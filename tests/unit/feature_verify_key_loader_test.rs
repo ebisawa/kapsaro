@@ -7,9 +7,7 @@
 
 use crate::cli_common::ALICE_MEMBER_ID;
 use crate::test_utils::setup_test_workspace_from_fixtures;
-use secretenv::feature::verify::key_loader::{
-    find_public_key_by_kid, load_verifying_key_from_signature,
-};
+use secretenv::feature::verify::key_loader::load_verifying_key_from_signature;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::signature::Signature;
 use secretenv::model::verification::VerifyingKeySource;
@@ -17,73 +15,25 @@ use std::fs;
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
 
-/// find_public_key_by_kid finds key in workspace active members
+/// load_verifying_key_from_signature fails with E_SIGNER_PUB_MISSING
+/// when signer_pub is not embedded in the signature
 #[test]
-fn test_find_public_key_by_kid_workspace_active() {
+fn test_load_verifying_key_from_signature_missing_signer_pub_fails() {
     let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
 
-    // Read Alice's public key from the workspace to get the kid
-    let member_file = workspace_dir
-        .join("members/active")
-        .join(format!("{}.json", ALICE_MEMBER_ID));
-    let content = fs::read_to_string(&member_file).unwrap();
-    let public_key: secretenv::model::public_key::PublicKey =
-        serde_json::from_str(&content).unwrap();
-    let kid = public_key.protected.kid.clone();
+    let signature = Signature {
+        alg: "eddsa-ed25519".to_string(),
+        kid: "SOME_KID_0000000000000000".to_string(),
+        signer_pub: None,
+        sig: "dummy".to_string(),
+    };
 
-    let (member_id, found_key, source) =
-        find_public_key_by_kid(Some(&workspace_dir), &kid).unwrap();
-
-    assert_eq!(member_id, ALICE_MEMBER_ID);
-    assert_eq!(found_key.protected.kid, kid);
-    assert_eq!(
-        source,
-        VerifyingKeySource::ActiveMemberByKid {
-            kid: kid.to_string()
-        }
-    );
-}
-
-/// find_public_key_by_kid does NOT find key in workspace incoming members
-/// (incoming members are excluded from signature verification)
-#[test]
-fn test_find_public_key_by_kid_workspace_incoming_excluded() {
-    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
-
-    // Read Alice's public key and move it from active to incoming
-    let active_path = workspace_dir
-        .join("members/active")
-        .join(format!("{}.json", ALICE_MEMBER_ID));
-    let content = fs::read_to_string(&active_path).unwrap();
-    let public_key: secretenv::model::public_key::PublicKey =
-        serde_json::from_str(&content).unwrap();
-    let kid = public_key.protected.kid.clone();
-
-    let incoming_path = workspace_dir
-        .join("members/incoming")
-        .join(format!("{}.json", ALICE_MEMBER_ID));
-    fs::rename(&active_path, &incoming_path).unwrap();
-
-    let result = find_public_key_by_kid(Some(&workspace_dir), &kid);
-    assert!(result.is_err(), "incoming members should not be found");
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("Cannot find public key"),
-        "Expected 'Cannot find public key' error, got: {}",
-        err_msg
-    );
-}
-
-/// find_public_key_by_kid returns error when both workspace_path is None
-#[test]
-fn test_find_public_key_by_kid_none() {
-    let result = find_public_key_by_kid(None, "SOME_KID_0000000000000000");
-
+    let result = load_verifying_key_from_signature(&signature, Some(&workspace_dir), false);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("Cannot find public key"),
-        "Expected 'Cannot find public key' error, got: {}",
+        err_msg.contains("signer_pub is missing"),
+        "Expected E_SIGNER_PUB_MISSING error, got: {}",
         err_msg
     );
 }

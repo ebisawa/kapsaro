@@ -80,7 +80,7 @@ fn test_encrypt_and_decrypt_kv() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: public1.clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -135,6 +135,7 @@ fn test_encrypt_empty_input() {
 
     let input = "";
     let recipients = vec![TEST_MEMBER_ID.to_string()];
+    let signer_pub = public.clone();
     let members = vec![public];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -147,7 +148,7 @@ fn test_encrypt_empty_input() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -184,6 +185,7 @@ API_KEY=secret123
 "#;
 
     let recipients = vec![TEST_MEMBER_ID.to_string()];
+    let signer_pub = public.clone();
     let members = vec![public];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -196,7 +198,7 @@ API_KEY=secret123
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -235,6 +237,7 @@ fn test_large_value_in_kv_enc() {
     let input = format!("LARGE_KEY={}\n", large_value);
 
     let recipients = vec![TEST_MEMBER_ID.to_string()];
+    let signer_pub = public.clone();
     let members = vec![public];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -247,7 +250,7 @@ fn test_large_value_in_kv_enc() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -292,7 +295,7 @@ fn test_wrap_line_with_many_recipients() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: members[0].clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -419,7 +422,7 @@ fn make_initial_kv_doc(
         &secretenv::feature::envelope::signature::SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
-            signer_pub: Some(public_key.clone()),
+            signer_pub: public_key.clone(),
             debug: false,
         },
         secretenv::format::token::TokenCodec::JsonJcs,
@@ -483,7 +486,7 @@ fn test_set_existing_file_preserves_sid() {
     let created_at_before = kv_head_field(&initial, "created_at");
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
     let result = secretenv::feature::kv::mutate::set_kv_entry(
@@ -528,7 +531,7 @@ fn test_set_existing_file_preserves_wrap_token() {
     let wrap_before = kv_wrap_line(&initial);
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
     let result = secretenv::feature::kv::mutate::set_kv_entry(
@@ -569,7 +572,7 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
     let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false);
     let entries = vec![("KEY3".to_string(), "value3".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
     let result = secretenv::feature::kv::mutate::set_kv_entry(
@@ -616,7 +619,7 @@ fn make_unset_test_ctx(
     let initial = make_initial_kv_doc(member_id, &kid, &keystore_root, &private, &public, entries);
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false);
     (initial, ctx, temp, ssh_temp)
 }
 

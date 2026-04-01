@@ -87,7 +87,6 @@ fn rewrap_file_content(
         workspace_root: Some(plan.workspace_root.as_path()),
         rotate_key: request.rotate_key,
         clear_disclosure_history: request.clear_disclosure_history,
-        no_signer_pub: request.no_signer_pub,
         debug: request.options.verbose,
     };
     rewrap_file_content_with_request(content, &request)
@@ -105,7 +104,6 @@ fn rewrap_kv_content(
         workspace_root: Some(plan.workspace_root.as_path()),
         rotate_key: request.rotate_key,
         clear_disclosure_history: request.clear_disclosure_history,
-        no_signer_pub: request.no_signer_pub,
         debug: request.options.verbose,
     };
     rewrap_kv_content_with_request(content, &request)
@@ -147,7 +145,6 @@ fn build_single_rewrap_options(
         rotate_key: request.rotate_key,
         clear_disclosure_history: request.clear_disclosure_history,
         token_codec,
-        no_signer_pub: request.no_signer_pub,
         debug: request.debug,
     }
 }

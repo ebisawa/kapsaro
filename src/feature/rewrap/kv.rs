@@ -48,7 +48,6 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             &self.original_content,
             recipients,
             self.ctx.key_ctx(),
-            self.ctx.options().no_signer_pub,
             self.ctx.options().debug,
         )?;
 
@@ -60,7 +59,6 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
         let new_content = rotate_kv_key(
             &self.original_content,
             self.ctx.key_ctx(),
-            self.ctx.options().no_signer_pub,
             self.ctx.options().debug,
         )?;
 
@@ -90,7 +88,6 @@ impl<'a> KvRewrapExecutor<'a> {
             ctx.member_id,
             ctx.key_ctx(),
             ctx.options().token_codec,
-            ctx.options().no_signer_pub,
             ctx.options().debug,
         );
         let kv_doc = session.document();

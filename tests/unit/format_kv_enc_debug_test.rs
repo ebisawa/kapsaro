@@ -58,7 +58,7 @@ fn test_debug_hpke_single_recipient() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: public.clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,

@@ -8,7 +8,7 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::format::file::build_file_signature_bytes;
 use crate::format::kv::enc::canonical::build_canonical_bytes;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::signer::load_signer_public_key_if_needed;
+use crate::io::keystore::signer::load_signer_public_key;
 use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::identifiers::alg;
 use crate::model::kv_enc::document::KvEncDocument;
@@ -22,20 +22,15 @@ use tracing::debug;
 pub struct SigningContext<'a> {
     pub signing_key: &'a SigningKey,
     pub signer_kid: &'a str,
-    pub signer_pub: Option<PublicKey>,
+    pub signer_pub: PublicKey,
     pub debug: bool,
 }
 
 pub(crate) fn build_signing_context<'a>(
     key_ctx: &'a CryptoContext,
-    no_signer_pub: bool,
     debug: bool,
 ) -> Result<SigningContext<'a>> {
-    let signer_pub = load_signer_public_key_if_needed(
-        key_ctx.pub_key_source.as_ref(),
-        &key_ctx.member_id,
-        no_signer_pub,
-    )?;
+    let signer_pub = load_signer_public_key(key_ctx.pub_key_source.as_ref(), &key_ctx.member_id)?;
     Ok(SigningContext {
         signing_key: &key_ctx.signing_key,
         signer_kid: &key_ctx.kid,
@@ -48,7 +43,7 @@ pub fn sign_file_document(
     protected: &FileEncDocumentProtected,
     signing_key: &SigningKey,
     signer_kid: &str,
-    signer_pub: Option<PublicKey>,
+    signer_pub: PublicKey,
     debug: bool,
 ) -> Result<Signature> {
     if debug {
@@ -60,7 +55,7 @@ pub fn sign_file_document(
         &canonical_bytes,
         signing_key,
         signer_kid,
-        signer_pub,
+        Some(signer_pub),
         alg::SIGNATURE_ED25519,
     )
 }
@@ -106,7 +101,7 @@ pub(crate) fn sign_and_append_kv_sig(
     unsigned: &str,
     signing_key: &SigningKey,
     signer_kid: &str,
-    signer_pub: Option<PublicKey>,
+    signer_pub: PublicKey,
     token_codec: TokenCodec,
     debug: bool,
     caller: &str,
@@ -119,7 +114,7 @@ pub(crate) fn sign_and_append_kv_sig(
         unsigned.as_bytes(),
         signing_key,
         signer_kid,
-        signer_pub,
+        Some(signer_pub),
         alg::SIGNATURE_ED25519,
     )?;
     let sig_token =

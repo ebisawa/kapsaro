@@ -33,13 +33,14 @@ fn create_test_kv_enc_content(
     // Load CryptoContext to get signing key
     let key_ctx = setup_member_key_context(temp_dir, ALICE_MEMBER_ID, Some(kid));
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let signer_pub = public_key.clone();
     let members = vec![public_key];
     let verified_members = make_verified_members(&members);
 
     let signing = SigningContext {
         signing_key: &key_ctx.signing_key,
         signer_kid: kid,
-        signer_pub: None,
+        signer_pub,
         debug: false,
     };
     encrypt_kv_document(
@@ -147,7 +148,7 @@ fn test_set_kv_entry_new_file() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: Some(TokenCodec::JsonJcs),
-        no_signer_pub: false,
+
         verbose: false,
     };
 
@@ -188,7 +189,7 @@ fn test_set_kv_entry_existing_file() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: None, // Preserve existing codec
-        no_signer_pub: false,
+
         verbose: false,
     };
 
@@ -228,7 +229,7 @@ fn test_unset_kv_entry() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: None,
-        no_signer_pub: false,
+
         verbose: false,
     };
 
@@ -263,7 +264,7 @@ fn test_unset_kv_entry_not_found() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: None,
-        no_signer_pub: false,
+
         verbose: false,
     };
 
@@ -287,7 +288,7 @@ fn test_set_kv_entry_multiple_entries_new_file() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: Some(TokenCodec::JsonJcs),
-        no_signer_pub: false,
+
         verbose: false,
     };
 
@@ -325,7 +326,7 @@ fn test_set_kv_entry_multiple_entries_existing_file() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: None,
-        no_signer_pub: false,
+
         verbose: false,
     };
 

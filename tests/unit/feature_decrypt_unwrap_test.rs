@@ -77,7 +77,7 @@ fn encrypt_file_for_test(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -116,6 +116,7 @@ fn encrypt_kv_for_test(
 
     let kv_map = parse_dotenv(dotenv_content).unwrap();
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let signer_pub = public_key.clone();
     let members = vec![public_key];
     let verified_members = make_verified_members(&members);
 
@@ -126,7 +127,7 @@ fn encrypt_kv_for_test(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -321,6 +322,7 @@ fn test_decrypt_kv_entries_empty() {
     // Create empty KV map
     let kv_map = std::collections::HashMap::new();
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let signer_pub = public_key.clone();
     let members = vec![public_key];
     let verified_members = make_verified_members(&members);
 
@@ -331,7 +333,7 @@ fn test_decrypt_kv_entries_empty() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -474,7 +476,7 @@ fn test_unwrap_master_key_for_file() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -522,7 +524,7 @@ fn test_unwrap_master_key_for_file_wrong_member() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )

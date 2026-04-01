@@ -11,7 +11,7 @@ pub(crate) mod kv_op;
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::signer::load_signer_public_key_if_needed;
+use crate::io::keystore::signer::load_signer_public_key;
 use crate::model::public_key::PublicKey;
 use crate::Result;
 
@@ -21,7 +21,6 @@ pub(crate) struct RewrapOptions {
     pub rotate_key: bool,
     pub clear_disclosure_history: bool,
     pub token_codec: Option<TokenCodec>,
-    pub no_signer_pub: bool,
     pub debug: bool,
 }
 
@@ -45,13 +44,9 @@ impl<'a> RewrapContext<'a> {
         }
     }
 
-    /// Load signer's public key if needed.
-    pub(crate) fn load_signer_pub(&self) -> Result<Option<PublicKey>> {
-        load_signer_public_key_if_needed(
-            self.key_ctx.pub_key_source.as_ref(),
-            self.member_id,
-            self.options.no_signer_pub,
-        )
+    /// Load signer's public key for embedding in signatures.
+    pub(crate) fn load_signer_pub(&self) -> Result<PublicKey> {
+        load_signer_public_key(self.key_ctx.pub_key_source.as_ref(), self.member_id)
     }
 
     pub(crate) fn options(&self) -> &'a RewrapOptions {

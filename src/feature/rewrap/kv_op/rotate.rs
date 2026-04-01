@@ -27,12 +27,7 @@ fn detect_disclosed_entries(content: &str) -> Result<bool> {
 }
 
 /// Rotate master key for kv-enc content.
-pub fn rotate_kv_key(
-    content: &str,
-    key_ctx: &CryptoContext,
-    no_signer_pub: bool,
-    debug: bool,
-) -> Result<String> {
+pub fn rotate_kv_key(content: &str, key_ctx: &CryptoContext, debug: bool) -> Result<String> {
     let disclosed = detect_disclosed_entries(content)?;
     let decrypted = decrypt_kv_content(content, key_ctx, debug)?;
     let (_, _, wrap_data) = parse_kv_wrap(content)?;
@@ -43,7 +38,6 @@ pub fn rotate_kv_key(
         &current_recipients,
         key_ctx,
         token_codec,
-        no_signer_pub,
         disclosed,
         debug,
     )

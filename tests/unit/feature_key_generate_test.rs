@@ -21,7 +21,7 @@ use secretenv::feature::key::ssh_binding::SshBindingContext;
 use secretenv::format::kid::derive_public_key_kid;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::resolver::KeystoreResolver;
-use secretenv::io::keystore::signer::load_signer_public_key_if_needed;
+use secretenv::io::keystore::signer::load_signer_public_key;
 use secretenv::io::keystore::storage::{list_kids, save_key_pair_atomic};
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
@@ -529,33 +529,15 @@ fn test_build_public_key() {
 }
 
 #[test]
-fn test_load_signer_public_key_if_needed_default() {
+fn test_load_signer_public_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
     let pub_key_source =
         secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
 
-    // no_signer_pub=false means DO embed the signer public key
-    let result = load_signer_public_key_if_needed(&pub_key_source, ALICE_MEMBER_ID, false).unwrap();
+    let result = load_signer_public_key(&pub_key_source, ALICE_MEMBER_ID).unwrap();
 
-    assert!(result.is_some());
-    assert_eq!(
-        result.as_ref().unwrap().protected.member_id,
-        ALICE_MEMBER_ID
-    );
-}
-
-#[test]
-fn test_load_signer_public_key_if_needed_no_signer_pub() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
-    let keystore_root = temp_dir.path().join("keys");
-    let pub_key_source =
-        secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
-
-    // no_signer_pub=true means DON'T embed the signer public key
-    let result = load_signer_public_key_if_needed(&pub_key_source, ALICE_MEMBER_ID, true).unwrap();
-
-    assert!(result.is_none());
+    assert_eq!(result.protected.member_id, ALICE_MEMBER_ID);
 }
 
 #[test]

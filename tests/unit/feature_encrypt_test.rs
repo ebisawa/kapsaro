@@ -48,7 +48,7 @@ fn test_encrypt_file_document() {
     let signing = SigningContext {
         signing_key,
         signer_kid: kid,
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         debug: false,
     };
     let encrypted_json =
@@ -89,13 +89,14 @@ fn test_encrypt_file_document_recipient_count_mismatch() {
     // Input content
     let content = b"Hello, World!";
     let recipients = vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()];
+    let signer_pub = public_key.clone();
     let attested_members = vec![make_recipient_key(public_key)]; // Only one member, but two recipients
 
     // Encrypt should fail due to mismatch
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: kid,
-        signer_pub: None,
+        signer_pub,
         debug: false,
     };
     let result = encrypt_file_document(content, &recipients, &attested_members, &signing);
@@ -133,7 +134,7 @@ fn test_encrypt_kv_document_via_inner_api() {
     let signing = SigningContext {
         signing_key,
         signer_kid: kid,
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         debug: false,
     };
     let encrypted = encrypt_kv_document(

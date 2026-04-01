@@ -49,7 +49,6 @@ pub struct RewrapBatchRequest {
     pub member_id: Option<String>,
     pub rotate_key: bool,
     pub clear_disclosure_history: bool,
-    pub no_signer_pub: bool,
     pub accepted_promotions: Vec<String>,
 }
 
@@ -61,7 +60,6 @@ pub struct SingleRewrapRequest<'a> {
     pub workspace_root: Option<&'a Path>,
     pub rotate_key: bool,
     pub clear_disclosure_history: bool,
-    pub no_signer_pub: bool,
     pub debug: bool,
 }
 

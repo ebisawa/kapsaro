@@ -22,10 +22,6 @@ pub struct RewrapArgs {
     #[arg(long)]
     pub clear_disclosure_history: bool,
 
-    /// Do not embed signer's PublicKey in signature
-    #[arg(long)]
-    pub no_signer_pub: bool,
-
     /// Member ID to use
     #[arg(long, short = 'm')]
     pub member_id: Option<String>,

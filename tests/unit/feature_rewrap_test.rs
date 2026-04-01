@@ -47,7 +47,7 @@ fn single_rewrap_request<'a>(
         workspace_root,
         rotate_key: false,
         clear_disclosure_history: false,
-        no_signer_pub: false,
+
         debug,
     }
 }
@@ -65,7 +65,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
 
     let content = b"secret";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(&[public_key.clone()]);
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -74,7 +74,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key,
             debug: false,
         },
     )
@@ -107,7 +107,7 @@ fn test_rewrap_file_flow_succeeds_with_valid_signature() {
 
     let content = b"secret";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(&[public_key.clone()]);
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -116,7 +116,7 @@ fn test_rewrap_file_flow_succeeds_with_valid_signature() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key,
             debug: false,
         },
     )

@@ -7,7 +7,6 @@ use crate::feature::inspect::{build_section, InspectSection};
 use crate::feature::verify::SignatureVerificationReport;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
 use crate::model::verification::VerifyingKeySource;
-use crate::support::kid::build_kid_display;
 
 /// Online verification display variants
 pub enum OnlineVerificationDisplay {
@@ -33,10 +32,6 @@ pub(crate) fn build_signature_verification_section(
         if let Some(ref source) = report.source {
             let source_str = match source {
                 VerifyingKeySource::SignerPubEmbedded => "signer_pub embedded",
-                VerifyingKeySource::ActiveMemberByKid { kid } => {
-                    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.clone());
-                    &format!("workspace active (kid: {})", kid_display)
-                }
             };
             lines.push(format!("Source:   {}", source_str));
         }

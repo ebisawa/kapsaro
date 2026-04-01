@@ -28,7 +28,6 @@ pub(crate) struct VerifiedKvRewriteSession<'a> {
     member_id: &'a str,
     key_ctx: &'a CryptoContext,
     token_codec: Option<TokenCodec>,
-    no_signer_pub: bool,
     debug: bool,
 }
 
@@ -38,7 +37,6 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         member_id: &'a str,
         key_ctx: &'a CryptoContext,
         token_codec: Option<TokenCodec>,
-        no_signer_pub: bool,
         debug: bool,
     ) -> Result<Self> {
         let verified = verify_kv_content(content, key_ctx.workspace_path.as_deref(), debug)?;
@@ -47,7 +45,6 @@ impl<'a> VerifiedKvRewriteSession<'a> {
             member_id,
             key_ctx,
             token_codec,
-            no_signer_pub,
             debug,
         ))
     }
@@ -57,7 +54,6 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         member_id: &'a str,
         key_ctx: &'a CryptoContext,
         token_codec: Option<TokenCodec>,
-        no_signer_pub: bool,
         debug: bool,
     ) -> Self {
         Self {
@@ -65,7 +61,6 @@ impl<'a> VerifiedKvRewriteSession<'a> {
             member_id,
             key_ctx,
             token_codec,
-            no_signer_pub,
             debug,
         }
     }
@@ -91,7 +86,7 @@ impl<'a> VerifiedKvRewriteSession<'a> {
     }
 
     pub(crate) fn sign(&self, unsigned: UnsignedKvDocument) -> Result<String> {
-        sign_unsigned_with_key_context(unsigned, self.key_ctx, self.no_signer_pub, self.debug)
+        sign_unsigned_with_key_context(unsigned, self.key_ctx, self.debug)
     }
 
     pub(crate) fn unwrap_master_key(&self) -> Result<MasterKey> {
@@ -125,10 +120,9 @@ pub(crate) fn rebuild_unsigned_from_content(
 pub(crate) fn sign_unsigned_with_key_context(
     unsigned: UnsignedKvDocument,
     key_ctx: &CryptoContext,
-    no_signer_pub: bool,
     debug: bool,
 ) -> Result<String> {
-    let signing = build_signing_context(key_ctx, no_signer_pub, debug)?;
+    let signing = build_signing_context(key_ctx, debug)?;
     super::sign::sign_unsigned_kv_document(unsigned, &signing)
 }
 

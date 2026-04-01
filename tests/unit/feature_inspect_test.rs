@@ -91,7 +91,6 @@ fn create_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
         key: "DATABASE_URL".to_string(),
         value: Some("postgres://localhost".to_string()),
         stdin: false,
-        no_signer_pub: false,
     };
     set::run(set_args).unwrap();
 
@@ -121,7 +120,6 @@ fn create_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
         member_id: Some(member_id.to_string()),
         input: input_path,
         out: Some(encrypted_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(encrypt_args).unwrap();
 
@@ -329,7 +327,6 @@ fn test_inspect_kv_enc_with_verification() {
         key: "DATABASE_URL".to_string(),
         value: Some("postgres://localhost".to_string()),
         stdin: false,
-        no_signer_pub: false,
     };
     set::run(set_args).unwrap();
 
@@ -383,7 +380,6 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
         key: "KEY".to_string(),
         value: Some("value".to_string()),
         stdin: false,
-        no_signer_pub: false,
     };
     set::run(set_args).unwrap();
 
@@ -454,7 +450,6 @@ fn test_verify_kv_document_report() {
         key: "KEY".to_string(),
         value: Some("value".to_string()),
         stdin: false,
-        no_signer_pub: false,
     };
     set::run(set_args).unwrap();
 
@@ -495,7 +490,6 @@ fn test_verify_file_document_report() {
         member_id: Some(CAROL_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(encrypted_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(encrypt_args).unwrap();
 
@@ -537,7 +531,6 @@ fn test_verify_kv_document_report_failure_wrong_key() {
         key: "KEY".to_string(),
         value: Some("value".to_string()),
         stdin: false,
-        no_signer_pub: false,
     };
     set::run(set_args).unwrap();
 
@@ -571,7 +564,9 @@ fn test_verify_kv_document_report_failure_wrong_key() {
     assert!(report.signer_member_id.is_none());
     assert!(report.source.is_none());
     assert!(
-        report.message.contains("Cannot find public key") || report.message.contains("not found")
+        report.message.contains("signer_pub is missing"),
+        "Expected E_SIGNER_PUB_MISSING error, got: {}",
+        report.message
     );
 }
 
@@ -585,7 +580,7 @@ fn test_verify_kv_document_report_with_embedded_signer_pub() {
     fs::create_dir_all(&workspace_dir).unwrap();
     setup_workspace_with_member(&keystore_root, &workspace_dir, DAVE_MEMBER_ID);
 
-    // Create and encrypt a kv file with no_signer_pub=false
+    // Create and encrypt a kv file
     use secretenv::cli::set;
     let common_opts = build_common_opts(test_dir, &workspace_dir);
     let encrypted_path = workspace_dir.join("secrets").join("default.kvenc");
@@ -597,7 +592,6 @@ fn test_verify_kv_document_report_with_embedded_signer_pub() {
         key: "KEY".to_string(),
         value: Some("value".to_string()),
         stdin: false,
-        no_signer_pub: false, // Enable signer_pub embedding
     };
     set::run(set_args).unwrap();
 

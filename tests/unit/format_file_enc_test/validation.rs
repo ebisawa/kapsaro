@@ -35,7 +35,7 @@ fn test_encrypt_file() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -93,7 +93,7 @@ fn test_defence_in_depth_sid_mismatch() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )

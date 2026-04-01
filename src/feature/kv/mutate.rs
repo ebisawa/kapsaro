@@ -28,23 +28,16 @@ pub struct KvWriteContext {
     pub member_id: String,
     pub key_ctx: CryptoContext,
     pub token_codec: Option<TokenCodec>,
-    pub no_signer_pub: bool,
     pub verbose: bool,
 }
 
 impl KvWriteContext {
     /// Build a new KvWriteContext.
-    pub fn new(
-        member_id: &str,
-        key_ctx: CryptoContext,
-        no_signer_pub: bool,
-        verbose: bool,
-    ) -> Self {
+    pub fn new(member_id: &str, key_ctx: CryptoContext, verbose: bool) -> Self {
         Self {
             member_id: member_id.to_string(),
             key_ctx,
             token_codec: None,
-            no_signer_pub,
             verbose,
         }
     }
@@ -70,7 +63,6 @@ pub fn unset_kv_entry(content: &KvEncContent, key: &str, ctx: &KvWriteContext) -
         &ctx.member_id,
         &ctx.key_ctx,
         ctx.token_codec,
-        ctx.no_signer_pub,
         ctx.verbose,
     )?;
     let doc = session.document();
@@ -96,11 +88,8 @@ fn set_kv_new_file(
         &recipients,
         ctx.verbose,
     )?;
-    let signing = crate::feature::envelope::signature::build_signing_context(
-        &ctx.key_ctx,
-        ctx.no_signer_pub,
-        ctx.verbose,
-    )?;
+    let signing =
+        crate::feature::envelope::signature::build_signing_context(&ctx.key_ctx, ctx.verbose)?;
     let codec = ctx.token_codec.unwrap_or(TokenCodec::JsonJcs);
     let kv_map: HashMap<String, String> = entries.iter().cloned().collect();
     let encrypted = super::encrypt::encrypt_kv_document(
@@ -126,7 +115,6 @@ fn set_kv_existing_file(
         &ctx.member_id,
         &ctx.key_ctx,
         ctx.token_codec,
-        ctx.no_signer_pub,
         ctx.verbose,
     )?;
     let doc = session.document();

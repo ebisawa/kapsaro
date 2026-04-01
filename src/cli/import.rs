@@ -19,10 +19,6 @@ pub struct ImportArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Do not embed signer's PublicKey in signature
-    #[arg(long)]
-    pub no_signer_pub: bool,
-
     /// Member ID to use
     #[arg(long, short = 'm')]
     pub member_id: Option<String>,
@@ -44,7 +40,6 @@ pub fn run(args: ImportArgs) -> Result<()> {
         args.member_id.clone(),
         args.name.as_deref(),
         &content,
-        args.no_signer_pub,
         None,
         ssh_ctx,
     )?;

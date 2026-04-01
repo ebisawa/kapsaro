@@ -26,7 +26,6 @@ pub fn remove_kv_recipients(
     content: &str,
     recipients_to_remove: &[String],
     key_ctx: &CryptoContext,
-    no_signer_pub: bool,
     debug: bool,
 ) -> Result<String> {
     let (_, _head_data, wrap_data) = parse_kv_wrap(content)?;
@@ -52,7 +51,6 @@ pub fn remove_kv_recipients(
         &current_recipients,
         recipients_to_remove,
         key_ctx,
-        no_signer_pub,
         true,
         debug,
     )

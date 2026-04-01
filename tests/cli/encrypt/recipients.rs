@@ -33,7 +33,6 @@ fn test_encrypt_recipients_are_all_active_members() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(output_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(args).unwrap();
 
@@ -66,7 +65,6 @@ fn test_encrypt_workspace_required() {
             member_id: Some(ALICE_MEMBER_ID.to_string()),
             input: input_path,
             out: Some(test_dir.join("out.encrypted")),
-            no_signer_pub: false,
         };
         let result = encrypt::run(args);
         assert!(result.is_err(), "Should fail without workspace");

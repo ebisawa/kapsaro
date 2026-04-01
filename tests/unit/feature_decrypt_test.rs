@@ -45,7 +45,7 @@ fn test_file_enc_content_detect_accepts_file_enc() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -102,7 +102,7 @@ fn test_decrypt_document_file() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -141,7 +141,7 @@ fn test_parse_verify_decrypt_file() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -192,7 +192,7 @@ fn test_verify_file_document_returns_verified() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -239,7 +239,7 @@ fn create_encrypted_file_for_error_tests() -> (
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )

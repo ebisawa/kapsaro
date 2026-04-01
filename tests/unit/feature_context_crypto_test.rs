@@ -52,7 +52,7 @@ fn test_parse_verify_decrypt_kv() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: Some(public_key),
+            signer_pub: public_key,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -110,7 +110,7 @@ fn test_parse_verify_decrypt_file() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: Some(public_key),
+            signer_pub: public_key,
             debug: false,
         },
     )

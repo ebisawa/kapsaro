@@ -97,7 +97,7 @@ fn encrypt_two_member_document(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
     let kv_map = std::collections::HashMap::from([
         ("KEY1".to_string(), "value1".to_string()),
@@ -111,7 +111,7 @@ fn encrypt_two_member_document(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub.clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -129,7 +129,7 @@ fn single_rewrap_request<'a>(
         workspace_root,
         rotate_key: false,
         clear_disclosure_history: false,
-        no_signer_pub: false,
+
         debug: false,
     }
 }
@@ -164,7 +164,7 @@ fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: None,
-        no_signer_pub: false,
+
         verbose: false,
     };
     let after_remove = KvEncContent::new_unchecked(after_remove);
@@ -198,7 +198,7 @@ fn test_set_kv_entry_new_entry_has_disclosed_false() {
         member_id: ALICE_MEMBER_ID.to_string(),
         key_ctx,
         token_codec: None,
-        no_signer_pub: false,
+
         verbose: false,
     };
     let after_remove = KvEncContent::new_unchecked(after_remove);

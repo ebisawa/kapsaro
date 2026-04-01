@@ -17,10 +17,6 @@ pub struct UnsetArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Do not embed signer's PublicKey in signature
-    #[arg(long)]
-    pub no_signer_pub: bool,
-
     /// Force removal without confirmation
     #[arg(long, short = 'f')]
     pub force: bool,
@@ -45,7 +41,6 @@ pub fn run(args: UnsetArgs) -> Result<()> {
         args.member_id.clone(),
         args.name.as_deref(),
         &args.key,
-        args.no_signer_pub,
         Some(&format!(
             "Removed key '{}' from '{}'",
             args.key,

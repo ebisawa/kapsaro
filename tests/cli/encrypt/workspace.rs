@@ -57,7 +57,6 @@ fn test_encrypt_member_id_mismatch() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path.clone(),
         out: Some(encrypted_path.clone()),
-        no_signer_pub: false,
     };
 
     // Should fail with member_id mismatch error
@@ -90,7 +89,7 @@ fn test_set_creates_default_file() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        no_signer_pub: false,
+
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         name: None,
         stdin: false,

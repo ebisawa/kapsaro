@@ -55,7 +55,7 @@ fn single_rewrap_request<'a>(
         workspace_root,
         rotate_key,
         clear_disclosure_history,
-        no_signer_pub: false,
+
         debug,
     }
 }
@@ -107,7 +107,7 @@ fn encrypt_file_for_alice(
 ) -> FileEncDocument {
     let keystore_root = temp_dir.path().join("keys");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(&[public_key.clone()]);
     let content = b"secret-file-content";
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
 
@@ -118,7 +118,7 @@ fn encrypt_file_for_alice(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -135,7 +135,7 @@ fn encrypt_file_for_alice_and_bob(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let content = b"secret-file-content";
     let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
 
@@ -146,7 +146,7 @@ fn encrypt_file_for_alice_and_bob(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub,
             debug: false,
         },
     )

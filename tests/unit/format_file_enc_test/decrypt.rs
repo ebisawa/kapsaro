@@ -33,7 +33,7 @@ fn test_decrypt_file_roundtrip() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -84,7 +84,7 @@ fn test_decrypt_file_multiple_recipients() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -129,7 +129,7 @@ fn test_decrypt_file_empty_content() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -166,7 +166,7 @@ fn test_decrypt_file_large_content() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -202,7 +202,7 @@ fn test_decrypt_file_wrong_member_id() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -259,7 +259,7 @@ fn test_decrypt_file_wrong_key() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )

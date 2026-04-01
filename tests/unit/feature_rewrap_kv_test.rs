@@ -51,7 +51,7 @@ fn single_rewrap_request<'a>(
         workspace_root,
         rotate_key,
         clear_disclosure_history,
-        no_signer_pub: false,
+
         debug,
     }
 }
@@ -60,7 +60,7 @@ fn single_rewrap_request<'a>(
 fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) -> String {
     let keystore_root = temp_dir.path().join("keys");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(&[public_key.clone()]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
 
@@ -71,7 +71,7 @@ fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) 
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -89,7 +89,7 @@ fn encrypt_kv_for_alice_and_bob(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
     let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
 
@@ -100,7 +100,7 @@ fn encrypt_kv_for_alice_and_bob(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -513,7 +513,7 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, &alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, &bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
     let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
     let encrypted = encrypt_kv_document(
@@ -523,7 +523,7 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -563,7 +563,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, &alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, &bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
     let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
     let encrypted = encrypt_kv_document(
@@ -573,7 +573,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,

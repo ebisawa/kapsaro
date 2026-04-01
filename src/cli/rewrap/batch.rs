@@ -35,7 +35,6 @@ pub(crate) fn execute_batch_rewrap(args: &RewrapArgs) -> Result<()> {
         member_id: args.member_id.clone(),
         rotate_key: args.rotate_key,
         clear_disclosure_history: args.clear_disclosure_history,
-        no_signer_pub: args.no_signer_pub,
         accepted_promotions: accepted_ids,
     };
     let outcome = execute_rewrap_batch(&request, &plan, ssh_ctx)?;

@@ -31,7 +31,6 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
             member_id: Some(ALICE_MEMBER_ID.to_string()),
             input: input_path.clone(),
             out: None,
-            no_signer_pub: false,
         };
         encrypt::run(args).unwrap();
 
@@ -63,7 +62,6 @@ fn test_encrypt_explicit_out_option() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(explicit_output.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(args).unwrap();
 

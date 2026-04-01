@@ -51,8 +51,6 @@ impl Default for ExpiryProof {
 pub enum VerifyingKeySource {
     /// PublicKey was embedded in signature.signer_pub
     SignerPubEmbedded,
-    /// PublicKey was found in workspace active members by kid
-    ActiveMemberByKid { kid: String },
 }
 
 /// Proof of signature verification

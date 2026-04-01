@@ -20,7 +20,6 @@ struct KvWriteRequest<'a> {
     member_id: Option<String>,
     file_name: Option<&'a str>,
     allow_missing: bool,
-    no_signer_pub: bool,
     success_message: Option<&'a str>,
     ssh_ctx: Option<ResolvedSshSigner>,
 }
@@ -30,7 +29,6 @@ pub(crate) fn set_kv_command(
     member_id: Option<String>,
     file_name: Option<&str>,
     entries: Vec<(String, String)>,
-    no_signer_pub: bool,
     success_message: Option<&str>,
     ssh_ctx: Option<ResolvedSshSigner>,
 ) -> Result<KvWriteOutcome> {
@@ -40,7 +38,6 @@ pub(crate) fn set_kv_command(
             member_id,
             file_name,
             allow_missing: true,
-            no_signer_pub,
             success_message,
             ssh_ctx,
         },
@@ -61,7 +58,6 @@ pub(crate) fn unset_kv_command(
     member_id: Option<String>,
     file_name: Option<&str>,
     key: &str,
-    no_signer_pub: bool,
     success_message: Option<&str>,
     ssh_ctx: Option<ResolvedSshSigner>,
 ) -> Result<KvWriteOutcome> {
@@ -71,7 +67,6 @@ pub(crate) fn unset_kv_command(
             member_id,
             file_name,
             allow_missing: false,
-            no_signer_pub,
             success_message,
             ssh_ctx,
         },
@@ -90,7 +85,6 @@ pub(crate) fn import_kv_command(
     member_id: Option<String>,
     file_name: Option<&str>,
     dotenv_content: &str,
-    no_signer_pub: bool,
     success_message: Option<&str>,
     ssh_ctx: Option<ResolvedSshSigner>,
 ) -> Result<(KvWriteOutcome, usize)> {
@@ -99,7 +93,6 @@ pub(crate) fn import_kv_command(
         member_id,
         file_name,
         dotenv_content,
-        no_signer_pub,
         success_message,
         ssh_ctx,
     )?;
@@ -111,7 +104,6 @@ pub(crate) fn import_kv_command_result(
     member_id: Option<String>,
     file_name: Option<&str>,
     dotenv_content: &str,
-    no_signer_pub: bool,
     success_message: Option<&str>,
     ssh_ctx: Option<ResolvedSshSigner>,
 ) -> Result<KvImportResult> {
@@ -124,7 +116,6 @@ pub(crate) fn import_kv_command_result(
         member_id,
         file_name,
         entries,
-        no_signer_pub,
         success_message,
         ssh_ctx,
     )?;
@@ -143,7 +134,6 @@ where
         member_id,
         file_name,
         allow_missing,
-        no_signer_pub,
         success_message,
         ssh_ctx,
     } = request;
@@ -152,7 +142,7 @@ where
     lock::with_file_lock(&file_path, move || {
         let execution = ExecutionContext::resolve(&options, member_id, None, ssh_ctx)?;
         enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
-        let write_ctx = build_kv_write_context(&options, execution, no_signer_pub);
+        let write_ctx = build_kv_write_context(&options, execution);
         let existing_content = load_existing_content(&target, allow_missing)?;
         let encrypted = operation(existing_content.as_ref(), &write_ctx, &target)?;
         atomic::save_text(&target.file_path, &encrypted)?;
@@ -165,12 +155,6 @@ where
 fn build_kv_write_context(
     options: &CommonCommandOptions,
     execution: ExecutionContext,
-    no_signer_pub: bool,
 ) -> KvWriteContext {
-    KvWriteContext::new(
-        &execution.member_id,
-        execution.key_ctx,
-        no_signer_pub,
-        options.verbose,
-    )
+    KvWriteContext::new(&execution.member_id, execution.key_ctx, options.verbose)
 }

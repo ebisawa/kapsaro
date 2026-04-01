@@ -57,25 +57,20 @@ impl EncryptFileSession {
         verify_recipient_public_keys(&public_keys, debug)
     }
 
-    fn signing_context<'a>(
-        &'a self,
-        no_signer_pub: bool,
-        debug: bool,
-    ) -> Result<SigningContext<'a>> {
-        build_signing_context(&self.execution.key_ctx, no_signer_pub, debug)
+    fn signing_context<'a>(&'a self, debug: bool) -> Result<SigningContext<'a>> {
+        build_signing_context(&self.execution.key_ctx, debug)
     }
 }
 
 pub fn encrypt_file_command(
     options: &CommonCommandOptions,
     member_id: Option<String>,
-    no_signer_pub: bool,
     input_path: &Path,
     ssh_ctx: Option<ResolvedSshSigner>,
 ) -> Result<String> {
     let session = EncryptFileSession::load(options, member_id, input_path, ssh_ctx)?;
     let verified_keys = session.verified_recipient_keys(options.verbose)?;
-    let signing = session.signing_context(no_signer_pub, options.verbose)?;
+    let signing = session.signing_context(options.verbose)?;
     encrypt_file_document(
         &session.input_bytes,
         &session.member_ids,

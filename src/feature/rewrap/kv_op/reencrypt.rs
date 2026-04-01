@@ -32,7 +32,6 @@ pub(super) fn encrypt_kv_with_recipients(
     new_recipients: &[String],
     key_ctx: &CryptoContext,
     token_codec: TokenCodec,
-    no_signer_pub: bool,
     disclosed: bool,
     debug: bool,
 ) -> Result<String> {
@@ -41,7 +40,7 @@ pub(super) fn encrypt_kv_with_recipients(
         new_recipients,
         debug,
     )?;
-    let signing = build_signing_context(key_ctx, no_signer_pub, debug)?;
+    let signing = build_signing_context(key_ctx, debug)?;
     encrypt_and_sign_kv_map(
         decrypted_content,
         &verified_members,
@@ -63,7 +62,6 @@ pub(super) fn encrypt_kv_with_recipients(
 /// * `new_recipients` - New list of recipient member IDs
 /// * `removed_recipients` - Recipients to add to removed history
 /// * `key_ctx` - Member key context
-/// * `no_signer_pub` - Whether to embed signer public key
 /// * `disclosed` - Whether to mark entries as disclosed (true when removing recipients)
 /// * `debug` - Enable debug logging
 ///
@@ -74,7 +72,6 @@ pub fn decrypt_and_reencrypt_kv(
     new_recipients: &[String],
     removed_recipients: &[String],
     key_ctx: &CryptoContext,
-    no_signer_pub: bool,
     disclosed: bool,
     debug: bool,
 ) -> Result<String> {
@@ -87,7 +84,7 @@ pub fn decrypt_and_reencrypt_kv(
         new_recipients,
         debug,
     )?;
-    let signing = build_signing_context(key_ctx, no_signer_pub, debug)?;
+    let signing = build_signing_context(key_ctx, debug)?;
     encrypt_and_sign_kv_map(
         &decrypted_content,
         &verified_members,

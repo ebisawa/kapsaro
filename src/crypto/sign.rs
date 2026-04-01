@@ -36,7 +36,7 @@ use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 /// * `signature_alg` - On-wire `signature.alg` value (caller supplies; v3 uses `crate::model::identifiers::alg::SIGNATURE_ED25519`)
 ///
 /// # Returns
-/// Signature structure (alg, kid, signer_pub?, sig)
+/// Signature structure (alg, kid, signer_pub, sig)
 pub fn sign_bytes(
     canonical_bytes: &[u8],
     signing_key: &SigningKey,

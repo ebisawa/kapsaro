@@ -35,7 +35,7 @@ fn create_test_kv_enc_content(
     let signing = SigningContext {
         signing_key: &key_ctx.signing_key,
         signer_kid: kid,
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         debug: false,
     };
     encrypt_kv_document(

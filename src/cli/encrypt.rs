@@ -22,10 +22,6 @@ pub struct EncryptArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Do not embed signer's PublicKey in signature
-    #[arg(long)]
-    pub no_signer_pub: bool,
-
     /// Member ID to use
     #[arg(long, short = 'm')]
     pub member_id: Option<String>,
@@ -41,13 +37,7 @@ pub struct EncryptArgs {
 pub fn run(args: EncryptArgs) -> Result<()> {
     let options = CommonCommandOptions::from(&args.common);
     let ssh_ctx = resolve_ssh_context_optional(&options, args.member_id.clone())?;
-    let encrypted = encrypt_file_command(
-        &options,
-        args.member_id.clone(),
-        args.no_signer_pub,
-        &args.input,
-        ssh_ctx,
-    )?;
+    let encrypted = encrypt_file_command(&options, args.member_id.clone(), &args.input, ssh_ctx)?;
     let output_path = resolve_encrypted_output_path(args.out.as_ref(), &args.input)?;
 
     save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet)?;

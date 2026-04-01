@@ -119,7 +119,6 @@ fn test_rewrap_removes_member_file_enc() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(encrypted_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(encrypt_args).unwrap();
     assert!(encrypted_path.exists(), "Encrypted file should exist");

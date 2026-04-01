@@ -42,16 +42,6 @@ pub struct IncomingVerificationReport {
     pub not_configured: Vec<IncomingVerificationItem>,
 }
 
-impl IncomingVerificationReport {
-    pub fn non_failed_member_ids(&self) -> Vec<String> {
-        self.verified
-            .iter()
-            .chain(self.not_configured.iter())
-            .map(|item| item.member_id.clone())
-            .collect()
-    }
-}
-
 /// Application-layer request for executing a rewrap batch.
 #[derive(Clone)]
 pub struct RewrapBatchRequest {

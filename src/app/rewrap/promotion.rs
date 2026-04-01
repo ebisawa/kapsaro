@@ -6,8 +6,6 @@ use super::types::{IncomingVerificationItem, IncomingVerificationReport};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromotionWarning {
     VerificationFailed { member_id: String, message: String },
-    ForceSkippedTofu,
-    ForceNoEligibleMembers,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,10 +17,6 @@ pub enum PromotionBlockError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromotionDecision {
     None,
-    AutoAccept {
-        accepted_member_ids: Vec<String>,
-        warnings: Vec<PromotionWarning>,
-    },
     Prompt {
         candidates: Vec<IncomingVerificationItem>,
     },
@@ -34,25 +28,8 @@ pub enum PromotionDecision {
 
 pub fn build_promotion_decision(
     report: &IncomingVerificationReport,
-    force: bool,
     is_interactive: bool,
 ) -> PromotionDecision {
-    if force {
-        let mut warnings = build_failed_warnings(report);
-        let accepted_member_ids = report.non_failed_member_ids();
-        warnings.push(
-            if accepted_member_ids.is_empty() && !report.failed.is_empty() {
-                PromotionWarning::ForceNoEligibleMembers
-            } else {
-                PromotionWarning::ForceSkippedTofu
-            },
-        );
-        return PromotionDecision::AutoAccept {
-            accepted_member_ids,
-            warnings,
-        };
-    }
-
     if !report.failed.is_empty() {
         return PromotionDecision::Blocked {
             warnings: build_failed_warnings(report),

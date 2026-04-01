@@ -34,54 +34,7 @@ fn verified_result(member_id: &str) -> IncomingVerificationItem {
 }
 
 #[test]
-fn test_confirm_force_excludes_failed() {
-    let report = make_report(
-        vec![verified_result("alice")],
-        vec![IncomingVerificationItem {
-            member_id: "bob".to_string(),
-            category: IncomingVerificationCategory::Failed,
-            message: "err".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, true, false, &mut input).unwrap();
-    assert_eq!(result.len(), 2);
-    assert!(result.contains(&"alice".to_string()));
-    assert!(!result.contains(&"bob".to_string()));
-    assert!(result.contains(&"carol".to_string()));
-}
-
-#[test]
-fn test_confirm_force_with_no_failed_promotes_all() {
-    let report = make_report(
-        vec![verified_result("alice")],
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, true, false, &mut input).unwrap();
-    assert_eq!(result.len(), 2);
-    assert!(result.contains(&"alice".to_string()));
-    assert!(result.contains(&"carol".to_string()));
-}
-
-#[test]
-fn test_confirm_failed_without_force_errors() {
+fn test_confirm_failed_errors() {
     let report = make_report(
         vec![],
         vec![IncomingVerificationItem {
@@ -94,14 +47,14 @@ fn test_confirm_failed_without_force_errors() {
         vec![],
     );
     let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input);
+    let result = confirm_incoming_promotions(&report, true, &mut input);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("Online verification failed"), "got: {}", err);
 }
 
 #[test]
-fn test_confirm_not_configured_without_force_errors() {
+fn test_confirm_not_configured_non_interactive_errors() {
     let report = make_report(
         vec![],
         vec![],
@@ -114,7 +67,7 @@ fn test_confirm_not_configured_without_force_errors() {
         }],
     );
     let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, false, &mut input);
+    let result = confirm_incoming_promotions(&report, false, &mut input);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("TOFU confirmation required"), "got: {}", err);
@@ -134,7 +87,7 @@ fn test_confirm_not_configured_interactive_accept() {
         }],
     );
     let mut input = Cursor::new(b"y\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert_eq!(result, vec!["carol".to_string()]);
 }
 
@@ -152,7 +105,7 @@ fn test_confirm_not_configured_interactive_reject() {
         }],
     );
     let mut input = Cursor::new(b"n\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert!(result.is_empty());
 }
 
@@ -170,17 +123,17 @@ fn test_confirm_verified_and_not_configured_mixed() {
         }],
     );
     let mut input = Cursor::new(b"y\ny\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert_eq!(result.len(), 2);
     assert_eq!(result[0], "alice");
     assert_eq!(result[1], "carol");
 }
 
 #[test]
-fn test_confirm_non_tty_without_force_errors() {
+fn test_confirm_non_tty_errors() {
     let report = make_report(vec![verified_result("alice")], vec![], vec![]);
     let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, false, &mut input);
+    let result = confirm_incoming_promotions(&report, false, &mut input);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("TOFU confirmation required"), "got: {}", err);
@@ -190,7 +143,7 @@ fn test_confirm_non_tty_without_force_errors() {
 fn test_confirm_interactive_accept() {
     let report = make_report(vec![verified_result("alice")], vec![], vec![]);
     let mut input = Cursor::new(b"y\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert_eq!(result, vec!["alice".to_string()]);
 }
 
@@ -198,7 +151,7 @@ fn test_confirm_interactive_accept() {
 fn test_confirm_interactive_reject() {
     let report = make_report(vec![verified_result("alice")], vec![], vec![]);
     let mut input = Cursor::new(b"n\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert!(result.is_empty());
 }
 
@@ -210,7 +163,7 @@ fn test_confirm_interactive_mixed_responses() {
         vec![],
     );
     let mut input = Cursor::new(b"y\nn\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert_eq!(result, vec!["alice".to_string()]);
 }
 
@@ -218,6 +171,6 @@ fn test_confirm_interactive_mixed_responses() {
 fn test_confirm_empty_report() {
     let report = make_report(vec![], vec![], vec![]);
     let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+    let result = confirm_incoming_promotions(&report, true, &mut input).unwrap();
     assert!(result.is_empty());
 }

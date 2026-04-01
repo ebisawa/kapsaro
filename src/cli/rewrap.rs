@@ -26,10 +26,6 @@ pub struct RewrapArgs {
     #[arg(long)]
     pub no_signer_pub: bool,
 
-    /// Skip online verification and TOFU confirmation
-    #[arg(long, short = 'f')]
-    pub force: bool,
-
     /// Member ID to use
     #[arg(long, short = 'm')]
     pub member_id: Option<String>,

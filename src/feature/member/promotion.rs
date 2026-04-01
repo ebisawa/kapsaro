@@ -37,9 +37,6 @@ impl IncomingVerificationReport {
     }
 
     /// Return member IDs excluding online-verification-failed members.
-    ///
-    /// Used by `--force` to skip TOFU confirmation while still rejecting
-    /// members whose online verification explicitly failed.
     pub fn non_failed_member_ids(&self) -> Vec<String> {
         self.verified
             .iter()

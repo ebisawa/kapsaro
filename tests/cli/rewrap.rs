@@ -37,7 +37,6 @@ fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArg
         rotate_key: false,
         clear_disclosure_history: false,
         no_signer_pub: false,
-        force: false,
     }
 }
 

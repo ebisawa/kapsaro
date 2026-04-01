@@ -22,12 +22,8 @@ pub(crate) fn execute_batch_rewrap(args: &RewrapArgs) -> Result<()> {
 
     let accepted_ids = if let Some(report) = plan.incoming_report.as_ref() {
         let is_interactive = std::io::stdin().is_terminal();
-        let accepted = confirm_incoming_promotions(
-            report,
-            args.force,
-            is_interactive,
-            &mut std::io::stdin().lock(),
-        )?;
+        let accepted =
+            confirm_incoming_promotions(report, is_interactive, &mut std::io::stdin().lock())?;
         print_promotion_summary(report, &accepted, args.common.quiet);
         accepted
     } else {

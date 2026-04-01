@@ -12,11 +12,10 @@ use std::io::BufRead;
 
 pub(crate) fn confirm_incoming_promotions(
     report: &IncomingVerificationReport,
-    force: bool,
     is_interactive: bool,
     input: &mut impl BufRead,
 ) -> Result<Vec<String>> {
-    let decision = build_promotion_decision(report, force, is_interactive);
+    let decision = build_promotion_decision(report, is_interactive);
     resolve_promotion_decision(&decision, input)
 }
 
@@ -62,13 +61,6 @@ fn resolve_promotion_decision(
 ) -> Result<Vec<String>> {
     match decision {
         PromotionDecision::None => Ok(vec![]),
-        PromotionDecision::AutoAccept {
-            accepted_member_ids,
-            warnings,
-        } => {
-            print_promotion_warnings(warnings);
-            Ok(accepted_member_ids.clone())
-        }
         PromotionDecision::Prompt { candidates } => {
             let mut accepted = Vec::new();
             for result in candidates {
@@ -91,16 +83,6 @@ fn print_promotion_warnings(warnings: &[PromotionWarning]) {
             PromotionWarning::VerificationFailed { member_id, message } => {
                 eprintln!("Warning: {}: {}", member_id, message);
             }
-            PromotionWarning::ForceSkippedTofu => {
-                eprintln!(
-                    "Warning: --force skips TOFU confirmation. Promoting members without identity verification."
-                );
-            }
-            PromotionWarning::ForceNoEligibleMembers => {
-                eprintln!(
-                    "Warning: --force skipped TOFU confirmation, but all incoming members failed online verification."
-                );
-            }
         }
     }
 }
@@ -109,12 +91,12 @@ fn build_promotion_error(error: PromotionBlockError) -> Error {
     match error {
         PromotionBlockError::OnlineVerificationFailed => Error::Verify {
             rule: "V-ONLINE-VERIFY".to_string(),
-            message: "Online verification failed for incoming member(s). Use --force to proceed."
-                .to_string(),
+            message: "Online verification failed for incoming member(s).".to_string(),
         },
         PromotionBlockError::TofuConfirmationRequired => Error::Verify {
             rule: "V-TOFU".to_string(),
-            message: "TOFU confirmation required for incoming members but stdin is not a terminal. Use --force to skip.".to_string(),
+            message: "TOFU confirmation required for incoming members but stdin is not a terminal."
+                .to_string(),
         },
     }
 }

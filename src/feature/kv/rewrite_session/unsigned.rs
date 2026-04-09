@@ -4,6 +4,7 @@
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::build_signing_context;
+use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
 use crate::feature::kv::document::UnsignedKvDocument;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvHeader;
@@ -41,12 +42,6 @@ pub(crate) fn unwrap_master_key_from_verified(
     debug: bool,
 ) -> Result<MasterKey> {
     let doc = verified.document();
-    crate::feature::envelope::unwrap::unwrap_master_key_for_kv(
-        &doc.head.sid,
-        &doc.wrap.wrap,
-        member_id,
-        &key_ctx.kid,
-        &key_ctx.private_key,
-        debug,
-    )
+    unwrap_master_key_for_kv_with_context(&doc.head.sid, &doc.wrap.wrap, member_id, key_ctx, debug)
+        .map(|result| result.value)
 }

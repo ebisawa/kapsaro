@@ -5,11 +5,11 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::disclosure::add_to_removed_history;
-use crate::feature::envelope::unwrap::unwrap_master_key_for_file;
+use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
 use crate::feature::envelope::wrap::build_wrap_item_for_file;
 use crate::feature::recipient::{
-    build_new_wrap_items, check_recipient_exists, validate_not_empty_recipients,
-    warn_recipient_not_found,
+    build_new_wrap_items, check_recipient_exists, resolve_verified_recipients,
+    validate_not_empty_recipients, warn_recipient_not_found,
 };
 use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::file_enc::VerifiedFileEncDocument;
@@ -68,13 +68,9 @@ pub fn add_file_recipients(
     target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
     debug: bool,
 ) -> Result<()> {
-    let content_key = unwrap_master_key_for_file(
-        verified,
-        &key_ctx.member_id,
-        &key_ctx.kid,
-        &key_ctx.private_key,
-        debug,
-    )?;
+    let content_key =
+        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_id, key_ctx, debug)?
+            .value;
     let current_recipients = protected.recipients();
     let wrap_items = build_new_wrap_items(
         &current_recipients,
@@ -86,6 +82,35 @@ pub fn add_file_recipients(
         |attested| build_wrap_item_for_file(attested, &protected.sid, &content_key, debug),
     )?;
     protected.wrap.extend(wrap_items);
+
+    Ok(())
+}
+
+pub fn refresh_file_recipients(
+    protected: &mut FileEncDocumentProtected,
+    verified: &VerifiedFileEncDocument,
+    recipients_to_refresh: &[String],
+    key_ctx: &CryptoContext,
+    target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
+    debug: bool,
+) -> Result<()> {
+    let content_key =
+        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_id, key_ctx, debug)?
+            .value;
+    let refreshed_members =
+        resolve_verified_recipients(target_members, key_ctx, recipients_to_refresh, debug)?;
+
+    protected
+        .wrap
+        .retain(|wrap| !recipients_to_refresh.contains(&wrap.rid));
+    for member in &refreshed_members {
+        protected.wrap.push(build_wrap_item_for_file(
+            member,
+            &protected.sid,
+            &content_key,
+            debug,
+        )?);
+    }
 
     Ok(())
 }

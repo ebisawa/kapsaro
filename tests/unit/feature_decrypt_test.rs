@@ -7,9 +7,14 @@
 
 use crate::keygen_helpers::make_verified_members;
 use crate::test_utils::ALICE_MEMBER_ID;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use crate::test_utils::{
+    setup_member_key_context, setup_test_keystore_from_fixtures,
+    update_active_private_key_expires_at,
+};
 use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::decrypt::file::decrypt_file_document;
+use secretenv::feature::decrypt::file::{
+    decrypt_file_document, decrypt_file_document_with_context,
+};
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::verify::file::{verify_file_content, verify_file_document};
@@ -170,6 +175,47 @@ fn test_parse_verify_decrypt_file() {
 
     // Compare Zeroizing<Vec<u8>> with &[u8] using as_ref()
     assert_eq!(decrypted.as_ref() as &[u8], content);
+}
+
+#[test]
+fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let old_kid = old_key_ctx.kid.to_string();
+    let old_public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &old_kid).unwrap();
+
+    let content = b"Hello from the old key";
+    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let members = make_verified_members(std::slice::from_ref(&old_public_key));
+    let file_enc_doc = encrypt_file_document(
+        content,
+        &recipient_ids,
+        &members,
+        &SigningContext {
+            signing_key: &old_key_ctx.signing_key,
+            signer_kid: &old_kid,
+            signer_pub: old_public_key,
+            debug: false,
+        },
+    )
+    .unwrap();
+
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
+    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    assert_ne!(new_key_ctx.kid.to_string(), old_kid);
+
+    let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
+    let verified =
+        verify_file_content(&FileEncContent::new_unchecked(encrypted_json), false).unwrap();
+    let decrypted =
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_ID, &new_key_ctx, false)
+            .unwrap();
+
+    assert_eq!(decrypted.value.as_ref() as &[u8], content);
+    assert_eq!(decrypted.key_info.kid, old_kid);
+    assert!(decrypted.key_info.used_fallback);
 }
 
 #[test]

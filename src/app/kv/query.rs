@@ -5,7 +5,9 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
 use crate::app::errors::handle_kv_key_not_found_error;
 use crate::app::trust::{build_read_signer_trust, ReadTrustPolicy, SignerTrustOutcome};
-use crate::feature::kv::decrypt::{decrypt_kv_document, decrypt_kv_single_entry};
+use crate::feature::kv::decrypt::{
+    decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
+};
 use crate::feature::kv::query::{
     decode_decrypted_kv_value, decode_decrypted_kv_values, list_kv_keys_with_disclosed,
     KvDisclosedEntry,
@@ -68,22 +70,24 @@ pub(crate) fn execute_kv_read_command(
     debug: bool,
 ) -> Result<KvReadResult> {
     let values = match mode {
-        KvReadMode::All => decode_decrypted_kv_values(decrypt_kv_document(
-            &command.verified_doc,
-            &command.execution.member_id,
-            &command.execution.key_ctx.kid,
-            &command.execution.key_ctx.private_key,
-            debug,
-        )?)?,
-        KvReadMode::Single(key) => {
-            let value = decrypt_kv_single_entry(
+        KvReadMode::All => decode_decrypted_kv_values(
+            decrypt_kv_document_with_context(
                 &command.verified_doc,
                 &command.execution.member_id,
-                &command.execution.key_ctx.kid,
-                &command.execution.key_ctx.private_key,
+                &command.execution.key_ctx,
+                debug,
+            )?
+            .value,
+        )?,
+        KvReadMode::Single(key) => {
+            let value = decrypt_kv_single_entry_with_context(
+                &command.verified_doc,
+                &command.execution.member_id,
+                &command.execution.key_ctx,
                 key,
                 debug,
             )
+            .map(|result| result.value)
             .map_err(|e| handle_kv_key_not_found_error(e, &command.target_path, key))?;
             let value = decode_decrypted_kv_value(key, value)?;
             std::collections::BTreeMap::from([(key.to_string(), value)])
@@ -97,11 +101,13 @@ pub(crate) fn execute_kv_read_command(
 }
 
 pub(crate) fn execute_kv_env_command(command: &KvReadCommand) -> Result<SecretEnvMap> {
-    decode_decrypted_kv_values(decrypt_kv_document(
-        &command.verified_doc,
-        &command.execution.member_id,
-        &command.execution.key_ctx.kid,
-        &command.execution.key_ctx.private_key,
-        false,
-    )?)
+    decode_decrypted_kv_values(
+        decrypt_kv_document_with_context(
+            &command.verified_doc,
+            &command.execution.member_id,
+            &command.execution.key_ctx,
+            false,
+        )?
+        .value,
+    )
 }

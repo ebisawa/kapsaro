@@ -3,7 +3,7 @@
 
 //! Read/query operations for kv-enc documents.
 
-use super::decrypt::decrypt_kv_document;
+use super::decrypt::decrypt_kv_document_with_context;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
@@ -45,13 +45,8 @@ pub fn decrypt_all_kv_values(
     verbose: bool,
 ) -> Result<HashMap<String, SecretString>> {
     let verified_doc = verify_kv_content(content, verbose)?;
-    let kv_map = decrypt_kv_document(
-        &verified_doc,
-        member_id,
-        &key_ctx.kid,
-        &key_ctx.private_key,
-        verbose,
-    )?;
+    let kv_map =
+        decrypt_kv_document_with_context(&verified_doc, member_id, key_ctx, verbose)?.value;
     Ok(decode_decrypted_kv_values(kv_map)?.into_iter().collect())
 }
 

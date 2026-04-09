@@ -7,10 +7,10 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::document::UnsignedKvDocument;
 use crate::feature::kv::rewrite_session::{KvRecipientRewriteRequest, VerifiedKvRewriteSession};
 use crate::feature::recipient::{
-    check_recipient_exists, collect_target_recipient_ids, validate_not_empty_recipients,
-    warn_recipient_not_found,
+    check_recipient_exists, collect_target_recipient_ids, resolve_verified_recipients,
+    validate_not_empty_recipients, warn_recipient_not_found,
 };
-use crate::feature::rewrap::kv_op::recipients::add_kv_recipients;
+use crate::feature::rewrap::kv_op::recipients::{add_kv_recipients, refresh_kv_recipients};
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
@@ -19,7 +19,10 @@ use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
 use std::path::Path;
 
-use super::{execute_rewrap_operations, RewrapContext, RewrapExecutor, RewrapOptions};
+use super::{
+    collect_stale_recipient_ids, execute_rewrap_operations, RewrapContext, RewrapExecutor,
+    RewrapOptions,
+};
 
 /// Executor for kv-enc rewrap operations.
 struct KvRewrapExecutor<'a> {
@@ -37,6 +40,21 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
         let sid = self.doc.head().sid;
         let master_key = self.session.unwrap_master_key()?;
         add_kv_recipients(
+            &sid,
+            self.doc.wrap_mut(),
+            recipients,
+            &master_key,
+            self.ctx.key_ctx(),
+            self.ctx.target_members(),
+            self.ctx.options().debug,
+        )?;
+        self.doc.update_timestamp()
+    }
+
+    fn refresh_recipients(&mut self, recipients: &[String]) -> Result<()> {
+        let sid = self.doc.head().sid;
+        let master_key = self.session.unwrap_master_key()?;
+        refresh_kv_recipients(
             &sid,
             self.doc.wrap_mut(),
             recipients,
@@ -143,10 +161,14 @@ pub fn rewrap_kv_document(
     target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
     let all_members = collect_target_recipient_ids(workspace_root, target_members)?;
+    let verified_target_members =
+        resolve_verified_recipients(target_members, key_ctx, &all_members, options.debug)?;
 
     let verified = verify_kv_content(content, options.debug)?;
+    let stale_recipients =
+        collect_stale_recipient_ids(&verified.document().wrap.wrap, &verified_target_members);
 
-    let ctx = RewrapContext::new(options, member_id, key_ctx, target_members);
+    let ctx = RewrapContext::new(options, member_id, key_ctx, Some(&verified_target_members));
     let executor = KvRewrapExecutor::new_from_verified(verified, &ctx)?;
-    execute_rewrap_operations(executor, options, &all_members)
+    execute_rewrap_operations(executor, options, &all_members, &stale_recipients)
 }

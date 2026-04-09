@@ -9,7 +9,7 @@ use crate::app::context::execution::{
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
 use crate::app::trust::{build_read_signer_trust, DecryptPolicy, SignerTrustOutcome};
-use crate::feature::decrypt::file::decrypt_file_document;
+use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::verify::file::verify_file_content;
 use crate::format::content::FileEncContent;
 use crate::Result;
@@ -50,11 +50,11 @@ pub(crate) fn build_decrypt_file_command(
 pub(crate) fn execute_decrypt_file_command(
     command: &DecryptFileCommand,
 ) -> Result<Zeroizing<Vec<u8>>> {
-    decrypt_file_document(
+    decrypt_file_document_with_context(
         &command.verified_doc,
         &command.execution.member_id,
-        &command.execution.key_ctx.kid,
-        &command.execution.key_ctx.private_key,
+        &command.execution.key_ctx,
         command.verbose,
     )
+    .map(|result| result.value)
 }

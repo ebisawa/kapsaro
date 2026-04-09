@@ -4,7 +4,10 @@
 //! Unit tests for feature/rewrap/kv module (KV document rewrap operations).
 
 use crate::keygen_helpers::make_verified_members;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use crate::test_utils::{
+    setup_member_key_context, setup_test_keystore_from_fixtures,
+    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+};
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -228,6 +231,48 @@ fn test_rewrap_kv_document_rotate_key() {
         original_wrap, rotated_wrap,
         "WRAP token must change after key rotation"
     );
+}
+
+#[test]
+fn test_rewrap_kv_succeeds_when_only_old_self_wrap_exists() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let old_kid = old_key_ctx.kid.to_string();
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &old_kid);
+    let encrypted = encrypt_kv_for_alice(&temp_dir, &old_kid, &old_key_ctx);
+
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
+    sync_active_public_key_to_workspace(temp_dir.path(), temp_dir.path(), ALICE_MEMBER_ID).unwrap();
+
+    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let new_kid = new_key_ctx.kid.to_string();
+    assert_ne!(new_kid, old_kid);
+
+    let request = single_rewrap_request(&new_key_ctx, Some(temp_dir.path()), false, false, false);
+    let encrypted = KvEncContent::new_unchecked(encrypted);
+    let result = rewrap_kv_content(&encrypted, &request);
+
+    assert!(
+        result.is_ok(),
+        "rewrap with only old self wrap must succeed: {:?}",
+        result.err()
+    );
+
+    let rewrapped = result.unwrap();
+    let wrap_token = rewrapped
+        .lines()
+        .find(|l| l.starts_with(":WRAP "))
+        .unwrap()
+        .strip_prefix(":WRAP ")
+        .unwrap();
+    let wrap_data: KvWrap = parse_kv_wrap_token(wrap_token).unwrap();
+    let alice_wrap = wrap_data
+        .wrap
+        .iter()
+        .find(|wrap| wrap.rid == ALICE_MEMBER_ID)
+        .unwrap();
+    assert_eq!(alice_wrap.kid, new_kid);
 }
 
 #[test]

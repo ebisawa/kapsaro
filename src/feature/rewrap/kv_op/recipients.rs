@@ -6,7 +6,7 @@
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::wrap::build_wrap_item_for_kv;
-use crate::feature::recipient::build_new_wrap_items;
+use crate::feature::recipient::{build_new_wrap_items, resolve_verified_recipients};
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::model::kv_enc::header::KvWrap;
 use crate::model::public_key::VerifiedRecipientKey;
@@ -39,5 +39,27 @@ pub fn add_kv_recipients(
     )?;
     wrap_data.wrap.extend(wrap_items);
 
+    Ok(())
+}
+
+pub fn refresh_kv_recipients(
+    sid: &Uuid,
+    wrap_data: &mut KvWrap,
+    refreshed_recipients: &[String],
+    master_key: &MasterKey,
+    key_ctx: &CryptoContext,
+    target_members: Option<&[VerifiedRecipientKey]>,
+    debug: bool,
+) -> Result<()> {
+    let refreshed_members =
+        resolve_verified_recipients(target_members, key_ctx, refreshed_recipients, debug)?;
+    wrap_data
+        .wrap
+        .retain(|wrap| !refreshed_recipients.contains(&wrap.rid));
+    for member in &refreshed_members {
+        wrap_data
+            .wrap
+            .push(build_wrap_item_for_kv(sid, member, master_key, debug)?);
+    }
     Ok(())
 }

@@ -4,7 +4,10 @@
 //! Unit tests for feature/rewrap/file module (file-enc document rewrap operations).
 
 use crate::keygen_helpers::make_verified_members;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use crate::test_utils::{
+    setup_member_key_context, setup_test_keystore_from_fixtures,
+    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+};
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::encrypt::file::encrypt_file_document;
@@ -258,6 +261,46 @@ fn test_rewrap_file_rotate_key() {
         original_ct, rotated_ct,
         "wrap ct must change after key rotation"
     );
+}
+
+#[test]
+fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let old_kid = old_key_ctx.kid.to_string();
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &old_kid);
+    let json = encrypt_file_for_alice(&temp_dir, &old_kid, &old_key_ctx);
+
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
+    sync_active_public_key_to_workspace(temp_dir.path(), temp_dir.path(), ALICE_MEMBER_ID).unwrap();
+
+    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let new_kid = new_key_ctx.kid.to_string();
+    assert_ne!(new_kid, old_kid);
+    assert!(load_public_key(&keystore_root, ALICE_MEMBER_ID, &new_kid).is_ok());
+
+    let request = single_rewrap_request(&new_key_ctx, Some(temp_dir.path()), false, false, false);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
+
+    assert!(
+        result.is_ok(),
+        "rewrap with only old self wrap must succeed: {:?}",
+        result.err()
+    );
+
+    let rewrapped = result.unwrap();
+    let doc: secretenv::model::file_enc::FileEncDocument =
+        serde_json::from_str(&rewrapped).unwrap();
+    let alice_wrap = doc
+        .protected
+        .wrap
+        .iter()
+        .find(|wrap| wrap.rid == ALICE_MEMBER_ID)
+        .unwrap();
+    assert_eq!(alice_wrap.kid, new_kid);
+    assert_eq!(doc.signature.kid, new_key_ctx.kid.to_string());
 }
 
 #[test]

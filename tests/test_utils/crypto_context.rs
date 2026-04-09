@@ -8,7 +8,7 @@
 use super::ed25519_backend::Ed25519DirectBackend;
 use ed25519_dalek::SigningKey;
 use secretenv::feature::context::crypto::{
-    validate_ed25519_consistency, validate_okp_key, CryptoContext,
+    build_local_key_access, validate_ed25519_consistency, validate_okp_key, CryptoContext,
 };
 use secretenv::feature::key::protection::encryption::decrypt_private_key;
 use secretenv::feature::verify::private_key::verify_private_key_matches_public_key;
@@ -31,25 +31,30 @@ use tempfile::TempDir;
 pub fn setup_member_key_context(
     temp_dir: &TempDir,
     member_id: &str,
-    kid: Option<&str>,
+    explicit_kid: Option<&str>,
 ) -> CryptoContext {
     let keystore_root = temp_dir.path().join("keys");
     let ssh_pub = load_test_ssh_public_key(temp_dir);
     let backend = build_test_signature_backend(temp_dir);
-    let (kid, private_key, public_key) = load_test_key_material(&keystore_root, member_id, kid);
+    let (resolved_kid, private_key, public_key) =
+        load_test_key_material(&keystore_root, member_id, explicit_kid);
     let verified_private_key =
         load_verified_private_key(&private_key, &public_key, backend.as_ref(), &ssh_pub);
     let signing_key = build_test_signing_key(verified_private_key.document()).unwrap();
 
-    CryptoContext {
-        member_id: MemberId::try_from(member_id.to_string()).unwrap(),
-        kid: Kid::try_from(kid).unwrap(),
-        pub_key_source: Box::new(KeystorePublicKeySource::new(keystore_root)),
-        workspace_path: Some(temp_dir.path().join("workspace")),
-        private_key: verified_private_key,
+    CryptoContext::new(
+        MemberId::try_from(member_id.to_string()).unwrap(),
+        Kid::try_from(resolved_kid.clone()).unwrap(),
+        Box::new(KeystorePublicKeySource::new(keystore_root.clone())),
+        Some(temp_dir.path().join("workspace")),
+        verified_private_key,
         signing_key,
-        expires_at: private_key.protected.expires_at,
-    }
+        private_key.protected.expires_at.clone(),
+    )
+    .with_local_key_access(
+        explicit_kid.map(|_| resolved_kid),
+        Some(build_local_key_access(keystore_root, ssh_pub, backend)),
+    )
 }
 
 fn load_test_ssh_public_key(temp_dir: &TempDir) -> String {

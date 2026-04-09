@@ -12,6 +12,7 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::format::content::EncryptedContent;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::signer::load_signer_public_key;
+use crate::model::common::WrapItem;
 use crate::model::public_key::PublicKey;
 use crate::model::public_key_verified::VerifiedRecipientKey;
 use crate::Result;
@@ -91,6 +92,9 @@ pub(crate) trait RewrapExecutor {
     /// `recipients` are plain member ID strings.
     fn add_recipients(&mut self, recipients: &[String]) -> Result<()>;
 
+    /// Refresh wrap items for recipients whose target kid changed.
+    fn refresh_recipients(&mut self, recipients: &[String]) -> Result<()>;
+
     /// Remove recipients from the encrypted file.
     ///
     /// - file-enc: removes wrap items and records in removed_recipients (MK/DEK unchanged)
@@ -117,6 +121,7 @@ pub(crate) fn execute_rewrap_operations<E: RewrapExecutor>(
     mut executor: E,
     options: &RewrapOptions,
     target_recipients: &[String],
+    stale_recipients: &[String],
 ) -> Result<String> {
     let current = executor.current_recipients();
 
@@ -135,6 +140,9 @@ pub(crate) fn execute_rewrap_operations<E: RewrapExecutor>(
     if !removed.is_empty() {
         executor.remove_recipients(&removed)?;
     }
+    if !stale_recipients.is_empty() {
+        executor.refresh_recipients(stale_recipients)?;
+    }
     if !added.is_empty() {
         executor.add_recipients(&added)?;
     }
@@ -146,6 +154,23 @@ pub(crate) fn execute_rewrap_operations<E: RewrapExecutor>(
     }
 
     executor.finalize()
+}
+
+pub(crate) fn collect_stale_recipient_ids(
+    current_wrap: &[WrapItem],
+    target_members: &[VerifiedRecipientKey],
+) -> Vec<String> {
+    target_members
+        .iter()
+        .filter_map(|member| {
+            let protected = &member.document().protected;
+            current_wrap
+                .iter()
+                .find(|wrap| wrap.rid == protected.member_id)
+                .filter(|wrap| wrap.kid != protected.kid)
+                .map(|_| protected.member_id.clone())
+        })
+        .collect()
 }
 
 pub fn rewrap_content(content: &EncryptedContent, request: &RewrapRequest<'_>) -> Result<String> {

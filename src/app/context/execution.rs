@@ -30,8 +30,8 @@ impl ExecutionContext {
         let workspace_root = resolved.paths.workspace_root.clone();
         let key_ctx = load_crypto_context(
             resolved.member_id.as_str(),
-            ssh_ctx.backend.as_ref(),
-            &ssh_ctx.public_key,
+            ssh_ctx.backend,
+            ssh_ctx.public_key,
             explicit_kid,
             Some(&resolved.paths.keystore_root),
             workspace_root.as_ref().map(|w| w.root_path.clone()),

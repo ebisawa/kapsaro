@@ -6,8 +6,11 @@
 use crate::crypto::aead::xchacha::decrypt as xchacha_decrypt;
 use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::crypto::types::primitives::XChaChaNonce;
+use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::binding::build_file_payload_aad;
-use crate::feature::envelope::unwrap::unwrap_master_key_for_file;
+use crate::feature::envelope::unwrap::{
+    unwrap_master_key_for_file, unwrap_master_key_for_file_with_context,
+};
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::identifiers::{alg, format};
 use crate::model::verified::VerifiedPrivateKey;
@@ -130,4 +133,38 @@ pub fn decrypt_file_document(
     let content_key = unwrap_master_key_for_file(verified_doc, member_id, kid, private_key, debug)?;
 
     decrypt_file_payload(verified_doc, &content_key, debug, "decrypt_file_document")
+}
+
+pub fn decrypt_file_document_with_context(
+    verified_doc: &VerifiedFileEncDocument,
+    member_id: &str,
+    key_ctx: &CryptoContext,
+    debug: bool,
+) -> Result<DecryptionResult<Zeroizing<Vec<u8>>>> {
+    validate_file_enc_document_format(verified_doc)?;
+    validate_file_enc_document_payload(verified_doc)?;
+
+    let doc = verified_doc.document();
+    if doc.protected.payload.protected.sid != doc.protected.sid {
+        return Err(Error::Crypto {
+            message: format!(
+                "SID mismatch: payload.protected.sid ({}) != protected.sid ({})",
+                doc.protected.payload.protected.sid, doc.protected.sid
+            ),
+            source: None,
+        });
+    }
+
+    let content_key =
+        unwrap_master_key_for_file_with_context(verified_doc, member_id, key_ctx, debug)?;
+    let plaintext = decrypt_file_payload(
+        verified_doc,
+        &content_key.value,
+        debug,
+        "decrypt_file_document_with_context",
+    )?;
+    Ok(DecryptionResult {
+        value: plaintext,
+        key_info: content_key.key_info,
+    })
 }

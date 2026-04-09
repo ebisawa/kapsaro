@@ -228,8 +228,8 @@ fn test_crypto_context_load_fails_when_public_key_mismatches_private_key() {
 
     let result = load_crypto_context(
         ALICE_MEMBER_ID,
-        backend.as_ref(),
-        &ssh_pub_for_kdf,
+        backend,
+        ssh_pub_for_kdf,
         Some(&kid1),
         Some(&keystore_root),
         Some(temp_dir.path().join("workspace")),

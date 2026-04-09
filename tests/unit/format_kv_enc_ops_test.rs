@@ -371,15 +371,15 @@ fn setup_crypto_ctx_for_test(
             ),
         );
 
-    secretenv::feature::context::crypto::CryptoContext {
-        member_id: MemberId::try_from(member_id.to_string()).unwrap(),
-        kid: Kid::try_from(kid.to_string()).unwrap(),
+    secretenv::feature::context::crypto::CryptoContext::new(
+        MemberId::try_from(member_id.to_string()).unwrap(),
+        Kid::try_from(kid.to_string()).unwrap(),
         pub_key_source,
         workspace_path,
-        private_key: verified_private,
+        verified_private,
         signing_key,
-        expires_at: "2099-12-31T23:59:59Z".to_string(),
-    }
+        "2099-12-31T23:59:59Z".to_string(),
+    )
 }
 
 fn make_initial_kv_doc(

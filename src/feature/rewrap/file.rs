@@ -5,8 +5,10 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::sign_file_document;
-use crate::feature::recipient::collect_target_recipient_ids;
-use crate::feature::rewrap::file_op::recipients::{add_file_recipients, remove_file_recipients};
+use crate::feature::recipient::{collect_target_recipient_ids, resolve_verified_recipients};
+use crate::feature::rewrap::file_op::recipients::{
+    add_file_recipients, refresh_file_recipients, remove_file_recipients,
+};
 use crate::feature::rewrap::file_op::rotate::rotate_file_key;
 use crate::feature::verify::file::verify_file_content;
 use crate::format::content::FileEncContent;
@@ -17,7 +19,10 @@ use crate::support::time;
 use crate::{Error, Result};
 use std::path::Path;
 
-use super::{execute_rewrap_operations, RewrapContext, RewrapExecutor, RewrapOptions};
+use super::{
+    collect_stale_recipient_ids, execute_rewrap_operations, RewrapContext, RewrapExecutor,
+    RewrapOptions,
+};
 
 /// Executor for file-enc rewrap operations.
 struct FileRewrapExecutor<'a> {
@@ -33,6 +38,17 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
 
     fn add_recipients(&mut self, recipients: &[String]) -> Result<()> {
         add_file_recipients(
+            &mut self.protected,
+            &self.verified,
+            recipients,
+            self.ctx.key_ctx(),
+            self.ctx.target_members(),
+            self.ctx.options().debug,
+        )
+    }
+
+    fn refresh_recipients(&mut self, recipients: &[String]) -> Result<()> {
+        refresh_file_recipients(
             &mut self.protected,
             &self.verified,
             recipients,
@@ -105,10 +121,16 @@ pub fn rewrap_file_document(
     target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
     let all_members = collect_target_recipient_ids(workspace_root, target_members)?;
+    let verified_target_members =
+        resolve_verified_recipients(target_members, key_ctx, &all_members, options.debug)?;
 
     let verified = verify_file_content(content, options.debug)?;
+    let stale_recipients = collect_stale_recipient_ids(
+        &verified.document().protected.wrap,
+        &verified_target_members,
+    );
 
-    let ctx = RewrapContext::new(options, member_id, key_ctx, target_members);
+    let ctx = RewrapContext::new(options, member_id, key_ctx, Some(&verified_target_members));
     let executor = FileRewrapExecutor::new(verified, &ctx);
-    execute_rewrap_operations(executor, options, &all_members)
+    execute_rewrap_operations(executor, options, &all_members, &stale_recipients)
 }

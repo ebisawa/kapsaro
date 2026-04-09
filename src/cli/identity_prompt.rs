@@ -44,8 +44,8 @@ pub(crate) fn select_ssh_key(candidates: &[SshKeyCandidateView]) -> Result<usize
     if !is_prompt_available() {
         return Err(Error::Config {
             message: "Multiple Ed25519 keys found in ssh-agent.\n\
-                      Specify which key to use with -i <path> or \
-                      SECRETENV_SSH_KEY environment variable."
+                      Specify which key to use with -i <path>, --ssh-identity <path>, or \
+                      SECRETENV_SSH_IDENTITY environment variable."
                 .to_string(),
         });
     }

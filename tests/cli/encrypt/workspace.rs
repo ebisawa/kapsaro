@@ -184,7 +184,7 @@ fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains("Insecure permissions"));
@@ -209,7 +209,7 @@ fn test_encrypt_rejects_strict_key_checking_no() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .env("SECRETENV_STRICT_KEY_CHECKING", "no")
         .assert()
         .failure()
@@ -239,7 +239,7 @@ fn test_encrypt_surfaces_private_key_expiry_warning_on_stderr() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains("Warning: Private key expires in"));
@@ -269,7 +269,7 @@ fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains(

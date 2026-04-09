@@ -45,15 +45,43 @@ fn test_load_config_file_valid() {
         &path,
         r#"
 member_id = "alice@example.com"
-ssh_signer = "agent"
+ssh_signing_method = "ssh-agent"
+ssh_keygen_command = "/usr/bin/ssh-keygen"
+ssh_add_command = "/usr/bin/ssh-add"
 "#,
     )
     .unwrap();
 
     let result = load_config_file(&path, tmp.path()).unwrap();
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.len(), 4);
     assert_eq!(result.get("member_id").unwrap(), "alice@example.com");
-    assert_eq!(result.get("ssh_signer").unwrap(), "agent");
+    assert_eq!(result.get("ssh_signing_method").unwrap(), "ssh-agent");
+    assert_eq!(
+        result.get("ssh_keygen_command").unwrap(),
+        "/usr/bin/ssh-keygen"
+    );
+    assert_eq!(result.get("ssh_add_command").unwrap(), "/usr/bin/ssh-add");
+}
+
+#[test]
+fn test_load_config_file_ignores_old_ssh_key() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("config.toml");
+    fs::write(
+        &path,
+        r#"
+ssh_key = "~/.ssh/id_ed25519"
+ssh_identity = "~/.ssh/id_ed25519_work"
+"#,
+    )
+    .unwrap();
+
+    let result = load_config_file(&path, tmp.path()).unwrap();
+    assert_eq!(result.get("ssh_key").unwrap(), "~/.ssh/id_ed25519");
+    assert_eq!(
+        result.get("ssh_identity").unwrap(),
+        "~/.ssh/id_ed25519_work"
+    );
 }
 
 #[test]
@@ -132,7 +160,7 @@ fn test_unset_config_value() {
     let path = tmp.path().join("config.toml");
     fs::write(
         &path,
-        "member_id = \"alice@example.com\"\nssh_signer = \"agent\"\n",
+        "member_id = \"alice@example.com\"\nssh_signing_method = \"ssh-agent\"\n",
     )
     .unwrap();
 
@@ -144,8 +172,8 @@ fn test_unset_config_value() {
         "member_id should be removed"
     );
     assert_eq!(
-        config.get("ssh_signer").unwrap(),
-        "agent",
+        config.get("ssh_signing_method").unwrap(),
+        "ssh-agent",
         "other keys should remain"
     );
 }

@@ -45,7 +45,7 @@ fn test_member_list_shows_initialized_member() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_ID));
@@ -62,7 +62,7 @@ fn test_member_list_json_output() {
         .arg(workspace_dir.path())
         .arg("--json")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -127,7 +127,7 @@ fn test_member_list_json_skips_invalid_member_file() {
         .arg(workspace_dir.path())
         .arg("--json")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -155,7 +155,7 @@ fn test_member_show_displays_public_key() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("Member:"))
@@ -175,7 +175,7 @@ fn test_member_show_unknown_member_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -199,7 +199,7 @@ fn test_member_show_invalid_member_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -217,7 +217,7 @@ fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
-        .env("SECRETENV_SSH_KEY", fixture_ssh_key_path(&temp_dir))
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"));
@@ -237,7 +237,7 @@ fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
         .env_remove("SECRETENV_MEMBER_ID")
-        .env("SECRETENV_SSH_KEY", fixture_ssh_key_path(&temp_dir))
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("Specify --member-id"));
@@ -253,7 +253,7 @@ fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
         .env_remove("SECRETENV_MEMBER_ID")
-        .env("SECRETENV_SSH_KEY", fixture_ssh_key_path(&temp_dir))
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"))
@@ -275,7 +275,7 @@ fn test_member_remove_removes_from_workspace() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_ID));
@@ -289,7 +289,7 @@ fn test_member_remove_removes_from_workspace() {
         .arg(workspace_dir.path())
         .arg("--force")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -300,7 +300,7 @@ fn test_member_remove_removes_from_workspace() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -356,7 +356,7 @@ fn test_member_remove_nonexistent_fails() {
         .arg(workspace_dir.path())
         .arg("--force")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -380,7 +380,7 @@ fn test_member_add_places_in_incoming() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Added member"));
@@ -401,7 +401,7 @@ fn test_member_add_invalid_file_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -422,7 +422,7 @@ fn test_member_add_duplicate_without_force_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -434,7 +434,7 @@ fn test_member_add_duplicate_without_force_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -462,7 +462,7 @@ fn test_member_verify_reports_offline_invalid_member() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found in active/"));
@@ -491,7 +491,7 @@ fn test_member_verify_ignores_invalid_incoming_member_when_verifying_all() {
         .arg(workspace_dir.path())
         .arg("--json")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

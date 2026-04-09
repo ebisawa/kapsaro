@@ -17,10 +17,10 @@ use tempfile::TempDir;
 #[test]
 fn test_validate_key_valid() {
     assert!(validate_key("member_id").is_ok());
-    assert!(validate_key("ssh_key").is_ok());
-    assert!(validate_key("ssh_keygen").is_ok());
-    assert!(validate_key("ssh_add").is_ok());
-    assert!(validate_key("ssh_signer").is_ok());
+    assert!(validate_key("ssh_identity").is_ok());
+    assert!(validate_key("ssh_keygen_command").is_ok());
+    assert!(validate_key("ssh_add_command").is_ok());
+    assert!(validate_key("ssh_signing_method").is_ok());
     assert!(validate_key("github_user").is_ok());
     assert!(validate_key("gihub_user").is_ok());
 }
@@ -29,6 +29,10 @@ fn test_validate_key_valid() {
 fn test_validate_key_invalid() {
     assert!(validate_key("invalid_key").is_err());
     assert!(validate_key("unknown").is_err());
+    assert!(validate_key("ssh_keygen").is_err());
+    assert!(validate_key("ssh_add").is_err());
+    assert!(validate_key("ssh_signer").is_err());
+    assert!(validate_key("ssh_key").is_err());
 }
 
 #[test]

@@ -65,7 +65,7 @@ fn test_trust_list_succeeds_without_ssh_agent() {
         .arg("list")
         .arg("--home")
         .arg(home.path())
-        .env("SECRETENV_SSH_SIGNER", "ssh-agent")
+        .env("SECRETENV_SSH_SIGNING_METHOD", "ssh-agent")
         .env_remove("SSH_AUTH_SOCK")
         .assert()
         .success();
@@ -133,7 +133,7 @@ fn test_trust_remove_prints_insecure_permission_warning() {
         .arg(KID_BOB)
         .arg("--home")
         .arg(home.path())
-        .arg("--identity")
+        .arg("--ssh-identity")
         .arg(home.path().join(".ssh").join("test_ed25519"))
         .assert()
         .success();
@@ -155,6 +155,25 @@ fn test_trust_remove_prints_insecure_permission_warning() {
         DISPLAY_KID_BOB,
         stderr
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_trust_remove_old_identity_option_fails() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("remove")
+        .arg(KID_BOB)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--ssh-identity"));
 }
 
 #[cfg(unix)]

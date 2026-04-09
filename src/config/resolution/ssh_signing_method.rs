@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSH signer resolution
+//! SSH signing method resolution
 //!
-//! Resolves SSH signer based on the following priority order:
+//! Resolves SSH signing method based on the following priority order:
 //! 1. CLI option (--ssh-agent / --ssh-keygen)
-//! 2. Environment variable (SECRETENV_SSH_SIGNER)
+//! 2. Environment variable (SECRETENV_SSH_SIGNING_METHOD)
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default (auto)
 
@@ -15,8 +15,8 @@ use std::path::Path;
 
 use super::common::resolve_string_required;
 
-/// Parse an SSH signer config string ("auto", "ssh-agent", or "ssh-keygen")
-pub(crate) fn parse_ssh_signer_config(s: &str) -> Result<types::SshSignerConfig> {
+/// Parse an SSH signing method config string.
+pub(crate) fn parse_ssh_signing_method_config(s: &str) -> Result<types::SshSignerConfig> {
     match s {
         "auto" => Ok(types::SshSignerConfig::Auto),
         "ssh-agent" => Ok(types::SshSignerConfig::SshAgent),
@@ -30,20 +30,20 @@ pub(crate) fn parse_ssh_signer_config(s: &str) -> Result<types::SshSignerConfig>
     }
 }
 
-/// Resolve SSH signer config based on priority order
+/// Resolve SSH signing method config based on priority order.
 ///
 /// # Priority Order
 ///
-/// 1. `ssh_signer_opt` parameter (CLI option --ssh-agent / --ssh-keygen)
-/// 2. `SECRETENV_SSH_SIGNER` environment variable
+/// 1. `ssh_signing_method_opt` parameter (CLI option --ssh-agent / --ssh-keygen)
+/// 2. `SECRETENV_SSH_SIGNING_METHOD` environment variable
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default (auto)
-pub(crate) fn resolve_ssh_signer_config(
-    ssh_signer_opt: Option<types::SshSigner>,
+pub(crate) fn resolve_ssh_signing_method_config(
+    ssh_signing_method_opt: Option<types::SshSigner>,
     base_dir: Option<&Path>,
 ) -> Result<types::SshSignerConfig> {
     // Priority 1: CLI option (explicit SshSigner → convert to Config)
-    if let Some(signer) = ssh_signer_opt {
+    if let Some(signer) = ssh_signing_method_opt {
         return Ok(match signer {
             types::SshSigner::SshAgent => types::SshSignerConfig::SshAgent,
             types::SshSigner::SshKeygen => types::SshSignerConfig::SshKeygen,
@@ -51,22 +51,22 @@ pub(crate) fn resolve_ssh_signer_config(
     }
 
     // Priority 2-4: env var / config / default (auto)
-    let signer_str = resolve_string_required(
+    let signing_method = resolve_string_required(
         None,
-        Some("SECRETENV_SSH_SIGNER"),
-        "ssh_signer",
+        Some("SECRETENV_SSH_SIGNING_METHOD"),
+        "ssh_signing_method",
         base_dir,
         "auto".to_string(),
     )?;
 
-    parse_ssh_signer_config(&signer_str)
+    parse_ssh_signing_method_config(&signing_method)
 }
 
-/// Resolve SshSignerConfig to concrete SshSigner.
+/// Resolve SshSignerConfig to a concrete SshSigner.
 ///
 /// For `Auto`, ssh-agent is preferred when an agent socket is available;
 /// otherwise falls back to ssh-keygen.
-pub(crate) fn resolve_ssh_signer(config: types::SshSignerConfig) -> types::SshSigner {
+pub(crate) fn resolve_ssh_signing_method(config: types::SshSignerConfig) -> types::SshSigner {
     match config {
         types::SshSignerConfig::SshAgent => types::SshSigner::SshAgent,
         types::SshSignerConfig::SshKeygen => types::SshSigner::SshKeygen,
@@ -81,5 +81,5 @@ pub(crate) fn resolve_ssh_signer(config: types::SshSignerConfig) -> types::SshSi
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_ssh_signer_test.rs"]
+#[path = "../../../tests/unit/config_resolution_ssh_signing_method_test.rs"]
 mod tests;

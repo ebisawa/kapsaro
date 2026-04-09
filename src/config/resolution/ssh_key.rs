@@ -4,8 +4,8 @@
 //! SSH Key resolution
 //!
 //! Resolves SSH key path based on the following priority order:
-//! 1. CLI option (-i)
-//! 2. Environment variable (SECRETENV_SSH_KEY)
+//! 1. CLI option (-i / --ssh-identity)
+//! 2. Environment variable (SECRETENV_SSH_IDENTITY)
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default (~/.ssh/id_ed25519)
 
@@ -19,9 +19,9 @@ use super::common::{expand_tilde, get_default_ssh_key_path, resolve_string_with_
 /// Source of SSH key configuration
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SshKeySource {
-    /// CLI option (-i)
+    /// CLI option (-i / --ssh-identity)
     Cli,
-    /// Environment variable (SECRETENV_SSH_KEY)
+    /// Environment variable (SECRETENV_SSH_IDENTITY)
     Env,
     /// Global config (SECRETENV_HOME/config.toml)
     GlobalConfig,
@@ -47,8 +47,8 @@ pub(crate) struct ResolvedSshKey {
 ///
 /// # Priority Order
 ///
-/// 1. `ssh_key_opt` parameter (CLI option -i)
-/// 2. `SECRETENV_SSH_KEY` environment variable
+/// 1. `ssh_key_opt` parameter (CLI option -i / --ssh-identity)
+/// 2. `SECRETENV_SSH_IDENTITY` environment variable
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default path (`~/.ssh/id_ed25519`)
 pub(crate) fn resolve_ssh_key_candidate(
@@ -66,7 +66,7 @@ pub(crate) fn resolve_ssh_key_candidate(
     }
 
     // Priority 2: Environment variable
-    if let Ok(ssh_key_str) = std::env::var("SECRETENV_SSH_KEY") {
+    if let Ok(ssh_key_str) = std::env::var("SECRETENV_SSH_IDENTITY") {
         let ssh_key = PathBuf::from(ssh_key_str);
         let exists = ssh_key.exists();
         return Ok(ResolvedSshKey {
@@ -78,7 +78,7 @@ pub(crate) fn resolve_ssh_key_candidate(
 
     // Priority 3: Global config
     if let Some(ssh_key_path_str) =
-        resolve_string_with_priority(None, None, "ssh_key", base_dir, None)?
+        resolve_string_with_priority(None, None, "ssh_identity", base_dir, None)?
     {
         let expanded = expand_tilde(&ssh_key_path_str)?;
         let exists = expanded.exists();
@@ -103,7 +103,7 @@ pub(crate) fn build_ssh_key_not_found_error(candidate: &ResolvedSshKey) -> Error
     if !candidate.exists {
         let source_str = match candidate.source {
             SshKeySource::Cli => "CLI option",
-            SshKeySource::Env => "SECRETENV_SSH_KEY",
+            SshKeySource::Env => "SECRETENV_SSH_IDENTITY",
             SshKeySource::GlobalConfig => "global config",
             SshKeySource::Default => {
                 return Error::NotFound {
@@ -132,8 +132,8 @@ pub(crate) fn build_ssh_key_not_found_error(candidate: &ResolvedSshKey) -> Error
 ///
 /// # Priority Order
 ///
-/// 1. `ssh_key_opt` parameter (CLI option -i)
-/// 2. `SECRETENV_SSH_KEY` environment variable
+/// 1. `ssh_key_opt` parameter (CLI option -i / --ssh-identity)
+/// 2. `SECRETENV_SSH_IDENTITY` environment variable
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default path (`~/.ssh/id_ed25519`)
 ///

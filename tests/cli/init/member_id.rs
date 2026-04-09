@@ -15,7 +15,7 @@ fn test_init_with_member_id() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -35,7 +35,7 @@ fn test_init_with_env_member_id() {
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_MEMBER_ID", BOB_MEMBER_ID)
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

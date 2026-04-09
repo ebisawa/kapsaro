@@ -66,7 +66,7 @@ fn test_rewrap_nonexistent_workspace_fails() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -115,7 +115,7 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains("Insecure permissions"));
@@ -149,7 +149,7 @@ fn test_rewrap_cli_rejects_strict_key_checking_no() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .env("SECRETENV_STRICT_KEY_CHECKING", "no")
         .assert()
         .failure()
@@ -189,7 +189,7 @@ fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
         .arg("--member-id")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains(

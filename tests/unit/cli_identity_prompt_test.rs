@@ -58,7 +58,8 @@ fn test_select_ssh_key_multiple_candidates_non_tty_fails() {
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("Multiple Ed25519 keys found"),
+        err_msg.contains("Multiple Ed25519 keys found")
+            && err_msg.contains("SECRETENV_SSH_IDENTITY"),
         "unexpected error: {err_msg}"
     );
 }

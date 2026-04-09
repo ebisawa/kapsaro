@@ -133,7 +133,13 @@ pub(super) fn resolve_string_required(
 /// 1. Global config
 /// 2. Default value
 pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_string_required(None, None, "ssh_keygen", base_dir, "ssh-keygen".to_string())
+    resolve_string_required(
+        None,
+        None,
+        "ssh_keygen_command",
+        base_dir,
+        "ssh-keygen".to_string(),
+    )
 }
 
 /// Resolve ssh-add command path from config
@@ -142,7 +148,13 @@ pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String>
 /// 1. Global config
 /// 2. Default value
 pub(crate) fn resolve_ssh_add_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_string_required(None, None, "ssh_add", base_dir, "ssh-add".to_string())
+    resolve_string_required(
+        None,
+        None,
+        "ssh_add_command",
+        base_dir,
+        "ssh-add".to_string(),
+    )
 }
 
 #[cfg(test)]

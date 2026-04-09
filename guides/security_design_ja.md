@@ -1215,7 +1215,7 @@ SecretEnv では、`signer_pub` による暗号学的真正性の確認、`membe
 
 補足:
 
-- self の署名用秘密鍵に対応する `signer_pub` は、2 の承認キャッシュ確認を省略してよい
+- ローカルキーストアに既にある self の鍵に対応する `signer_pub` は、2 の承認キャッシュ確認を省略してよい
 - `SECRETENV_STRICT_KEY_CHECKING=no` は利用者が明示指定した読み取り経路に限り 2 を省略してよい
 - いずれの例外でも 1 の `members/active` 確認は省略しない
 - `known_keys` への暗黙的な自動更新は行わない

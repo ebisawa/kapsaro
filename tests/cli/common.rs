@@ -22,10 +22,10 @@ use tempfile::TempDir;
 
 /// Helper to get the secretenv test binary command.
 ///
-/// Sets `SECRETENV_SSH_SIGNER=ssh-keygen` for CLI integration tests.
+/// Sets `SECRETENV_SSH_SIGNING_METHOD=ssh-keygen` for CLI integration tests.
 pub fn cmd() -> Command {
     let mut c = cargo::cargo_bin_cmd!("secretenv");
-    c.env("SECRETENV_SSH_SIGNER", "ssh-keygen");
+    c.env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
     c
 }
 
@@ -78,7 +78,7 @@ pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .output()
         .unwrap();
 

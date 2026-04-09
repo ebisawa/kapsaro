@@ -60,7 +60,7 @@ impl std::fmt::Display for SshSigner {
 ///
 /// - `ssh_add_path`: `"ssh-add"`
 /// - `ssh_keygen_path`: `"ssh-keygen"`
-/// - `ssh_signer`: `SshSignerConfig::Auto`
+/// - `ssh_signing_method`: `SshSignerConfig::Auto`
 ///
 /// # TOML Example
 ///
@@ -68,7 +68,7 @@ impl std::fmt::Display for SshSigner {
 /// [ssh]
 /// ssh_add_path = "/usr/local/bin/ssh-add"
 /// ssh_keygen_path = "/usr/local/bin/ssh-keygen"
-/// ssh_signer = "auto"
+/// ssh_signing_method = "auto"
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshConfig {
@@ -81,7 +81,7 @@ pub struct SshConfig {
 
     /// Path to ssh-keygen command
     ///
-    /// Used for `ssh-keygen -Y sign` operations when `ssh_signer` is `SshKeygen`.
+    /// Used for `ssh-keygen -Y sign` operations when `ssh_signing_method` is `SshKeygen`.
     /// Default: `"ssh-keygen"`
     #[serde(default = "default_ssh_keygen_path")]
     pub ssh_keygen_path: String,
@@ -90,7 +90,7 @@ pub struct SshConfig {
     ///
     /// Determines how SSH signatures are obtained for LocalIdentityEncrypted.
     /// Default: `SshSignerConfig::Auto`
-    #[serde(default, rename = "ssh_signer")]
+    #[serde(default, rename = "ssh_signing_method")]
     pub signing_method: SshSignerConfig,
 }
 
@@ -200,7 +200,7 @@ pub struct IdentityConfig {
 /// member_id = "alice"
 ///
 /// [ssh]
-/// ssh_signer = "auto"
+/// ssh_signing_method = "auto"
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigDocument {

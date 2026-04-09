@@ -21,6 +21,7 @@
 13. [Operational Guidelines](#13-operational-guidelines)
 14. [FAQ](#14-faq)
 15. [Command Reference](#15-command-reference)
+16. [Configuration Reference](#16-configuration-reference)
 
 ---
 
@@ -284,10 +285,10 @@ secretenv config set github_user alice-gh
 # auto: tries ssh-agent first, then ssh-keygen
 # ssh-agent: use SSH agent
 # ssh-keygen: use ssh-keygen command
-secretenv config set ssh_signer auto
+secretenv config set ssh_signing_method auto
 
 # Set SSH key (select a specific key when multiple keys are loaded in ssh-agent)
-secretenv config set ssh_key ~/.ssh/id_ed25519_work
+secretenv config set ssh_identity ~/.ssh/id_ed25519_work
 ```
 
 The configuration file is located at `~/.config/secretenv/config.toml`.
@@ -642,7 +643,7 @@ secretenv member verify --approve
 secretenv member verify --approve alice@example.com bob@example.com
 ```
 
-`member verify --approve` targets only `members/active`. It performs offline verification and, when needed, online verification, then shows the `kid`, GitHub account `id`, the `login` when available, and the SSH fingerprint for review. Only approved non-self `kid`s are written to `known_keys` in the local trust store. Your own active key is trusted from the local keystore and is not normally added to `known_keys`.
+`member verify --approve` targets only `members/active`. It performs offline verification and, when needed, online verification, then shows the `kid`, GitHub account `id`, the `login` when available, and the SSH fingerprint for review. Only approved non-self `kid`s are written to `known_keys` in the local trust store. Your own keys that already exist in the local keystore are treated as self-trusted for the approval-cache check and are not normally added to `known_keys`, but this does not bypass the current `members/active` check.
 
 ### Managing the Local Trust Store
 
@@ -1027,7 +1028,7 @@ secretenv private keys (HPKE private keys) are protected by an SSH Ed25519 key i
 
 In environments where an SSH agent is unavailable, you can switch to signing with the `ssh-keygen` command using the `--ssh-keygen` option.
 
-When multiple keys are loaded in the SSH agent, you can explicitly specify which key to use with the `-i` option or the `ssh_key` configuration:
+When multiple keys are loaded in the SSH agent, you can explicitly specify which key to use with the `-i` option or the `ssh_identity` configuration:
 
 ```bash
 secretenv encrypt -i ~/.ssh/id_ed25519_work secret.env
@@ -1120,7 +1121,7 @@ This means your SSH key produced different signatures for the same input on two 
 |--------|-------------|
 | `--home <path>` | Specify base directory (default: `~/.config/secretenv/`) |
 | `-w` / `--workspace <path>` | Specify Workspace Root |
-| `-i` / `--identity <path>` | Specify SSH key file path (also used for key selection with ssh-agent) |
+| `-i` / `--ssh-identity <path>` | Specify SSH key file path (also used for key selection with ssh-agent) |
 | `--ssh-agent` | Use SSH agent |
 | `--ssh-keygen` | Use ssh-keygen command |
 | `--json` | Output in JSON format |
@@ -1196,7 +1197,64 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv config list` | List all configuration values |
 | `secretenv config unset <key>` | Remove a configuration value |
 
-Configuration keys: `member_id`, `ssh_signer` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_key`, `github_user`
+Configuration keys: `member_id`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `github_user`
+
+---
+
+## 16. Configuration Reference
+
+secretenv resolves configuration values from multiple sources in the following priority order:
+
+1. **CLI options** (highest priority)
+2. **Environment variables**
+3. **Config file** (`<SECRETENV_HOME>/config.toml`)
+4. **Default values** (lowest priority)
+
+When a higher-priority source provides a value, lower-priority sources are ignored.
+
+### Config File
+
+The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~/.config/secretenv/config.toml`). It uses flat TOML key-value format.
+
+| Key | Description | Default | CLI Option | Environment Variable |
+|-----|-------------|---------|------------|---------------------|
+| `member_id` | Default member identifier (pattern: `^[a-z][a-z0-9-]{0,31}$`) | (none) | `-m` / `--member-id` | `SECRETENV_MEMBER_ID` |
+| `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `SECRETENV_SSH_IDENTITY` |
+| `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `SECRETENV_SSH_SIGNING_METHOD` |
+| `ssh_keygen_command` | Path to `ssh-keygen` command | `ssh-keygen` | — | — |
+| `ssh_add_command` | Path to `ssh-add` command | `ssh-add` | — | — |
+| `github_user` | Default GitHub login name for `key new` | (none) | `--github-user` | `SECRETENV_GITHUB_USER` |
+
+Example:
+
+```toml
+member_id = "alice"
+ssh_identity = "~/.ssh/id_ed25519"
+ssh_signing_method = "auto"
+github_user = "alice-gh"
+```
+
+If the config file does not exist, secretenv falls back to environment variables and default values without error. If the file exists but contains syntax errors, secretenv reports an error.
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SECRETENV_HOME` | Base directory for secretenv configuration and keys | `~/.config/secretenv/` |
+| `SECRETENV_MEMBER_ID` | Default member identifier | (none) |
+| `SECRETENV_SSH_IDENTITY` | Path to SSH private key file (Ed25519) | `~/.ssh/id_ed25519` |
+| `SECRETENV_SSH_SIGNING_METHOD` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
+| `SECRETENV_GITHUB_USER` | Default GitHub login name for `key new` | (none) |
+| `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected from git root) |
+| `SECRETENV_STRICT_KEY_CHECKING` | Trust store strict checking for read-path: `yes`, `no` | `yes` |
+| `SECRETENV_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
+| `SECRETENV_KEY_PASSWORD` | Password for `SECRETENV_PRIVATE_KEY` (CI/CD) | (none) |
+
+**Notes:**
+
+- `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 12](#12-cicd-integration) for details.
+- `SECRETENV_STRICT_KEY_CHECKING=no` disables the `known_keys` check on the read path. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking.
+- `SECRETENV_WORKSPACE` overrides the automatic workspace detection from the git repository root. Useful when running commands outside the repository tree.
 
 ---
 

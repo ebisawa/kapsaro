@@ -181,7 +181,7 @@ The local trust store is a signed JSON document in `secretenv.trust.local@2` for
 - It does not distinguish signer vs recipient
 - It does not distinguish workspaces
 - Presence in `known_keys` does not imply current membership
-- The user's own key normally does not need to be recorded in `known_keys`, because the local keystore is the trust anchor for self
+- The user's own keys that already exist in the local keystore normally do not need to be recorded in `known_keys`, because the local keystore is the trust anchor for self; this skips only the approval-cache check and does not skip the `members/active` authorization check
 
 **Layer 4: Manual approval and online verify**
 

@@ -15,7 +15,7 @@ pub struct CommonOptions {
     pub home: Option<PathBuf>,
 
     /// SSH identity file (private key path)
-    #[arg(long, short = 'i')]
+    #[arg(long = "ssh-identity", short = 'i')]
     pub identity: Option<PathBuf>,
 
     /// Output in JSON format

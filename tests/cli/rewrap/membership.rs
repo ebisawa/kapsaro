@@ -423,7 +423,7 @@ fn test_rewrap_rejects_duplicate_kid_workspace_before_processing() {
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
         .env(
-            "SECRETENV_SSH_KEY",
+            "SECRETENV_SSH_IDENTITY",
             temp_dir.path().join(".ssh").join("test_ed25519"),
         )
         .assert()

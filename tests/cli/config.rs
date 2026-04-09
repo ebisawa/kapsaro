@@ -52,6 +52,98 @@ fn test_config_set_and_get() {
         .stdout(predicate::str::contains("test@example.com"));
 }
 
+#[test]
+fn test_config_set_and_get_ssh_identity() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("ssh_identity")
+        .arg("~/.ssh/id_ed25519_work")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_identity")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("~/.ssh/id_ed25519_work"));
+}
+
+#[test]
+fn test_config_set_and_get_ssh_signing_method() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("ssh_signing_method")
+        .arg("ssh-keygen")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_signing_method")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ssh-keygen"));
+}
+
+#[test]
+fn test_config_set_and_get_ssh_keygen_command() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("ssh_keygen_command")
+        .arg("/usr/local/bin/ssh-keygen")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_keygen_command")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("/usr/local/bin/ssh-keygen"));
+}
+
+#[test]
+fn test_config_set_and_get_ssh_add_command() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("ssh_add_command")
+        .arg("/usr/local/bin/ssh-add")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_add_command")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("/usr/local/bin/ssh-add"));
+}
+
 // ============================================================================
 // Set and List
 // ============================================================================
@@ -139,6 +231,62 @@ fn test_config_invalid_key_fails() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Invalid")));
+}
+
+#[test]
+fn test_config_old_ssh_key_fails() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_key")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
+}
+
+#[test]
+fn test_config_old_ssh_signer_fails() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_signer")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
+}
+
+#[test]
+fn test_config_old_ssh_keygen_fails() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_keygen")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
+}
+
+#[test]
+fn test_config_old_ssh_add_fails() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("ssh_add")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
 }
 
 // ============================================================================

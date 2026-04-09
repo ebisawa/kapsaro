@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 // NOTE: Keep in sync with PRD config.toml documentation (global config.toml keys).
 pub(crate) const VALID_KEYS: &[&str] = &[
     "member_id",
-    "ssh_key",
-    "ssh_keygen",
-    "ssh_add",
-    "ssh_signer",
+    "ssh_identity",
+    "ssh_keygen_command",
+    "ssh_add_command",
+    "ssh_signing_method",
     "github_user",
 ];
 

@@ -89,6 +89,13 @@ pub struct MemberRemoveResult {
     pub member_id: String,
 }
 
+#[derive(Debug)]
+pub struct MemberRemovePreview {
+    pub member_id: String,
+    pub affected_artifacts: Vec<std::path::PathBuf>,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MemberVerificationResult {
     pub member_id: String,

@@ -315,6 +315,36 @@ fn test_member_remove_removes_from_workspace() {
 }
 
 #[test]
+fn test_member_remove_without_force_in_non_interactive_mode_fails() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    cmd()
+        .arg("member")
+        .arg("remove")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "without --force in non-interactive mode",
+        ));
+
+    cmd()
+        .arg("member")
+        .arg("list")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(TEST_MEMBER_ID));
+}
+
+#[test]
 fn test_member_remove_nonexistent_fails() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 

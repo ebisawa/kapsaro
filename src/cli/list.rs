@@ -5,10 +5,10 @@
 
 use clap::Args;
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::app::kv::query::list_kv_command;
-use crate::cli::common::options::CommonOptions;
-use crate::cli::common::output::json::print_json_output;
+use crate::cli::common::command::resolve_options;
+use crate::cli::common::output::kv::print_kv_key_list;
+use crate::cli::options::CommonOptions;
 use crate::Result;
 
 #[derive(Args)]
@@ -23,24 +23,7 @@ pub struct ListArgs {
 }
 
 pub fn run(args: ListArgs) -> Result<()> {
-    let options = CommonCommandOptions::from(&args.common);
+    let options = resolve_options(&args.common);
     let keys_with_disclosed = list_kv_command(&options, args.name.as_deref())?;
-
-    if args.common.json {
-        let keys: Vec<&str> = keys_with_disclosed
-            .iter()
-            .map(|(k, _)| k.as_str())
-            .collect();
-        print_json_output(&serde_json::json!({ "keys": keys }))?;
-    } else {
-        for (key, disclosed) in &keys_with_disclosed {
-            if *disclosed {
-                println!("{} [DISCLOSED]", key);
-            } else {
-                println!("{}", key);
-            }
-        }
-    }
-
-    Ok(())
+    print_kv_key_list(&keys_with_disclosed, args.common.json)
 }

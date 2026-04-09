@@ -58,7 +58,7 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
         },
     };
 
-    let result = verify_file_document(&doc, None, false);
+    let result = verify_file_document(&doc, false);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("wrap count"));
 }
@@ -80,7 +80,7 @@ fn test_verify_kv_document_rejects_wrap_count_over_limit() {
         "invalid".to_string(),
     );
 
-    let result = verify_kv_document(&doc, None, false);
+    let result = verify_kv_document(&doc, false);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("wrap count"));
 }

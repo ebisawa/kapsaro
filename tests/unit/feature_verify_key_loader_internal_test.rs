@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::feature::context::expiry::enforce_recipient_key_not_expired;
+use crate::feature::context::expiry::{
+    build_recipient_key_expiry_warning, enforce_recipient_key_not_expired,
+};
 use crate::feature::key::material::{build_identity_keys, generate_keypairs};
 use crate::feature::key::public_key_document::{
     build_attestation, build_public_key, PublicKeyBuildParams,
@@ -56,8 +58,8 @@ fn build_test_public_key(expires_at: &str) -> (PublicKey, String) {
     let (ssh_temp, ssh_priv, ssh_pub_content) = generate_ssh_keypair();
     let ssh_context = build_test_ssh_context(&ssh_priv, &ssh_pub_content);
 
-    let (_kem_sk, kem_pk, sig_sk, sig_pk) = generate_keypairs().unwrap();
-    let identity_keys = build_identity_keys(&kem_pk, &sig_pk).unwrap();
+    let keypairs = generate_keypairs().unwrap();
+    let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
     let attestation = build_attestation(&ssh_context, &identity_keys).unwrap();
     let identity = Identity {
         keys: identity_keys,
@@ -68,7 +70,7 @@ fn build_test_public_key(expires_at: &str) -> (PublicKey, String) {
         identity,
         created_at: "2026-01-01T00:00:00Z",
         expires_at,
-        sig_sk: &sig_sk,
+        sig_sk: &keypairs.sig_sk,
         debug: false,
         github_account: None,
     };
@@ -188,4 +190,36 @@ fn test_public_key_expiry_warning_expiring_soon() {
         "Warning should mention 'expires in': {}",
         warning.unwrap()
     );
+}
+
+#[test]
+fn test_build_recipient_key_expiry_warning_expiring_soon() {
+    let now = time::OffsetDateTime::now_utc();
+    let future = now + time::Duration::days(15);
+    let expires_at = future
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+    let (public_key, _kid) = build_test_public_key(&expires_at);
+
+    let warning = build_recipient_key_expiry_warning(&public_key).unwrap();
+
+    assert!(
+        warning.is_some(),
+        "Should warn about expiring soon recipient key"
+    );
+    assert!(
+        warning
+            .as_ref()
+            .unwrap()
+            .contains("Recipient public key for 'test@example.com' expires in"),
+        "Warning should mention recipient expiry: {}",
+        warning.unwrap()
+    );
+}
+
+#[test]
+fn test_build_recipient_key_expiry_warning_expired_none() {
+    let (public_key, _kid) = build_test_public_key("2020-01-01T00:00:00Z");
+    let warning = build_recipient_key_expiry_warning(&public_key).unwrap();
+    assert!(warning.is_none());
 }

@@ -3,17 +3,19 @@
 
 //! Rewrap feature - re-encryption for kv-enc and file-enc formats.
 
-pub mod common;
 pub(crate) mod file;
 pub(crate) mod file_op;
 pub(crate) mod kv;
 pub(crate) mod kv_op;
 
 use crate::feature::context::crypto::CryptoContext;
+use crate::format::content::EncryptedContent;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::signer::load_signer_public_key;
 use crate::model::public_key::PublicKey;
+use crate::model::public_key_verified::VerifiedRecipientKey;
 use crate::Result;
+use std::path::Path;
 
 /// Rewrap operation options.
 #[derive(Debug, Clone)]
@@ -29,6 +31,19 @@ pub(crate) struct RewrapContext<'a> {
     options: &'a RewrapOptions,
     member_id: &'a str,
     key_ctx: &'a CryptoContext,
+    target_members: Option<&'a [VerifiedRecipientKey]>,
+}
+
+/// Request for rewrapping a single encrypted artifact.
+#[derive(Clone, Copy)]
+pub struct RewrapRequest<'a> {
+    pub member_id: &'a str,
+    pub key_ctx: &'a CryptoContext,
+    pub workspace_root: Option<&'a Path>,
+    pub target_members: Option<&'a [VerifiedRecipientKey]>,
+    pub rotate_key: bool,
+    pub clear_disclosure_history: bool,
+    pub debug: bool,
 }
 
 impl<'a> RewrapContext<'a> {
@@ -36,11 +51,13 @@ impl<'a> RewrapContext<'a> {
         options: &'a RewrapOptions,
         member_id: &'a str,
         key_ctx: &'a CryptoContext,
+        target_members: Option<&'a [VerifiedRecipientKey]>,
     ) -> Self {
         Self {
             options,
             member_id,
             key_ctx,
+            target_members,
         }
     }
 
@@ -55,6 +72,10 @@ impl<'a> RewrapContext<'a> {
 
     pub(crate) fn key_ctx(&self) -> &'a CryptoContext {
         self.key_ctx
+    }
+
+    pub(crate) fn target_members(&self) -> Option<&'a [VerifiedRecipientKey]> {
+        self.target_members
     }
 }
 
@@ -125,4 +146,35 @@ pub(crate) fn execute_rewrap_operations<E: RewrapExecutor>(
     }
 
     executor.finalize()
+}
+
+pub fn rewrap_content(content: &EncryptedContent, request: &RewrapRequest<'_>) -> Result<String> {
+    let options = RewrapOptions {
+        rotate_key: request.rotate_key,
+        clear_disclosure_history: request.clear_disclosure_history,
+        token_codec: match content {
+            EncryptedContent::FileEnc(_) => None,
+            EncryptedContent::KvEnc(_) => Some(TokenCodec::JsonJcs),
+        },
+        debug: request.debug,
+    };
+
+    match content {
+        EncryptedContent::FileEnc(file_content) => file::rewrap_file_document(
+            &options,
+            file_content,
+            request.member_id,
+            request.key_ctx,
+            request.workspace_root,
+            request.target_members,
+        ),
+        EncryptedContent::KvEnc(kv_content) => kv::rewrap_kv_document(
+            &options,
+            kv_content,
+            request.member_id,
+            request.key_ctx,
+            request.workspace_root,
+            request.target_members,
+        ),
+    }
 }

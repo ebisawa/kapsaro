@@ -6,7 +6,9 @@
 use crate::feature::verify::public_key::verify_public_key_for_verification;
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
-use crate::io::workspace::members::{list_member_file_paths, load_member_file_from_path};
+use crate::io::workspace::members::{
+    active_member_file_path, list_active_member_paths, load_member_file_from_path,
+};
 use crate::model::public_key::PublicKey;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -18,6 +20,13 @@ pub struct VerifiedMemberFile {
     pub member_id: String,
     pub public_key: PublicKey,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct VerifiedMemberCandidate {
+    member_id: String,
+    public_key: PublicKey,
+    warnings: Vec<String>,
 }
 
 pub fn load_and_verify_member_file(
@@ -68,15 +77,15 @@ pub async fn verify_member(
     member_ids: &[String],
     verbose: bool,
 ) -> Result<Vec<VerificationResult>> {
-    let member_files = list_member_file_paths(workspace_path, member_ids)?;
+    let member_files = list_verifiable_member_files(workspace_path, member_ids)?;
+    Ok(verify_member_files(&member_files, verbose).await)
+}
 
-    let mut results = Vec::new();
-    for member_file in member_files {
-        let result = verify_member_file_online(&member_file, verbose).await;
-        results.push(result);
-    }
-
-    Ok(results)
+pub async fn verify_member_public_keys(
+    public_keys: &[PublicKey],
+    verbose: bool,
+) -> Result<Vec<VerificationResult>> {
+    verify_public_key_candidates(public_keys, verbose).await
 }
 
 /// Classify verification results into verified, failed, and not_configured.
@@ -110,36 +119,107 @@ pub async fn verify_member_files(
 ) -> Vec<VerificationResult> {
     let mut results = Vec::new();
     for member_file in member_files {
-        let result = verify_member_file_online(member_file, verbose).await;
+        let result = verify_member_file_path(member_file, verbose).await;
         results.push(result);
     }
     results
 }
 
-async fn verify_member_file_online(member_file: &Path, verbose: bool) -> VerificationResult {
+async fn verify_member_file_path(member_file: &Path, verbose: bool) -> VerificationResult {
     let fallback_member_id = member_id_from_path(member_file);
-    let verified =
-        match load_and_verify_member_file(member_file, Some(&fallback_member_id), verbose) {
-            Ok(verified) => verified,
+    let candidate = match build_verified_candidate_from_file(member_file, verbose) {
+        Ok(candidate) => candidate,
+        Err(e) => return build_offline_verification_failure(&fallback_member_id, e, false),
+    };
+    verify_verified_candidate_online(&candidate, verbose).await
+}
+
+async fn verify_public_key_candidates(
+    public_keys: &[PublicKey],
+    verbose: bool,
+) -> Result<Vec<VerificationResult>> {
+    let mut results = Vec::new();
+    for public_key in public_keys {
+        let candidate = match build_verified_candidate_from_public_key(public_key, verbose) {
+            Ok(candidate) => candidate,
             Err(e) => {
-                return VerificationResult::failed(
-                    &fallback_member_id,
-                    format!("Offline verification failed: {}", e.user_message()),
-                    None,
-                );
+                results.push(build_offline_verification_failure(
+                    &public_key.protected.member_id,
+                    e,
+                    has_github_claim(public_key),
+                ));
+                continue;
             }
         };
+        results.push(verify_verified_candidate_online(&candidate, verbose).await);
+    }
+    Ok(results)
+}
 
-    let result = match verify_github_account(&verified.public_key, verbose, None).await {
+fn build_verified_candidate_from_file(
+    member_file: &Path,
+    verbose: bool,
+) -> Result<VerifiedMemberCandidate> {
+    let verified = load_and_verify_member_file(
+        member_file,
+        Some(&member_id_from_path(member_file)),
+        verbose,
+    )?;
+    Ok(VerifiedMemberCandidate {
+        member_id: verified.member_id,
+        public_key: verified.public_key,
+        warnings: verified.warnings,
+    })
+}
+
+fn build_verified_candidate_from_public_key(
+    public_key: &PublicKey,
+    verbose: bool,
+) -> Result<VerifiedMemberCandidate> {
+    let verified = verify_public_key_for_verification(public_key, verbose)?;
+    Ok(VerifiedMemberCandidate {
+        member_id: public_key.protected.member_id.clone(),
+        public_key: public_key.clone(),
+        warnings: verified.warnings,
+    })
+}
+
+async fn verify_verified_candidate_online(
+    candidate: &VerifiedMemberCandidate,
+    verbose: bool,
+) -> VerificationResult {
+    let result = match verify_github_account(&candidate.public_key, verbose, None).await {
         Ok(result) => result,
         Err(e) => VerificationResult::failed(
-            &verified.member_id,
+            &candidate.member_id,
             format!("Online verification error: {}", e.user_message()),
             None,
+            has_github_claim(&candidate.public_key),
         ),
     };
 
-    append_verification_warnings(result, &verified.warnings)
+    append_verification_warnings(result, &candidate.warnings)
+}
+
+fn list_verifiable_member_files(
+    workspace_path: &Path,
+    member_ids: &[String],
+) -> Result<Vec<std::path::PathBuf>> {
+    if member_ids.is_empty() {
+        return list_active_member_paths(workspace_path);
+    }
+
+    member_ids
+        .iter()
+        .map(|member_id| {
+            let path = active_member_file_path(workspace_path, member_id);
+            path.exists()
+                .then_some(path)
+                .ok_or_else(|| Error::NotFound {
+                    message: format!("Member '{}' not found in active/", member_id),
+                })
+        })
+        .collect()
 }
 
 fn append_verification_warnings(
@@ -152,6 +232,28 @@ fn append_verification_warnings(
 
     result.message = format!("{} [{}]", result.message, warnings.join("; "));
     result
+}
+
+fn build_offline_verification_failure(
+    member_id: &str,
+    error: Error,
+    github_claim_present: bool,
+) -> VerificationResult {
+    VerificationResult::failed(
+        member_id,
+        format!("Offline verification failed: {}", error.user_message()),
+        None,
+        github_claim_present,
+    )
+}
+
+fn has_github_claim(public_key: &PublicKey) -> bool {
+    public_key
+        .protected
+        .binding_claims
+        .as_ref()
+        .and_then(|claims| claims.github_account.as_ref())
+        .is_some()
 }
 
 #[cfg(test)]

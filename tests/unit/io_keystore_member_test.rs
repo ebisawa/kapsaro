@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::test_utils::setup_test_keystore_from_fixtures;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::io::keystore::member::{
-    find_active_key_document, load_single_member_id_from_keystore,
+    find_active_key_document, load_public_keys_for_member, load_single_member_id_from_keystore,
 };
 use tempfile::TempDir;
 
@@ -30,4 +30,15 @@ fn test_find_active_key_document_returns_active_key() {
 
     assert_eq!(active.public_key.protected.member_id, ALICE_MEMBER_ID);
     assert_eq!(active.kid, active.public_key.protected.kid);
+}
+
+#[test]
+fn test_load_public_keys_for_member_returns_all_local_keys() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let public_keys = load_public_keys_for_member(&keystore_root, ALICE_MEMBER_ID).unwrap();
+
+    assert_eq!(public_keys.len(), 1);
+    assert_eq!(public_keys[0].protected.member_id, ALICE_MEMBER_ID);
 }

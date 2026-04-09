@@ -8,7 +8,7 @@
 use crate::crypto::crypto_operation_failed;
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::base64url::b64_decode_array;
+use crate::support::base64url::b64_decode_secret_array;
 use crate::Result;
 use hpke::{
     aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::X25519HkdfSha256, Deserializable,
@@ -18,7 +18,6 @@ use rand::rngs::OsRng;
 use zeroize::Zeroizing;
 
 /// X25519 secret key with Zeroizing memory protection
-#[derive(Clone)]
 pub struct X25519SecretKey(Zeroizing<[u8; 32]>);
 
 impl X25519SecretKey {
@@ -28,6 +27,10 @@ impl X25519SecretKey {
 
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(Zeroizing::new(bytes))
+    }
+
+    pub fn from_zeroizing(bytes: Zeroizing<[u8; 32]>) -> Self {
+        Self(bytes)
     }
 }
 
@@ -116,9 +119,7 @@ pub fn open_base(
 /// This is a common helper for extracting the X25519 secret key from
 /// a VerifiedPrivateKey structure.
 pub fn decode_kem_secret_key(private_key: &VerifiedPrivateKey) -> Result<X25519SecretKey> {
-    let kem_sk_bytes: Zeroizing<[u8; 32]> = Zeroizing::new(b64_decode_array(
-        &private_key.document().keys.kem.d,
-        "KEM private key",
-    )?);
-    Ok(X25519SecretKey::from_bytes(*kem_sk_bytes))
+    let kem_sk_bytes =
+        b64_decode_secret_array(&private_key.document().keys.kem.d, "KEM private key")?;
+    Ok(X25519SecretKey::from_zeroizing(kem_sk_bytes))
 }

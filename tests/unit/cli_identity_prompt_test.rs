@@ -1,10 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Tests for cli::identity_prompt::select_ssh_key
+//! Tests for cli::identity_prompt
 
-use secretenv::app::context::ssh::SshKeyCandidateView;
-use secretenv::cli::identity_prompt::select_ssh_key;
+use std::env;
+use std::fs;
+
+use crate::app::context::ssh::SshKeyCandidateView;
+use crate::cli::identity_prompt::{resolve_key_generation_github_user_with_prompt, select_ssh_key};
+use crate::test_utils::EnvGuard;
+use serial_test::serial;
+use tempfile::TempDir;
 
 #[test]
 fn test_select_ssh_key_empty_candidates_fails() {
@@ -55,4 +61,125 @@ fn test_select_ssh_key_multiple_candidates_non_tty_fails() {
         err_msg.contains("Multiple Ed25519 keys found"),
         "unexpected error: {err_msg}"
     );
+}
+
+#[test]
+#[serial]
+fn test_resolve_key_generation_github_user_with_prompt_returns_none_when_key_reuse() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("SECRETENV_GITHUB_USER", "env-user");
+
+    let mut prompted = false;
+    let result = resolve_key_generation_github_user_with_prompt(
+        false,
+        None,
+        Some(temp_home.path()),
+        true,
+        || {
+            prompted = true;
+            Ok(Some("prompt-user".to_string()))
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result, None);
+    assert!(!prompted);
+}
+
+#[test]
+#[serial]
+fn test_resolve_key_generation_github_user_with_prompt_prefers_config_before_prompt() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+    fs::write(
+        temp_home.path().join("config.toml"),
+        "github_user = \"config-user\"\n",
+    )
+    .unwrap();
+
+    let mut prompted = false;
+    let result = resolve_key_generation_github_user_with_prompt(
+        true,
+        None,
+        Some(temp_home.path()),
+        true,
+        || {
+            prompted = true;
+            Ok(Some("prompt-user".to_string()))
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result, Some("config-user".to_string()));
+    assert!(!prompted);
+}
+
+#[test]
+#[serial]
+fn test_resolve_key_generation_github_user_with_prompt_uses_prompt_when_tty_and_unset() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+
+    let mut prompted = false;
+    let result = resolve_key_generation_github_user_with_prompt(
+        true,
+        None,
+        Some(temp_home.path()),
+        true,
+        || {
+            prompted = true;
+            Ok(Some("prompt-user".to_string()))
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result, Some("prompt-user".to_string()));
+    assert!(prompted);
+}
+
+#[test]
+#[serial]
+fn test_resolve_key_generation_github_user_with_prompt_returns_none_without_tty() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+
+    let mut prompted = false;
+    let result = resolve_key_generation_github_user_with_prompt(
+        true,
+        None,
+        Some(temp_home.path()),
+        false,
+        || {
+            prompted = true;
+            Ok(Some("prompt-user".to_string()))
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result, None);
+    assert!(!prompted);
+}
+
+#[test]
+#[serial]
+fn test_resolve_key_generation_github_user_with_prompt_allows_empty_prompt_input() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+
+    let result = resolve_key_generation_github_user_with_prompt(
+        true,
+        None,
+        Some(temp_home.path()),
+        true,
+        || Ok(None),
+    )
+    .unwrap();
+
+    assert_eq!(result, None);
 }

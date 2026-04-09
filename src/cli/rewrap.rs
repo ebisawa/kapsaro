@@ -3,14 +3,14 @@
 
 //! rewrap command - recipient management for encrypted files
 
-use crate::cli::common::options::CommonOptions;
+use crate::cli::common::command::{resolve_options, resolve_trust_store_owner_member};
+use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::options::CommonOptions;
 use crate::Result;
 use clap::Args;
 
 mod batch;
 mod promotion;
-#[cfg(test)]
-pub(crate) use promotion::confirm_incoming_promotions;
 
 #[derive(Args, Clone)]
 pub struct RewrapArgs {
@@ -32,9 +32,10 @@ pub struct RewrapArgs {
 }
 
 pub fn run(args: RewrapArgs) -> Result<()> {
-    batch::execute_batch_rewrap(&args)
+    let options = resolve_options(&args.common);
+    run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || batch::execute_batch_rewrap(&args),
+    )
 }
-
-#[cfg(test)]
-#[path = "../../tests/unit/cli_rewrap_internal_test.rs"]
-mod tests;

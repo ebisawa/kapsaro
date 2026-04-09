@@ -3,7 +3,6 @@
 
 //! SSH public key retrieval utilities
 
-use super::keygen::DefaultSshKeygen;
 use crate::io::ssh::external::traits::{SshAdd, SshKeygen};
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
@@ -28,15 +27,6 @@ pub struct SshKeyCandidate {
 /// Create an SSH error (convenience for replacing `utils::error::ssh_error`).
 fn ssh_error(message: impl Into<String>) -> Error {
     SshError::operation_failed(message).into()
-}
-
-/// Load SSH public key in OpenSSH format from a private key file using a specific ssh-keygen path.
-pub fn load_ssh_public_key_from_keygen(
-    ssh_keygen_path: &str,
-    ssh_key_path: &Path,
-) -> Result<String> {
-    let ssh_keygen = DefaultSshKeygen::new(ssh_keygen_path);
-    ssh_keygen.derive_public_key(ssh_key_path)
 }
 
 /// Read SSH public key directly from a .pub file
@@ -89,27 +79,6 @@ pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
     }
 
     Ok(pubkey)
-}
-
-/// Load SSH public key using a key descriptor (string-based, legacy)
-///
-/// For private keys: Derives the public key using `ssh-keygen -y -f`
-/// For public keys: Reads the key directly from the .pub file
-///
-/// # Arguments
-///
-/// * `ssh_keygen_path` - Path to ssh-keygen command (used only for private keys)
-/// * `key_descriptor` - SSH key descriptor (private or public key)
-///
-/// # Returns
-///
-/// SSH public key in OpenSSH format (e.g., "ssh-ed25519 AAAA...")
-pub fn load_ssh_public_key_with_descriptor(
-    ssh_keygen_path: &str,
-    key_descriptor: &SshKeyDescriptor,
-) -> Result<String> {
-    let ssh_keygen = DefaultSshKeygen::new(ssh_keygen_path);
-    load_ssh_public_key_with_descriptor_trait(&ssh_keygen, key_descriptor)
 }
 
 /// Load SSH public key using a key descriptor via the `SshKeygen` trait.

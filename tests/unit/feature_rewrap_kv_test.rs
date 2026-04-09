@@ -3,15 +3,14 @@
 
 //! Unit tests for feature/rewrap/kv module (KV document rewrap operations).
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_verified_members;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use secretenv::app::rewrap::execution::rewrap_kv_content_with_request;
-use secretenv::app::rewrap::types::SingleRewrapRequest;
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::format::content::KvEncContent;
+use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
+use secretenv::format::content::{EncryptedContent, KvEncContent};
 use secretenv::format::kv::document::parse_kv_document;
 use secretenv::format::kv::dotenv::parse_dotenv;
 use secretenv::format::schema::document::{parse_kv_entry_token, parse_kv_wrap_token};
@@ -44,11 +43,12 @@ fn single_rewrap_request<'a>(
     rotate_key: bool,
     clear_disclosure_history: bool,
     debug: bool,
-) -> SingleRewrapRequest<'a> {
-    SingleRewrapRequest {
+) -> RewrapRequest<'a> {
+    RewrapRequest {
         member_id: ALICE_MEMBER_ID,
         key_ctx,
         workspace_root,
+        target_members: None,
         rotate_key,
         clear_disclosure_history,
 
@@ -56,17 +56,21 @@ fn single_rewrap_request<'a>(
     }
 }
 
+fn rewrap_kv_content(
+    content: &KvEncContent,
+    request: &RewrapRequest<'_>,
+) -> secretenv::Result<String> {
+    rewrap_content(&EncryptedContent::KvEnc(content.clone()), request)
+}
+
 /// Encrypt a simple KV document for alice (single recipient).
 fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) -> String {
     let keystore_root = temp_dir.path().join("keys");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let members = make_verified_members(&[public_key.clone()]);
+    let members = make_verified_members(std::slice::from_ref(&public_key));
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
-
     encrypt_kv_document(
         &kv_map,
-        &recipients,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -91,11 +95,8 @@ fn encrypt_kv_for_alice_and_bob(
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
     let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
-
     encrypt_kv_document(
         &kv_map,
-        &recipients,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -162,7 +163,7 @@ fn test_rewrap_kv_document_succeeds() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = rewrap_kv_content_with_request(&encrypted, &request);
+    let result = rewrap_kv_content(&encrypted, &request);
 
     assert!(
         result.is_ok(),
@@ -194,7 +195,7 @@ fn test_rewrap_kv_document_rotate_key() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = rewrap_kv_content_with_request(&encrypted, &request);
+    let result = rewrap_kv_content(&encrypted, &request);
 
     assert!(
         result.is_ok(),
@@ -243,7 +244,7 @@ fn test_rewrap_kv_add_recipient() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = rewrap_kv_content_with_request(&encrypted, &request);
+    let result = rewrap_kv_content(&encrypted, &request);
 
     assert!(
         result.is_ok(),
@@ -288,7 +289,7 @@ fn test_rewrap_kv_remove_recipient() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = rewrap_kv_content_with_request(&encrypted, &request);
+    let result = rewrap_kv_content(&encrypted, &request);
 
     assert!(
         result.is_ok(),
@@ -321,12 +322,12 @@ fn test_rewrap_kv_clear_disclosure_history() {
     let remove_request =
         single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let after_remove = rewrap_kv_content_with_request(&encrypted, &remove_request).unwrap();
+    let after_remove = rewrap_kv_content(&encrypted, &remove_request).unwrap();
 
     // Now rewrap again with clear_disclosure_history
     let clear_request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, true, false);
     let after_remove = KvEncContent::new_unchecked(after_remove);
-    let result = rewrap_kv_content_with_request(&after_remove, &clear_request);
+    let result = rewrap_kv_content(&after_remove, &clear_request);
 
     assert!(
         result.is_ok(),
@@ -370,7 +371,7 @@ fn test_rewrap_kv_invalid_signature_error() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let tampered = KvEncContent::new_unchecked(tampered);
-    let result = rewrap_kv_content_with_request(&tampered, &request);
+    let result = rewrap_kv_content(&tampered, &request);
 
     assert!(
         result.is_err(),
@@ -414,7 +415,7 @@ fn test_rewrap_kv_remove_recipient_sets_disclosed_true() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let rewrapped = rewrap_kv_content_with_request(&encrypted, &request).unwrap();
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
 
     // After removing bob, all entries must have disclosed: true
     let flags = extract_disclosed_flags(&rewrapped);
@@ -452,7 +453,7 @@ fn test_rewrap_kv_add_recipient_preserves_disclosed() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let rewrapped = rewrap_kv_content_with_request(&encrypted, &request).unwrap();
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
 
     // After adding bob (no removal), entries must preserve disclosed: false
     let flags = extract_disclosed_flags(&rewrapped);
@@ -490,7 +491,7 @@ fn test_rewrap_kv_rotate_key_preserves_disclosed() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let rewrapped = rewrap_kv_content_with_request(&encrypted, &request).unwrap();
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
 
     // After rotate-key without removal, entries must preserve disclosed: false
     let flags = extract_disclosed_flags(&rewrapped);
@@ -515,10 +516,8 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, &bob_kid).unwrap();
     let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -536,7 +535,7 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
     // Step 1: Remove bob (sets disclosed: true on all entries) + rotate key
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let rewrapped = rewrap_kv_content_with_request(&encrypted, &request).unwrap();
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
 
     // After remove + rotate, all entries must still have disclosed: true
     let flags = extract_disclosed_flags(&rewrapped);
@@ -565,10 +564,8 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, &bob_kid).unwrap();
     let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -587,7 +584,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
     let remove_request =
         single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let after_remove = rewrap_kv_content_with_request(&encrypted, &remove_request).unwrap();
+    let after_remove = rewrap_kv_content(&encrypted, &remove_request).unwrap();
 
     // Verify disclosed: true after removal
     let flags_after_remove = extract_disclosed_flags(&after_remove);
@@ -618,7 +615,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
     // Step 2: Clear disclosure history => disclosed: false, removed_recipients gone
     let clear_request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, true, false);
     let after_remove = KvEncContent::new_unchecked(after_remove);
-    let after_clear = rewrap_kv_content_with_request(&after_remove, &clear_request).unwrap();
+    let after_clear = rewrap_kv_content(&after_remove, &clear_request).unwrap();
 
     // Verify all entries have disclosed: false (field omitted)
     let flags_after_clear = extract_disclosed_flags(&after_clear);

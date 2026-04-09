@@ -99,6 +99,11 @@ If you want the security model and design details:
 - [Security Design (English)](guides/security_design_en.md)
 - [Security Design (Japanese)](guides/security_design_ja.md)
 
+If you want to learn about the local trust store:
+
+- [Local Trust Store Update (English)](guides/trust_store_update_en.md)
+- [Local Trust Store Update (Japanese)](guides/trust_store_update_ja.md)
+
 ## Status
 
 This project is currently in alpha. Specification work and implementation are still evolving together.

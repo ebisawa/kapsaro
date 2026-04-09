@@ -13,10 +13,15 @@
 
 use clap::Args;
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::run::execute_env_command;
-use crate::cli::common::options::CommonOptions;
-use crate::cli::common::ssh::resolve_ssh_context_optional;
+use crate::app::kv::query::build_kv_read_command;
+use crate::app::run::execute_run_command;
+use crate::app::trust::RunPolicy;
+use crate::cli::common::command::{
+    resolve_command_input, resolve_options, resolve_trust_store_owner_member,
+    run_read_command_with_trust, ReadCommandLabels,
+};
+use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::options::CommonOptions;
 use crate::Result;
 
 #[derive(Args)]
@@ -39,14 +44,29 @@ pub struct RunArgs {
 }
 
 pub fn run(args: RunArgs) -> Result<()> {
-    let options = CommonCommandOptions::from(&args.common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, args.member_id.clone())?;
-    let exit_code = execute_env_command(
+    let options = resolve_options(&args.common);
+    let exit_code = run_with_trust_store_reset_recovery(
         &options,
-        args.member_id.clone(),
-        args.name.as_deref(),
-        &args.command,
-        ssh_ctx,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || {
+            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_id.clone())?;
+            let command = build_kv_read_command::<RunPolicy>(
+                &options,
+                args.member_id.clone(),
+                args.name.as_deref(),
+                ssh_ctx,
+            )?;
+            run_read_command_with_trust(
+                &options,
+                &command,
+                ReadCommandLabels {
+                    context: "run signer",
+                    subject: "run",
+                    allow_non_member: false,
+                },
+                || execute_run_command(&command, &args.command),
+            )
+        },
     )?;
     std::process::exit(exit_code);
 }

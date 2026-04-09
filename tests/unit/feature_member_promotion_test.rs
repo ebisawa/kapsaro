@@ -3,16 +3,10 @@
 
 use super::*;
 use crate::io::verify_online::VerificationResult;
-use crate::model::public_key::{BindingClaims, VerifiedBindingClaims};
-use crate::model::verification::BindingVerificationProof;
+use crate::io::verify_online::VerifiedGithubIdentity;
 
-fn dummy_bindings() -> VerifiedBindingClaims {
-    VerifiedBindingClaims::new(
-        BindingClaims {
-            github_account: None,
-        },
-        BindingVerificationProof::new("github".to_string(), None, None),
-    )
+fn dummy_github() -> VerifiedGithubIdentity {
+    VerifiedGithubIdentity::new(1, "alice-gh".to_string(), "SHA256:abc".to_string(), 42)
 }
 
 #[test]
@@ -21,19 +15,19 @@ fn test_report_all_member_ids_returns_all_categories() {
         verified: vec![VerificationResult::verified(
             "alice",
             "OK".to_string(),
-            "SHA256:abc".to_string(),
-            42,
-            dummy_bindings(),
+            dummy_github(),
         )],
         failed: vec![VerificationResult::failed(
             "bob",
             "Failed".to_string(),
             None,
+            true,
         )],
         not_configured: vec![VerificationResult::not_configured(
             "carol",
             "No binding",
             None,
+            false,
         )],
     };
     let mut ids = report.all_member_ids();
@@ -47,9 +41,7 @@ fn test_report_verified_member_ids() {
         verified: vec![VerificationResult::verified(
             "alice",
             "OK".to_string(),
-            "SHA256:abc".to_string(),
-            42,
-            dummy_bindings(),
+            dummy_github(),
         )],
         failed: vec![],
         not_configured: vec![],
@@ -64,19 +56,19 @@ fn test_report_non_failed_member_ids_excludes_failed() {
         verified: vec![VerificationResult::verified(
             "alice",
             "OK".to_string(),
-            "SHA256:abc".to_string(),
-            42,
-            dummy_bindings(),
+            dummy_github(),
         )],
         failed: vec![VerificationResult::failed(
             "bob",
             "Failed".to_string(),
             None,
+            true,
         )],
         not_configured: vec![VerificationResult::not_configured(
             "carol",
             "No binding",
             None,
+            false,
         )],
     };
     let mut ids = report.non_failed_member_ids();

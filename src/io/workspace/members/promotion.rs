@@ -5,13 +5,22 @@ use super::paths::{
     ensure_members_dir, incoming_member_file_path, member_file_path, members_dir, MemberStatus,
 };
 use super::store::{
-    ensure_workspace_member_kid_uniqueness, load_json_files_in_dir, load_member_file_from_path,
+    check_workspace_member_kid_uniqueness, load_json_files_in_dir, load_member_file_from_path,
     MemberKidCandidate,
 };
+use crate::support::fs::{atomic, ensure_text_file_matches_snapshot, lock};
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncomingMemberPromotionSnapshot {
+    pub member_id: String,
+    pub kid: String,
+    pub source_path: PathBuf,
+    pub source_content: String,
+}
 
 struct PromotionPlan {
     source: PathBuf,
@@ -122,6 +131,79 @@ pub fn promote_specified_incoming_members(
     execute_promotion_plan(workspace_path, &plans)
 }
 
+pub fn promote_snapshotted_incoming_members(
+    workspace_path: &Path,
+    snapshots: &[IncomingMemberPromotionSnapshot],
+) -> Result<Vec<String>> {
+    if snapshots.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    ensure_snapshotted_promotion_kids_are_unique(workspace_path, snapshots)?;
+    ensure_members_dir(workspace_path, MemberStatus::Active)?;
+
+    for snapshot in snapshots {
+        promote_snapshotted_member(workspace_path, snapshot)?;
+    }
+
+    Ok(snapshots
+        .iter()
+        .map(|snapshot| snapshot.member_id.clone())
+        .collect())
+}
+
+fn promote_snapshotted_member(
+    workspace_path: &Path,
+    snapshot: &IncomingMemberPromotionSnapshot,
+) -> Result<()> {
+    let destination = member_file_path(workspace_path, MemberStatus::Active, &snapshot.member_id);
+    with_promotion_file_locks(&snapshot.source_path, &destination, || {
+        let subject_display = format!("Incoming member '{}'", snapshot.member_id);
+        ensure_text_file_matches_snapshot(
+            &snapshot.source_path,
+            Some(&snapshot.source_content),
+            &subject_display,
+        )?;
+        if destination.exists() {
+            return Err(Error::InvalidOperation {
+                message: format!(
+                    "Member '{}' already exists in active/. Cannot promote from incoming/.",
+                    snapshot.member_id
+                ),
+            });
+        }
+        atomic::save_text(&destination, &snapshot.source_content)?;
+        fs::remove_file(&snapshot.source_path).map_err(|e| {
+            Error::io_with_source(
+                format!(
+                    "Failed to clean incoming member '{}': {}",
+                    snapshot.member_id, e
+                ),
+                e,
+            )
+        })
+    })
+}
+
+fn with_promotion_file_locks<T, F>(source_path: &Path, destination_path: &Path, f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    let source_key = source_path.as_os_str().to_string_lossy();
+    let destination_key = destination_path.as_os_str().to_string_lossy();
+    let mut action = Some(f);
+
+    if source_key <= destination_key {
+        lock::with_file_lock(source_path, || {
+            lock::with_file_lock(destination_path, || action.take().unwrap()())
+        })
+    } else {
+        lock::with_file_lock(destination_path, || {
+            lock::with_file_lock(source_path, || action.take().unwrap()())
+        })
+    }
+}
+
 fn ensure_promotion_kids_are_unique(workspace_path: &Path, plans: &[PromotionPlan]) -> Result<()> {
     let candidates = plans
         .iter()
@@ -134,10 +216,29 @@ fn ensure_promotion_kids_are_unique(workspace_path: &Path, plans: &[PromotionPla
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    ensure_workspace_member_kid_uniqueness(
+    check_workspace_member_kid_uniqueness(workspace_path, &candidates, &[], &[MemberStatus::Active])
+}
+
+fn ensure_snapshotted_promotion_kids_are_unique(
+    workspace_path: &Path,
+    snapshots: &[IncomingMemberPromotionSnapshot],
+) -> Result<()> {
+    let candidates = snapshots
+        .iter()
+        .map(|snapshot| MemberKidCandidate {
+            member_id: snapshot.member_id.clone(),
+            kid: snapshot.kid.clone(),
+            status: MemberStatus::Active,
+        })
+        .collect::<Vec<_>>();
+    let ignored_existing = snapshots
+        .iter()
+        .map(|snapshot| (MemberStatus::Incoming, snapshot.member_id.clone()))
+        .collect::<Vec<_>>();
+    check_workspace_member_kid_uniqueness(
         workspace_path,
         &candidates,
-        &[],
-        &[MemberStatus::Active],
+        &ignored_existing,
+        &[MemberStatus::Active, MemberStatus::Incoming],
     )
 }

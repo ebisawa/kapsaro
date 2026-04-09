@@ -5,15 +5,18 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::document::UnsignedKvDocument;
-use crate::feature::kv::rewrite_session::VerifiedKvRewriteSession;
-use crate::feature::rewrap::kv_op::recipients::{add_kv_recipients, remove_kv_recipients};
-use crate::feature::rewrap::kv_op::rotate::rotate_kv_key;
+use crate::feature::kv::rewrite_session::{KvRecipientRewriteRequest, VerifiedKvRewriteSession};
+use crate::feature::recipient::{
+    check_recipient_exists, collect_target_recipient_ids, validate_not_empty_recipients,
+    warn_recipient_not_found,
+};
+use crate::feature::rewrap::kv_op::recipients::add_kv_recipients;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
-use crate::io::workspace::members::list_active_member_ids;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
-use crate::{Error, Result};
+use crate::model::public_key::VerifiedRecipientKey;
+use crate::Result;
 use std::path::Path;
 
 use super::{execute_rewrap_operations, RewrapContext, RewrapExecutor, RewrapOptions};
@@ -23,7 +26,6 @@ struct KvRewrapExecutor<'a> {
     session: VerifiedKvRewriteSession<'a>,
     doc: UnsignedKvDocument,
     ctx: &'a RewrapContext<'a>,
-    original_content: String,
 }
 
 impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
@@ -33,22 +35,36 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
 
     fn add_recipients(&mut self, recipients: &[String]) -> Result<()> {
         let sid = self.doc.head().sid;
+        let master_key = self.session.unwrap_master_key()?;
         add_kv_recipients(
             &sid,
             self.doc.wrap_mut(),
             recipients,
+            &master_key,
             self.ctx.key_ctx(),
+            self.ctx.target_members(),
             self.ctx.options().debug,
         )?;
         self.doc.update_timestamp()
     }
 
     fn remove_recipients(&mut self, recipients: &[String]) -> Result<()> {
-        let new_content = remove_kv_recipients(
-            &self.original_content,
-            recipients,
-            self.ctx.key_ctx(),
-            self.ctx.options().debug,
+        let mut current_recipients = self.session.current_recipients();
+        for recipient in recipients {
+            if !check_recipient_exists(&current_recipients, recipient) {
+                warn_recipient_not_found(recipient);
+            }
+        }
+        current_recipients.retain(|recipient| !recipients.contains(recipient));
+        validate_not_empty_recipients(&current_recipients)?;
+        let new_content = self.session.reencrypt_with_recipients(
+            self.ctx.target_members(),
+            KvRecipientRewriteRequest {
+                new_recipients: &current_recipients,
+                removed_recipients: recipients,
+                disclosed: true,
+                preserve_removed_history: true,
+            },
         )?;
 
         self.rebuild_from_content(&new_content)?;
@@ -56,10 +72,15 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
     }
 
     fn rotate_key(&mut self) -> Result<()> {
-        let new_content = rotate_kv_key(
-            &self.original_content,
-            self.ctx.key_ctx(),
-            self.ctx.options().debug,
+        let current_recipients = self.session.current_recipients();
+        let new_content = self.session.reencrypt_with_recipients(
+            self.ctx.target_members(),
+            KvRecipientRewriteRequest {
+                new_recipients: &current_recipients,
+                removed_recipients: &[],
+                disclosed: self.session.disclosed(),
+                preserve_removed_history: false,
+            },
         )?;
 
         self.rebuild_from_content(&new_content)?;
@@ -91,21 +112,23 @@ impl<'a> KvRewrapExecutor<'a> {
             ctx.options().debug,
         );
         let kv_doc = session.document();
-        let original_content = kv_doc.content().to_string();
         let doc = session.build_unsigned(kv_doc.head().clone())?;
 
-        Ok(Self {
-            session,
-            doc,
-            ctx,
-            original_content,
-        })
+        Ok(Self { session, doc, ctx })
     }
 
     /// Rebuild the document from new kv-enc content (used after remove/rotate).
     fn rebuild_from_content(&mut self, content: &str) -> Result<()> {
-        self.doc = self.session.rebuild_unsigned_from_content(content)?;
-        self.original_content = content.to_string();
+        let kv_content = KvEncContent::new_unchecked(content.to_string());
+        self.session = VerifiedKvRewriteSession::load(
+            &kv_content,
+            self.ctx.member_id,
+            self.ctx.key_ctx(),
+            self.ctx.options().token_codec,
+            self.ctx.options().debug,
+        )?;
+        let kv_doc = self.session.document();
+        self.doc = self.session.build_unsigned(kv_doc.head().clone())?;
         Ok(())
     }
 }
@@ -117,15 +140,13 @@ pub fn rewrap_kv_document(
     member_id: &str,
     key_ctx: &CryptoContext,
     workspace_root: Option<&Path>,
+    target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
-    let workspace_root = workspace_root.ok_or_else(|| Error::Config {
-        message: "rewrap requires a workspace".to_string(),
-    })?;
-    let all_members = list_active_member_ids(workspace_root)?;
+    let all_members = collect_target_recipient_ids(workspace_root, target_members)?;
 
-    let verified = verify_kv_content(content, key_ctx.workspace_path.as_deref(), options.debug)?;
+    let verified = verify_kv_content(content, options.debug)?;
 
-    let ctx = RewrapContext::new(options, member_id, key_ctx);
+    let ctx = RewrapContext::new(options, member_id, key_ctx, target_members);
     let executor = KvRewrapExecutor::new_from_verified(verified, &ctx)?;
     execute_rewrap_operations(executor, options, &all_members)
 }

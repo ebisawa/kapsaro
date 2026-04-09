@@ -5,6 +5,7 @@
 
 use crate::crypto::sign::{sign_bytes, verify_bytes};
 use crate::feature::context::crypto::CryptoContext;
+use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
 use crate::format::file::build_file_signature_bytes;
 use crate::format::kv::enc::canonical::build_canonical_bytes;
 use crate::format::token::TokenCodec;
@@ -17,6 +18,7 @@ use crate::model::signature::Signature;
 use crate::support::kid::build_kid_display;
 use crate::Result;
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use std::ops::Deref;
 use tracing::debug;
 
 pub struct SigningContext<'a> {
@@ -26,16 +28,45 @@ pub struct SigningContext<'a> {
     pub debug: bool,
 }
 
-pub(crate) fn build_signing_context<'a>(
+pub struct VerifiedSigningContext<'a> {
+    signing: SigningContext<'a>,
+}
+
+impl<'a> VerifiedSigningContext<'a> {
+    pub fn signing_key(&self) -> &'a SigningKey {
+        self.signing.signing_key
+    }
+
+    pub fn signer_kid(&self) -> &'a str {
+        self.signing.signer_kid
+    }
+
+    pub fn signer_pub(&self) -> PublicKey {
+        self.signing.signer_pub.clone()
+    }
+}
+
+impl<'a> Deref for VerifiedSigningContext<'a> {
+    type Target = SigningContext<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.signing
+    }
+}
+
+pub fn build_signing_context<'a>(
     key_ctx: &'a CryptoContext,
     debug: bool,
-) -> Result<SigningContext<'a>> {
+) -> Result<VerifiedSigningContext<'a>> {
+    enforce_key_not_expired_for_signing(&key_ctx.expires_at)?;
     let signer_pub = load_signer_public_key(key_ctx.pub_key_source.as_ref(), &key_ctx.member_id)?;
-    Ok(SigningContext {
-        signing_key: &key_ctx.signing_key,
-        signer_kid: &key_ctx.kid,
-        signer_pub,
-        debug,
+    Ok(VerifiedSigningContext {
+        signing: SigningContext {
+            signing_key: &key_ctx.signing_key,
+            signer_kid: &key_ctx.kid,
+            signer_pub,
+            debug,
+        },
     })
 }
 

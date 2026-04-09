@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::test_utils::{setup_member_key_context, setup_trust_store_for_workspace};
 
 #[test]
 fn test_rewrap_rotate_key() {
@@ -85,6 +86,8 @@ fn test_rewrap_noop_rewrites_file() {
 #[test]
 fn test_rewrap_clear_disclosure_history() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());

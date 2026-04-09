@@ -9,7 +9,9 @@ use crate::cli::common::{
     cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID,
     EVE_MEMBER_ID, FRANK_MEMBER_ID, TEST_MEMBER_ID,
 };
+use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use predicates::prelude::*;
+use secretenv::io::keystore::member::find_active_key_document;
 use secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256;
 use std::fs;
 use tempfile::TempDir;
@@ -449,6 +451,69 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
         decrypted_content, original_content,
         "Decrypted content should match original"
     );
+}
+
+#[test]
+fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let home_ssh_dir = home_dir.path().join(".ssh");
+    fs::create_dir_all(&home_ssh_dir).unwrap();
+    fs::copy(&ssh_priv, home_ssh_dir.join("test_ed25519")).unwrap();
+    fs::copy(
+        ssh_priv.with_extension("pub"),
+        home_ssh_dir.join("test_ed25519.pub"),
+    )
+    .unwrap();
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(home_dir.path(), TEST_MEMBER_ID, &expires_at);
+    let active_key = find_active_key_document(TEST_MEMBER_ID, &home_dir.path().join("keys"))
+        .unwrap()
+        .unwrap();
+    fs::write(
+        workspace_dir
+            .path()
+            .join("members/active")
+            .join(format!("{TEST_MEMBER_ID}.json")),
+        serde_json::to_string_pretty(&active_key.public_key).unwrap(),
+    )
+    .unwrap();
+
+    let original_content = b"SECRET_VALUE=hello_world\n";
+    let input_file = home_dir.path().join("expiry-secret.txt");
+    fs::write(&input_file, original_content).unwrap();
+
+    let encrypted_file = home_dir.path().join("expiry-secret.txt.encrypted");
+    let decrypted_file = home_dir.path().join("expiry-decrypted.txt");
+
+    cmd()
+        .arg("encrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--out")
+        .arg(encrypted_file.to_str().unwrap())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Warning: Private key expires in"));
+
+    cmd()
+        .arg("decrypt")
+        .arg(encrypted_file.to_str().unwrap())
+        .arg("--out")
+        .arg(decrypted_file.to_str().unwrap())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Warning: Private key expires in"));
 }
 
 #[test]

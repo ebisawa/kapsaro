@@ -215,25 +215,42 @@ pub fn create_test_private_key(
 ///
 /// This function wraps a PrivateKeyPlaintext in a VerifiedPrivateKey type without
 /// performing full validation. It's intended for test code only.
-#[allow(dead_code)] // Used in unit tests via tests/unit.rs
 pub fn make_decrypted_private_key_plaintext(
-    plaintext: PrivateKeyPlaintext,
+    plaintext: &PrivateKeyPlaintext,
     member_id: &str,
     kid: &str,
     ssh_fpr: &str,
 ) -> VerifiedPrivateKey {
-    let proof = DecryptionProof {
-        member_id: member_id.to_string(),
-        kid: kid.to_string(),
-        ssh_fpr: Some(ssh_fpr.to_string()),
-    };
-    VerifiedPrivateKey::new(plaintext, proof)
+    let proof = DecryptionProof::new(
+        member_id.to_string(),
+        kid.to_string(),
+        Some(ssh_fpr.to_string()),
+    );
+    VerifiedPrivateKey::new(clone_private_key_plaintext_for_test(plaintext), proof)
+}
+
+fn clone_private_key_plaintext_for_test(plaintext: &PrivateKeyPlaintext) -> PrivateKeyPlaintext {
+    PrivateKeyPlaintext {
+        keys: IdentityKeysPrivate {
+            kem: JwkOkpPrivateKey {
+                kty: plaintext.keys.kem.kty.clone(),
+                crv: plaintext.keys.kem.crv.clone(),
+                x: plaintext.keys.kem.x.clone(),
+                d: plaintext.keys.kem.d.clone(),
+            },
+            sig: JwkOkpPrivateKey {
+                kty: plaintext.keys.sig.kty.clone(),
+                crv: plaintext.keys.sig.crv.clone(),
+                x: plaintext.keys.sig.x.clone(),
+                d: plaintext.keys.sig.d.clone(),
+            },
+        },
+    }
 }
 
 /// Convert a slice of PublicKeys to VerifiedRecipientKey (for testing only).
 ///
 /// Used by tests that call encrypt_kv_document or similar with a list of keys.
-#[allow(dead_code)]
 pub fn make_verified_members(members: &[PublicKey]) -> Vec<VerifiedRecipientKey> {
     members
         .iter()
@@ -245,14 +262,12 @@ pub fn make_verified_members(members: &[PublicKey]) -> Vec<VerifiedRecipientKey>
 ///
 /// This function wraps a PublicKey in a VerifiedRecipientKey type without
 /// performing full verification. It's intended for test code only.
-#[allow(dead_code)] // Used in unit tests via tests/unit.rs
 pub fn make_recipient_key(public_key: PublicKey) -> VerifiedRecipientKey {
     let attested = make_attested_public_key(public_key);
     VerifiedRecipientKey::new(attested, ExpiryProof::new())
 }
 
 /// Build a VerifiedPublicKeyAttested wrapper for PublicKey (for testing only).
-#[allow(dead_code)]
 pub fn make_attested_public_key(public_key: PublicKey) -> VerifiedPublicKeyAttested {
     let proof = AttestationProof {
         method: public_key.protected.identity.attestation.method.clone(),
@@ -262,4 +277,43 @@ pub fn make_attested_public_key(public_key: PublicKey) -> VerifiedPublicKeyAttes
     let attested_identity = AttestedIdentity::new(public_key.protected.identity.clone(), proof);
     let self_sig_proof = SelfSignatureProof::new();
     VerifiedPublicKeyAttested::new(public_key, self_sig_proof, attested_identity)
+}
+
+/// Build a dummy PublicKey for tests that only need the structural shape.
+///
+/// Uses placeholder values for all fields. Not suitable for cryptographic
+/// verification — use `keygen_test()` when real key material is needed.
+pub fn make_dummy_public_key(kid: &str) -> PublicKey {
+    use secretenv::model::public_key::{Attestation, PublicKeyProtected};
+
+    PublicKey {
+        protected: PublicKeyProtected {
+            format: "secretenv.public.key@4".to_string(),
+            member_id: "signer@test".to_string(),
+            kid: kid.to_string(),
+            identity: Identity {
+                keys: IdentityKeys {
+                    kem: JwkOkpPublicKey {
+                        kty: "OKP".to_string(),
+                        crv: "X25519".to_string(),
+                        x: "dummy".to_string(),
+                    },
+                    sig: JwkOkpPublicKey {
+                        kty: "OKP".to_string(),
+                        crv: "Ed25519".to_string(),
+                        x: "dummy".to_string(),
+                    },
+                },
+                attestation: Attestation {
+                    method: "test".to_string(),
+                    pub_: "test".to_string(),
+                    sig: "dummy".to_string(),
+                },
+            },
+            binding_claims: None,
+            expires_at: "2099-01-01T00:00:00Z".to_string(),
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+        signature: "dummy".to_string(),
+    }
 }

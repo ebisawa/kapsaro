@@ -8,7 +8,7 @@
 use crate::format::schema::document::{parse_private_key_file, parse_public_key_file};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::support::fs::{atomic, check_permission, ensure_dir_restricted, list_dir};
+use crate::support::fs::{atomic, check_permission_chain, ensure_dir_restricted, list_dir};
 use crate::support::kid::kid_display_lossy;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -85,7 +85,10 @@ pub fn save_key_pair_atomic(
 /// Load PrivateKey from keystore
 pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Result<PrivateKey> {
     let path = key_dir(keystore_root, member_id, kid).join("private.json");
-    if let Some(msg) = check_permission(&path) {
+    if let Some(msg) = check_permission_chain(&path, keystore_root)
+        .into_iter()
+        .next()
+    {
         return Err(Error::io(msg));
     }
     parse_private_key_file(&path)
@@ -94,8 +97,8 @@ pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Res
 /// Load PublicKey from keystore
 pub fn load_public_key(keystore_root: &Path, member_id: &str, kid: &str) -> Result<PublicKey> {
     let path = key_dir(keystore_root, member_id, kid).join("public.json");
-    if let Some(msg) = check_permission(&path) {
-        tracing::warn!("{}", msg);
+    for warning in check_permission_chain(&path, keystore_root) {
+        tracing::warn!("{}", warning);
     }
     parse_public_key_file(&path)
 }

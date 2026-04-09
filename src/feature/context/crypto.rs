@@ -9,15 +9,16 @@ use zeroize::Zeroizing;
 
 use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::model::identifiers::jwk;
+use crate::model::identity::{Kid, MemberId};
 use crate::model::private_key::PrivateKeyPlaintext;
 use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
-use crate::support::base64url::{b64_decode, b64_decode_array};
+use crate::support::base64url::{b64_decode, b64_decode_secret_array};
 use crate::{Error, Result};
 
 /// Context for cryptographic operations requiring member keys
 pub struct CryptoContext {
-    pub member_id: String,
-    pub kid: String,
+    pub member_id: MemberId,
+    pub kid: Kid,
     pub pub_key_source: Box<dyn PublicKeySource>,
     pub workspace_path: Option<PathBuf>,
     pub private_key: VerifiedPrivateKey,
@@ -27,10 +28,7 @@ pub struct CryptoContext {
 }
 
 pub(crate) fn build_signing_key(plaintext: &PrivateKeyPlaintext) -> Result<SigningKey> {
-    let sig_key_bytes: Zeroizing<[u8; 32]> = Zeroizing::new(b64_decode_array(
-        &plaintext.keys.sig.d,
-        "Ed25519 private key",
-    )?);
+    let sig_key_bytes = b64_decode_secret_array(&plaintext.keys.sig.d, "Ed25519 private key")?;
     Ok(SigningKey::from_bytes(&sig_key_bytes))
 }
 
@@ -85,10 +83,15 @@ pub fn validate_okp_key(
 
 /// Verify Ed25519 key pair consistency: private key must derive to the given public key.
 pub fn validate_ed25519_consistency(sig_d_bytes: &[u8], sig_x_bytes: &[u8]) -> Result<()> {
-    let sig_d_array: [u8; 32] = sig_d_bytes.try_into().map_err(|_| Error::Crypto {
-        message: "Failed to convert Sig private key to array".to_string(),
-        source: None,
-    })?;
+    if sig_d_bytes.len() != 32 {
+        return Err(Error::Crypto {
+            message: "Failed to convert Sig private key to array".to_string(),
+            source: None,
+        });
+    }
+
+    let mut sig_d_array = Zeroizing::new([0u8; 32]);
+    sig_d_array.as_mut().copy_from_slice(sig_d_bytes);
     let signing_key = SigningKey::from_bytes(&sig_d_array);
     let derived_vk = signing_key.verifying_key();
     let derived_x_bytes = derived_vk.as_bytes();

@@ -11,6 +11,7 @@ pub mod recipients;
 
 pub mod key_loader;
 pub(crate) mod report;
+pub(crate) mod signature;
 
 use crate::model::public_key::PublicKey;
 use crate::model::verification::VerifyingKeySource;

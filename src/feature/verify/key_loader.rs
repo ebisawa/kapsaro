@@ -3,7 +3,6 @@
 
 //! Key loading for signature verification.
 
-use crate::io::workspace::members::find_active_member_by_kid;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::Signature;
 use crate::model::verification::VerifyingKeySource;
@@ -30,27 +29,21 @@ pub struct LoadedVerifyingKey {
 /// If signer_pub is missing, fails with E_SIGNER_PUB_MISSING.
 pub fn load_verifying_key_from_signature(
     signature: &Signature,
-    workspace_path: Option<&std::path::Path>,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {
     let signer_pub = signature.signer_pub.as_ref().ok_or_else(|| Error::Verify {
         rule: "E_SIGNER_PUB_MISSING".to_string(),
         message: "Required signer_pub is missing from signature".to_string(),
     })?;
-    load_from_signer_pub(signature, signer_pub, workspace_path, debug)
+    load_from_signer_pub(signature, signer_pub, debug)
 }
 
 /// Load verifying key from embedded signer_pub.
-///
-/// The embedded key is used for cryptographic verification, but membership
-/// is also confirmed by checking that the kid exists in workspace active members.
 fn load_from_signer_pub(
     signature: &Signature,
     signer_pub: &PublicKey,
-    workspace_path: Option<&std::path::Path>,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {
-    verify_kid_in_active_members(workspace_path, &signature.kid)?;
     build_loaded_verifying_key(
         signer_pub,
         &signature.kid,
@@ -58,25 +51,6 @@ fn load_from_signer_pub(
         "signer_pub embedded",
         debug,
     )
-}
-
-/// Verify that a kid exists in workspace active members.
-fn verify_kid_in_active_members(workspace_path: Option<&std::path::Path>, kid: &str) -> Result<()> {
-    let ws_path = workspace_path.ok_or_else(|| Error::Crypto {
-        message: "Workspace is required to verify signer membership".to_string(),
-        source: None,
-    })?;
-    let found = find_active_member_by_kid(ws_path, kid)?;
-    if found.is_none() {
-        return Err(Error::Crypto {
-            message: format!(
-                "Signer key '{}' not found in active members",
-                kid_display_lossy(kid)
-            ),
-            source: None,
-        });
-    }
-    Ok(())
 }
 
 fn build_loaded_verifying_key(

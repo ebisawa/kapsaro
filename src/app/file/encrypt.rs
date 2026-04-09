@@ -3,78 +3,93 @@
 
 use std::path::Path;
 
-use crate::app::context::execution::ExecutionContext;
+use crate::app::context::execution::{
+    build_write_execution_warnings, resolve_write_execution, ExecutionContext,
+};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::trust::{
+    current_self_sig_x, EncryptPolicy, RecipientTrustOutcome, WriteRecipientTrustPlan,
+};
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
-use crate::feature::encrypt::encrypt_file_document;
-use crate::feature::envelope::signature::{build_signing_context, SigningContext};
-use crate::feature::verify::public_key::verify_recipient_public_keys;
+use crate::feature::encrypt::encrypt_file_content;
+use crate::feature::envelope::signature::build_signing_context;
 use crate::io::workspace::detection::WorkspaceRoot;
-use crate::io::workspace::members::{list_active_member_ids, load_member_files};
+use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::fs::load_bytes;
 use crate::{Error, Result};
 
-/// Encrypt command inputs resolved at the application layer.
-struct EncryptFileSession {
-    execution: ExecutionContext,
-    workspace_root: WorkspaceRoot,
-    member_ids: Vec<String>,
+pub(crate) struct EncryptFileCommand {
+    pub execution: ExecutionContext,
+    pub warnings: Vec<String>,
     input_bytes: Vec<u8>,
+    member_ids: Vec<String>,
+    verified_keys: Vec<VerifiedRecipientKey>,
+    pub recipient_trust: RecipientTrustOutcome,
 }
 
-impl EncryptFileSession {
-    fn load(
-        options: &CommonCommandOptions,
-        member_id: Option<String>,
-        input_path: &Path,
-        ssh_ctx: Option<ResolvedSshSigner>,
-    ) -> Result<Self> {
-        let execution = ExecutionContext::resolve(options, member_id, None, ssh_ctx)?;
-        enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
-        let workspace_root = execution
-            .workspace_root
-            .clone()
-            .ok_or_else(|| Error::Config {
-                message: "Workspace is required for encrypt".to_string(),
-            })?;
-        let member_ids = list_active_member_ids(&workspace_root.root_path)?;
-        let input_bytes = load_bytes(input_path)?;
-
-        Ok(Self {
-            execution,
-            workspace_root,
-            member_ids,
-            input_bytes,
-        })
-    }
-
-    fn verified_recipient_keys(
-        &self,
-        debug: bool,
-    ) -> Result<Vec<crate::model::public_key::VerifiedRecipientKey>> {
-        let public_keys = load_member_files(&self.workspace_root.root_path, &self.member_ids)?;
-        verify_recipient_public_keys(&public_keys, debug)
-    }
-
-    fn signing_context<'a>(&'a self, debug: bool) -> Result<SigningContext<'a>> {
-        build_signing_context(&self.execution.key_ctx, debug)
-    }
-}
-
-pub fn encrypt_file_command(
+pub(crate) fn build_encrypt_file_command(
     options: &CommonCommandOptions,
     member_id: Option<String>,
     input_path: &Path,
     ssh_ctx: Option<ResolvedSshSigner>,
+) -> Result<EncryptFileCommand> {
+    let execution = resolve_encrypt_execution(options, member_id, ssh_ctx)?;
+    let workspace_root = require_encrypt_workspace(&execution)?;
+    let input_bytes = load_encrypt_input_bytes(input_path)?;
+    let trust_plan = WriteRecipientTrustPlan::<EncryptPolicy>::load(
+        options,
+        &workspace_root.root_path,
+        &execution.member_id,
+        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        options.verbose,
+    )?;
+    let workspace_members = trust_plan.workspace_members();
+    let mut warnings = build_write_execution_warnings(&execution)?;
+    warnings.extend(trust_plan.warnings().iter().cloned());
+
+    Ok(EncryptFileCommand {
+        execution,
+        warnings,
+        input_bytes,
+        member_ids: workspace_members.member_ids().to_vec(),
+        verified_keys: workspace_members.verified_recipients().to_vec(),
+        recipient_trust: trust_plan.recipient_trust().clone(),
+    })
+}
+
+pub(crate) fn execute_encrypt_file_command(
+    command: &EncryptFileCommand,
+    debug: bool,
 ) -> Result<String> {
-    let session = EncryptFileSession::load(options, member_id, input_path, ssh_ctx)?;
-    let verified_keys = session.verified_recipient_keys(options.verbose)?;
-    let signing = session.signing_context(options.verbose)?;
-    encrypt_file_document(
-        &session.input_bytes,
-        &session.member_ids,
-        &verified_keys,
+    let signing = build_signing_context(&command.execution.key_ctx, debug)?;
+    encrypt_file_content(
+        &command.input_bytes,
+        &command.member_ids,
+        &command.verified_keys,
         &signing,
     )
+}
+
+fn resolve_encrypt_execution(
+    options: &CommonCommandOptions,
+    member_id: Option<String>,
+    ssh_ctx: Option<ResolvedSshSigner>,
+) -> Result<ExecutionContext> {
+    let execution = resolve_write_execution(options, member_id, ssh_ctx)?;
+    enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
+    Ok(execution)
+}
+
+fn require_encrypt_workspace(execution: &ExecutionContext) -> Result<WorkspaceRoot> {
+    execution
+        .workspace_root
+        .clone()
+        .ok_or_else(|| Error::Config {
+            message: "Workspace is required for encrypt".to_string(),
+        })
+}
+
+fn load_encrypt_input_bytes(input_path: &Path) -> Result<Vec<u8>> {
+    load_bytes(input_path)
 }

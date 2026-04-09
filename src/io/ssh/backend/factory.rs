@@ -25,10 +25,15 @@ use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 pub fn build_backend(
     method: SshSigner,
     ssh_keygen: Box<dyn SshKeygen>,
-    key_descriptor: SshKeyDescriptor,
-) -> Box<dyn SignatureBackend> {
+    key_descriptor: Option<SshKeyDescriptor>,
+) -> crate::Result<Box<dyn SignatureBackend>> {
     match method {
-        SshSigner::SshAgent => Box::new(SshAgentBackend::new(Box::new(DefaultAgentSigner))),
-        SshSigner::SshKeygen => Box::new(SshKeygenBackend::new(ssh_keygen, key_descriptor)),
+        SshSigner::SshAgent => Ok(Box::new(SshAgentBackend::new(Box::new(DefaultAgentSigner)))),
+        SshSigner::SshKeygen => {
+            let key_descriptor = key_descriptor.ok_or_else(|| crate::Error::Config {
+                message: "SSH key descriptor is required for ssh-keygen signing".to_string(),
+            })?;
+            Ok(Box::new(SshKeygenBackend::new(ssh_keygen, key_descriptor)))
+        }
     }
 }

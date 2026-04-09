@@ -3,7 +3,8 @@
 
 //! Integration tests for member list/show/remove/add commands
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
+use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
@@ -24,6 +25,10 @@ fn copy_fresh_public_key(temp_key_file: &std::path::Path) {
         .join("active")
         .join(format!("{}.json", TEST_MEMBER_ID));
     fs::copy(other_active_key_path, temp_key_file).unwrap();
+}
+
+fn fixture_ssh_key_path(temp_dir: &TempDir) -> std::path::PathBuf {
+    temp_dir.path().join(".ssh").join("test_ed25519")
 }
 
 // ============================================================================
@@ -199,6 +204,62 @@ fn test_member_show_invalid_member_fails() {
         .failure();
 }
 
+#[test]
+fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+
+    cmd()
+        .arg("member")
+        .arg("verify")
+        .arg("--approve")
+        .arg(BOB_MEMBER_ID)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
+        .env("SECRETENV_SSH_KEY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("interactive confirmation"));
+}
+
+#[test]
+fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    fs::remove_file(temp_dir.path().join("config.toml")).unwrap();
+
+    cmd()
+        .arg("member")
+        .arg("verify")
+        .arg("--approve")
+        .arg(BOB_MEMBER_ID)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
+        .env_remove("SECRETENV_MEMBER_ID")
+        .env("SECRETENV_SSH_KEY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Specify --member-id"));
+
+    cmd()
+        .arg("member")
+        .arg("verify")
+        .arg("--approve")
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .arg(BOB_MEMBER_ID)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
+        .env_remove("SECRETENV_MEMBER_ID")
+        .env("SECRETENV_SSH_KEY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("interactive confirmation"))
+        .stderr(predicate::str::contains("Specify --member-id").not());
+}
+
 // ============================================================================
 // member remove
 // ============================================================================
@@ -364,10 +425,38 @@ fn test_member_verify_reports_offline_invalid_member() {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
     });
 
-    let assert = cmd()
+    cmd()
         .arg("member")
         .arg("verify")
         .arg("broken@example.com")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found in active/"));
+}
+
+#[test]
+fn test_member_verify_ignores_invalid_incoming_member_when_verifying_all() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let incoming_dir = workspace_dir.path().join("members").join("incoming");
+    fs::create_dir_all(&incoming_dir).unwrap();
+    let incoming_file = incoming_dir.join("broken@example.com.json");
+    let active_key_path = workspace_dir
+        .path()
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", TEST_MEMBER_ID));
+    fs::copy(&active_key_path, &incoming_file).unwrap();
+    write_tampered_member_file(&incoming_file, |value| {
+        value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
+    });
+
+    let assert = cmd()
+        .arg("member")
+        .arg("verify")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
@@ -380,10 +469,5 @@ fn test_member_verify_reports_offline_invalid_member() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let results = parsed["results"].as_array().unwrap();
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0]["member_id"], "broken@example.com");
-    assert_eq!(results[0]["verified"], false);
-    assert!(results[0]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Offline verification failed"));
+    assert_eq!(results[0]["member_id"], TEST_MEMBER_ID);
 }

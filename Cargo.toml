@@ -10,6 +10,7 @@ autotests = false
 [dependencies]
 # CLI framework
 clap = { version = "4", features = ["derive"] }
+console = "0.16"
 dialoguer = "0.12"
 
 # Serialization

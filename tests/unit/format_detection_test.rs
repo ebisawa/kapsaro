@@ -50,6 +50,13 @@ fn test_detect_file_enc_v2_rejected() {
 }
 
 #[test]
+fn test_detect_file_enc_top_level_format_rejected() {
+    let content = r#"{"format":"secretenv.file@3","protected":{"sid":"550e8400-e29b-41d4-a716-446655440000","wrap":[],"payload":{"protected":{"format":"secretenv.file.payload@3","sid":"550e8400-e29b-41d4-a716-446655440000","alg":{"aead":"xchacha20-poly1305"}},"encrypted":{"nonce":"...","ct":"..."}},"created_at":"2026-01-19T10:00:00Z","updated_at":"2026-01-19T10:00:00Z"},"signature":{"alg":"eddsa-ed25519","kid":"...","sig":"..."}}"#;
+    let format = detect_format(content).unwrap();
+    assert_eq!(format, InputFormat::Unknown);
+}
+
+#[test]
 fn test_detect_kv_plain_simple() {
     let content = "DATABASE_URL=postgresql://localhost\nREDIS_URL=redis://localhost\n";
     let format = detect_format(content).unwrap();

@@ -17,7 +17,6 @@ pub(crate) struct SshSigningParams {
 
 /// Resolved SSH signing context.
 pub(crate) struct SshSigningContext {
-    pub signing_method: SshSigner,
     pub public_key: String,
     pub fingerprint: String,
     pub backend: Box<dyn SignatureBackend>,

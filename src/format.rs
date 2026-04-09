@@ -18,5 +18,6 @@ pub mod kid;
 pub mod kv;
 pub mod schema;
 pub mod token;
+pub mod trust_store;
 
 pub use error::FormatError;

@@ -7,8 +7,12 @@
 //! CLI integration tests to reduce code duplication and improve maintainability.
 
 use crate::test_utils::create_temp_ssh_keypair_in_dir;
+pub use crate::test_utils::{
+    ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID, EVE_MEMBER_ID,
+    FRANK_MEMBER_ID, TEST_MEMBER_ID,
+};
 use assert_cmd::{cargo, Command};
-use secretenv::cli::common::options::CommonOptions;
+use secretenv::cli::options::CommonOptions;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -28,15 +32,6 @@ pub fn cmd() -> Command {
 // ============================================================================
 // Test Constants
 // ============================================================================
-
-/// Test member ID constants
-pub const TEST_MEMBER_ID: &str = "test@example.com";
-pub const ALICE_MEMBER_ID: &str = "alice@example.com";
-pub const BOB_MEMBER_ID: &str = "bob@example.com";
-pub const CAROL_MEMBER_ID: &str = "carol@example.com";
-pub const DAVE_MEMBER_ID: &str = "dave@example.com";
-pub const EVE_MEMBER_ID: &str = "eve@example.com";
-pub const FRANK_MEMBER_ID: &str = "frank@example.com";
 
 // ============================================================================
 // Common Helper Functions

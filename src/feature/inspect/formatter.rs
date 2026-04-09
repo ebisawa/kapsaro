@@ -10,17 +10,18 @@ use crate::support::kid::build_kid_display;
 /// Append file payload information.
 pub(crate) fn append_file_payload_info(payload: &FilePayload, out: &mut String) {
     push_line(out, "  Protected:");
-    push_line(out, format!("    format:    {}", payload.protected.format));
+    push_line(out, format!("    Format:    {}", payload.protected.format));
+    push_line(out, format!("    SID:       {}", payload.protected.sid));
     push_line(
         out,
-        format!("    alg.aead:  {}", payload.protected.alg.aead),
+        format!("    AEAD:      {}", payload.protected.alg.aead),
     );
     push_line(out, "  Encrypted:");
-    push_line(out, format!("    nonce:  {}", payload.encrypted.nonce));
+    push_line(out, format!("    Nonce:     {}", payload.encrypted.nonce));
     push_line(
         out,
         format!(
-            "    ct:     {} bytes ({}...)",
+            "    CT:        {} bytes ({}...)",
             payload.encrypted.ct.len(),
             &payload.encrypted.ct[..payload.encrypted.ct.len().min(64)]
         ),
@@ -30,16 +31,16 @@ pub(crate) fn append_file_payload_info(payload: &FilePayload, out: &mut String) 
 /// Append wrap item information.
 pub(crate) fn append_wrap_item(index: usize, wrap: &WrapItem, out: &mut String) {
     let kid_display = build_kid_display(&wrap.kid).unwrap_or_else(|_| wrap.kid.clone());
-    push_line(out, format!("  [{}] rid:  {}", index, wrap.rid));
-    push_line(out, format!("      kid:  {}", kid_display));
-    push_line(out, format!("      alg:  {}", wrap.alg));
+    push_line(out, format!("    [{}] RID:   {}", index, wrap.rid));
+    push_line(out, format!("        Kid:   {}", kid_display));
+    push_line(out, format!("        Alg:   {}", wrap.alg));
     push_line(
         out,
-        format!("      enc:  {}...", &wrap.enc[..wrap.enc.len().min(32)]),
+        format!("        Enc:   {}...", &wrap.enc[..wrap.enc.len().min(32)]),
     );
     push_line(
         out,
-        format!("      ct:   {}...", &wrap.ct[..wrap.ct.len().min(32)]),
+        format!("        CT:    {}...", &wrap.ct[..wrap.ct.len().min(32)]),
     );
 }
 
@@ -48,16 +49,13 @@ pub(crate) fn append_removed_recipients(removed: Option<&Vec<RemovedRecipient>>,
     if let Some(removed) = removed {
         if !removed.is_empty() {
             push_line(out, "");
-            push_line(
-                out,
-                format!("Removed Recipients History ({}):", removed.len()),
-            );
+            push_line(out, format!("  Removed Recipients ({}):", removed.len()));
             for r in removed {
                 let kid_display = build_kid_display(&r.kid).unwrap_or_else(|_| r.kid.clone());
                 push_line(
                     out,
                     format!(
-                        "  - {} (kid: {}, removed at {})",
+                        "    \u{2022} {} (kid: {}, removed at {})",
                         r.rid, kid_display, r.removed_at
                     ),
                 );
@@ -76,13 +74,13 @@ pub(crate) fn append_signer_info(
         push_line(
             out,
             format!(
-                "Signer:     {} (claimed, not verified)",
+                "  Signer:      {} (claimed)",
                 signer_pub.protected.member_id
             ),
         );
-        push_line(out, format!("Attestation Method: {}", attestation.method));
+        push_line(out, format!("  Attestation: {}", attestation.method));
         if attestation.pub_.is_empty() {
-            push_line(out, "Attestation Pubkey: (empty)");
+            push_line(out, "  Attest Key:  (empty)");
         } else {
             let shown_len = attestation.pub_.len().min(60);
             let shown = &attestation.pub_[..shown_len];
@@ -91,10 +89,10 @@ pub(crate) fn append_signer_info(
             } else {
                 ""
             };
-            push_line(out, format!("Attestation Pubkey: {}{}", shown, suffix));
+            push_line(out, format!("  Attest Key:  {}{}", shown, suffix));
         }
     } else {
-        push_line(out, "Signer:     (not embedded, search by kid)");
+        push_line(out, "  Signer:      (not embedded, search by kid)");
     }
 }
 

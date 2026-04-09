@@ -3,8 +3,9 @@
 
 //! Application-layer member workflows.
 
-pub mod mutation;
-pub mod query;
-pub mod types;
-pub mod verification;
-pub mod view;
+pub(crate) mod approval;
+pub(crate) mod mutation;
+pub(crate) mod query;
+pub(crate) mod types;
+pub(crate) mod verification;
+pub(crate) mod view;

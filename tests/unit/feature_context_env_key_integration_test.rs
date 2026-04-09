@@ -6,7 +6,7 @@
 //! These tests exercise the full portable export -> env var loading pipeline
 //! using properly generated key pairs with SSH attestation.
 
-use secretenv::app::context::crypto::load_crypto_context_from_env;
+use crate::app::context::crypto::load_crypto_context_from_env;
 use secretenv::feature::context::env_key::load_private_key_from_env;
 use secretenv::feature::key::portable_export::export_private_key_portable;
 use tempfile::TempDir;
@@ -46,7 +46,8 @@ fn generate_and_export(
         password,
         false,
     )
-    .expect("export should succeed");
+    .expect("export should succeed")
+    .into_plain_string_for_output();
 
     (exported, plaintext, public_key)
 }
@@ -65,9 +66,9 @@ fn test_env_key_roundtrip_with_attested_keys() {
     let result = load_private_key_from_env(false).expect("load from env should succeed");
 
     assert_eq!(result.member_id, member_id);
-    assert_eq!(result.verified_key.proof().member_id, member_id);
-    assert_eq!(result.verified_key.proof().kid, public_key.protected.kid);
-    assert_eq!(result.verified_key.proof().ssh_fpr, None);
+    assert_eq!(result.verified_key.proof().member_id(), member_id);
+    assert_eq!(result.verified_key.proof().kid(), public_key.protected.kid);
+    assert!(result.verified_key.proof().ssh_fpr().is_none());
 
     // Verify key material matches original
     assert_eq!(
@@ -127,7 +128,7 @@ fn test_env_key_roundtrip_preserves_key_material_for_decryption() {
 
     assert_eq!(env_result.member_id, public_key.protected.member_id);
     assert_eq!(
-        env_result.verified_key.proof().kid,
+        env_result.verified_key.proof().kid(),
         public_key.protected.kid
     );
     assert_eq!(

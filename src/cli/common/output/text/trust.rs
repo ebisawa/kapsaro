@@ -1,0 +1,54 @@
+// Copyright 2026 Satoshi Ebisawa
+// SPDX-License-Identifier: Apache-2.0
+
+//! Text renderers for trust commands.
+
+use crate::cli::common::output::trust::TrustListItemView;
+use crate::support::kid::kid_display_lossy;
+
+pub(crate) fn print_known_key_list(items: &[TrustListItemView<'_>]) {
+    for item in items {
+        let kid_display = kid_display_lossy(item.kid);
+        eprintln!(
+            "  {} {} (approved: {}, via: {})",
+            item.member_id, kid_display, item.approved_at, item.approved_via
+        );
+    }
+    eprintln!("\n{} known key(s)", items.len());
+}
+
+pub(crate) fn print_empty_known_key_list() {
+    eprintln!("No known keys in trust store");
+}
+
+pub(crate) fn print_trust_remove_summary(kid: &str, member_id: &str) {
+    let kid_display = kid_display_lossy(kid);
+    eprintln!(
+        "Removed kid '{}' (member: {}) from trust store",
+        kid_display, member_id
+    );
+}
+
+pub(crate) fn print_no_entries_to_purge() {
+    eprintln!("No entries to purge");
+}
+
+pub(crate) fn print_trust_purge_candidates(items: &[TrustListItemView<'_>]) {
+    eprintln!("Entries to purge:");
+    for item in items {
+        let kid_display = kid_display_lossy(item.kid);
+        eprintln!(
+            "  {} {} (approved: {})",
+            item.member_id, kid_display, item.approved_at
+        );
+    }
+    eprintln!("\n{} entry(ies) will be removed", items.len());
+}
+
+pub(crate) fn print_purge_cancelled() {
+    eprintln!("Purge cancelled");
+}
+
+pub(crate) fn print_trust_purge_summary(count: usize) {
+    eprintln!("Purged {} entry(ies)", count);
+}

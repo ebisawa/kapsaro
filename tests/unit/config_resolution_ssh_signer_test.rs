@@ -9,13 +9,12 @@
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default (auto)
 
+use crate::config::types::{SshSigner, SshSignerConfig};
 use crate::test_utils::EnvGuard;
-use secretenv::config::resolution::ssh_signer::{
-    parse_ssh_signer_config, resolve_ssh_signer, resolve_ssh_signer_config,
-};
-use secretenv::config::types::{SshSigner, SshSignerConfig};
 use serial_test::serial;
 use tempfile::TempDir;
+
+use super::{parse_ssh_signer_config, resolve_ssh_signer, resolve_ssh_signer_config};
 
 #[test]
 fn test_parse_ssh_signer_config_auto() {

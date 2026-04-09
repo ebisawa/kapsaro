@@ -10,10 +10,9 @@ use crate::Result;
 
 /// App-facing copy of common CLI options used by orchestration code.
 #[derive(Debug, Clone)]
-pub struct CommonCommandOptions {
+pub(crate) struct CommonCommandOptions {
     pub home: Option<PathBuf>,
     pub identity: Option<PathBuf>,
-    pub quiet: bool,
     pub verbose: bool,
     pub workspace: Option<PathBuf>,
     pub ssh_signer: Option<SshSigner>,
@@ -21,7 +20,7 @@ pub struct CommonCommandOptions {
 
 impl CommonCommandOptions {
     /// Resolve base directory from options, environment, or defaults.
-    pub fn resolve_base_dir(&self) -> Result<PathBuf> {
+    pub(crate) fn resolve_base_dir(&self) -> Result<PathBuf> {
         match &self.home {
             Some(path) => Ok(path.clone()),
             None => get_base_dir(),
@@ -29,7 +28,7 @@ impl CommonCommandOptions {
     }
 
     /// Resolve keystore root from options or defaults.
-    pub fn resolve_keystore_root(&self) -> Result<PathBuf> {
+    pub(crate) fn resolve_keystore_root(&self) -> Result<PathBuf> {
         KeystoreResolver::resolve(self.home.as_ref())
     }
 }

@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_common::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::envelope::binding;
 use secretenv::feature::key::protection::binding as private_key_binding;
 use secretenv::model::identifiers::{alg, context as wire_context, format};

@@ -52,5 +52,5 @@ pub fn expand(
 pub fn expand_to_array(ikm: &Ikm, salt: Option<&Salt>, info: &Info) -> Result<Cek> {
     let mut okm = Zeroizing::new([0u8; 32]);
     expand_internal(ikm, salt, info, okm.as_mut())?;
-    Ok(Cek::new(*okm))
+    Ok(Cek::from_zeroizing(okm))
 }

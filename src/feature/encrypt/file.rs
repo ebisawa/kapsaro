@@ -22,6 +22,35 @@ use rand::RngCore;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+fn validate_recipient_members(
+    recipient_ids: &[String],
+    members: &[VerifiedRecipientKey],
+) -> Result<()> {
+    if recipient_ids.len() != members.len() {
+        return Err(crate::Error::InvalidArgument {
+            message: format!(
+                "Recipients count ({}) does not match public keys ({})",
+                recipient_ids.len(),
+                members.len()
+            ),
+        });
+    }
+
+    for (recipient_id, member) in recipient_ids.iter().zip(members.iter()) {
+        let member_id = &member.document().protected.member_id;
+        if recipient_id != member_id {
+            return Err(crate::Error::InvalidArgument {
+                message: format!(
+                    "Recipient '{}' does not match member '{}'",
+                    recipient_id, member_id
+                ),
+            });
+        }
+    }
+
+    Ok(())
+}
+
 /// Build encryption context: generate content key, create XChaChaKey
 ///
 /// Returns plaintext wrapped in Zeroizing to ensure it's zeroed after encryption.
@@ -29,7 +58,7 @@ fn build_encrypt_context(content: &[u8]) -> Result<(MasterKey, Zeroizing<Vec<u8>
     // Generate content key (32 bytes random)
     let mut content_key_bytes = Zeroizing::new([0u8; 32]);
     OsRng.fill_bytes(content_key_bytes.as_mut());
-    let content_key = MasterKey::new(*content_key_bytes);
+    let content_key = MasterKey::from_zeroizing(content_key_bytes);
     let xchacha_key = XChaChaKey::from_slice(content_key.as_bytes())?;
 
     // Wrap plaintext in Zeroizing to ensure it's zeroed after use
@@ -106,10 +135,11 @@ fn build_file_enc_document_protected(
 /// FileEncDocument structure
 pub fn encrypt_file_document(
     content: &[u8],
-    _recipient_ids: &[String],
+    recipient_ids: &[String],
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
 ) -> Result<FileEncDocument> {
+    validate_recipient_members(recipient_ids, members)?;
     let sid = Uuid::new_v4();
     let timestamp = current_timestamp()?;
 

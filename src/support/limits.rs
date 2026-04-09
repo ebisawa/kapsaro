@@ -4,12 +4,16 @@
 //! DoS protection limits (per PRD)
 
 use crate::{Error, Result};
+use std::path::Path;
 
 /// Maximum number of WRAP items per document
 pub const MAX_WRAP_ITEMS: usize = 1_000;
 
 /// Maximum kv-enc file size in bytes (16 MiB)
 pub const MAX_KV_ENC_FILE_SIZE: usize = 16 * 1024 * 1024;
+
+/// Maximum JSON document file size in bytes for pre-read validation.
+pub const MAX_JSON_DOCUMENT_READ_SIZE: usize = 24 * 1024 * 1024;
 
 /// Maximum number of KEY lines in a kv-enc document
 pub const MAX_KV_KEY_LINES: usize = 10_000;
@@ -39,4 +43,12 @@ pub fn validate_wrap_count(count: usize, context: &str) -> Result<()> {
         ),
         source: None,
     })
+}
+
+/// Resolve a pre-read size limit for encrypted artifact paths.
+pub fn encrypted_file_read_limit(path: &Path) -> usize {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("kvenc") => MAX_KV_ENC_FILE_SIZE,
+        _ => MAX_JSON_DOCUMENT_READ_SIZE,
+    }
 }

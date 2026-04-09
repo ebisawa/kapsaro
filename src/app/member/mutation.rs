@@ -6,7 +6,6 @@ use std::path::Path;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
 use crate::feature::member::add::add_member_from_file;
-use crate::feature::member::promotion::promote_verified_members;
 use crate::io::workspace::members::delete_member;
 use crate::{Error, Result};
 
@@ -36,8 +35,4 @@ pub fn remove_member(
     Ok(MemberRemoveResult {
         member_id: member_id.to_string(),
     })
-}
-
-pub fn promote_members(workspace_path: &Path, member_ids: &[String]) -> Result<()> {
-    promote_verified_members(workspace_path, member_ids)
 }

@@ -4,15 +4,15 @@
 //! Recipient operations for file-enc content (add, remove).
 
 use crate::feature::context::crypto::CryptoContext;
+use crate::feature::disclosure::add_to_removed_history;
 use crate::feature::envelope::unwrap::unwrap_master_key_for_file;
 use crate::feature::envelope::wrap::build_wrap_item_for_file;
-use crate::feature::rewrap::common::{
-    add_to_removed_history, check_recipient_exists, resolve_attested_recipients,
-    validate_not_empty_recipients, warn_recipient_not_found,
+use crate::feature::recipient::{
+    build_new_wrap_items, check_recipient_exists, validate_not_empty_recipients,
+    warn_recipient_not_found,
 };
 use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::file_enc::VerifiedFileEncDocument;
-use crate::support::limits::validate_wrap_count;
 use crate::Result;
 
 /// Remove recipients from file-enc content.
@@ -65,6 +65,7 @@ pub fn add_file_recipients(
     verified: &VerifiedFileEncDocument,
     new_recipients: &[String],
     key_ctx: &CryptoContext,
+    target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
     debug: bool,
 ) -> Result<()> {
     let content_key = unwrap_master_key_for_file(
@@ -75,17 +76,16 @@ pub fn add_file_recipients(
         debug,
     )?;
     let current_recipients = protected.recipients();
-    let attested_pubkeys =
-        resolve_attested_recipients(key_ctx, new_recipients, &current_recipients, debug)?;
-    validate_wrap_count(
-        protected.wrap.len() + attested_pubkeys.len(),
-        "Updated wrap set",
+    let wrap_items = build_new_wrap_items(
+        &current_recipients,
+        protected.wrap.len(),
+        new_recipients,
+        key_ctx,
+        target_members,
+        debug,
+        |attested| build_wrap_item_for_file(attested, &protected.sid, &content_key, debug),
     )?;
-
-    for attested in &attested_pubkeys {
-        let wrap_item = build_wrap_item_for_file(attested, &protected.sid, &content_key, debug)?;
-        protected.wrap.push(wrap_item);
-    }
+    protected.wrap.extend(wrap_items);
 
     Ok(())
 }

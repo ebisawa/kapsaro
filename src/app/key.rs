@@ -3,10 +3,13 @@
 
 //! Application-layer orchestration for key workflows.
 
-pub mod export;
-pub mod generate;
+pub(crate) mod export;
+pub(crate) mod generate;
 pub(crate) mod github;
-pub mod identity;
-pub mod manage;
-mod timestamp;
-pub mod types;
+pub(crate) mod manage;
+pub(crate) mod timestamp;
+pub(crate) mod types;
+
+#[cfg(test)]
+#[path = "../../tests/unit/app_key_github_test.rs"]
+mod tests;

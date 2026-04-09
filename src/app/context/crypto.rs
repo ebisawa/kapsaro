@@ -8,7 +8,6 @@ use tracing::debug;
 use crate::feature::context::crypto::{
     build_signing_key, validate_and_wrap_private_key_ssh, CryptoContext,
 };
-use crate::feature::context::env_key;
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
 use crate::feature::verify::public_key::verify_public_key_with_attestation;
@@ -20,14 +19,11 @@ use crate::io::keystore::public_key_source::{
 };
 use crate::io::keystore::storage::{load_private_key, load_public_key};
 use crate::io::ssh::backend::SignatureBackend;
+use crate::model::identity::{Kid, MemberId};
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
 use crate::model::verified::VerifiedPrivateKey;
 use crate::support::kid::build_kid_display;
 use crate::{Error, Result};
-
-pub fn is_env_key_mode() -> bool {
-    env_key::is_env_key_mode()
-}
 
 struct DecryptedSshKeyData {
     private_key: VerifiedPrivateKey,
@@ -57,8 +53,8 @@ pub fn load_crypto_context_from_env(
     workspace_path: PathBuf,
     debug_enabled: bool,
 ) -> Result<CryptoContext> {
-    let result = env_key::load_private_key_from_env(debug_enabled)?;
-    let kid = result.verified_key.proof().kid.clone();
+    let result = crate::feature::context::env_key::load_private_key_from_env(debug_enabled)?;
+    let kid = Kid::try_from(result.verified_key.proof().kid.clone())?;
     let signing_key = build_signing_key(result.verified_key.document())?;
 
     Ok(CryptoContext {
@@ -164,8 +160,8 @@ fn build_keystore_crypto_context(
         Box::new(KeystorePublicKeySource::new(keystore_root));
 
     Ok(CryptoContext {
-        member_id: member_id.to_string(),
-        kid,
+        member_id: MemberId::try_from(member_id)?,
+        kid: Kid::try_from(kid)?,
         pub_key_source,
         workspace_path,
         private_key: decrypted_key.private_key,
@@ -173,3 +169,11 @@ fn build_keystore_crypto_context(
         expires_at: decrypted_key.expires_at,
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_context_crypto_test.rs"]
+mod feature_context_crypto_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_context_env_key_integration_test.rs"]
+mod feature_context_env_key_integration_test;

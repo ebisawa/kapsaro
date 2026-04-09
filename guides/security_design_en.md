@@ -4,11 +4,33 @@
 
 ## 0. Document Information
 
+### Executive Summary
+
+SecretEnv protects team secrets (`.env` files, certificates, API keys) using modern standardized cryptography: HPKE (RFC 9180) for key delivery, XChaCha20-Poly1305 for content encryption, and Ed25519 for digital signatures. All encrypted artifacts are signed and verified before decryption.
+
+**What SecretEnv guarantees by design:** confidentiality of encrypted content, tamper detection via signatures, cryptographic binding to prevent component swapping, and self-contained signature verification without external key servers.
+
+**What SecretEnv does NOT guarantee:** prevention of insider misuse after decryption, recovery of previously disclosed secrets, strong forward secrecy, or identity assurance beyond TOFU (Trust On First Use). These are explicit non-goals, not oversights.
+
+**What users are responsible for:** managing SSH keys properly (passphrases, disabling agent forwarding), reviewing PR changes to `members/active/`, verifying new members through out-of-band channels during TOFU approval, and rotating actual secret values when members are removed.
+
+For operational guidance, see the User Guide. For the full security analysis, continue reading this document.
+
 ### Purpose of This Document
 
 This document organizes the security design of SecretEnv and clarifies both its protection targets and its underlying assumptions. Its purpose is to present SecretEnv's security claims, the conditions required for those claims to hold, the design-level verification points, the residual risks, and the explicit non-goals in a coherent form.
 
 Each section is written not only to describe algorithms and data structures, but also to show which design decisions support which security claims, and where operational assumptions and constraints remain.
+
+### Intended Audience
+
+This document serves three audiences. Each audience may focus on different sections:
+
+| Audience | Primary sections | Purpose |
+|----------|-----------------|---------|
+| **Security reviewers / auditors** | §2 (threat model), §3 (primitives), §10 (context binding), §11 (attack scenarios) | Evaluate the soundness of the security design |
+| **Implementers / contributors** | §5–§8 (protocols), §12 (verification points) | Understand protocol details and implementation requirements |
+| **Decision makers evaluating SecretEnv** | Executive Summary, §1 (overview), §2.1–§2.4 (threat model summary), §13 (limitations) | Assess whether SecretEnv meets their security needs |
 
 ---
 
@@ -19,10 +41,11 @@ SecretEnv is an offline-first encrypted file sharing CLI tool for safely sharing
 ### 1.1 Key Design Points
 
 1. **security claims**: what is cryptographically protected and what is delegated to operational assumptions
-2. **trust boundary**: local private keys and the local keystore are trusted; workspace public keys and encrypted files are not
-3. **limits of key identity**: self-signature and attestation show key consistency and key binding, but identity cannot be established by any single mechanism. Interactive promotion confirmation and operator judgment provide additional evidence for identity decisions
-4. **context binding**: `sid` / `kid` / `k` / `p` are used to prevent reuse and mix-ups
-5. **critical implementation invariants**: signature-before-decrypt, preserving bindings, and respecting the constraints of environment variable-based key loading
+2. **trust boundary**: local private keys, the local keystore, and the local trust store live in a user-local trusted area; workspace `members/active`, `members/incoming`, and `secrets` are treated as tamperable repository inputs
+3. **role-separated trust policy**: `signer_pub` is the input to cryptographic signature verification, `members/active` is the authorization source for the current member/recipient set, and `known_keys` is a TOFU approval cache
+4. **limits of key identity**: self-signature and attestation show key consistency and key binding, but identity cannot be established by any single mechanism. Manual approval and online verify provide additional evidence for identity decisions
+5. **context binding**: `sid` / `kid` / `k` / `p` are used to prevent reuse and mix-ups
+6. **critical implementation invariants**: signature-before-decrypt, preserving bindings, fail-closed behavior when `signer_pub` is missing, and limiting `SECRETENV_STRICT_KEY_CHECKING=no` to read-path
 
 ### 1.2 Security Claims and Verification
 
@@ -30,9 +53,11 @@ SecretEnv is an offline-first encrypted file sharing CLI tool for safely sharing
 |---------------|----------------|------------------------------|------------|---------------|
 | **Confidentiality** | HPKE wrap + XChaCha20-Poly1305 | Encrypt plaintext with a per-file CEK (AEAD), and wrap that CEK to each recipient with HPKE | Recipient private keys are not compromised | Legitimate recipients can still exfiltrate plaintext |
 | **Tamper detection** | Ed25519 signatures | Sign the ciphertext and relevant metadata, and reject any data whose signature does not verify | Verification is never bypassed | A malicious legitimate signer is not prevented |
+| **Self-contained verification of signed artifacts** | Mandatory `signer_pub` + PublicKey verification | Always obtain the signature verification key from embedded `signer_pub`, verify its self-signature, attestation, and `kid`, then verify the artifact signature | Every signed artifact embeds `signer_pub` | Current membership still depends on separate trust policy checks |
 | **Context binding** | `sid` / `kid` / `k` / `p` in info / AAD | Bind `sid` / `kid` / `k` / `p` into HPKE info and payload AAD so reuse and substitution do not hold across contexts | The implementation preserves the intended binding points | Security weakens if a future change removes a binding |
 | **Key consistency** | PublicKey self-signature | Protect each PublicKey with a self-signature so tampering with an existing key statement does not hold | The original private key is not compromised | It does not prevent creation of a brand new malicious key |
-| **Stronger key identity evidence** | SSH attestation + interactive promotion confirmation + online verify | The layers are not misrepresented as equivalent proofs | The promotion confirmation is executed correctly | Weakens with `--force`, misapproval, or account compromise |
+| **Current-trust decision** | `members/active` + `known_keys` | Treat `members/active` as the authorization source and `known_keys` as an approval cache, with separate read-path and write-path checks | Repo governance and user approvals work as intended | Weak against bootstrap TOFU, repo compromise, and misapproval |
+| **Stronger key identity evidence** | SSH attestation + manual approval + online verify | The layers are not misrepresented as equivalent proofs | Manual approval is executed correctly | Weak against first-contact MITM and GitHub/SSH compromise |
 | **Portable private key use** | Password export or SSH-based protection | CI use meets the stated trust conditions | Used only in a trusted CI context | Storing both secrets in the same backend is not independent defense |
 
 ### 1.3 Terminology Used Here
@@ -41,6 +66,9 @@ SecretEnv is an offline-first encrypted file sharing CLI tool for safely sharing
 |------|--------------------------|
 | **Key consistency** | Evidence that the same private key holder created the PublicKey; not identity by itself |
 | **Identity assurance** | Operational evidence that helps a human decide which person or account a key belongs to |
+| **approval cache** | A local cache that lets a user skip re-review for a `kid` they have already confirmed |
+| **current member set** | The set of `(member_id, kid)` pairs obtained from the current workspace's `members/active` |
+| **non-member acceptance** | An interactive, one-shot, artifact-scoped exception for a signer not present in current `members/active` |
 | **trust boundary** | The boundary between inputs trusted as-is and inputs assumed tamperable until validated |
 | **residual risk** | Risk that remains even with a correct implementation, or when an operational assumption is not met |
 
@@ -53,15 +81,19 @@ SecretEnv is an offline-first encrypted file sharing CLI tool for safely sharing
 | Attacker | Capability | Assumed Scenario |
 |----------|-----------|----------------|
 | **Repository tamperer** | Can arbitrarily tamper with files under `.secretenv/` | Malicious CI, compromised Git server, unauthorized push |
-| **Public key substituter** | Can replace `members/active/<id>.json` with a forged public key | MITM during new member addition, unauthorized commit to repository |
+| **Public key substituter** | Can replace `members/active/<id>.json` or `members/incoming/<id>.json` with a forged public key | MITM during new member addition, unauthorized commit to repository |
 | **Key rotation attacker** | Retains old-generation wraps and attempts decryption with new keys | Exploiting weaknesses in the key update process |
 | **Context confusion attacker** | Swaps ciphertext components between different secrets | Copy-and-paste across encrypted files |
+| **First-contact MITM** | Replaces bootstrap-time `kid`, GitHub account information, or attestation fingerprint with attacker-controlled values | First clone, first encounter with a signer |
+| **Local trust store tamperer** | Can write to or roll back `<SECRETENV_HOME>/trust/` | Replacing `known_keys`, rewinding approval history |
 
 ### 2.2 Operational Assumptions
 
-The attacker model above assumes repository write access is properly controlled. In the main target environment of Git + GitHub operation, changes to `members/active/` are checked through PR review. Attackers with unrestricted write access to the repository, such as compromise of repository administrator privileges, are outside the scope of this model.
+The attacker model above assumes repository write access is properly controlled. In the main target environment of Git + GitHub operation, changes to `members/active/` are checked through PR review. `members/active` is the authorization source for the current member set / current recipient set, but it is not a cryptographic trust anchor.
 
-If this assumption does not hold, repository-layer access control must be evaluated separately from SecretEnv's cryptographic design. It is important to distinguish between the security of the crypto design and the security of the distribution medium.
+It also assumes `<SECRETENV_HOME>/trust/` is a user-local trusted area protected by OS / filesystem access control. Signatures on the local trust store are used for integrity checks, corruption detection, and format validation, but they do not fully protect against consistent replacement or rollback inside that area.
+
+Initial bootstrap and first-seen `kid` approval rely on TOFU. As a result, first-contact MITM and whole-workspace substitution are outside the scope of cryptographic prevention. The crypto design must therefore be evaluated separately from distribution-medium controls, review workflow, and any out-of-band verification.
 
 ### 2.3 Trust Boundary
 
@@ -70,6 +102,7 @@ graph TB
     subgraph trusted["Trusted"]
         LocalTerminal[Local machine]
         LocalKeystore["Local key storage<br/>~/.config/secretenv/keys/"]
+        LocalTrustStore["Local trust store<br/>~/.config/secretenv/trust/"]
         SSHKey[SSH Ed25519 private key]
     end
 
@@ -83,6 +116,7 @@ graph TB
     end
 
     LocalTerminal -->|key generation / decryption| LocalKeystore
+    LocalTerminal -->|approval cache lookup| LocalTrustStore
     LocalTerminal -->|attestation| SSHKey
     LocalTerminal -->|encryption / verification| MembersDir
     LocalTerminal -->|encryption / decryption| SecretsDir
@@ -95,60 +129,78 @@ graph TB
 
 **Trusted elements:**
 - Local machine and local key storage (`~/.config/secretenv/keys/`)
+- Local trust store (`~/.config/secretenv/trust/`), but only as a user-local approval cache, not as the authority for current trust
 - User's SSH Ed25519 private key
 - GitHub API (only during online verification, optional)
 
 **Untrusted elements:**
-- Workspace `members/` directory — verified by signatures and attestation
+- Workspace `members/active/` and `members/incoming/` — untrusted repository data. PublicKeys themselves are verified by self-signature and attestation, while use of these directories as the authority for current membership depends on repo governance
 - Workspace `secrets/` directory — verified by signatures
 
 ### 2.4 Design Scope Summary
 
 | Item | Implication |
 |------|----------------------|
-| **Guaranteed by design** | Confidentiality, tamper detection, context binding, key-generation binding, key consistency |
-| **Depends on operational assumptions** | Identity decisions, safe CI execution conditions, repository-layer access control |
-| **Not guaranteed** | Insider misuse prevention, recovery of prior disclosure, strong forward secrecy, centralized authorization policy |
-| **Most important implementation checks** | Signature verification order, preserving bindings, constraints of environment variable-based key loading, no skipped PublicKey verification |
+| **Guaranteed by design** | Confidentiality, tamper detection, context binding, key-generation binding, key consistency, self-contained signature verification via `signer_pub` |
+| **Depends on operational assumptions** | Identity decisions, review of `members/active` changes, TOFU approval, protection of the local trust-store area, safe CI execution conditions |
+| **Not guaranteed** | Insider misuse prevention, recovery of prior disclosure, strong forward secrecy, bootstrap authenticity, whole-workspace substitution, centralized authorization policy |
+| **Most important implementation checks** | Signature verification order, preserving bindings, mandatory `signer_pub`, no signer lookup fallback, separation of `members/active` vs `known_keys` |
 
 ### 2.5 Trust Model
 
-"Key authenticity" in SecretEnv is not determined by a single mechanism. Instead, the system combines the following layers to provide more evidence for human trust decisions. No single layer alone establishes identity.
+SecretEnv's trust model intentionally separates cryptographic verification, current-membership decisions, and user approval. Rather than having a single mechanism decide both 'whose key is this?' and 'should it be accepted now?', the system applies the following four layers. The User Guide presents a simplified operational view of these layers; this section provides the full model with the rationale behind each layer.
 
-**Layer 1: Self-signature (key consistency)**
+Note: Layers 2–4 reference protocol elements (`members/active`, `known_keys`, the local trust store) that are described in detail in §4–§9. This overview introduces the trust model at the conceptual level; readers are encouraged to revisit this section after reading the protocol details.
 
-The self-signature included in a PublicKey shows that "the entity that created this PublicKey holds the corresponding private key." This supports **consistency** of the key, but does not establish **identity**. An attacker who creates a new SecretEnv key pair can generate a PublicKey with a valid self-signature.
+| Layer | Mechanism | What it establishes | What it does NOT establish |
+|-------|-----------|---------------------|---------------------------|
+| **1. Cryptographic verification** | `signer_pub` + PublicKey verification | Cryptographic authenticity of the artifact and the signing key | Identity of the key holder |
+| **2. Authorization** | `members/active` | Current membership / current recipient set | Cryptographic trust (depends on repo governance) |
+| **3. Approval cache** | `known_keys` in local trust store | Previously approved `kid`s | Current membership |
+| **4. Manual approval + online verify** | TOFU approval, GitHub API | Supplementary evidence for identity decisions | Cryptographic proof of identity |
 
-The role of self-signature is limited to **tamper prevention** of existing PublicKeys. Modifying any field of a PublicKey in `members/active/` will cause self-signature verification to fail.
+**Layer 1: Cryptographic verification**
 
-**Layer 2: SSH attestation (key binding)**
+Signed artifacts always include `signature.signer_pub`, and the signature verification key is always obtained from that embedded PublicKey. The implementation verifies self-signature, attestation, `kid` consistency, and expiration, and thereby self-containedly determines which key statement signed the artifact. `members/active` is not used for signer lookup.
 
-SSH attestation cryptographically ties a SecretEnv key pair to an SSH key. However, who owns the SSH key itself cannot be determined at this layer. An attacker can generate valid attestation by attesting their SecretEnv key with their own SSH key.
+This layer establishes cryptographic authenticity through the following properties:
 
-**Layer 3: Interactive promotion confirmation (evidence for key-to-person association)**
+- **Self-signature (key consistency)**: The self-signature included in a PublicKey shows that the entity that created this PublicKey holds the corresponding private key. This supports **consistency** of the key, but does not establish **identity**. An attacker who creates a new SecretEnv key pair can generate a PublicKey with a valid self-signature. The role of self-signature is limited to **tamper prevention** of existing PublicKeys. Modifying any field of a PublicKey in `members/active/` or `members/incoming/` will cause self-signature verification to fail.
+- **SSH attestation (key binding)**: SSH attestation cryptographically ties a SecretEnv key pair to an SSH key. However, who owns the SSH key itself cannot be determined by attestation alone. An attacker can generate valid attestation by attesting their SecretEnv key with their own SSH key.
 
-The user running `rewrap` visually confirms the SSH fingerprint and GitHub account information of the incoming member. This is the same trust model as confirming a first connection in SSH's `known_hosts`. **This does not establish identity; it provides evidence for deciding which person to accept the key as belonging to.**
+**Layer 2: Authorization (`members/active`)**
 
-**Risks of skipping via `--force` and recommended operation**:
-When interactive promotion confirmation is skipped (with `--force`), promotion proceeds without interactive confirmation, so there is less evidence available for the identity decision, which weakens the last line of defense against public key substitution attacks. However, members who have been explicitly failed by online verification (Layer 4) are excluded from promotion even when `--force` is used.
+The current workspace's `members/active` is the authorization source for the current member set / current recipient set. On read-path it requires the signer's `(member_id, kid)` to be in the current member set, and on write-path it is the source of recipients.
 
-In non-interactive environments such as automation scripts, using `--force` for `rewrap` may be necessary, in which case the following operations are recommended:
-- Whenever possible, complete member promotion via interactive `rewrap` beforehand
-- After using `--force`, run `member verify` for online verification to post-hoc confirm the legitimacy of promoted members
-- Manage the use of `--force` as a team operational policy and avoid unrestricted use in daily manual operations
+However, `members/active` is not a cryptographic trust anchor. It is untrusted repository data whose authenticity depends on repo governance, specifically Git access control and PR review.
 
-**Layer 4: Online verify (supplementary evidence)**
+**Layer 3: Approval cache (`known_keys`)**
 
-Automatically checks SSH public key registration via the GitHub API. This is useful supplementary evidence as long as the GitHub account is not compromised, but it does not establish identity on its own.
+The local trust store is a signed JSON document in `secretenv.trust.local@2` format. Through `known_keys[]`, it records `kid`s the user has already reviewed once. This is an approval cache, not the authority for current trust.
+
+- It does not distinguish signer vs recipient
+- It does not distinguish workspaces
+- Presence in `known_keys` does not imply current membership
+- The user's own key normally does not need to be recorded in `known_keys`, because the local keystore is the trust anchor for self
+
+**Layer 4: Manual approval and online verify**
+
+When approving an unseen `kid`, the user reviews the `kid`, the `attestation.pub` fingerprint, and when available the GitHub account `id` / `login`. This is a TOFU model similar to SSH `known_hosts`: it does not cryptographically establish identity, but provides evidence for an acceptance decision. GitHub API online verification is supplementary evidence and does not establish identity on its own.
+
+**Limited exceptions: non-member acceptance and `SECRETENV_STRICT_KEY_CHECKING=no`**
+
+- non-member acceptance is an interactive, one-shot, artifact-scoped exception that accepts an artifact signed by a signer outside current `members/active` without restoring that signer to current membership or updating `known_keys`
+- `SECRETENV_STRICT_KEY_CHECKING=no` skips only the `known_keys` check for explicitly requested read paths. It may be used in interactive runs when the operator explicitly sets it, and it never skips the `members/active` check or the cryptographic signature verification
 
 **Composite trust**
 
 Stronger confidence in key authenticity depends on the above layers working as intended. However, the ways this confidence can break down differ by attack scenario:
 
-- **Tampering with existing keys**: Requires SSH private key compromise. Since self-signature and SSH attestation cannot be forged, tampering cannot succeed without the original key holder's SSH private key.
-- **Inserting a new key**: Can succeed with only misapproval during promotion confirmation (or omission via `--force`). An attacker can generate valid self-signature and attestation with their own key, so the victim's SSH key compromise is not required.
-
-The conditions listed above are a composite of these multiple attack scenarios.
+- **Tampering with existing keys**: Typically requires compromise of the original secret material needed to satisfy self-signature or attestation checks
+- **Inserting a new key**: Can succeed if repo governance fails and the user mis-approves the TOFU prompt. The attacker can generate valid self-signature and attestation with their own keys, so compromise of the victim's keys is not required
+- **SSH attestor private-key-only compromise**: Even with a healthy GitHub account, an attacker can create a malicious key carrying legitimate-looking attestor evidence
+- **GitHub trust-domain compromise**: The GitHub information shown by online verify / manual review can itself be forged consistently
+- **Local trust store tampering**: Once the local trusted area is broken, consistent replacement or rollback of `known_keys` cannot be fully prevented
 
 ---
 
@@ -172,7 +224,7 @@ The conditions listed above are a composite of these multiple attack scenarios.
 
 **Rationale:**
 - A standardized hybrid public key encryption scheme with a consistent definition of the KEM + KDF + AEAD combination
-- Base mode provides ephemeral key isolation per wrap (however, if a recipient's long-term key is compromised, all existing wraps for that recipient can be decrypted; see §12.1)
+- Base mode provides ephemeral key isolation per wrap (however, if a recipient's long-term key is compromised, all existing wraps for that recipient can be decrypted; see §13.1)
 - Clear suite ID identification via IANA Registry
 
 **Suite configuration:**
@@ -265,7 +317,7 @@ hpke-32-1-3
 - Cryptographic independence between entries in kv-enc depends on the PRF security of HKDF-SHA256. In SecretEnv, a distinct CEK is derived for each entry from a high-entropy MK, so knowledge about one entry is not expected to directly reveal the CEK of another entry.
 
 **Preconditions and limitations:**
-- HPKE Base mode assumes confidentiality of the recipient's long-term private key. If the long-term key is compromised, all wraps for that recipient can be decrypted (see §12.1).
+- HPKE Base mode assumes confidentiality of the recipient's long-term private key. If the long-term key is compromised, all wraps for that recipient can be decrypted (see §13.1).
 - XChaCha20-Poly1305 depends on nonce uniqueness in practice, and nonce reuse can lead to serious problems.
 - Ed25519 assumes private key confidentiality. In SecretEnv, the signing private key is stored encrypted by PrivateKey protection (§7).
 
@@ -360,7 +412,11 @@ Notes:
 - The same SSH key can protect multiple SecretEnv key statements, but different `kid` / `salt` values produce different `enc_key` values
 - The `private.json` stored in the local keystore contains only the ciphertext of SecretEnv private key material; the SSH private key itself remains outside SecretEnv storage
 
-### 4.3 Key Lifecycle
+### 4.3 Recipient Eligibility
+
+Only members listed in `members/active/` are included as recipients during encryption operations. Members in `members/incoming/` cannot decrypt any existing secrets until they are promoted to active membership via `rewrap`.
+
+### 4.4 Key Lifecycle
 
 A SecretEnv key pair transitions through a lifecycle from generation to expiration, and is eventually replaced through key rotation.
 
@@ -377,19 +433,21 @@ The behavior in each state is as follows:
 - **Expired**: The state after `expires_at` has passed. New encryption (wrap) and signing operations are rejected. However, decryption and verification of data legitimately signed in the past are permitted with a warning.
 - **Rotate**: The active key is replaced by generating a new key pair (with a new `kid`) using commands like `rewrap --rotate-key`. The old key is retained for decryption and verification until it expires.
 
-#### 4.3.1 Immutability of Key Statement ID (kid)
+#### 4.4.1 Immutability of Key Statement ID (kid)
 
 Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens, deterministically derived from the contents of the self-signed `PublicKey@4.protected` (which includes the public key, identity, binding_claims, expiration metadata, etc.).
 
 Because `kid` is derived from the PublicKey contents, **`kid` equality implies strict equality of the key statement content**. If any field changes, the result is treated as an entirely new key pair with a different `kid`.
 
-### 4.4 Key Rotation
+### 4.5 Key Rotation
 
 Key rotation is performed by the `rewrap` command. The behavior differs between file-enc and kv-enc and between recipient changes and explicit `--rotate-key`. See §6.7 for the full comparison after both protocols have been introduced.
 
 ---
 
 ## 5. file-enc Protocol
+
+file-enc encrypts a single file for multiple recipients. A random per-file key (DEK) encrypts the entire content using XChaCha20-Poly1305, and each recipient receives a HPKE-wrapped copy of the DEK. The complete structure is signed with Ed25519, and tampering is detected before any decryption occurs.
 
 ### 5.0 Data Structure Overview
 
@@ -435,7 +493,7 @@ The overall structure of file-enc nests in order: top level (signed container) �
     "updated_at": "<RFC3339>"        // file update timestamp
   },
   "signature": {
-    // signature_v3 (§8.2): signature over JCS-canonicalized protected, etc.
+    // signature_v4 (§8.2): signature over JCS-canonicalized protected, etc.
   }
 }
 ```
@@ -552,6 +610,8 @@ payload.encrypted = { "nonce": b64url(nonce), "ct": b64url(ct) }
 ---
 
 ## 6. kv-enc Protocol
+
+kv-enc encrypts `.env`-style key-value entries individually. It uses a two-layer key structure: a Master Key (MK) is HPKE-wrapped for each recipient, and per-entry Content Encryption Keys (CEKs) are derived from the MK via HKDF. This design enables partial decryption of individual entries and efficient updates without re-encrypting the entire file.
 
 ### 6.0 Data Structure Overview
 
@@ -935,17 +995,17 @@ The HKDF info string (`secretenv:password-private-key-enc@4:{kid}`) differs from
 
 - Default parameters at export time: m=47104 (46 MiB), t=1, p=1 (OWASP recommended)
 - Parameters are fixed by the implementation and are not serialized in the private key document
-- Minimum password length: 8 characters
+- Minimum password length: 8 characters. This is the implementation-enforced floor, not a recommendation. Users are responsible for choosing a sufficiently strong password. For offline brute-force resistance, 20 or more random characters (or a passphrase with equivalent entropy) is strongly recommended.
 
 #### 7.9.4 Security Trade-offs in CI Environments
 
-Environment variables (`SECRETENV_KEY_PASSWORD`) persist in process memory and may be visible via `/proc/*/environ` on Linux. This is an accepted trade-off consistent with how CI platforms handle secret variables. What is accepted here is runtime exposure caused by environment-variable delivery, not the idea that storing `SECRETENV_KEY_PASSWORD` in the same secret backend as `SECRETENV_PRIVATE_KEY` creates an independent barrier against backend compromise. The password and decrypted key material are zeroized after use where the Rust type system permits (using the `zeroize` crate).
+Environment variables (`SECRETENV_KEY_PASSWORD`) persist in process memory and may be visible via `/proc/*/environ` on Linux. This is an accepted trade-off consistent with how CI platforms handle secret variables. The password and decrypted key material are zeroized after use where the Rust type system permits (using the `zeroize` crate).
 
-The main security value of this password protection is defense when the exported blob leaks by itself. For example, if only the `SECRETENV_PRIVATE_KEY`-equivalent blob escapes through an exported file, copied text, artifact, or clipboard content, the key still cannot be decrypted immediately unless the password is also disclosed.
+**What password protection defends against:** The main security value is defense when the exported blob leaks by itself. For example, if only the `SECRETENV_PRIVATE_KEY`-equivalent blob escapes through an exported file, copied text, artifact, or clipboard content, the key still cannot be decrypted immediately unless the password is also disclosed.
 
-By contrast, when `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are stored in the same CI secret backend, the password provides little independent protection against compromise of that backend itself, because both values are typically obtained together. This configuration is therefore useful for portable SSH-free operation, but it must not be interpreted as "placing both in one secret backend still gives meaningful defense-in-depth against backend compromise."
+**What password protection does NOT defend against:** When `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are stored in the same CI secret backend, the password provides little independent protection against compromise of that backend itself, because both values are typically obtained together. This configuration is useful for portable SSH-free operation, but it must not be interpreted as meaningful defense-in-depth against backend compromise.
 
-If operations can place `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` in separate trust domains, the password protection becomes more meaningful. In the common case where both are stored in the same CI secret backend, the practical protection is primarily limited to blob-only leakage scenarios.
+**Recommendation:** If operations can place `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` in separate trust domains, the password protection becomes more meaningful. In the common case where both are stored in the same CI secret backend, the practical protection is primarily limited to blob-only leakage scenarios.
 
 #### 7.9.5 Public Key Verification with Environment Variable-Based Key Loading
 
@@ -980,25 +1040,26 @@ Typical allowed cases are post-merge workflows on protected branches and deploy 
 
 ## 8. Signature and Verification Architecture
 
-### 8.0 signature_v3 Common Format
+### 8.0 signature_v4 Common Format
 
-Both file-enc and kv-enc use a common signature structure called `signature_v3`. This structure has the following security properties:
+All signed artifacts in file-enc, kv-enc, and the local trust store use a common signature structure called `signature_v4`. This structure has the following security properties.
 
-- **Self-contained verification**: The signer's PublicKey (`signer_pub`) can optionally be embedded within the signature. This allows signature verification and signer identification to complete without referencing an external keystore.
-- **Explicit key statement reference**: Containing `kid` makes it clear which signed key statement was used for signing.
-- **Ed25519 raw signature**: The signature value is base64url-encoded Ed25519 raw signature bytes (64 bytes) — a fixed length of 86 characters.
+- **Self-contained verification**: The signer's PublicKey (`signer_pub`) is required to be embedded in the signature. This allows signature verification and signer identification to complete without relying on an external keystore or workspace lookup.
+- **Explicit key statement**: Including `kid` makes it clear which self-signed key statement was used for signing.
+- **Fixed verification chain**: The implementation first verifies the self-signature, attestation, expiration, and `kid` match of `signer_pub`, and then verifies the artifact signature using that key.
+- **Ed25519 raw signature**: The signature value is base64url-encoded Ed25519 raw signature bytes (64 bytes), with a fixed length of 86 characters.
 
-When the signature token contains `signer_pub`, it can also chain-verify the PublicKey's self-signature and SSH attestation, forming an offline trust chain.
+Artifacts that omit `signer_pub` are rejected fail-closed. SecretEnv does not support legacy fallback signer lookup from workspace `members/active`.
 
 ### 8.1 Comparison of Signing Methods
 
 | Item | file-enc | kv-enc |
 |------|----------|--------|
 | Signed data | `jcs(protected)` | canonical_bytes (concatenation of text lines) |
-| Format | `signature` field in JSON | `:SIG` line (last line) |
+| Format | `signature` field in JSON | `:SIG` line (final line) |
 | Tamper detection scope | Entire `protected` (sid, wrap, payload, timestamps) | HEAD / WRAP / all entry lines |
 | Signature algorithm | `eddsa-ed25519` (PureEdDSA) | `eddsa-ed25519` (PureEdDSA) |
-| Signature format | `signature_v3` format | `signature_v3` format |
+| Signature format | `signature_v4` format | `signature_v4` format |
 
 ### 8.2 file-enc Signature
 
@@ -1008,113 +1069,194 @@ signature = ed25519_sign(sig_priv, canonical_bytes)
 ```
 
 - The `protected` object is JCS-canonicalized and signed directly (RFC 8032 PureEdDSA)
-- `wrap`, `payload`, and `removed_recipients` are all contained within `protected` and therefore protected by the signature
+- `wrap`, `payload`, and `removed_recipients` are all contained within `protected` and are therefore protected by the signature
 - The `signature` field is not included in the signed data
 
 ### 8.3 kv-enc Signature
 
-canonical_bytes construction procedure:
+Procedure for constructing canonical_bytes:
 
-1. Normalize line endings in the input file to LF (0x0A) (CRLF → LF)
-2. Concatenate in order all lines including the first line `:SECRETENV_KV 3` except the `:SIG` line
-3. Append **line terminator** LF (0x0A) to the end of each line
-4. The **field separator** within each line is space (0x20) (not tab)
+1. Normalize line endings in the input file to LF (0x0A) (CRLF to LF)
+2. Concatenate, in order, all lines including the first line `:SECRETENV_KV 3`, excluding the `:SIG` line
+3. Append the **line terminator** LF (0x0A) to the end of each line
+4. Use space (0x20) as the **field separator** within each line, not tab
 
 Concrete byte-level example:
+
 ```
-:SECRETENV_KV 3\n      ← line terminator: LF (0x0A)
-:HEAD <token>\n         ← field separator: space (0x20), line terminator: LF
-:WRAP <token>\n         ← field separator: space (0x20), line terminator: LF
-DATABASE_URL <token>\n  ← field separator: space (0x20), line terminator: LF
+:SECRETENV_KV 3\n      <- line terminator: LF (0x0A)
+:HEAD <token>\n         <- field separator: space (0x20), line terminator: LF
+:WRAP <token>\n         <- field separator: space (0x20), line terminator: LF
+DATABASE_URL <token>\n  <- field separator: space (0x20), line terminator: LF
 ```
 
-**Distinction**: The LF in step 3 is a **line terminator**, while the space in step 4 is a **field separator** between the line header and the token. These serve different roles.
+**Distinction**: The LF in step 3 is the **line terminator**, while the space in step 4 is the **field separator** between the line header and the token. These have different roles.
 
 ```
 canonical_bytes = concat_lines_with_lf(all_lines_except_SIG)
 signature = ed25519_sign(sig_priv, canonical_bytes)
 ```
 
-### 8.4 Verification Key Source and Membership Check
+### 8.4 Cryptographic Verification of Signed Artifacts
 
-The source of the verification key used for signature verification, and how that key is confirmed to belong to a legitimate member, are structured as follows:
+The verification key for signature verification is always obtained from the embedded `signer_pub`.
 
-**1. Source of the Verification Key**
-- **When `signer_pub` is embedded**: The embedded PublicKey is used as the verification key.
-- **When `signer_pub` is absent**: The PublicKey is located from the workspace's `members/active/` directory using `signature.kid`.
+1. Verify `signature.signer_pub` as a PublicKey
+2. Check its self-signature, expiration, re-derived `kid`, `kid` match, and attestation
+3. Confirm `signature.kid == signer_pub.protected.kid`
+4. Use `signer_pub.protected.identity.keys.sig.x` as the verification key for the artifact signature itself
 
-*(Note: The local keystore is used strictly for private key storage and is never used as a public key source for signature verification.)*
-
-**2. Self-Verification of Embedded Public Keys**
-When `signer_pub` is embedded, the PublicKey document itself must first be verified.
-- The implementation verifies its self-signature, expiration, `kid` match, and attestation.
-- Because `kid` is deterministically derived from the document's content (`protected_without_kid`) rather than being a mere label, the implementation re-derives the `kid` and ensures it matches the declared `kid` to guarantee the key statement has not been tampered with.
-
-**3. Membership Check**
-Even if the verification key is cryptographically valid, it must be confirmed as belonging to an active member of the workspace.
-- This is checked by confirming that **the `kid` exists in the workspace's `members/active/` directory**.
-- Since `kid` equality implies strict equality of the key statement content (§4.3.1), checking for the existence of the `kid` is sufficient; a byte-for-byte comparison of the entire file is not required.
-
-**4. Trust Boundary (Role of the Workspace)**
-While the workspace's `active` directory provides a list of currently accepted keys, it is **not an absolute trust anchor**.
-- As described earlier, the ultimate decision of "which person this key is accepted as belonging to" is the responsibility of each user (§2.5 Layer 3 Interactive promotion confirmation).
-- Supporting evidence for this judgment is provided through SSH attestation and GitHub online verify.
+Artifacts that omit `signer_pub` are rejected fail-closed. The implementation must not use workspace `members/active/`, `members/incoming/`, or the local keystore as signer lookup sources.
 
 ### 8.5 PublicKey Self-Signature
 
-A PublicKey has a self-signature over its `protected` object:
+A PublicKey carries a self-signature over its `protected` object:
 
 ```
 canonical_bytes = jcs(protected)
 signature = ed25519_sign(identity.keys.sig private key, canonical_bytes)
 ```
 
-This shows that "the holder of the corresponding private key created this PublicKey."
+This confirms that the holder of the corresponding private key created this PublicKey.
 
 ### 8.6 SSH Attestation
 
-SSH key attestation over the `identity.keys` of a PublicKey:
+SSH-key attestation over `identity.keys` in a PublicKey:
 
 1. JCS-canonicalize `identity.keys`
-2. Compute SHA256 of the canonicalized bytes
+2. Compute the SHA256 of the canonicalized bytes
 3. Sign with the SSH key (namespace: `secretenv`)
-4. Extract Ed25519 raw signature bytes (64 bytes) and store
+4. Extract and store the Ed25519 raw signature bytes (64 bytes)
 
-This allows offline verification of the binding between the SecretEnv key pair and the SSH key.
+This enables offline verification of the binding between the SecretEnv key pair and the SSH key.
 
 ### 8.7 Online Verification (GitHub)
 
-When `binding_claims.github_account` exists, the fingerprint of `attestation.pub` is cross-checked against the public keys obtained from the GitHub API. This confirms that the SSH key is registered to the claimed GitHub account.
+When `binding_claims.github_account` exists, the fingerprint of `attestation.pub` is checked against the public keys obtained from the GitHub API. This confirms that the SSH key is registered to the claimed GitHub account.
+
+`member verify` targets only `members/active`. Online verification for `members/incoming` candidates is not performed by ordinary `member verify`; it is performed only during interactive `rewrap` when a candidate still needs a trust update. A `kid` that already exists in `known_keys` may skip re-verification.
 
 ---
 
-## 9. Context Binding and Defence-in-Depth
+## 9. Trust Policy and Approval Model
 
-This chapter describes the binding design that prevents implementation drift. SecretEnv intentionally places `sid` / `kid` / `k` / `p` in multiple locations so that the system cryptographically fixes what a ciphertext belongs to and which key generation it was created for.
+This chapter operationalizes the trust model introduced in §2.5. While §2.5 describes the four layers conceptually, this chapter specifies the exact read-path and write-path policies and the operational rules for each trust source.
 
-### 9.1 System of Binding Elements
+SecretEnv explicitly separates cryptographic authenticity by `signer_pub`, current-trust authorization by `members/active`, and the approval cache represented by `known_keys` in the local trust store.
+
+### 9.1 Principle of Role Separation
+
+Acceptance of a signed artifact is divided into at least the following three layers.
+
+- **Cryptographic verification**: Use the embedded `signer_pub` to determine, in a self-contained way, which key signed the artifact
+- **Authorization**: Use `members/active` in the current workspace to decide whether that `(member_id, kid)` belongs to the current member set
+- **Approval cache**: Use `known_keys` in the local trust store to decide whether the user has previously approved that `kid`
+
+This separation keeps the roles distinct: `members/active` is the authority for current trust, `known_keys` is a TOFU approval cache, and `signer_pub` is the signature verification key source.
+
+### 9.2 Read-Path Trust Policy
+
+Even if cryptographic signature verification succeeds, the artifact is not automatically acceptable in the current workspace. On the read path, the following conditions must be satisfied.
+
+1. `(signer_pub.protected.member_id, signer_pub.protected.kid)` exists in the current workspace's `members/active`
+2. `signer_pub.protected.kid` exists in the local trust store's `known_keys`, or the user manually approves it in the current execution
+
+Notes:
+
+- A `signer_pub` corresponding to the user's own signing private key may skip condition 2
+- `SECRETENV_STRICT_KEY_CHECKING=no` may skip condition 2 only on explicitly requested read paths
+- Even under these exceptions, condition 1, the `members/active` check, is never skipped
+- There is no implicit auto-update of `known_keys`
+
+### 9.3 Write-Path Trust Policy
+
+On write paths such as `encrypt`, `set`, `unset`, `import`, and `rewrap`, current recipients are always derived from `members/active`. In addition, the following must hold.
+
+1. Each PublicKey in `members/active` is cryptographically valid
+2. Each recipient `kid` exists in `known_keys`, or the user manually approves it in the current execution
+3. Any processing that reads an input artifact applies the read-path trust policy to that artifact's signer
+
+`SECRETENV_STRICT_KEY_CHECKING=no` does not apply to write paths.
+
+### 9.4 Local Trust Store and Approval Cache
+
+The local trust store is signed JSON in the `secretenv.trust.local@2` format, stored at `<SECRETENV_HOME>/trust/<owner_member_id>.json`. Its role is not to serve as the authority for current trust, but as an approval cache.
+
+The local trust store is the main exception to the general `signer_pub` rule. Trust-store signatures are verified with the owner's local keystore PublicKey resolved by `(protected.owner_member_id, signature.kid)`, not by embedded `signer_pub`.
+
+The implementation must verify at least the following.
+
+- `signature.kid` matches the selected local keystore PublicKey's `protected.kid`
+- the selected local keystore PublicKey's `protected.member_id == protected.owner_member_id`
+- `known_keys` contains no duplicate `kid` and no duplicate `(member_id, kid)`
+- When comparing a candidate PublicKey against `known_keys`, if the same `kid` exists under a different `member_id`, fail as an integrity anomaly
+
+Updates must be written completely to a temporary file in the same directory and then atomically replaced. Permissions weaker than `0600` must produce a warning. The signature is used for integrity checks, corruption detection, and format validation, but it does not prevent coherent replacement or rollback if the local trusted area is compromised. If the trust store cannot be verified, the CLI warns and may delete the invalid cache only after explicit user confirmation; otherwise it fails closed.
+
+For incoming candidates, manual review is required only for `kid`s that are not already present in `known_keys`. A candidate with `binding_claims.github_account` must succeed in online verify at that review point, while a candidate without that binding may still be approved through warning-backed manual review only.
+
+### 9.5 Non-Member Acceptance and Limited Exceptions
+
+Non-member acceptance is a mechanism that interactively accepts, on a one-shot and per-artifact basis, an artifact signed by a signer that is not present in the current `members/active`. This does not restore the signer to current membership; it is only a temporary exception in the trust policy.
+
+- It is allowed only for `verify`, `inspect`, `decrypt`, `get`, and `rewrap`
+- It does not auto-update `known_keys`
+- It is not allowed for `encrypt`, `set`, `unset`, `import`, or `run`
+- When applied to `rewrap`, the user must be shown not only the signer information but also the destination current recipient set
+
+### 9.6 `SECRETENV_STRICT_KEY_CHECKING` Behavior
+
+The environment variable `SECRETENV_STRICT_KEY_CHECKING` controls whether the `known_keys` approval cache check is enforced. This section consolidates the rules that appear across §2.5, §9.2, §9.3, and §12.1.
+
+**What `SECRETENV_STRICT_KEY_CHECKING=no` skips:**
+
+- The `known_keys` check (Layer 3 of the trust model): the requirement that the signer's or recipient's `kid` exists in the local trust store's `known_keys`
+
+**What it does NOT skip:**
+
+- The `members/active` authorization check (Layer 2): the signer's `(member_id, kid)` must still be in the current member set
+- Cryptographic signature verification (Layer 1): `signer_pub` verification, self-signature, attestation, and artifact signature checks remain mandatory
+
+**Scope:**
+
+- Applies only to explicitly requested **read paths** (`decrypt`, `get`, `run`)
+- Does **not** apply to write paths (`encrypt`, `set`, `unset`, `import`, `rewrap`)
+- May be used in interactive runs when the operator explicitly sets it
+- Has no implicit auto-update effect on `known_keys`
+
+**CI considerations:** Setting `SECRETENV_STRICT_KEY_CHECKING=no` permanently in a CI environment effectively disables the approval cache for all read operations. This is acceptable only when the CI context is trusted (§7.9.5). Avoid setting it globally in development environments where TOFU approval provides meaningful protection.
+
+## 10. Context Binding and Defence-in-Depth
+
+SecretEnv cryptographically binds each encrypted artifact to its context (which file, which key generation, which entry, which protocol) so that components cannot be swapped, reused, or mixed between different contexts. This is achieved by embedding identifiers (`sid`, `kid`, `k`, `p`) into both the key derivation inputs and the authenticated data, providing multiple independent layers of protection.
+
+This chapter explains the binding design that prevents implementation drift. SecretEnv intentionally places `sid`, `kid`, `k`, and `p` in multiple places so that the system cryptographically fixes what was encrypted and which key generation it belongs to.
+
+### 10.1 System of Binding Elements
 
 | Binding element | Description | Attack it defends against |
 |----------------|-------------|--------------------------|
 | `sid` | File identifier (UUID) | Swapping ciphertext components between different files |
-| `kid` | Key statement ID (canonical 32-char Crockford Base32) | Reusing wraps across different key statements |
-| `k` | dotenv KEY | Swapping entries within the same kv-enc file |
+| `kid` | Key statement ID (canonical 32-character Crockford Base32) | Reusing wraps across different key statements |
+| `k` | dotenv KEY | Swapping entries within the same kv-enc |
 | `p` | Protocol identifier | Reusing data across different protocols |
 
-### 9.2 Rationale for Double-Binding
+### 10.2 Rationale for Double-Binding
 
 Why `sid` is included in both info and AAD:
 
 **For kv-enc:**
-- Including `sid` in CEK derivation info → `sid` affects CEK at the HKDF stage
-- Also including `sid` in payload AAD → `sid` is also verified at the AEAD stage
 
-While info alone is cryptographically sufficient, also including it in AAD provides:
-1. **Implementation bug resilience**: If CEK is derived with the wrong `sid`, AEAD verification will fail
-2. **Safety net for future changes**: Detection layer for changes to CEK derivation logic
-3. **Miswiring detection**: Early detection when the wrong file's `sid` is mistakenly applied
+- Include `sid` in CEK derivation info so `sid` affects the CEK at the HKDF stage
+- Also include `sid` in payload AAD so `sid` is verified again at the AEAD stage
 
-### 9.3 HPKE info = AAD Design
+In cryptographic terms, one of these may appear sufficient in isolation, but also including it in AAD provides:
+
+1. **Implementation bug resilience**: If a CEK is derived with the wrong `sid`, AEAD verification still fails
+2. **Safety net for future changes**: An additional detection layer when CEK derivation logic changes
+3. **Miswiring detection**: Early detection when a different file's `sid` is applied by mistake
+
+### 10.3 HPKE info = AAD Design
 
 In file-enc wrap, the same bytes are used for HPKE info and AAD:
 
@@ -1123,141 +1265,165 @@ info_bytes = jcs({"kid": ..., "p": "secretenv:file:hpke-wrap@3", "sid": ...})
 aad_bytes  = info_bytes
 ```
 
-This applies the same binding at both the KDF stage and the AEAD stage, so a bypass of one stage is detected by the other.
+This applies the same binding at both the KDF stage and the AEAD stage, so bypassing one stage is detected by the other.
 
-### 9.4 Design Decision to Exclude recipients from Payload AAD
+### 10.4 Design Decision to Exclude recipients from Payload AAD
 
-Recipients (the list of rids in the wrap array) are **not** included in payload AAD.
+Recipients, meaning the list of rids in the wrap array, are **not** included in payload AAD.
 
-**Reason:** To allow replacing only wraps while keeping payload fixed during `rewrap`. If recipients were included in AAD, the entire payload would need to be re-encrypted every time a recipient changes.
+**Reason:** This allows `rewrap` to replace only the wraps while keeping the payload fixed. If recipients were included in AAD, every recipient change would require re-encrypting the entire payload.
 
-Recipient integrity is protected by **Ed25519 signatures** (wraps are contained within `protected`, which is the signed data).
+Recipient integrity is protected by the **Ed25519 signature**, because wraps are contained in `protected`, which is part of the signed data.
 
-### 9.5 Binding Matrix
+### 10.5 Binding Matrix
 
-| Binding element | Protocol | HPKE info | HPKE AAD | CEK info | payload AAD | Signature | Attack defended against |
-|----------------|----------|-----------|----------|----------|-------------|-----------|------------------------|
-| `sid` | file-enc wrap | **included** | **= info** | — | — | **included** | Reusing wraps across different files |
-| `sid` | file-enc payload | — | — | — | **included** | **included** | Swapping payload between different files |
-| `sid` | kv-enc wrap | **included** | **= info** | — | — | **included** | Reusing wraps across different files |
-| `sid` | kv-enc CEK derivation | — | — | **included** | — | — | Copying entries between different files |
-| `sid` | kv-enc payload | — | — | — | **included** | **included** | Defence-in-depth (duplication with CEK info) |
-| `kid` | file-enc wrap | **included** | **= info** | — | — | **included** | Reusing old-generation wraps |
-| `kid` | kv-enc wrap | **included** | **= info** | — | — | **included** | Reusing old-generation wraps |
-| `k` | kv-enc payload | — | — | — | **included** | **included** | Swapping entries within the same file |
-| `p` | all protocols | **included** | **included** | **included** | **included** | — | Reusing data across different protocols |
+| Binding element | Protocol | HPKE info | HPKE AAD | CEK info | payload AAD | Signature | Attack it defends against |
+|----------------|----------|-----------|----------|----------|-------------|-----------|---------------------------|
+| `sid` | file-enc wrap | **included** | **= info** | - | - | **included** | Reusing wraps across different files |
+| `sid` | file-enc payload | - | - | - | **included** | **included** | Swapping payload between different files |
+| `sid` | kv-enc wrap | **included** | **= info** | - | - | **included** | Reusing wraps across different files |
+| `sid` | kv-enc CEK derivation | - | - | **included** | - | - | Copying entries between different files |
+| `sid` | kv-enc payload | - | - | - | **included** | **included** | Defence-in-depth (duplication with CEK info) |
+| `kid` | file-enc wrap | **included** | **= info** | - | - | **included** | Reusing old-generation wraps |
+| `kid` | kv-enc wrap | **included** | **= info** | - | - | **included** | Reusing old-generation wraps |
+| `k` | kv-enc payload | - | - | - | **included** | **included** | Swapping entries within the same file |
+| `p` | all protocols | **included** | **included** | **included** | **included** | - | Reusing data across different protocols |
 
-**Implementation note** — Each binding point in the table must remain present, must not be replaced with another input, and must be compared as canonicalized bytes rather than as ad hoc string values.
+**Implementation note:** Each binding point in the table must remain present, must not be replaced with another input value, and must be compared as canonicalized bytes rather than as plain strings.
 
 ---
 
-## 10. Major Attack Scenarios
+## 11. Major Attack Scenarios
 
-### 10.1 Repository Tampering
+### 11.1 Repository Tampering
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker tampers with encrypted files in `.secretenv/secrets/` |
+| **Attack** | An attacker tampers with encrypted files under `.secretenv/secrets/` |
 | **Capability** | Write access to the repository |
 | **Primary defense** | Ed25519 signature verification detects tampering with `protected` (file-enc) or the entire file (kv-enc) |
-| **When it weakens** | An implementation decrypts before signature verification |
-| **Expected failure point** | Decryption refused with `E_SIGNATURE_INVALID` |
+| **When it weakens** | The implementation does not perform signature verification before decryption |
+| **Expected failure point** | Decryption is rejected with `E_SIGNATURE_INVALID` |
 
-### 10.2 Public Key Substitution
+### 11.2 Public Key Substitution
 
-**10.2.1 Tampering with an existing PublicKey**
+**11.2.1 Tampering with an existing PublicKey**
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker tampers with fields in `members/active/<id>.json` |
+| **Attack** | An attacker tampers with fields in `members/active/<id>.json` |
 | **Capability** | Write access to the repository |
 | **Primary defense** | (1) Self-signature verification (2) SSH attestation verification |
-| **When it weakens** | The original SSH private key is compromised |
-| **Expected failure point** | Refused with `E_SELF_SIG_INVALID` or `E_ATTESTATION_INVALID` |
+| **When it weakens** | The original SSH private key has been compromised |
+| **Expected failure point** | Rejected with `E_SELF_SIG_INVALID` or `E_ATTESTATION_INVALID` |
 
-**10.2.2 Attacker inserting a new key**
-
-| Item | Content |
-|------|---------|
-| **Attack** | Attacker creates their own SecretEnv key + SSH key and places it in `members/incoming/` |
-| **Capability** | Write access to the repository + their own SSH Ed25519 key |
-| **Self-signature / attestation** | The attacker can generate valid self-signature and attestation with their own keys |
-| **Primary defense** | (1) interactive promotion confirmation (2) supplementary evidence from online verify |
-| **When it weakens** | misapproval during promotion confirmation, skipping confirmation via `--force`, or GitHub account compromise |
-| **Expected failure point** | Human rejection or promotion refusal after verification failure |
-
-**Important**: Self-signature prevents tampering with existing PublicKeys, but cannot prevent an attacker from creating a new PublicKey following legitimate procedures with their own key. The final defense against new key insertion is interactive promotion confirmation (§2.5, Layer 3). Skipping this confirmation with `--force` intentionally disables this defense, and its use requires careful consideration.
-
-### 10.3 Payload Swapping (Between Different Secrets)
+**11.2.2 Inserting a new key by an attacker**
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker copies the payload of file-enc A into file-enc B |
+| **Attack** | An attacker creates their own SecretEnv key and SSH key and places the result in `members/incoming/` |
+| **Capability** | Write access to the repository plus their own SSH Ed25519 key |
+| **Self-signature / attestation** | The attacker can generate a valid self-signature and attestation with their own keys |
+| **Primary defense** | (1) TOFU-based manual review (2) supplementary evidence from online verify (3) integrity anomaly detection for `known_keys` and `kid` collisions |
+| **When it weakens** | Misapproval during manual review, failure of repo governance, GitHub account compromise, or leakage of the SSH attestor private key |
+| **Expected failure point** | Human rejection or promotion refusal due to verification failure |
+
+**Important**: Self-signature prevents tampering with an existing PublicKey, but it cannot prevent an attacker from creating a new PublicKey with their own key while following the legitimate procedure. The primary defense against new-key insertion is TOFU-based manual review and repo governance. During initial bootstrap or first contact with a signer, out-of-band verification through a channel outside the repository is desirable.
+
+### 11.2.3 Local trust store tampering
+
+| Item | Content |
+|------|---------|
+| **Attack** | An attacker coherently replaces or rolls back `<SECRETENV_HOME>/trust/<owner_member_id>.json` |
+| **Capability** | Write access to the user's local trust directory |
+| **Primary defense** | (1) Local trusted area assumption (2) trust-store signature for corruption detection (3) atomic update and permission management |
+| **When it weakens** | OS or filesystem access control is broken |
+| **Expected failure point** | Corruption and inconsistency can be detected, but coherent replacement or rollback cannot be fully prevented |
+
+### 11.3 Payload Swapping (Between Different Secrets)
+
+| Item | Content |
+|------|---------|
+| **Attack** | An attacker copies the payload of file-enc A into file-enc B |
 | **Capability** | Write access to the repository |
 | **Primary defense** | (1) `sid` in payload AAD (2) signature verification |
-| **When it weakens** | A future implementation change removes `sid` binding |
+| **When it weakens** | An implementation change removes `sid` binding |
 | **Expected failure point** | AEAD decryption failure or signature verification failure |
 
-### 10.4 Entry Swapping (Within the Same kv-enc)
+### 11.4 Entry Swapping (Within the Same kv-enc)
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker copies the ciphertext of entry A in a kv-enc to entry B in the same file |
+| **Attack** | An attacker copies the ciphertext of entry A to entry B within the same kv-enc |
 | **Capability** | Write access to the repository |
 | **Primary defense** | (1) `k` in AAD (2) signature verification |
-| **When it weakens** | A future implementation change removes `k` binding |
+| **When it weakens** | An implementation change removes `k` binding |
 | **Expected failure point** | AEAD decryption failure or signature verification failure |
 
-### 10.5 Reusing Old Wraps
+### 11.5 Reusing Old Wraps
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker copies an old-generation wrap_item into a new encrypted file |
-| **Capability** | Access to old encrypted files |
+| **Attack** | An attacker copies a wrap_item from an old key generation into a new encrypted file |
+| **Capability** | Access to older encrypted files |
 | **Primary defense** | `kid` in HPKE info |
-| **When it weakens** | A future implementation change removes `kid` binding |
+| **When it weakens** | An implementation change removes `kid` binding |
 | **Expected failure point** | HPKE unwrap failure |
 
-### 10.6 PrivateKey Metadata Tampering
+### 11.6 PrivateKey Metadata Tampering
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker tampers with a field in PrivateKey's `protected` (e.g., `expires_at`) |
+| **Attack** | An attacker tampers with a field in a PrivateKey's `protected` section, such as `expires_at` |
 | **Capability** | Access to the local filesystem |
 | **Primary defense** | AAD = `jcs(protected)` |
-| **When it weakens** | AAD generation no longer covers the full `protected` object |
+| **When it weakens** | AAD generation is narrowed so it no longer covers the full `protected` object |
 | **Expected failure point** | XChaCha20-Poly1305 decryption failure |
 
-### 10.7 Entry Copying Between kv-enc Files
+### 11.7 Entry Copying Between kv-enc Files
 
 | Item | Content |
 |------|---------|
-| **Attack** | Attacker copies an entry from kv-enc file A into kv-enc file B |
+| **Attack** | An attacker copies an entry from kv-enc file A into kv-enc file B |
 | **Capability** | Write access to the repository |
-| **Primary defense** | (1) MK separation (2) `sid` in CEK derivation info (3) `sid` in payload AAD |
-| **When it weakens** | `sid` is removed from CEK info or AAD |
+| **Primary defense** | (1) MK separation (2) `sid` in CEK info (3) `sid` in payload AAD |
+| **When it weakens** | An implementation change drops `sid` from CEK info or AAD |
 | **Expected failure point** | AEAD decryption failure due to CEK mismatch |
 
-These scenarios share a common structure: context bindings (`sid`, `kid`, `k`, `p`) and Ed25519 signatures form two independent layers of defense. Bypassing both simultaneously requires either compromise of the signer's private key or an implementation defect that removes a binding or reorders processing steps. The verification points in §11 are designed to detect such defects.
+These scenarios share a common structure. Context bindings (`sid`, `kid`, `k`, `p`) and Ed25519 signatures form two independent layers of defense. Bypassing both at the same time requires either compromise of the signer's private key or an implementation defect such as removing a binding or changing the processing order. The verification points in §12 are intended to detect such defects.
 
 ---
 
-## 11. Implementation Verification Points
+## 12. Implementation Verification Points
 
-### 11.1 Highest-Priority Verification Points
+### 12.1 Highest-Priority Verification Points
+
+#### 12.1.1 Design Invariants
+
+These are architectural constraints that should be verified in design review. Violation indicates a structural flaw, not just a coding error.
+
+| Invariant | Expected behavior | Risk if violated |
+|-----------|-------------------|------------------|
+| **Signature key source** | The signature verification key source is always the embedded `signer_pub`, with no workspace or keystore fallback | The trust boundary shifts and acceptance conditions may vary by implementation |
+| **Trust-source separation** | `members/active` is treated as the authorization source and `known_keys` as the approval cache | Current-member checks and approval history may become conflated, causing mistaken acceptance |
+| **`STRICT_KEY_CHECKING` scope** | `SECRETENV_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths (see §9.6) | The approval cache may be unintentionally disabled in CI or daily operation |
+
+#### 12.1.2 Implementation Checks
+
+These are code-level verification points that should be checked in code review and testing.
 
 | Review target | Expected implementation behavior | Risk if violated |
 |---------------|----------------------------------|------------------|
-| **Processing order** | Structural validation → signature verification → reference consistency checks → decryption | Tampered data may be decrypted first |
-| **Bindings** | `sid` / `kid` / `k` / `p` are included in info / AAD as designed | Reuse, substitution, or wrong-context errors become possible |
+| **Processing order** | Structural validation -> `signer_pub` verification -> artifact signature verification -> trust policy decision -> reference consistency checks -> decryption | Tampered data or data outside current trust may be decrypted first |
+| **Bindings** | `sid` / `kid` / `k` / `p` are included in info / AAD exactly as specified | Reuse, substitution, or miswiring attacks become easier |
 | **HPKE info = AAD** | The wrap path uses the same bytes in both places | Defence-in-depth is lost |
-| **PublicKey verification** | Self-signature and attestation are both verified | A tampered PublicKey may be accepted |
-| **Signature key source** | The keystore is not used as a public-key source for signature verification | Verification may accidentally depend on local state |
-| **Environment variable-based key loading** | Only used in trusted CI contexts, without self PublicKey workspace lookup during key loading | Private keys may be used in attacker-controlled checkouts |
+| **PublicKey verification** | Both `signer_pub` and workspace PublicKeys are verified for self-signature and attestation | A tampered PublicKey could be accepted |
+| **Trust-store verification** | Implement `known_keys` uniqueness, same-`kid` cross-member anomaly detection, atomic update, and permission warnings | Approval history corruption and implementation-dependent trust decisions become possible |
+| **Environment variable-based key loading** | Used only in trusted CI contexts, and key loading never performs workspace lookup for the self PublicKey | Private keys may be misused in attacker-controlled checkouts |
 
-### 11.2 Input Validation and DoS Resistance
+### 12.2 Input Validation and DoS Resistance
 
-The implementation enforces conservative limits and strict parsing as shown below.
+The implementation applies conservative limits and strict parsing as shown below.
 
 | Item | Expected limit / requirement | Purpose |
 |------|------------------------------|---------|
@@ -1267,59 +1433,84 @@ The implementation enforces conservative limits and strict parsing as shown belo
 | base64url token length | 1 MiB | Limit parse time |
 | JSON depth / element count | 32 levels / 10,000 elements | Prevent computational blow-up |
 
-For base64url inputs, the implementation should reject invalid characters, padding (`=`), and whitespace or newlines, and should validate fixed-length fields.
+For base64url input, it is important to reject invalid characters, padding (`=`), and whitespace or newlines, and to validate the lengths of fixed-size fields.
 
-### 11.3 Memory Handling of Secrets
+### 12.3 Memory Handling of Secrets
 
-KEM private keys, signing private keys, DEK / MK / CEK values, and decrypted plaintext should be zeroized after use as far as the type system allows. The design ensures that secret material is not retained in long-lived buffers or exposed through logs.
+KEM private keys, signing private keys, DEK / MK / CEK values, and decrypted plaintext should be zeroized after use as far as the type system allows. At minimum, the design avoids leaving secret material in long-lived buffers or log output.
 
-However, complete erasure of secret material from process memory is not guaranteed. When key bytes are copied into cryptographic library types (e.g., `SigningKey::from_bytes`), the `Zeroize` wrapper clears the source buffer but cannot control copies held internally by the library. Additionally, the runtime allocator may leave residual data in freed pages, and compiler optimizations may create intermediate copies that are not zeroized. SecretEnv therefore treats memory zeroization as a best-effort defense-in-depth measure, not an absolute guarantee.
-
----
-
-## 12. Limitations and Non-Goals
-
-### 12.1 Scope of Forward Secrecy
-
-HPKE Base mode provides ephemeral key isolation per wrap via ephemeral keys. However:
-- If a recipient's long-term private key is compromised, **all existing wraps** for that recipient can be unwrapped
-- Running `rewrap --rotate-key` to regenerate the Content Key after compromise can prevent damage from spreading to newly encrypted data going forward
-
-**Design rationale:** SecretEnv does not claim strong system-wide forward secrecy. `--rotate-key` is a post-compromise damage-limitation measure, not a mechanism that restores protection for data encrypted before the compromise.
-
-### 12.2 Irrecoverability of Past Disclosures
-
-Even if a recipient is removed, content that was previously decryptable is cryptographically irrecoverable. `removed_recipients` and the `disclosed` flag are operational aids for deciding whether secrets must be reissued; they are not a recovery mechanism.
-
-### 12.3 Insider Misuse
-
-It is not possible to prevent a workspace member who has legitimately decrypted content from misusing it. SecretEnv provides confidential distribution and tamper detection, but control over post-decryption use must come from another control layer.
-
-### 12.4 Policy-Less Design
-
-SecretEnv does not provide a centralized policy defining "who should hold which secret." The cryptographic design should be evaluated separately from the organization's approval and distribution process.
-
-### 12.5 No Compression
-
-Compression before encryption is not performed. This is an intentional design decision to avoid compression oracle attacks (in the class of CRIME/BREACH).
+However, complete erasure of secret material from process memory is not guaranteed. When key bytes are copied into cryptographic library types such as `SigningKey::from_bytes`, a `Zeroize` wrapper clears the source buffer but cannot control copies retained internally by the library. In addition, the runtime allocator may leave data in freed pages, and compiler optimizations may introduce intermediate copies that are not zeroized. SecretEnv therefore treats memory zeroization as a best-effort defence-in-depth measure, not an absolute guarantee.
 
 ---
 
-## 13. References and RFC List
+## 13. Limitations and Non-Goals
+
+### 13.1 Scope of Forward Secrecy
+
+HPKE Base mode provides ephemeral-key isolation per wrap via ephemeral keys. However:
+
+- If a recipient's long-term private key is compromised, **all existing wraps** for that recipient become decryptable
+- Running `rewrap --rotate-key` to regenerate the Content Key after compromise can limit damage to future newly encrypted data
+
+**Design intent:** SecretEnv does not claim strong system-wide forward secrecy. `--rotate-key` is a post-compromise damage-limitation measure, not a mechanism that restores protection for historical data.
+
+**Operational response:** If a key compromise is suspected, immediately run `rewrap --rotate-key` on all affected files. Also rotate the underlying secret values (database passwords, API keys, etc.), since `--rotate-key` only protects future encryptions, not already-decrypted content.
+
+### 13.2 Irrecoverability of Past Disclosures
+
+Even if a recipient is removed, content that was previously decryptable cannot be cryptographically reclaimed. `removed_recipients` and the `disclosed` flag are operational aids for visualizing disclosure history and helping decide whether secrets should be reissued; they are not a recovery mechanism.
+
+**Operational response:** When removing a member, review `disclosed` entries and rotate the actual secret values (database passwords, API keys, certificates, etc.) that the removed member had access to.
+
+### 13.3 Insider Misuse
+
+SecretEnv cannot prevent a workspace member who legitimately decrypted content from misusing it. SecretEnv provides confidential distribution and tamper detection, but control after decryption depends on another control layer.
+
+**Operational response:** Limit workspace membership to those who need access. Use separate workspaces for secrets of different sensitivity levels.
+
+### 13.4 Policy-Less Design
+
+SecretEnv does not provide a central policy that defines who should hold which secret. The soundness of the cryptographic design and the organization's approval and distribution process should be evaluated separately.
+
+### 13.5 No Compression
+
+Compression before encryption is not performed. This is an intentional design decision to avoid compression-oracle attacks in the CRIME/BREACH class.
+
+### 13.6 Limits of TOFU Bootstrap
+
+Initial bootstrap and first approval of a newly encountered `kid` rely on TOFU. As a result, first-contact MITM and whole-workspace substitution cannot be prevented cryptographically. During initial approval through `member verify --approve` or interactive `rewrap`, it is desirable to confirm the `kid`, the GitHub account `id`, the `login` when available, and the fingerprint of `attestation.pub` through an out-of-band channel outside the repository.
+
+**Operational response:** At first approval, confirm the `kid` and the SSH key fingerprint through an out-of-band channel separate from the repository (voice call, in-person, secure messaging).
+
+### 13.7 Limits of Local Trust Store Tampering
+
+The signature on the local trust store is effective for integrity checks, corruption detection, and malformed-format detection. However, against an attacker who can write to or roll back `<SECRETENV_HOME>/trust/`, SecretEnv cannot completely prevent injection of a coherently replaced local trust store. SecretEnv treats this as a residual risk outside the local trusted area assumption.
+
+**Operational response:** Ensure proper OS-level access control on the local machine. Verify that `<SECRETENV_HOME>/trust/` files have `0600` permissions.
+
+### 13.8 GitHub / SSH Trust Domain Compromise
+
+If a GitHub account is fully compromised, online verify and manual review no longer provide meaningful identity assurance. Likewise, if only the SSH attestor private key is leaked, a malicious PublicKey can still be created with apparently valid attestor information. These are operational residual risks. Once detected, `members/active` and `known_keys` must be reviewed and updated manually.
+
+**Operational response:** Upon detecting compromise, review and update `members/active` and `known_keys` manually. Run `member verify` to re-validate remaining members. Remove compromised keys from the workspace.
+
+---
+
+## 14. References and RFC List
 
 | Specification | Purpose |
 |--------------|---------|
-| RFC 9180 — Hybrid Public Key Encryption | HPKE (wrap/unwrap) |
-| RFC 8439 — ChaCha20 and Poly1305 | HPKE internal AEAD |
-| draft-irtf-cfrg-xchacha — XChaCha20 and AEAD_XChaCha20_Poly1305 | XChaCha20-Poly1305 construction (payload / entry / PrivateKey encryption) |
-| RFC 8032 — Edwards-Curve Digital Signature Algorithm (EdDSA) | Ed25519 signature (PureEdDSA) |
-| RFC 8037 — CFRG Elliptic Curve Diffie-Hellman (ECDH) and Signatures in JOSE | JWK OKP key representation |
-| RFC 7517 — JSON Web Key (JWK) | Key representation format |
-| RFC 5869 — HMAC-based Extract-and-Expand Key Derivation Function (HKDF) | Key derivation |
-| RFC 9106 — Argon2 Memory-Hard Function for Password Hashing and Proof-of-Work Applications | Password-based key protection (Argon2id) |
-| RFC 8785 — JSON Canonicalization Scheme (JCS) | Deterministic JSON canonicalization |
-| RFC 4648 — The Base16, Base32, and Base64 Data Encodings | base64url encoding |
-| RFC 2119 — Key words for use in RFCs to Indicate Requirement Levels | Requirement level keywords |
+| RFC 9180 - Hybrid Public Key Encryption | HPKE (wrap/unwrap) |
+| RFC 8439 - ChaCha20 and Poly1305 | HPKE internal AEAD |
+| draft-irtf-cfrg-xchacha - XChaCha20 and AEAD_XChaCha20_Poly1305 | XChaCha20-Poly1305 construction (payload / entry / PrivateKey encryption) |
+| RFC 8032 - Edwards-Curve Digital Signature Algorithm (EdDSA) | Ed25519 signature (PureEdDSA) |
+| RFC 8037 - CFRG Elliptic Curve Diffie-Hellman (ECDH) and Signatures in JOSE | JWK OKP key representation |
+| RFC 7517 - JSON Web Key (JWK) | Key representation format |
+| RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function (HKDF) | Key derivation |
+| RFC 9106 - Argon2 Memory-Hard Function for Password Hashing and Proof-of-Work Applications | Password-based key protection (Argon2id) |
+| RFC 8785 - JSON Canonicalization Scheme (JCS) | Deterministic JSON canonicalization |
+| RFC 4648 - The Base16, Base32, and Base64 Data Encodings | base64url encoding |
+| RFC 2119 - Key words for use in RFCs to Indicate Requirement Levels | Requirement level keywords |
 | OpenSSH PROTOCOL.sshsig | SSHSIG signature format |
 | IANA HPKE Registry | HPKE suite ID |
 
@@ -1389,4 +1580,45 @@ graph TB
     style CEK fill:#90EE90
 ```
 
-This diagram provides a quick overview of which secret protects which object and where signatures or wraps are applied. For concrete binding points and verification order, prefer the main text in §9 and §11.
+This diagram provides a quick overview of which secret protects which object and where signatures or wraps are applied. For concrete binding points and verification order, prefer the main text in §10 and §12.
+
+### Appendix B: Security Operations Checklist
+
+This checklist summarizes the key operational responsibilities that users should follow to maintain the security properties described in this document. Each item references the relevant section.
+
+**SSH Key Management (§7)**
+
+- Set a passphrase on all SSH Ed25519 private keys used with SecretEnv
+- Disable SSH agent forwarding in environments where SecretEnv is used (§7.8)
+- Use a dedicated SSH key for CI/CD environments rather than reusing personal keys
+
+**Workspace Governance (§2.2, §9)**
+
+- Require PR review for all changes to `members/active/`
+- Only members in `members/active/` can be recipients; `members/incoming/` members cannot decrypt existing secrets until promoted via `rewrap`
+- Limit workspace membership to those who need access (§13.3)
+- Use separate workspaces for secrets of different sensitivity levels
+
+**TOFU Approval (§2.5, §13.6)**
+
+- At first approval of a new `kid`, confirm the `kid` and SSH key fingerprint through an out-of-band channel (voice call, in-person, secure messaging)
+- Review `binding_claims.github_account` information during `member verify --approve`
+- Do not approve keys without verifying the identity of the key holder
+
+**Key Rotation and Member Removal (§6.7, §13.1, §13.2)**
+
+- Run `rewrap --rotate-key` after suspected key compromise
+- After removing a member, rotate the actual secret values (database passwords, API keys, certificates) that the removed member had access to
+- Review `disclosed` entries to identify which secrets need rotation
+
+**CI/CD Security (§7.9)**
+
+- Place `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` in separate trust domains when possible (§7.9.4)
+- Use environment variable-based key loading only in trusted CI contexts (§7.9.5)
+- Never expose secrets to untrusted PR workflows or attacker-controlled checkouts
+
+**Local Trust Store (§9.4, §13.7)**
+
+- Verify that `<SECRETENV_HOME>/trust/` files have `0600` permissions
+- Ensure proper OS-level access control on the local machine
+- Run `member verify` periodically to re-validate workspace members

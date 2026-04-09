@@ -3,16 +3,10 @@
 
 //! Unit tests for feature/init module
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::test_utils::setup_test_keystore_from_fixtures;
-use secretenv::app::context::ssh::{
-    build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
-};
-use secretenv::config::types::SshSigner;
-use secretenv::feature::init::ensure_key_exists;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::member::load_single_member_id_from_keystore;
-use secretenv::io::keystore::paths;
 use secretenv::io::keystore::resolver::KeystoreResolver;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::io::workspace::detection::resolve_workspace_creation_path;
@@ -164,138 +158,4 @@ fn test_save_member_document_creates_file() {
         ALICE_MEMBER_ID
     );
     assert_eq!(json["protected"]["kid"].as_str().unwrap(), kid);
-}
-
-// ---------------------------------------------------------------------------
-// ensure_key_exists tests (merged from usecase_init_test.rs)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_ensure_key_exists_creates_new_key() {
-    let home_dir = TempDir::new().unwrap();
-    let keystore_root =
-        secretenv::io::keystore::paths::get_keystore_root_from_base(home_dir.path());
-    let member_id = "test@example.com";
-
-    // Create a temporary SSH key for testing
-    let ssh_temp = TempDir::new().unwrap();
-    let ssh_dir = ssh_temp.path().join(".ssh");
-    std::fs::create_dir_all(&ssh_dir).unwrap();
-    let ssh_key_path = ssh_dir.join("id_ed25519");
-    std::process::Command::new("ssh-keygen")
-        .arg("-t")
-        .arg("ed25519")
-        .arg("-f")
-        .arg(&ssh_key_path)
-        .arg("-N")
-        .arg("")
-        .output()
-        .expect("Failed to generate SSH key");
-
-    // Ensure key exists (should create new key)
-    let params = SshSigningParams {
-        ssh_key: Some(ssh_key_path.clone()),
-        signing_method: Some(SshSigner::SshKeygen),
-        base_dir: Some(home_dir.path().to_path_buf()),
-        verbose: false,
-        check_determinism: true,
-    };
-    let candidates = resolve_ssh_key_candidates_with_params(&params).unwrap();
-    let ssh_signer =
-        build_ssh_signing_context_with_params(&params, &candidates[0].public_key).unwrap();
-    let result = ensure_key_exists(
-        member_id,
-        &keystore_root,
-        Some(home_dir.path().to_path_buf()),
-        false,
-        None,
-        ssh_signer.into_ssh_binding(),
-    )
-    .unwrap();
-
-    // Should have created a new key
-    assert!(result.created, "Should indicate that a new key was created");
-    assert!(!result.kid.is_empty(), "Should have a valid kid");
-
-    // Verify key exists in keystore
-    let private_key_path =
-        paths::get_private_key_file_path_from_root(&keystore_root, member_id, &result.kid);
-    assert!(
-        private_key_path.exists(),
-        "Private key should exist in keystore"
-    );
-}
-
-#[test]
-fn test_ensure_key_exists_reuses_existing_key() {
-    let home_dir = TempDir::new().unwrap();
-    let keystore_root =
-        secretenv::io::keystore::paths::get_keystore_root_from_base(home_dir.path());
-    let member_id = "test@example.com";
-
-    // Create a temporary SSH key for testing
-    let ssh_temp = TempDir::new().unwrap();
-    let ssh_dir = ssh_temp.path().join(".ssh");
-    std::fs::create_dir_all(&ssh_dir).unwrap();
-    let ssh_key_path = ssh_dir.join("id_ed25519");
-    std::process::Command::new("ssh-keygen")
-        .arg("-t")
-        .arg("ed25519")
-        .arg("-f")
-        .arg(&ssh_key_path)
-        .arg("-N")
-        .arg("")
-        .output()
-        .expect("Failed to generate SSH key");
-
-    // First call: create a new key
-    let params = SshSigningParams {
-        ssh_key: Some(ssh_key_path.clone()),
-        signing_method: Some(SshSigner::SshKeygen),
-        base_dir: Some(home_dir.path().to_path_buf()),
-        verbose: false,
-        check_determinism: true,
-    };
-    let candidates = resolve_ssh_key_candidates_with_params(&params).unwrap();
-    let ssh_signer =
-        build_ssh_signing_context_with_params(&params, &candidates[0].public_key).unwrap();
-    let first_result = ensure_key_exists(
-        member_id,
-        &keystore_root,
-        Some(home_dir.path().to_path_buf()),
-        false,
-        None,
-        ssh_signer.into_ssh_binding(),
-    )
-    .unwrap();
-    assert!(first_result.created, "First call should create a new key");
-    let first_kid = first_result.kid.clone();
-
-    // Second call: should reuse existing key
-    let params2 = SshSigningParams {
-        ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
-        base_dir: Some(home_dir.path().to_path_buf()),
-        verbose: false,
-        check_determinism: true,
-    };
-    let candidates2 = resolve_ssh_key_candidates_with_params(&params2).unwrap();
-    let ssh_signer2 =
-        build_ssh_signing_context_with_params(&params2, &candidates2[0].public_key).unwrap();
-    let second_result = ensure_key_exists(
-        member_id,
-        &keystore_root,
-        Some(home_dir.path().to_path_buf()),
-        false,
-        None,
-        ssh_signer2.into_ssh_binding(),
-    )
-    .unwrap();
-
-    // Should have reused the existing key
-    assert!(
-        !second_result.created,
-        "Should indicate that no new key was created"
-    );
-    assert_eq!(first_kid, second_result.kid, "Should reuse the same kid");
 }

@@ -47,8 +47,8 @@ fn test_verify_file_enc_valid_signature() {
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[Signature Verification]"))
-        .stdout(predicate::str::contains("Status:   OK"));
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("OK"));
 }
 
 #[test]
@@ -82,8 +82,8 @@ fn test_verify_kv_enc_valid_signature() {
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[Signature Verification]"))
-        .stdout(predicate::str::contains("Status:   OK"));
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("OK"));
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn test_verify_file_enc_tampered_fails() {
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Status:   FAILED"));
+        .stdout(predicate::str::contains("FAILED"));
 }
 
 #[test]

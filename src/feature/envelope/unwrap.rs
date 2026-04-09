@@ -83,17 +83,19 @@ pub fn decode_wrap_item_fields(wrap_item: &WrapItem) -> Result<(Enc, Ciphertext)
 
 /// Convert HPKE plaintext output to a 32-byte MasterKey.
 pub fn plaintext_to_master_key(mk_plaintext: Zeroizing<Plaintext>) -> Result<MasterKey> {
-    let mk_array: [u8; 32] = mk_plaintext
-        .as_bytes()
-        .try_into()
-        .map_err(|_| Error::Crypto {
+    if mk_plaintext.as_bytes().len() != 32 {
+        return Err(Error::Crypto {
             message: format!(
                 "Invalid master key length: expected 32, got {}",
                 mk_plaintext.as_bytes().len()
             ),
             source: None,
-        })?;
-    Ok(MasterKey::new(mk_array))
+        });
+    }
+
+    let mut mk_array = Zeroizing::new([0u8; 32]);
+    mk_array.as_mut().copy_from_slice(mk_plaintext.as_bytes());
+    Ok(MasterKey::from_zeroizing(mk_array))
 }
 
 /// Unwrap master key from a wrap item (common logic)

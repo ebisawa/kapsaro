@@ -9,11 +9,14 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::file::encrypt::encrypt_file_command;
-use crate::cli::common::options::CommonOptions;
+use crate::app::file::encrypt::{build_encrypt_file_command, execute_encrypt_file_command};
+use crate::cli::common::command::{
+    resolve_command_input, resolve_options, resolve_trust_store_owner_member,
+    run_write_command_with_trust, WriteCommandLabels,
+};
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
-use crate::cli::common::ssh::resolve_ssh_context_optional;
+use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::options::CommonOptions;
 use crate::Result;
 
 #[derive(Args)]
@@ -35,9 +38,25 @@ pub struct EncryptArgs {
 }
 
 pub fn run(args: EncryptArgs) -> Result<()> {
-    let options = CommonCommandOptions::from(&args.common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, args.member_id.clone())?;
-    let encrypted = encrypt_file_command(&options, args.member_id.clone(), &args.input, ssh_ctx)?;
+    let options = resolve_options(&args.common);
+    let encrypted = run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || {
+            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_id.clone())?;
+            let command =
+                build_encrypt_file_command(&options, args.member_id.clone(), &args.input, ssh_ctx)?;
+            run_write_command_with_trust(
+                &options,
+                &command,
+                WriteCommandLabels {
+                    signer_context: None,
+                    recipient_context: "encrypt recipients",
+                },
+                || execute_encrypt_file_command(&command, options.verbose),
+            )
+        },
+    )?;
     let output_path = resolve_encrypted_output_path(args.out.as_ref(), &args.input)?;
 
     save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet)?;

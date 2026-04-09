@@ -13,15 +13,27 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
+pub struct GeneratedKeypairs {
+    pub kem_sk: X25519SecretKey,
+    pub kem_pk: X25519PublicKey,
+    pub sig_sk: SigningKey,
+    pub sig_pk: VerifyingKey,
+}
+
 /// Generate a new key pair (KEM and signing keys).
-pub fn generate_keypairs() -> Result<(X25519SecretKey, X25519PublicKey, SigningKey, VerifyingKey)> {
+pub fn generate_keypairs() -> Result<GeneratedKeypairs> {
     let kem_sk = X25519SecretKey::random_from_rng(OsRng);
     let kem_pk = X25519PublicKey::from(&kem_sk);
 
     let sig_sk = SigningKey::generate(&mut OsRng);
     let sig_pk: VerifyingKey = sig_sk.verifying_key();
 
-    Ok((kem_sk, kem_pk, sig_sk, sig_pk))
+    Ok(GeneratedKeypairs {
+        kem_sk,
+        kem_pk,
+        sig_sk,
+        sig_pk,
+    })
 }
 
 /// Build identity keys from KEM and signing public keys.
@@ -44,6 +56,11 @@ pub fn build_identity_keys(
 }
 
 /// Build private key plaintext from keypairs.
+///
+/// Note: base64::encode intermediates are not wrapped in Zeroizing.
+/// Accepted risk: the String is moved directly into JwkOkpPrivateKey
+/// which has #[zeroize(drop)]. A custom encoder would be disproportionate
+/// for 32-byte key material.
 pub fn build_private_key_plaintext(
     kem_sk: &X25519SecretKey,
     kem_pk: &X25519PublicKey,

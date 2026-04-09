@@ -5,8 +5,8 @@ use super::helpers::{
     create_test_private_key, create_test_public_key, generate_ed25519_keypair,
     generate_x25519_keypair, recipients_and_members,
 };
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::make_decrypted_private_key_plaintext;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file as file_enc;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -55,7 +55,7 @@ fn test_encrypt_file() {
         ),
     );
     let decrypted_key = make_decrypted_private_key_plaintext(
-        create_test_private_key(&sk, &pk),
+        &create_test_private_key(&sk, &pk),
         ALICE_MEMBER_ID,
         signer_kid,
         "sha256:test",
@@ -110,7 +110,7 @@ fn test_defence_in_depth_sid_mismatch() {
         ),
     );
     let decrypted_key = make_decrypted_private_key_plaintext(
-        create_test_private_key(&sk, &pk),
+        &create_test_private_key(&sk, &pk),
         ALICE_MEMBER_ID,
         signer_kid,
         "sha256:test",

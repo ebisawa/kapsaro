@@ -5,7 +5,7 @@
 //!
 //! Tests for key operation helper functions.
 
-use crate::cli_common::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{create_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
 use secretenv::io::keystore::active::set_active_kid;
 use secretenv::io::keystore::helpers::resolve_kid;

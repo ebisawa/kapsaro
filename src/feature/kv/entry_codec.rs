@@ -13,19 +13,24 @@ use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::line::KvEncLine;
 use crate::Result;
 
+use super::types::{KvEncodedEntry, KvInputEntry};
+
 /// Encode encrypted KV entries to token strings.
 pub(crate) fn encode_kv_entries_to_tokens(
     entries: &[(String, KvEntryValue)],
     token_codec: TokenCodec,
     debug: bool,
     caller: &'static str,
-) -> Result<Vec<(String, String)>> {
+) -> Result<Vec<KvEncodedEntry>> {
     entries
         .iter()
         .map(|(key, entry)| {
             let token =
                 TokenCodec::encode_debug(token_codec, entry, debug, Some(&entry.k), Some(caller))?;
-            Ok((key.clone(), token))
+            Ok(KvEncodedEntry {
+                key: key.clone(),
+                token,
+            })
         })
         .collect()
 }
@@ -48,7 +53,7 @@ pub(crate) fn detect_token_codec(
 }
 
 pub(crate) fn build_entry_tokens<'a>(
-    entries: &'a [(String, String)],
+    entries: &'a [KvInputEntry],
     master_key: &MasterKey,
     sid: &Uuid,
     codec: TokenCodec,
@@ -57,10 +62,17 @@ pub(crate) fn build_entry_tokens<'a>(
 ) -> Result<HashMap<&'a str, String>> {
     entries
         .iter()
-        .map(|(key, value)| {
-            let token =
-                encrypt_and_encode_entry(key, value, master_key, sid, codec, verbose, caller)?;
-            Ok((key.as_str(), token))
+        .map(|entry| {
+            let token = encrypt_and_encode_entry(
+                &entry.key,
+                &entry.value,
+                master_key,
+                sid,
+                codec,
+                verbose,
+                caller,
+            )?;
+            Ok((entry.key.as_str(), token))
         })
         .collect()
 }

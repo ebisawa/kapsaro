@@ -1,0 +1,43 @@
+// Copyright 2026 Satoshi Ebisawa
+// SPDX-License-Identifier: Apache-2.0
+
+//! JSON renderers for key commands.
+
+use crate::cli::common::output::json::print_json_output;
+use crate::cli::common::output::key::{KeyInfoView, KeyListView};
+use crate::Result;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct KeyInfoJsonView {
+    kid: String,
+    member_id: String,
+    created_at: String,
+    expires_at: String,
+    active: bool,
+    format: String,
+}
+
+pub(crate) fn print_empty_key_list() -> Result<()> {
+    print_json_output(&Vec::<serde_json::Value>::new())
+}
+
+pub(crate) fn print_key_list(result: &KeyListView<'_>) -> Result<()> {
+    let flattened = result
+        .entries
+        .iter()
+        .flat_map(|entry| entry.keys.iter().map(map_key_info))
+        .collect::<Vec<_>>();
+    print_json_output(&flattened)
+}
+
+fn map_key_info(key: &KeyInfoView<'_>) -> KeyInfoJsonView {
+    KeyInfoJsonView {
+        kid: key.kid.to_string(),
+        member_id: key.member_id.to_string(),
+        created_at: key.created_at.to_string(),
+        expires_at: key.expires_at.to_string(),
+        active: key.active,
+        format: key.format.to_string(),
+    }
+}

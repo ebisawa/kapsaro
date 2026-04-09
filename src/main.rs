@@ -10,9 +10,11 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 fn main() {
     let verbose = std::env::args().any(|arg| arg == "--verbose" || arg == "-v");
-    let default_filter = if verbose { "debug" } else { "info" };
-    let filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
+    let filter = if verbose {
+        EnvFilter::new("debug")
+    } else {
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+    };
     fmt().with_env_filter(filter).with_target(false).init();
 
     if let Err(e) = cli::run() {

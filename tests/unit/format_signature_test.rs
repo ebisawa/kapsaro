@@ -12,43 +12,9 @@ use secretenv::model::file_enc::{
     FilePayloadHeader,
 };
 use secretenv::model::identifiers::hpke;
-use secretenv::model::public_key::{
-    Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
-};
 use uuid::Uuid;
 
-fn make_dummy_public_key(kid: &str) -> PublicKey {
-    PublicKey {
-        protected: PublicKeyProtected {
-            format: "secretenv.public.key@4".to_string(),
-            member_id: "signer@test".to_string(),
-            kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: "dummy".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: "dummy".to_string(),
-                    },
-                },
-                attestation: Attestation {
-                    method: "test".to_string(),
-                    pub_: "test".to_string(),
-                    sig: "dummy".to_string(),
-                },
-            },
-            binding_claims: None,
-            expires_at: "2099-01-01T00:00:00Z".to_string(),
-            created_at: Some("2026-01-01T00:00:00Z".to_string()),
-        },
-        signature: "dummy".to_string(),
-    }
-}
+use crate::keygen_helpers::make_dummy_public_key;
 
 fn create_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();

@@ -5,7 +5,7 @@
 
 pub mod file;
 
-use crate::feature::encrypt::file::encrypt_file_document as encrypt_file_inner;
+use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::envelope::signature::SigningContext;
 use crate::model::common::normalize_recipients;
 use crate::model::public_key::VerifiedRecipientKey;
@@ -29,7 +29,7 @@ fn validate_recipients_and_keys(
 }
 
 /// Encrypt binary content to file-enc v3 format and return JSON string.
-pub fn encrypt_file_document(
+pub fn encrypt_file_content(
     content: &[u8],
     recipients: &[String],
     members: &[VerifiedRecipientKey],
@@ -51,7 +51,7 @@ pub fn encrypt_file_document(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let file_enc_doc = encrypt_file_inner(content, &normalized_ids, &members_ordered, signing)?;
+    let file_enc_doc = encrypt_file_document(content, &normalized_ids, &members_ordered, signing)?;
 
     serde_json::to_string_pretty(&file_enc_doc).map_err(|e| Error::Parse {
         message: format!("Failed to serialize FileEncDocument: {}", e),

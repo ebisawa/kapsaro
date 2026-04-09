@@ -6,11 +6,31 @@
 use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
 use base64::Engine;
+use predicates::prelude::*;
 use secretenv::io::ssh::protocol::constants as ssh_constants;
 use secretenv::model::identifiers::{alg, format};
 use secretenv::model::{private_key::PrivateKey, public_key::PublicKey};
 use std::fs;
 use tempfile::TempDir;
+
+#[test]
+fn test_key_new_requires_member_id_before_ssh_resolution() {
+    let temp_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--valid-for")
+        .arg("1d")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("member_id not configured")
+                .and(predicate::str::contains("SSH key").not())
+                .and(predicate::str::contains("GitHub username").not()),
+        );
+}
 
 #[test]
 fn test_key_new_generates_private_key() {

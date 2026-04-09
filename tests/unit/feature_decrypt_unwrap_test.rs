@@ -7,10 +7,10 @@
 //! The happy path is covered by usecase_decrypt_test.rs; this file focuses on
 //! error paths such as wrong kid, empty entries, and rid mismatch scenarios.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::{
     make_decrypted_private_key_plaintext, make_recipient_key, make_verified_members,
 };
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
 use secretenv::crypto::kem::decode_kem_secret_key;
@@ -83,12 +83,7 @@ fn encrypt_file_for_test(
     )
     .unwrap();
 
-    let verified_doc = verify_file_document(
-        &file_enc_doc,
-        Some(&temp_dir.path().join("workspace")),
-        false,
-    )
-    .unwrap();
+    let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
 
     (verified_doc, key_ctx, kid, temp_dir)
 }
@@ -115,14 +110,12 @@ fn encrypt_kv_for_test(
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
 
     let kv_map = parse_dotenv(dotenv_content).unwrap();
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
     let signer_pub = public_key.clone();
     let members = vec![public_key];
     let verified_members = make_verified_members(&members);
 
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -135,8 +128,7 @@ fn encrypt_kv_for_test(
     .unwrap();
 
     let doc = parse_kv_document(&encrypted).unwrap();
-    let verified_doc =
-        verify_kv_document(&doc, Some(&temp_dir.path().join("workspace")), false).unwrap();
+    let verified_doc = verify_kv_document(&doc, false).unwrap();
 
     (verified_doc, key_ctx, kid, temp_dir)
 }
@@ -320,15 +312,13 @@ fn test_decrypt_kv_entries_empty() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
 
     // Create empty KV map
-    let kv_map = std::collections::HashMap::new();
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let kv_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let signer_pub = public_key.clone();
     let members = vec![public_key];
     let verified_members = make_verified_members(&members);
 
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -341,8 +331,7 @@ fn test_decrypt_kv_entries_empty() {
     .unwrap();
 
     let doc = parse_kv_document(&encrypted).unwrap();
-    let verified_doc =
-        verify_kv_document(&doc, Some(&temp_dir.path().join("workspace")), false).unwrap();
+    let verified_doc = verify_kv_document(&doc, false).unwrap();
 
     let decrypted = decrypt_kv_document(
         &verified_doc,
@@ -484,7 +473,7 @@ fn test_unwrap_master_key_for_file() {
 
     // Wrap private key in Decrypted for unwrap API
     let decrypted_key =
-        make_decrypted_private_key_plaintext(private_key, ALICE_MEMBER_ID, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(&private_key, ALICE_MEMBER_ID, kid, "sha256:test");
 
     // Wrap in VerifiedFileEncDocument (tests use freshly encrypted content, treated as verified)
     let proof = SignatureVerificationProof::new(
@@ -540,7 +529,7 @@ fn test_unwrap_master_key_for_file_wrong_member() {
 
     // Try to unwrap with wrong member (should fail - bob doesn't have a wrap)
     let dummy_private_key = make_decrypted_private_key_plaintext(
-        PrivateKeyPlaintext {
+        &PrivateKeyPlaintext {
             keys: IdentityKeysPrivate {
                 kem: JwkOkpPrivateKey {
                     kty: "OKP".to_string(),
@@ -603,7 +592,7 @@ fn test_unwrap_master_key_from_wrap_item() {
     // Note: build_wrap_item_for_file uses hpke_info::file, so we need to use unwrap_master_key_base
     // with hpke_info::file instead of unwrap_master_key_from_wrap_item (which uses hpke_info::kv_file)
     let decrypted_key = make_decrypted_private_key_plaintext(
-        private_key_plaintext,
+        &private_key_plaintext,
         ALICE_MEMBER_ID,
         &public_key.protected.kid,
         "sha256:test",
@@ -654,7 +643,7 @@ fn test_hpke_aad_binding_defence_in_depth() {
     // Try to unwrap with empty AAD (old behavior) - should fail
     // This demonstrates that aad=info binding is enforced
     let decrypted_key = make_decrypted_private_key_plaintext(
-        private_key_plaintext,
+        &private_key_plaintext,
         ALICE_MEMBER_ID,
         &public_key.protected.kid,
         "sha256:test",

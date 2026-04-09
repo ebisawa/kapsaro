@@ -7,6 +7,7 @@ use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use predicates::prelude::*;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::PrivateKey;
 use secretenv::model::public_key::PublicKey;
@@ -218,6 +219,25 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
     assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V4);
 
     drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_requires_member_id_before_password_input() {
+    let temp_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--stdout")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .write_stdin("strong-password-42\n")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("member_id not configured")
+                .and(predicate::str::contains("Passwords do not match").not()),
+        );
 }
 
 #[test]

@@ -4,7 +4,7 @@
 use crate::support::time as time_util;
 use crate::{Error, Result};
 
-pub(super) fn resolve_key_timestamps(
+pub(crate) fn resolve_key_timestamps(
     expires_at_arg: &Option<String>,
     valid_for_arg: &Option<String>,
 ) -> Result<(String, String)> {

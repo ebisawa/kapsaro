@@ -9,9 +9,10 @@
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default values
 
-pub mod common;
-pub mod github_user;
-pub mod member_id;
-pub mod ssh_key;
-pub mod ssh_signer;
-pub mod workspace;
+pub(crate) mod common;
+pub(crate) mod github_user;
+pub(crate) mod member_id;
+pub(crate) mod ssh_key;
+pub(crate) mod ssh_signer;
+pub(crate) mod strict_key_checking;
+pub(crate) mod workspace;

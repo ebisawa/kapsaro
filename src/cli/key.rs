@@ -13,14 +13,14 @@
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
-use crate::cli::common::options::CommonOptions;
+use crate::cli::options::CommonOptions;
 use crate::Result;
 
 // Submodule declarations
-pub mod common;
-pub mod list;
-pub mod new;
-pub mod operations;
+pub(crate) mod common;
+mod list;
+mod new;
+mod operations;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]

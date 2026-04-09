@@ -3,8 +3,8 @@
 
 //! Debug test for kv-enc v3 HPKE issue
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::{make_decrypted_private_key_plaintext, make_verified_members};
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{create_temp_ssh_keypair_in_dir, keygen_test};
 use ed25519_dalek::SigningKey;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -53,7 +53,6 @@ fn test_debug_hpke_single_recipient() {
     let kv_map = parse_dotenv(input).unwrap();
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &signing_key,
@@ -85,7 +84,7 @@ fn test_debug_hpke_single_recipient() {
     );
     let verified_doc = VerifiedKvEncDocument::new(doc, proof);
     let decrypted_key = make_decrypted_private_key_plaintext(
-        private.clone(),
+        &private,
         ALICE_MEMBER_ID,
         &public.protected.kid,
         "sha256:test",

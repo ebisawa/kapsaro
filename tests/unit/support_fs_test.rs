@@ -4,7 +4,8 @@
 //! Unit tests for support/fs module.
 
 use secretenv::support::fs::{
-    check_permission, ensure_dir, ensure_dir_restricted, list_dir, load_text,
+    check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted, list_dir,
+    load_text, load_text_with_limit,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -30,6 +31,30 @@ fn test_load_text_missing_file_error() {
     let message = error.to_string();
     assert!(message.contains("Failed to read file"));
     assert!(message.contains("missing.txt"));
+}
+
+#[test]
+fn test_load_text_with_limit() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.txt");
+    fs::write(&file_path, "hello").unwrap();
+
+    let content = load_text_with_limit(&file_path, 5, "test file").unwrap();
+
+    assert_eq!(content, "hello");
+}
+
+#[test]
+fn test_load_text_with_limit_rejects_oversized_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("oversized.txt");
+    fs::write(&file_path, "hello!").unwrap();
+
+    let error = load_text_with_limit(&file_path, 5, "test file").unwrap_err();
+
+    let message = error.to_string();
+    assert!(message.contains("exceeds maximum size limit"));
+    assert!(message.contains("test file"));
 }
 
 #[test]
@@ -142,4 +167,48 @@ fn test_check_permission_nonexistent_path_returns_warning() {
     let result = check_permission(&missing);
     assert!(result.is_some());
     assert!(result.unwrap().contains("Cannot check permissions"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_check_permission_chain_detects_insecure_intermediate_directory() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path().join("secretenv");
+    let key_dir = root.join("keys").join("alice").join("KID");
+    fs::create_dir_all(&key_dir).unwrap();
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+    fs::set_permissions(root.join("keys"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(
+        root.join("keys").join("alice"),
+        fs::Permissions::from_mode(0o700),
+    )
+    .unwrap();
+    fs::set_permissions(&key_dir, fs::Permissions::from_mode(0o700)).unwrap();
+
+    let file_path = key_dir.join("private.json");
+    fs::write(&file_path, "{}").unwrap();
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o600)).unwrap();
+
+    let warnings = check_permission_chain(&file_path, &root);
+
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].contains("keys"));
+    assert!(warnings[0].contains("expected 0700"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_check_permission_chain_rejects_path_outside_logical_root() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path().join("secretenv");
+    let file_path = temp_dir.path().join("outside.txt");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(&file_path, "secret").unwrap();
+
+    let warnings = check_permission_chain(&file_path, &root);
+
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].contains("outside logical root"));
 }

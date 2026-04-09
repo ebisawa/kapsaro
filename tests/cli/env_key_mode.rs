@@ -65,7 +65,8 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
         TEST_PASSWORD,
         false,
     )
-    .expect("should export private key");
+    .expect("should export private key")
+    .into_plain_string_for_output();
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv, exported)
 }

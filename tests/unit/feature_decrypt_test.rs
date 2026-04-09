@@ -5,15 +5,14 @@
 //!
 //! Tests for file-enc decryption.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::make_verified_members;
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::decrypt::decrypt_document;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::verify::file::verify_file_document;
+use secretenv::feature::verify::file::{verify_file_content, verify_file_document};
 use secretenv::format::content::FileEncContent;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::file_enc::VerifiedFileEncDocument;
@@ -78,7 +77,7 @@ fn test_file_enc_content_detect_rejects_kv_enc() {
 }
 
 #[test]
-fn test_decrypt_document_file() {
+fn test_verify_content_then_decrypt_file() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -111,8 +110,15 @@ fn test_decrypt_document_file() {
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
     let file_enc = FileEncContent::new_unchecked(encrypted_json);
 
-    // Decrypt
-    let decrypted = decrypt_document(&file_enc, ALICE_MEMBER_ID, &key_ctx, false).unwrap();
+    let verified = verify_file_content(&file_enc, false).unwrap();
+    let decrypted = decrypt_file_document(
+        &verified,
+        ALICE_MEMBER_ID,
+        &key_ctx.kid,
+        &key_ctx.private_key,
+        false,
+    )
+    .unwrap();
     assert_eq!(decrypted.as_ref() as &[u8], content);
 }
 
@@ -152,8 +158,7 @@ fn test_parse_verify_decrypt_file() {
     // Use verify+decrypt API
     let file_doc: secretenv::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_file_doc = verify_file_document(&file_doc, Some(&workspace_path), false).unwrap();
+    let verified_file_doc = verify_file_document(&file_doc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified_file_doc,
         ALICE_MEMBER_ID,
@@ -199,8 +204,7 @@ fn test_verify_file_document_returns_verified() {
     .unwrap();
 
     // Verify document (returns Verified<FileEncDocument>)
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_doc = verify_file_document(&file_enc_doc, Some(&workspace_path), false).unwrap();
+    let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
 
     // Check that we have verified proof information
     assert_eq!(verified_doc.proof().member_id, ALICE_MEMBER_ID);

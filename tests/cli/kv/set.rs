@@ -3,8 +3,14 @@
 
 //! Integration tests for `set` command
 
-use crate::cli::common::{cmd, setup_workspace};
+use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID};
+use crate::test_utils::{
+    setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
+};
 use predicates::prelude::*;
+use secretenv::format::kv::enc::canonical::parse_kv_wrap;
+use secretenv::io::keystore::active::set_active_kid;
+use secretenv::io::keystore::storage::list_kids;
 use std::fs;
 use tempfile::TempDir;
 
@@ -199,4 +205,119 @@ fn test_set_without_stdin_and_without_value_fails() {
         .current_dir("/tmp")
         .assert()
         .failure();
+}
+
+#[test]
+fn test_set_existing_file_updates_wrap_to_current_active_members() {
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let home_dir = temp_dir.path();
+    let ssh_priv = temp_dir.path().join(".ssh").join("test_ed25519");
+    let keystore_root = temp_dir.path().join("keys");
+    let alice_kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    set_active_kid(ALICE_MEMBER_ID, &alice_kid, &keystore_root).unwrap();
+    let bob_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    let bob_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    fs::rename(&bob_active, &bob_incoming).unwrap();
+
+    cmd()
+        .arg("set")
+        .arg("API_KEY")
+        .arg("initial_value")
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir)
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    fs::rename(&bob_incoming, &bob_active).unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+    setup_trust_store_for_workspace(home_dir, &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    cmd()
+        .arg("set")
+        .arg("API_KEY")
+        .arg("updated_value")
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir)
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let kv_path = workspace_dir.join("secrets").join("default.kvenc");
+    let content = fs::read_to_string(kv_path).unwrap();
+    let (_, _, wrap) = parse_kv_wrap(&content).unwrap();
+    let mut rids = wrap
+        .wrap
+        .iter()
+        .map(|item| item.rid.clone())
+        .collect::<Vec<_>>();
+    rids.sort();
+    assert_eq!(
+        rids,
+        vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()]
+    );
+}
+
+#[test]
+fn test_set_existing_file_rejects_strict_key_checking_no() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    cmd()
+        .arg("set")
+        .arg("API_KEY")
+        .arg("initial_value")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("set")
+        .arg("API_KEY")
+        .arg("updated_value")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not allowed").and(predicate::str::contains("set")));
+}
+
+#[test]
+fn test_set_new_file_rejects_strict_key_checking_no() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    cmd()
+        .arg("set")
+        .arg("API_KEY")
+        .arg("initial_value")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not allowed").and(predicate::str::contains("set")));
 }

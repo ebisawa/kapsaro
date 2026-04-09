@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use secretenv::io::process::execute_command_with_env;
+use secretenv::support::secret::SecretString;
 use std::collections::BTreeMap;
 
 use crate::test_utils::EnvGuard;
@@ -15,7 +16,10 @@ fn test_execute_command_with_env_filters_parent_env_and_applies_overrides() {
     std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
 
     let mut env_vars = BTreeMap::new();
-    env_vars.insert("PATH".to_string(), "/custom/bin".to_string());
+    env_vars.insert(
+        "PATH".to_string(),
+        SecretString::new("/custom/bin".to_string()),
+    );
 
     let script = r#"test -z "$SECRETENV_PRIVATE_KEY" &&
         test "$PATH" = "/custom/bin" &&

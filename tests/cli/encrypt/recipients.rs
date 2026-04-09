@@ -10,7 +10,9 @@ use crate::cli::common::{
     default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_ID, BOB_MEMBER_ID,
     CAROL_MEMBER_ID,
 };
-use crate::test_utils::setup_test_workspace;
+use crate::test_utils::{
+    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
+};
 use secretenv::cli::encrypt;
 use std::fs;
 
@@ -18,6 +20,10 @@ use std::fs;
 fn test_encrypt_recipients_are_all_active_members() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID]);
+
+    // Set up trust store with all active members approved
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
     let input_path = workspace_dir.join("secret.bin");
     fs::write(&input_path, b"secret data").unwrap();

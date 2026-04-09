@@ -45,6 +45,7 @@ fn test_init_with_verbose_option() {
         .arg("--member-id")
         .arg("verbose@example.com")
         .env("SECRETENV_HOME", home_dir.path())
+        .env("RUST_LOG", "warn")
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()

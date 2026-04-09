@@ -12,10 +12,8 @@ pub mod format {
     pub const PUBLIC_KEY_V4: &str = "secretenv.public.key@4";
     /// `PrivateKey@4` format identifier.
     pub const PRIVATE_KEY_V4: &str = "secretenv.private.key@4";
-    /// Legacy alias retained while internal callers migrate to v4 names.
-    pub const PUBLIC_KEY_V3: &str = PUBLIC_KEY_V4;
-    /// Legacy alias retained while internal callers migrate to v4 names.
-    pub const PRIVATE_KEY_V3: &str = PRIVATE_KEY_V4;
+    /// Local Trust Store v2 format identifier.
+    pub const TRUST_LOCAL_V2: &str = "secretenv.trust.local@2";
     /// FileEncDocument@3 format identifier (on-wire: "secretenv.file@3").
     pub const FILE_ENC_V3: &str = "secretenv.file@3";
     /// `FilePayload@3` format identifier (used in file-enc payload.protected).
@@ -44,8 +42,6 @@ pub mod context {
     pub const PAYLOAD_KV_V3: &str = "secretenv:kv:payload@3";
     /// AAD/Context discriminator for `PrivateKey@4` encryption.
     pub const PRIVATE_KEY_V4: &str = "secretenv:private-key@4";
-    /// Legacy alias retained while internal callers migrate to v4 names.
-    pub const PRIVATE_KEY_V3: &str = PRIVATE_KEY_V4;
 
     /// HPKE info discriminator for kv-file WRAP.
     pub const HPKE_WRAP_KV_FILE_V3: &str = "secretenv:kv:hpke-wrap@3";
@@ -57,19 +53,11 @@ pub mod context {
     /// HKDF info prefix for `PrivateKey@4` encryption key derivation from password.
     pub const PASSWORD_PRIVATE_KEY_ENC_INFO_PREFIX_V4: &str =
         "secretenv:password-private-key-enc@4";
-    /// Legacy alias retained while internal callers migrate to v4 names.
-    pub const SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V3: &str = SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V4;
-    /// Legacy alias retained while internal callers migrate to v4 names.
-    pub const PASSWORD_PRIVATE_KEY_ENC_INFO_PREFIX_V3: &str =
-        PASSWORD_PRIVATE_KEY_ENC_INFO_PREFIX_V4;
     /// Message used to check determinism of SSH signing backend.
     pub const SSH_DETERMINISM_CHECK_MESSAGE: &[u8] = b"secretenv:determinism-check";
 
     /// Sign message header for SSH `PrivateKey@4` protection.
     pub const SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V4: &str = "secretenv:key-protection@4";
-    /// Legacy alias retained while internal callers migrate to v4 names.
-    pub const SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V3: &str =
-        SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V4;
     /// HKDF info prefix for kv-enc entry CEK derivation.
     pub const KV_CEK_INFO_PREFIX_V3: &str = "secretenv:kv:cek@3";
 }

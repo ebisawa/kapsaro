@@ -6,7 +6,7 @@ use crate::model::public_key::PublicKey;
 use crate::Result;
 
 use super::types::{
-    MemberDocumentStatus, MemberDocumentView, MemberGithubAccount, MemberListEntry,
+    MemberDocumentStatus, MemberDocumentView, MemberGithubClaim, MemberListEntry,
     MemberVerificationResult,
 };
 
@@ -39,12 +39,12 @@ pub(crate) fn build_member_document_view(
         sig_curve: public_key.protected.identity.keys.sig.crv.clone(),
         ssh_attestation_method: public_key.protected.identity.attestation.method.clone(),
         ssh_attestation_pubkey: public_key.protected.identity.attestation.pub_.clone(),
-        github_account: public_key
+        github_claim: public_key
             .protected
             .binding_claims
             .as_ref()
             .and_then(|claims| claims.github_account.as_ref())
-            .map(|account| MemberGithubAccount {
+            .map(|account| MemberGithubClaim {
                 id: account.id,
                 login: account.login.clone(),
             }),

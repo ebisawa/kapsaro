@@ -8,107 +8,44 @@ use crate::feature::envelope::signature::verify_file_signature;
 use crate::format::content::FileEncContent;
 use crate::model::file_enc::FileEncDocument;
 use crate::model::file_enc::VerifiedFileEncDocument;
-use crate::model::verification::SignatureVerificationProof;
 use crate::Result;
 
 use super::key_loader::load_verifying_key_from_signature;
-use super::report::{build_error_report, build_success_report};
+use super::report::build_signature_verification_report;
+use super::signature::verify_signature_with_loaded_key;
 
 /// Parse and verify file-enc content.
 pub fn verify_file_content(
     content: &FileEncContent,
-    workspace_path: Option<&std::path::Path>,
     debug: bool,
 ) -> Result<VerifiedFileEncDocument> {
     let doc = content.parse()?;
-    verify_file_document(&doc, workspace_path, debug)
+    verify_file_document(&doc, debug)
 }
 
-/// Build a verification report directly from file-enc content.
-pub fn verify_file_content_report(
-    content: &FileEncContent,
-    workspace_path: Option<&std::path::Path>,
-) -> SignatureVerificationReport {
-    match content.parse() {
-        Ok(doc) => verify_file_document_report(&doc, workspace_path, false),
-        Err(e) => SignatureVerificationReport {
-            verified: false,
-            signer_member_id: None,
-            source: None,
-            warnings: Vec::new(),
-            message: e.user_message().to_string(),
-            signer_public_key: None,
-        },
-    }
-}
-
-/// Verify signature of FileEncDocument and return report
-///
-/// This function uses Verified types internally and converts the result to a report
-/// for display purposes.
-///
-/// # Arguments
-/// * `doc` - FileEncDocument structure to verify
-/// * `workspace_path` - Path to workspace directory
-/// * `debug` - Enable debug logging
-///
-/// # Returns
-/// SignatureVerificationReport with verification result
+/// Verify signature of FileEncDocument and return report for display.
 pub fn verify_file_document_report(
     doc: &FileEncDocument,
-    workspace_path: Option<&std::path::Path>,
     debug: bool,
 ) -> SignatureVerificationReport {
     let signature = &doc.signature;
-    match load_verifying_key_from_signature(signature, workspace_path, debug) {
-        Ok(loaded) => {
-            let protected = doc.protected_for_signing();
-            match verify_file_signature(protected, &loaded.verifying_key, signature, debug) {
-                Ok(()) => build_success_report(
-                    loaded.member_id,
-                    loaded.source,
-                    loaded.warnings,
-                    loaded.public_key,
-                ),
-                Err(e) => build_error_report(e.user_message().to_string()),
-            }
-        }
-        Err(e) => build_error_report(e.user_message().to_string()),
-    }
+    let protected = doc.protected_for_signing();
+    build_signature_verification_report(
+        load_verifying_key_from_signature(signature, debug),
+        |loaded| verify_file_signature(protected, &loaded.verifying_key, signature, debug),
+    )
 }
 
-/// Verify signature of FileEncDocument and return VerifiedFileEncDocument wrapper
+/// Verify signature of FileEncDocument and return VerifiedFileEncDocument wrapper.
 ///
-/// This function performs signature verification and returns a `VerifiedFileEncDocument`
-/// if successful. The VerifiedFileEncDocument wrapper ensures type-level guarantees that the
-/// document has been verified before it can be used in trusted operations.
-///
-/// # Arguments
-/// * `doc` - FileEncDocument structure to verify
-/// * `workspace_path` - Path to workspace directory
-/// * `debug` - Enable debug logging
-///
-/// # Returns
-/// `Ok(VerifiedFileEncDocument)` if signature is valid, error otherwise
-pub fn verify_file_document(
-    doc: &FileEncDocument,
-    workspace_path: Option<&std::path::Path>,
-    debug: bool,
-) -> Result<VerifiedFileEncDocument> {
+/// Returns `Ok(VerifiedFileEncDocument)` if signature is valid, error otherwise.
+pub fn verify_file_document(doc: &FileEncDocument, debug: bool) -> Result<VerifiedFileEncDocument> {
     crate::support::limits::validate_wrap_count(doc.protected.wrap.len(), "Document")?;
-
     let signature = &doc.signature;
-
-    let loaded = load_verifying_key_from_signature(signature, workspace_path, debug)?;
     let protected = doc.protected_for_signing();
-    verify_file_signature(protected, &loaded.verifying_key, signature, debug)?;
-
-    let proof = SignatureVerificationProof::new(
-        loaded.member_id,
-        signature.kid.clone(),
-        loaded.source,
-        loaded.warnings,
-    );
+    let proof = verify_signature_with_loaded_key(signature, debug, |loaded| {
+        verify_file_signature(protected, &loaded.verifying_key, signature, debug)
+    })?;
 
     Ok(VerifiedFileEncDocument::new(doc.clone(), proof))
 }

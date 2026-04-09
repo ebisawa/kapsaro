@@ -16,7 +16,7 @@ use std::path::Path;
 use super::common::resolve_string_required;
 
 /// Parse an SSH signer config string ("auto", "ssh-agent", or "ssh-keygen")
-pub fn parse_ssh_signer_config(s: &str) -> Result<types::SshSignerConfig> {
+pub(crate) fn parse_ssh_signer_config(s: &str) -> Result<types::SshSignerConfig> {
     match s {
         "auto" => Ok(types::SshSignerConfig::Auto),
         "ssh-agent" => Ok(types::SshSignerConfig::SshAgent),
@@ -38,7 +38,7 @@ pub fn parse_ssh_signer_config(s: &str) -> Result<types::SshSignerConfig> {
 /// 2. `SECRETENV_SSH_SIGNER` environment variable
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default (auto)
-pub fn resolve_ssh_signer_config(
+pub(crate) fn resolve_ssh_signer_config(
     ssh_signer_opt: Option<types::SshSigner>,
     base_dir: Option<&Path>,
 ) -> Result<types::SshSignerConfig> {
@@ -66,7 +66,7 @@ pub fn resolve_ssh_signer_config(
 ///
 /// For `Auto`, ssh-agent is preferred when an agent socket is available;
 /// otherwise falls back to ssh-keygen.
-pub fn resolve_ssh_signer(config: types::SshSignerConfig) -> types::SshSigner {
+pub(crate) fn resolve_ssh_signer(config: types::SshSignerConfig) -> types::SshSigner {
     match config {
         types::SshSignerConfig::SshAgent => types::SshSigner::SshAgent,
         types::SshSignerConfig::SshKeygen => types::SshSigner::SshKeygen,
@@ -79,3 +79,7 @@ pub fn resolve_ssh_signer(config: types::SshSignerConfig) -> types::SshSigner {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/config_resolution_ssh_signer_test.rs"]
+mod tests;

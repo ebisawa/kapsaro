@@ -5,13 +5,14 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::sign_file_document;
+use crate::feature::recipient::collect_target_recipient_ids;
 use crate::feature::rewrap::file_op::recipients::{add_file_recipients, remove_file_recipients};
 use crate::feature::rewrap::file_op::rotate::rotate_file_key;
 use crate::feature::verify::file::verify_file_content;
 use crate::format::content::FileEncContent;
-use crate::io::workspace::members::list_active_member_ids;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::file_enc::{FileEncDocument, FileEncDocumentProtected};
+use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::time;
 use crate::{Error, Result};
 use std::path::Path;
@@ -36,6 +37,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             &self.verified,
             recipients,
             self.ctx.key_ctx(),
+            self.ctx.target_members(),
             self.ctx.options().debug,
         )
     }
@@ -49,6 +51,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             &mut self.protected,
             &self.verified,
             self.ctx.key_ctx(),
+            self.ctx.target_members(),
             self.ctx.options().debug,
         )
     }
@@ -99,15 +102,13 @@ pub fn rewrap_file_document(
     member_id: &str,
     key_ctx: &CryptoContext,
     workspace_root: Option<&Path>,
+    target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
-    let workspace_root = workspace_root.ok_or_else(|| Error::Config {
-        message: "rewrap requires a workspace".to_string(),
-    })?;
-    let all_members = list_active_member_ids(workspace_root)?;
+    let all_members = collect_target_recipient_ids(workspace_root, target_members)?;
 
-    let verified = verify_file_content(content, key_ctx.workspace_path.as_deref(), options.debug)?;
+    let verified = verify_file_content(content, options.debug)?;
 
-    let ctx = RewrapContext::new(options, member_id, key_ctx);
+    let ctx = RewrapContext::new(options, member_id, key_ctx, target_members);
     let executor = FileRewrapExecutor::new(verified, &ctx);
     execute_rewrap_operations(executor, options, &all_members)
 }

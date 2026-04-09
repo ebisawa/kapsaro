@@ -1,11 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::app::context::identity::resolve_github_user_input;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
-use crate::app::identity::resolve_github_user_with_fallback;
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
-use crate::app::key::identity::resolve_required_key_identity;
 use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::key::types::KeyNewResult;
 use crate::app::verification::OnlineVerificationStatus;
@@ -13,7 +12,7 @@ use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
 use crate::Result;
 
 /// Resolve GitHub account metadata, verify SSH key on GitHub, then generate a key.
-pub fn generate_key_with_github_user(
+fn generate_key_with_github_user(
     mut options: KeyGenerationOptions,
     github_user: Option<String>,
 ) -> Result<KeyNewResult> {
@@ -35,20 +34,19 @@ pub fn generate_key_with_github_user(
 
 pub fn generate_key_command(
     options: &CommonCommandOptions,
-    member_id_arg: Option<String>,
+    member_id: String,
     github_user_arg: Option<String>,
     expires_at_arg: &Option<String>,
     valid_for_arg: &Option<String>,
     no_activate: bool,
     ssh_ctx: ResolvedSshSigner,
 ) -> Result<KeyNewResult> {
-    let identity = resolve_required_key_identity(options, member_id_arg)?;
-    let github_user = resolve_github_user_with_fallback(github_user_arg, options.home.as_deref())?;
+    let github_user = resolve_github_user_input(github_user_arg, options.home.as_deref())?;
     let (created_at, expires_at) = resolve_key_timestamps(expires_at_arg, valid_for_arg)?;
 
     generate_key_with_github_user(
         KeyGenerationOptions {
-            member_id: identity.member_id,
+            member_id,
             home: options.home.clone(),
             created_at,
             expires_at,

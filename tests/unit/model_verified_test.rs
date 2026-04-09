@@ -176,22 +176,22 @@ fn test_verified_binding_claims_new() {
 fn test_decryption_proof_without_ssh_fpr() {
     use secretenv::model::verified::DecryptionProof;
 
-    let proof = DecryptionProof {
-        member_id: "user@example.com".to_string(),
-        kid: "01ABCDEFGHIJKLMNOPQRSTUV".to_string(),
-        ssh_fpr: None,
-    };
-    assert!(proof.ssh_fpr.is_none());
+    let proof = DecryptionProof::new(
+        "user@example.com".to_string(),
+        "01ABCDEFGHIJKLMNOPQRSTUV".to_string(),
+        None,
+    );
+    assert!(proof.ssh_fpr().is_none());
 }
 
 #[test]
 fn test_decryption_proof_with_ssh_fpr() {
     use secretenv::model::verified::DecryptionProof;
 
-    let proof = DecryptionProof {
-        member_id: "user@example.com".to_string(),
-        kid: "01ABCDEFGHIJKLMNOPQRSTUV".to_string(),
-        ssh_fpr: Some("SHA256:abc123".to_string()),
-    };
-    assert_eq!(proof.ssh_fpr.as_deref(), Some("SHA256:abc123"));
+    let proof = DecryptionProof::new(
+        "user@example.com".to_string(),
+        "01ABCDEFGHIJKLMNOPQRSTUV".to_string(),
+        Some("SHA256:abc123".to_string()),
+    );
+    assert_eq!(proof.ssh_fpr(), Some("SHA256:abc123"));
 }

@@ -1,121 +1,107 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
-use tracing::warn;
-
-use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
 use crate::app::errors::handle_kv_key_not_found_error;
-use crate::feature::context::expiry::build_key_expiry_warning;
+use crate::app::trust::{build_read_signer_trust, ReadTrustPolicy, SignerTrustOutcome};
+use crate::feature::kv::decrypt::{decrypt_kv_document, decrypt_kv_single_entry};
 use crate::feature::kv::query::{
-    decrypt_all_kv_values, decrypt_kv_value, list_kv_keys_with_disclosed,
+    decode_decrypted_kv_value, decode_decrypted_kv_values, list_kv_keys_with_disclosed,
+    KvDisclosedEntry,
 };
-use crate::feature::run::build_env_from_kv_contents;
-use crate::{Error, Result};
+use crate::feature::verify::kv::signature::verify_kv_content;
+use crate::support::secret::SecretEnvMap;
+use crate::Result;
 
-use super::session::KvFileSession;
+use super::session::{KvCommandSession, KvFileSession};
 use super::types::{KvReadMode, KvReadResult};
 
-struct ResolvedKvQuery {
-    file: KvFileSession,
-    execution: ExecutionContext,
+pub(crate) struct KvReadCommand {
+    pub execution: crate::app::context::execution::ExecutionContext,
+    verified_doc: crate::model::kv_enc::verified::VerifiedKvEncDocument,
+    disclosed: Vec<KvDisclosedEntry>,
+    pub trust_outcome: SignerTrustOutcome,
+    pub warnings: Vec<String>,
+    target_path: std::path::PathBuf,
 }
 
 pub(crate) fn list_kv_command(
     options: &CommonCommandOptions,
     file_name: Option<&str>,
-) -> Result<Vec<(String, bool)>> {
+) -> Result<Vec<KvDisclosedEntry>> {
     let session = KvFileSession::load(options, file_name)?;
     list_kv_keys_with_disclosed(&session.kv_content())
 }
 
-pub(crate) fn get_kv_command(
-    options: &CommonCommandOptions,
-    member_id: Option<String>,
-    file_name: Option<&str>,
-    key: Option<&str>,
-    all: bool,
-    ssh_ctx: Option<ResolvedSshSigner>,
-) -> Result<KvReadResult> {
-    let resolved = resolve_kv_query(options, member_id, file_name, ssh_ctx)?;
-    let disclosed = list_kv_keys_with_disclosed(&resolved.file.kv_content())?;
-    let mode = if all {
-        KvReadMode::All
-    } else {
-        KvReadMode::Single(key.ok_or_else(|| Error::InvalidOperation {
-            message: "KEY argument is required (or use --all to get all entries)".to_string(),
-        })?)
-    };
-    load_kv_values(
-        &resolved.file,
-        &resolved.execution,
-        &disclosed,
-        mode,
-        options.verbose,
-    )
-}
-
-pub(crate) fn build_run_env_command(
+pub(crate) fn build_kv_read_command<P>(
     options: &CommonCommandOptions,
     member_id: Option<String>,
     file_name: Option<&str>,
     ssh_ctx: Option<ResolvedSshSigner>,
-) -> Result<BTreeMap<String, String>> {
-    let resolved = resolve_kv_query(options, member_id, file_name, ssh_ctx)?;
-    let content = resolved.file.content().to_string();
-    build_env_from_kv_contents(
-        &[&content],
-        &resolved.execution.member_id,
-        &resolved.execution.key_ctx,
-        options.verbose,
-    )
+) -> Result<KvReadCommand>
+where
+    P: ReadTrustPolicy,
+{
+    let command = KvCommandSession::resolve_read(options, member_id, file_name, ssh_ctx)?;
+    let file = command.load_required_file()?;
+    let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?;
+    let verified_doc = verify_kv_content(&file.kv_content(), options.verbose)?;
+    let trust_plan =
+        build_read_signer_trust::<P>(options, &command.execution, verified_doc.proof())?;
+    let mut warnings = command.warnings;
+    warnings.extend(trust_plan.warnings);
+
+    Ok(KvReadCommand {
+        execution: command.execution,
+        verified_doc,
+        disclosed,
+        trust_outcome: trust_plan.outcome,
+        warnings,
+        target_path: file.target.file_path,
+    })
 }
 
-fn resolve_kv_query(
-    options: &CommonCommandOptions,
-    member_id: Option<String>,
-    file_name: Option<&str>,
-    ssh_ctx: Option<ResolvedSshSigner>,
-) -> Result<ResolvedKvQuery> {
-    let file = KvFileSession::load(options, file_name)?;
-    let execution = ExecutionContext::resolve(options, member_id, None, ssh_ctx)?;
-    if let Some(warning) = build_key_expiry_warning(&execution.key_ctx.expires_at)? {
-        warn!("{}", warning);
-    }
-    Ok(ResolvedKvQuery { file, execution })
-}
-
-fn load_kv_values(
-    file: &KvFileSession,
-    execution: &ExecutionContext,
-    disclosed: &[(String, bool)],
+pub(crate) fn execute_kv_read_command(
+    command: &KvReadCommand,
     mode: KvReadMode<'_>,
     debug: bool,
 ) -> Result<KvReadResult> {
-    let content = file.kv_content();
     let values = match mode {
-        KvReadMode::All => {
-            decrypt_all_kv_values(&content, &execution.member_id, &execution.key_ctx, debug)?
-                .into_iter()
-                .collect()
-        }
+        KvReadMode::All => decode_decrypted_kv_values(decrypt_kv_document(
+            &command.verified_doc,
+            &command.execution.member_id,
+            &command.execution.key_ctx.kid,
+            &command.execution.key_ctx.private_key,
+            debug,
+        )?)?,
         KvReadMode::Single(key) => {
-            let value = decrypt_kv_value(
-                &content,
-                &execution.member_id,
-                &execution.key_ctx,
+            let value = decrypt_kv_single_entry(
+                &command.verified_doc,
+                &command.execution.member_id,
+                &command.execution.key_ctx.kid,
+                &command.execution.key_ctx.private_key,
                 key,
                 debug,
             )
-            .map_err(|e| handle_kv_key_not_found_error(e, &file.target.file_path, key))?;
-            BTreeMap::from([(key.to_string(), value)])
+            .map_err(|e| handle_kv_key_not_found_error(e, &command.target_path, key))?;
+            let value = decode_decrypted_kv_value(key, value)?;
+            std::collections::BTreeMap::from([(key.to_string(), value)])
         }
     };
+
     Ok(KvReadResult {
         values,
-        disclosed: disclosed.to_vec(),
+        disclosed: command.disclosed.clone(),
     })
+}
+
+pub(crate) fn execute_kv_env_command(command: &KvReadCommand) -> Result<SecretEnvMap> {
+    decode_decrypted_kv_values(decrypt_kv_document(
+        &command.verified_doc,
+        &command.execution.member_id,
+        &command.execution.key_ctx.kid,
+        &command.execution.key_ctx.private_key,
+        false,
+    )?)
 }

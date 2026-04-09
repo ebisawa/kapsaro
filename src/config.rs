@@ -7,5 +7,5 @@
 //! for resolving configuration values from CLI arguments, environment variables,
 //! config files, and defaults.
 
-pub mod resolution;
+pub(crate) mod resolution;
 pub mod types;

@@ -11,8 +11,8 @@ use crate::cli::common::{
 };
 use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;
-use secretenv::cli::common::options::CommonOptions;
 use secretenv::cli::encrypt;
+use secretenv::cli::options::CommonOptions;
 use secretenv::cli::rewrap::{self, RewrapArgs};
 use secretenv::cli::set;
 use secretenv::format::kv::enc::canonical::parse_kv_wrap;

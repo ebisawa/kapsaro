@@ -3,10 +3,10 @@
 
 //! Unit tests for feature/verify/key_loader module
 //!
-//! Tests for public key lookup by kid and verifying key loading from signatures.
+//! Tests for embedded signer_pub based verifying key loading.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::test_utils::setup_test_workspace_from_fixtures;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::verify::key_loader::load_verifying_key_from_signature;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::signature::Signature;
@@ -19,8 +19,6 @@ use crate::test_utils::setup_test_keystore_from_fixtures;
 /// when signer_pub is not embedded in the signature
 #[test]
 fn test_load_verifying_key_from_signature_missing_signer_pub_fails() {
-    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
-
     let signature = Signature {
         alg: "eddsa-ed25519".to_string(),
         kid: "SOME_KID_0000000000000000".to_string(),
@@ -28,7 +26,7 @@ fn test_load_verifying_key_from_signature_missing_signer_pub_fails() {
         sig: "dummy".to_string(),
     };
 
-    let result = load_verifying_key_from_signature(&signature, Some(&workspace_dir), false);
+    let result = load_verifying_key_from_signature(&signature, false);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(
@@ -38,8 +36,7 @@ fn test_load_verifying_key_from_signature_missing_signer_pub_fails() {
     );
 }
 
-/// load_verifying_key_from_signature extracts key from embedded signer_pub
-/// when kid exists in workspace active members
+/// load_verifying_key_from_signature extracts key from embedded signer_pub.
 #[test]
 fn test_load_verifying_key_from_signature_with_signer_pub() {
     let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
@@ -60,8 +57,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
         sig: "dummy".to_string(), // sig field not used during key loading
     };
 
-    let loaded =
-        load_verifying_key_from_signature(&signature, Some(&workspace_dir), false).unwrap();
+    let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
 
     assert_eq!(loaded.member_id, ALICE_MEMBER_ID);
     assert_eq!(loaded.source, VerifyingKeySource::SignerPubEmbedded);
@@ -73,10 +69,10 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
     assert_eq!(loaded.public_key.protected.kid, kid);
 }
 
-/// load_verifying_key_from_signature fails when signer_pub is embedded
-/// but kid is not found in workspace active members
+/// load_verifying_key_from_signature succeeds even when the signer is not in
+/// workspace active members because cryptographic verification is self-contained.
 #[test]
-fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_fails() {
+fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succeeds() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -96,20 +92,16 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_fail
         sig: "dummy".to_string(),
     };
 
-    let result = load_verifying_key_from_signature(&signature, Some(&empty_workspace), false);
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("not found in active members"),
-        "Expected 'not found in active members' error, got: {}",
-        err_msg
-    );
+    let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
+
+    assert_eq!(loaded.member_id, ALICE_MEMBER_ID);
+    assert_eq!(loaded.public_key.protected.kid, kid.as_str());
 }
 
-/// load_verifying_key_from_signature fails when signer_pub is embedded
-/// but no workspace is available for membership verification
+/// load_verifying_key_from_signature succeeds without a workspace because
+/// embedded signer_pub is the verification source.
 #[test]
-fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_fails() {
+fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -124,14 +116,10 @@ fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_fails() {
         sig: "dummy".to_string(),
     };
 
-    let result = load_verifying_key_from_signature(&signature, None, false);
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.to_lowercase().contains("workspace"),
-        "Expected workspace-related error, got: {}",
-        err_msg
-    );
+    let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
+
+    assert_eq!(loaded.member_id, ALICE_MEMBER_ID);
+    assert_eq!(loaded.public_key.protected.kid, kid.as_str());
 }
 
 /// load_verifying_key_from_signature returns error when kid in signature
@@ -156,13 +144,13 @@ fn test_load_verifying_key_from_signature_kid_mismatch() {
         sig: "dummy".to_string(),
     };
 
-    let result = load_verifying_key_from_signature(&signature, Some(&workspace_dir), false);
+    let result = load_verifying_key_from_signature(&signature, false);
 
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("not found in active members"),
-        "Expected 'not found in active members' error, got: {}",
+        err_msg.contains("kid mismatch"),
+        "Expected kid mismatch error, got: {}",
         err_msg
     );
 }

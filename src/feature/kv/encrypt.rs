@@ -18,6 +18,9 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use super::builder::KvDocumentBuilder;
+use super::entry_codec::encode_kv_entries_to_tokens;
+
 /// Build KV encryption context: generate master key, create HEAD/WRAP structures
 pub(crate) fn build_kv_encryption(
     members: &[VerifiedRecipientKey],
@@ -27,7 +30,7 @@ pub(crate) fn build_kv_encryption(
     // Generate master key
     let mut master_key_bytes = Zeroizing::new([0u8; 32]);
     OsRng.fill_bytes(master_key_bytes.as_mut());
-    let master_key = MasterKey::new(*master_key_bytes);
+    let master_key = MasterKey::from_zeroizing(master_key_bytes);
 
     // Create HEAD token
     let head_data = KvHeader {
@@ -48,19 +51,22 @@ pub(crate) fn build_kv_encryption(
 }
 
 /// Encrypt all KV entries
-pub(crate) fn encrypt_kv_entries(
-    kv_map: &HashMap<String, String>,
+pub(crate) fn encrypt_kv_entries<V>(
+    kv_map: &HashMap<String, V>,
     master_key: &MasterKey,
     sid: &Uuid,
     debug: bool,
     disclosed: bool,
-) -> Result<Vec<(String, KvEntryValue)>> {
+) -> Result<Vec<(String, KvEntryValue)>>
+where
+    V: AsRef<str>,
+{
     let mut entries: Vec<_> = kv_map
         .iter()
         .map(|(key, value)| {
             encrypt_entry(
                 key,
-                value,
+                value.as_ref(),
                 master_key,
                 sid,
                 debug,
@@ -88,31 +94,59 @@ pub(crate) fn encrypt_kv_entries(
 ///
 /// # Returns
 /// kv-enc v3 format string with SIG line
-pub fn encrypt_kv_document(
-    kv_map: &HashMap<String, String>,
-    _recipients: &[String],
+pub fn encrypt_kv_document<V>(
+    kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
     token_codec: TokenCodec,
-) -> Result<String> {
-    encrypt_kv_document_with_disclosed(kv_map, _recipients, members, signing, token_codec, false)
+) -> Result<String>
+where
+    V: AsRef<str>,
+{
+    encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
 
 /// Encrypt KV map to kv-enc v3 format with disclosed flag control
-pub fn encrypt_kv_document_with_disclosed(
-    kv_map: &HashMap<String, String>,
-    _recipients: &[String],
+pub(crate) fn encrypt_kv_document_with_disclosed<V>(
+    kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
     token_codec: TokenCodec,
     disclosed: bool,
-) -> Result<String> {
-    super::rewrite_session::encrypt_and_sign_kv_map(
-        kv_map,
-        members,
-        signing,
+) -> Result<String>
+where
+    V: AsRef<str>,
+{
+    encrypt_and_sign_kv_map(kv_map, members, signing, token_codec, disclosed, |_| Ok(()))
+}
+
+pub fn encrypt_and_sign_kv_map<V, F>(
+    kv_map: &HashMap<String, V>,
+    members: &[VerifiedRecipientKey],
+    signing: &SigningContext<'_>,
+    token_codec: TokenCodec,
+    disclosed: bool,
+    mutate_wrap: F,
+) -> Result<String>
+where
+    V: AsRef<str>,
+    F: FnOnce(&mut KvWrap) -> Result<()>,
+{
+    let timestamp = crate::support::time::current_timestamp()?;
+    let sid = Uuid::new_v4();
+    let (master_key, head_data, mut wrap_data) = build_kv_encryption(members, &sid, &timestamp)?;
+    mutate_wrap(&mut wrap_data)?;
+
+    let entries = encrypt_kv_entries(kv_map, &master_key, &sid, signing.debug, disclosed)?;
+    let encoded = encode_kv_entries_to_tokens(
+        &entries,
         token_codec,
-        disclosed,
-        |_| Ok(()),
-    )
+        signing.debug,
+        "encrypt_and_sign_kv_map",
+    )?;
+
+    let unsigned = KvDocumentBuilder::new(head_data, wrap_data, token_codec, signing.debug)
+        .with_entries(encoded)
+        .build();
+    super::sign::sign_unsigned_kv_document(unsigned, signing)
 }

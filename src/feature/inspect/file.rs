@@ -22,21 +22,11 @@ fn build_file_enc_header_section(doc: &FileEncDocument) -> InspectSection {
     build_section(
         "Header",
         vec![
-            format!("Format:     {}", doc.protected.format),
-            format!("Secret ID:  {}", doc.protected.sid),
+            format!("  SID:         {}", doc.protected.sid),
+            format!("  Created:     {}", doc.protected.created_at),
+            format!("  Updated:     {}", doc.protected.updated_at),
         ],
     )
-}
-
-fn build_file_enc_recipients_section(doc: &FileEncDocument) -> InspectSection {
-    let mut lines = Vec::new();
-    lines.push(format!("Recipients ({}):", doc.recipients().len()));
-    lines.extend(
-        doc.recipients()
-            .into_iter()
-            .map(|rid| format!("  - {}", rid)),
-    );
-    build_section("Recipients", lines)
 }
 
 fn build_file_enc_payload_section(doc: &FileEncDocument) -> InspectSection {
@@ -50,10 +40,11 @@ fn build_file_enc_wrap_section(doc: &FileEncDocument) -> InspectSection {
     build_section(
         "Wrap Data",
         build_section_lines(|out| {
-            push_line(
-                out,
-                format!("Wrap Data ({} recipients):", doc.protected.wrap.len()),
-            );
+            push_line(out, format!("  Recipients ({}):", doc.protected.wrap.len()));
+            for wrap in &doc.protected.wrap {
+                push_line(out, format!("    \u{2022} {}", wrap.rid));
+            }
+            push_line(out, "  Wrap Items:");
             for (i, wrap) in doc.protected.wrap.iter().enumerate() {
                 append_wrap_item(i, wrap, out);
             }
@@ -66,16 +57,14 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
     build_section(
         "Signature",
         build_section_lines(|out| {
-            push_line(out, format!("Created:  {}", doc.protected.created_at));
-            push_line(out, format!("Updated:  {}", doc.protected.updated_at));
             let sig = &doc.signature;
             let kid_display = build_kid_display(&sig.kid).unwrap_or_else(|_| sig.kid.clone());
-            push_line(out, format!("  alg:    {}", sig.alg));
-            push_line(out, format!("  kid:    {}", kid_display));
+            push_line(out, format!("  Algorithm:   {}", sig.alg));
+            push_line(out, format!("  Kid:         {}", kid_display));
             append_signer_info(sig.signer_pub.as_ref(), out);
             push_line(
                 out,
-                format!("  sig:    {}...", &sig.sig[..sig.sig.len().min(404)]),
+                format!("  Sig:         {}...", &sig.sig[..sig.sig.len().min(40)]),
             );
         }),
     )
@@ -83,12 +72,11 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
 
 pub(crate) fn build_file_inspect_output(doc: &FileEncDocument) -> InspectOutput {
     InspectOutput {
-        title: "=== File-Enc v3 Metadata ===".to_string(),
+        title: "File-Enc v3 Metadata".to_string(),
         sections: vec![
             build_file_enc_header_section(doc),
-            build_file_enc_recipients_section(doc),
-            build_file_enc_payload_section(doc),
             build_file_enc_wrap_section(doc),
+            build_file_enc_payload_section(doc),
             build_file_enc_signature_section(doc),
         ],
     }

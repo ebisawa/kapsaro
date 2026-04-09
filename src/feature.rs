@@ -6,13 +6,14 @@
 pub mod config;
 pub mod context;
 pub mod decrypt;
+pub mod disclosure;
 pub mod encrypt;
 pub mod envelope;
-pub mod init;
 pub mod inspect;
 pub mod key;
 pub mod kv;
 pub mod member;
+pub mod recipient;
 pub mod rewrap;
-pub mod run;
+pub mod trust;
 pub mod verify;

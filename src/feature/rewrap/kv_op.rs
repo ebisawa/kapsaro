@@ -4,5 +4,3 @@
 //! Rewrap operations for kv-enc format.
 
 pub mod recipients;
-pub mod reencrypt;
-pub mod rotate;

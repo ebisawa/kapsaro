@@ -10,6 +10,7 @@ use crate::model::kv_enc::line::KvEncLine;
 use crate::{Error, Result};
 
 use super::document::{KvDocumentEntry, UnsignedKvDocument, WrapSource};
+use super::types::KvEncodedEntry;
 
 /// Builder for assembling a KV-enc document prior to signing.
 pub struct KvDocumentBuilder {
@@ -94,8 +95,13 @@ impl KvDocumentBuilder {
     }
 
     /// Append entries as Encoded.
-    pub fn with_entries(mut self, entries: Vec<(String, String)>) -> Self {
-        for (key, token) in entries {
+    pub fn with_entries<I, E>(mut self, entries: I) -> Self
+    where
+        I: IntoIterator<Item = E>,
+        E: Into<KvEncodedEntry>,
+    {
+        for entry in entries {
+            let KvEncodedEntry { key, token } = entry.into();
             self.entries.push(KvDocumentEntry::Encoded { key, token });
         }
         self

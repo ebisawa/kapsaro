@@ -96,6 +96,29 @@ pub fn b64_decode_array<const N: usize>(data: &str, field_name: &str) -> Result<
     })
 }
 
+/// Decode base64url and convert to a fixed-size secret array without an extra plain copy.
+pub fn b64_decode_secret_array<const N: usize>(
+    data: &str,
+    field_name: &str,
+) -> Result<Zeroizing<[u8; N]>> {
+    let bytes: Zeroizing<Vec<u8>> = Zeroizing::new(b64_decode(data, field_name)?);
+    if bytes.len() != N {
+        return Err(Error::Crypto {
+            message: format!(
+                "Invalid {} length: expected {}, got {}",
+                field_name,
+                N,
+                bytes.len()
+            ),
+            source: None,
+        });
+    }
+
+    let mut out = Zeroizing::new([0u8; N]);
+    out.as_mut().copy_from_slice(bytes.as_slice());
+    Ok(out)
+}
+
 /// Decode base64url token with stricter size limit (`MAX_BASE64_TOKEN_LENGTH`)
 ///
 /// Use this for protocol tokens (HEAD, WRAP, SIG, KV entry tokens).

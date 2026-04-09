@@ -7,8 +7,7 @@
 
 use secretenv::io::ssh::external::pubkey::{
     collect_ed25519_keys_in_output, load_ed25519_keys_from_agent, load_ssh_public_key_file,
-    load_ssh_public_key_with_descriptor, load_ssh_public_key_with_descriptor_trait,
-    SshKeyCandidate,
+    load_ssh_public_key_with_descriptor_trait, SshKeyCandidate,
 };
 use secretenv::io::ssh::external::traits::{SshAdd, SshKeygen};
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
@@ -151,16 +150,16 @@ fn test_load_ssh_public_key_file_not_found() {
 }
 
 #[test]
-fn test_load_ssh_public_key_with_descriptor_public_key() {
+fn test_load_ssh_public_key_with_descriptor_trait_public_key() {
     let temp_dir = TempDir::new().unwrap();
     let pub_path = temp_dir.path().join("test.pub");
 
     std::fs::write(&pub_path, format!("{}\n", VALID_ED25519_KEY)).unwrap();
 
     let descriptor = SshKeyDescriptor::from_path(pub_path);
+    let ssh_keygen = MockSshKeygen::ok(VALID_ED25519_KEY_2);
 
-    // ssh-keygen path is not used when .pub file is provided
-    let result = load_ssh_public_key_with_descriptor("unused-ssh-keygen", &descriptor).unwrap();
+    let result = load_ssh_public_key_with_descriptor_trait(&ssh_keygen, &descriptor).unwrap();
     assert_eq!(result, VALID_ED25519_KEY);
 }
 

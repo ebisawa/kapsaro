@@ -4,9 +4,14 @@
 //! Workspace-related encryption tests
 
 use crate::cli::common::{
-    default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_ID, BOB_MEMBER_ID,
+    cmd, default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_ID, BOB_MEMBER_ID,
 };
-use crate::test_utils::{keygen_test, setup_test_workspace};
+use crate::test_utils::{
+    build_expiring_soon_timestamp, keygen_test, setup_member_key_context, setup_test_workspace,
+    setup_trust_store_for_workspace, sync_active_public_key_to_workspace,
+    update_active_private_key_expires_at,
+};
+use predicates::prelude::*;
 use secretenv::cli::encrypt;
 use secretenv::cli::set;
 use secretenv::format::kv;
@@ -14,8 +19,11 @@ use secretenv::format::schema::document::parse_kv_wrap_token;
 use secretenv::model::kv_enc::header::KvWrap;
 use std::fs;
 
+#[cfg(unix)]
+use secretenv::io::trust::paths::trust_store_file_path;
+
 #[test]
-fn test_encrypt_member_id_mismatch() {
+fn test_encrypt_uses_member_file_contents_not_filename() {
     // Setup test workspace with alice
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
     let members_dir = workspace_dir.join("members/active");
@@ -37,6 +45,8 @@ fn test_encrypt_member_id_mismatch() {
         serde_json::to_string_pretty(&bob_public).unwrap(),
     )
     .unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
     // Create test binary file
     let input_path = workspace_dir.join("test.bin");
@@ -46,7 +56,7 @@ fn test_encrypt_member_id_mismatch() {
     // Create output path
     let encrypted_path = secrets_dir.join("test.encrypted");
 
-    // Try to encrypt with alice as recipient
+    // Encrypt should use the document content as the source of truth.
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
     common_opts.workspace = Some(workspace_dir.clone());
@@ -59,15 +69,18 @@ fn test_encrypt_member_id_mismatch() {
         out: Some(encrypted_path.clone()),
     };
 
-    // Should fail with member_id mismatch error
-    let result = encrypt::run(encrypt_args);
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("mismatch") || err_msg.contains("ID"),
-        "Error should mention member_id mismatch: {}",
-        err_msg
-    );
+    encrypt::run(encrypt_args).unwrap();
+
+    let encrypted = fs::read_to_string(&encrypted_path).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&encrypted).unwrap();
+    let recipients = document["protected"]["wrap"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["rid"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(recipients, vec![BOB_MEMBER_ID.to_string()]);
 }
 
 #[test]
@@ -75,6 +88,8 @@ fn test_set_creates_default_file() {
     // Setup test workspace with alice and bob
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let secrets_dir = workspace_dir.join("secrets");
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
     // Define default kv-enc file path (does NOT exist yet)
     let kv_file_path = secrets_dir.join("default.kvenc");
@@ -140,4 +155,124 @@ fn test_set_creates_default_file() {
         kv_line.starts_with("DATABASE_URL "),
         "Should have DATABASE_URL key"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let input_path = workspace_dir.join("warn.txt");
+    fs::write(&input_path, b"warning check").unwrap();
+    let output_path = workspace_dir.join("warn.txt.encrypted");
+    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
+
+    cmd()
+        .arg("encrypt")
+        .arg(input_path)
+        .arg("--out")
+        .arg(output_path)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_key)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Insecure permissions"));
+}
+
+#[test]
+fn test_encrypt_rejects_strict_key_checking_no() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+
+    let input_path = workspace_dir.join("strict-no.txt");
+    fs::write(&input_path, b"strict no check").unwrap();
+    let output_path = workspace_dir.join("strict-no.txt.encrypted");
+    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_key)
+        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not allowed").and(predicate::str::contains("encrypt")));
+}
+
+#[test]
+fn test_encrypt_surfaces_private_key_expiry_warning_on_stderr() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, &expires_at);
+
+    let input_path = workspace_dir.join("expiry.txt");
+    fs::write(&input_path, b"warning check").unwrap();
+    let output_path = workspace_dir.join("expiry.txt.encrypted");
+    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
+
+    cmd()
+        .arg("encrypt")
+        .arg(input_path)
+        .arg("--out")
+        .arg(output_path)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_key)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Warning: Private key expires in"));
+}
+
+#[test]
+fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
+    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    let input_path = workspace_dir.join("recipient-expiry.txt");
+    fs::write(&input_path, b"warning check").unwrap();
+    let output_path = workspace_dir.join("recipient-expiry.txt.encrypted");
+    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
+
+    cmd()
+        .arg("encrypt")
+        .arg(input_path)
+        .arg("--out")
+        .arg(output_path)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_key)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Warning: Recipient public key for 'bob@example.com' expires in",
+        ));
 }

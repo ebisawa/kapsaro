@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::app::context::ssh::{find_ssh_candidate_by_fingerprint, SshKeyCandidateView};
+use crate::app::context::ssh::{find_ssh_candidate_by_fingerprint, SshKeyCandidateView};
 
 fn build_candidate(fingerprint: &str, comment: &str) -> SshKeyCandidateView {
     SshKeyCandidateView {

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use secretenv::feature::context::expiry::{
-    build_key_expiry_warning, check_key_expiry, enforce_key_not_expired_for_signing,
-    KeyExpiryStatus,
+    build_key_expiry_warning, build_signing_key_expiry_warning, check_key_expiry,
+    enforce_key_not_expired_for_signing, KeyExpiryStatus,
 };
 use time::OffsetDateTime;
 
@@ -137,5 +137,20 @@ fn test_build_warning_expiring_soon() {
 fn test_build_warning_valid_none() {
     let expires_at = rfc3339(future_time(365));
     let warning = build_key_expiry_warning(&expires_at).unwrap();
+    assert!(warning.is_none());
+}
+
+#[test]
+fn test_build_signing_warning_expiring_soon() {
+    let expires_at = rfc3339(future_time(15));
+    let warning = build_signing_key_expiry_warning(&expires_at).unwrap();
+    assert!(warning.is_some());
+    assert!(warning.unwrap().contains("expir"));
+}
+
+#[test]
+fn test_build_signing_warning_expired_none() {
+    let expires_at = rfc3339(past_time(1));
+    let warning = build_signing_key_expiry_warning(&expires_at).unwrap();
     assert!(warning.is_none());
 }

@@ -10,22 +10,19 @@
 //! 4. Single member_id in keystore
 
 use crate::io::config as io_config;
+use crate::io::keystore::member::load_single_member_id_from_keystore;
 use crate::io::keystore::paths;
-use crate::support::fs::list_dir;
-use crate::{Error, Result};
+use crate::support::validation;
+use crate::Result;
 use std::path::Path;
 
 use super::common::resolve_string_with_priority;
 
-/// Resolve member_id based on priority order
-///
-/// # Priority Order
-///
-/// 1. `member_id_opt` parameter (CLI argument)
-/// 2. `SECRETENV_MEMBER_ID` environment variable
-/// 3. Global config (`SECRETENV_HOME/config.toml`)
-/// 4. Single member_id in keystore (`SECRETENV_HOME/keys/`)
-pub fn resolve_member_id(member_id_opt: Option<String>, base_dir: Option<&Path>) -> Result<String> {
+/// Resolve member_id from non-interactive sources and return `None` when unresolved.
+pub(crate) fn resolve_member_id_with_fallback(
+    member_id_opt: Option<String>,
+    base_dir: Option<&Path>,
+) -> Result<Option<String>> {
     // Priority 1-3: Use common resolution logic
     if let Some(member_id) = resolve_string_with_priority(
         member_id_opt,
@@ -34,15 +31,15 @@ pub fn resolve_member_id(member_id_opt: Option<String>, base_dir: Option<&Path>)
         base_dir,
         None,
     )? {
-        return Ok(member_id);
+        validation::validate_member_id(&member_id)?;
+        return Ok(Some(member_id));
     }
 
     // Priority 4: Single member_id in keystore
-    resolve_member_id_from_keystore(base_dir)
+    resolve_optional_member_id_from_keystore(base_dir)
 }
 
-/// Resolve member_id from keystore (single member_id only)
-fn resolve_member_id_from_keystore(base_dir: Option<&Path>) -> Result<String> {
+fn resolve_optional_member_id_from_keystore(base_dir: Option<&Path>) -> Result<Option<String>> {
     let keystore_root = match base_dir {
         Some(dir) => paths::get_keystore_root_from_base(dir),
         None => {
@@ -51,43 +48,9 @@ fn resolve_member_id_from_keystore(base_dir: Option<&Path>) -> Result<String> {
         }
     };
 
-    if !keystore_root.exists() {
-        return Err(missing_member_id_error(
-            "member_id not configured and keystore directory does not exist",
-        ));
-    }
-
-    let member_ids: Vec<String> = list_dir(&keystore_root)?
-        .filter_map(|entry| {
-            entry.ok().and_then(|e| {
-                if e.path().is_dir() {
-                    e.file_name().to_str().map(|s| s.to_string())
-                } else {
-                    None
-                }
-            })
-        })
-        .collect();
-
-    match member_ids.len() {
-        0 => Err(missing_member_id_error(
-            "member_id not configured and no member_ids found in keystore",
-        )),
-        1 => Ok(member_ids[0].clone()),
-        _ => Err(missing_member_id_error(
-            "member_id not configured and multiple member_ids found in keystore",
-        )),
-    }
+    load_single_member_id_from_keystore(&keystore_root)
 }
 
-fn missing_member_id_error(detail: &str) -> Error {
-    Error::Config {
-        message: format!(
-            "{detail}.\n\n\
-             Specify member_id explicitly using one of:\n\
-             1. Specify --member-id <id>\n\
-             2. Set environment variable: export SECRETENV_MEMBER_ID=<id>\n\
-             3. Set in config: secretenv config set member_id <id>"
-        ),
-    }
-}
+#[cfg(test)]
+#[path = "../../../tests/unit/config_resolution_member_id_test.rs"]
+mod tests;

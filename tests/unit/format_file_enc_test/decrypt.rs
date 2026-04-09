@@ -5,8 +5,8 @@ use super::helpers::{
     create_test_private_key, create_test_public_key, decrypt_file_document_for_test,
     generate_ed25519_keypair, generate_x25519_keypair, recipients_and_members,
 };
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_decrypted_private_key_plaintext;
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file as file_enc;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -218,7 +218,7 @@ fn test_decrypt_file_wrong_member_id() {
         ),
     );
     let decrypted_key = make_decrypted_private_key_plaintext(
-        create_test_private_key(&sk, &pk),
+        &create_test_private_key(&sk, &pk),
         BOB_MEMBER_ID,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GJ",
         "sha256:test",
@@ -274,7 +274,7 @@ fn test_decrypt_file_wrong_key() {
         ),
     );
     let wrong_key = make_decrypted_private_key_plaintext(
-        create_test_private_key(&sk2, &pk2),
+        &create_test_private_key(&sk2, &pk2),
         ALICE_MEMBER_ID,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "sha256:test",

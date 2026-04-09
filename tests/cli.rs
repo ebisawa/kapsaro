@@ -18,4 +18,5 @@ pub mod kv;
 pub mod member;
 pub mod rewrap;
 pub mod run;
+pub mod trust;
 pub mod verify;

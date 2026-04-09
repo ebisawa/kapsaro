@@ -3,11 +3,9 @@
 
 //! Online verification for binding_claims.github_account
 //!
-//! Implements GitHub API integration for verifying SSH key ownership
+//! Implements GitHub API integration for verifying SSH key ownership.
 
 pub mod github;
-
-use crate::model::public_key::VerifiedBindingClaims;
 
 /// Status of online verification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -20,6 +18,26 @@ pub enum VerificationStatus {
     NotConfigured,
 }
 
+/// GitHub identity verified by online verification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedGithubIdentity {
+    pub id: u64,
+    pub login: String,
+    pub fingerprint: String,
+    pub matched_key_id: i64,
+}
+
+impl VerifiedGithubIdentity {
+    pub fn new(id: u64, login: String, fingerprint: String, matched_key_id: i64) -> Self {
+        Self {
+            id,
+            login,
+            fingerprint,
+            matched_key_id,
+        }
+    }
+}
+
 /// Verification result
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VerificationResult {
@@ -28,9 +46,10 @@ pub struct VerificationResult {
     pub message: String,
     pub fingerprint: Option<String>,
     pub matched_key_id: Option<i64>,
-    /// When verification succeeded, the verified binding claims (not serialized)
+    pub github_claim_present: bool,
+    /// When verification succeeded, the verified GitHub identity (not serialized)
     #[serde(skip)]
-    pub verified_bindings: Option<VerifiedBindingClaims>,
+    pub verified_github: Option<VerifiedGithubIdentity>,
 }
 
 impl VerificationResult {
@@ -39,6 +58,7 @@ impl VerificationResult {
         member_id: &str,
         message: &str,
         fingerprint: Option<String>,
+        github_claim_present: bool,
     ) -> Self {
         Self {
             member_id: member_id.to_string(),
@@ -46,19 +66,26 @@ impl VerificationResult {
             message: message.to_string(),
             fingerprint,
             matched_key_id: None,
-            verified_bindings: None,
+            github_claim_present,
+            verified_github: None,
         }
     }
 
     /// Create a failed verification result.
-    pub(crate) fn failed(member_id: &str, message: String, fingerprint: Option<String>) -> Self {
+    pub(crate) fn failed(
+        member_id: &str,
+        message: String,
+        fingerprint: Option<String>,
+        github_claim_present: bool,
+    ) -> Self {
         Self {
             member_id: member_id.to_string(),
             status: VerificationStatus::Failed,
             message,
             fingerprint,
             matched_key_id: None,
-            verified_bindings: None,
+            github_claim_present,
+            verified_github: None,
         }
     }
 
@@ -66,17 +93,16 @@ impl VerificationResult {
     pub(crate) fn verified(
         member_id: &str,
         message: String,
-        fingerprint: String,
-        matched_key_id: i64,
-        verified_bindings: VerifiedBindingClaims,
+        verified_github: VerifiedGithubIdentity,
     ) -> Self {
         Self {
             member_id: member_id.to_string(),
             status: VerificationStatus::Verified,
             message,
-            fingerprint: Some(fingerprint),
-            matched_key_id: Some(matched_key_id),
-            verified_bindings: Some(verified_bindings),
+            fingerprint: Some(verified_github.fingerprint.clone()),
+            matched_key_id: Some(verified_github.matched_key_id),
+            github_claim_present: true,
+            verified_github: Some(verified_github),
         }
     }
 

@@ -5,8 +5,8 @@ use super::helpers::{
     create_test_public_key, generate_ed25519_keypair, generate_x25519_keypair,
     recipients_and_members,
 };
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_recipient_key;
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::encrypt::file as file_enc;
 use secretenv::feature::envelope::signature::SigningContext;
 use uuid::Uuid;

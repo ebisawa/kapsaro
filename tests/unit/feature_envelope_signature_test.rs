@@ -9,7 +9,7 @@ use crate::model::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKeyProtected,
 };
 
-fn make_dummy_signer_pub(kid: &str) -> PublicKey {
+fn make_dummy_public_key(kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
             format: "secretenv.public.key@4".to_string(),
@@ -52,7 +52,7 @@ fn test_sign_and_append_kv_sig_produces_sig_line() {
         unsigned,
         &signing_key,
         kid,
-        make_dummy_signer_pub(kid),
+        make_dummy_public_key(kid),
         TokenCodec::JsonJcs,
         false,
         "test",
@@ -74,7 +74,7 @@ fn test_sign_and_append_kv_sig_preserves_unsigned_content() {
         unsigned,
         &signing_key,
         "kid",
-        make_dummy_signer_pub("kid"),
+        make_dummy_public_key("kid"),
         TokenCodec::JsonJcs,
         false,
         "test",

@@ -140,14 +140,7 @@ fn make_kv_document(entries: &[(&str, &str)], signing_key: &SigningKey, kid: &st
         debug: false,
     };
 
-    encrypt_kv_document(
-        &kv_map,
-        &["test@example.com".to_string()],
-        &[verified_member],
-        &signing,
-        TokenCodec::JsonJcs,
-    )
-    .unwrap()
+    encrypt_kv_document(&kv_map, &[verified_member], &signing, TokenCodec::JsonJcs).unwrap()
 }
 
 /// Build a test context for set/unset tests: (initial_content, doc, signing_key, kid)

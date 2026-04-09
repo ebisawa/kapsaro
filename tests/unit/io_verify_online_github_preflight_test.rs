@@ -4,7 +4,9 @@
 //! Unit tests for pre-flight SSH key verification against GitHub.
 
 use secretenv::io::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
-use secretenv::io::verify_online::github::{GitHubApi, GitHubApiFuture, GitHubKeyRecord};
+use secretenv::io::verify_online::github::{
+    GitHubApiFuture, GitHubKeyRecord, GitHubVerificationApi,
+};
 use secretenv::io::verify_online::VerificationStatus;
 use secretenv::model::public_key::GithubAccount;
 use secretenv::{Error, Result};
@@ -16,9 +18,9 @@ struct FakeGitHubApi {
     keys_result: Result<Vec<GitHubKeyRecord>>,
 }
 
-impl GitHubApi for FakeGitHubApi {
-    fn fetch_user_by_login<'a>(&'a self, _login: &'a str) -> GitHubApiFuture<'a, (u64, String)> {
-        Box::pin(async { unreachable!("pre-flight should not call fetch_user_by_login") })
+impl GitHubVerificationApi for FakeGitHubApi {
+    fn fetch_user_by_id<'a>(&'a self, _account_id: u64) -> GitHubApiFuture<'a, (u64, String)> {
+        Box::pin(async { unreachable!("pre-flight should not call fetch_user_by_id") })
     }
 
     fn fetch_keys<'a>(&'a self, _login: &'a str) -> GitHubApiFuture<'a, Vec<GitHubKeyRecord>> {

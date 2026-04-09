@@ -15,7 +15,7 @@ pub struct MemberListResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct MemberGithubAccount {
+pub struct MemberGithubClaim {
     pub id: u64,
     pub login: String,
 }
@@ -48,13 +48,13 @@ pub struct MemberDocumentView {
     pub sig_curve: String,
     pub ssh_attestation_method: String,
     pub ssh_attestation_pubkey: String,
-    pub github_account: Option<MemberGithubAccount>,
+    pub github_claim: Option<MemberGithubClaim>,
     pub verification_status: MemberDocumentStatus,
     pub verification_warnings: Vec<String>,
     pub document: serde_json::Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MembershipStatus {
     Active,
     Incoming,

@@ -100,7 +100,7 @@ pub(crate) fn decrypt_file_payload(
 /// * `member_id` - Member ID to find the wrap for
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - PrivateKeyPlaintext containing the KEM private key
-/// * `debug` - Enable debug logging (unused)
+/// * `debug` - Enable debug logging
 ///
 /// # Returns
 /// Decrypted content wrapped in Zeroizing to ensure it's zeroed when dropped
@@ -109,7 +109,7 @@ pub fn decrypt_file_document(
     member_id: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
-    _debug: bool,
+    debug: bool,
 ) -> Result<Zeroizing<Vec<u8>>> {
     validate_file_enc_document_format(verified_doc)?;
     validate_file_enc_document_payload(verified_doc)?;
@@ -127,8 +127,7 @@ pub fn decrypt_file_document(
     }
 
     // Unwrap content key using the shared helper
-    let content_key =
-        unwrap_master_key_for_file(verified_doc, member_id, kid, private_key, _debug)?;
+    let content_key = unwrap_master_key_for_file(verified_doc, member_id, kid, private_key, debug)?;
 
-    decrypt_file_payload(verified_doc, &content_key, _debug, "decrypt_file_document")
+    decrypt_file_payload(verified_doc, &content_key, debug, "decrypt_file_document")
 }

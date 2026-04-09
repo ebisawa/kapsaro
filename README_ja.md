@@ -99,6 +99,11 @@ secretenv run -- ./my-app
 - [Security Design (English)](guides/security_design_en.md)
 - [Security Design (Japanese)](guides/security_design_ja.md)
 
+Local Trust Store について知りたい場合:
+
+- [Local Trust Store の導入（日本語）](guides/trust_store_update_ja.md)
+- [Local Trust Store Update (English)](guides/trust_store_update_en.md)
+
 ## Status
 
 現在はアルファ段階です。仕様策定と実装を並行して進めています。

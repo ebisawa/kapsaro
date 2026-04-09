@@ -171,6 +171,7 @@ fn test_unset_with_name_option() {
         .arg("-n")
         .arg("myfile")
         .arg("REMOVE_KEY")
+        .arg("--force")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())

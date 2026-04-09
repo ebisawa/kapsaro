@@ -3,13 +3,13 @@
 
 //! Shared SSH signing context resolution for CLI commands.
 
-use crate::app::context::crypto::is_env_key_mode;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::{
     build_ssh_signing_context, resolve_ssh_context_by_active_key, resolve_ssh_key_candidates,
     ResolvedSshSigner,
 };
 use crate::cli::identity_prompt::select_ssh_key;
+use crate::feature::context::env_key::is_env_key_mode;
 use crate::Result;
 use tracing::debug;
 
@@ -17,7 +17,7 @@ use tracing::debug;
 /// Phase 1: Discover key candidates (via app layer)
 /// Phase 2: Select key (auto for 1, interactive for multiple, error for 0)
 /// Phase 3: Build signing context with determinism check (via app layer)
-pub fn resolve_ssh_context(options: &CommonCommandOptions) -> Result<ResolvedSshSigner> {
+pub(crate) fn resolve_ssh_context(options: &CommonCommandOptions) -> Result<ResolvedSshSigner> {
     let candidates = resolve_ssh_key_candidates(options)?;
     let selected = select_ssh_key(&candidates)?;
     build_ssh_signing_context(options, &candidates[selected].public_key, true)
@@ -25,7 +25,7 @@ pub fn resolve_ssh_context(options: &CommonCommandOptions) -> Result<ResolvedSsh
 
 /// Resolve SSH context using the active key's fingerprint.
 /// No interactive selection; auto-matches against ssh-agent candidates.
-pub fn resolve_ssh_context_for_active_key(
+pub(crate) fn resolve_ssh_context_for_active_key(
     options: &CommonCommandOptions,
     member_id: Option<String>,
 ) -> Result<ResolvedSshSigner> {
@@ -38,7 +38,7 @@ pub fn resolve_ssh_context_for_active_key(
 ///
 /// Returns `None` when `SECRETENV_PRIVATE_KEY` is set (CI mode),
 /// causing the app layer to use environment variable key loading.
-pub fn resolve_ssh_context_optional(
+pub(crate) fn resolve_ssh_context_optional(
     options: &CommonCommandOptions,
     member_id: Option<String>,
 ) -> Result<Option<ResolvedSshSigner>> {

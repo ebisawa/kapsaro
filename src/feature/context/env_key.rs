@@ -8,13 +8,14 @@
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use zeroize::Zeroizing;
 
 use crate::feature::context::crypto::validate_and_wrap_private_key_password;
 use crate::feature::key::protection::password_encryption::decrypt_private_key_with_password;
 use crate::format::schema::document::parse_private_key_bytes;
+use crate::model::identity::MemberId;
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
 use crate::model::verified::VerifiedPrivateKey;
+use crate::support::secret::{SecretBytes, SecretString};
 use crate::{Error, Result};
 
 const ENV_PRIVATE_KEY: &str = "SECRETENV_PRIVATE_KEY";
@@ -24,6 +25,8 @@ struct EnvKeyCleanupGuard;
 
 impl Drop for EnvKeyCleanupGuard {
     fn drop(&mut self) {
+        // TODO(edition-2024): wrap in unsafe {} with SAFETY comment:
+        // called from main thread only, no concurrent env access.
         std::env::remove_var(ENV_PRIVATE_KEY);
         std::env::remove_var(ENV_KEY_PASSWORD);
     }
@@ -38,7 +41,7 @@ pub fn is_env_key_mode() -> bool {
 #[derive(Debug)]
 pub struct EnvKeyLoadResult {
     pub verified_key: VerifiedPrivateKey,
-    pub member_id: String,
+    pub member_id: MemberId,
     pub expires_at: String,
 }
 
@@ -57,13 +60,13 @@ pub fn load_private_key_from_env(debug: bool) -> Result<EnvKeyLoadResult> {
     let _cleanup = EnvKeyCleanupGuard;
     let encoded = load_env_private_key()?;
     let password = load_env_key_password()?;
-    let json_bytes = decode_private_key_env(&encoded)?;
-    let private_key = parse_password_protected_private_key(&json_bytes)?;
-    build_env_key_load_result(&private_key, &password, debug)
+    let json_bytes = decode_private_key_env(encoded.as_str())?;
+    let private_key = parse_password_protected_private_key(json_bytes.as_bytes())?;
+    build_env_key_load_result(&private_key, password.as_str(), debug)
 }
 
-fn load_env_private_key() -> Result<Zeroizing<String>> {
-    Ok(Zeroizing::new(std::env::var(ENV_PRIVATE_KEY).map_err(
+fn load_env_private_key() -> Result<SecretString> {
+    Ok(SecretString::new(std::env::var(ENV_PRIVATE_KEY).map_err(
         |e| match e {
             std::env::VarError::NotPresent => Error::Config {
                 message: format!("{} environment variable is not set", ENV_PRIVATE_KEY),
@@ -78,8 +81,8 @@ fn load_env_private_key() -> Result<Zeroizing<String>> {
     )?))
 }
 
-fn load_env_key_password() -> Result<Zeroizing<String>> {
-    Ok(Zeroizing::new(std::env::var(ENV_KEY_PASSWORD).map_err(
+fn load_env_key_password() -> Result<SecretString> {
+    Ok(SecretString::new(std::env::var(ENV_KEY_PASSWORD).map_err(
         |e| match e {
             std::env::VarError::NotPresent => Error::Config {
                 message: format!(
@@ -97,8 +100,8 @@ fn load_env_key_password() -> Result<Zeroizing<String>> {
     )?))
 }
 
-fn decode_private_key_env(encoded: &str) -> Result<Zeroizing<Vec<u8>>> {
-    Ok(Zeroizing::new(URL_SAFE_NO_PAD.decode(encoded).map_err(
+fn decode_private_key_env(encoded: &str) -> Result<SecretBytes> {
+    Ok(SecretBytes::new(URL_SAFE_NO_PAD.decode(encoded).map_err(
         |e| Error::Parse {
             message: format!("Failed to decode {} as Base64url: {}", ENV_PRIVATE_KEY, e),
             source: Some(Box::new(e)),
@@ -132,7 +135,7 @@ fn build_env_key_load_result(
 
     Ok(EnvKeyLoadResult {
         verified_key,
-        member_id,
+        member_id: MemberId::try_from(member_id)?,
         expires_at,
     })
 }

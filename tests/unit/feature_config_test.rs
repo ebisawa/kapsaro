@@ -47,10 +47,10 @@ fn test_resolve_config_value_global() {
     set_config_value(&global_config_path, "member_id", "global@example.com").unwrap();
 
     // Resolve config value
-    let (value, scope) = resolve_config_value("member_id", Some(_temp_dir.path())).unwrap();
+    let resolution = resolve_config_value("member_id", Some(_temp_dir.path())).unwrap();
 
-    assert_eq!(value, Some("global@example.com".to_string()));
-    assert_eq!(scope, Some("global".to_string()));
+    assert_eq!(resolution.value, Some("global@example.com".to_string()));
+    assert_eq!(resolution.scope, Some("global".to_string()));
 }
 
 #[test]
@@ -58,13 +58,13 @@ fn test_get_config_path_and_scope_global() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
     let _temp_dir = TempDir::new().unwrap();
     std::env::set_var("SECRETENV_HOME", _temp_dir.path().to_str().unwrap());
-    let (path, scope) = get_config_path_and_scope(Some(_temp_dir.path())).unwrap();
+    let resolution = get_config_path_and_scope(Some(_temp_dir.path())).unwrap();
 
-    match scope {
+    match resolution.scope {
         ConfigScope::Global => {}
     }
     // Path should be global config path
-    assert!(path.to_string_lossy().contains("config.toml"));
+    assert!(resolution.path.to_string_lossy().contains("config.toml"));
 }
 
 #[test]

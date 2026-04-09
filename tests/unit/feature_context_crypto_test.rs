@@ -5,12 +5,11 @@
 //!
 //! Tests for common decryption helpers and member key context.
 
-use crate::cli_common::ALICE_MEMBER_ID;
-use crate::keygen_helpers::make_verified_members;
+use crate::app::context::crypto::load_crypto_context;
+use crate::test_utils::keygen_helpers::make_verified_members;
 use crate::test_utils::{
     load_fixture_ssh_pubkey, setup_member_key_context, setup_test_keystore_from_fixtures,
 };
-use secretenv::app::context::crypto::load_crypto_context;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -24,6 +23,8 @@ use secretenv::format::token::TokenCodec;
 use secretenv::io::keystore::storage::{list_kids, load_public_key, save_key_pair_atomic};
 use secretenv::model::public_key::PublicKey;
 use std::fs;
+
+const ALICE_MEMBER_ID: &str = "alice@example.com";
 
 #[test]
 fn test_parse_verify_decrypt_kv() {
@@ -41,13 +42,11 @@ fn test_parse_verify_decrypt_kv() {
 
     // Create kv-enc content using signing key from CryptoContext
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
     let members = vec![public_key.clone()];
     let verified_members = make_verified_members(&members);
 
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -61,8 +60,7 @@ fn test_parse_verify_decrypt_kv() {
 
     // Verify and decrypt
     let doc = parse_kv_document(&encrypted).unwrap();
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_doc = verify_kv_document(&doc, Some(&workspace_path), false).unwrap();
+    let verified_doc = verify_kv_document(&doc, false).unwrap();
     let decrypted = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_ID,
@@ -121,8 +119,7 @@ fn test_parse_verify_decrypt_file() {
     // Verify and decrypt
     let doc: secretenv::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_doc = verify_file_document(&doc, Some(&workspace_path), false).unwrap();
+    let verified_doc = verify_file_document(&doc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified_doc,
         ALICE_MEMBER_ID,

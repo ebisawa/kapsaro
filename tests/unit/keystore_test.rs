@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_common::TEST_MEMBER_ID;
 use crate::test_utils::save_public_key;
+use crate::test_utils::TEST_MEMBER_ID;
 use secretenv::io::keystore::storage::*;
 use secretenv::model::private_key::{
     EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyProtected,
@@ -11,6 +11,8 @@ use secretenv::model::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -19,6 +21,8 @@ const TEST_KID_2: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
 #[test]
 fn test_save_and_load_private_key() {
     let temp_dir = TempDir::new().unwrap();
+    #[cfg(unix)]
+    fs::set_permissions(temp_dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let keystore_root = temp_dir.path();
 
     let member_id = TEST_MEMBER_ID;
@@ -93,6 +97,8 @@ fn test_save_and_load_private_key() {
 #[test]
 fn test_save_and_load_public_key() {
     let temp_dir = TempDir::new().unwrap();
+    #[cfg(unix)]
+    fs::set_permissions(temp_dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let keystore_root = temp_dir.path();
 
     let member_id = TEST_MEMBER_ID;

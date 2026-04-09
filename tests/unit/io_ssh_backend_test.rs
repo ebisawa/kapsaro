@@ -83,8 +83,11 @@ fn test_backend_factory_ssh_agent() {
     let backend = build_backend(
         SshSigner::SshAgent,
         stub_ssh_keygen(),
-        SshKeyDescriptor::from_path(std::path::PathBuf::from("/dummy")),
-    );
+        Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
+            "/dummy",
+        ))),
+    )
+    .unwrap();
     // Type check - should be SshAgentBackend
     // (We can't directly check type, but we can test behavior)
     // For now, just verify it creates successfully
@@ -96,8 +99,11 @@ fn test_backend_factory_ssh_keygen() {
     let backend = build_backend(
         SshSigner::SshKeygen,
         stub_ssh_keygen(),
-        SshKeyDescriptor::from_path(std::path::PathBuf::from("/home/user/.ssh/id_ed25519")),
-    );
+        Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
+            "/home/user/.ssh/id_ed25519",
+        ))),
+    )
+    .unwrap();
     // Should create SshKeygenBackend with correct path
     assert!(std::mem::size_of_val(&backend) > 0);
 }
@@ -255,8 +261,11 @@ fn test_determinism_check_with_real_backend_type() {
     let backend = build_backend(
         SshSigner::SshAgent,
         stub_ssh_keygen(),
-        SshKeyDescriptor::from_path(std::path::PathBuf::from("/dummy")),
-    );
+        Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
+            "/dummy",
+        ))),
+    )
+    .unwrap();
 
     // This will fail (no agent available in test), but we're testing the API
     let result = backend.check_determinism("fake-key", b"test");

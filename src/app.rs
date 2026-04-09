@@ -3,15 +3,15 @@
 
 //! Application-layer orchestration helpers.
 
-pub mod config;
-pub mod context;
-pub mod errors;
-pub mod file;
-pub mod identity;
-pub mod key;
-pub mod kv;
-pub mod member;
-pub mod registration;
-pub mod rewrap;
-pub mod run;
-pub mod verification;
+pub(crate) mod config;
+pub(crate) mod context;
+pub(crate) mod errors;
+pub(crate) mod file;
+pub(crate) mod key;
+pub(crate) mod kv;
+pub(crate) mod member;
+pub(crate) mod registration;
+pub(crate) mod rewrap;
+pub(crate) mod run;
+pub(crate) mod trust;
+pub(crate) mod verification;

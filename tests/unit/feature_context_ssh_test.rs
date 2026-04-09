@@ -3,10 +3,10 @@
 
 //! Unit tests for SSH signing context resolution.
 
-use crate::test_utils::{setup_test_keystore, stub_ssh_keygen};
-use secretenv::app::context::ssh::{
+use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
+use crate::test_utils::{setup_test_keystore, stub_ssh_keygen};
 use secretenv::config::types::SshSigner;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;

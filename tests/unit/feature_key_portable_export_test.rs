@@ -55,19 +55,24 @@ fn test_export_produces_valid_base64url() {
     .expect("export should succeed");
 
     // No padding characters
-    assert!(!result.contains('='), "should not contain padding");
+    assert!(!result.as_str().contains('='), "should not contain padding");
     // No standard base64 characters
-    assert!(!result.contains('+'), "should not contain '+'");
-    assert!(!result.contains('/'), "should not contain '/'");
+    assert!(!result.as_str().contains('+'), "should not contain '+'");
+    assert!(!result.as_str().contains('/'), "should not contain '/'");
     // Only valid base64url characters
     assert!(
         result
+            .as_str()
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
         "should only contain base64url characters"
     );
     // Should be non-empty
-    assert!(!result.is_empty(), "should not be empty");
+    assert!(!result.as_str().is_empty(), "should not be empty");
+
+    let debug = format!("{result:?}");
+    assert!(debug.contains("REDACTED"), "got: {debug}");
+    assert!(!debug.contains(result.as_str()), "got: {debug}");
 }
 
 #[test]
@@ -88,7 +93,7 @@ fn test_export_roundtrip() {
 
     // Decode base64url
     let json_bytes = URL_SAFE_NO_PAD
-        .decode(&exported)
+        .decode(exported.as_str())
         .expect("should be valid base64url");
 
     // Deserialize to PrivateKey
@@ -122,7 +127,7 @@ fn test_export_preserves_metadata() {
     .expect("export should succeed");
 
     let json_bytes = URL_SAFE_NO_PAD
-        .decode(&exported)
+        .decode(exported.as_str())
         .expect("should be valid base64url");
     let private_key: PrivateKey =
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");
@@ -149,7 +154,7 @@ fn test_export_uses_argon2id_kdf() {
     .expect("export should succeed");
 
     let json_bytes = URL_SAFE_NO_PAD
-        .decode(&exported)
+        .decode(exported.as_str())
         .expect("should be valid base64url");
     let private_key: PrivateKey =
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");

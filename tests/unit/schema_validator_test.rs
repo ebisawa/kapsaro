@@ -16,6 +16,19 @@ fn test_validator_creation() {
 }
 
 #[test]
+fn test_load_trust_schema_with_aligned_filename() {
+    let schema = Validator::load_schema_from_paths("secretenv_trust_local_schema.json")
+        .expect("Trust schema should be loadable with the aligned filename");
+    assert!(
+        schema
+            .get("$id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|id| id == "secretenv.trust.local.schema.v2.json"),
+        "Trust schema should expose the aligned schema id"
+    );
+}
+
+#[test]
 fn test_validate_public_key_basic() {
     let validator = Validator::new().unwrap();
     // v3 schema requires: protected (format, member_id, kid, identity, attestation, expires_at), signature

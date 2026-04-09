@@ -49,9 +49,9 @@ fn test_inspect_file_enc_shows_metadata() {
         .success()
         .stdout(predicate::str::contains("File-Enc v3 Metadata"))
         .stdout(predicate::str::contains("Format:"))
-        .stdout(predicate::str::contains("Secret ID:"))
+        .stdout(predicate::str::contains("SID:"))
         .stdout(predicate::str::contains("Recipients"))
-        .stdout(predicate::str::contains("[Signature]"));
+        .stdout(predicate::str::contains("Signature"));
 
     // Even when signature verification information is unavailable/failed,
     // embedded attestation metadata should still be inspectable.
@@ -64,7 +64,7 @@ fn test_inspect_file_enc_shows_metadata() {
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Attestation Method:"));
+        .stdout(predicate::str::contains("Attestation:"));
 }
 
 #[test]
@@ -99,8 +99,8 @@ fn test_inspect_kv_enc_shows_metadata() {
         .assert()
         .success()
         .stdout(predicate::str::contains("KV-Enc v3 Metadata"))
-        .stdout(predicate::str::contains("HEAD Data"))
-        .stdout(predicate::str::contains("WRAP Data"))
+        .stdout(predicate::str::contains("Header"))
+        .stdout(predicate::str::contains("Wrap Data"))
         .stdout(predicate::str::contains("Entries"))
         .stdout(predicate::str::contains("Signature"));
 
@@ -113,7 +113,7 @@ fn test_inspect_kv_enc_shows_metadata() {
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Attestation Method:"));
+        .stdout(predicate::str::contains("Attestation:"));
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn test_inspect_shows_signature_verification() {
         .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[Signature Verification]"))
+        .stdout(predicate::str::contains("Signature Verification"))
         .stdout(predicate::str::contains("Status:"));
 }
 
@@ -217,4 +217,76 @@ fn test_inspect_kv_shows_entry_count() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Total Entries: 1"));
+}
+
+#[test]
+fn test_inspect_succeeds_without_workspace_or_private_key() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    let input_file = home_dir.path().join("no_private_key.txt");
+    fs::write(&input_file, b"inspect without private key").unwrap();
+
+    let encrypted_file = home_dir.path().join("no_private_key.txt.encrypted");
+    cmd()
+        .arg("encrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--out")
+        .arg(encrypted_file.to_str().unwrap())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("inspect")
+        .arg(encrypted_file.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("Status:"));
+}
+
+#[test]
+fn test_inspect_ignores_trust_store_and_strict_key_checking() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    let input_file = home_dir.path().join("ignore_trust.txt");
+    fs::write(&input_file, b"inspect ignores trust store").unwrap();
+
+    let encrypted_file = home_dir.path().join("ignore_trust.txt.encrypted");
+    cmd()
+        .arg("encrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--out")
+        .arg(encrypted_file.to_str().unwrap())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let trust_dir = home_dir.path().join("trust");
+    fs::create_dir_all(&trust_dir).unwrap();
+    fs::write(
+        trust_dir.join(format!("{}.json", TEST_MEMBER_ID)),
+        "{ this is not valid trust store json",
+    )
+    .unwrap();
+
+    cmd()
+        .arg("inspect")
+        .arg(encrypted_file.to_str().unwrap())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("Status:"));
 }

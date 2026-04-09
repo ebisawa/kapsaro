@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::io::github_account::resolve_github_account_by_login;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;
-use crate::io::verify_online::github::resolve_github_id_by_username;
 use crate::io::verify_online::VerificationStatus;
 use crate::model::public_key::GithubAccount;
 use crate::support::runtime::block_on_result;
@@ -16,8 +16,8 @@ pub(crate) fn resolve_github_account(
         return Ok(None);
     };
 
-    let (id, login) = block_on_result(resolve_github_id_by_username(&login, verbose))?;
-    Ok(Some(GithubAccount { id, login }))
+    let account = block_on_result(resolve_github_account_by_login(&login, verbose))?;
+    Ok(Some(account))
 }
 
 /// Verify SSH public key is registered on GitHub before key generation.

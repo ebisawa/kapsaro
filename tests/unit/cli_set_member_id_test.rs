@@ -17,3 +17,20 @@ fn test_cli_set_parses_member_id_option() {
         _ => panic!("expected set command"),
     }
 }
+
+#[test]
+fn test_cli_member_verify_parses_member_id_option() {
+    let cli = Cli::try_parse_from([
+        "secretenv",
+        "member",
+        "verify",
+        "--member-id",
+        "alice@example.com",
+        "bob@example.com",
+    ]);
+
+    assert!(cli.is_ok());
+
+    let cli = cli.unwrap();
+    assert!(matches!(cli.command, Commands::Member(_)));
+}

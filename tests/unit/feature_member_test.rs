@@ -5,8 +5,8 @@
 //!
 //! Tests for member management use cases.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::test_utils::setup_test_workspace;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::member::verification::verify_member;
 use secretenv::io::workspace::members::{
     delete_member, load_active_member_files, load_member_file,
@@ -86,6 +86,45 @@ async fn test_verify_member_all() {
 
     let result = verify_member(&workspace_dir, &[], false).await;
 
-    // The result may be Ok or Err depending on network/GitHub API availability
-    let _ = result;
+    assert_eq!(result.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn test_verify_member_all_excludes_incoming() {
+    let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let alice_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    let alice_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    std::fs::rename(&alice_active, &alice_incoming).unwrap();
+
+    let result = verify_member(&workspace_dir, &[], false).await;
+
+    assert!(result.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_verify_member_explicit_incoming_fails() {
+    let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let alice_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    let alice_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    std::fs::rename(&alice_active, &alice_incoming).unwrap();
+
+    let result = verify_member(&workspace_dir, &[ALICE_MEMBER_ID.to_string()], false).await;
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("not found in active/"));
 }

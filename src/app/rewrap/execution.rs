@@ -2,46 +2,90 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::execution::ExecutionContext;
-use crate::app::context::ssh::ResolvedSshSigner;
-use crate::app::member::mutation::promote_members;
+use crate::app::context::review::{
+    ensure_public_key_snapshot_matches, ensure_text_file_matches_snapshot,
+};
+use crate::app::trust::approval::{commit_known_key_approvals, ApprovedKnownKey};
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
-use crate::feature::rewrap::file::rewrap_file_document;
-use crate::feature::rewrap::kv::rewrap_kv_document;
-use crate::feature::rewrap::RewrapOptions;
-use crate::format::content::{EncryptedContent, FileEncContent, KvEncContent};
-use crate::format::token::TokenCodec;
-use crate::support::fs::{atomic, load_text, lock};
+use crate::feature::rewrap::{rewrap_content as rewrap_feature_content, RewrapRequest};
+use crate::feature::verify::public_key::verify_recipient_public_keys;
+use crate::format::content::EncryptedContent;
+use crate::io::workspace::members::{
+    load_active_member_files, promote_snapshotted_incoming_members, IncomingMemberPromotionSnapshot,
+};
+use crate::support::fs::{atomic, lock};
 use crate::Result;
 use std::path::Path;
 
 use super::types::{
-    RewrapBatchOutcome, RewrapBatchPlan, RewrapBatchRequest, RewrapFileFailure, RewrapFileSuccess,
-    SingleRewrapRequest,
+    RewrapArtifactSnapshot, RewrapBatchOutcome, RewrapBatchPlan, RewrapBatchRequest,
+    RewrapFileFailure, RewrapFileSuccess, VerifiedPostPromotionRecipients,
 };
 
-/// Execute a batch rewrap over already planned files.
-pub fn execute_rewrap_batch(
+pub(crate) fn apply_rewrap_promotions(
+    workspace_root: &Path,
+    accepted_promotions: &[crate::app::rewrap::types::IncomingPromotionCandidate],
+) -> Result<Vec<String>> {
+    if accepted_promotions.is_empty() {
+        return Ok(Vec::new());
+    }
+    let snapshots = accepted_promotions
+        .iter()
+        .map(|candidate| IncomingMemberPromotionSnapshot {
+            member_id: candidate.review.member_id.clone(),
+            kid: candidate.review.kid.clone(),
+            source_path: candidate.source_path.clone(),
+            source_content: candidate.source_content.clone(),
+        })
+        .collect::<Vec<_>>();
+    promote_snapshotted_incoming_members(workspace_root, &snapshots)
+}
+
+pub(crate) fn execute_confirmed_rewrap_batch(
     request: &RewrapBatchRequest,
     plan: &RewrapBatchPlan,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    expected_post_promotion_members: &[crate::model::public_key::PublicKey],
+    execution: ExecutionContext,
+    approvals: &[ApprovedKnownKey],
 ) -> Result<RewrapBatchOutcome> {
-    if !request.accepted_promotions.is_empty() {
-        promote_members(&plan.workspace_root, &request.accepted_promotions)?;
-    }
+    let promoted_member_ids =
+        apply_rewrap_promotions(&plan.workspace_root, &request.accepted_promotions)?;
+    let actual_post_promotion_members = load_verified_post_promotion_members(
+        &plan.workspace_root,
+        expected_post_promotion_members,
+    )?;
+    // Persist approvals before execution: the user's review decision is
+    // durable regardless of whether individual artifacts succeed or fail.
+    let approval_warnings = if approvals.is_empty() {
+        Vec::new()
+    } else {
+        commit_known_key_approvals(&request.options, &execution, approvals)?.warnings
+    };
+    let mut outcome =
+        execute_rewrap_batch(request, plan, execution, &actual_post_promotion_members)?;
+    outcome.promoted_member_ids = promoted_member_ids;
+    outcome.warnings = approval_warnings;
+    Ok(outcome)
+}
 
-    let execution =
-        ExecutionContext::resolve(&request.options, request.member_id.clone(), None, ssh_ctx)?;
+/// Execute a batch rewrap over already planned files.
+pub(crate) fn execute_rewrap_batch(
+    request: &RewrapBatchRequest,
+    plan: &RewrapBatchPlan,
+    execution: ExecutionContext,
+    post_promotion_members: &VerifiedPostPromotionRecipients,
+) -> Result<RewrapBatchOutcome> {
     enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
     let mut processed_files = Vec::new();
     let mut failed_files = Vec::new();
 
-    for file_path in &plan.file_paths {
-        match process_rewrap_file(file_path, plan, &execution, request) {
+    for snapshot in &plan.artifact_snapshots {
+        match process_rewrap_file(snapshot, plan, &execution, request, post_promotion_members) {
             Ok(()) => processed_files.push(RewrapFileSuccess {
-                output_path: file_path.clone(),
+                output_path: snapshot.file_path.clone(),
             }),
             Err(error) => failed_files.push(RewrapFileFailure {
-                output_path: file_path.clone(),
+                output_path: snapshot.file_path.clone(),
                 error_message: error.user_message().to_string(),
             }),
         }
@@ -50,101 +94,62 @@ pub fn execute_rewrap_batch(
     Ok(RewrapBatchOutcome {
         processed_files,
         failed_files,
+        promoted_member_ids: Vec::new(),
+        warnings: Vec::new(),
     })
+}
+
+fn load_verified_post_promotion_members(
+    workspace_root: &Path,
+    expected: &[crate::model::public_key::PublicKey],
+) -> Result<VerifiedPostPromotionRecipients> {
+    let actual = load_active_member_files(workspace_root)?;
+    ensure_post_promotion_members_match(expected, &actual)?;
+    let verified_members = verify_recipient_public_keys(&actual, false)?;
+    Ok(VerifiedPostPromotionRecipients::new(verified_members))
+}
+
+fn ensure_post_promotion_members_match(
+    expected: &[crate::model::public_key::PublicKey],
+    actual: &[crate::model::public_key::PublicKey],
+) -> Result<()> {
+    ensure_public_key_snapshot_matches(
+        expected,
+        actual,
+        "Rewrap post-promotion active members changed and must be reviewed again.",
+    )
 }
 
 fn process_rewrap_file(
-    file_path: &Path,
+    snapshot: &RewrapArtifactSnapshot,
     plan: &RewrapBatchPlan,
     execution: &ExecutionContext,
     request: &RewrapBatchRequest,
+    post_promotion_members: &VerifiedPostPromotionRecipients,
 ) -> Result<()> {
-    let file_path_buf = file_path.to_path_buf();
+    let file_path_buf = snapshot.file_path.clone();
     lock::with_file_lock(&file_path_buf, || {
-        let content = load_text(file_path)?;
-        let rewritten = match EncryptedContent::detect(content)? {
-            EncryptedContent::FileEnc(file_content) => {
-                rewrap_file_content(&file_content, plan, execution, request)?
-            }
-            EncryptedContent::KvEnc(kv_content) => {
-                rewrap_kv_content(&kv_content, plan, execution, request)?
-            }
+        ensure_rewrap_artifact_matches_snapshot(snapshot)?;
+        let content = EncryptedContent::detect(snapshot.content.clone())?;
+        let rewrap_request = RewrapRequest {
+            member_id: &execution.member_id,
+            key_ctx: &execution.key_ctx,
+            workspace_root: Some(plan.workspace_root.as_path()),
+            target_members: Some(post_promotion_members.verified_members()),
+            rotate_key: request.rotate_key,
+            clear_disclosure_history: request.clear_disclosure_history,
+            debug: request.options.verbose,
         };
+        let rewritten = rewrap_feature_content(&content, &rewrap_request)?;
 
-        atomic::save_text(file_path, &rewritten)
+        atomic::save_text(&snapshot.file_path, &rewritten)
     })
 }
 
-fn rewrap_file_content(
-    content: &FileEncContent,
-    plan: &RewrapBatchPlan,
-    execution: &ExecutionContext,
-    request: &RewrapBatchRequest,
-) -> Result<String> {
-    let request = SingleRewrapRequest {
-        member_id: &execution.member_id,
-        key_ctx: &execution.key_ctx,
-        workspace_root: Some(plan.workspace_root.as_path()),
-        rotate_key: request.rotate_key,
-        clear_disclosure_history: request.clear_disclosure_history,
-        debug: request.options.verbose,
-    };
-    rewrap_file_content_with_request(content, &request)
+fn ensure_rewrap_artifact_matches_snapshot(snapshot: &RewrapArtifactSnapshot) -> Result<()> {
+    ensure_text_file_matches_snapshot(&snapshot.file_path, Some(&snapshot.content), "Rewrap input")
 }
 
-fn rewrap_kv_content(
-    content: &KvEncContent,
-    plan: &RewrapBatchPlan,
-    execution: &ExecutionContext,
-    request: &RewrapBatchRequest,
-) -> Result<String> {
-    let request = SingleRewrapRequest {
-        member_id: &execution.member_id,
-        key_ctx: &execution.key_ctx,
-        workspace_root: Some(plan.workspace_root.as_path()),
-        rotate_key: request.rotate_key,
-        clear_disclosure_history: request.clear_disclosure_history,
-        debug: request.options.verbose,
-    };
-    rewrap_kv_content_with_request(content, &request)
-}
-
-pub fn rewrap_file_content_with_request(
-    content: &FileEncContent,
-    request: &SingleRewrapRequest<'_>,
-) -> Result<String> {
-    let options = build_single_rewrap_options(request, None);
-    rewrap_file_document(
-        &options,
-        content,
-        request.member_id,
-        request.key_ctx,
-        request.workspace_root,
-    )
-}
-
-pub fn rewrap_kv_content_with_request(
-    content: &KvEncContent,
-    request: &SingleRewrapRequest<'_>,
-) -> Result<String> {
-    let options = build_single_rewrap_options(request, Some(TokenCodec::JsonJcs));
-    rewrap_kv_document(
-        &options,
-        content,
-        request.member_id,
-        request.key_ctx,
-        request.workspace_root,
-    )
-}
-
-fn build_single_rewrap_options(
-    request: &SingleRewrapRequest<'_>,
-    token_codec: Option<TokenCodec>,
-) -> RewrapOptions {
-    RewrapOptions {
-        rotate_key: request.rotate_key,
-        clear_disclosure_history: request.clear_disclosure_history,
-        token_codec,
-        debug: request.debug,
-    }
-}
+#[cfg(test)]
+#[path = "../../../tests/unit/app_rewrap_execution_test.rs"]
+mod tests;

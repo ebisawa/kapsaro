@@ -3,10 +3,32 @@
 
 use super::build_member_show_lines;
 use crate::cli::common::output::member::{view::MemberGithubClaimView, MemberShowView};
+use console::{colors_enabled, set_colors_enabled};
 use serde_json::json;
+use serial_test::serial;
+
+struct StdoutColorGuard {
+    enabled: bool,
+}
+
+impl StdoutColorGuard {
+    fn new(enabled: bool) -> Self {
+        let previous = colors_enabled();
+        set_colors_enabled(enabled);
+        Self { enabled: previous }
+    }
+}
+
+impl Drop for StdoutColorGuard {
+    fn drop(&mut self) {
+        set_colors_enabled(self.enabled);
+    }
+}
 
 #[test]
+#[serial]
 fn test_build_member_show_lines_renders_header_and_status_section() {
+    let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
     let rendered = build_member_show_lines(&view).join("\n");
@@ -21,7 +43,9 @@ fn test_build_member_show_lines_renders_header_and_status_section() {
 }
 
 #[test]
+#[serial]
 fn test_build_member_show_lines_renders_key_section_with_kid_in_title() {
+    let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
     let rendered = build_member_show_lines(&view).join("\n");
@@ -36,7 +60,9 @@ fn test_build_member_show_lines_renders_key_section_with_kid_in_title() {
 }
 
 #[test]
+#[serial]
 fn test_build_member_show_lines_renders_ssh_attestation_fingerprint_only() {
+    let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
     let rendered = build_member_show_lines(&view).join("\n");
@@ -49,7 +75,9 @@ fn test_build_member_show_lines_renders_ssh_attestation_fingerprint_only() {
 }
 
 #[test]
+#[serial]
 fn test_build_member_show_lines_omits_github_binding_when_absent() {
+    let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
     let rendered = build_member_show_lines(&view).join("\n");
@@ -58,7 +86,9 @@ fn test_build_member_show_lines_omits_github_binding_when_absent() {
 }
 
 #[test]
+#[serial]
 fn test_build_member_show_lines_includes_github_binding_section() {
+    let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(Some(MemberGithubClaimView {
         id: 42,
         login: "octocat",

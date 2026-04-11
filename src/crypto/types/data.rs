@@ -186,7 +186,13 @@ impl From<&str> for Info {
 /// Input Keying Material (IKM) for HKDF
 ///
 /// This is wrapped in Zeroizing for secure memory clearing.
-#[derive(Clone)]
+///
+/// ```compile_fail
+/// use secretenv::crypto::types::data::Ikm;
+///
+/// let ikm = Ikm::from(b"secret" as &[u8]);
+/// let _copy = ikm.clone();
+/// ```
 pub struct Ikm(Zeroizing<Vec<u8>>);
 
 impl Ikm {

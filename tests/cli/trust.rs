@@ -4,7 +4,6 @@
 //! Integration tests for trust commands.
 
 use std::collections::BTreeMap;
-#[cfg(unix)]
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -55,6 +54,28 @@ fn save_signed_trust_store(home: &TempDir) {
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
     let path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     save_trust_store(&path, &document).unwrap();
+}
+
+fn install_secondary_member_fixture(home: &TempDir, member_id: &str) {
+    let secondary_home = setup_test_keystore_from_fixtures(member_id);
+    let source = secondary_home.path().join("keys").join(member_id);
+    let destination = home.path().join("keys").join(member_id);
+    copy_dir_all(&source, &destination);
+}
+
+fn copy_dir_all(source: &std::path::Path, destination: &std::path::Path) {
+    fs::create_dir_all(destination).unwrap();
+    for entry in fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let file_type = entry.file_type().unwrap();
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_all(&source_path, &destination_path);
+        } else {
+            fs::copy(&source_path, &destination_path).unwrap();
+        }
+    }
 }
 
 #[test]
@@ -192,6 +213,46 @@ fn test_trust_remove_colors_warning_when_forced() {
     );
 }
 
+#[test]
+fn test_trust_remove_requires_member_id_when_keystore_is_ambiguous() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    install_secondary_member_fixture(&home, BOB_MEMBER_ID);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("remove")
+        .arg(KID_BOB)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("member_id not configured"));
+}
+
+#[test]
+fn test_trust_remove_accepts_member_id_when_keystore_is_ambiguous() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    install_secondary_member_fixture(&home, BOB_MEMBER_ID);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("remove")
+        .arg(KID_BOB)
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Removed kid"));
+}
+
 #[cfg(unix)]
 #[test]
 fn test_trust_remove_old_identity_option_fails() {
@@ -264,6 +325,29 @@ fn test_trust_purge_with_force() {
         .assert()
         .success()
         .stderr(predicate::str::contains("No known keys in trust store"));
+}
+
+#[test]
+fn test_trust_purge_accepts_member_id_when_keystore_is_ambiguous() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    install_secondary_member_fixture(&home, BOB_MEMBER_ID);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("purge")
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .arg("--older-than")
+        .arg("1d")
+        .arg("--force")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Purged 2 entry(ies)"));
 }
 
 #[test]

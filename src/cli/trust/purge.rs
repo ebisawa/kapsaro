@@ -22,10 +22,11 @@ use super::PurgeArgs;
 pub(crate) fn run(args: PurgeArgs) -> Result<(), Error> {
     let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
     let options = resolve_options(&args.common);
-    let (_, execution) = resolve_execution_input(&args.common, None)?;
+    let member_id = args.member_id.clone();
+    let (_, execution) = resolve_execution_input(&args.common, member_id.clone())?;
     let candidates = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, None),
+        || resolve_trust_store_owner_member(&options, member_id.clone()),
         || list_purge_candidates(&options, &execution.member_id, older_than_timestamp),
     )?;
     let mut shown_warnings = BTreeSet::new();
@@ -47,7 +48,7 @@ pub(crate) fn run(args: PurgeArgs) -> Result<(), Error> {
 
     let result = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, None),
+        || resolve_trust_store_owner_member(&options, member_id.clone()),
         || execute_purge(&options, &execution, older_than_timestamp, options.verbose),
     )?;
     print_trust_purge_outcome(&result, &mut shown_warnings);

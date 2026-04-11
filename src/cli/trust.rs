@@ -48,6 +48,10 @@ pub struct RemoveArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
+    /// Member ID (owner of the trust store to update)
+    #[arg(long, short = 'm')]
+    pub member_id: Option<String>,
+
     /// Key ID to remove
     pub kid: String,
 }
@@ -57,6 +61,10 @@ pub struct PurgeArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: CommonOptions,
+
+    /// Member ID (owner of the trust store to update)
+    #[arg(long, short = 'm')]
+    pub member_id: Option<String>,
 
     /// Remove entries older than this duration (e.g. "180d")
     #[arg(long)]

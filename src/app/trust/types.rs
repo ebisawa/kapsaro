@@ -3,6 +3,12 @@
 
 //! Shared types for trust-store mutations.
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemovedKnownKey {
+    pub member_id: String,
+    pub kid: String,
+}
+
 #[derive(Debug)]
 pub struct TrustMutationResult<T> {
     pub value: T,

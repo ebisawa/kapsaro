@@ -9,7 +9,7 @@ use crate::app::trust::store::{
     load_optional_trust_store_for_member, mutate_trust_store_with_execution, TrustStoreMutation,
     TrustStoreMutationMode,
 };
-use crate::app::trust::types::TrustMutationResult;
+use crate::app::trust::types::{RemovedKnownKey, TrustMutationResult};
 use crate::feature::trust::known_keys::{purge_known_keys, remove_known_key};
 use crate::{Error, Result};
 use time::format_description::well_known::Rfc3339;
@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 
 use super::list::{TrustListItem, TrustListResult};
 
-pub(crate) type RemoveKnownKeyResult = TrustMutationResult<String>;
+pub(crate) type RemoveKnownKeyResult = TrustMutationResult<RemovedKnownKey>;
 pub(crate) type PurgeKnownKeysResult = TrustMutationResult<usize>;
 
 /// Remove a known key by kid and re-sign the trust store.
@@ -35,7 +35,10 @@ pub(crate) fn remove_known_key_command(
         |protected| {
             let removed = remove_known_key(&mut protected.known_keys, kid)?;
             Ok(TrustStoreMutation {
-                value: removed.member_id,
+                value: RemovedKnownKey {
+                    member_id: removed.member_id,
+                    kid: removed.kid,
+                },
                 changed: true,
             })
         },

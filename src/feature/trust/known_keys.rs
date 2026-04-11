@@ -5,6 +5,7 @@
 
 use crate::model::identity::{Kid, MemberId};
 use crate::model::trust_store::KnownKey;
+use crate::support::kid::resolve_unique_kid;
 use crate::{Error, Result};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -120,9 +121,10 @@ pub fn add_known_key(keys: &mut Vec<KnownKey>, new_key: KnownKey) -> Result<bool
 
 /// Remove a known key by kid. Returns the removed entry or error if not found.
 pub fn remove_known_key(keys: &mut Vec<KnownKey>, kid: &str) -> Result<KnownKey> {
+    let resolved_kid = resolve_unique_kid(keys.iter().map(|key| key.kid.as_str()), kid)?;
     let pos = keys
         .iter()
-        .position(|k| k.kid == kid)
+        .position(|k| k.kid == resolved_kid)
         .ok_or_else(|| Error::NotFound {
             message: format!("kid '{}' not found in known_keys", kid),
         })?;

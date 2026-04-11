@@ -11,6 +11,7 @@ use predicates::prelude::*;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::PrivateKey;
 use secretenv::model::public_key::PublicKey;
+use secretenv::support::kid::build_kid_display;
 use std::fs;
 use tempfile::TempDir;
 
@@ -123,6 +124,47 @@ fn test_key_export_active() {
     );
 
     // Keep temp directories alive
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_accepts_display_kid() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let member_id = TEST_MEMBER_ID;
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-id")
+        .arg(member_id)
+        .arg("-i")
+        .arg(ssh_priv.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+
+    let keystore_root = temp_dir.path().join("keys");
+    let member_dir = keystore_root.join(member_id);
+    let kid = find_kid_in_member_dir(&member_dir);
+    let export_file = temp_dir.path().join("display-exported.json");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg(build_kid_display(&kid).unwrap())
+        .arg("--member-id")
+        .arg(member_id)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+
+    let exported_json = fs::read_to_string(&export_file).unwrap();
+    let exported: PublicKey = serde_json::from_str(&exported_json).unwrap();
+    assert_eq!(exported.protected.kid, kid);
+
     drop(ssh_temp);
 }
 

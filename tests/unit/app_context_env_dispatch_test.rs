@@ -208,3 +208,19 @@ fn test_resolve_key_owner_uses_kid_lookup_when_member_id_missing() {
 
     assert_eq!(resolved, "alice@example.com");
 }
+
+#[test]
+fn test_resolve_key_owner_uses_kid_prefix_lookup_when_member_id_missing() {
+    let home = setup_test_keystore("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let key_ctx = secretenv::io::keystore::active::load_active_kid(
+        "alice@example.com",
+        &home.path().join("keys"),
+    )
+    .unwrap()
+    .unwrap();
+
+    let resolved = resolve_key_owner(&options, None, &key_ctx[..4]).unwrap();
+
+    assert_eq!(resolved, "alice@example.com");
+}

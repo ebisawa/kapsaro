@@ -26,6 +26,6 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
         },
     )?;
     text::print_warnings(&result.warnings);
-    print_trust_remove_summary(&args.kid, &result.value);
+    print_trust_remove_summary(&result.value.kid, &result.value.member_id);
     Ok(())
 }

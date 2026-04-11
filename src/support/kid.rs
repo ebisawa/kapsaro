@@ -10,28 +10,74 @@ const DISPLAY_GROUP_SIZE: usize = 4;
 
 /// Normalize user-provided `kid` input to canonical serialized form.
 pub fn normalize_kid(input: &str) -> Result<String> {
+    let canonical = normalize_kid_query(input)?;
+    if canonical.len() != KID_LENGTH {
+        return Err(Error::invalid_argument(format!(
+            "kid must be {KID_LENGTH} Crockford Base32 characters after normalization"
+        )));
+    }
+    Ok(canonical)
+}
+
+/// Normalize a CLI `kid` query.
+///
+/// Accepts canonical `kid`, dashed display form, and any non-empty prefix.
+pub fn normalize_kid_query(input: &str) -> Result<String> {
     let normalized = input
         .bytes()
         .filter(|byte| *byte != b'-')
         .map(|byte| byte.to_ascii_uppercase())
         .collect::<Vec<u8>>();
 
-    if normalized.len() != KID_LENGTH {
+    if normalized.is_empty() || normalized.len() > KID_LENGTH {
         return Err(Error::invalid_argument(format!(
-            "kid must be {KID_LENGTH} Crockford Base32 characters after normalization"
+            "kid must be 1 to {KID_LENGTH} Crockford Base32 characters after normalization"
         )));
     }
 
-    let canonical = String::from_utf8(normalized)
+    let query = String::from_utf8(normalized)
         .map_err(|_| Error::invalid_argument("kid must be valid ASCII"))?;
 
-    if !canonical.bytes().all(is_crockford_base32_byte) {
+    if !query.bytes().all(is_crockford_base32_byte) {
         return Err(Error::invalid_argument(
             "kid must use Crockford Base32 characters only",
         ));
     }
 
-    Ok(canonical)
+    Ok(query)
+}
+
+/// Resolve a canonical `kid` from a candidate set using exact/display/prefix input.
+pub fn resolve_unique_kid<I, S>(candidates: I, query: &str) -> Result<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let normalized_query = normalize_kid_query(query)?;
+    let matches = candidates
+        .into_iter()
+        .map(|candidate| normalize_kid(candidate.as_ref()))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|candidate| candidate.starts_with(&normalized_query))
+        .collect::<Vec<_>>();
+
+    match matches.as_slice() {
+        [resolved] => Ok(resolved.clone()),
+        [] => Err(Error::NotFound {
+            message: format!("kid '{}' not found", query),
+        }),
+        _ => {
+            let displays = matches
+                .iter()
+                .map(|kid| build_kid_display(kid).unwrap_or_else(|_| kid.clone()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(Error::InvalidArgument {
+                message: format!("kid '{}' is ambiguous; matches: {}", query, displays),
+            })
+        }
+    }
 }
 
 /// Build the human-friendly dashed display form of a canonical `kid`.

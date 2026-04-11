@@ -253,6 +253,42 @@ fn test_trust_remove_accepts_member_id_when_keystore_is_ambiguous() {
         .stderr(predicate::str::contains("Removed kid"));
 }
 
+#[test]
+fn test_trust_remove_accepts_display_kid() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("remove")
+        .arg(DISPLAY_KID_BOB)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(DISPLAY_KID_BOB));
+}
+
+#[test]
+fn test_trust_remove_accepts_unique_prefix_kid() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("remove")
+        .arg("B0B0")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(DISPLAY_KID_BOB));
+}
+
 #[cfg(unix)]
 #[test]
 fn test_trust_remove_old_identity_option_fails() {

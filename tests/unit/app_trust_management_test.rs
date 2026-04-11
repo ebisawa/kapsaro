@@ -106,6 +106,38 @@ fn test_remove_known_key_command_rejects_expired_signing_key() {
 }
 
 #[test]
+fn test_remove_known_key_command_accepts_display_kid() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    save_signed_trust_store(&home);
+    let options = build_test_command_options(home.path(), None);
+    let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
+
+    let result = remove_known_key_command(
+        &options,
+        &execution,
+        "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0",
+        false,
+    )
+    .unwrap();
+
+    assert_eq!(result.value.member_id, "bob@example.com");
+    assert_eq!(result.value.kid, KID_OLD);
+}
+
+#[test]
+fn test_remove_known_key_command_accepts_unique_prefix() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    save_signed_trust_store(&home);
+    let options = build_test_command_options(home.path(), None);
+    let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
+
+    let result = remove_known_key_command(&options, &execution, "C4AR", false).unwrap();
+
+    assert_eq!(result.value.member_id, "charlie@example.com");
+    assert_eq!(result.value.kid, KID_FRACTIONAL);
+}
+
+#[test]
 fn test_execute_purge_rejects_expired_signing_key() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
@@ -147,7 +179,8 @@ fn test_remove_known_key_command_surfaces_insecure_permission_warning() {
 
     let result = remove_known_key_command(&options, &execution, KID_OLD, false).unwrap();
 
-    assert_eq!(result.value, "bob@example.com");
+    assert_eq!(result.value.member_id, "bob@example.com");
+    assert_eq!(result.value.kid, KID_OLD);
     assert!(!result.warnings.is_empty());
     assert!(result
         .warnings

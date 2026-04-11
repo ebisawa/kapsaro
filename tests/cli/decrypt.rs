@@ -227,6 +227,52 @@ fn test_decrypt_with_kid_option() {
 }
 
 #[test]
+fn test_decrypt_with_display_kid_option() {
+    let temp_dir = TempDir::new().unwrap();
+    let _keystore_root =
+        create_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+    let input_file = temp_dir.path().join("test.enc");
+    create_test_encrypted_file(&input_file);
+    let output_file = temp_dir.path().join("output-display.dat");
+
+    cmd()
+        .arg("decrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--out")
+        .arg(output_file.to_str().unwrap())
+        .arg("--member-id")
+        .arg(EVE_MEMBER_ID)
+        .arg("--kid")
+        .arg("5EAD-N8XX-CXP9-PZWD-1FXT-336X-SBT9-W1BR")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_decrypt_with_prefix_kid_option() {
+    let temp_dir = TempDir::new().unwrap();
+    let _keystore_root =
+        create_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+    let input_file = temp_dir.path().join("test.enc");
+    create_test_encrypted_file(&input_file);
+    let output_file = temp_dir.path().join("output-prefix.dat");
+
+    cmd()
+        .arg("decrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--out")
+        .arg(output_file.to_str().unwrap())
+        .arg("--member-id")
+        .arg(EVE_MEMBER_ID)
+        .arg("--kid")
+        .arg("5EAD")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .failure();
+}
+
+#[test]
 fn test_decrypt_with_ssh_key_option() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root = create_test_keystore(

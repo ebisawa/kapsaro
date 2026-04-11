@@ -225,3 +225,7 @@ fn check_verify_output(output: std::process::Output) -> Result<()> {
             .into(),
     )
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/ssh_external_keygen_helpers_test.rs"]
+mod tests;

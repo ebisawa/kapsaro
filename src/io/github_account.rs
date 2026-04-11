@@ -3,18 +3,12 @@
 
 //! GitHub account lookup helpers for key generation.
 
+use crate::io::verify_online::github::http::{build_http_client, fetch_github_user_by_login};
 use crate::model::public_key::GithubAccount;
-use crate::{Error, Result};
-use serde::Deserialize;
+use crate::Result;
 use std::future::Future;
 use std::pin::Pin;
 use tracing::debug;
-
-#[derive(Debug, Deserialize)]
-struct GitHubUser {
-    id: u64,
-    login: String,
-}
 
 pub type GitHubAccountLookupFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
 
@@ -73,59 +67,4 @@ pub async fn resolve_github_account_by_login_with_api(
     }
 
     Ok(account)
-}
-
-fn build_http_client() -> Result<reqwest::Client> {
-    let builder = reqwest::Client::builder()
-        .user_agent(format!("secretenv/{}", env!("CARGO_PKG_VERSION")))
-        .timeout(std::time::Duration::from_secs(10));
-
-    builder.build().map_err(|e| Error::Config {
-        message: format!("Failed to create HTTP client: {}", e),
-    })
-}
-
-fn build_github_request(client: &reqwest::Client, url: &str) -> reqwest::RequestBuilder {
-    let request = client.get(url);
-    apply_github_auth(request)
-}
-
-fn apply_github_auth(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-        return request.header("Authorization", format!("Bearer {}", token));
-    }
-    request
-}
-
-async fn fetch_github_user_by_login(
-    client: &reqwest::Client,
-    login: &str,
-) -> Result<GithubAccount> {
-    let url = format!("https://api.github.com/users/{}", login);
-    let request = build_github_request(client, &url);
-    let response = request.send().await.map_err(|e| Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: format!("Failed to fetch GitHub user: {}", e),
-    })?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(Error::Verify {
-            rule: "V-GITHUB-API".to_string(),
-            message: format!(
-                "GitHub user not found for login '{}' (status: {})",
-                login, status
-            ),
-        });
-    }
-
-    let user: GitHubUser = response.json().await.map_err(|e| Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: format!("Failed to parse GitHub user response: {}", e),
-    })?;
-
-    Ok(GithubAccount {
-        id: user.id,
-        login: user.login,
-    })
 }

@@ -25,6 +25,8 @@ pub mod crypto_sign_ed25519_test;
 pub mod crypto_test;
 #[path = "unit/crypto_xchacha20_poly1305_test.rs"]
 pub mod crypto_xchacha20_poly1305_test;
+#[path = "unit/error_display_test.rs"]
+pub mod error_display_test;
 #[path = "unit/error_test.rs"]
 pub mod error_test;
 #[path = "unit/feature_config_test.rs"]
@@ -215,8 +217,12 @@ pub mod ssh_verify_test;
 pub mod sshsig_format_test;
 #[path = "unit/support_base64url_test.rs"]
 pub mod support_base64url_test;
+#[path = "unit/support_fs_atomic_error_test.rs"]
+pub mod support_fs_atomic_error_test;
 #[path = "unit/support_fs_atomic_test.rs"]
 pub mod support_fs_atomic_test;
+#[path = "unit/support_fs_lock_error_test.rs"]
+pub mod support_fs_lock_error_test;
 #[path = "unit/support_fs_lock_test.rs"]
 pub mod support_fs_lock_test;
 #[path = "unit/support_fs_test.rs"]

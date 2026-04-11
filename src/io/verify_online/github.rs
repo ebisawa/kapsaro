@@ -18,7 +18,7 @@ use self::matcher::compute_attestation_fingerprint;
 use self::policy::{fetch_and_match_github_keys, resolve_github_identity};
 use super::VerificationResult;
 
-mod http;
+pub(crate) mod http;
 mod matcher;
 mod policy;
 pub mod preflight;

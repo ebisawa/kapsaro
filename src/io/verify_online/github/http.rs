@@ -1,9 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! HTTP transport helpers for GitHub verification.
+//! HTTP transport helpers for GitHub REST API access.
 
 use super::GitHubKeyRecord;
+use crate::model::public_key::GithubAccount;
 use crate::{Error, Result};
 use serde::Deserialize;
 
@@ -22,7 +23,7 @@ struct GitHubUser {
 }
 
 /// Build HTTP client for GitHub API requests
-pub(super) fn build_http_client() -> Result<reqwest::Client> {
+pub(crate) fn build_http_client() -> Result<reqwest::Client> {
     let builder = reqwest::Client::builder()
         .user_agent(format!("secretenv/{}", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(10));
@@ -109,4 +110,38 @@ async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyR
             key: key.key,
         })
         .collect())
+}
+
+/// Fetch a GitHub user by login via REST API (GET /users/{login}).
+pub(crate) async fn fetch_github_user_by_login(
+    client: &reqwest::Client,
+    login: &str,
+) -> Result<GithubAccount> {
+    let url = format!("https://api.github.com/users/{}", login);
+    let request = build_github_request(client, &url);
+    let response = request.send().await.map_err(|e| Error::Verify {
+        rule: "V-GITHUB-API".to_string(),
+        message: format!("Failed to fetch GitHub user: {}", e),
+    })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: format!(
+                "GitHub user not found for login '{}' (status: {})",
+                login, status
+            ),
+        });
+    }
+
+    let user: GitHubUser = response.json().await.map_err(|e| Error::Verify {
+        rule: "V-GITHUB-API".to_string(),
+        message: format!("Failed to parse GitHub user response: {}", e),
+    })?;
+
+    Ok(GithubAccount {
+        id: user.id,
+        login: user.login,
+    })
 }

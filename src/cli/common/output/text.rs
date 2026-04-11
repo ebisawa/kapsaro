@@ -3,6 +3,8 @@
 
 //! Text output helpers for CLI commands.
 
+use console::Style;
+
 pub(crate) mod inspect;
 pub(crate) mod key;
 pub(crate) mod kv;
@@ -20,8 +22,28 @@ pub(crate) fn print_optional_status(message: Option<&str>, quiet: bool) {
     }
 }
 
+pub(crate) fn build_warning_line(message: &str) -> String {
+    Style::new()
+        .yellow()
+        .for_stderr()
+        .apply_to(message)
+        .to_string()
+}
+
+pub(crate) fn print_warning_line(message: &str) {
+    eprintln!("{}", build_warning_line(message));
+}
+
+pub(crate) fn print_warning(message: &str) {
+    print_warning_line(&format!("Warning: {}", message));
+}
+
 pub(crate) fn print_warnings(warnings: &[String]) {
     for warning in warnings {
-        eprintln!("Warning: {}", warning);
+        print_warning(warning);
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/cli_common_output_text_test.rs"]
+mod tests;

@@ -139,7 +139,7 @@ fn render_inspect_output(
     for (index, section) in sections.iter().enumerate() {
         out.push_str(&format!("{}\n", section_style.apply_to(&section.title)));
         for line in &section.lines {
-            out.push_str(&colorize_status_marks(line));
+            out.push_str(&colorize_inspect_line(line));
             out.push('\n');
         }
         if index + 1 != sections.len() {
@@ -151,9 +151,12 @@ fn render_inspect_output(
     out
 }
 
-fn colorize_status_marks(line: &str) -> String {
-    let ok_style = Style::new().green();
-    let ng_style = Style::new().red();
+fn colorize_inspect_line(line: &str) -> String {
+    let ok_style = Style::new().green().for_stdout();
+    let ng_style = Style::new().red().for_stdout();
+    let warning_style = Style::new().yellow().for_stdout();
+    let is_disclosed_warning =
+        line.contains("\u{26a0} DISCLOSED \u{2014} Secret may need rotation");
     if line.contains("\u{2714} OK") {
         line.replace(
             "\u{2714} OK",
@@ -164,7 +167,13 @@ fn colorize_status_marks(line: &str) -> String {
             "\u{2718} FAILED",
             &format!("{}", ng_style.apply_to("\u{2718} FAILED")),
         )
+    } else if line.trim_start().starts_with("Warning:") || is_disclosed_warning {
+        warning_style.apply_to(line).to_string()
     } else {
         line.to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/app_file_inspect_test.rs"]
+mod tests;

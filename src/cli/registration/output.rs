@@ -7,6 +7,7 @@ use crate::app::registration::types::{
 use crate::cli::common::output::text::key::{
     print_existing_key_summary, print_generated_key_summary,
 };
+use crate::cli::common::output::text::print_warning_line;
 use crate::cli::common::output::text::registration::{
     print_created_workspace_summary, print_registration_next_steps,
 };
@@ -55,10 +56,10 @@ fn print_existing_member_message(outcome: &RegistrationOutcome) {
 }
 
 fn print_skipped_message(member_id: &str) {
-    eprintln!(
+    print_warning_line(&format!(
         "Warning: Member '{}' already exists in workspace (use --force to overwrite)",
         member_id
-    );
+    ));
 }
 
 fn print_key_info(member_id: &str, key_result: &MemberKeySetupResult) -> Result<(), Error> {

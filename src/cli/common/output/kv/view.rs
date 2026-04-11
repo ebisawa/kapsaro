@@ -4,6 +4,7 @@
 //! View builders for KV command output.
 
 use crate::app::kv::types::KvReadResult;
+use crate::cli::common::output::text::print_warning_line;
 use crate::feature::kv::query::KvDisclosedEntry;
 use std::collections::BTreeMap;
 
@@ -69,11 +70,11 @@ pub(crate) fn print_disclosed_key_warnings(entries: &[KvEntryView<'_>]) {
 
 pub(crate) fn print_disclosed_key_warning(entry: &impl KvDisclosureWarning) {
     if entry.disclosed() {
-        eprintln!(
+        print_warning_line(&format!(
             "Warning: Entry '{}' may have been disclosed to a removed recipient. \
              Consider rotating the secret value.",
             entry.key()
-        );
+        ));
     }
 }
 

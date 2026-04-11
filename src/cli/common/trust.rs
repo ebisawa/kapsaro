@@ -7,6 +7,7 @@ use std::io::BufRead;
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::TrustApprovalCandidate;
+use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::trust::review::print_candidate_review;
 use crate::cli::common::prompt::{prompt_yes_no, prompt_yes_no_with_reader};
 use crate::io::trust::paths::trust_store_file_path;
@@ -120,7 +121,7 @@ where
 
     let base_dir = options.resolve_base_dir()?;
     let path = trust_store_file_path(&base_dir, owner_member_id);
-    eprintln!("Warning: {}", error.user_message());
+    print_warning(error.user_message());
     if !confirm_trust_store_reset_with_reader(&path, reader)? {
         return Err(Error::InvalidOperation {
             message: "Local trust store reset was declined".to_string(),

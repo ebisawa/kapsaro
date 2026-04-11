@@ -6,6 +6,7 @@ use std::io::BufRead;
 use crate::app::member::mutation::{preview_member_removal, remove_member};
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::member::print_member_remove_summary;
+use crate::cli::common::output::text::{print_warning, print_warning_line};
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::support::tty;
@@ -26,22 +27,24 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
 
 fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemovePreview) {
     for warning in &preview.warnings {
-        eprintln!("Warning: {}", warning);
+        print_warning(warning);
     }
 
     if preview.affected_artifacts.is_empty() {
         return;
     }
 
-    eprintln!(
+    print_warning_line(&format!(
         "Warning: removing member '{}' affects {} encrypted artifact(s):",
         preview.member_id,
         preview.affected_artifacts.len()
-    );
+    ));
     for artifact in &preview.affected_artifacts {
         eprintln!("  {}", display_path_relative_to_cwd(artifact));
     }
-    eprintln!("Run `secretenv rewrap` after removal to update recipients in encrypted artifacts.");
+    print_warning_line(
+        "Run `secretenv rewrap` after removal to update recipients in encrypted artifacts.",
+    );
 }
 
 fn confirm_member_remove(force: bool, member_id: &str) -> Result<(), Error> {

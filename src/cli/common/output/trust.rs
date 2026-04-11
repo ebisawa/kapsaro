@@ -12,6 +12,7 @@ use crate::app::trust::list::TrustListResult;
 use crate::app::trust::management::PurgeKnownKeysResult;
 use crate::cli::common::output::json::trust::print_known_key_list as print_known_key_list_json;
 use crate::cli::common::output::print_empty_or_json_or_text_with_warnings;
+use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::text::trust::{
     print_empty_known_key_list, print_known_key_list as print_known_key_list_text,
     print_no_entries_to_purge, print_trust_purge_candidates, print_trust_purge_summary,
@@ -57,7 +58,7 @@ pub(crate) fn print_trust_purge_outcome(
 fn print_unique_warnings(warnings: &[String], shown: &mut BTreeSet<String>) {
     for warning in warnings {
         if shown.insert(warning.clone()) {
-            eprintln!("Warning: {}", warning);
+            print_warning(warning);
         }
     }
 }

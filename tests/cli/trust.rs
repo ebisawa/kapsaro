@@ -12,6 +12,8 @@ use std::os::unix::fs::PermissionsExt;
 use crate::cli::common::{cmd, ALICE_MEMBER_ID};
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use assert_cmd::cargo;
+#[cfg(unix)]
+use console::strip_ansi_codes;
 use predicates::prelude::*;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::io::trust::paths::trust_store_file_path;
@@ -153,6 +155,39 @@ fn test_trust_remove_prints_insecure_permission_warning() {
         stderr.contains(DISPLAY_KID_BOB),
         "expected removal confirmation to contain display kid '{}', got: {}",
         DISPLAY_KID_BOB,
+        stderr
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_trust_remove_colors_warning_when_forced() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    save_signed_trust_store(&home);
+    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("remove")
+        .arg(KID_BOB)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .env("CLICOLOR_FORCE", "1")
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("\u{1b}[33mWarning: Insecure permissions"),
+        "expected ANSI-colored warning in stderr, got: {}",
+        stderr
+    );
+    assert!(
+        strip_ansi_codes(&stderr).contains("Warning: Insecure permissions"),
+        "expected warning text to remain intact after stripping ANSI, got: {}",
         stderr
     );
 }

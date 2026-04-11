@@ -7,6 +7,7 @@ use console::Style;
 
 use crate::app::rewrap::promotion::PromotionReviewFailure;
 use crate::app::trust::TrustApprovalCandidate;
+use crate::cli::common::output::text::print_warning_line;
 use crate::support::kid::build_kid_display;
 
 pub(crate) fn build_candidate_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
@@ -57,7 +58,11 @@ pub(crate) fn build_candidate_review_lines(candidate: &TrustApprovalCandidate) -
 
 pub(crate) fn print_candidate_review(candidate: &TrustApprovalCandidate) {
     for line in build_candidate_review_lines(candidate) {
-        eprintln!("{}", line);
+        if is_warning_line(&line) {
+            print_warning_line(&line);
+        } else {
+            eprintln!("{}", line);
+        }
     }
 }
 
@@ -68,6 +73,10 @@ pub(crate) fn print_failed_promotion_reviews(failed_candidates: &[PromotionRevie
             candidate.member_id, candidate.message
         );
     }
+}
+
+fn is_warning_line(line: &str) -> bool {
+    line.trim_start().starts_with("Warning:")
 }
 
 #[cfg(test)]

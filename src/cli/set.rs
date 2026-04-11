@@ -7,10 +7,16 @@ use std::io::{self, Read};
 
 use clap::Args;
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::app::kv::mutation::set_kv_command;
-use crate::cli::common::options::CommonOptions;
-use crate::cli::common::ssh::resolve_ssh_context_optional;
+use crate::app::trust::SetPolicy;
+use crate::cli::common::command::{
+    resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
+    WriteCommandLabels,
+};
+use crate::cli::common::output::text::print_optional_status;
+use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::options::CommonOptions;
+use crate::feature::kv::types::KvInputEntry;
 use crate::{Error, Result};
 
 #[derive(Args)]
@@ -18,10 +24,6 @@ pub struct SetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: CommonOptions,
-
-    /// Do not embed signer's PublicKey in signature
-    #[arg(long)]
-    pub no_signer_pub: bool,
 
     /// Member ID to use
     #[arg(long, short = 'm')]
@@ -61,25 +63,35 @@ fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<String> {
 
 pub fn run(args: SetArgs) -> Result<()> {
     let value = resolve_value(args.value.clone(), args.stdin)?;
-    let options = CommonCommandOptions::from(&args.common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, args.member_id.clone())?;
-    let outcome = set_kv_command(
-        options,
-        args.member_id.clone(),
-        args.name.as_deref(),
-        vec![(args.key.clone(), value)],
-        args.no_signer_pub,
-        Some(&format!(
-            "Set key '{}' in '{}'",
-            args.key,
-            args.name.as_deref().unwrap_or("default")
-        )),
-        ssh_ctx,
+    let options = resolve_options(&args.common);
+    let outcome = run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || {
+            run_kv_write_command_with_trust::<SetPolicy, _, _>(
+                &args.common,
+                args.member_id.clone(),
+                args.name.as_deref(),
+                true,
+                WriteCommandLabels {
+                    signer_context: Some(("set input signer", "input signer")),
+                    recipient_context: "set recipients",
+                },
+                |_, trust_plan| {
+                    let success_message = format!(
+                        "Set key '{}' in '{}'",
+                        args.key,
+                        args.name.as_deref().unwrap_or("default")
+                    );
+                    set_kv_command(
+                        trust_plan,
+                        vec![KvInputEntry::new(args.key.clone(), value.clone())],
+                        Some(&success_message),
+                    )
+                },
+            )
+        },
     )?;
-    if let Some(message) = outcome.message {
-        if !args.common.quiet {
-            eprintln!("{}", message);
-        }
-    }
+    print_optional_status(outcome.message.as_deref(), args.common.quiet);
     Ok(())
 }

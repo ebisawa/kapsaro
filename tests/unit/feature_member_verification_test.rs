@@ -2,16 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::io::verify_online::VerifiedGithubIdentity;
 
-fn dummy_bindings() -> crate::model::public_key::VerifiedBindingClaims {
-    use crate::model::public_key::{BindingClaims, VerifiedBindingClaims};
-    use crate::model::verification::BindingVerificationProof;
-    VerifiedBindingClaims::new(
-        BindingClaims {
-            github_account: None,
-        },
-        BindingVerificationProof::new("github".to_string(), None, None),
-    )
+fn dummy_github() -> VerifiedGithubIdentity {
+    VerifiedGithubIdentity::new(1, "alice-gh".to_string(), "SHA256:abc".to_string(), 42)
 }
 
 #[test]
@@ -19,9 +13,7 @@ fn test_classify_all_verified() {
     let results = vec![VerificationResult::verified(
         "alice",
         "SSH key verified on GitHub (id=1, login=alice-gh)".to_string(),
-        "SHA256:abc".to_string(),
-        42,
-        dummy_bindings(),
+        dummy_github(),
     )];
     let (verified, failed, not_configured) = classify_verification_results(&results);
     assert_eq!(verified.len(), 1);
@@ -32,15 +24,9 @@ fn test_classify_all_verified() {
 #[test]
 fn test_classify_mixed() {
     let results = vec![
-        VerificationResult::verified(
-            "alice",
-            "OK".to_string(),
-            "SHA256:abc".to_string(),
-            42,
-            dummy_bindings(),
-        ),
-        VerificationResult::failed("bob", "SSH key not found".to_string(), None),
-        VerificationResult::not_configured("carol", "No binding_claims", None),
+        VerificationResult::verified("alice", "OK".to_string(), dummy_github()),
+        VerificationResult::failed("bob", "SSH key not found".to_string(), None, true),
+        VerificationResult::not_configured("carol", "No binding_claims", None, false),
     ];
     let (verified, failed, not_configured) = classify_verification_results(&results);
     assert_eq!(verified.len(), 1);

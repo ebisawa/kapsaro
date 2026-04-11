@@ -5,15 +5,14 @@
 //!
 //! Tests for file-enc rewrap, including signature verification at entry.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::make_verified_members;
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use base64::Engine;
-use secretenv::app::rewrap::execution::rewrap_file_content_with_request;
-use secretenv::app::rewrap::types::SingleRewrapRequest;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::format::content::FileEncContent;
+use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
+use secretenv::format::content::{EncryptedContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use std::fs;
 use tempfile::TempDir;
@@ -40,16 +39,24 @@ fn single_rewrap_request<'a>(
     key_ctx: &'a secretenv::feature::context::crypto::CryptoContext,
     workspace_root: Option<&'a std::path::Path>,
     debug: bool,
-) -> SingleRewrapRequest<'a> {
-    SingleRewrapRequest {
+) -> RewrapRequest<'a> {
+    RewrapRequest {
         member_id: ALICE_MEMBER_ID,
         key_ctx,
         workspace_root,
+        target_members: None,
         rotate_key: false,
         clear_disclosure_history: false,
-        no_signer_pub: false,
+
         debug,
     }
+}
+
+fn rewrap_file_content(
+    content: &FileEncContent,
+    request: &RewrapRequest<'_>,
+) -> secretenv::Result<String> {
+    rewrap_content(&EncryptedContent::FileEnc(content.clone()), request)
 }
 
 #[test]
@@ -65,7 +72,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
 
     let content = b"secret";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -74,7 +81,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key,
             debug: false,
         },
     )
@@ -86,7 +93,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
     let json = serde_json::to_string_pretty(&file_enc_doc_tampered).unwrap();
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
         result.is_err(),
@@ -107,7 +114,7 @@ fn test_rewrap_file_flow_succeeds_with_valid_signature() {
 
     let content = b"secret";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -116,7 +123,7 @@ fn test_rewrap_file_flow_succeeds_with_valid_signature() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key,
             debug: false,
         },
     )
@@ -124,7 +131,7 @@ fn test_rewrap_file_flow_succeeds_with_valid_signature() {
 
     let json = serde_json::to_string_pretty(&file_enc_doc).unwrap();
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
         result.is_ok(),

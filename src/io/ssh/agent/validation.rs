@@ -70,7 +70,7 @@ pub fn validate_key_present(target_key_present: bool, socket_path: &std::path::P
 Agent socket: {}\n\
 Check available keys: SSH_AUTH_SOCK=\"{}\" ssh-add -L\n\
 The requested key must match one of the keys listed by ssh-add -L.\n\
-Alternative: Set config 'ssh_signer: ssh-keygen'",
+Alternative: Set config 'ssh_signing_method: ssh-keygen'",
             socket_display, socket_display
         ))
         .into());

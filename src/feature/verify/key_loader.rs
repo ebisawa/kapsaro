@@ -3,7 +3,6 @@
 
 //! Key loading for signature verification.
 
-use crate::io::workspace::members::find_active_member_by_kid;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::Signature;
 use crate::model::verification::VerifyingKeySource;
@@ -13,37 +12,6 @@ use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
 
 use super::public_key::verify_public_key_for_verification;
-
-/// Find PublicKey by kid, searching workspace active members.
-///
-/// Incoming members are excluded to prevent untrusted keys from being used
-/// for signature verification.
-///
-/// Returns `(member_id, PublicKey, VerifyingKeySource)`.
-pub fn find_public_key_by_kid(
-    workspace_path: Option<&std::path::Path>,
-    kid: &str,
-) -> Result<(String, PublicKey, VerifyingKeySource)> {
-    if let Some(ws_path) = workspace_path {
-        if let Some(public_key) = find_active_member_by_kid(ws_path, kid)? {
-            return Ok((
-                public_key.protected.member_id.clone(),
-                public_key,
-                VerifyingKeySource::ActiveMemberByKid {
-                    kid: kid.to_string(),
-                },
-            ));
-        }
-    }
-
-    Err(Error::Crypto {
-        message: format!(
-            "Cannot find public key with kid '{}' in workspace",
-            kid_display_lossy(kid)
-        ),
-        source: None,
-    })
-}
 
 /// Result of loading a verifying key from a signature
 #[derive(Debug)]
@@ -55,32 +23,27 @@ pub struct LoadedVerifyingKey {
     pub public_key: PublicKey,
 }
 
-/// Load verifying key from signature (signer_pub or workspace search)
+/// Load verifying key from signature's embedded signer_pub.
 ///
 /// Expired keys are allowed for verification but generate a warning.
+/// If signer_pub is missing, fails with E_SIGNER_PUB_MISSING.
 pub fn load_verifying_key_from_signature(
     signature: &Signature,
-    workspace_path: Option<&std::path::Path>,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {
-    if let Some(ref signer_pub) = signature.signer_pub {
-        load_from_signer_pub(signature, signer_pub, workspace_path, debug)
-    } else {
-        load_from_kid_lookup(signature, workspace_path, debug)
-    }
+    let signer_pub = signature.signer_pub.as_ref().ok_or_else(|| Error::Verify {
+        rule: "E_SIGNER_PUB_MISSING".to_string(),
+        message: "Required signer_pub is missing from signature".to_string(),
+    })?;
+    load_from_signer_pub(signature, signer_pub, debug)
 }
 
 /// Load verifying key from embedded signer_pub.
-///
-/// The embedded key is used for cryptographic verification, but membership
-/// is also confirmed by checking that the kid exists in workspace active members.
 fn load_from_signer_pub(
     signature: &Signature,
     signer_pub: &PublicKey,
-    workspace_path: Option<&std::path::Path>,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {
-    verify_kid_in_active_members(workspace_path, &signature.kid)?;
     build_loaded_verifying_key(
         signer_pub,
         &signature.kid,
@@ -88,35 +51,6 @@ fn load_from_signer_pub(
         "signer_pub embedded",
         debug,
     )
-}
-
-/// Verify that a kid exists in workspace active members.
-fn verify_kid_in_active_members(workspace_path: Option<&std::path::Path>, kid: &str) -> Result<()> {
-    let ws_path = workspace_path.ok_or_else(|| Error::Crypto {
-        message: "Workspace is required to verify signer membership".to_string(),
-        source: None,
-    })?;
-    let found = find_active_member_by_kid(ws_path, kid)?;
-    if found.is_none() {
-        return Err(Error::Crypto {
-            message: format!(
-                "Signer key '{}' not found in active members",
-                kid_display_lossy(kid)
-            ),
-            source: None,
-        });
-    }
-    Ok(())
-}
-
-/// Load verifying key by kid lookup in workspace active members.
-fn load_from_kid_lookup(
-    signature: &Signature,
-    workspace_path: Option<&std::path::Path>,
-    debug: bool,
-) -> Result<LoadedVerifyingKey> {
-    let (_member_id, public_key, source) = find_public_key_by_kid(workspace_path, &signature.kid)?;
-    build_loaded_verifying_key(&public_key, &signature.kid, source, "workspace", debug)
 }
 
 fn build_loaded_verifying_key(

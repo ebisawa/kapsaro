@@ -3,8 +3,8 @@
 
 //! Unit tests for feature/key/manage module
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::test_utils::{create_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::key::manage::export::export_key;
 use secretenv::feature::key::manage::mutation::{activate_key, remove_key};
 use secretenv::feature::key::manage::query::list_keys;

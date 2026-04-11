@@ -3,10 +3,11 @@
 
 //! Key generation (key new) implementation
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::app::key::generate::generate_key_command;
+use crate::cli::common::command::{resolve_options, resolve_required_member_id};
+use crate::cli::common::output::text::key::print_generated_key_summary;
 use crate::cli::common::ssh::resolve_ssh_context;
-use crate::support::kid::build_kid_display;
+use crate::cli::identity_prompt::resolve_key_generation_github_user;
 use crate::Result;
 
 use super::common::print_key_generation_binding_info;
@@ -14,13 +15,19 @@ use super::NewArgs;
 
 /// Main entry point for key generation
 pub fn run(args: NewArgs) -> Result<()> {
-    let options = CommonCommandOptions::from(&args.common);
+    let options = resolve_options(&args.common);
+    let member_id = resolve_required_member_id(&options, args.member_id.clone(), false)?;
+    let github_user = resolve_key_generation_github_user(
+        true,
+        args.github_user.clone(),
+        options.home.as_deref(),
+    )?;
     eprintln!();
     let ssh_ctx = resolve_ssh_context(&options)?;
     let result = generate_key_command(
         &options,
-        args.member_id.clone(),
-        args.github_user.clone(),
+        member_id,
+        github_user,
         &args.expires_at,
         &args.valid_for,
         args.no_activate,
@@ -32,16 +39,12 @@ pub fn run(args: NewArgs) -> Result<()> {
         &result.ssh_determinism,
         result.github_verification,
     )?;
-
-    eprintln!();
-    if result.activated {
-        eprintln!("Generated and activated key for '{}':", result.member_id);
-    } else {
-        eprintln!("Generated key for '{}':", result.member_id);
-    }
-    let kid_display = build_kid_display(&result.kid).unwrap_or_else(|_| result.kid.clone());
-    eprintln!("  Key ID:  {}", kid_display);
-    eprintln!("  Expires: {}", result.expires_at);
+    print_generated_key_summary(
+        &result.member_id,
+        &result.kid,
+        &result.expires_at,
+        result.activated,
+    );
 
     Ok(())
 }

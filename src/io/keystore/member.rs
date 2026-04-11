@@ -61,6 +61,17 @@ pub fn find_active_key_document(
     Ok(Some(ActiveKeyDocument { kid, public_key }))
 }
 
+/// Load all public key documents for a member from the local keystore.
+pub fn load_public_keys_for_member(
+    keystore_root: &Path,
+    member_id: &str,
+) -> Result<Vec<PublicKey>> {
+    let kids = list_kids(keystore_root, member_id)?;
+    kids.into_iter()
+        .map(|kid| load_public_key(keystore_root, member_id, &kid))
+        .collect()
+}
+
 /// Select latest valid (non-expired) key for a member.
 pub fn select_latest_valid_kid(keystore_root: &Path, member_id: &str) -> Result<String> {
     let kids = list_kids(keystore_root, member_id)?;

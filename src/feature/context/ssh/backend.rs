@@ -4,7 +4,7 @@
 use crate::feature::context::ssh::determinism::{probe_determinism, validate_ssh_key_type};
 use crate::feature::context::ssh::params::{SshSigningContext, SshSigningParams};
 use crate::feature::context::ssh::resolution::{
-    resolve_key_descriptor_lenient, resolve_signing_method, resolve_ssh_commands,
+    resolve_backend_key_descriptor, resolve_signing_method, resolve_ssh_commands,
 };
 use crate::io::ssh::backend::build_backend;
 use crate::io::ssh::external::keygen::DefaultSshKeygen;
@@ -21,14 +21,13 @@ pub(crate) fn build_ssh_signing_context(
 
     validate_ssh_key_type(selected_pubkey)?;
     let fingerprint = build_sha256_fingerprint(selected_pubkey)?;
-    let key_descriptor = resolve_key_descriptor_lenient(&params.ssh_key, base_dir);
+    let key_descriptor = resolve_backend_key_descriptor(signing_method, &params.ssh_key, base_dir)?;
 
     let ssh_keygen = Box::new(DefaultSshKeygen::new(commands.ssh_keygen_path));
-    let backend = build_backend(signing_method, ssh_keygen, key_descriptor);
+    let backend = build_backend(signing_method, ssh_keygen, key_descriptor)?;
     let determinism = probe_determinism(params, backend.as_ref(), selected_pubkey)?;
 
     Ok(SshSigningContext {
-        signing_method,
         public_key: selected_pubkey.to_string(),
         fingerprint,
         backend,

@@ -14,7 +14,7 @@ use super::common::{expand_tilde, load_field_from_global_config};
 /// (or `$SECRETENV_HOME/config.toml`). Returns `None` if not configured.
 ///
 /// Tilde (`~`) in the path is expanded to the HOME directory.
-pub fn resolve_workspace_from_config() -> Result<Option<PathBuf>> {
+pub(crate) fn resolve_workspace_from_config() -> Result<Option<PathBuf>> {
     let value = load_field_from_global_config("workspace", None)?;
     match value {
         Some(path_str) => {

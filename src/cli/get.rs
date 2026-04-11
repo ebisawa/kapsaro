@@ -5,12 +5,15 @@
 
 use clap::Args;
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::kv::query::get_kv_command;
-use crate::app::kv::types::KvReadResult;
-use crate::cli::common::options::CommonOptions;
-use crate::cli::common::output::json::print_json_output;
-use crate::cli::common::ssh::resolve_ssh_context_optional;
+use crate::app::kv::query::{build_kv_read_command, execute_kv_read_command};
+use crate::app::trust::GetPolicy;
+use crate::cli::common::command::{
+    resolve_command_input, resolve_options, resolve_trust_store_owner_member,
+    run_read_command_with_trust, ReadCommandLabels,
+};
+use crate::cli::common::output::kv::print_kv_read_result;
+use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::options::CommonOptions;
 use crate::Result;
 
 #[derive(Args)]
@@ -51,93 +54,44 @@ pub fn run(args: GetArgs) -> Result<()> {
         });
     }
 
-    let options = CommonCommandOptions::from(&args.common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, args.member_id.clone())?;
-    let kv_map = get_kv_command(
+    let read_mode = if args.all {
+        crate::app::kv::types::KvReadMode::All
+    } else {
+        crate::app::kv::types::KvReadMode::Single(
+            args.key
+                .as_deref()
+                .ok_or_else(|| crate::Error::invalid_operation("KEY argument is required"))?,
+        )
+    };
+    let options = resolve_options(&args.common);
+    let kv_map = run_with_trust_store_reset_recovery(
         &options,
-        args.member_id.clone(),
-        args.name.as_deref(),
-        args.key.as_deref(),
-        args.all,
-        ssh_ctx,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || {
+            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_id.clone())?;
+            let command = build_kv_read_command::<GetPolicy>(
+                &options,
+                args.member_id.clone(),
+                args.name.as_deref(),
+                ssh_ctx,
+            )?;
+            run_read_command_with_trust(
+                &options,
+                &command,
+                ReadCommandLabels {
+                    context: "get signer",
+                    subject: "signer",
+                    allow_non_member: true,
+                },
+                || execute_kv_read_command(&command, read_mode, args.common.verbose),
+            )
+        },
     )?;
 
-    if args.all {
-        run_all(&kv_map, &args)
-    } else {
-        run_single(&kv_map, &args)
-    }
-}
-
-fn format_value(key: &str, value: &str, with_key: bool) -> String {
-    if with_key {
-        format!(
-            "{}=\"{}\"",
-            key,
-            value.replace('\\', "\\\\").replace('"', "\\\"")
-        )
-    } else {
-        value.to_string()
-    }
-}
-
-fn warn_disclosed(keys: &[(String, bool)]) {
-    for (key, is_disclosed) in keys {
-        if *is_disclosed {
-            eprintln!(
-                "Warning: Entry '{}' may have been disclosed to a removed recipient. \
-                 Consider rotating the secret value.",
-                key
-            );
-        }
-    }
-}
-
-fn run_all(result: &KvReadResult, args: &GetArgs) -> Result<()> {
-    warn_disclosed(&result.disclosed);
-
-    if args.common.json {
-        let map: std::collections::BTreeMap<&str, &str> = result
-            .values
-            .iter()
-            .map(|(k, v)| (k.as_str(), v.as_str()))
-            .collect();
-        print_json_output(&map)?;
-    } else {
-        let mut entries: Vec<_> = result.values.iter().collect();
-        entries.sort_by_key(|(k, _)| k.as_str());
-        for (key, value) in entries {
-            println!("{}", format_value(key, value, args.with_key));
-        }
-    }
-    Ok(())
-}
-
-fn run_single(result: &KvReadResult, args: &GetArgs) -> Result<()> {
-    let key = args
-        .key
-        .as_deref()
-        .ok_or_else(|| crate::Error::invalid_operation("KEY argument is required"))?;
-    let value = result.values.get(key).cloned().unwrap_or_default();
-
-    if result
-        .disclosed
-        .iter()
-        .any(|(name, is_disclosed)| name == key && *is_disclosed)
-    {
-        eprintln!(
-            "Warning: Entry '{}' may have been disclosed to a removed recipient. \
-             Consider rotating the secret value.",
-            key
-        );
-    }
-
-    if args.common.json {
-        let mut map = std::collections::BTreeMap::new();
-        map.insert(key, value.as_str());
-        print_json_output(&map)?;
-    } else {
-        println!("{}", format_value(key, &value, args.with_key));
-    }
-    Ok(())
+    print_kv_read_result(
+        &kv_map,
+        if args.all { None } else { args.key.as_deref() },
+        args.common.json,
+        args.with_key,
+    )
 }

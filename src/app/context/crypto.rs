@@ -6,38 +6,24 @@ use std::path::{Path, PathBuf};
 use tracing::debug;
 
 use crate::feature::context::crypto::{
-    build_signing_key, validate_and_wrap_private_key_ssh, CryptoContext,
+    build_local_key_access, build_signing_key, load_verified_private_key_from_keystore,
+    CryptoContext,
 };
-use crate::feature::context::env_key;
-use crate::feature::key::protection::encryption::decrypt_private_key;
-use crate::feature::verify::private_key::verify_private_key_matches_public_key;
-use crate::feature::verify::public_key::verify_public_key_with_attestation;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::helpers::resolve_kid;
 use crate::io::keystore::paths::get_keystore_root_from_base;
 use crate::io::keystore::public_key_source::{
     KeystorePublicKeySource, PublicKeySource, WorkspacePublicKeySource,
 };
-use crate::io::keystore::storage::{load_private_key, load_public_key};
 use crate::io::ssh::backend::SignatureBackend;
-use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
-use crate::model::verified::VerifiedPrivateKey;
+use crate::model::identity::{Kid, MemberId};
 use crate::support::kid::build_kid_display;
-use crate::{Error, Result};
-
-pub fn is_env_key_mode() -> bool {
-    env_key::is_env_key_mode()
-}
-
-struct DecryptedSshKeyData {
-    private_key: VerifiedPrivateKey,
-    expires_at: String,
-}
+use crate::Result;
 
 pub fn load_crypto_context(
     member_id: &str,
-    backend: &dyn SignatureBackend,
-    ssh_pubkey: &str,
+    backend: Box<dyn SignatureBackend>,
+    ssh_pubkey: String,
     explicit_kid: Option<&str>,
     keystore_root: Option<&PathBuf>,
     workspace_path: Option<PathBuf>,
@@ -46,30 +32,45 @@ pub fn load_crypto_context(
     log_crypto_context_load(member_id, explicit_kid, debug_enabled);
     let keystore_root = resolve_keystore_root(keystore_root)?;
     let kid = resolve_keystore_kid(&keystore_root, member_id, explicit_kid, debug_enabled)?;
-    let encrypted_private_key =
-        load_and_verify_keystore_private_key(&keystore_root, member_id, &kid, debug_enabled)?;
-    let decrypted_key =
-        decrypt_and_wrap_ssh_key(&encrypted_private_key, backend, ssh_pubkey, debug_enabled)?;
-    build_keystore_crypto_context(member_id, kid, keystore_root, workspace_path, decrypted_key)
+    let decrypted_key = load_verified_private_key_from_keystore(
+        &keystore_root,
+        member_id,
+        &kid,
+        backend.as_ref(),
+        &ssh_pubkey,
+        debug_enabled,
+    )?;
+    let selected_kid_override =
+        explicit_kid.map(|_| decrypted_key.private_key.proof().kid().to_string());
+    let local_key_access = build_local_key_access(keystore_root.clone(), ssh_pubkey, backend);
+    let context = build_keystore_crypto_context(
+        member_id,
+        kid,
+        keystore_root,
+        workspace_path,
+        decrypted_key.private_key,
+        decrypted_key.expires_at,
+    )?;
+    Ok(context.with_local_key_access(selected_kid_override, Some(local_key_access)))
 }
 
 pub fn load_crypto_context_from_env(
     workspace_path: PathBuf,
     debug_enabled: bool,
 ) -> Result<CryptoContext> {
-    let result = env_key::load_private_key_from_env(debug_enabled)?;
-    let kid = result.verified_key.proof().kid.clone();
+    let result = crate::feature::context::env_key::load_private_key_from_env(debug_enabled)?;
+    let kid = Kid::try_from(result.verified_key.proof().kid.clone())?;
     let signing_key = build_signing_key(result.verified_key.document())?;
-
-    Ok(CryptoContext {
-        member_id: result.member_id,
+    let context = CryptoContext::new(
+        result.member_id,
         kid,
-        pub_key_source: Box::new(WorkspacePublicKeySource::new(workspace_path.clone())),
-        workspace_path: Some(workspace_path),
-        private_key: result.verified_key,
+        Box::new(WorkspacePublicKeySource::new(workspace_path.clone())),
+        Some(workspace_path),
+        result.verified_key,
         signing_key,
-        expires_at: result.expires_at,
-    })
+        result.expires_at,
+    );
+    Ok(context.with_local_key_access(None, None))
 }
 
 fn log_crypto_context_load(member_id: &str, explicit_kid: Option<&str>, debug_enabled: bool) {
@@ -106,70 +107,34 @@ fn resolve_keystore_kid(
     Ok(kid)
 }
 
-fn load_and_verify_keystore_private_key(
-    keystore_root: &Path,
-    member_id: &str,
-    kid: &str,
-    debug_enabled: bool,
-) -> Result<PrivateKey> {
-    let encrypted_private_key = load_private_key(keystore_root, member_id, kid)?;
-
-    // Keystore invariant: private/public pair under the same `<kid>/` directory should match.
-    // (env key mode intentionally skips this, but keystore mode can verify it.)
-    let public_key = load_public_key(keystore_root, member_id, kid)?;
-    let verified_public_key = verify_public_key_with_attestation(&public_key, debug_enabled)?;
-    verify_private_key_matches_public_key(&encrypted_private_key, verified_public_key.document())?;
-    Ok(encrypted_private_key)
-}
-
-fn decrypt_and_wrap_ssh_key(
-    encrypted_private_key: &PrivateKey,
-    backend: &dyn SignatureBackend,
-    ssh_pubkey: &str,
-    debug_enabled: bool,
-) -> Result<DecryptedSshKeyData> {
-    let plaintext = decrypt_private_key(encrypted_private_key, backend, ssh_pubkey, debug_enabled)?;
-    let private_key = validate_and_wrap_private_key_ssh(
-        plaintext,
-        &encrypted_private_key.protected.member_id,
-        &encrypted_private_key.protected.kid,
-        extract_ssh_fingerprint(encrypted_private_key)?,
-    )?;
-
-    Ok(DecryptedSshKeyData {
-        private_key,
-        expires_at: encrypted_private_key.protected.expires_at.clone(),
-    })
-}
-
-fn extract_ssh_fingerprint(private_key: &PrivateKey) -> Result<&str> {
-    match &private_key.protected.alg {
-        PrivateKeyAlgorithm::SshSig { fpr, .. } => Ok(fpr.as_str()),
-        _ => Err(Error::Crypto {
-            message: "Expected SshSig algorithm for SSH-based decryption".to_string(),
-            source: None,
-        }),
-    }
-}
-
 fn build_keystore_crypto_context(
     member_id: &str,
     kid: String,
     keystore_root: PathBuf,
     workspace_path: Option<PathBuf>,
-    decrypted_key: DecryptedSshKeyData,
+    private_key: crate::model::verified::VerifiedPrivateKey,
+    expires_at: String,
 ) -> Result<CryptoContext> {
-    let signing_key = build_signing_key(decrypted_key.private_key.document())?;
+    let signing_key = build_signing_key(private_key.document())?;
     let pub_key_source: Box<dyn PublicKeySource> =
-        Box::new(KeystorePublicKeySource::new(keystore_root));
+        Box::new(KeystorePublicKeySource::new(keystore_root.clone()));
 
-    Ok(CryptoContext {
-        member_id: member_id.to_string(),
-        kid,
+    let context = CryptoContext::new(
+        MemberId::try_from(member_id)?,
+        Kid::try_from(kid)?,
         pub_key_source,
         workspace_path,
-        private_key: decrypted_key.private_key,
+        private_key,
         signing_key,
-        expires_at: decrypted_key.expires_at,
-    })
+        expires_at,
+    );
+    Ok(context)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_context_crypto_test.rs"]
+mod feature_context_crypto_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_context_env_key_integration_test.rs"]
+mod feature_context_env_key_integration_test;

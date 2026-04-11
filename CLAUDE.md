@@ -86,7 +86,7 @@ KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トー
 
 ## Reference Documents
 
-- `schemas/secretenv_schema_v3.json` — v3 JSON Schema
+- `schemas/secretenv_schema.json` — v3 JSON Schema
 - `guides/product_brief_en.md` / `guides/product_brief_ja.md` — Product Brief (EN/JA)
 - `guides/security_design_en.md` / `guides/security_design_ja.md` — Security Design (EN/JA)
 - `guides/user_guide_en.md` / `guides/user_guide_ja.md` — User Guide (EN/JA)

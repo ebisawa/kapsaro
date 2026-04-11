@@ -3,7 +3,11 @@
 
 //! Application-layer member registration helpers for init/join flows.
 
-pub mod command;
-pub mod key_plan;
-pub mod types;
+pub(crate) mod command;
+pub(crate) mod key_plan;
+pub(crate) mod types;
 mod workspace;
+
+#[cfg(test)]
+#[path = "../../tests/unit/app_registration_test.rs"]
+mod tests;

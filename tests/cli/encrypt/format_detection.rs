@@ -29,7 +29,6 @@ fn test_encrypt_always_produces_file_enc_for_binary() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(output_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(args).unwrap();
 
@@ -61,7 +60,6 @@ fn test_encrypt_always_produces_file_enc_for_dotenv() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(output_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(args).unwrap();
 

@@ -8,13 +8,16 @@ mod promotion;
 mod store;
 
 pub use paths::{active_member_file_path, incoming_member_file_path, MemberStatus};
-pub use promotion::{promote_incoming_members, promote_specified_incoming_members};
+pub use promotion::{
+    promote_incoming_members, promote_snapshotted_incoming_members,
+    promote_specified_incoming_members, IncomingMemberPromotionSnapshot,
+};
 pub use store::{
-    delete_member, ensure_member_document_kid_is_unique, find_active_member_by_kid,
-    list_active_member_ids, list_active_member_paths, list_incoming_member_paths,
-    list_member_file_paths, load_active_member_files, load_active_member_index_by_kid,
-    load_incoming_member_files, load_member_file, load_member_file_from_path, load_member_files,
-    save_member_content,
+    delete_member, ensure_member_document_kid_is_unique, ensure_workspace_member_kid_uniqueness,
+    find_active_member_by_kid, list_active_member_ids, list_active_member_paths,
+    list_incoming_member_paths, list_member_file_paths, load_active_member_files,
+    load_active_member_index_by_kid, load_incoming_member_files, load_member_file,
+    load_member_file_from_path, load_member_files, save_member_content,
 };
 
 #[cfg(test)]

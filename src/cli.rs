@@ -4,35 +4,48 @@
 //! CLI commands for secretenv v3
 
 // Common utilities (enabled for v3)
-pub mod common;
+pub(crate) mod common;
 pub mod error;
-pub mod identity_prompt;
+pub(crate) mod identity_prompt;
+pub mod options;
 
 // Active v3 commands
-pub mod decrypt;
+mod decrypt;
 pub mod encrypt;
-pub mod get;
-pub mod import;
-pub mod init;
-pub mod inspect;
-pub mod join;
-pub mod key;
-pub mod list;
-pub mod member;
+mod get;
+mod import;
+mod init;
+mod inspect;
+mod join;
+mod key;
+mod list;
+mod member;
 mod registration;
 pub mod rewrap;
-pub mod run;
+mod run;
 pub mod set;
-pub mod unset;
+mod trust;
+mod unset;
 
-pub mod config;
+mod config;
 
-// Removed (deprecated in v3)
-// pub mod share;
-// pub mod verify;
+pub use config::ConfigArgs;
+pub use decrypt::DecryptArgs;
+pub use get::GetArgs;
+pub use import::ImportArgs;
+pub use init::InitArgs;
+pub use inspect::InspectArgs;
+pub use join::JoinArgs;
+pub use key::KeyArgs;
+pub use list::ListArgs;
+pub use member::MemberArgs;
+pub use run::RunArgs;
+pub use trust::TrustArgs;
+pub use unset::UnsetArgs;
 
 use clap::{Parser, Subcommand};
 
+use crate::app::trust::CommandCapability;
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
 use crate::Error;
 
@@ -50,54 +63,57 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Configuration management
-    Config(config::ConfigArgs),
+    Config(ConfigArgs),
 
     /// Decrypt a file
-    Decrypt(decrypt::DecryptArgs),
+    Decrypt(DecryptArgs),
 
     /// Encrypt a file
     Encrypt(encrypt::EncryptArgs),
 
     /// Get a secret value
-    Get(get::GetArgs),
+    Get(GetArgs),
 
     /// Import secrets from .env file
-    Import(import::ImportArgs),
+    Import(ImportArgs),
 
     /// Initialize workspace
-    Init(init::InitArgs),
+    Init(InitArgs),
 
     /// Inspect encrypted file metadata
-    Inspect(inspect::InspectArgs),
+    Inspect(InspectArgs),
 
     /// Join an existing workspace
-    Join(join::JoinArgs),
+    Join(JoinArgs),
 
     /// Key management
-    Key(key::KeyArgs),
+    Key(KeyArgs),
 
     /// List all secrets
-    List(list::ListArgs),
+    List(ListArgs),
 
     /// Member management
-    Member(member::MemberArgs),
+    Member(MemberArgs),
 
     /// Re-encrypt secrets for updated members
     Rewrap(rewrap::RewrapArgs),
 
     /// Run command with decrypted environment variables
-    Run(run::RunArgs),
+    Run(RunArgs),
 
     /// Set a secret value
     Set(set::SetArgs),
 
+    /// Trust store management
+    Trust(TrustArgs),
+
     /// Remove a secret
-    Unset(unset::UnsetArgs),
+    Unset(UnsetArgs),
 }
 
 pub fn run() -> Result<(), Error> {
     let cli = Cli::parse();
-    ensure_env_mode_command_allowed(command_label(&cli.command))?;
+    ensure_env_mode_command_allowed(command_capability(&cli.command))?;
 
     match cli.command {
         Commands::Config(args) => config::run(args),
@@ -114,26 +130,28 @@ pub fn run() -> Result<(), Error> {
         Commands::Rewrap(args) => rewrap::run(args),
         Commands::Run(args) => run::run(args),
         Commands::Set(args) => set::run(args),
+        Commands::Trust(args) => trust::run(args),
         Commands::Unset(args) => unset::run(args),
     }
 }
 
-fn command_label(command: &Commands) -> &'static str {
+fn command_capability(command: &Commands) -> CommandCapability {
     match command {
-        Commands::Config(_) => "config",
-        Commands::Decrypt(_) => "decrypt",
-        Commands::Encrypt(_) => "encrypt",
-        Commands::Get(_) => "get",
-        Commands::Import(_) => "import",
-        Commands::Init(_) => "init",
-        Commands::Inspect(_) => "inspect",
-        Commands::Join(_) => "join",
-        Commands::Key(_) => "key",
-        Commands::List(_) => "list",
-        Commands::Member(_) => "member",
-        Commands::Rewrap(_) => "rewrap",
-        Commands::Run(_) => "run",
-        Commands::Set(_) => "set",
-        Commands::Unset(_) => "unset",
+        Commands::Config(_) => CommandCapability::Config,
+        Commands::Decrypt(_) => CommandCapability::Decrypt,
+        Commands::Encrypt(_) => CommandCapability::Encrypt,
+        Commands::Get(_) => CommandCapability::Get,
+        Commands::Import(_) => CommandCapability::Import,
+        Commands::Init(_) => CommandCapability::Init,
+        Commands::Inspect(_) => CommandCapability::Inspect,
+        Commands::Join(_) => CommandCapability::Join,
+        Commands::Key(_) => CommandCapability::Key,
+        Commands::List(_) => CommandCapability::List,
+        Commands::Member(_) => CommandCapability::Member,
+        Commands::Rewrap(_) => CommandCapability::Rewrap,
+        Commands::Run(_) => CommandCapability::Run,
+        Commands::Set(_) => CommandCapability::Set,
+        Commands::Trust(_) => CommandCapability::Trust,
+        Commands::Unset(_) => CommandCapability::Unset,
     }
 }

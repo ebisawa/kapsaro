@@ -27,7 +27,7 @@ fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -39,7 +39,7 @@ fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -56,7 +56,7 @@ fn setup_workspace_with_multiple_keys() -> (TempDir, TempDir, TempDir, PathBuf) 
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -74,7 +74,7 @@ fn test_get_existing_key() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("test_value"));
@@ -91,7 +91,7 @@ fn test_get_nonexistent_key() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -109,7 +109,7 @@ fn test_get_with_json_output() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("\"TEST_KEY\""))
@@ -134,7 +134,7 @@ fn test_get_error_when_file_not_exists() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -145,7 +145,7 @@ fn test_get_error_when_file_not_exists() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -163,7 +163,7 @@ fn test_get_all() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("test_value"))
@@ -181,7 +181,7 @@ fn test_get_all_with_key() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("ANOTHER_KEY=\"another_value\""))
@@ -199,7 +199,7 @@ fn test_get_with_key_format() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("TEST_KEY=\"test_value\""));
@@ -216,7 +216,7 @@ fn test_get_all_with_key_arg_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -230,7 +230,7 @@ fn test_get_without_key_and_all_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -246,7 +246,7 @@ fn test_get_all_json() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("\"ANOTHER_KEY\""))

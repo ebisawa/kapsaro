@@ -7,7 +7,20 @@ use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
 
 /// Plaintext data
-#[derive(Clone)]
+///
+/// ```compile_fail
+/// use secretenv::crypto::types::data::Plaintext;
+///
+/// let plaintext = Plaintext::from(b"secret" as &[u8]);
+/// let _copy = plaintext.clone();
+/// ```
+///
+/// ```compile_fail
+/// use secretenv::crypto::types::data::Plaintext;
+///
+/// let plaintext = Plaintext::from(b"secret" as &[u8]);
+/// let _bytes = plaintext.into_bytes();
+/// ```
 pub struct Plaintext(Vec<u8>);
 
 impl Zeroize for Plaintext {
@@ -31,21 +44,6 @@ impl Plaintext {
     /// Get the plaintext bytes
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
-    }
-
-    /// Convert into bytes
-    ///
-    /// Note: This method clones the data because `Plaintext` implements `Drop`
-    /// for secure memory clearing. Use `to_vec()` for explicit cloning.
-    pub fn into_bytes(self) -> Vec<u8> {
-        // Drop を実装しているため move できないので clone を使用
-        // ドロップ時に自動的にゼロ化される
-        self.0.clone()
-    }
-
-    /// Convert to a vector of bytes (cloning)
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.clone()
     }
 
     /// Convert to a zeroizing vector of bytes

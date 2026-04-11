@@ -3,14 +3,16 @@
 
 //! Key operations (activate, remove, export) implementation
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, remove_key_command,
-    save_exported_private_key,
+};
+use crate::cli::common::command::{resolve_options, resolve_required_member_id};
+use crate::cli::common::output::text::key::{
+    print_key_activate_summary, print_key_export_summary, print_key_remove_summary,
+    print_private_key_export_file_summary, print_private_key_export_stdout_summary,
 };
 use crate::cli::common::ssh::resolve_ssh_context_for_active_key;
-use crate::support::kid::build_kid_display;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::fs::atomic;
 use crate::Result;
 use std::io::IsTerminal;
 use std::io::{self, BufRead};
@@ -20,29 +22,22 @@ use super::{ActivateArgs, ExportArgs, RemoveArgs};
 
 /// Main entry point for key activation
 pub fn run_activate(args: ActivateArgs) -> Result<()> {
-    let options = CommonCommandOptions::from(&args.common);
+    let options = resolve_options(&args.common);
     let result = activate_key_command(&options, args.member_id.clone(), args.kid.clone())?;
-    let kid_display = build_kid_display(&result.kid).unwrap_or_else(|_| result.kid.clone());
-    eprintln!("Activated key for '{}':", result.member_id);
-    eprintln!("  Kid: {}", kid_display);
+    print_key_activate_summary(&result.member_id, &result.kid);
     Ok(())
 }
 
 /// Main entry point for key removal
 pub fn run_remove(args: RemoveArgs) -> Result<()> {
-    let options = CommonCommandOptions::from(&args.common);
+    let options = resolve_options(&args.common);
     let result = remove_key_command(
         &options,
         args.member_id.clone(),
         args.kid.clone(),
         args.force,
     )?;
-    let kid_display = build_kid_display(&result.kid).unwrap_or_else(|_| result.kid.clone());
-    eprintln!("Removed key for '{}':", result.member_id);
-    eprintln!("  Kid: {}", kid_display);
-    if result.was_active {
-        eprintln!("  Note: This was the active key. No key is now active.");
-    }
+    print_key_remove_summary(&result.member_id, &result.kid, result.was_active);
     Ok(())
 }
 
@@ -54,12 +49,9 @@ pub fn run_export(args: ExportArgs) -> Result<()> {
         .ok_or_else(|| crate::Error::InvalidArgument {
             message: "--out is required for public key export".to_string(),
         })?;
-    let options = CommonCommandOptions::from(&args.common);
+    let options = resolve_options(&args.common);
     let result = export_key_command(&options, args.member_id.clone(), args.kid.clone(), out)?;
-    let kid_display = build_kid_display(&result.kid).unwrap_or_else(|_| result.kid.clone());
-    eprintln!("Exported public key for '{}':", result.member_id);
-    eprintln!("  Kid:    {}", kid_display);
-    eprintln!("  Output: {}", display_path_relative_to_cwd(out));
+    print_key_export_summary(&result.member_id, &result.kid, out);
 
     Ok(())
 }
@@ -72,31 +64,26 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
         });
     }
 
-    let options = CommonCommandOptions::from(&args.common);
+    let options = resolve_options(&args.common);
+    let member_id = resolve_required_member_id(&options, args.member_id.clone(), false)?;
+    let ssh_ctx = resolve_ssh_context_for_active_key(&options, Some(member_id.clone()))?;
     let password = prompt_export_password()?;
-
-    let ssh_ctx = resolve_ssh_context_for_active_key(&options, args.member_id.clone())?;
 
     let result = export_private_key_command(
         &options,
-        args.member_id.clone(),
+        member_id,
         args.kid.clone(),
         password.as_str(),
         ssh_ctx,
     )?;
-    let kid_display = build_kid_display(&result.kid).unwrap_or_else(|_| result.kid.clone());
 
     if let Some(out) = args.out.as_ref() {
-        save_exported_private_key(out, &result.encoded_key)?;
-        eprintln!("Exported private key for '{}':", result.member_id);
-        eprintln!("  Kid:    {}", kid_display);
-        eprintln!("  Output: {}", display_path_relative_to_cwd(out));
+        atomic::save_text(out, result.encoded_key.as_str())?;
+        print_private_key_export_file_summary(&result.member_id, &result.kid, out);
     } else if args.stdout {
         eprintln!();
-        println!("{}", result.encoded_key);
-        eprintln!();
-        eprintln!("Exported private key for '{}':", result.member_id);
-        eprintln!("  Kid: {}", kid_display);
+        println!("{}", result.encoded_key.as_str());
+        print_private_key_export_stdout_summary(&result.member_id, &result.kid);
     }
 
     Ok(())

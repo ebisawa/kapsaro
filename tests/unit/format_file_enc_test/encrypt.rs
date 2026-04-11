@@ -5,8 +5,8 @@ use super::helpers::{
     create_test_public_key, generate_ed25519_keypair, generate_x25519_keypair,
     recipients_and_members,
 };
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_recipient_key;
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::encrypt::file as file_enc;
 use secretenv::feature::envelope::signature::SigningContext;
 use uuid::Uuid;
@@ -38,7 +38,7 @@ fn test_encrypt_file_basic() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -114,7 +114,11 @@ fn test_encrypt_file_multiple_recipients() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     )
@@ -170,7 +174,11 @@ fn test_encrypt_file_empty_content() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     );
@@ -204,7 +212,11 @@ fn test_encrypt_file_large_content() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     );
@@ -238,7 +250,11 @@ fn test_encrypt_file_name_is_set() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     );
@@ -265,7 +281,11 @@ fn test_encrypt_file_sid_is_uuid() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     )
@@ -299,7 +319,7 @@ fn test_encrypt_file_deterministic_structure() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -311,7 +331,7 @@ fn test_encrypt_file_deterministic_structure() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -342,7 +362,11 @@ fn test_encrypt_file_no_recipient_found() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     )
@@ -373,7 +397,11 @@ fn test_encrypt_file_signature_included() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: None,
+            signer_pub: create_test_public_key(
+                "signer@test",
+                "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "dummy",
+            ),
             debug: false,
         },
     )

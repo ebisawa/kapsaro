@@ -5,11 +5,15 @@
 
 use clap::Args;
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::app::kv::mutation::import_kv_command;
-use crate::cli::common::options::CommonOptions;
-use crate::cli::common::output::json::print_json_output;
-use crate::cli::common::ssh::resolve_ssh_context_optional;
+use crate::app::trust::ImportPolicy;
+use crate::cli::common::command::{
+    resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
+    WriteCommandLabels,
+};
+use crate::cli::common::output::kv::print_kv_import_result;
+use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::options::CommonOptions;
 use crate::support::fs::load_text;
 use crate::Result;
 
@@ -18,10 +22,6 @@ pub struct ImportArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: CommonOptions,
-
-    /// Do not embed signer's PublicKey in signature
-    #[arg(long)]
-    pub no_signer_pub: bool,
 
     /// Member ID to use
     #[arg(long, short = 'm')]
@@ -37,32 +37,30 @@ pub struct ImportArgs {
 
 pub fn run(args: ImportArgs) -> Result<()> {
     let content = load_text(std::path::Path::new(&args.filename))?;
-    let options = CommonCommandOptions::from(&args.common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, args.member_id.clone())?;
-    let (outcome, entry_count) = import_kv_command(
-        options,
-        args.member_id.clone(),
-        args.name.as_deref(),
-        &content,
-        args.no_signer_pub,
-        None,
-        ssh_ctx,
+    let options = resolve_options(&args.common);
+    let (outcome, entry_count) = run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || {
+            run_kv_write_command_with_trust::<ImportPolicy, _, _>(
+                &args.common,
+                args.member_id.clone(),
+                args.name.as_deref(),
+                true,
+                WriteCommandLabels {
+                    signer_context: Some(("import input signer", "input signer")),
+                    recipient_context: "import recipients",
+                },
+                |_, trust_plan| import_kv_command(trust_plan, &content, None),
+            )
+        },
     )?;
-    if let Some(message) = outcome.message {
-        if !args.common.quiet {
-            eprintln!("{}", message);
-        }
-    } else if !args.common.quiet {
-        eprintln!("Imported {} entries", entry_count);
-    }
 
-    if args.common.json {
-        let file_name = args.name.as_deref().unwrap_or("default");
-        print_json_output(&serde_json::json!({
-            "imported": entry_count,
-            "file": file_name,
-        }))?;
-    }
-
-    Ok(())
+    print_kv_import_result(
+        outcome.message.as_deref(),
+        entry_count,
+        args.name.as_deref().unwrap_or("default"),
+        args.common.json,
+        args.common.quiet,
+    )
 }

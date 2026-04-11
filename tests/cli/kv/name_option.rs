@@ -29,7 +29,7 @@ fn test_set_with_name_option_creates_named_file() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -57,7 +57,7 @@ fn test_set_without_name_option_defaults_to_default() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -86,7 +86,7 @@ fn test_set_get_with_name_option_roundtrip() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -99,7 +99,7 @@ fn test_set_get_with_name_option_roundtrip() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("my_secret_value"));
@@ -124,7 +124,7 @@ fn test_list_with_name_option() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -136,7 +136,7 @@ fn test_list_with_name_option() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("PROD_KEY"));
@@ -161,7 +161,7 @@ fn test_unset_with_name_option() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -171,10 +171,11 @@ fn test_unset_with_name_option() {
         .arg("-n")
         .arg("myfile")
         .arg("REMOVE_KEY")
+        .arg("--force")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -187,7 +188,7 @@ fn test_unset_with_name_option() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -211,7 +212,7 @@ fn test_run_with_name_option() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -229,7 +230,7 @@ fn test_run_with_name_option() {
             .arg("-c")
             .arg("echo $RUN_KEY")
             .env("SECRETENV_HOME", home_dir.path())
-            .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+            .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
             .assert()
             .success()
             .stdout(predicate::str::contains("run_secret_value"));
@@ -253,7 +254,7 @@ fn test_get_with_nonexistent_name_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -271,7 +272,7 @@ fn test_named_file_and_default_file_are_independent() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -285,7 +286,7 @@ fn test_named_file_and_default_file_are_independent() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -295,7 +296,7 @@ fn test_named_file_and_default_file_are_independent() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("DEFAULT_KEY"))
@@ -309,7 +310,7 @@ fn test_named_file_and_default_file_are_independent() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("OTHER_KEY"))

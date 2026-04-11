@@ -15,7 +15,8 @@ fn make_verified_result() -> VerificationResult {
         message: "OK".to_string(),
         fingerprint: Some("SHA256:abcdef1234567890".to_string()),
         matched_key_id: Some(67890),
-        verified_bindings: None,
+        github_claim_present: true,
+        verified_github: None,
     }
 }
 
@@ -26,7 +27,8 @@ fn make_failed_result() -> VerificationResult {
         message: "SSH key not found in GitHub account keys".to_string(),
         fingerprint: None,
         matched_key_id: None,
-        verified_bindings: None,
+        github_claim_present: true,
+        verified_github: None,
     }
 }
 
@@ -37,19 +39,19 @@ fn test_online_verification_display_github_verified() {
     let section = build_online_verification_section(&display, Some("alice"), Some(12345));
 
     assert_eq!(section.title, "Online Verification (GitHub)");
-    assert!(section.lines.iter().any(|line| line == "Status:   OK"));
     assert!(section
         .lines
         .iter()
-        .any(|line| line == "Account:  alice (id: 12345)"));
+        .any(|line| line.contains("\u{2714} OK")));
     assert!(section
         .lines
         .iter()
-        .any(|line| line == "SSH key fingerprint: SHA256:abcdef1234567890"));
+        .any(|line| line.contains("alice") && line.contains("12345")));
     assert!(section
         .lines
         .iter()
-        .any(|line| line == "Matched key ID: 67890"));
+        .any(|line| line.contains("SHA256:abcdef1234567890")));
+    assert!(section.lines.iter().any(|line| line.contains("67890")));
 }
 
 #[test]
@@ -59,15 +61,18 @@ fn test_online_verification_display_github_failed() {
     let section = build_online_verification_section(&display, Some("bob"), Some(54321));
 
     assert_eq!(section.title, "Online Verification (GitHub)");
-    assert!(section.lines.iter().any(|line| line == "Status:   FAILED"));
     assert!(section
         .lines
         .iter()
-        .any(|line| line == "Reason:   SSH key not found in GitHub account keys"));
+        .any(|line| line.contains("\u{2718} FAILED")));
+    assert!(section
+        .lines
+        .iter()
+        .any(|line| line.contains("SSH key not found")));
     assert!(!section
         .lines
         .iter()
-        .any(|line| line.starts_with("Account:")));
+        .any(|line| line.starts_with("  Account:")));
 }
 
 #[test]
@@ -80,5 +85,5 @@ fn test_online_verification_display_no_supported_binding() {
     assert!(section
         .lines
         .iter()
-        .any(|line| line == "Status:   Not available (no supported binding configured)"));
+        .any(|line| line.contains("Not available (no supported binding configured)")));
 }

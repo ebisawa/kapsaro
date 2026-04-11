@@ -54,7 +54,7 @@ fn test_join_existing_workspace() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains(&missing_key_message))
@@ -110,7 +110,7 @@ fn test_join_force_overwrites_existing_member() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -123,7 +123,7 @@ fn test_join_force_overwrites_existing_member() {
         .arg(TEST_MEMBER_ID)
         .arg("--force")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_ID)));
@@ -147,7 +147,7 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -161,7 +161,7 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg("--github-user")
         .arg("definitely-not-a-real-github-user-for-secretenv-tests")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Using existing key for"));
@@ -184,7 +184,7 @@ fn test_join_nonexistent_workspace_fails() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -204,7 +204,7 @@ fn test_join_incomplete_workspace_fails() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 
@@ -236,7 +236,7 @@ fn test_init_then_join_different_member() {
         .arg("--member-id")
         .arg("alice@example.com")
         .env("SECRETENV_HOME", home_dir_alice.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv_alice.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv_alice.to_str().unwrap())
         .assert()
         .success();
 
@@ -248,7 +248,7 @@ fn test_init_then_join_different_member() {
         .arg("--member-id")
         .arg("bob@example.com")
         .env("SECRETENV_HOME", home_dir_bob.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv_bob.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv_bob.to_str().unwrap())
         .assert()
         .success();
 

@@ -79,7 +79,7 @@ pub struct MemberKeySetupResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedRegistration {
+pub struct RegistrationCommand {
     pub mode: RegistrationMode,
     pub workspace_path: PathBuf,
     pub keystore_root: PathBuf,

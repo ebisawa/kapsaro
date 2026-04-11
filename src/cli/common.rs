@@ -3,9 +3,11 @@
 
 //! Common utilities for CLI commands
 
-pub mod env_mode;
-pub mod options;
+pub(crate) mod command;
+pub(crate) mod env_mode;
+pub(crate) mod prompt;
 
-pub mod output;
+pub(crate) mod output;
 
-pub mod ssh;
+pub(crate) mod ssh;
+pub(crate) mod trust;

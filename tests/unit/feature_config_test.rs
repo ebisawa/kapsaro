@@ -17,10 +17,10 @@ use tempfile::TempDir;
 #[test]
 fn test_validate_key_valid() {
     assert!(validate_key("member_id").is_ok());
-    assert!(validate_key("ssh_key").is_ok());
-    assert!(validate_key("ssh_keygen").is_ok());
-    assert!(validate_key("ssh_add").is_ok());
-    assert!(validate_key("ssh_signer").is_ok());
+    assert!(validate_key("ssh_identity").is_ok());
+    assert!(validate_key("ssh_keygen_command").is_ok());
+    assert!(validate_key("ssh_add_command").is_ok());
+    assert!(validate_key("ssh_signing_method").is_ok());
     assert!(validate_key("github_user").is_ok());
     assert!(validate_key("gihub_user").is_ok());
 }
@@ -29,6 +29,10 @@ fn test_validate_key_valid() {
 fn test_validate_key_invalid() {
     assert!(validate_key("invalid_key").is_err());
     assert!(validate_key("unknown").is_err());
+    assert!(validate_key("ssh_keygen").is_err());
+    assert!(validate_key("ssh_add").is_err());
+    assert!(validate_key("ssh_signer").is_err());
+    assert!(validate_key("ssh_key").is_err());
 }
 
 #[test]
@@ -47,10 +51,10 @@ fn test_resolve_config_value_global() {
     set_config_value(&global_config_path, "member_id", "global@example.com").unwrap();
 
     // Resolve config value
-    let (value, scope) = resolve_config_value("member_id", Some(_temp_dir.path())).unwrap();
+    let resolution = resolve_config_value("member_id", Some(_temp_dir.path())).unwrap();
 
-    assert_eq!(value, Some("global@example.com".to_string()));
-    assert_eq!(scope, Some("global".to_string()));
+    assert_eq!(resolution.value, Some("global@example.com".to_string()));
+    assert_eq!(resolution.scope, Some("global".to_string()));
 }
 
 #[test]
@@ -58,13 +62,13 @@ fn test_get_config_path_and_scope_global() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
     let _temp_dir = TempDir::new().unwrap();
     std::env::set_var("SECRETENV_HOME", _temp_dir.path().to_str().unwrap());
-    let (path, scope) = get_config_path_and_scope(Some(_temp_dir.path())).unwrap();
+    let resolution = get_config_path_and_scope(Some(_temp_dir.path())).unwrap();
 
-    match scope {
+    match resolution.scope {
         ConfigScope::Global => {}
     }
     // Path should be global config path
-    assert!(path.to_string_lossy().contains("config.toml"));
+    assert!(resolution.path.to_string_lossy().contains("config.toml"));
 }
 
 #[test]

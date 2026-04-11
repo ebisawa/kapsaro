@@ -3,20 +3,23 @@
 
 //! Unit tests for disclosed-flag behavior in feature/kv.
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_verified_members;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use secretenv::app::rewrap::execution::rewrap_kv_content_with_request;
-use secretenv::app::rewrap::types::SingleRewrapRequest;
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::kv::mutate::{set_kv_entry, KvWriteContext};
-use secretenv::format::content::KvEncContent;
+use secretenv::feature::kv::mutate::{
+    set_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult, KvWriteContext,
+};
+use secretenv::feature::kv::types::KvInputEntry;
+use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
+use secretenv::format::content::{EncryptedContent, KvEncContent};
 use secretenv::format::kv::document::parse_kv_document;
 use secretenv::format::schema::document::parse_kv_entry_token;
 use secretenv::format::token::TokenCodec;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
+use secretenv::io::workspace::members::{list_active_member_ids, load_member_files};
 use secretenv::model::kv_enc::entry::KvEntryValue;
 use secretenv::model::kv_enc::line::KvEncLine;
 use std::fs;
@@ -88,6 +91,13 @@ fn extract_disclosed_flags(content: &str) -> Vec<(String, bool)> {
         .collect()
 }
 
+fn rewrap_kv_content(
+    content: &KvEncContent,
+    request: &RewrapRequest<'_>,
+) -> secretenv::Result<String> {
+    rewrap_content(&EncryptedContent::KvEnc(content.clone()), request)
+}
+
 fn encrypt_two_member_document(
     temp_dir: &TempDir,
     alice_kid: &str,
@@ -97,8 +107,7 @@ fn encrypt_two_member_document(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let kv_map = std::collections::HashMap::from([
         ("KEY1".to_string(), "value1".to_string()),
         ("KEY2".to_string(), "value2".to_string()),
@@ -106,12 +115,11 @@ fn encrypt_two_member_document(
 
     encrypt_kv_document(
         &kv_map,
-        &recipients,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub.clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -122,14 +130,15 @@ fn encrypt_two_member_document(
 fn single_rewrap_request<'a>(
     key_ctx: &'a CryptoContext,
     workspace_root: Option<&'a std::path::Path>,
-) -> SingleRewrapRequest<'a> {
-    SingleRewrapRequest {
+) -> RewrapRequest<'a> {
+    RewrapRequest {
         member_id: ALICE_MEMBER_ID,
         key_ctx,
         workspace_root,
+        target_members: None,
         rotate_key: false,
         clear_disclosure_history: false,
-        no_signer_pub: false,
+
         debug: false,
     }
 }
@@ -144,7 +153,34 @@ fn remove_bob_recipient(
     let request = single_rewrap_request(key_ctx, Some(temp_dir.path()));
     let encrypted = KvEncContent::new_unchecked(encrypted);
 
-    rewrap_kv_content_with_request(&encrypted, &request).unwrap()
+    rewrap_kv_content(&encrypted, &request).unwrap()
+}
+
+fn build_recipient_snapshot(
+    workspace_root: &std::path::Path,
+) -> secretenv::Result<KvRecipientSnapshot> {
+    let member_ids = list_active_member_ids(workspace_root)?;
+    let public_keys = load_member_files(workspace_root, &member_ids)?;
+    let verified_members =
+        secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+    Ok(KvRecipientSnapshot {
+        member_ids,
+        verified_members,
+    })
+}
+
+fn set_kv_entry(
+    existing_content: Option<&KvEncContent>,
+    entries: &[(String, String)],
+    workspace_root: &std::path::Path,
+    ctx: &KvWriteContext<'_>,
+) -> secretenv::Result<KvSetResult> {
+    let recipients = build_recipient_snapshot(workspace_root)?;
+    let entries = entries
+        .iter()
+        .map(|(key, value)| KvInputEntry::new(key.clone(), value.clone()))
+        .collect::<Vec<_>>();
+    set_kv_entry_with_recipients(existing_content, &entries, &recipients, ctx)
 }
 
 #[test]
@@ -160,13 +196,7 @@ fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
     let flags_after_remove = extract_disclosed_flags(&after_remove);
     assert!(flags_after_remove.iter().all(|(_, disclosed)| *disclosed));
 
-    let ctx = KvWriteContext {
-        member_id: ALICE_MEMBER_ID.to_string(),
-        key_ctx,
-        token_codec: None,
-        no_signer_pub: false,
-        verbose: false,
-    };
+    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
     let after_remove = KvEncContent::new_unchecked(after_remove);
     let result = set_kv_entry(
         Some(&after_remove),
@@ -194,13 +224,7 @@ fn test_set_kv_entry_new_entry_has_disclosed_false() {
     let encrypted = encrypt_two_member_document(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
     let after_remove = remove_bob_recipient(&temp_dir, encrypted, &key_ctx, &alice_kid);
 
-    let ctx = KvWriteContext {
-        member_id: ALICE_MEMBER_ID.to_string(),
-        key_ctx,
-        token_codec: None,
-        no_signer_pub: false,
-        verbose: false,
-    };
+    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
     let after_remove = KvEncContent::new_unchecked(after_remove);
     let result = set_kv_entry(
         Some(&after_remove),

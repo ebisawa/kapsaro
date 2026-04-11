@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::test_utils::EnvGuard;
 use std::fs;
 
 #[test]
 fn returns_none_when_no_workspace_in_config() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "HOME"]);
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
     fs::write(
@@ -25,6 +27,7 @@ fn returns_none_when_no_workspace_in_config() {
 
 #[test]
 fn returns_path_when_workspace_in_config() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "HOME"]);
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
     fs::write(
@@ -47,6 +50,7 @@ fn returns_path_when_workspace_in_config() {
 
 #[test]
 fn expands_tilde_in_workspace_path() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "HOME"]);
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
     fs::write(

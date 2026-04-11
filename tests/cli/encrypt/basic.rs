@@ -27,7 +27,6 @@ fn test_encrypt_file_with_workspace() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(output_path.clone()),
-        no_signer_pub: false,
     };
     encrypt::run(args).unwrap();
 
@@ -60,7 +59,6 @@ fn test_encrypt_no_active_members_error() {
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         input: input_path,
         out: Some(workspace_dir.join("output.encrypted")),
-        no_signer_pub: false,
     };
     let result = encrypt::run(args);
     assert!(result.is_err(), "Should fail with no active members");

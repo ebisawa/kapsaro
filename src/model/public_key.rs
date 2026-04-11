@@ -14,7 +14,7 @@ pub use super::public_key_verified::{
 };
 
 /// PublicKey v4 document (signed container)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKey {
     /// The protected content of the public key (signed payload)
@@ -25,7 +25,7 @@ pub struct PublicKey {
 }
 
 /// The protected content of the public key (Signed payload)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKeyProtected {
     /// Format identifier: "secretenv.public.key@4"
@@ -53,7 +53,7 @@ pub struct PublicKeyProtected {
 }
 
 /// Identity (Keys + Attestation)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Identity {
     pub keys: IdentityKeys,
@@ -61,7 +61,7 @@ pub struct Identity {
 }
 
 /// Identity Keys (KEM + Sig)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct IdentityKeys {
     pub kem: JwkOkpPublicKey,
@@ -82,7 +82,7 @@ pub struct JwkOkpPublicKey {
 }
 
 /// SSH attestation
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Attestation {
     /// Method: "ssh"
@@ -97,7 +97,7 @@ pub struct Attestation {
 }
 
 /// Claims about external service bindings (e.g. GitHub). Verified online.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct BindingClaims {
     /// GitHub account binding (claim; verified by member verify)
@@ -106,7 +106,7 @@ pub struct BindingClaims {
 }
 
 /// GitHub account binding (optional at document level; when present, both id and login are required)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct GithubAccount {
     /// GitHub user ID (numeric, stable across login changes)

@@ -32,7 +32,7 @@ format = "secretenv/config@1"
 [ssh]
 ssh_add_path = "/usr/bin/ssh-add"
 ssh_keygen_path = "/usr/bin/ssh-keygen"
-ssh_signer = "ssh-agent"
+ssh_signing_method = "ssh-agent"
 "#;
     let doc: ConfigDocument = toml::from_str(toml).unwrap();
     assert_eq!(doc.ssh.ssh_add_path, "/usr/bin/ssh-add");
@@ -98,7 +98,19 @@ fn test_config_deserialize_auto() {
 format = "secretenv/config@1"
 
 [ssh]
-ssh_signer = "auto"
+ssh_signing_method = "auto"
+"#;
+    let doc: ConfigDocument = toml::from_str(toml).unwrap();
+    assert!(matches!(doc.ssh.signing_method, SshSignerConfig::Auto));
+}
+
+#[test]
+fn test_config_ignores_old_ssh_signer_key() {
+    let toml = r#"
+format = "secretenv/config@1"
+
+[ssh]
+ssh_signer = "ssh-agent"
 "#;
     let doc: ConfigDocument = toml::from_str(toml).unwrap();
     assert!(matches!(doc.ssh.signing_method, SshSignerConfig::Auto));

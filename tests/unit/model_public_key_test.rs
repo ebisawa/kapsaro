@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
 use secretenv::model::public_key::*;
 
 #[test]

@@ -9,7 +9,7 @@
 //! - ensure_keystore_dir (tested via KeystoreResolver::resolve_and_ensure)
 //! - build_public_key with github_account
 
-use crate::cli_common::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -21,7 +21,7 @@ use secretenv::feature::key::ssh_binding::SshBindingContext;
 use secretenv::format::kid::derive_public_key_kid;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::resolver::KeystoreResolver;
-use secretenv::io::keystore::signer::load_signer_public_key_if_needed;
+use secretenv::io::keystore::signer::load_signer_public_key;
 use secretenv::io::keystore::storage::{list_kids, save_key_pair_atomic};
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
@@ -120,8 +120,8 @@ fn build_protected_without_kid_value(
 }
 
 fn make_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
-    let (_kem_sk, kem_pk, sig_sk, sig_pk) = generate_keypairs().unwrap();
-    let identity_keys = build_identity_keys(&kem_pk, &sig_pk).unwrap();
+    let keypairs = generate_keypairs().unwrap();
+    let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
     let identity = Identity {
         keys: identity_keys,
         attestation: Attestation {
@@ -130,7 +130,7 @@ fn make_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
             sig: "dummy".to_string(),
         },
     };
-    (identity, sig_sk)
+    (identity, keypairs.sig_sk)
 }
 
 #[test]
@@ -473,9 +473,9 @@ fn test_ensure_keystore_dir_idempotent() {
 
 #[test]
 fn test_generate_keypairs() {
-    let (_kem_sk, kem_pk, _sig_sk, sig_pk) = generate_keypairs().unwrap();
-    assert_eq!(kem_pk.as_bytes().len(), 32);
-    assert_eq!(sig_pk.as_bytes().len(), 32);
+    let keypairs = generate_keypairs().unwrap();
+    assert_eq!(keypairs.kem_pk.as_bytes().len(), 32);
+    assert_eq!(keypairs.sig_pk.as_bytes().len(), 32);
 }
 
 #[test]
@@ -493,12 +493,12 @@ fn test_build_identity_keys() {
 
 #[test]
 fn test_build_public_key() {
-    let (_temp_dir, _kem_sk, kem_pk, _sig_sk, sig_pk) = {
+    let (_temp_dir, keypairs) = {
         let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
-        let (kem_sk, kem_pk, sig_sk, sig_pk) = generate_keypairs().unwrap();
-        (temp_dir, kem_sk, kem_pk, sig_sk, sig_pk)
+        let keypairs = generate_keypairs().unwrap();
+        (temp_dir, keypairs)
     };
-    let identity_keys = build_identity_keys(&kem_pk, &sig_pk).unwrap();
+    let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
 
     let identity = Identity {
         keys: identity_keys,
@@ -514,7 +514,7 @@ fn test_build_public_key() {
         identity,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
-        sig_sk: &_sig_sk,
+        sig_sk: &keypairs.sig_sk,
         debug: false,
         github_account: None,
     })
@@ -529,33 +529,15 @@ fn test_build_public_key() {
 }
 
 #[test]
-fn test_load_signer_public_key_if_needed_default() {
+fn test_load_signer_public_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
     let pub_key_source =
         secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
 
-    // no_signer_pub=false means DO embed the signer public key
-    let result = load_signer_public_key_if_needed(&pub_key_source, ALICE_MEMBER_ID, false).unwrap();
+    let result = load_signer_public_key(&pub_key_source, ALICE_MEMBER_ID).unwrap();
 
-    assert!(result.is_some());
-    assert_eq!(
-        result.as_ref().unwrap().protected.member_id,
-        ALICE_MEMBER_ID
-    );
-}
-
-#[test]
-fn test_load_signer_public_key_if_needed_no_signer_pub() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
-    let keystore_root = temp_dir.path().join("keys");
-    let pub_key_source =
-        secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
-
-    // no_signer_pub=true means DON'T embed the signer public key
-    let result = load_signer_public_key_if_needed(&pub_key_source, ALICE_MEMBER_ID, true).unwrap();
-
-    assert!(result.is_none());
+    assert_eq!(result.protected.member_id, ALICE_MEMBER_ID);
 }
 
 #[test]

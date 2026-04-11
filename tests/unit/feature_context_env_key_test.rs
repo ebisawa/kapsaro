@@ -58,6 +58,7 @@ fn build_exported_key(plaintext: &PrivateKeyPlaintext, password: &str) -> String
         false,
     )
     .expect("export should succeed")
+    .into_plain_string_for_output()
 }
 
 fn assert_env_key_vars_cleared() {
@@ -99,8 +100,8 @@ fn test_decode_env_private_key() {
 
     let result = load_private_key_from_env(false).expect("should succeed");
     assert_eq!(result.member_id, "alice@example.com");
-    assert_eq!(result.verified_key.proof().kid, TEST_KID);
-    assert_eq!(result.verified_key.proof().ssh_fpr, None);
+    assert_eq!(result.verified_key.proof().kid(), TEST_KID);
+    assert!(result.verified_key.proof().ssh_fpr().is_none());
     assert_eq!(
         result.verified_key.document().keys.sig.x,
         plaintext.keys.sig.x

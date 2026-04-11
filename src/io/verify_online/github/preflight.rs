@@ -6,7 +6,7 @@
 //! Verifies that an SSH public key is registered on a GitHub user's account
 //! before key generation. Does not require a PublicKey model.
 
-use super::GitHubApi;
+use super::{GitHubVerificationApi, GitHubVerificationApiClient};
 use crate::io::ssh::protocol::fingerprint;
 use crate::io::verify_online::VerificationStatus;
 use crate::model::public_key::GithubAccount;
@@ -21,7 +21,7 @@ pub async fn verify_ssh_key_on_github(
     account: &GithubAccount,
     verbose: bool,
 ) -> Result<VerificationStatus> {
-    let api = super::GitHubApiClient::new()?;
+    let api = GitHubVerificationApiClient::new()?;
     verify_ssh_key_on_github_with_api(ssh_pub_key, account, verbose, &api).await
 }
 
@@ -30,7 +30,7 @@ pub async fn verify_ssh_key_on_github_with_api(
     ssh_pub_key: &str,
     account: &GithubAccount,
     verbose: bool,
-    api: &impl GitHubApi,
+    api: &impl GitHubVerificationApi,
 ) -> Result<VerificationStatus> {
     let our_fingerprint = fingerprint::build_sha256_fingerprint(ssh_pub_key)?;
 

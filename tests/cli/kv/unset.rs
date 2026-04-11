@@ -27,7 +27,7 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -39,7 +39,7 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -50,7 +50,7 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -58,17 +58,18 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
 }
 
 #[test]
-fn test_unset_existing_key() {
+fn test_unset_existing_key_with_force() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_keys();
 
-    // Unset a key
+    // Unset a key in non-interactive mode
     cmd()
         .arg("unset")
         .arg("KEY1")
+        .arg("--force")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -92,20 +93,61 @@ fn test_unset_nonexistent_key() {
     cmd()
         .arg("unset")
         .arg("NONEXISTENT_KEY")
+        .arg("--force")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
 }
 
 #[test]
+fn test_unset_non_interactive_without_force_fails() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_keys();
+
+    cmd()
+        .arg("unset")
+        .arg("KEY1")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "without --force in non-interactive mode",
+        ));
+}
+
+#[test]
+fn test_unset_requires_member_id_before_confirmation() {
+    let workspace_dir = TempDir::new().unwrap();
+    let home_dir = TempDir::new().unwrap();
+
+    fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
+    fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
+    fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
+
+    cmd()
+        .arg("unset")
+        .arg("KEY1")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("member_id not configured")
+                .and(predicate::str::contains("without --force in non-interactive mode").not()),
+        );
+}
+
+#[test]
 fn test_unset_with_force() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_keys();
 
-    // Unset with --force flag (should not prompt)
     cmd()
         .arg("unset")
         .arg("KEY1")
@@ -113,7 +155,7 @@ fn test_unset_with_force() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 }

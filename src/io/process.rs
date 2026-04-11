@@ -3,6 +3,7 @@
 
 //! External process execution helpers.
 
+use crate::support::secret::SecretEnvMap;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -29,21 +30,25 @@ pub(crate) const STANDARD_ENV_KEYS: &[&str] = &[
 pub fn execute_command_with_env(
     cmd: &str,
     cmd_args: &[String],
-    env_vars: &BTreeMap<String, String>,
+    env_vars: &SecretEnvMap,
 ) -> Result<i32> {
     let mut command = Command::new(cmd);
     command.args(cmd_args);
-    let env_vars = env_vars
-        .iter()
-        .map(|(key, value)| (key.clone(), OsString::from(value)))
-        .collect();
-    configure_child_env_os(&mut command, &env_vars);
+    configure_child_env_secret(&mut command, env_vars);
 
     let status = command.status().map_err(|e| {
         Error::io_with_source(format!("Failed to execute command '{}': {}", cmd, e), e)
     })?;
 
     Ok(status.code().unwrap_or(1))
+}
+
+pub(crate) fn configure_child_env_secret(command: &mut Command, env_vars: &SecretEnvMap) {
+    command.env_clear();
+    command.envs(load_standard_env_vars());
+    for (key, value) in env_vars {
+        command.env(key, value.as_str());
+    }
 }
 
 pub(crate) fn configure_child_env_os(command: &mut Command, env_vars: &BTreeMap<String, OsString>) {

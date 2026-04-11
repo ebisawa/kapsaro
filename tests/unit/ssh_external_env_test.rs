@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use secretenv::io::ssh::external::add::DefaultSshAdd;
-use secretenv::io::ssh::external::pubkey::load_ssh_public_key_from_keygen;
+use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
 use secretenv::io::ssh::external::traits::SshAdd;
+use secretenv::io::ssh::external::traits::SshKeygen;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
@@ -30,9 +31,9 @@ fn test_load_ssh_public_key_from_keygen_uses_sanitized_env_with_optional_socket(
     std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
 
     let (_script_dir, script_path) = make_env_dump_script();
-    let output =
-        load_ssh_public_key_from_keygen(&script_path, std::path::Path::new("/tmp/test-key"))
-            .unwrap();
+    let output = DefaultSshKeygen::new(&script_path)
+        .derive_public_key(std::path::Path::new("/tmp/test-key"))
+        .unwrap();
 
     assert!(output.contains("PATH=/usr/bin"));
     assert!(output.contains("SSH_AUTH_SOCK=/tmp/agent.sock"));

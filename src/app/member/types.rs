@@ -15,7 +15,7 @@ pub struct MemberListResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct MemberGithubAccount {
+pub struct MemberGithubClaim {
     pub id: u64,
     pub login: String,
 }
@@ -39,22 +39,18 @@ impl MemberDocumentStatus {
 pub struct MemberDocumentView {
     pub member_id: String,
     pub kid: String,
-    pub format: String,
     pub expires_at: String,
     pub created_at: Option<String>,
-    pub kem_key_type: String,
     pub kem_curve: String,
-    pub sig_key_type: String,
     pub sig_curve: String,
-    pub ssh_attestation_method: String,
-    pub ssh_attestation_pubkey: String,
-    pub github_account: Option<MemberGithubAccount>,
+    pub ssh_attestation_fingerprint: String,
+    pub github_claim: Option<MemberGithubClaim>,
     pub verification_status: MemberDocumentStatus,
     pub verification_warnings: Vec<String>,
     pub document: serde_json::Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MembershipStatus {
     Active,
     Incoming,
@@ -87,6 +83,13 @@ pub struct MemberShowResult {
 #[derive(Debug)]
 pub struct MemberRemoveResult {
     pub member_id: String,
+}
+
+#[derive(Debug)]
+pub struct MemberRemovePreview {
+    pub member_id: String,
+    pub affected_artifacts: Vec<std::path::PathBuf>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

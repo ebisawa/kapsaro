@@ -31,7 +31,7 @@ fn test_verify_file_enc_valid_signature() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -44,11 +44,11 @@ fn test_verify_file_enc_valid_signature() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[Signature Verification]"))
-        .stdout(predicate::str::contains("Status:   OK"));
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("OK"));
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_verify_kv_enc_valid_signature() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -79,11 +79,11 @@ fn test_verify_kv_enc_valid_signature() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[Signature Verification]"))
-        .stdout(predicate::str::contains("Status:   OK"));
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("OK"));
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn test_verify_file_enc_tampered_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -137,10 +137,10 @@ fn test_verify_file_enc_tampered_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Status:   FAILED"));
+        .stdout(predicate::str::contains("FAILED"));
 }
 
 #[test]

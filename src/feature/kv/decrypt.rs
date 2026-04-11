@@ -4,8 +4,11 @@
 //! KV decryption operations
 
 use crate::crypto::types::keys::MasterKey;
+use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::entry::decrypt_entry;
-use crate::feature::envelope::unwrap::unwrap_master_key_for_kv;
+use crate::feature::envelope::unwrap::{
+    unwrap_master_key_for_kv, unwrap_master_key_for_kv_with_context,
+};
 use crate::format::kv::enc::canonical::extract_head_and_wrap_tokens;
 use crate::format::kv::enc::parser::KvEncParser;
 use crate::format::schema::document::{
@@ -106,6 +109,44 @@ pub fn decrypt_kv_single_entry(
     }
 }
 
+pub fn decrypt_kv_single_entry_with_context(
+    verified_doc: &VerifiedKvEncDocument,
+    member_id: &str,
+    key_ctx: &CryptoContext,
+    key: &str,
+    debug: bool,
+) -> Result<DecryptionResult<Zeroizing<Vec<u8>>>> {
+    let doc = verified_doc.document();
+    let (head_data, wrap_data, lines) = parse_kv_enc_content(doc.content(), debug)?;
+    let sid = head_data.sid;
+    let master_key =
+        unwrap_master_key_for_kv_with_context(&sid, &wrap_data.wrap, member_id, key_ctx, debug)?;
+
+    let kv_line = lines
+        .iter()
+        .find(|l| matches!(l, KvEncLine::KV { key: k, .. } if k == key))
+        .ok_or_else(|| crate::Error::InvalidOperation {
+            message: format!("Key '{}' not found", key),
+        })?;
+
+    if let KvEncLine::KV { token, .. } = kv_line {
+        let entry = parse_kv_entry_token(token)?;
+        let value = decrypt_entry(
+            &entry,
+            &master_key.value,
+            &sid,
+            debug,
+            "decrypt_kv_single_entry_with_context",
+        )?;
+        Ok(DecryptionResult {
+            value,
+            key_info: master_key.key_info,
+        })
+    } else {
+        unreachable!()
+    }
+}
+
 /// Decrypt kv-enc v3 format to KV map
 ///
 /// This function requires a VerifiedKvEncDocument, ensuring that signature
@@ -135,4 +176,22 @@ pub fn decrypt_kv_document(
         unwrap_master_key_for_kv(&sid, &wrap_data.wrap, member_id, kid, private_key, debug)?;
 
     decrypt_kv_entries(&lines, &master_key, &sid, debug)
+}
+
+pub fn decrypt_kv_document_with_context(
+    verified_doc: &VerifiedKvEncDocument,
+    member_id: &str,
+    key_ctx: &CryptoContext,
+    debug: bool,
+) -> Result<DecryptionResult<HashMap<String, Zeroizing<Vec<u8>>>>> {
+    let doc = verified_doc.document();
+    let (head_data, wrap_data, lines) = parse_kv_enc_content(doc.content(), debug)?;
+    let sid = head_data.sid;
+    let master_key =
+        unwrap_master_key_for_kv_with_context(&sid, &wrap_data.wrap, member_id, key_ctx, debug)?;
+    let kv_map = decrypt_kv_entries(&lines, &master_key.value, &sid, debug)?;
+    Ok(DecryptionResult {
+        value: kv_map,
+        key_info: master_key.key_info,
+    })
 }

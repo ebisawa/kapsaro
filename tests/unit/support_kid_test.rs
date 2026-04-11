@@ -4,7 +4,9 @@
 //! Unit tests for kid helpers.
 
 use secretenv::format::kid::derive_public_key_kid;
-use secretenv::support::kid::{build_kid_display, normalize_kid};
+use secretenv::support::kid::{
+    build_kid_display, normalize_kid, normalize_kid_query, resolve_unique_kid,
+};
 use serde_json::json;
 
 const CANONICAL_KID: &str = "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N";
@@ -26,6 +28,39 @@ fn test_normalize_kid_rejects_invalid_length() {
     assert!(
         error.to_string().contains("kid"),
         "error should mention kid: {error}"
+    );
+}
+
+#[test]
+fn test_normalize_kid_query_accepts_prefix_and_display_form() {
+    assert_eq!(normalize_kid_query("rdkj-8y").unwrap(), "RDKJ8Y");
+    assert_eq!(normalize_kid_query("83").unwrap(), "83");
+}
+
+#[test]
+fn test_resolve_unique_kid_accepts_unique_prefix() {
+    let candidates = [
+        "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N",
+        "83ZZ8YHMPPJHW7QC3446GPNXHNRTX61N",
+    ];
+
+    let resolved = resolve_unique_kid(candidates, "rdkj-8y").unwrap();
+
+    assert_eq!(resolved, CANONICAL_KID);
+}
+
+#[test]
+fn test_resolve_unique_kid_rejects_ambiguous_prefix() {
+    let candidates = [
+        "83KJ8YHMPPJHW7QC3446GPNXHNRTX61N",
+        "83ZZ8YHMPPJHW7QC3446GPNXHNRTX61N",
+    ];
+
+    let error = resolve_unique_kid(candidates, "83").unwrap_err();
+
+    assert!(
+        error.to_string().contains("ambiguous"),
+        "error should mention ambiguity: {error}"
     );
 }
 

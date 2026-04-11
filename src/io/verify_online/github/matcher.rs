@@ -5,9 +5,8 @@
 
 use super::GitHubKeyRecord;
 use crate::io::ssh::protocol::fingerprint;
-use crate::io::verify_online::VerificationResult;
-use crate::model::public_key::{PublicKey, VerifiedBindingClaims};
-use crate::model::verification::BindingVerificationProof;
+use crate::io::verify_online::{VerificationResult, VerifiedGithubIdentity};
+use crate::model::public_key::PublicKey;
 use tracing::debug;
 
 pub(super) fn compute_attestation_fingerprint(
@@ -68,33 +67,20 @@ pub(super) fn match_key_by_fingerprint(
                 member_id, github_key.id
             );
         }
-        let verified_bindings =
-            build_verified_bindings(public_key, our_fingerprint, github_key.id)?;
         return Some(VerificationResult::verified(
             member_id,
             format!(
                 "SSH key verified on GitHub (id={}, login={})",
                 id_used, login_for_keys
             ),
-            our_fingerprint.to_string(),
-            github_key.id,
-            verified_bindings,
+            VerifiedGithubIdentity::new(
+                id_used,
+                login_for_keys.to_string(),
+                our_fingerprint.to_string(),
+                github_key.id,
+            ),
         ));
     }
 
     None
-}
-
-fn build_verified_bindings(
-    public_key: &PublicKey,
-    fingerprint: &str,
-    matched_key_id: i64,
-) -> Option<VerifiedBindingClaims> {
-    let claims = public_key.protected.binding_claims.clone()?;
-    let proof = BindingVerificationProof::new(
-        "github".to_string(),
-        Some(fingerprint.to_string()),
-        Some(matched_key_id),
-    );
-    Some(VerifiedBindingClaims::new(claims, proof))
 }

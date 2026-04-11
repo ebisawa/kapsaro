@@ -3,13 +3,11 @@
 
 use std::path::PathBuf;
 
-use crate::app::context::member::resolve_member_context;
+use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
 use crate::feature::context::ssh::backend::build_ssh_signing_context as feature_build_ssh_signing_context;
 use crate::feature::context::ssh::candidate::resolve_ssh_key_candidates as feature_resolve_ssh_key_candidates;
-use crate::feature::context::ssh::params::{
-    SshSigningContext as FeatureSshSigningContext, SshSigningParams as FeatureSshSigningParams,
-};
+use crate::feature::context::ssh::params::SshSigningParams as FeatureSshSigningParams;
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::io::keystore::active::load_active_kid;
 use crate::io::keystore::storage::load_private_key;
@@ -20,16 +18,15 @@ use crate::model::private_key::PrivateKeyAlgorithm;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::{Error, Result};
 
-pub struct ResolvedSshSigner {
-    pub signing_method: crate::config::types::SshSigner,
-    pub public_key: String,
-    pub fingerprint: String,
-    pub backend: Box<dyn SignatureBackend>,
-    pub determinism: SshDeterminismStatus,
+pub(crate) struct ResolvedSshSigner {
+    pub(crate) public_key: String,
+    pub(crate) fingerprint: String,
+    pub(crate) backend: Box<dyn SignatureBackend>,
+    pub(crate) determinism: SshDeterminismStatus,
 }
 
 impl ResolvedSshSigner {
-    pub fn into_ssh_binding(self) -> SshBindingContext {
+    pub(crate) fn into_ssh_binding(self) -> SshBindingContext {
         SshBindingContext {
             public_key: self.public_key,
             fingerprint: self.fingerprint,
@@ -40,19 +37,19 @@ impl ResolvedSshSigner {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SshKeyCandidateView {
-    pub public_key: String,
-    pub fingerprint: String,
-    pub comment: String,
+pub(crate) struct SshKeyCandidateView {
+    pub(crate) public_key: String,
+    pub(crate) fingerprint: String,
+    pub(crate) comment: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct SshSigningParams {
-    pub ssh_key: Option<PathBuf>,
-    pub signing_method: Option<crate::config::types::SshSigner>,
-    pub base_dir: Option<PathBuf>,
-    pub verbose: bool,
-    pub check_determinism: bool,
+pub(crate) struct SshSigningParams {
+    pub(crate) ssh_key: Option<PathBuf>,
+    pub(crate) signing_method: Option<crate::config::types::SshSigner>,
+    pub(crate) base_dir: Option<PathBuf>,
+    pub(crate) verbose: bool,
+    pub(crate) check_determinism: bool,
 }
 
 fn build_ssh_signing_params(options: &CommonCommandOptions) -> SshSigningParams {
@@ -65,42 +62,28 @@ fn build_ssh_signing_params(options: &CommonCommandOptions) -> SshSigningParams 
     }
 }
 
-fn build_feature_ssh_signing_params(params: &SshSigningParams) -> FeatureSshSigningParams {
-    FeatureSshSigningParams {
-        ssh_key: params.ssh_key.clone(),
-        signing_method: params.signing_method,
-        base_dir: params.base_dir.clone(),
-        verbose: params.verbose,
-        check_determinism: params.check_determinism,
-    }
-}
-
-fn build_resolved_ssh_signer(ctx: FeatureSshSigningContext) -> ResolvedSshSigner {
-    ResolvedSshSigner {
-        signing_method: ctx.signing_method,
-        public_key: ctx.public_key,
-        fingerprint: ctx.fingerprint,
-        backend: ctx.backend,
-        determinism: ctx.determinism,
-    }
-}
-
-pub fn resolve_ssh_key_candidates(
+pub(crate) fn resolve_ssh_key_candidates(
     options: &CommonCommandOptions,
 ) -> Result<Vec<SshKeyCandidateView>> {
     let params = build_ssh_signing_params(options);
     resolve_ssh_key_candidates_with_params(&params)
 }
 
-pub fn resolve_ssh_key_candidates_with_params(
+pub(crate) fn resolve_ssh_key_candidates_with_params(
     params: &SshSigningParams,
 ) -> Result<Vec<SshKeyCandidateView>> {
-    let params = build_feature_ssh_signing_params(params);
+    let params = FeatureSshSigningParams {
+        ssh_key: params.ssh_key.clone(),
+        signing_method: params.signing_method,
+        base_dir: params.base_dir.clone(),
+        verbose: params.verbose,
+        check_determinism: params.check_determinism,
+    };
     let candidates = feature_resolve_ssh_key_candidates(&params)?;
     Ok(build_ssh_candidate_views(candidates))
 }
 
-pub fn build_ssh_signing_context(
+pub(crate) fn build_ssh_signing_context(
     options: &CommonCommandOptions,
     selected_pubkey: &str,
     check_determinism: bool,
@@ -110,26 +93,37 @@ pub fn build_ssh_signing_context(
     build_ssh_signing_context_with_params(&params, selected_pubkey)
 }
 
-pub fn build_ssh_signing_context_with_params(
+pub(crate) fn build_ssh_signing_context_with_params(
     params: &SshSigningParams,
     selected_pubkey: &str,
 ) -> Result<ResolvedSshSigner> {
-    let params = build_feature_ssh_signing_params(params);
+    let params = FeatureSshSigningParams {
+        ssh_key: params.ssh_key.clone(),
+        signing_method: params.signing_method,
+        base_dir: params.base_dir.clone(),
+        verbose: params.verbose,
+        check_determinism: params.check_determinism,
+    };
     let signer = feature_build_ssh_signing_context(&params, selected_pubkey)?;
-    Ok(build_resolved_ssh_signer(signer))
+    Ok(ResolvedSshSigner {
+        public_key: signer.public_key,
+        fingerprint: signer.fingerprint,
+        backend: signer.backend,
+        determinism: signer.determinism,
+    })
 }
 
-pub fn resolve_ssh_context_by_active_key(
+pub(crate) fn resolve_ssh_context_by_active_key(
     options: &CommonCommandOptions,
     member_id: Option<String>,
 ) -> Result<ResolvedSshSigner> {
-    let resolved = resolve_member_context(options, member_id)?;
+    let resolved = resolve_command_member(options, member_id)?;
     let fingerprint =
         resolve_active_key_ssh_fingerprint(&resolved.member_id, &resolved.paths.keystore_root)?;
     resolve_ssh_context_for_fingerprint(options, &fingerprint)
 }
 
-pub fn find_ssh_candidate_by_fingerprint<'a>(
+pub(crate) fn find_ssh_candidate_by_fingerprint<'a>(
     candidates: &'a [SshKeyCandidateView],
     fingerprint: &str,
 ) -> Result<&'a SshKeyCandidateView> {
@@ -191,3 +185,19 @@ fn resolve_ssh_fingerprint_from_private_key(private_key: &PrivateKey) -> Result<
         }),
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/app_context_ssh_member_id_test.rs"]
+mod app_context_ssh_member_id_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_context_ssh_match_test.rs"]
+mod feature_context_ssh_match_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_context_ssh_test.rs"]
+mod feature_context_ssh_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_verify_public_key_attestation_test.rs"]
+mod feature_verify_public_key_attestation_test;

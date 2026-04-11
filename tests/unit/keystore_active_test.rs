@@ -38,7 +38,7 @@ fn test_set_active_kid_invalid_length() {
     let temp = TempDir::new().unwrap();
     let keystore_root = temp.path();
     let member_id = "alice@example.com";
-    let invalid_kid = "too-short";
+    let invalid_kid = "7M2Q";
 
     let err = set_active_kid(member_id, invalid_kid, keystore_root).unwrap_err();
     assert!(err.to_string().contains("32 Crockford Base32 characters"));

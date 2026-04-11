@@ -14,6 +14,8 @@ use secretenv::model::file_enc::{
 use secretenv::model::identifiers::hpke;
 use uuid::Uuid;
 
+use crate::keygen_helpers::make_dummy_public_key;
+
 fn create_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
@@ -63,15 +65,21 @@ fn test_sign_file_document_returns_valid_structure() {
 
     let doc = create_test_file_enc_document_protected();
 
-    let sig =
-        sign_file_document(&doc, &sk, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", None, false).unwrap();
+    let sig = sign_file_document(
+        &doc,
+        &sk,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        false,
+    )
+    .unwrap();
 
     assert_eq!(
         sig.alg,
         secretenv::model::identifiers::alg::SIGNATURE_ED25519
     );
     assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    assert!(sig.signer_pub.is_none());
+    assert!(sig.signer_pub.is_some());
     assert!(!sig.sig.is_empty());
 }
 
@@ -83,8 +91,14 @@ fn test_verify_file_enc_signature_accepts_valid_signature() {
 
     let doc = create_test_file_enc_document_protected();
 
-    let sig =
-        sign_file_document(&doc, &sk, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", None, false).unwrap();
+    let sig = sign_file_document(
+        &doc,
+        &sk,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        false,
+    )
+    .unwrap();
     verify_file_signature(&doc, &vk, &sig, false).unwrap();
 }
 
@@ -96,8 +110,14 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
 
     let doc = create_test_file_enc_document_protected();
 
-    let sig =
-        sign_file_document(&doc, &sk, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", None, false).unwrap();
+    let sig = sign_file_document(
+        &doc,
+        &sk,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        false,
+    )
+    .unwrap();
 
     // Tamper document
     let mut tampered = doc.clone();
@@ -118,10 +138,22 @@ fn test_sign_file_document_deterministic() {
 
     let doc = create_test_file_enc_document_protected();
 
-    let sig1 =
-        sign_file_document(&doc, &sk, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", None, false).unwrap();
-    let sig2 =
-        sign_file_document(&doc, &sk, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", None, false).unwrap();
+    let sig1 = sign_file_document(
+        &doc,
+        &sk,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        false,
+    )
+    .unwrap();
+    let sig2 = sign_file_document(
+        &doc,
+        &sk,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        false,
+    )
+    .unwrap();
 
     // Ed25519 signatures are deterministic per RFC 8032
     assert_eq!(sig1.sig, sig2.sig);

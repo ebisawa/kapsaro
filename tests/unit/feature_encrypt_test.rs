@@ -5,12 +5,12 @@
 //!
 //! Tests for encryption use cases.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::make_recipient_key;
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
 use secretenv::feature::decrypt::file::decrypt_file_document;
-use secretenv::feature::encrypt::encrypt_file_document;
+use secretenv::feature::encrypt::encrypt_file_content;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::kv::decrypt::decrypt_kv_document;
 use secretenv::feature::verify::file::verify_file_document;
@@ -48,22 +48,26 @@ fn test_encrypt_file_document() {
     let signing = SigningContext {
         signing_key,
         signer_kid: kid,
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         debug: false,
     };
     let encrypted_json =
-        encrypt_file_document(content, &recipients, &attested_members, &signing).unwrap();
+        encrypt_file_content(content, &recipients, &attested_members, &signing).unwrap();
 
     // Verify it's valid JSON
     let file_enc_doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
 
     // Verify structure
     assert_eq!(file_enc_doc.protected.format, FILE_ENC_V3);
+    // Verify signer_pub is always embedded in output signature
+    assert!(
+        file_enc_doc.signature.signer_pub.is_some(),
+        "signature.signer_pub must be present in file-enc output"
+    );
 
     // Decrypt and verify
     let doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_doc = verify_file_document(&doc, Some(&workspace_path), false).unwrap();
+    let verified_doc = verify_file_document(&doc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified_doc,
         ALICE_MEMBER_ID,
@@ -89,16 +93,17 @@ fn test_encrypt_file_document_recipient_count_mismatch() {
     // Input content
     let content = b"Hello, World!";
     let recipients = vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()];
+    let signer_pub = public_key.clone();
     let attested_members = vec![make_recipient_key(public_key)]; // Only one member, but two recipients
 
     // Encrypt should fail due to mismatch
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: kid,
-        signer_pub: None,
+        signer_pub,
         debug: false,
     };
-    let result = encrypt_file_document(content, &recipients, &attested_members, &signing);
+    let result = encrypt_file_content(content, &recipients, &attested_members, &signing);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Recipients count"));
@@ -127,23 +132,16 @@ fn test_encrypt_kv_document_via_inner_api() {
     );
     kv_map.insert("API_KEY".to_string(), "secret123".to_string());
 
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
     let attested_members = vec![make_recipient_key(public_key.clone())];
 
     let signing = SigningContext {
         signing_key,
         signer_kid: kid,
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         debug: false,
     };
-    let encrypted = encrypt_kv_document(
-        &kv_map,
-        &recipients,
-        &attested_members,
-        &signing,
-        TokenCodec::JsonJcs,
-    )
-    .unwrap();
+    let encrypted =
+        encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
 
     // Verify structure
     assert!(encrypted.starts_with(":SECRETENV_KV 3\n"));
@@ -152,10 +150,17 @@ fn test_encrypt_kv_document_via_inner_api() {
     assert!(encrypted.contains("DATABASE_URL "));
     assert!(encrypted.contains("API_KEY "));
 
-    // Decrypt and verify
+    // Verify signer_pub is always embedded in output signature
     let doc = parse_kv_document(&encrypted).unwrap();
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_doc = verify_kv_document(&doc, Some(&workspace_path), false).unwrap();
+    let sig_token = &doc.signature_token;
+    let sig = secretenv::format::schema::document::parse_kv_signature_token(sig_token).unwrap();
+    assert!(
+        sig.signer_pub.is_some(),
+        "signature.signer_pub must be present in kv-enc output"
+    );
+
+    // Decrypt and verify
+    let verified_doc = verify_kv_document(&doc, false).unwrap();
     let decrypted_map_zeroizing = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_ID,

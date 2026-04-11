@@ -7,6 +7,7 @@ use super::wrap::ALG_HPKE_32_1_3;
 use crate::crypto::kem::{decode_kem_secret_key, open_base, X25519SecretKey};
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 use crate::crypto::types::keys::MasterKey;
+use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info};
 use crate::model::common::WrapItem;
 use crate::model::file_enc::VerifiedFileEncDocument;
@@ -83,17 +84,19 @@ pub fn decode_wrap_item_fields(wrap_item: &WrapItem) -> Result<(Enc, Ciphertext)
 
 /// Convert HPKE plaintext output to a 32-byte MasterKey.
 pub fn plaintext_to_master_key(mk_plaintext: Zeroizing<Plaintext>) -> Result<MasterKey> {
-    let mk_array: [u8; 32] = mk_plaintext
-        .as_bytes()
-        .try_into()
-        .map_err(|_| Error::Crypto {
+    if mk_plaintext.as_bytes().len() != 32 {
+        return Err(Error::Crypto {
             message: format!(
                 "Invalid master key length: expected 32, got {}",
                 mk_plaintext.as_bytes().len()
             ),
             source: None,
-        })?;
-    Ok(MasterKey::new(mk_array))
+        });
+    }
+
+    let mut mk_array = Zeroizing::new([0u8; 32]);
+    mk_array.as_mut().copy_from_slice(mk_plaintext.as_bytes());
+    Ok(MasterKey::from_zeroizing(mk_array))
 }
 
 /// Unwrap master key from a wrap item (common logic)
@@ -169,6 +172,32 @@ pub fn unwrap_master_key_for_file(
     )
 }
 
+pub fn unwrap_master_key_for_file_with_context(
+    verified: &VerifiedFileEncDocument,
+    member_id: &str,
+    key_ctx: &CryptoContext,
+    debug: bool,
+) -> Result<DecryptionResult<MasterKey>> {
+    let secret = verified.document();
+    let selected_key =
+        key_ctx.select_local_decryption_key(&secret.protected.wrap, member_id, debug)?;
+    let wrap_item =
+        find_wrap_item_by_kid(&secret.protected.wrap, &selected_key.info().kid, member_id)?;
+    let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
+    let master_key = unwrap_master_key(
+        wrap_item,
+        &secret.protected.sid,
+        &kem_sk,
+        build_file_wrap_info,
+        debug,
+        "unwrap_master_key_for_file_with_context",
+    )?;
+    Ok(DecryptionResult {
+        value: master_key,
+        key_info: selected_key.info().clone(),
+    })
+}
+
 /// Unwrap master key from a WRAP item for kv-enc format (low-level API).
 ///
 /// # Arguments
@@ -214,4 +243,21 @@ pub fn unwrap_master_key_for_kv(
     let wrap_item = find_wrap_item_by_kid(wrap_items, kid, member_id)?;
     let kem_sk = decode_kem_secret_key(private_key)?;
     unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)
+}
+
+pub fn unwrap_master_key_for_kv_with_context(
+    sid: &Uuid,
+    wrap_items: &[WrapItem],
+    member_id: &str,
+    key_ctx: &CryptoContext,
+    debug: bool,
+) -> Result<DecryptionResult<MasterKey>> {
+    let selected_key = key_ctx.select_local_decryption_key(wrap_items, member_id, debug)?;
+    let wrap_item = find_wrap_item_by_kid(wrap_items, &selected_key.info().kid, member_id)?;
+    let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
+    let master_key = unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)?;
+    Ok(DecryptionResult {
+        value: master_key,
+        key_info: selected_key.info().clone(),
+    })
 }

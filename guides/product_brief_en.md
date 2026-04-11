@@ -73,6 +73,13 @@ secretenv get DATABASE_URL
 
 `run` decrypts the encrypted `.env` content on the fly, injects it as environment variables, and starts the target process. This lets teams move away from distributing plaintext `.env` files without changing how they normally run commands.
 
+Separate environments are managed with the `-n` option:
+
+```bash
+secretenv set -n staging DATABASE_URL "postgres://staging/..."
+secretenv run -n prod -- ./deploy.sh
+```
+
 ### 4. Member Onboarding and Approval Fit into Git Review
 
 ```bash
@@ -107,6 +114,30 @@ SecretEnv records the history of members who were removed from access. For encry
 
 The important point is that **removing a member does not recover secrets that were already disclosed in the past**. SecretEnv does not hide that fact. Instead, it makes the risk visible so teams can make clean decisions about updating values and rotating keys.
 
+### 7. CI/CD Works Without SSH Keys or an Agent
+
+SecretEnv supports CI/CD environments through portable private key export:
+
+```bash
+# On a developer machine: export the CI member's key
+secretenv key export --private --member-id ci@example.com --out ci-key.txt
+```
+
+Register `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` as CI secret variables. The CI job can then use `secretenv run` and `secretenv get` without any SSH key, SSH agent, or local keystore.
+
+### 8. Key Identity Verification Reduces Supply Chain Risk
+
+```bash
+# Verify active members against GitHub and approve them
+secretenv member verify --approve
+
+# Manage the local trust store
+secretenv trust list
+secretenv trust remove <kid>
+```
+
+SecretEnv separates current membership from approval history. `member verify --approve` cross-checks member public keys against GitHub accounts and saves the result in a local trust store. This adds a layer of protection against public key substitution without requiring a PKI.
+
 ## Why It Is Safe
 
 SecretEnv focuses on the following properties.
@@ -117,6 +148,7 @@ SecretEnv focuses on the following properties.
 | Tamper detection | Ed25519 signatures | Detects modification of encrypted files and metadata |
 | Context binding | The design ties encrypted data to the file and key names | Prevents swapping content across different secrets or entries |
 | Key rotation consistency | The design binds encrypted data to specific key statements | Prevents mix-ups during key rotation and key replacement |
+| Trust decisions | `members/active` as the authorization source, local trust store as a TOFU approval cache | Separates current membership from approval history |
 | Stronger key identity checks | SSH-key binding plus GitHub verification | Reduces the risk of public key substitution |
 
 Core operations are offline-first. Encryption, decryption, signature verification, and `rewrap` work locally. GitHub integration is optional and mainly helps when you want an additional identity check between a public key and an account.
@@ -163,7 +195,7 @@ Good fit for teams that:
 - already use Git and PR review as their main workflow
 - want to share `.env` files or certificates safely in a small team
 - do not want to depend on a SaaS or always-on secret platform
-- need the same workflow to work offline and in local development
+- need the same workflow to work offline, in local development, and in CI/CD
 
 Not a good fit if you need to:
 
@@ -171,6 +203,11 @@ Not a good fit if you need to:
 - recover secrets after they were already disclosed
 - centrally control runtime secret injection across an entire cloud platform
 
+## Learn More
+
+- [User Guide](user_guide_en.md) — Installation, daily usage, and CI/CD setup
+- [Security Design](security_design_en.md) — Threat model, cryptographic protocols, and trust architecture
+
 ---
 
-**SecretEnv** is a CLI for replacing “send me the `.env` file” with “share encrypted secrets through Git.”
+**SecretEnv** — Stop sending `.env` files through Slack. Encrypt them, share them through Git, and let your team's existing review workflow handle the rest.

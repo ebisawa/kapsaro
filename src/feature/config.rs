@@ -11,16 +11,28 @@ use std::path::{Path, PathBuf};
 // NOTE: Keep in sync with PRD config.toml documentation (global config.toml keys).
 pub(crate) const VALID_KEYS: &[&str] = &[
     "member_id",
-    "ssh_key",
-    "ssh_keygen",
-    "ssh_add",
-    "ssh_signer",
+    "ssh_identity",
+    "ssh_keygen_command",
+    "ssh_add_command",
+    "ssh_signing_method",
     "github_user",
 ];
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigScope {
     Global,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigValueResolution {
+    pub value: Option<String>,
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigPathResolution {
+    pub path: PathBuf,
+    pub scope: ConfigScope,
 }
 
 pub(crate) fn normalize_key(key: &str) -> Result<String> {
@@ -48,29 +60,36 @@ pub fn validate_key(key: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn resolve_config_value(
-    key: &str,
-    base_dir: Option<&Path>,
-) -> Result<(Option<String>, Option<String>)> {
+pub fn resolve_config_value(key: &str, base_dir: Option<&Path>) -> Result<ConfigValueResolution> {
     if let Some(value) = load_global_config(base_dir)?.get(key) {
-        return Ok((Some(value.clone()), Some("global".to_string())));
+        return Ok(ConfigValueResolution {
+            value: Some(value.clone()),
+            scope: Some("global".to_string()),
+        });
     }
 
-    Ok((None, None))
+    Ok(ConfigValueResolution {
+        value: None,
+        scope: None,
+    })
 }
 
-pub fn get_config_path_and_scope(base_dir: Option<&Path>) -> Result<(PathBuf, ConfigScope)> {
+pub fn get_config_path_and_scope(base_dir: Option<&Path>) -> Result<ConfigPathResolution> {
     let config_path = match base_dir {
         Some(dir) => config::paths::get_global_config_path_from_base(dir),
         None => config::paths::get_global_config_path()?,
     };
-    Ok((config_path, ConfigScope::Global))
+    Ok(ConfigPathResolution {
+        path: config_path,
+        scope: ConfigScope::Global,
+    })
 }
 
 pub fn load_global_config(base_dir: Option<&Path>) -> Result<BTreeMap<String, String>> {
-    let config_path = match base_dir {
-        Some(dir) => config::paths::get_global_config_path_from_base(dir),
-        None => config::paths::get_global_config_path()?,
+    let base_dir = match base_dir {
+        Some(dir) => dir.to_path_buf(),
+        None => config::paths::get_base_dir()?,
     };
-    config::store::load_config_file(&config_path)
+    let config_path = config::paths::get_global_config_path_from_base(&base_dir);
+    config::store::load_config_file(&config_path, &base_dir)
 }

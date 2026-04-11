@@ -3,17 +3,21 @@
 
 //! Unit tests for feature/rewrap/file module (file-enc document rewrap operations).
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_verified_members;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use secretenv::app::rewrap::execution::rewrap_file_content_with_request;
-use secretenv::app::rewrap::types::SingleRewrapRequest;
+use crate::test_utils::{
+    setup_member_key_context, setup_test_keystore_from_fixtures,
+    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+};
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::format::content::FileEncContent;
+use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
+use secretenv::format::content::{EncryptedContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use std::fs;
+use std::thread::sleep;
+use std::time::Duration;
 use tempfile::TempDir;
 
 /// Create workspace members directory with the member's public key file.
@@ -37,23 +41,31 @@ fn single_rewrap_request<'a>(
     rotate_key: bool,
     clear_disclosure_history: bool,
     debug: bool,
-) -> SingleRewrapRequest<'a> {
-    SingleRewrapRequest {
+) -> RewrapRequest<'a> {
+    RewrapRequest {
         member_id: ALICE_MEMBER_ID,
         key_ctx,
         workspace_root,
+        target_members: None,
         rotate_key,
         clear_disclosure_history,
-        no_signer_pub: false,
+
         debug,
     }
+}
+
+fn rewrap_file_content(
+    content: &FileEncContent,
+    request: &RewrapRequest<'_>,
+) -> secretenv::Result<String> {
+    rewrap_content(&EncryptedContent::FileEnc(content.clone()), request)
 }
 
 /// Encrypt file content for alice (single recipient), returning the JSON string.
 fn encrypt_file_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) -> String {
     let keystore_root = temp_dir.path().join("keys");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(std::slice::from_ref(&public_key));
     let content = b"test secret data";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
 
@@ -64,7 +76,7 @@ fn encrypt_file_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key,
             debug: false,
         },
     )
@@ -83,7 +95,7 @@ fn encrypt_file_for_alice_and_bob(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let content = b"test secret data";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
 
@@ -94,7 +106,7 @@ fn encrypt_file_for_alice_and_bob(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub,
             debug: false,
         },
     )
@@ -154,7 +166,7 @@ fn test_rewrap_file_add_recipient() {
     setup_workspace_members(&temp_dir, BOB_MEMBER_ID, &bob_kid);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
         result.is_ok(),
@@ -191,7 +203,7 @@ fn test_rewrap_file_remove_recipient() {
     setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &alice_kid);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
         result.is_ok(),
@@ -229,8 +241,7 @@ fn test_rewrap_file_rotate_key() {
     let json = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
-    let result =
-        rewrap_file_content_with_request(&FileEncContent::new_unchecked(json.clone()), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json.clone()), &request);
 
     assert!(
         result.is_ok(),
@@ -255,6 +266,46 @@ fn test_rewrap_file_rotate_key() {
 }
 
 #[test]
+fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let old_kid = old_key_ctx.kid.to_string();
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &old_kid);
+    let json = encrypt_file_for_alice(&temp_dir, &old_kid, &old_key_ctx);
+
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
+    sync_active_public_key_to_workspace(temp_dir.path(), temp_dir.path(), ALICE_MEMBER_ID).unwrap();
+
+    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let new_kid = new_key_ctx.kid.to_string();
+    assert_ne!(new_kid, old_kid);
+    assert!(load_public_key(&keystore_root, ALICE_MEMBER_ID, &new_kid).is_ok());
+
+    let request = single_rewrap_request(&new_key_ctx, Some(temp_dir.path()), false, false, false);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
+
+    assert!(
+        result.is_ok(),
+        "rewrap with only old self wrap must succeed: {:?}",
+        result.err()
+    );
+
+    let rewrapped = result.unwrap();
+    let doc: secretenv::model::file_enc::FileEncDocument =
+        serde_json::from_str(&rewrapped).unwrap();
+    let alice_wrap = doc
+        .protected
+        .wrap
+        .iter()
+        .find(|wrap| wrap.rid == ALICE_MEMBER_ID)
+        .unwrap();
+    assert_eq!(alice_wrap.kid, new_kid);
+    assert_eq!(doc.signature.kid, new_key_ctx.kid.to_string());
+}
+
+#[test]
 fn test_rewrap_file_clear_disclosure_history() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
@@ -268,8 +319,7 @@ fn test_rewrap_file_clear_disclosure_history() {
     let remove_request =
         single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let after_remove =
-        rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &remove_request)
-            .unwrap();
+        rewrap_file_content(&FileEncContent::new_unchecked(json), &remove_request).unwrap();
 
     // Verify disclosure history exists after removal
     let after_remove_doc: secretenv::model::file_enc::FileEncDocument =
@@ -281,10 +331,7 @@ fn test_rewrap_file_clear_disclosure_history() {
 
     // Now rewrap again with clear_disclosure_history
     let clear_request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, true, false);
-    let result = rewrap_file_content_with_request(
-        &FileEncContent::new_unchecked(after_remove),
-        &clear_request,
-    );
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(after_remove), &clear_request);
 
     assert!(
         result.is_ok(),
@@ -315,7 +362,7 @@ fn test_rewrap_file_preserves_payload() {
     let json = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(result.is_ok(), "rewrap must succeed: {:?}", result.err());
 
@@ -330,6 +377,66 @@ fn test_rewrap_file_preserves_payload() {
 }
 
 #[test]
+fn test_rewrap_file_remove_add_remove_deduplicates_removed_kid() {
+    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &alice_kid);
+    setup_workspace_members(&temp_dir, BOB_MEMBER_ID, &bob_kid);
+
+    let json = encrypt_file_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
+
+    fs::remove_file(
+        temp_dir
+            .path()
+            .join("members/active")
+            .join(format!("{}.json", BOB_MEMBER_ID)),
+    )
+    .unwrap();
+
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let after_first_remove =
+        rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
+    let first_doc: secretenv::model::file_enc::FileEncDocument =
+        serde_json::from_str(&after_first_remove).unwrap();
+    let first_removed_at = first_doc
+        .protected
+        .removed_recipients
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|recipient| recipient.kid == bob_kid)
+        .unwrap()
+        .removed_at
+        .clone();
+
+    sleep(Duration::from_secs(1));
+
+    setup_workspace_members(&temp_dir, BOB_MEMBER_ID, &bob_kid);
+    let after_add =
+        rewrap_file_content(&FileEncContent::new_unchecked(after_first_remove), &request).unwrap();
+
+    fs::remove_file(
+        temp_dir
+            .path()
+            .join("members/active")
+            .join(format!("{}.json", BOB_MEMBER_ID)),
+    )
+    .unwrap();
+
+    let after_second_remove =
+        rewrap_file_content(&FileEncContent::new_unchecked(after_add), &request).unwrap();
+    let second_doc: secretenv::model::file_enc::FileEncDocument =
+        serde_json::from_str(&after_second_remove).unwrap();
+    let removed = second_doc.protected.removed_recipients.unwrap();
+
+    assert_eq!(removed.len(), 1);
+    assert_eq!(removed[0].rid, BOB_MEMBER_ID);
+    assert_eq!(removed[0].kid, bob_kid);
+    assert_ne!(removed[0].removed_at, first_removed_at);
+}
+
+#[test]
 fn test_rewrap_file_requires_workspace() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
@@ -341,7 +448,7 @@ fn test_rewrap_file_requires_workspace() {
     let json = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
 
     let request = single_rewrap_request(&key_ctx, None, false, false, false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
         result.is_err(),

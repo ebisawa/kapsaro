@@ -5,15 +5,19 @@
 //!
 //! Tests for file-enc decryption.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::make_verified_members;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::{
+    setup_member_key_context, setup_test_keystore_from_fixtures,
+    update_active_private_key_expires_at,
+};
 use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::decrypt::decrypt_document;
-use secretenv::feature::decrypt::file::decrypt_file_document;
+use secretenv::feature::decrypt::file::{
+    decrypt_file_document, decrypt_file_document_with_context,
+};
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::verify::file::verify_file_document;
+use secretenv::feature::verify::file::{verify_file_content, verify_file_document};
 use secretenv::format::content::FileEncContent;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::file_enc::VerifiedFileEncDocument;
@@ -45,7 +49,7 @@ fn test_file_enc_content_detect_accepts_file_enc() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -78,7 +82,7 @@ fn test_file_enc_content_detect_rejects_kv_enc() {
 }
 
 #[test]
-fn test_decrypt_document_file() {
+fn test_verify_content_then_decrypt_file() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -102,7 +106,7 @@ fn test_decrypt_document_file() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -111,8 +115,15 @@ fn test_decrypt_document_file() {
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
     let file_enc = FileEncContent::new_unchecked(encrypted_json);
 
-    // Decrypt
-    let decrypted = decrypt_document(&file_enc, ALICE_MEMBER_ID, &key_ctx, false).unwrap();
+    let verified = verify_file_content(&file_enc, false).unwrap();
+    let decrypted = decrypt_file_document(
+        &verified,
+        ALICE_MEMBER_ID,
+        &key_ctx.kid,
+        &key_ctx.private_key,
+        false,
+    )
+    .unwrap();
     assert_eq!(decrypted.as_ref() as &[u8], content);
 }
 
@@ -141,7 +152,7 @@ fn test_parse_verify_decrypt_file() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -152,8 +163,7 @@ fn test_parse_verify_decrypt_file() {
     // Use verify+decrypt API
     let file_doc: secretenv::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_file_doc = verify_file_document(&file_doc, Some(&workspace_path), false).unwrap();
+    let verified_file_doc = verify_file_document(&file_doc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified_file_doc,
         ALICE_MEMBER_ID,
@@ -165,6 +175,47 @@ fn test_parse_verify_decrypt_file() {
 
     // Compare Zeroizing<Vec<u8>> with &[u8] using as_ref()
     assert_eq!(decrypted.as_ref() as &[u8], content);
+}
+
+#[test]
+fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let old_kid = old_key_ctx.kid.to_string();
+    let old_public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &old_kid).unwrap();
+
+    let content = b"Hello from the old key";
+    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let members = make_verified_members(std::slice::from_ref(&old_public_key));
+    let file_enc_doc = encrypt_file_document(
+        content,
+        &recipient_ids,
+        &members,
+        &SigningContext {
+            signing_key: &old_key_ctx.signing_key,
+            signer_kid: &old_kid,
+            signer_pub: old_public_key,
+            debug: false,
+        },
+    )
+    .unwrap();
+
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
+    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    assert_ne!(new_key_ctx.kid.to_string(), old_kid);
+
+    let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
+    let verified =
+        verify_file_content(&FileEncContent::new_unchecked(encrypted_json), false).unwrap();
+    let decrypted =
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_ID, &new_key_ctx, false)
+            .unwrap();
+
+    assert_eq!(decrypted.value.as_ref() as &[u8], content);
+    assert_eq!(decrypted.key_info.kid, old_kid);
+    assert!(decrypted.key_info.used_fallback);
 }
 
 #[test]
@@ -192,15 +243,14 @@ fn test_verify_file_document_returns_verified() {
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
     .unwrap();
 
     // Verify document (returns Verified<FileEncDocument>)
-    let workspace_path = temp_dir.path().join("workspace");
-    let verified_doc = verify_file_document(&file_enc_doc, Some(&workspace_path), false).unwrap();
+    let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
 
     // Check that we have verified proof information
     assert_eq!(verified_doc.proof().member_id, ALICE_MEMBER_ID);
@@ -239,7 +289,7 @@ fn create_encrypted_file_for_error_tests() -> (
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: &kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )

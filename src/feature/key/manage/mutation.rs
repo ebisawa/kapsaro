@@ -3,9 +3,9 @@
 
 use crate::feature::key::types::{KeyActivateResult, KeyRemoveResult};
 use crate::io::keystore::active::{clear_active_kid, load_active_kid, set_active_kid};
+use crate::io::keystore::helpers::resolve_member_kid_query;
 use crate::io::keystore::member::{remove_key_directory, select_latest_valid_kid};
 use crate::io::keystore::paths::get_private_key_file_path_from_root;
-use crate::support::kid::normalize_kid;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
@@ -30,7 +30,7 @@ pub fn remove_key(
     force: bool,
 ) -> Result<KeyRemoveResult> {
     let keystore_root = resolve_keystore_root(home)?;
-    let kid = normalize_kid(&kid)?;
+    let kid = resolve_member_kid_query(&keystore_root, &member_id, &kid)?;
     validate_key_directory_exists(&keystore_root, &member_id, &kid)?;
     let was_active = load_active_kid(&member_id, &keystore_root)?.as_ref() == Some(&kid);
     validate_key_removal(&kid, was_active, force)?;
@@ -53,7 +53,7 @@ fn resolve_activated_kid(
     kid: Option<String>,
 ) -> Result<String> {
     match kid {
-        Some(kid) => normalize_kid(&kid),
+        Some(kid) => resolve_member_kid_query(keystore_root, member_id, &kid),
         None => select_latest_valid_kid(keystore_root, member_id),
     }
 }

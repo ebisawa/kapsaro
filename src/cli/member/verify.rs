@@ -1,50 +1,81 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::context::options::CommonCommandOptions;
+use crate::app::member::approval::{commit_approvals, evaluate_members_for_approval};
 use crate::app::member::verification::verify_members;
-use crate::cli::common::output::json::print_json_output;
+use crate::app::trust::TrustApprovalCandidate;
+use crate::cli::common::command::{
+    resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
+};
+use crate::cli::common::output::member::print_member_approval_results;
+use crate::cli::common::output::member::print_member_verification_results;
+use crate::cli::common::output::text;
+use crate::cli::common::trust::{confirm_known_key_approval, run_with_trust_store_reset_recovery};
+use crate::support::tty;
 use crate::Error;
 
 use super::VerifyArgs;
 
 pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
-    let options = CommonCommandOptions::from(&args.common);
-    let results = verify_members(&options, &args.member_ids, args.common.verbose)?;
+    if args.approve {
+        run_approve(args)
+    } else {
+        run_verify_only(args)
+    }
+}
 
-    if results.is_empty() {
-        eprintln!("No members found in workspace");
+fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
+    let options = resolve_options(&args.common);
+    let results = verify_members(&options, &args.member_ids, args.common.verbose)?;
+    print_member_verification_results(args.common.json, &results)
+}
+
+fn run_approve(args: VerifyArgs) -> Result<(), Error> {
+    let options = resolve_options(&args.common);
+    run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || {
+            let (_, execution) = resolve_execution_input(&args.common, args.member_id.clone())?;
+
+            let evaluation =
+                evaluate_members_for_approval(&options, &args.member_ids, &execution.member_id)?;
+            text::print_warnings(&evaluation.warnings);
+            let mut results = evaluation.results;
+
+            if results.is_empty() {
+                return print_member_approval_results(args.common.json, &results);
+            }
+
+            review_approval_candidates(&mut results)?;
+
+            let has_new_approvals = results.iter().any(|r| r.approved);
+            if has_new_approvals {
+                let commit_result = commit_approvals(&options, &results, &execution)?;
+                text::print_warnings(&commit_result.warnings);
+            }
+
+            print_member_approval_results(args.common.json, &results)
+        },
+    )
+}
+
+fn review_approval_candidates(
+    results: &mut [crate::app::member::approval::MemberApprovalResult],
+) -> Result<(), Error> {
+    let requires_review = results.iter().any(|r| r.review_required);
+    if !requires_review {
         return Ok(());
     }
-
-    // Output results
-    if args.common.json {
-        let output = serde_json::json!({
-            "results": results.iter().map(|r| serde_json::json!({
-                "member_id": r.member_id,
-                "verified": r.verified,
-                "message": r.message,
-                "fingerprint": r.fingerprint,
-                "matched_key_id": r.matched_key_id,
-            })).collect::<Vec<_>>(),
+    if !tty::is_interactive() {
+        return Err(Error::InvalidOperation {
+            message: "member verify --approve requires interactive confirmation".to_string(),
         });
-        print_json_output(&output)?;
-    } else {
-        for result in &results {
-            if result.verified {
-                eprintln!("✓ {}: {}", result.member_id, result.message);
-            } else {
-                eprintln!("✗ {}: {}", result.member_id, result.message);
-            }
-            if let Some(fp) = &result.fingerprint {
-                eprintln!("  SSH key fingerprint: {}", fp);
-            }
-        }
+    }
 
-        // Summary
-        let verified_count = results.iter().filter(|r| r.verified).count();
-        let total_count = results.len();
-        eprintln!("\nVerified {}/{} members", verified_count, total_count);
+    for result in results.iter_mut().filter(|r| r.review_required) {
+        let candidate = TrustApprovalCandidate::from(&*result);
+        result.approved = confirm_known_key_approval(&candidate, "member verify")?;
     }
 
     Ok(())

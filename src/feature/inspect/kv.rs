@@ -18,7 +18,6 @@ use super::{build_section, InspectOutput, InspectSection};
 
 /// Parsed kv-enc inspection data.
 struct KvEncInspectionData {
-    version: Option<String>,
     head_data: Option<(KvHeader, String)>,
     wrap_data: Option<(KvWrap, String)>,
     entries: Vec<(String, KvEntryValue, String)>,
@@ -34,11 +33,11 @@ fn build_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
 fn build_kv_enc_header_section(data: &KvEncInspectionData) -> Option<InspectSection> {
     data.head_data.as_ref().map(|(head, _token)| {
         build_section(
-            "HEAD Data",
+            "Header",
             vec![
-                format!("SID:        {}", head.sid),
-                format!("Created:    {}", head.created_at),
-                format!("Updated:    {}", head.updated_at),
+                format!("  SID:         {}", head.sid),
+                format!("  Created:     {}", head.created_at),
+                format!("  Updated:     {}", head.updated_at),
             ],
         )
     })
@@ -47,13 +46,13 @@ fn build_kv_enc_header_section(data: &KvEncInspectionData) -> Option<InspectSect
 fn build_kv_enc_wrap_section(data: &KvEncInspectionData) -> Option<InspectSection> {
     data.wrap_data.as_ref().map(|(wrap, _token)| {
         build_section(
-            "WRAP Data",
+            "Wrap Data",
             build_section_lines(|out| {
-                push_line(out, format!("Recipients ({}):", wrap.wrap.len()));
+                push_line(out, format!("  Recipients ({}):", wrap.wrap.len()));
                 for rid in &wrap.wrap {
-                    push_line(out, format!("  - {}", rid.rid));
+                    push_line(out, format!("    \u{2022} {}", rid.rid));
                 }
-                push_line(out, "Wrap Items:");
+                push_line(out, "  Wrap Items:");
                 for (i, wrap_item) in wrap.wrap.iter().enumerate() {
                     append_wrap_item(i, wrap_item, out);
                 }
@@ -68,21 +67,24 @@ fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
         format!("Entries ({})", data.entries.len()),
         build_section_lines(|out| {
             for (i, (key, entry, _token)) in data.entries.iter().enumerate() {
-                push_line(out, format!("[{}] Key: {}", i, key));
-                push_line(out, "  Encryption:");
-                push_line(out, format!("    aead:   {}", entry.aead));
-                push_line(out, format!("    salt:   {}", entry.salt));
-                push_line(out, format!("    nonce:  {}", entry.nonce));
+                push_line(out, format!("  [{}] Key: {}", i, key));
+                push_line(out, format!("      AEAD:    {}", entry.aead));
+                push_line(out, format!("      Salt:    {}", entry.salt));
+                push_line(out, format!("      K:       {}", entry.k));
+                push_line(out, format!("      Nonce:   {}", entry.nonce));
                 push_line(
                     out,
                     format!(
-                        "    ct:     {} bytes ({}...)",
+                        "      CT:      {} bytes ({}...)",
                         entry.ct.len(),
                         &entry.ct[..entry.ct.len().min(40)]
                     ),
                 );
                 if entry.disclosed {
-                    push_line(out, "  Status:     [DISCLOSED] Secret may need rotation");
+                    push_line(
+                        out,
+                        "      \u{26a0} DISCLOSED \u{2014} Secret may need rotation",
+                    );
                 }
             }
         }),
@@ -96,13 +98,13 @@ fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectS
         build_section(
             "Signature",
             build_section_lines(|out| {
-                push_line(out, format!("Algorithm:  {}", signature.alg));
-                push_line(out, format!("Kid:        {}", kid_display));
+                push_line(out, format!("  Algorithm:   {}", signature.alg));
+                push_line(out, format!("  Kid:         {}", kid_display));
                 append_signer_info(signature.signer_pub.as_ref(), out);
                 push_line(
                     out,
                     format!(
-                        "Signature:  {}...",
+                        "  Sig:         {}...",
                         &signature.sig[..signature.sig.len().min(40)]
                     ),
                 );
@@ -113,16 +115,11 @@ fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectS
 
 /// Build inspection data from a KvEncDocument (verified or not).
 fn kv_enc_document_to_inspection_data(doc: &KvEncDocument) -> Result<KvEncInspectionData> {
-    let mut version = None;
     let mut entries = Vec::new();
     for line in doc.lines() {
-        match line {
-            KvEncLine::Header { version: v } => version = Some(v.to_string()),
-            KvEncLine::KV { key, token } => {
-                let entry = parse_kv_entry_token(token)?;
-                entries.push((key.clone(), entry, token.clone()));
-            }
-            _ => {}
+        if let KvEncLine::KV { key, token } = line {
+            let entry = parse_kv_entry_token(token)?;
+            entries.push((key.clone(), entry, token.clone()));
         }
     }
     let signature: Option<(KvFileSignature, String)> =
@@ -130,7 +127,6 @@ fn kv_enc_document_to_inspection_data(doc: &KvEncDocument) -> Result<KvEncInspec
             .ok()
             .map(|s| (s, String::new()));
     Ok(KvEncInspectionData {
-        version,
         head_data: Some((doc.head().clone(), String::new())),
         wrap_data: Some((doc.wrap().clone(), String::new())),
         entries,
@@ -142,9 +138,6 @@ pub(crate) fn build_kv_inspect_output(doc: &KvEncDocument) -> Result<InspectOutp
     let data = kv_enc_document_to_inspection_data(doc)?;
     let mut sections = Vec::new();
 
-    if let Some(ref version) = data.version {
-        sections.push(build_section("Version", vec![version.clone()]));
-    }
     if let Some(section) = build_kv_enc_header_section(&data) {
         sections.push(section);
     }
@@ -157,10 +150,10 @@ pub(crate) fn build_kv_inspect_output(doc: &KvEncDocument) -> Result<InspectOutp
     }
     sections.push(build_section(
         "Summary",
-        vec![format!("Total Entries: {}", data.entries.len())],
+        vec![format!("  Total Entries: {}", data.entries.len())],
     ));
     Ok(InspectOutput {
-        title: "=== KV-Enc v3 Metadata ===".to_string(),
+        title: "KV-Enc v3 Metadata".to_string(),
         sections,
     })
 }

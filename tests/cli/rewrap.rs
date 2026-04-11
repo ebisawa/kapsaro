@@ -11,8 +11,8 @@ use crate::cli::common::{
 };
 use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;
-use secretenv::cli::common::options::CommonOptions;
 use secretenv::cli::encrypt;
+use secretenv::cli::options::CommonOptions;
 use secretenv::cli::rewrap::{self, RewrapArgs};
 use secretenv::cli::set;
 use secretenv::format::kv::enc::canonical::parse_kv_wrap;
@@ -36,8 +36,6 @@ fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArg
         member_id: Some(member_id.to_string()),
         rotate_key: false,
         clear_disclosure_history: false,
-        no_signer_pub: false,
-        force: false,
     }
 }
 
@@ -54,7 +52,7 @@ fn create_kv_file(
     for (key, value) in entries {
         let set_args = set::SetArgs {
             common: common_opts.clone(),
-            no_signer_pub: false,
+
             member_id: Some(member_id.to_string()),
             name: Some(name.to_string()),
             stdin: false,

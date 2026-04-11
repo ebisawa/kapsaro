@@ -89,6 +89,67 @@ fn test_resolve_kid_with_override() {
 }
 
 #[test]
+fn test_resolve_kid_with_unique_prefix_override() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
+
+    let temp_dir = TempDir::new().unwrap();
+    std::env::set_var("SECRETENV_HOME", temp_dir.path().to_str().unwrap());
+
+    let member_id = format!("alice-prefix-{}@example.com", uuid::Uuid::new_v4());
+
+    let pub1 = dummy_public_key(
+        &member_id,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        "2026-03-01T00:00:00Z",
+    );
+    let pub2 = dummy_public_key(
+        &member_id,
+        "9N4R1H8VW6PKT3XNC5JY2F9AR8GD7M2Q",
+        "2026-03-02T00:00:00Z",
+    );
+
+    let base_dir = get_base_dir().unwrap();
+    let keystore_root = get_keystore_root_from_base(&base_dir);
+    save_public_key(&keystore_root, &member_id, &pub1.protected.kid, &pub1).unwrap();
+    save_public_key(&keystore_root, &member_id, &pub2.protected.kid, &pub2).unwrap();
+
+    let resolved = resolve_kid(&keystore_root, &member_id, Some("7m2q-9d4r")).unwrap();
+    assert_eq!(resolved, pub1.protected.kid);
+}
+
+#[test]
+fn test_resolve_kid_with_ambiguous_prefix_override_error() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
+
+    let temp_dir = TempDir::new().unwrap();
+    std::env::set_var("SECRETENV_HOME", temp_dir.path().to_str().unwrap());
+
+    let member_id = format!("alice-ambiguous-{}@example.com", uuid::Uuid::new_v4());
+
+    let pub1 = dummy_public_key(
+        &member_id,
+        "83AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "2026-03-01T00:00:00Z",
+    );
+    let pub2 = dummy_public_key(
+        &member_id,
+        "83BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "2026-03-02T00:00:00Z",
+    );
+
+    let base_dir = get_base_dir().unwrap();
+    let keystore_root = get_keystore_root_from_base(&base_dir);
+    save_public_key(&keystore_root, &member_id, &pub1.protected.kid, &pub1).unwrap();
+    save_public_key(&keystore_root, &member_id, &pub2.protected.kid, &pub2).unwrap();
+
+    let error = resolve_kid(&keystore_root, &member_id, Some("83")).unwrap_err();
+    assert!(
+        error.to_string().contains("ambiguous"),
+        "error should mention ambiguity: {error}"
+    );
+}
+
+#[test]
 fn test_resolve_kid_with_active() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
 

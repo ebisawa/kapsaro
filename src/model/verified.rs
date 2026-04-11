@@ -13,11 +13,37 @@ use super::private_key::PrivateKeyPlaintext;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptionProof {
     /// Member ID from the encrypted document
-    pub member_id: String,
+    pub(crate) member_id: String,
     /// Key statement ID from the encrypted document
-    pub kid: String,
+    pub(crate) kid: String,
     /// SSH fingerprint used for decryption (None for non-SSH key protection)
-    pub ssh_fpr: Option<String>,
+    pub(crate) ssh_fpr: Option<String>,
+}
+
+impl DecryptionProof {
+    /// Create a new DecryptionProof.
+    pub fn new(member_id: String, kid: String, ssh_fpr: Option<String>) -> Self {
+        Self {
+            member_id,
+            kid,
+            ssh_fpr,
+        }
+    }
+
+    /// Get the member ID.
+    pub fn member_id(&self) -> &str {
+        &self.member_id
+    }
+
+    /// Get the key statement ID.
+    pub fn kid(&self) -> &str {
+        &self.kid
+    }
+
+    /// Get the SSH fingerprint used for decryption.
+    pub fn ssh_fpr(&self) -> Option<&str> {
+        self.ssh_fpr.as_deref()
+    }
 }
 
 /// A PrivateKeyPlaintext that has been successfully decrypted and validated
@@ -31,8 +57,7 @@ pub struct DecryptionProof {
 ///
 /// # Example
 ///
-/// ```rust,no_run
-/// use secretenv::app::context::crypto::load_crypto_context;
+/// ```ignore
 /// use secretenv::model::verified::VerifiedPrivateKey;
 /// use secretenv::model::private_key::PrivateKeyPlaintext;
 /// use secretenv::io::ssh::backend::SignatureBackend;
@@ -44,6 +69,14 @@ pub struct DecryptionProof {
 /// # let ssh_pubkey = "";
 /// # let keystore_root = std::path::PathBuf::from("/tmp");
 /// # let debug = false;
+/// # let load_crypto_context = |_member_id: &str,
+/// #                            _backend: &dyn SignatureBackend,
+/// #                            _ssh_pubkey: &str,
+/// #                            _explicit_kid: Option<&str>,
+/// #                            _keystore_root: Option<&std::path::PathBuf>,
+/// #                            _workspace_path: Option<std::path::PathBuf>,
+/// #                            _debug: bool|
+/// #  -> Result<{ secretenv::feature::context::crypto::CryptoContext }, Box<dyn std::error::Error>> { todo!() };
 /// let key_ctx = load_crypto_context(
 ///     member_id,
 ///     backend,
@@ -57,19 +90,19 @@ pub struct DecryptionProof {
 /// // Access decrypted document and proof information
 /// let plaintext = key_ctx.private_key.document();
 /// let proof = key_ctx.private_key.proof();
-/// assert_eq!(proof.member_id, "alice@example.com");
+/// assert_eq!(proof.member_id(), "alice@example.com");
 ///
 /// // The VerifiedPrivateKey wrapper ensures type-level guarantees that decryption
 /// // and validation have occurred before the plaintext can be used in trusted operations.
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VerifiedPrivateKey {
     /// The decrypted document
-    pub document: PrivateKeyPlaintext,
+    pub(crate) document: PrivateKeyPlaintext,
     /// Proof of decryption and validation
-    pub proof: DecryptionProof,
+    pub(crate) proof: DecryptionProof,
 }
 impl VerifiedPrivateKey {
     /// Create a new VerifiedPrivateKey wrapper

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::test_utils::{setup_member_key_context, setup_trust_store_for_workspace};
 
 #[test]
 fn test_rewrap_rotate_key() {
@@ -85,6 +86,8 @@ fn test_rewrap_noop_rewrites_file() {
 #[test]
 fn test_rewrap_clear_disclosure_history() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -147,7 +150,7 @@ fn test_rewrap_with_rotate_key_flag() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -159,7 +162,7 @@ fn test_rewrap_with_rotate_key_flag() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -169,7 +172,7 @@ fn test_rewrap_with_rotate_key_flag() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("value123"));
@@ -188,7 +191,7 @@ fn test_rewrap_with_clear_disclosure_history_flag() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -200,7 +203,7 @@ fn test_rewrap_with_clear_disclosure_history_flag() {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 }

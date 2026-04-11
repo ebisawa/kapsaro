@@ -14,7 +14,7 @@ struct GitHubKey {
     key: String,
 }
 
-/// GitHub REST API user response (GET /users/{username}).
+/// GitHub REST API user response.
 #[derive(Debug, Deserialize)]
 struct GitHubUser {
     id: u64,
@@ -44,12 +44,12 @@ fn apply_github_auth(request: reqwest::RequestBuilder) -> reqwest::RequestBuilde
     request
 }
 
-/// Resolve GitHub login (username) to (id, login) via REST API.
-pub(super) async fn fetch_github_user_by_login(
+/// Resolve GitHub account ID to (id, current login) via REST API.
+pub(super) async fn fetch_github_user_by_id(
     client: &reqwest::Client,
-    login: &str,
+    account_id: u64,
 ) -> Result<(u64, String)> {
-    let url = format!("https://api.github.com/users/{}", login);
+    let url = format!("https://api.github.com/user/{}", account_id);
     let request = build_github_request(client, &url);
     let response = request.send().await.map_err(|e| Error::Verify {
         rule: "V-GITHUB-API".to_string(),
@@ -61,8 +61,8 @@ pub(super) async fn fetch_github_user_by_login(
         return Err(Error::Verify {
             rule: "V-GITHUB-API".to_string(),
             message: format!(
-                "GitHub user not found for login '{}' (status: {})",
-                login, status
+                "GitHub user not found for account id '{}' (status: {})",
+                account_id, status
             ),
         });
     }

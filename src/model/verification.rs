@@ -6,6 +6,8 @@
 //! This module provides proof types that represent the result of verification operations.
 //! These proofs are used in state wrappers to ensure type-level guarantees.
 
+use crate::model::public_key::PublicKey;
+
 /// Proof of PublicKey self-signature verification
 ///
 /// This proof indicates that the PublicKey document's self-signature has been
@@ -51,8 +53,6 @@ impl Default for ExpiryProof {
 pub enum VerifyingKeySource {
     /// PublicKey was embedded in signature.signer_pub
     SignerPubEmbedded,
-    /// PublicKey was found in workspace active members by kid
-    ActiveMemberByKid { kid: String },
 }
 
 /// Proof of signature verification
@@ -61,12 +61,14 @@ pub enum VerifyingKeySource {
 /// the verifying key was obtained. It is used in `VerifiedFileEncDocument`
 /// and `VerifiedKvEncDocument` to provide type-level guarantees that
 /// signature verification has occurred.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SignatureVerificationProof {
     /// Signer's member ID (verified)
     pub member_id: String,
     /// Key statement ID of the signing key
     pub kid: String,
+    /// Embedded signer public key used for cryptographic verification
+    pub signer_public_key: Option<PublicKey>,
     /// Source of the verifying key
     pub verifying_key_source: VerifyingKeySource,
     /// Warnings (e.g., expired key used for verification)
@@ -84,6 +86,24 @@ impl SignatureVerificationProof {
         Self {
             member_id,
             kid,
+            signer_public_key: None,
+            verifying_key_source,
+            warnings,
+        }
+    }
+
+    /// Create a new SignatureVerificationProof with embedded signer metadata.
+    pub fn new_with_signer_public_key(
+        member_id: String,
+        kid: String,
+        signer_public_key: PublicKey,
+        verifying_key_source: VerifyingKeySource,
+        warnings: Vec<String>,
+    ) -> Self {
+        Self {
+            member_id,
+            kid,
+            signer_public_key: Some(signer_public_key),
             verifying_key_source,
             warnings,
         }

@@ -7,9 +7,27 @@ use crate::io::keystore::active::load_active_kid;
 use crate::io::keystore::member::select_most_recent_kid;
 use crate::io::keystore::storage::list_kids;
 use crate::support::kid::kid_display_lossy;
-use crate::support::kid::normalize_kid;
+use crate::support::kid::resolve_unique_kid;
 use crate::{Error, Result};
 use std::path::Path;
+
+pub fn resolve_member_kid_query(
+    keystore_root: &Path,
+    member_id: &str,
+    kid_query: &str,
+) -> Result<String> {
+    let kids = list_kids(keystore_root, member_id)?;
+    resolve_unique_kid(kids.iter().map(String::as_str), kid_query).map_err(|error| match error {
+        Error::NotFound { .. } => Error::NotFound {
+            message: format!(
+                "Specified kid '{}' not found for member '{}'",
+                kid_display_lossy(kid_query),
+                member_id
+            ),
+        },
+        other => other,
+    })
+}
 
 /// Resolves the kid to use for a given member_id
 ///
@@ -34,27 +52,13 @@ pub fn resolve_kid(
     member_id: &str,
     kid_override: Option<&str>,
 ) -> Result<String> {
-    // If explicit kid provided, validate and use it
     if let Some(kid) = kid_override {
-        let normalized_kid = normalize_kid(kid)?;
-        let kids = list_kids(keystore_root, member_id)?;
-        if !kids.contains(&normalized_kid) {
-            return Err(Error::NotFound {
-                message: format!(
-                    "Specified kid '{}' not found for member '{}'",
-                    kid_display_lossy(kid),
-                    member_id
-                ),
-            });
-        }
-        return Ok(normalized_kid);
+        return resolve_member_kid_query(keystore_root, member_id, kid);
     }
 
-    // Try to get active kid
     if let Some(active_kid) = load_active_kid(member_id, keystore_root)? {
         return Ok(active_kid);
     }
 
-    // Fall back to the most recent key by created_at desc, then kid asc.
     select_most_recent_kid(keystore_root, member_id)
 }

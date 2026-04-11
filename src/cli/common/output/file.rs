@@ -7,7 +7,7 @@ use crate::support::fs::atomic;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 
-pub fn resolve_encrypted_output_path(
+pub(crate) fn resolve_encrypted_output_path(
     explicit_out: Option<&PathBuf>,
     input_path: &Path,
 ) -> Result<Option<PathBuf>> {
@@ -38,7 +38,7 @@ pub fn resolve_encrypted_output_path(
     ))
 }
 
-pub fn save_encrypted_output(
+pub(crate) fn save_encrypted_output(
     output_path: Option<&PathBuf>,
     content: &str,
     quiet: bool,
@@ -53,7 +53,7 @@ pub fn save_encrypted_output(
     Ok(())
 }
 
-pub fn save_decrypted_output(
+pub(crate) fn save_decrypted_output(
     output_path: &Path,
     plaintext_bytes: &[u8],
     quiet: bool,

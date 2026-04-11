@@ -5,18 +5,15 @@ use crate::app::verification::OnlineVerificationStatus;
 use crate::feature::key::portable_export::PortableExportOutput;
 use crate::feature::key::types as feature_key_types;
 use crate::model::ssh::SshDeterminismStatus;
+use crate::support::secret::SecretString;
 
 #[derive(Debug, Clone)]
 pub struct KeyNewResult {
     pub member_id: String,
     pub kid: String,
-    pub created_at: String,
     pub expires_at: String,
-    pub keystore_root: std::path::PathBuf,
-    pub key_dir: std::path::PathBuf,
     pub activated: bool,
     pub ssh_fingerprint: String,
-    pub ssh_public_key: String,
     pub ssh_determinism: SshDeterminismStatus,
     pub github_verification: OnlineVerificationStatus,
 }
@@ -26,13 +23,9 @@ impl From<feature_key_types::KeyNewResult> for KeyNewResult {
         Self {
             member_id: r.member_id,
             kid: r.kid,
-            created_at: r.created_at,
             expires_at: r.expires_at,
-            keystore_root: r.keystore_root,
-            key_dir: r.key_dir,
             activated: r.activated,
             ssh_fingerprint: r.ssh_fingerprint,
-            ssh_public_key: r.ssh_public_key,
             ssh_determinism: r.ssh_determinism,
             github_verification: OnlineVerificationStatus::NotConfigured,
         }
@@ -50,14 +43,14 @@ pub struct KeyInfo {
 }
 
 impl From<feature_key_types::KeyInfo> for KeyInfo {
-    fn from(i: feature_key_types::KeyInfo) -> Self {
+    fn from(value: feature_key_types::KeyInfo) -> Self {
         Self {
-            kid: i.kid,
-            member_id: i.member_id,
-            created_at: i.created_at,
-            expires_at: i.expires_at,
-            active: i.active,
-            format: i.format,
+            kid: value.kid,
+            member_id: value.member_id,
+            created_at: value.created_at,
+            expires_at: value.expires_at,
+            active: value.active,
+            format: value.format,
         }
     }
 }
@@ -68,58 +61,14 @@ pub struct KeyListResult {
 }
 
 impl From<feature_key_types::KeyListResult> for KeyListResult {
-    fn from(r: feature_key_types::KeyListResult) -> Self {
+    fn from(value: feature_key_types::KeyListResult) -> Self {
         Self {
-            entries: r
+            entries: value
                 .entries
                 .into_iter()
-                .map(|(id, keys)| (id, keys.into_iter().map(KeyInfo::from).collect()))
+                .map(|(member_id, keys)| (member_id, keys.into_iter().map(Into::into).collect()))
                 .collect(),
-            total_keys: r.total_keys,
-        }
-    }
-}
-
-pub struct KeyActivateResult {
-    pub member_id: String,
-    pub kid: String,
-}
-
-impl From<feature_key_types::KeyActivateResult> for KeyActivateResult {
-    fn from(r: feature_key_types::KeyActivateResult) -> Self {
-        Self {
-            member_id: r.member_id,
-            kid: r.kid,
-        }
-    }
-}
-
-pub struct KeyRemoveResult {
-    pub member_id: String,
-    pub kid: String,
-    pub was_active: bool,
-}
-
-impl From<feature_key_types::KeyRemoveResult> for KeyRemoveResult {
-    fn from(r: feature_key_types::KeyRemoveResult) -> Self {
-        Self {
-            member_id: r.member_id,
-            kid: r.kid,
-            was_active: r.was_active,
-        }
-    }
-}
-
-pub struct KeyExportResult {
-    pub member_id: String,
-    pub kid: String,
-}
-
-impl From<feature_key_types::KeyExportResult> for KeyExportResult {
-    fn from(r: feature_key_types::KeyExportResult) -> Self {
-        Self {
-            member_id: r.member_id,
-            kid: r.kid,
+            total_keys: value.total_keys,
         }
     }
 }
@@ -127,7 +76,7 @@ impl From<feature_key_types::KeyExportResult> for KeyExportResult {
 pub struct KeyExportPrivateResult {
     pub member_id: String,
     pub kid: String,
-    pub encoded_key: String,
+    pub encoded_key: SecretString,
 }
 
 impl From<PortableExportOutput> for KeyExportPrivateResult {

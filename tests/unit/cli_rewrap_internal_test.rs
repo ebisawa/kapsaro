@@ -1,223 +1,102 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
-use crate::app::rewrap::types::{
-    IncomingGithubAccount, IncomingVerificationCategory, IncomingVerificationItem,
-    IncomingVerificationReport,
-};
 use std::io::Cursor;
 
-fn make_report(
-    verified: Vec<IncomingVerificationItem>,
-    failed: Vec<IncomingVerificationItem>,
-    not_configured: Vec<IncomingVerificationItem>,
-) -> IncomingVerificationReport {
-    IncomingVerificationReport {
-        verified,
-        failed,
-        not_configured,
+use crate::app::rewrap::promotion::{
+    PromotionReviewFailure, PromotionReviewPrompt, PromotionReviewView,
+};
+use crate::app::trust::TrustApprovalCandidate;
+use crate::test_utils::{kid as test_kid, member_id as test_member_id};
+
+use super::confirm_incoming_promotions;
+
+fn make_prompt(member_id: &str) -> PromotionReviewPrompt {
+    let kid = match member_id {
+        "alice" => "KAD1AAAA1111BBBB2222CCCC3333DDDD",
+        "bob" => "KBD1AAAA1111BBBB2222CCCC3333DDDD",
+        _ => "KCD1AAAA1111BBBB2222CCCC3333DDDD",
+    };
+    PromotionReviewPrompt {
+        candidate: TrustApprovalCandidate {
+            member_id: test_member_id(member_id),
+            kid: test_kid(kid),
+            fingerprint: Some("SHA256:abc".to_string()),
+            github_id: Some(12345),
+            github_login: Some(format!("{}-gh", member_id)),
+            attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
+            verified_github: None,
+            github_binding_configured: true,
+            online_verification_attempted: true,
+            online_verification_message: Some("verified".to_string()),
+            public_key: None,
+            requires_out_of_band_verification: true,
+        },
     }
 }
 
-fn verified_result(member_id: &str) -> IncomingVerificationItem {
-    IncomingVerificationItem {
-        member_id: member_id.to_string(),
-        category: IncomingVerificationCategory::Verified,
-        message: "OK".to_string(),
-        fingerprint: Some("SHA256:abc".to_string()),
-        github_account: Some(IncomingGithubAccount {
-            id: 12345,
-            login: format!("{}-gh", member_id),
-        }),
+fn make_review_view(
+    failed_candidates: Vec<PromotionReviewFailure>,
+    prompt_candidates: Vec<PromotionReviewPrompt>,
+) -> PromotionReviewView {
+    PromotionReviewView {
+        failed_candidates,
+        prompt_candidates,
     }
 }
 
 #[test]
-fn test_confirm_force_excludes_failed() {
-    let report = make_report(
-        vec![verified_result("alice")],
-        vec![IncomingVerificationItem {
-            member_id: "bob".to_string(),
-            category: IncomingVerificationCategory::Failed,
-            message: "err".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, true, false, &mut input).unwrap();
-    assert_eq!(result.len(), 2);
-    assert!(result.contains(&"alice".to_string()));
-    assert!(!result.contains(&"bob".to_string()));
-    assert!(result.contains(&"carol".to_string()));
-}
-
-#[test]
-fn test_confirm_force_with_no_failed_promotes_all() {
-    let report = make_report(
-        vec![verified_result("alice")],
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, true, false, &mut input).unwrap();
-    assert_eq!(result.len(), 2);
-    assert!(result.contains(&"alice".to_string()));
-    assert!(result.contains(&"carol".to_string()));
-}
-
-#[test]
-fn test_confirm_failed_without_force_errors() {
-    let report = make_report(
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "bob".to_string(),
-            category: IncomingVerificationCategory::Failed,
-            message: "err".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-        vec![],
-    );
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("Online verification failed"), "got: {}", err);
-}
-
-#[test]
-fn test_confirm_not_configured_without_force_errors() {
-    let report = make_report(
-        vec![],
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: None,
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, false, &mut input);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("TOFU confirmation required"), "got: {}", err);
-}
-
-#[test]
-fn test_confirm_not_configured_interactive_accept() {
-    let report = make_report(
-        vec![],
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: Some("SHA256:xyz".to_string()),
-            github_account: None,
-        }],
-    );
+fn test_confirm_incoming_promotions_accepts_single_prompt() {
+    let review_view = make_review_view(vec![], vec![make_prompt("alice")]);
     let mut input = Cursor::new(b"y\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
-    assert_eq!(result, vec!["carol".to_string()]);
-}
 
-#[test]
-fn test_confirm_not_configured_interactive_reject() {
-    let report = make_report(
-        vec![],
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: Some("SHA256:xyz".to_string()),
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"n\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
-    assert!(result.is_empty());
-}
+    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
 
-#[test]
-fn test_confirm_verified_and_not_configured_mixed() {
-    let report = make_report(
-        vec![verified_result("alice")],
-        vec![],
-        vec![IncomingVerificationItem {
-            member_id: "carol".to_string(),
-            category: IncomingVerificationCategory::NotConfigured,
-            message: "no github".to_string(),
-            fingerprint: Some("SHA256:xyz".to_string()),
-            github_account: None,
-        }],
-    );
-    let mut input = Cursor::new(b"y\ny\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
-    assert_eq!(result.len(), 2);
-    assert_eq!(result[0], "alice");
-    assert_eq!(result[1], "carol");
-}
-
-#[test]
-fn test_confirm_non_tty_without_force_errors() {
-    let report = make_report(vec![verified_result("alice")], vec![], vec![]);
-    let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, false, &mut input);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("TOFU confirmation required"), "got: {}", err);
-}
-
-#[test]
-fn test_confirm_interactive_accept() {
-    let report = make_report(vec![verified_result("alice")], vec![], vec![]);
-    let mut input = Cursor::new(b"y\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
     assert_eq!(result, vec!["alice".to_string()]);
 }
 
 #[test]
-fn test_confirm_interactive_reject() {
-    let report = make_report(vec![verified_result("alice")], vec![], vec![]);
+fn test_confirm_incoming_promotions_rejects_single_prompt() {
+    let review_view = make_review_view(vec![], vec![make_prompt("alice")]);
     let mut input = Cursor::new(b"n\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+
+    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+
     assert!(result.is_empty());
 }
 
 #[test]
-fn test_confirm_interactive_mixed_responses() {
-    let report = make_report(
-        vec![verified_result("alice"), verified_result("bob")],
-        vec![],
-        vec![],
-    );
+fn test_confirm_incoming_promotions_accepts_mixed_prompt_responses() {
+    let review_view = make_review_view(vec![], vec![make_prompt("alice"), make_prompt("bob")]);
     let mut input = Cursor::new(b"y\nn\n" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+
+    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+
     assert_eq!(result, vec!["alice".to_string()]);
 }
 
 #[test]
-fn test_confirm_empty_report() {
-    let report = make_report(vec![], vec![], vec![]);
+fn test_confirm_incoming_promotions_ignores_failed_candidates() {
+    let review_view = make_review_view(
+        vec![PromotionReviewFailure {
+            member_id: "carol".to_string(),
+            message: "verification failed".to_string(),
+        }],
+        vec![make_prompt("alice")],
+    );
+    let mut input = Cursor::new(b"y\n" as &[u8]);
+
+    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+
+    assert_eq!(result, vec!["alice".to_string()]);
+}
+
+#[test]
+fn test_confirm_incoming_promotions_empty_view_returns_empty() {
+    let review_view = make_review_view(vec![], vec![]);
     let mut input = Cursor::new(b"" as &[u8]);
-    let result = confirm_incoming_promotions(&report, false, true, &mut input).unwrap();
+
+    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+
     assert!(result.is_empty());
 }

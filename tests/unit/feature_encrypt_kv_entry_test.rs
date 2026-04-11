@@ -23,6 +23,52 @@ fn make_signing_ctx_for_test() -> (SigningKey, String) {
     )
 }
 
+fn make_dummy_signer_pub(
+    signing_key: &SigningKey,
+    kid: &str,
+) -> secretenv::model::public_key::PublicKey {
+    use base64::Engine;
+    use secretenv::model::public_key::{
+        Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+    };
+
+    let vk = signing_key.verifying_key();
+    let b64url = |b: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b);
+    let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
+    let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
+
+    PublicKey {
+        protected: PublicKeyProtected {
+            format: "secretenv.public.key@4".to_string(),
+            member_id: "test@example.com".to_string(),
+            kid: kid.to_string(),
+            identity: Identity {
+                keys: IdentityKeys {
+                    kem: JwkOkpPublicKey {
+                        kty: "OKP".to_string(),
+                        crv: "X25519".to_string(),
+                        x: b64url(kem_pk.as_bytes()),
+                    },
+                    sig: JwkOkpPublicKey {
+                        kty: "OKP".to_string(),
+                        crv: "Ed25519".to_string(),
+                        x: b64url(vk.as_bytes()),
+                    },
+                },
+                attestation: Attestation {
+                    method: "ssh-sign".to_string(),
+                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
+                    sig: b64url(&[0u8; 64]),
+                },
+            },
+            binding_claims: None,
+            expires_at: "2099-01-01T00:00:00Z".to_string(),
+            created_at: Some("2026-01-01T00:00:00Z".to_string()),
+        },
+        signature: b64url(&[0u8; 64]),
+    }
+}
+
 fn make_verified_member_for_test(signing_key: &SigningKey, kid: &str) -> VerifiedRecipientKey {
     use base64::Engine;
     use ed25519_dalek::Signer;
@@ -90,18 +136,11 @@ fn make_kv_document(entries: &[(&str, &str)], signing_key: &SigningKey, kid: &st
     let signing = SigningContext {
         signing_key,
         signer_kid: kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(signing_key, kid),
         debug: false,
     };
 
-    encrypt_kv_document(
-        &kv_map,
-        &["test@example.com".to_string()],
-        &[verified_member],
-        &signing,
-        TokenCodec::JsonJcs,
-    )
-    .unwrap()
+    encrypt_kv_document(&kv_map, &[verified_member], &signing, TokenCodec::JsonJcs).unwrap()
 }
 
 /// Build a test context for set/unset tests: (initial_content, doc, signing_key, kid)
@@ -199,7 +238,7 @@ fn test_build_kv_set_entry_adds_new_key() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -222,7 +261,7 @@ fn test_build_kv_set_entry_replaces_existing_key() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let new_token = "newtoken456";
@@ -247,7 +286,7 @@ fn test_build_kv_set_entry_preserves_wrap_token() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -269,7 +308,7 @@ fn test_build_kv_set_entry_preserves_sid_and_created_at() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -300,7 +339,7 @@ fn test_build_kv_unset_entry_removes_target_key() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -323,7 +362,7 @@ fn test_build_kv_unset_entry_preserves_wrap_token() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -345,7 +384,7 @@ fn test_build_kv_unset_entry_last_entry() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -370,7 +409,7 @@ fn test_build_kv_unset_entry_preserves_sid_and_created_at() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -395,7 +434,7 @@ fn test_build_kv_set_entries_updates_and_adds_multiple_keys() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -436,7 +475,7 @@ fn test_build_kv_set_entries_preserves_existing_keys_not_in_map() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -467,7 +506,7 @@ fn test_build_kv_set_entries_new_keys_sorted_deterministically() {
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: None,
+        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {

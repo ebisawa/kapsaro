@@ -87,7 +87,7 @@ pub struct EncryptedData {
 }
 
 /// Plaintext key material (inside encrypted.ct).
-#[derive(Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 #[serde(deny_unknown_fields)]
 pub struct PrivateKeyPlaintext {
@@ -96,7 +96,7 @@ pub struct PrivateKeyPlaintext {
 }
 
 /// Identity Keys Private (KEM + Sig with private components)
-#[derive(Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 #[serde(deny_unknown_fields)]
 pub struct IdentityKeysPrivate {
@@ -113,7 +113,7 @@ pub struct IdentityKeysPrivate {
 /// - `crv = "Ed25519"` for signatures
 ///
 /// It also includes public component `x` for PublicKey reconstruction.
-#[derive(Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 #[serde(deny_unknown_fields)]
 pub struct JwkOkpPrivateKey {

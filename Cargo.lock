@@ -2362,6 +2362,7 @@ dependencies = [
  "base64",
  "chacha20poly1305",
  "clap",
+ "console",
  "dialoguer",
  "dotenvy",
  "ed25519-dalek",

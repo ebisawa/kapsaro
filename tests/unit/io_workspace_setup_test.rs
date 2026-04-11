@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::test_utils::setup_test_keystore_from_fixtures;
+use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::io::workspace::setup::{

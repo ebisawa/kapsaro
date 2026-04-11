@@ -65,8 +65,7 @@ fn detect_kv_enc(content: &str) -> Result<Option<InputFormat>> {
 
 /// Detect file-enc format from content
 ///
-/// Format: JSON with "format": "secretenv.file@3"
-/// file-enc v3 has format in protected.format
+/// Format: JSON with `protected.format = "secretenv.file@3"`
 fn detect_file_enc(content: &str) -> Result<Option<InputFormat>> {
     if !content.trim_start().starts_with('{') {
         return Ok(None);
@@ -77,19 +76,11 @@ fn detect_file_enc(content: &str) -> Result<Option<InputFormat>> {
         Err(_) => return Ok(None),
     };
 
-    // Check protected.format (new structure)
     if let Some(protected) = value.get("protected") {
         if let Some(format) = protected.get("format").and_then(|v| v.as_str()) {
             if format == format::FILE_ENC_V3 {
                 return Ok(Some(InputFormat::FileEnc));
             }
-        }
-    }
-
-    // Fallback: check top-level format (for backward compatibility)
-    if let Some(format) = value.get("format").and_then(|v| v.as_str()) {
-        if format == format::FILE_ENC_V3 {
-            return Ok(Some(InputFormat::FileEnc));
         }
     }
 

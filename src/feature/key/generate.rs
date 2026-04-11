@@ -120,12 +120,12 @@ fn ensure_kid_not_in_keystore(keystore_root: &Path, kid: &str) -> Result<()> {
 }
 
 fn generate_key_material() -> Result<GeneratedKeyMaterial> {
-    let (kem_sk, kem_pk, sig_sk, sig_pk) = material::generate_keypairs()?;
+    let keypairs = material::generate_keypairs()?;
     Ok(GeneratedKeyMaterial {
-        kem_sk,
-        kem_pk,
-        sig_sk,
-        sig_pk,
+        kem_sk: keypairs.kem_sk,
+        kem_pk: keypairs.kem_pk,
+        sig_sk: keypairs.sig_sk,
+        sig_pk: keypairs.sig_pk,
     })
 }
 

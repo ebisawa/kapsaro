@@ -52,9 +52,9 @@ macro_rules! impl_fixed_size_type {
                     ))
                     .into());
                 }
-                let mut out = [0u8; $size];
-                out.copy_from_slice(bytes);
-                Ok(Self(::zeroize::Zeroizing::new(out)))
+                let mut out = ::zeroize::Zeroizing::new([0u8; $size]);
+                out.as_mut().copy_from_slice(bytes);
+                Ok(Self(out))
             }
         }
     };

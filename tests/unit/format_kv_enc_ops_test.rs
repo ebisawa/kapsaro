@@ -3,18 +3,26 @@
 
 //! Unit tests for kv-enc v3 encryption/decryption operations
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
 use crate::keygen_helpers::{make_decrypted_private_key_plaintext, make_verified_members};
 use crate::test_utils::{create_temp_ssh_keypair_in_dir, keygen_test};
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
 use ed25519_dalek::SigningKey;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::kv::decrypt::decrypt_kv_document;
 use secretenv::feature::kv::encrypt::encrypt_kv_document;
+use secretenv::feature::kv::mutate::{
+    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
+    KvWriteContext,
+};
+use secretenv::feature::kv::types::KvInputEntry;
 use secretenv::format::content::KvEncContent;
 use secretenv::format::kv::document::parse_kv_document;
 use secretenv::format::kv::dotenv::{build_dotenv_string, parse_dotenv};
+use secretenv::format::kv::enc::canonical::parse_kv_wrap;
 use secretenv::format::schema::document::{parse_kv_head_token, parse_kv_wrap_token};
 use secretenv::format::token::TokenCodec;
+use secretenv::io::workspace::members::{list_active_member_ids, load_member_files};
+use secretenv::model::identity::{Kid, MemberId};
 use secretenv::model::kv_enc::verified::VerifiedKvEncDocument;
 use secretenv::model::public_key::PublicKey;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
@@ -42,7 +50,7 @@ fn decrypt_kv_document_for_test(
     let verified_doc = VerifiedKvEncDocument::new(doc, proof);
     // Wrap private key in Decrypted for API
     let decrypted_key =
-        make_decrypted_private_key_plaintext(private.clone(), member_id, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(private, member_id, kid, "sha256:test");
     let kv_map_zeroizing =
         decrypt_kv_document(&verified_doc, member_id, kid, &decrypted_key, false).unwrap();
     // Convert Zeroizing<Vec<u8>> to String at the boundary
@@ -67,7 +75,6 @@ fn test_encrypt_and_decrypt_kv() {
     let input = "DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n";
 
     // Encrypt for two recipients
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
     let members: Vec<PublicKey> = vec![public1.clone(), public2.clone()];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -75,12 +82,11 @@ fn test_encrypt_and_decrypt_kv() {
     let kv_map = parse_dotenv(input).unwrap();
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: public1.clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -134,7 +140,7 @@ fn test_encrypt_empty_input() {
     let (_, public) = keygen_test(TEST_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
 
     let input = "";
-    let recipients = vec![TEST_MEMBER_ID.to_string()];
+    let signer_pub = public.clone();
     let members = vec![public];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -142,12 +148,11 @@ fn test_encrypt_empty_input() {
     let kv_map = parse_dotenv(input).unwrap();
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -183,7 +188,7 @@ DATABASE_URL=postgres://localhost
 API_KEY=secret123
 "#;
 
-    let recipients = vec![TEST_MEMBER_ID.to_string()];
+    let signer_pub = public.clone();
     let members = vec![public];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -191,12 +196,11 @@ API_KEY=secret123
     let kv_map = parse_dotenv(input).unwrap();
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -234,7 +238,7 @@ fn test_large_value_in_kv_enc() {
     let large_value = "A".repeat(500);
     let input = format!("LARGE_KEY={}\n", large_value);
 
-    let recipients = vec![TEST_MEMBER_ID.to_string()];
+    let signer_pub = public.clone();
     let members = vec![public];
     let verified_members = make_verified_members(&members);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -242,12 +246,11 @@ fn test_large_value_in_kv_enc() {
     let kv_map = parse_dotenv(&input).unwrap();
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub,
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -281,18 +284,16 @@ fn test_wrap_line_with_many_recipients() {
     let (private, _) = &keys[0]; // Use the first user's private key
 
     let input = "KEY=value\n";
-    let recipients: Vec<String> = (0..10).map(|i| format!("user{}@example.com", i)).collect();
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let kv_map = parse_dotenv(input).unwrap();
     let encrypted = encrypt_kv_document(
         &kv_map,
-        &recipients,
         &verified_members,
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: None,
+            signer_pub: members[0].clone(),
             debug: false,
         },
         TokenCodec::JsonJcs,
@@ -358,7 +359,7 @@ fn setup_crypto_ctx_for_test(
     let signing_key = signing_key_from_private(private_key);
 
     let verified_private =
-        make_decrypted_private_key_plaintext(private_key.clone(), member_id, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(private_key, member_id, kid, "sha256:test");
 
     // Derive workspace path from keystore_root (sibling directory)
     let workspace_path = keystore_root.parent().map(|p| p.join("workspace"));
@@ -370,15 +371,15 @@ fn setup_crypto_ctx_for_test(
             ),
         );
 
-    secretenv::feature::context::crypto::CryptoContext {
-        member_id: member_id.to_string(),
-        kid: kid.to_string(),
+    secretenv::feature::context::crypto::CryptoContext::new(
+        MemberId::try_from(member_id.to_string()).unwrap(),
+        Kid::try_from(kid.to_string()).unwrap(),
         pub_key_source,
         workspace_path,
-        private_key: verified_private,
+        verified_private,
         signing_key,
-        expires_at: "2099-12-31T23:59:59Z".to_string(),
-    }
+        "2099-12-31T23:59:59Z".to_string(),
+    )
 }
 
 fn make_initial_kv_doc(
@@ -414,25 +415,16 @@ fn make_initial_kv_doc(
 
     secretenv::feature::kv::encrypt::encrypt_kv_document(
         &kv_map,
-        &[member_id.to_string()],
         &verified_members,
         &secretenv::feature::envelope::signature::SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
-            signer_pub: Some(public_key.clone()),
+            signer_pub: public_key.clone(),
             debug: false,
         },
         secretenv::format::token::TokenCodec::JsonJcs,
     )
     .unwrap()
-}
-
-fn kv_wrap_line(content: &str) -> String {
-    content
-        .lines()
-        .find(|l| l.starts_with(":WRAP "))
-        .unwrap()
-        .to_string()
 }
 
 fn kv_entry_token(content: &str, key: &str) -> Option<String> {
@@ -460,6 +452,49 @@ fn kv_head_field(content: &str, field: &str) -> String {
     }
 }
 
+fn set_kv_entry(
+    existing_content: Option<&KvEncContent>,
+    entries: &[(String, String)],
+    workspace_root: &std::path::Path,
+    ctx: &KvWriteContext<'_>,
+) -> secretenv::Result<KvSetResult> {
+    let recipients = build_recipient_snapshot(workspace_root)?;
+    let entries = entries
+        .iter()
+        .map(|(key, value)| KvInputEntry::new(key.clone(), value.clone()))
+        .collect::<Vec<_>>();
+    set_kv_entry_with_recipients(existing_content, &entries, &recipients, ctx)
+}
+
+fn unset_kv_entry(
+    content: &KvEncContent,
+    key: &str,
+    ctx: &KvWriteContext<'_>,
+) -> secretenv::Result<String> {
+    let workspace_root =
+        ctx.key_ctx
+            .workspace_path
+            .as_deref()
+            .ok_or_else(|| secretenv::Error::Config {
+                message: "Workspace is required for kv mutation".to_string(),
+            })?;
+    let recipients = build_recipient_snapshot(workspace_root)?;
+    unset_kv_entry_with_recipients(content, key, &recipients, ctx)
+}
+
+fn build_recipient_snapshot(
+    workspace_root: &std::path::Path,
+) -> secretenv::Result<KvRecipientSnapshot> {
+    let member_ids = list_active_member_ids(workspace_root)?;
+    let public_keys = load_member_files(workspace_root, &member_ids)?;
+    let verified_members =
+        secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+    Ok(KvRecipientSnapshot {
+        member_ids,
+        verified_members,
+    })
+}
+
 #[test]
 fn test_set_existing_file_preserves_sid() {
     let member_id = "alice@example.com";
@@ -483,16 +518,11 @@ fn test_set_existing_file_preserves_sid() {
     let created_at_before = kv_head_field(&initial, "created_at");
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = KvWriteContext::new(member_id, &key_ctx, false);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::set_kv_entry(
-        Some(&initial_content),
-        &entries,
-        temp.path(),
-        &ctx,
-    )
-    .unwrap();
+    let workspace_dir = temp.path().join("workspace");
+    let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
 
     assert_eq!(
         sid_before,
@@ -507,7 +537,7 @@ fn test_set_existing_file_preserves_sid() {
 }
 
 #[test]
-fn test_set_existing_file_preserves_wrap_token() {
+fn test_set_existing_file_uses_current_recipients_in_wrap() {
     let member_id = "alice@example.com";
     let ssh_temp = tempfile::TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&ssh_temp);
@@ -525,25 +555,20 @@ fn test_set_existing_file_preserves_wrap_token() {
         &public,
         &[("KEY1", "value1")],
     );
-    let wrap_before = kv_wrap_line(&initial);
-
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = KvWriteContext::new(member_id, &key_ctx, false);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::set_kv_entry(
-        Some(&initial_content),
-        &entries,
-        temp.path(),
-        &ctx,
-    )
-    .unwrap();
+    let workspace_dir = temp.path().join("workspace");
+    let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
 
-    assert_eq!(
-        wrap_before,
-        kv_wrap_line(result.encrypted.as_str()),
-        "WRAP line must be unchanged"
-    );
+    let (_, _, wrap) = parse_kv_wrap(result.encrypted.as_str()).unwrap();
+    let recipients = wrap
+        .wrap
+        .iter()
+        .map(|item| item.rid.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(recipients, vec![member_id]);
 }
 
 #[test]
@@ -569,16 +594,11 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
     let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
+    let ctx = KvWriteContext::new(member_id, &key_ctx, false);
     let entries = vec![("KEY3".to_string(), "value3".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::set_kv_entry(
-        Some(&initial_content),
-        &entries,
-        temp.path(),
-        &ctx,
-    )
-    .unwrap();
+    let workspace_dir = temp.path().join("workspace");
+    let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
 
     assert_eq!(
         key1_token_before,
@@ -600,10 +620,10 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
 fn make_unset_test_ctx(
     entries: &[(&str, &str)],
 ) -> (
-    String,                                         // initial content
-    secretenv::feature::kv::mutate::KvWriteContext, // write context
-    tempfile::TempDir,                              // must be kept alive
-    tempfile::TempDir,                              // SSH temp dir - must be kept alive
+    String,                                             // initial content
+    secretenv::feature::context::crypto::CryptoContext, // key context
+    tempfile::TempDir,                                  // must be kept alive
+    tempfile::TempDir,                                  // SSH temp dir - must be kept alive
 ) {
     let member_id = "alice@example.com";
     let ssh_temp = tempfile::TempDir::new().unwrap();
@@ -616,19 +636,19 @@ fn make_unset_test_ctx(
     let initial = make_initial_kv_doc(member_id, &kid, &keystore_root, &private, &public, entries);
 
     let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
-    let ctx = secretenv::feature::kv::mutate::KvWriteContext::new(member_id, key_ctx, false, false);
-    (initial, ctx, temp, ssh_temp)
+    (initial, key_ctx, temp, ssh_temp)
 }
 
 #[test]
 fn test_unset_preserves_sid_and_created_at() {
-    let (initial, ctx, _temp, _ssh_temp) =
+    let (initial, key_ctx, _temp, _ssh_temp) =
         make_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
     let sid_before = kv_head_field(&initial, "sid");
     let created_at_before = kv_head_field(&initial, "created_at");
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
 
     let initial = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
+    let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
 
     assert_eq!(
         sid_before,
@@ -643,29 +663,32 @@ fn test_unset_preserves_sid_and_created_at() {
 }
 
 #[test]
-fn test_unset_preserves_wrap_token() {
-    let (initial, ctx, _temp, _ssh_temp) =
+fn test_unset_uses_current_recipients_in_wrap() {
+    let (initial, key_ctx, _temp, _ssh_temp) =
         make_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
-    let wrap_before = kv_wrap_line(&initial);
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
 
     let initial = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
+    let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
 
-    assert_eq!(
-        wrap_before,
-        kv_wrap_line(&result),
-        "WRAP line must be unchanged"
-    );
+    let (_, _, wrap) = parse_kv_wrap(&result).unwrap();
+    let recipients = wrap
+        .wrap
+        .iter()
+        .map(|item| item.rid.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(recipients, vec!["alice@example.com"]);
 }
 
 #[test]
 fn test_unset_preserves_other_entry_tokens() {
-    let (initial, ctx, _temp, _ssh_temp) =
+    let (initial, key_ctx, _temp, _ssh_temp) =
         make_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
     let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
 
     let initial = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
+    let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
 
     assert!(
         kv_entry_token(&result, "KEY1").is_none(),
@@ -680,10 +703,11 @@ fn test_unset_preserves_other_entry_tokens() {
 
 #[test]
 fn test_unset_key_not_found_error() {
-    let (initial, ctx, _temp, _ssh_temp) = make_unset_test_ctx(&[("KEY1", "value1")]);
+    let (initial, key_ctx, _temp, _ssh_temp) = make_unset_test_ctx(&[("KEY1", "value1")]);
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
 
     let initial = KvEncContent::new_unchecked(initial);
-    let result = secretenv::feature::kv::mutate::unset_kv_entry(&initial, "NONEXISTENT", &ctx);
+    let result = unset_kv_entry(&initial, "NONEXISTENT", &ctx);
 
     assert!(
         result.is_err(),

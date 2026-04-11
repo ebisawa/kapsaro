@@ -11,9 +11,10 @@ use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::Signature;
-use crate::support::fs::load_text;
+use crate::support::fs::load_text_with_limit;
 use crate::support::json_limits::validate_json_limits;
 use crate::support::limits::validate_wrap_count;
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use serde::de::DeserializeOwned;
@@ -117,7 +118,8 @@ where
     T: DeserializeOwned,
 {
     let source_name = display_path_relative_to_cwd(path);
-    let content = load_text(path)?;
+    let subject = format!("{} file", kind);
+    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, &subject)?;
     parse_json_document_str(&content, &source_name, kind, validate)
 }
 

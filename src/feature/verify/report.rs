@@ -3,9 +3,11 @@
 
 //! Signature verification report generation
 
+use super::key_loader::LoadedVerifyingKey;
 use super::SignatureVerificationReport;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::VerifyingKeySource;
+use crate::Result;
 
 /// Build an error verification report.
 pub(crate) fn build_error_report(message: String) -> SignatureVerificationReport {
@@ -33,5 +35,32 @@ pub(crate) fn build_success_report(
         warnings,
         message: "OK".to_string(),
         signer_public_key: Some(signer_public_key),
+    }
+}
+
+pub(crate) fn build_success_report_from_loaded_key(
+    loaded: LoadedVerifyingKey,
+) -> SignatureVerificationReport {
+    build_success_report(
+        loaded.member_id,
+        loaded.source,
+        loaded.warnings,
+        loaded.public_key,
+    )
+}
+
+pub(crate) fn build_signature_verification_report<Verify>(
+    loaded: Result<LoadedVerifyingKey>,
+    verify: Verify,
+) -> SignatureVerificationReport
+where
+    Verify: FnOnce(&LoadedVerifyingKey) -> Result<()>,
+{
+    match loaded {
+        Ok(loaded) => match verify(&loaded) {
+            Ok(()) => build_success_report_from_loaded_key(loaded),
+            Err(e) => build_error_report(e.user_message().to_string()),
+        },
+        Err(e) => build_error_report(e.user_message().to_string()),
     }
 }

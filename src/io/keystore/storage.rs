@@ -8,8 +8,9 @@
 use crate::format::schema::document::{parse_private_key_file, parse_public_key_file};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::support::fs::{atomic, check_permission, ensure_dir_restricted, list_dir};
+use crate::support::fs::{atomic, check_permission_chain, ensure_dir_restricted, list_dir};
 use crate::support::kid::kid_display_lossy;
+use crate::support::kid::resolve_unique_kid;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
@@ -85,7 +86,10 @@ pub fn save_key_pair_atomic(
 /// Load PrivateKey from keystore
 pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Result<PrivateKey> {
     let path = key_dir(keystore_root, member_id, kid).join("private.json");
-    if let Some(msg) = check_permission(&path) {
+    if let Some(msg) = check_permission_chain(&path, keystore_root)
+        .into_iter()
+        .next()
+    {
         return Err(Error::io(msg));
     }
     parse_private_key_file(&path)
@@ -94,8 +98,8 @@ pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Res
 /// Load PublicKey from keystore
 pub fn load_public_key(keystore_root: &Path, member_id: &str, kid: &str) -> Result<PublicKey> {
     let path = key_dir(keystore_root, member_id, kid).join("public.json");
-    if let Some(msg) = check_permission(&path) {
-        tracing::warn!("{}", msg);
+    for warning in check_permission_chain(&path, keystore_root) {
+        tracing::warn!("{}", warning);
     }
     parse_public_key_file(&path)
 }
@@ -152,15 +156,24 @@ pub fn list_member_ids(keystore_root: &Path) -> Result<Vec<String>> {
 /// the given kid directory. Since key directory names use canonical `kid`, at most
 /// one member will match.
 pub fn find_member_by_kid(keystore_root: &Path, kid: &str) -> Result<String> {
-    let kid = crate::support::kid::normalize_kid(kid)?;
     let member_ids = list_member_ids(keystore_root)?;
-    for member_id in member_ids {
-        let kid_dir = keystore_root.join(&member_id).join(&kid);
-        if kid_dir.is_dir() {
-            return Ok(member_id);
+    let candidates = member_ids
+        .iter()
+        .map(|member_id| list_kids(keystore_root, member_id).map(|kids| (member_id, kids)))
+        .collect::<Result<Vec<_>>>()?;
+    let candidate_kids = candidates
+        .iter()
+        .flat_map(|(_, kids)| kids.iter().map(String::as_str))
+        .collect::<Vec<_>>();
+    let resolved_kid = resolve_unique_kid(candidate_kids, kid)?;
+
+    for (member_id, kids) in candidates {
+        if kids.iter().any(|candidate| candidate == &resolved_kid) {
+            return Ok(member_id.clone());
         }
     }
+
     Err(Error::NotFound {
-        message: format!("kid '{}' not found in keystore", kid_display_lossy(&kid)),
+        message: format!("kid '{}' not found in keystore", kid_display_lossy(kid)),
     })
 }

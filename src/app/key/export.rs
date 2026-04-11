@@ -13,7 +13,3 @@ pub(super) fn save_exported_public_key(out: &Path, public_key: &PublicKey) -> Re
     })?;
     atomic::save_text(out, &json)
 }
-
-pub(super) fn save_portable_private_key(out: &Path, encoded_key: &str) -> Result<()> {
-    atomic::save_text(out, encoded_key)
-}

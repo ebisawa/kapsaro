@@ -7,7 +7,6 @@
 //! expired keys must not be used for encryption (wrap) or signing.
 
 use time::OffsetDateTime;
-use tracing::warn;
 
 use crate::model::public_key::PublicKey;
 use crate::{Error, Result};
@@ -55,20 +54,11 @@ pub fn check_key_expiry(expires_at: &str, now: OffsetDateTime) -> Result<KeyExpi
 
 /// Enforce that a key is not expired for write operations (encrypt/sign).
 ///
-/// Returns `Err` if the key has expired. Logs a warning if expiring soon.
+/// Returns `Err` if the key has expired.
 pub fn enforce_key_not_expired_for_signing(expires_at: &str) -> Result<()> {
     match check_key_expiry(expires_at, OffsetDateTime::now_utc())? {
         KeyExpiryStatus::Valid => Ok(()),
-        KeyExpiryStatus::ExpiringSoon {
-            expires_at,
-            days_remaining,
-        } => {
-            warn!(
-                "Private key expires in {} days (expires_at: {})",
-                days_remaining, expires_at
-            );
-            Ok(())
-        }
+        KeyExpiryStatus::ExpiringSoon { .. } => Ok(()),
         KeyExpiryStatus::Expired { expires_at } => Err(Error::Verify {
             rule: "key-expiry".to_string(),
             message: format!(
@@ -100,9 +90,46 @@ pub fn build_key_expiry_warning(expires_at: &str) -> Result<Option<String>> {
     }
 }
 
+/// Build a warning message for write operations when the signing key expires soon.
+pub fn build_signing_key_expiry_warning(expires_at: &str) -> Result<Option<String>> {
+    match check_key_expiry(expires_at, OffsetDateTime::now_utc())? {
+        KeyExpiryStatus::Valid | KeyExpiryStatus::Expired { .. } => Ok(None),
+        KeyExpiryStatus::ExpiringSoon {
+            expires_at,
+            days_remaining,
+        } => Ok(Some(format!(
+            "Private key expires in {} days (expires_at: {})",
+            days_remaining, expires_at
+        ))),
+    }
+}
+
+/// Build a warning message for recipient keys that will expire soon.
+pub fn build_recipient_key_expiry_warning(doc: &PublicKey) -> Result<Option<String>> {
+    if doc.protected.expires_at.is_empty() {
+        return Ok(None);
+    }
+    match check_key_expiry(&doc.protected.expires_at, OffsetDateTime::now_utc())? {
+        KeyExpiryStatus::Valid | KeyExpiryStatus::Expired { .. } => Ok(None),
+        KeyExpiryStatus::ExpiringSoon {
+            expires_at,
+            days_remaining,
+        } => Ok(Some(format!(
+            "Recipient public key for '{}' expires in {} days (expires_at: {})",
+            doc.protected.member_id, days_remaining, expires_at
+        ))),
+    }
+}
+
+pub fn collect_recipient_key_expiry_warnings(keys: &[PublicKey]) -> Result<Vec<String>> {
+    keys.iter()
+        .filter_map(|key| build_recipient_key_expiry_warning(key).transpose())
+        .collect()
+}
+
 /// Enforce that a recipient public key is not expired for wrap operations.
 ///
-/// Returns `Err` if the key has expired. Logs a warning if expiring soon.
+/// Returns `Err` if the key has expired.
 /// Keys with empty `expires_at` are considered valid (no expiry set).
 pub fn enforce_recipient_key_not_expired(doc: &PublicKey) -> Result<()> {
     if doc.protected.expires_at.is_empty() {
@@ -110,16 +137,7 @@ pub fn enforce_recipient_key_not_expired(doc: &PublicKey) -> Result<()> {
     }
     match check_key_expiry(&doc.protected.expires_at, OffsetDateTime::now_utc())? {
         KeyExpiryStatus::Valid => Ok(()),
-        KeyExpiryStatus::ExpiringSoon {
-            expires_at,
-            days_remaining,
-        } => {
-            warn!(
-                "Recipient public key for '{}' expires in {} days (expires_at: {})",
-                doc.protected.member_id, days_remaining, expires_at
-            );
-            Ok(())
-        }
+        KeyExpiryStatus::ExpiringSoon { .. } => Ok(()),
         KeyExpiryStatus::Expired { expires_at } => Err(Error::Verify {
             rule: "key-expiry".to_string(),
             message: format!(

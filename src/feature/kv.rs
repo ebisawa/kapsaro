@@ -13,3 +13,4 @@ pub mod mutate;
 pub mod query;
 pub(crate) mod rewrite_session;
 pub(crate) mod sign;
+pub mod types;

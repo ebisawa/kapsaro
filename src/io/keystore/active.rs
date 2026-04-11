@@ -3,7 +3,7 @@
 
 //! Active key management
 
-use crate::support::fs::{atomic, check_permission, load_text};
+use crate::support::fs::{atomic, check_permission_chain, load_text};
 use crate::support::kid::normalize_kid;
 use crate::Error;
 use std::fs;
@@ -19,8 +19,8 @@ pub fn load_active_kid(member_id: &str, keystore_root: &Path) -> Result<Option<S
         return Ok(None);
     }
 
-    if let Some(msg) = check_permission(&active_path) {
-        tracing::warn!("{}", msg);
+    for warning in check_permission_chain(&active_path, keystore_root) {
+        tracing::warn!("{}", warning);
     }
 
     let content = load_text(&active_path)?;

@@ -6,17 +6,16 @@
 //! Tests rotate, add-recipient, and remove-recipient via the app-level
 //! rewrap API since `file_op` is `pub(crate)`.
 
-use crate::cli_common::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use crate::keygen_helpers::make_verified_members;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use secretenv::app::rewrap::execution::rewrap_file_content_with_request;
-use secretenv::app::rewrap::types::SingleRewrapRequest;
+use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
+use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
 use secretenv::feature::verify::file::verify_file_document;
-use secretenv::format::content::FileEncContent;
+use secretenv::format::content::{EncryptedContent, FileEncContent};
 use secretenv::io::keystore::storage::save_key_pair_atomic;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::file_enc::FileEncDocument;
@@ -48,16 +47,24 @@ fn single_rewrap_request<'a>(
     rotate_key: bool,
     clear_disclosure_history: bool,
     debug: bool,
-) -> SingleRewrapRequest<'a> {
-    SingleRewrapRequest {
+) -> RewrapRequest<'a> {
+    RewrapRequest {
         member_id: ALICE_MEMBER_ID,
         key_ctx,
         workspace_root,
+        target_members: None,
         rotate_key,
         clear_disclosure_history,
-        no_signer_pub: false,
+
         debug,
     }
+}
+
+fn rewrap_file_content(
+    content: &FileEncContent,
+    request: &RewrapRequest<'_>,
+) -> secretenv::Result<String> {
+    rewrap_content(&EncryptedContent::FileEnc(content.clone()), request)
 }
 
 /// Setup a two-member keystore (alice + bob) in one TempDir.
@@ -107,7 +114,7 @@ fn encrypt_file_for_alice(
 ) -> FileEncDocument {
     let keystore_root = temp_dir.path().join("keys");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let members = make_verified_members(&[public_key]);
+    let members = make_verified_members(std::slice::from_ref(&public_key));
     let content = b"secret-file-content";
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
 
@@ -118,7 +125,7 @@ fn encrypt_file_for_alice(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: kid,
-            signer_pub: None,
+            signer_pub: public_key.clone(),
             debug: false,
         },
     )
@@ -135,7 +142,7 @@ fn encrypt_file_for_alice_and_bob(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub, bob_pub]);
+    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
     let content = b"secret-file-content";
     let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
 
@@ -146,7 +153,7 @@ fn encrypt_file_for_alice_and_bob(
         &SigningContext {
             signing_key: &key_ctx.signing_key,
             signer_kid: alice_kid,
-            signer_pub: None,
+            signer_pub: alice_pub,
             debug: false,
         },
     )
@@ -171,7 +178,7 @@ fn test_rotate_file_key_changes_content() {
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
-    let rewrapped_json = rewrap_file_content_with_request(
+    let rewrapped_json = rewrap_file_content(
         &FileEncContent::new_unchecked(original_json.clone()),
         &request,
     )
@@ -202,7 +209,7 @@ fn test_rotate_file_key_preserves_decryptability() {
 
     // Rewrap with rotation
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
-    let rewrapped_json = rewrap_file_content_with_request(
+    let rewrapped_json = rewrap_file_content(
         &FileEncContent::new_unchecked(original_json.clone()),
         &request,
     )
@@ -210,7 +217,7 @@ fn test_rotate_file_key_preserves_decryptability() {
 
     // Verify and decrypt the rewrapped document
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
-    let verified = verify_file_document(&rewrapped_doc, Some(temp_dir.path()), false).unwrap();
+    let verified = verify_file_document(&rewrapped_doc, false).unwrap();
     let decrypted =
         decrypt_file_document(&verified, ALICE_MEMBER_ID, kid, &key_ctx.private_key, false)
             .unwrap();
@@ -236,7 +243,7 @@ fn test_rotate_file_key_updates_wrap() {
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
-    let rewrapped_json = rewrap_file_content_with_request(
+    let rewrapped_json = rewrap_file_content(
         &FileEncContent::new_unchecked(original_json.clone()),
         &request,
     )
@@ -273,7 +280,7 @@ fn test_add_file_recipient_via_rewrap() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let rewrapped_json =
-        rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request).unwrap();
+        rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
     let recipient_ids: Vec<&str> = rewrapped_doc
@@ -310,7 +317,7 @@ fn test_add_file_recipient_already_exists_noop() {
 
     // Rewrap when all recipients already present (alice is both in doc and workspace)
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let result = rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request);
+    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
         result.is_ok(),
@@ -340,7 +347,7 @@ fn test_remove_file_recipient_via_rewrap() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let rewrapped_json =
-        rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request).unwrap();
+        rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
     let recipient_ids: Vec<&str> = rewrapped_doc
@@ -376,7 +383,7 @@ fn test_remove_file_recipient_adds_disclosure() {
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let rewrapped_json =
-        rewrap_file_content_with_request(&FileEncContent::new_unchecked(json), &request).unwrap();
+        rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
     // The output JSON must contain removed_recipients disclosure history
     assert!(
@@ -417,8 +424,7 @@ fn test_rewrap_file_roundtrip_with_rotation() {
     // Rewrap with rotation
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
     let rewrapped_json =
-        rewrap_file_content_with_request(&FileEncContent::new_unchecked(original_json), &request)
-            .unwrap();
+        rewrap_file_content(&FileEncContent::new_unchecked(original_json), &request).unwrap();
 
     // Output must be valid JSON parseable as FileEncDocument
     let parsed: Result<FileEncDocument, _> = serde_json::from_str(&rewrapped_json);
@@ -430,7 +436,7 @@ fn test_rewrap_file_roundtrip_with_rotation() {
 
     // Verify signature on rewrapped document
     let rewrapped_doc = parsed.unwrap();
-    let verified = verify_file_document(&rewrapped_doc, Some(temp_dir.path()), false);
+    let verified = verify_file_document(&rewrapped_doc, false);
     assert!(
         verified.is_ok(),
         "rewrapped document must pass signature verification: {:?}",

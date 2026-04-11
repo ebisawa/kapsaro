@@ -6,8 +6,11 @@
 use clap::{Args, Subcommand};
 
 use crate::app::config;
-use crate::app::context::options::CommonCommandOptions;
-use crate::cli::common::options::CommonOptions;
+use crate::cli::common::command::resolve_options;
+use crate::cli::common::output::config::{
+    print_config_list, print_config_set_result, print_config_unset_result, print_config_value,
+};
+use crate::cli::options::CommonOptions;
 use crate::Error;
 
 #[derive(Args)]
@@ -82,51 +85,27 @@ pub fn run(args: ConfigArgs) -> Result<(), Error> {
 }
 
 fn run_get(args: GetArgs) -> Result<(), Error> {
-    let options = CommonCommandOptions::from(&args.common);
-    let base_dir = options.resolve_base_dir()?;
-    println!("{}", config::get_config(&args.key, Some(&base_dir))?);
+    let options = resolve_options(&args.common);
+    print_config_value(&config::get_config_command(&options, &args.key)?);
     Ok(())
 }
 
 fn run_set(args: SetArgs) -> Result<(), Error> {
-    let options = CommonCommandOptions::from(&args.common);
-    let base_dir = options.resolve_base_dir()?;
-    let result = config::set_config(&args.key, &args.value, Some(&base_dir))?;
-    eprintln!(
-        "Set '{}' = '{}' in {} config",
-        result.key,
-        result.value,
-        scope_label(result.scope)
-    );
+    let options = resolve_options(&args.common);
+    let result = config::set_config_command(&options, &args.key, &args.value)?;
+    print_config_set_result(&result);
     Ok(())
 }
 
 fn run_unset(args: UnsetArgs) -> Result<(), Error> {
-    let options = CommonCommandOptions::from(&args.common);
-    let base_dir = options.resolve_base_dir()?;
-    let result = config::unset_config(&args.key, Some(&base_dir))?;
-    eprintln!(
-        "Unset '{}' from {} config",
-        result.key,
-        scope_label(result.scope)
-    );
+    let options = resolve_options(&args.common);
+    let result = config::unset_config_command(&options, &args.key)?;
+    print_config_unset_result(&result);
     Ok(())
 }
 
 fn run_list(args: ListArgs) -> Result<(), Error> {
-    let options = CommonCommandOptions::from(&args.common);
-    let base_dir = options.resolve_base_dir()?;
-    let config = config::list_config(Some(&base_dir))?;
-
-    for (key, value) in config {
-        println!("{} = {}", key, value);
-    }
-
+    let options = resolve_options(&args.common);
+    print_config_list(&config::list_config_command(&options)?);
     Ok(())
-}
-
-fn scope_label(scope: config::ConfigScope) -> &'static str {
-    match scope {
-        config::ConfigScope::Global => "global",
-    }
 }

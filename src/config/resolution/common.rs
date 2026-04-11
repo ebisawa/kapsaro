@@ -7,7 +7,7 @@ use crate::{Error, Result};
 use std::env;
 use std::path::{Path, PathBuf};
 
-use crate::io::config::paths::{get_global_config_path, get_global_config_path_from_base};
+use crate::io::config::paths::get_global_config_path_from_base;
 use crate::io::config::store::load_config_file;
 
 /// Load a config field from global config (SECRETENV_HOME/config.toml)
@@ -15,16 +15,17 @@ pub(crate) fn load_field_from_global_config(
     field_name: &str,
     base_dir: Option<&Path>,
 ) -> Result<Option<String>> {
-    let config_path = match base_dir {
-        Some(dir) => get_global_config_path_from_base(dir),
-        None => get_global_config_path()?,
+    let base_dir = match base_dir {
+        Some(dir) => dir.to_path_buf(),
+        None => crate::io::config::paths::get_base_dir()?,
     };
-    let config = load_config_file(&config_path)?;
+    let config_path = get_global_config_path_from_base(&base_dir);
+    let config = load_config_file(&config_path, &base_dir)?;
     Ok(config.get(field_name).cloned())
 }
 
 /// Expand tilde (~) in path to HOME directory
-pub fn expand_tilde(path: &str) -> Result<PathBuf> {
+pub(crate) fn expand_tilde(path: &str) -> Result<PathBuf> {
     if path == "~" {
         return get_home_dir();
     }
@@ -131,8 +132,14 @@ pub(super) fn resolve_string_required(
 /// Priority order:
 /// 1. Global config
 /// 2. Default value
-pub fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_string_required(None, None, "ssh_keygen", base_dir, "ssh-keygen".to_string())
+pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String> {
+    resolve_string_required(
+        None,
+        None,
+        "ssh_keygen_command",
+        base_dir,
+        "ssh-keygen".to_string(),
+    )
 }
 
 /// Resolve ssh-add command path from config
@@ -140,6 +147,16 @@ pub fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String> {
 /// Priority order:
 /// 1. Global config
 /// 2. Default value
-pub fn resolve_ssh_add_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_string_required(None, None, "ssh_add", base_dir, "ssh-add".to_string())
+pub(crate) fn resolve_ssh_add_path(base_dir: Option<&Path>) -> Result<String> {
+    resolve_string_required(
+        None,
+        None,
+        "ssh_add_command",
+        base_dir,
+        "ssh-add".to_string(),
+    )
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/config_resolution_common_test.rs"]
+mod tests;

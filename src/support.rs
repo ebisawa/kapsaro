@@ -10,5 +10,7 @@ pub mod kid;
 pub mod limits;
 pub mod path;
 pub mod runtime;
+pub mod secret;
 pub mod time;
+pub mod tty;
 pub mod validation;

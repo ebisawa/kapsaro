@@ -12,14 +12,14 @@
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
-use crate::cli::common::options::CommonOptions;
+use crate::cli::options::CommonOptions;
 use crate::Error;
 
-pub mod add;
-pub mod list;
-pub mod remove;
-pub mod show;
-pub mod verify;
+mod add;
+mod list;
+mod remove;
+mod show;
+mod verify;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]
@@ -96,6 +96,14 @@ pub struct VerifyArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: CommonOptions,
+
+    /// Member ID to use for trust store owner resolution
+    #[arg(long, short = 'm')]
+    pub member_id: Option<String>,
+
+    /// Approve verified members and add to local trust store
+    #[arg(long)]
+    pub approve: bool,
 
     /// Member IDs to verify (verifies all members if not specified)
     pub member_ids: Vec<String>,

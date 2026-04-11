@@ -4,8 +4,8 @@
 //! SSH Key resolution
 //!
 //! Resolves SSH key path based on the following priority order:
-//! 1. CLI option (-i)
-//! 2. Environment variable (SECRETENV_SSH_KEY)
+//! 1. CLI option (-i / --ssh-identity)
+//! 2. Environment variable (SECRETENV_SSH_IDENTITY)
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default (~/.ssh/id_ed25519)
 
@@ -18,10 +18,10 @@ use super::common::{expand_tilde, get_default_ssh_key_path, resolve_string_with_
 
 /// Source of SSH key configuration
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SshKeySource {
-    /// CLI option (-i)
+pub(crate) enum SshKeySource {
+    /// CLI option (-i / --ssh-identity)
     Cli,
-    /// Environment variable (SECRETENV_SSH_KEY)
+    /// Environment variable (SECRETENV_SSH_IDENTITY)
     Env,
     /// Global config (SECRETENV_HOME/config.toml)
     GlobalConfig,
@@ -31,13 +31,13 @@ pub enum SshKeySource {
 
 /// Resolved SSH key information
 #[derive(Debug, Clone)]
-pub struct ResolvedSshKey {
+pub(crate) struct ResolvedSshKey {
     /// Resolved path
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
     /// Source of the configuration
-    pub source: SshKeySource,
+    pub(crate) source: SshKeySource,
     /// Whether the file exists
-    pub exists: bool,
+    pub(crate) exists: bool,
 }
 
 /// Resolve SSH key candidate with source and existence information
@@ -47,11 +47,11 @@ pub struct ResolvedSshKey {
 ///
 /// # Priority Order
 ///
-/// 1. `ssh_key_opt` parameter (CLI option -i)
-/// 2. `SECRETENV_SSH_KEY` environment variable
+/// 1. `ssh_key_opt` parameter (CLI option -i / --ssh-identity)
+/// 2. `SECRETENV_SSH_IDENTITY` environment variable
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default path (`~/.ssh/id_ed25519`)
-pub fn resolve_ssh_key_candidate(
+pub(crate) fn resolve_ssh_key_candidate(
     ssh_key_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<ResolvedSshKey> {
@@ -66,7 +66,7 @@ pub fn resolve_ssh_key_candidate(
     }
 
     // Priority 2: Environment variable
-    if let Ok(ssh_key_str) = std::env::var("SECRETENV_SSH_KEY") {
+    if let Ok(ssh_key_str) = std::env::var("SECRETENV_SSH_IDENTITY") {
         let ssh_key = PathBuf::from(ssh_key_str);
         let exists = ssh_key.exists();
         return Ok(ResolvedSshKey {
@@ -78,7 +78,7 @@ pub fn resolve_ssh_key_candidate(
 
     // Priority 3: Global config
     if let Some(ssh_key_path_str) =
-        resolve_string_with_priority(None, None, "ssh_key", base_dir, None)?
+        resolve_string_with_priority(None, None, "ssh_identity", base_dir, None)?
     {
         let expanded = expand_tilde(&ssh_key_path_str)?;
         let exists = expanded.exists();
@@ -99,55 +99,41 @@ pub fn resolve_ssh_key_candidate(
     })
 }
 
-/// Resolve SSH key path based on priority order (Phase 1.5)
-///
-/// This is a strict wrapper around `resolve_ssh_key_candidate()` that
-/// enforces file existence for backward compatibility.
-///
-/// # Priority Order
-///
-/// 1. `ssh_key_opt` parameter (CLI option -i)
-/// 2. `SECRETENV_SSH_KEY` environment variable
-/// 3. Global config (`SECRETENV_HOME/config.toml`)
-/// 4. Default path (`~/.ssh/id_ed25519`)
-pub fn resolve_ssh_key(ssh_key_opt: Option<PathBuf>, base_dir: Option<&Path>) -> Result<PathBuf> {
-    let candidate = resolve_ssh_key_candidate(ssh_key_opt, base_dir)?;
-
+pub(crate) fn build_ssh_key_not_found_error(candidate: &ResolvedSshKey) -> Error {
     if !candidate.exists {
         let source_str = match candidate.source {
             SshKeySource::Cli => "CLI option",
-            SshKeySource::Env => "SECRETENV_SSH_KEY",
+            SshKeySource::Env => "SECRETENV_SSH_IDENTITY",
             SshKeySource::GlobalConfig => "global config",
             SshKeySource::Default => {
-                return Err(Error::NotFound {
+                return Error::NotFound {
                     message:
                         "SSH key not configured and default path (~/.ssh/id_ed25519) not found"
                             .to_string(),
-                });
+                };
             }
         };
-        return Err(Error::NotFound {
+        return Error::NotFound {
             message: format!(
                 "SSH key file from {} does not exist: {}",
                 source_str,
                 display_path_relative_to_cwd(&candidate.path)
             ),
-        });
+        };
     }
-
-    Ok(candidate.path)
+    unreachable!("build_ssh_key_not_found_error requires a missing candidate")
 }
 
 /// Resolve SSH key descriptor with automatic key type detection
 ///
-/// This function resolves the SSH key path using the same priority order as
-/// `resolve_ssh_key()`, then automatically detects whether the key is a private
-/// key or a public key (.pub file) and returns the appropriate descriptor.
+/// This function resolves the SSH key candidate using the configured priority order,
+/// requires the selected file to exist, then automatically detects whether the
+/// key is a private key or a public key (.pub file).
 ///
 /// # Priority Order
 ///
-/// 1. `ssh_key_opt` parameter (CLI option -i)
-/// 2. `SECRETENV_SSH_KEY` environment variable
+/// 1. `ssh_key_opt` parameter (CLI option -i / --ssh-identity)
+/// 2. `SECRETENV_SSH_IDENTITY` environment variable
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default path (`~/.ssh/id_ed25519`)
 ///
@@ -155,10 +141,17 @@ pub fn resolve_ssh_key(ssh_key_opt: Option<PathBuf>, base_dir: Option<&Path>) ->
 ///
 /// Files ending with `.pub` extension are treated as public keys.
 /// All other files are treated as private keys.
-pub fn resolve_ssh_key_descriptor(
+pub(crate) fn resolve_ssh_key_descriptor(
     ssh_key_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<SshKeyDescriptor> {
-    let path = resolve_ssh_key(ssh_key_opt, base_dir)?;
-    Ok(SshKeyDescriptor::from_path(path))
+    let candidate = resolve_ssh_key_candidate(ssh_key_opt, base_dir)?;
+    if !candidate.exists {
+        return Err(build_ssh_key_not_found_error(&candidate));
+    }
+    Ok(SshKeyDescriptor::from_path(candidate.path))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/config_resolution_ssh_key_test.rs"]
+mod tests;

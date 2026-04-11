@@ -4,105 +4,113 @@
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
+use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::verification::OnlineVerificationStatus;
-use crate::feature::init::generate_new_key;
+use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
 use crate::model::public_key::GithubAccount;
 use crate::Result;
 
 use super::types::{
-    MemberKeySetupResult, MemberSetupResult, PreparedRegistration, RegistrationKeyPlan,
+    MemberKeySetupResult, MemberSetupResult, RegistrationCommand, RegistrationKeyPlan,
     RegistrationMode, RegistrationOutcome, RegistrationResult,
 };
 use super::workspace::{register_member, resolve_registration_paths};
 
-pub fn build_init_registration(
-    common: &CommonCommandOptions,
-    member_id: String,
-    github_user: Option<String>,
-    key_plan: RegistrationKeyPlan,
-    ssh_ctx: Option<ResolvedSshSigner>,
-) -> Result<PreparedRegistration> {
-    build_registration(
-        common,
-        member_id,
-        github_user,
-        key_plan,
-        RegistrationMode::Init,
-        ssh_ctx,
-    )
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationDecision {
+    Apply { overwrite: bool },
+    Return(RegistrationResult),
+    ConfirmOverwrite,
 }
 
-pub fn build_join_registration(
-    common: &CommonCommandOptions,
-    member_id: String,
-    github_user: Option<String>,
-    key_plan: RegistrationKeyPlan,
-    ssh_ctx: Option<ResolvedSshSigner>,
-) -> Result<PreparedRegistration> {
-    build_registration(
-        common,
-        member_id,
-        github_user,
-        key_plan,
-        RegistrationMode::Join,
-        ssh_ctx,
-    )
-}
-
-pub fn apply_registration(
-    prepared: &PreparedRegistration,
-    overwrite: bool,
-) -> Result<RegistrationOutcome> {
-    let result = register_member(
-        &prepared.workspace_path,
-        &prepared.setup.member_id,
-        prepared.setup.kid(),
-        overwrite,
-        &prepared.keystore_root,
-        prepared.target,
-    )?;
-
-    Ok(build_registration_outcome(prepared, result))
-}
-
-pub fn build_registration_outcome(
-    prepared: &PreparedRegistration,
-    result: RegistrationResult,
-) -> RegistrationOutcome {
-    RegistrationOutcome {
-        mode: prepared.mode,
-        workspace_path: prepared.workspace_path.clone(),
-        target: prepared.target,
-        is_new_workspace: prepared.is_new_workspace,
-        member_id: prepared.setup.member_id.clone(),
-        key_result: prepared.setup.key_result.clone(),
-        result,
-    }
-}
-
-impl From<crate::feature::init::EnsureKeyExistsResult> for MemberKeySetupResult {
-    fn from(r: crate::feature::init::EnsureKeyExistsResult) -> Self {
-        Self {
-            kid: r.kid,
-            created: r.created,
-            expires_at: r.expires_at,
-            ssh_fingerprint: r.ssh_fingerprint,
-            ssh_determinism: r.ssh_determinism,
-            github_verification: OnlineVerificationStatus::NotConfigured,
-        }
-    }
-}
-
-fn build_registration(
+pub fn build_registration(
     common: &CommonCommandOptions,
     member_id: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     mode: RegistrationMode,
     ssh_ctx: Option<ResolvedSshSigner>,
-) -> Result<PreparedRegistration> {
+) -> Result<RegistrationCommand> {
     let setup = resolve_member_setup(common, member_id, github_user, key_plan, ssh_ctx)?;
-    build_prepared_registration(common, mode, setup)
+    build_registration_command(common, mode, setup)
+}
+
+pub fn apply_registration(
+    command: &RegistrationCommand,
+    overwrite: bool,
+) -> Result<RegistrationOutcome> {
+    let result = register_member(
+        &command.workspace_path,
+        &command.setup.member_id,
+        command.setup.kid(),
+        overwrite,
+        &command.keystore_root,
+        command.target,
+    )?;
+
+    Ok(build_registration_outcome(command, result))
+}
+
+pub(crate) fn finalize_registration(
+    command: &RegistrationCommand,
+    decision: RegistrationDecision,
+) -> Result<RegistrationOutcome> {
+    match decision {
+        RegistrationDecision::Apply { overwrite } => apply_registration(command, overwrite),
+        RegistrationDecision::Return(result) => Ok(build_registration_outcome(command, result)),
+        RegistrationDecision::ConfirmOverwrite => Err(crate::Error::InvalidOperation {
+            message: "Registration confirmation is required before finalizing".to_string(),
+        }),
+    }
+}
+
+pub fn build_registration_decision(
+    command: &RegistrationCommand,
+    force: bool,
+    prompt_available: bool,
+) -> Result<RegistrationDecision> {
+    if command.already_active {
+        return Ok(RegistrationDecision::Return(
+            RegistrationResult::AlreadyExists,
+        ));
+    }
+
+    if !command.conflict_exists {
+        return Ok(RegistrationDecision::Apply { overwrite: force });
+    }
+
+    if force {
+        return Ok(RegistrationDecision::Apply { overwrite: true });
+    }
+
+    if prompt_available {
+        return Ok(RegistrationDecision::ConfirmOverwrite);
+    }
+
+    match command.mode {
+        RegistrationMode::Init => Ok(RegistrationDecision::Return(RegistrationResult::Skipped)),
+        RegistrationMode::Join => Err(crate::Error::InvalidOperation {
+            message: format!(
+                "Member '{}' already exists. Use --force to overwrite.",
+                command.setup.member_id
+            ),
+        }),
+    }
+}
+
+fn build_registration_outcome(
+    command: &RegistrationCommand,
+    result: RegistrationResult,
+) -> RegistrationOutcome {
+    RegistrationOutcome {
+        mode: command.mode,
+        workspace_path: command.workspace_path.clone(),
+        target: command.target,
+        is_new_workspace: command.is_new_workspace,
+        member_id: command.setup.member_id.clone(),
+        key_result: command.setup.key_result.clone(),
+        result,
+    }
 }
 
 fn resolve_member_setup(
@@ -151,13 +159,13 @@ fn build_existing_member_setup(
     }
 }
 
-fn build_prepared_registration(
+fn build_registration_command(
     common: &CommonCommandOptions,
     mode: RegistrationMode,
     setup: MemberSetupResult,
-) -> Result<PreparedRegistration> {
+) -> Result<RegistrationCommand> {
     let paths = resolve_registration_paths(common, mode, &setup.member_id)?;
-    Ok(PreparedRegistration {
+    Ok(RegistrationCommand {
         mode,
         workspace_path: paths.workspace_path,
         keystore_root: paths.keystore_root,
@@ -188,14 +196,26 @@ fn generate_member_key_result(
     github_account: Option<GithubAccount>,
     ssh_ctx: ResolvedSshSigner,
 ) -> Result<MemberKeySetupResult> {
-    let result = generate_new_key(
-        member_id,
-        common.home.clone(),
-        common.verbose,
+    let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
+    let result = generate_key(KeyGenerationOptions {
+        member_id: member_id.to_string(),
+        home: common.home.clone(),
+        created_at,
+        expires_at,
+        no_activate: false,
+        debug: common.verbose,
         github_account,
-        ssh_ctx.into_ssh_binding(),
-    )?;
-    Ok(MemberKeySetupResult::from(result))
+        verbose: common.verbose,
+        ssh_binding: ssh_ctx.into_ssh_binding(),
+    })?;
+    Ok(MemberKeySetupResult {
+        kid: result.kid,
+        created: true,
+        expires_at: result.expires_at,
+        ssh_fingerprint: Some(result.ssh_fingerprint),
+        ssh_determinism: Some(result.ssh_determinism),
+        github_verification: OnlineVerificationStatus::NotConfigured,
+    })
 }
 
 fn build_generated_member_setup(

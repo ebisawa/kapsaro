@@ -10,13 +10,14 @@ use crate::feature::key::protection::password_encryption::encrypt_private_key_wi
 use crate::format::jcs;
 use crate::model::private_key::PrivateKeyPlaintext;
 use crate::support::base64url::b64_encode;
+use crate::support::secret::SecretString;
 use crate::{Error, Result};
 
 /// Output of a portable private key export operation.
 pub struct PortableExportOutput {
     pub member_id: String,
     pub kid: String,
-    pub encoded_key: String,
+    pub encoded_key: SecretString,
 }
 
 const MIN_PASSWORD_LENGTH: usize = 8;
@@ -33,7 +34,7 @@ pub fn export_private_key_portable(
     expires_at: &str,
     password: &str,
     debug: bool,
-) -> Result<String> {
+) -> Result<SecretString> {
     validate_password_length(password)?;
 
     let private_key = encrypt_private_key_with_password(
@@ -42,7 +43,7 @@ pub fn export_private_key_portable(
 
     let jcs_bytes = jcs::normalize(&private_key)?;
 
-    Ok(b64_encode(&jcs_bytes))
+    Ok(SecretString::new(b64_encode(&jcs_bytes)))
 }
 
 /// Validate that the password meets minimum length requirements.

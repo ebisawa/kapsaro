@@ -11,7 +11,9 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-const EMBEDDED_SCHEMA: &str = include_str!("../../../schemas/secretenv_schema_v3.json");
+const EMBEDDED_SCHEMA: &str = include_str!("../../../schemas/secretenv_schema.json");
+const EMBEDDED_TRUST_SCHEMA: &str =
+    include_str!("../../../schemas/secretenv_trust_local_schema.json");
 
 static EMBEDDED_VALIDATOR: LazyLock<std::result::Result<Validator, String>> = LazyLock::new(|| {
     let schema_json: Value = serde_json::from_str(EMBEDDED_SCHEMA)
@@ -20,11 +22,29 @@ static EMBEDDED_VALIDATOR: LazyLock<std::result::Result<Validator, String>> = La
         .map_err(|e| format!("Failed to compile embedded schema: {}", e))
 });
 
+static EMBEDDED_TRUST_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| {
+        let schema_json: Value = serde_json::from_str(EMBEDDED_TRUST_SCHEMA)
+            .map_err(|e| format!("Failed to parse embedded trust schema: {}", e))?;
+        Validator::from_schema(schema_json)
+            .map_err(|e| format!("Failed to compile embedded trust schema: {}", e))
+    });
+
 pub fn embedded_validator() -> Result<&'static Validator> {
     EMBEDDED_VALIDATOR.as_ref().map_err(|e| Error::Schema {
         message: e.clone(),
         source: None,
     })
+}
+
+/// Get the embedded Trust Store schema validator.
+pub fn embedded_trust_validator() -> Result<&'static Validator> {
+    EMBEDDED_TRUST_VALIDATOR
+        .as_ref()
+        .map_err(|e| Error::Schema {
+            message: e.clone(),
+            source: None,
+        })
 }
 
 pub struct Validator {
@@ -33,7 +53,7 @@ pub struct Validator {
 
 impl Validator {
     pub fn new() -> Result<Self> {
-        let schema_json = Self::load_schema_from_paths("secretenv_schema_v3.json")?;
+        let schema_json = Self::load_schema_from_paths("secretenv_schema.json")?;
         Self::from_schema(schema_json)
     }
 
@@ -100,6 +120,10 @@ impl Validator {
     }
 
     pub fn validate_signature(&self, doc: &Value) -> Result<()> {
+        self.validate_generic(doc)
+    }
+
+    pub fn validate_trust_store(&self, doc: &Value) -> Result<()> {
         self.validate_generic(doc)
     }
 

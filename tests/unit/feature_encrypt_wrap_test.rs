@@ -5,8 +5,8 @@
 //!
 //! Tests for wrap item creation.
 
-use crate::cli_common::ALICE_MEMBER_ID;
 use crate::keygen_helpers::make_recipient_key;
+use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{create_temp_ssh_keypair_in_dir, keygen_test};
 use secretenv::crypto::types::keys::MasterKey;
 use secretenv::feature::envelope::wrap::WrapFormat;

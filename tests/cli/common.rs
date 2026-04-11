@@ -7,8 +7,12 @@
 //! CLI integration tests to reduce code duplication and improve maintainability.
 
 use crate::test_utils::create_temp_ssh_keypair_in_dir;
+pub use crate::test_utils::{
+    ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID, EVE_MEMBER_ID,
+    FRANK_MEMBER_ID, TEST_MEMBER_ID,
+};
 use assert_cmd::{cargo, Command};
-use secretenv::cli::common::options::CommonOptions;
+use secretenv::cli::options::CommonOptions;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -18,25 +22,16 @@ use tempfile::TempDir;
 
 /// Helper to get the secretenv test binary command.
 ///
-/// Sets `SECRETENV_SSH_SIGNER=ssh-keygen` for CLI integration tests.
+/// Sets `SECRETENV_SSH_SIGNING_METHOD=ssh-keygen` for CLI integration tests.
 pub fn cmd() -> Command {
     let mut c = cargo::cargo_bin_cmd!("secretenv");
-    c.env("SECRETENV_SSH_SIGNER", "ssh-keygen");
+    c.env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
     c
 }
 
 // ============================================================================
 // Test Constants
 // ============================================================================
-
-/// Test member ID constants
-pub const TEST_MEMBER_ID: &str = "test@example.com";
-pub const ALICE_MEMBER_ID: &str = "alice@example.com";
-pub const BOB_MEMBER_ID: &str = "bob@example.com";
-pub const CAROL_MEMBER_ID: &str = "carol@example.com";
-pub const DAVE_MEMBER_ID: &str = "dave@example.com";
-pub const EVE_MEMBER_ID: &str = "eve@example.com";
-pub const FRANK_MEMBER_ID: &str = "frank@example.com";
 
 // ============================================================================
 // Common Helper Functions
@@ -83,7 +78,7 @@ pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--member-id")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .output()
         .unwrap();
 

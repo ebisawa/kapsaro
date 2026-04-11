@@ -7,9 +7,11 @@ use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use predicates::prelude::*;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::PrivateKey;
 use secretenv::model::public_key::PublicKey;
+use secretenv::support::kid::build_kid_display;
 use std::fs;
 use tempfile::TempDir;
 
@@ -126,6 +128,47 @@ fn test_key_export_active() {
 }
 
 #[test]
+fn test_key_export_accepts_display_kid() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let member_id = TEST_MEMBER_ID;
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-id")
+        .arg(member_id)
+        .arg("-i")
+        .arg(ssh_priv.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+
+    let keystore_root = temp_dir.path().join("keys");
+    let member_dir = keystore_root.join(member_id);
+    let kid = find_kid_in_member_dir(&member_dir);
+    let export_file = temp_dir.path().join("display-exported.json");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg(build_kid_display(&kid).unwrap())
+        .arg("--member-id")
+        .arg(member_id)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+
+    let exported_json = fs::read_to_string(&export_file).unwrap();
+    let exported: PublicKey = serde_json::from_str(&exported_json).unwrap();
+    assert_eq!(exported.protected.kid, kid);
+
+    drop(ssh_temp);
+}
+
+#[test]
 fn test_key_export_private_writes_password_protected_key_file() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
@@ -153,7 +196,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("strong-password-42\nstrong-password-42\n")
         .assert()
         .success();
@@ -196,7 +239,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         .arg("--member-id")
         .arg(member_id)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("strong-password-42\nstrong-password-42\n")
         .assert()
         .success()
@@ -218,6 +261,25 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
     assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V4);
 
     drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_requires_member_id_before_password_input() {
+    let temp_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--stdout")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .write_stdin("strong-password-42\n")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("member_id not configured")
+                .and(predicate::str::contains("Passwords do not match").not()),
+        );
 }
 
 #[test]
@@ -244,7 +306,7 @@ fn test_key_export_private_requires_explicit_output_destination() {
         .arg("--member-id")
         .arg(member_id)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stdout(predicates::prelude::predicate::str::is_empty())
@@ -284,7 +346,7 @@ fn test_key_export_private_rejects_stdout_and_out_together() {
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicates::prelude::predicate::str::contains(

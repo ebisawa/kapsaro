@@ -65,7 +65,8 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
         TEST_PASSWORD,
         false,
     )
-    .expect("should export private key");
+    .expect("should export private key")
+    .into_plain_string_for_output();
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv, exported)
 }
@@ -81,7 +82,7 @@ fn env_key_cmd(home: &TempDir, exported_key: &str, password: &str) -> assert_cmd
         .env("SECRETENV_KEY_PASSWORD", password);
     // Remove SSH_AUTH_SOCK to ensure env key mode is used
     c.env_remove("SSH_AUTH_SOCK");
-    c.env_remove("SECRETENV_SSH_KEY");
+    c.env_remove("SECRETENV_SSH_IDENTITY");
     c
 }
 
@@ -101,7 +102,7 @@ fn test_env_key_get_roundtrip() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -136,7 +137,7 @@ fn test_env_key_decrypt_roundtrip() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -170,7 +171,7 @@ fn test_env_key_run_roundtrip() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -218,7 +219,7 @@ fn test_env_key_missing_password_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -228,7 +229,7 @@ fn test_env_key_missing_password_fails() {
         .env("SECRETENV_PRIVATE_KEY", &exported_key)
         .env_remove("SECRETENV_KEY_PASSWORD")
         .env_remove("SSH_AUTH_SOCK")
-        .env_remove("SECRETENV_SSH_KEY");
+        .env_remove("SECRETENV_SSH_IDENTITY");
 
     c.arg("get")
         .arg("SOME_KEY")
@@ -250,7 +251,7 @@ fn test_env_key_wrong_password_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -322,7 +323,7 @@ fn test_env_key_mode_allows_list() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_KEY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

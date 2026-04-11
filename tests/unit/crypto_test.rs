@@ -169,6 +169,16 @@ fn test_plaintext_debug_redacts_contents() {
 }
 
 #[test]
+fn test_plaintext_to_zeroizing_vec_clones_contents() {
+    use secretenv::crypto::types::data::Plaintext;
+
+    let plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
+    let bytes = plaintext.to_zeroizing_vec();
+
+    assert_eq!(bytes.as_slice(), plaintext.as_bytes());
+}
+
+#[test]
 fn test_hpke_open_error_message_sanitized() {
     use secretenv::crypto::kem::{open_base, seal_base};
     use secretenv::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};

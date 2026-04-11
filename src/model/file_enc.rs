@@ -133,7 +133,7 @@ impl FileEncDocument {
 /// let doc: FileEncDocument = serde_json::from_str(json)?;
 ///
 /// // Verify signature (returns VerifiedFileEncDocument)
-/// let verified = verify_file_document(&doc, None, debug)?;
+/// let verified = verify_file_document(&doc, debug)?;
 ///
 /// // Access verified document and proof information
 /// let document = verified.document();

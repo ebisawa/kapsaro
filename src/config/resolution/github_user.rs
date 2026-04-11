@@ -22,7 +22,7 @@ use super::common::resolve_string_with_priority;
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 ///
 /// Returns `None` if no source provides a value.
-pub fn resolve_github_user(
+pub(crate) fn resolve_github_user(
     cli_value: Option<String>,
     base_dir: Option<&Path>,
 ) -> Result<Option<String>> {
@@ -34,3 +34,7 @@ pub fn resolve_github_user(
         None,
     )
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/config_resolution_github_user_test.rs"]
+mod tests;

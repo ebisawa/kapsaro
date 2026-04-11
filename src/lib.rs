@@ -3,7 +3,7 @@
 
 //! secretenv - Serverless CLI for secure secret sharing
 
-pub mod app;
+pub(crate) mod app;
 pub mod cli;
 pub mod config;
 pub mod crypto;
@@ -15,3 +15,14 @@ pub mod model;
 pub mod support;
 
 pub use error::{Error, Result};
+
+#[cfg(test)]
+extern crate self as secretenv;
+
+#[cfg(test)]
+#[path = "../tests/test_utils.rs"]
+pub(crate) mod test_utils;
+
+#[cfg(test)]
+#[path = "../tests/test_utils/app_context.rs"]
+pub(crate) mod app_test_utils;

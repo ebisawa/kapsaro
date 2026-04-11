@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::feature::kv::query::KvDisclosedEntry;
+pub use crate::feature::kv::query::KvDisclosedEntry;
+pub use crate::feature::kv::types::KvInputEntry;
 use crate::support::secret::SecretString;
 
 #[derive(Debug)]

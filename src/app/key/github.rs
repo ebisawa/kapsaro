@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::io::github_account::resolve_github_account_by_login;
+use crate::io::github::account::resolve_github_account_by_login;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;
 use crate::io::verify_online::VerificationStatus;
 use crate::model::public_key::GithubAccount;

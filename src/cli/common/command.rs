@@ -3,6 +3,7 @@
 
 //! Shared CLI command runners for trust-gated commands.
 
+use crate::app::context::env_key::is_env_key_mode;
 use crate::app::context::execution::{resolve_write_execution, ExecutionContext};
 use crate::app::context::identity::{build_missing_member_id_error, resolve_member_id_input};
 use crate::app::context::member::resolve_required_member;
@@ -24,7 +25,6 @@ use crate::cli::common::trust::{
 };
 use crate::cli::identity_prompt;
 use crate::cli::options::CommonOptions;
-use crate::feature::context::env_key::is_env_key_mode;
 use crate::Result;
 
 pub(crate) struct ReadCommandLabels<'a> {

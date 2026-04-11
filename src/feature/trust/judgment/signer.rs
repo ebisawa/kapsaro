@@ -65,16 +65,7 @@ where
 {
     match active_members.match_identity(signer) {
         CurrentMemberMatch::Missing => {
-            // Historical self signers remain trusted from the local keystore
-            // without falling back to one-shot non-member acceptance.
-            if is_self_key(signer, self_trust)? {
-                return Ok(TrustJudgment::Trusted);
-            }
-
-            return Ok(TrustJudgment::NonMember {
-                member_id: signer.member_id_value().clone(),
-                kid: signer.kid_value().clone(),
-            });
+            return evaluate_missing_active_member(signer, self_trust);
         }
         CurrentMemberMatch::MemberIdMismatch { active_member_id } => {
             return Ok(TrustJudgment::ActiveMemberMismatch {
@@ -90,7 +81,28 @@ where
         return Ok(TrustJudgment::Trusted);
     }
 
-    Ok(match match_known(signer) {
+    Ok(build_known_key_judgment(signer, match_known(signer)))
+}
+
+/// Decide the judgment when the signer is not present in the active member set.
+///
+/// Historical self signers remain trusted from the local keystore without
+/// falling back to one-shot non-member acceptance.
+fn evaluate_missing_active_member(
+    signer: &TrustIdentity,
+    self_trust: &SelfTrustSet,
+) -> Result<TrustJudgment> {
+    if is_self_key(signer, self_trust)? {
+        return Ok(TrustJudgment::Trusted);
+    }
+    Ok(TrustJudgment::NonMember {
+        member_id: signer.member_id_value().clone(),
+        kid: signer.kid_value().clone(),
+    })
+}
+
+fn build_known_key_judgment(signer: &TrustIdentity, match_result: KnownKeyMatch) -> TrustJudgment {
+    match match_result {
         KnownKeyMatch::Exact => TrustJudgment::Trusted,
         KnownKeyMatch::Missing => TrustJudgment::NeedsApproval {
             member_id: signer.member_id_value().clone(),
@@ -103,7 +115,7 @@ where
                 known_member_id,
             }
         }
-    })
+    }
 }
 
 fn is_self_key(identity: &TrustIdentity, self_trust: &SelfTrustSet) -> Result<bool> {

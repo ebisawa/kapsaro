@@ -7,6 +7,10 @@ use crate::support::path::display_path_relative_to_cwd;
 use crate::Error;
 use std::path::Path;
 
+#[cfg(test)]
+#[path = "../../tests/unit/app_errors_test.rs"]
+mod tests;
+
 /// Add file path context to key-not-found errors from KV commands.
 pub fn handle_kv_key_not_found_error(error: Error, input_path: &Path, key: &str) -> Error {
     match &error {

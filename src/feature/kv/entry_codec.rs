@@ -7,7 +7,6 @@ use uuid::Uuid;
 
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::envelope::entry::encrypt_entry;
-use crate::format::kv::detect_token_codec_from_kv_content;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::line::KvEncLine;
@@ -35,9 +34,11 @@ pub(crate) fn encode_kv_entries_to_tokens(
         .collect()
 }
 
-/// Detect the token codec for a verified or parsed KV document.
+/// Detect the token codec for a validated KV document.
+///
+/// Relies on the invariant that `KvEncDocument` is only constructed via
+/// `parse_kv_document`, which requires a `:WRAP` line to be present.
 pub(crate) fn detect_token_codec(
-    content: &str,
     lines: &[KvEncLine],
     override_codec: Option<TokenCodec>,
 ) -> TokenCodec {
@@ -48,7 +49,7 @@ pub(crate) fn detect_token_codec(
                 KvEncLine::Wrap { token } => Some(TokenCodec::detect(token)),
                 _ => None,
             })
-            .unwrap_or_else(|| detect_token_codec_from_kv_content(content))
+            .expect("WRAP line must exist in validated KvEncDocument")
     })
 }
 
@@ -89,3 +90,7 @@ fn encrypt_and_encode_entry(
     let new_entry = encrypt_entry(key, value, master_key, sid, verbose, caller, false)?;
     TokenCodec::encode_debug(codec, &new_entry, verbose, Some(key), Some(caller))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_kv_entry_codec_test.rs"]
+mod entry_codec_tests;

@@ -8,6 +8,7 @@ use std::io::{self, Read};
 use clap::Args;
 
 use crate::app::kv::mutation::set_kv_command;
+use crate::app::kv::types::KvInputEntry;
 use crate::app::trust::SetPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
@@ -16,7 +17,6 @@ use crate::cli::common::command::{
 use crate::cli::common::output::text::print_optional_status;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::CommonOptions;
-use crate::feature::kv::types::KvInputEntry;
 use crate::{Error, Result};
 
 #[derive(Args)]

@@ -4,6 +4,7 @@
 //! Shared command execution context resolution.
 
 pub(crate) mod crypto;
+pub(crate) mod env_key;
 pub(crate) mod execution;
 pub(crate) mod identity;
 pub(crate) mod member;

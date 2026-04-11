@@ -3,8 +3,9 @@
 
 //! Unit tests for GitHub binding_claims.github_account verification.
 
+use secretenv::io::github::http::GitHubKeyRecord;
 use secretenv::io::verify_online::github::{
-    verify_github_account_with_api, GitHubApiFuture, GitHubKeyRecord, GitHubVerificationApi,
+    verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
 };
 use secretenv::io::verify_online::VerifiedGithubIdentity;
 use secretenv::model::public_key::{

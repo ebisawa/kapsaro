@@ -20,28 +20,3 @@ pub const HEADER_LINE_V3: &str = ":SECRETENV_KV 3";
 pub const KV_ENC_EXTENSION: &str = ".kvenc";
 /// Default base name for kv-enc files.
 pub const DEFAULT_KV_ENC_BASENAME: &str = "default";
-/// Default kv-enc file name: `default.kvenc`.
-pub const DEFAULT_KV_ENC_FILE_NAME: &str = "default.kvenc";
-
-use crate::format::kv::enc::parser::KvEncParser;
-use crate::format::token::TokenCodec;
-use crate::model::kv_enc::line::KvEncLine;
-
-/// Detect token codec from kv-enc content by parsing WRAP line.
-///
-/// # Arguments
-/// * `content` - kv-enc format content string
-///
-/// # Returns
-/// Detected TokenCodec, or JsonJcs as default if not found
-pub fn detect_token_codec_from_kv_content(content: &str) -> TokenCodec {
-    let parser = KvEncParser::new(content);
-    if let Ok(lines) = parser.parse_all() {
-        for line in &lines {
-            if let KvEncLine::Wrap { token } = line {
-                return TokenCodec::detect(token);
-            }
-        }
-    }
-    TokenCodec::JsonJcs // Default
-}

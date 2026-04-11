@@ -21,7 +21,7 @@ pub(crate) fn build_unsigned_from_verified(
     debug: bool,
 ) -> Result<UnsignedKvDocument> {
     let doc = verified.document();
-    let token_codec = detect_token_codec(doc.content(), doc.lines(), override_codec);
+    let token_codec = detect_token_codec(doc.lines(), override_codec);
     KvDocumentBuilder::from_lines(head, None, doc.lines(), token_codec, debug)
         .map(|builder| builder.build())
 }

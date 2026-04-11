@@ -16,6 +16,8 @@ use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
 use secretenv::format::content::{EncryptedContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use std::fs;
+use std::thread::sleep;
+use std::time::Duration;
 use tempfile::TempDir;
 
 /// Create workspace members directory with the member's public key file.
@@ -372,6 +374,66 @@ fn test_rewrap_file_preserves_payload() {
         doc.protected.format, "secretenv.file@3",
         "format field must be preserved as secretenv.file@3"
     );
+}
+
+#[test]
+fn test_rewrap_file_remove_add_remove_deduplicates_removed_kid() {
+    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &alice_kid);
+    setup_workspace_members(&temp_dir, BOB_MEMBER_ID, &bob_kid);
+
+    let json = encrypt_file_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
+
+    fs::remove_file(
+        temp_dir
+            .path()
+            .join("members/active")
+            .join(format!("{}.json", BOB_MEMBER_ID)),
+    )
+    .unwrap();
+
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let after_first_remove =
+        rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
+    let first_doc: secretenv::model::file_enc::FileEncDocument =
+        serde_json::from_str(&after_first_remove).unwrap();
+    let first_removed_at = first_doc
+        .protected
+        .removed_recipients
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|recipient| recipient.kid == bob_kid)
+        .unwrap()
+        .removed_at
+        .clone();
+
+    sleep(Duration::from_secs(1));
+
+    setup_workspace_members(&temp_dir, BOB_MEMBER_ID, &bob_kid);
+    let after_add =
+        rewrap_file_content(&FileEncContent::new_unchecked(after_first_remove), &request).unwrap();
+
+    fs::remove_file(
+        temp_dir
+            .path()
+            .join("members/active")
+            .join(format!("{}.json", BOB_MEMBER_ID)),
+    )
+    .unwrap();
+
+    let after_second_remove =
+        rewrap_file_content(&FileEncContent::new_unchecked(after_add), &request).unwrap();
+    let second_doc: secretenv::model::file_enc::FileEncDocument =
+        serde_json::from_str(&after_second_remove).unwrap();
+    let removed = second_doc.protected.removed_recipients.unwrap();
+
+    assert_eq!(removed.len(), 1);
+    assert_eq!(removed[0].rid, BOB_MEMBER_ID);
+    assert_eq!(removed[0].kid, bob_kid);
+    assert_ne!(removed[0].removed_at, first_removed_at);
 }
 
 #[test]

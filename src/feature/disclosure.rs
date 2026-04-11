@@ -21,7 +21,7 @@ pub fn add_to_removed_history(
     };
 
     match removed_recipients {
-        Some(list) => list.push(removed),
+        Some(list) => upsert_removed_recipient(list, removed),
         None => *removed_recipients = Some(vec![removed]),
     }
     Ok(())
@@ -34,8 +34,54 @@ pub fn merge_removed_history(
 ) {
     if let Some(old_removed) = source {
         match target {
-            Some(new_list) => new_list.extend(old_removed.clone()),
-            None => *target = Some(old_removed.clone()),
+            Some(new_list) => {
+                dedup_removed_recipients(new_list);
+                for removed in old_removed {
+                    if new_list.iter().any(|existing| existing.kid == removed.kid) {
+                        continue;
+                    }
+                    new_list.push(removed.clone());
+                }
+            }
+            None => *target = Some(build_deduped_removed_recipients(old_removed)),
         }
     }
+}
+
+fn upsert_removed_recipient(list: &mut Vec<RemovedRecipient>, removed: RemovedRecipient) {
+    if let Some(index) = list.iter().position(|existing| existing.kid == removed.kid) {
+        list[index] = removed;
+        dedup_removed_recipients(list);
+        return;
+    }
+
+    list.push(removed);
+}
+
+fn dedup_removed_recipients(list: &mut Vec<RemovedRecipient>) {
+    let mut deduped = Vec::with_capacity(list.len());
+    for removed in list.drain(..) {
+        if deduped
+            .iter()
+            .any(|existing: &RemovedRecipient| existing.kid == removed.kid)
+        {
+            continue;
+        }
+        deduped.push(removed);
+    }
+    *list = deduped;
+}
+
+fn build_deduped_removed_recipients(source: &[RemovedRecipient]) -> Vec<RemovedRecipient> {
+    let mut deduped = Vec::with_capacity(source.len());
+    for removed in source {
+        if deduped
+            .iter()
+            .any(|existing: &RemovedRecipient| existing.kid == removed.kid)
+        {
+            continue;
+        }
+        deduped.push(removed.clone());
+    }
+    deduped
 }

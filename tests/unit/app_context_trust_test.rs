@@ -229,6 +229,95 @@ fn test_command_trust_snapshot_defers_unreferenced_local_self_key_loading() {
 }
 
 #[test]
+fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let workspace = dir.path().join("workspace");
+    let keystore_root = dir.path().join("keys");
+    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_ID, &keystore_root)
+        .unwrap()
+        .expect("expected active key fixture")
+        .public_key;
+    local_nonactive.protected.kid = "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string();
+    local_nonactive.protected.identity.keys.sig.x =
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
+    save_public_key(
+        &keystore_root,
+        ALICE_MEMBER_ID,
+        &local_nonactive.protected.kid,
+        &local_nonactive,
+    )
+    .unwrap();
+    let options = build_test_command_options(dir.path(), Some(&workspace));
+    let snapshot = CommandTrustSnapshot::<DecryptPolicy>::load(
+        &options,
+        &workspace,
+        ALICE_MEMBER_ID,
+        None,
+        false,
+    )
+    .unwrap();
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
+        local_nonactive.protected.member_id.clone(),
+        local_nonactive.protected.kid.clone(),
+        local_nonactive.clone(),
+        VerifyingKeySource::SignerPubEmbedded,
+        Vec::new(),
+    );
+
+    let result = evaluate_signer_trust_with_proof(
+        snapshot.trust_context(),
+        &proof,
+        CommandCapability::Decrypt,
+        &[],
+    )
+    .unwrap();
+
+    assert_eq!(result, SignerTrustOutcome::Accepted);
+}
+
+#[test]
+fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let workspace = dir.path().join("workspace");
+    let keystore_root = dir.path().join("keys");
+    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_ID, &keystore_root)
+        .unwrap()
+        .expect("expected active key fixture")
+        .public_key;
+    local_nonactive.protected.kid = "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string();
+    local_nonactive.protected.identity.keys.sig.x =
+        "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
+    save_public_key(
+        &keystore_root,
+        ALICE_MEMBER_ID,
+        &local_nonactive.protected.kid,
+        &local_nonactive,
+    )
+    .unwrap();
+    let options = build_test_command_options(dir.path(), Some(&workspace));
+    let snapshot =
+        CommandTrustSnapshot::<RunPolicy>::load(&options, &workspace, ALICE_MEMBER_ID, None, false)
+            .unwrap();
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
+        local_nonactive.protected.member_id.clone(),
+        local_nonactive.protected.kid.clone(),
+        local_nonactive.clone(),
+        VerifyingKeySource::SignerPubEmbedded,
+        Vec::new(),
+    );
+
+    let result = evaluate_signer_trust_with_proof(
+        snapshot.trust_context(),
+        &proof,
+        CommandCapability::Run,
+        &[],
+    )
+    .unwrap();
+
+    assert_eq!(result, SignerTrustOutcome::Accepted);
+}
+
+#[test]
 fn test_enforce_signer_trust_needs_known_key_approval_interactive() {
     let ctx = build_test_trust_ctx(StrictKeyChecking::Yes, true);
     let public_key = build_public_key(

@@ -193,9 +193,9 @@ fn test_judge_signer_trust_self_trust_set_not_matched() {
 }
 
 #[test]
-fn test_judge_signer_trust_self_trust_set_requires_active_membership() {
+fn test_judge_signer_trust_self_trust_set_accepts_historical_self_key() {
     let kid = KID1;
-    let active: BTreeMap<String, PublicKey> = BTreeMap::new(); // Not in active
+    let active: BTreeMap<String, PublicKey> = BTreeMap::new();
     let known: Vec<KnownKey> = vec![];
     let self_keys = SelfTrustSet::new("self", [[42u8; 32], [99u8; 32]]);
     let signer = TrustIdentity::new("self", kid, [99u8; 32]);
@@ -207,13 +207,7 @@ fn test_judge_signer_trust_self_trust_set_requires_active_membership() {
         &self_keys,
     )
     .unwrap();
-    assert_eq!(
-        result,
-        TrustJudgment::NonMember {
-            member_id: member_id("self"),
-            kid: kid_value(kid),
-        }
-    );
+    assert_eq!(result, TrustJudgment::Trusted);
 }
 
 // === P2 regression: kid cached with different member_id (spec §9.4) ===

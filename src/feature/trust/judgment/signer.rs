@@ -65,6 +65,12 @@ where
 {
     match active_members.match_identity(signer) {
         CurrentMemberMatch::Missing => {
+            // Historical self signers remain trusted from the local keystore
+            // without falling back to one-shot non-member acceptance.
+            if is_self_key(signer, self_trust)? {
+                return Ok(TrustJudgment::Trusted);
+            }
+
             return Ok(TrustJudgment::NonMember {
                 member_id: signer.member_id_value().clone(),
                 kid: signer.kid_value().clone(),

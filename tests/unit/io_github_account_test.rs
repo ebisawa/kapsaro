@@ -3,7 +3,7 @@
 
 //! Unit tests for GitHub account lookup by login.
 
-use secretenv::io::github_account::{
+use secretenv::io::github::account::{
     resolve_github_account_by_login_with_api, GitHubAccountLookupApi, GitHubAccountLookupFuture,
 };
 use secretenv::model::public_key::GithubAccount;

@@ -3,10 +3,9 @@
 
 //! Unit tests for pre-flight SSH key verification against GitHub.
 
+use secretenv::io::github::http::GitHubKeyRecord;
 use secretenv::io::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
-use secretenv::io::verify_online::github::{
-    GitHubApiFuture, GitHubKeyRecord, GitHubVerificationApi,
-};
+use secretenv::io::verify_online::github::{GitHubApiFuture, GitHubVerificationApi};
 use secretenv::io::verify_online::VerificationStatus;
 use secretenv::model::public_key::GithubAccount;
 use secretenv::{Error, Result};

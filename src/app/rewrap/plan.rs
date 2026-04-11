@@ -137,13 +137,7 @@ fn build_incoming_candidate(
             message: format!("Offline verification failed: {}", error.user_message()),
             fingerprint: None,
             verified_github: None,
-            github_binding_configured: snapshot
-                .public_key
-                .protected
-                .binding_claims
-                .as_ref()
-                .and_then(|claims| claims.github_account.as_ref())
-                .is_some(),
+            github_binding_configured: github_binding_configured(&snapshot.public_key),
             attestor_pub: None,
         },
     };
@@ -157,45 +151,50 @@ fn build_incoming_candidate(
 }
 
 fn build_pending_review(snapshot: &IncomingSnapshot) -> IncomingVerificationItem {
-    let github_binding_configured = snapshot
+    let binding_configured = github_binding_configured(&snapshot.public_key);
+    let (category, message) = classify_pending_review(binding_configured);
+    let attestor_pub = snapshot
         .public_key
         .protected
-        .binding_claims
-        .as_ref()
-        .and_then(|claims| claims.github_account.as_ref())
-        .is_some();
-    let category = if github_binding_configured {
-        IncomingVerificationCategory::BindingConfigured
-    } else {
-        IncomingVerificationCategory::NotConfigured
-    };
-    let message = if github_binding_configured {
-        "GitHub binding configured; online verification will run if trust update is required"
-            .to_string()
-    } else {
-        "No binding_claims.github_account configured".to_string()
-    };
+        .identity
+        .attestation
+        .pub_
+        .clone();
+    let fingerprint = build_sha256_fingerprint(&attestor_pub).ok();
 
     IncomingVerificationItem {
         member_id: snapshot.public_key.protected.member_id.clone(),
         kid: snapshot.public_key.protected.kid.clone(),
         category,
         message,
-        fingerprint: build_sha256_fingerprint(
-            &snapshot.public_key.protected.identity.attestation.pub_,
-        )
-        .ok(),
+        fingerprint,
         verified_github: None,
-        github_binding_configured,
-        attestor_pub: Some(
-            snapshot
-                .public_key
-                .protected
-                .identity
-                .attestation
-                .pub_
-                .clone(),
-        ),
+        github_binding_configured: binding_configured,
+        attestor_pub: Some(attestor_pub),
+    }
+}
+
+fn github_binding_configured(public_key: &PublicKey) -> bool {
+    public_key
+        .protected
+        .binding_claims
+        .as_ref()
+        .and_then(|claims| claims.github_account.as_ref())
+        .is_some()
+}
+
+fn classify_pending_review(binding_configured: bool) -> (IncomingVerificationCategory, String) {
+    if binding_configured {
+        (
+            IncomingVerificationCategory::BindingConfigured,
+            "GitHub binding configured; online verification will run if trust update is required"
+                .to_string(),
+        )
+    } else {
+        (
+            IncomingVerificationCategory::NotConfigured,
+            "No binding_claims.github_account configured".to_string(),
+        )
     }
 }
 

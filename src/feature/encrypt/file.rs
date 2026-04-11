@@ -142,32 +142,61 @@ pub fn encrypt_file_document(
     validate_recipient_members(recipient_ids, members)?;
     let sid = Uuid::new_v4();
     let timestamp = current_timestamp()?;
-
-    // Build encryption context (plaintext wrapped in Zeroizing)
-    let (content_key, bytes_to_encrypt, xchacha_key) = build_encrypt_context(content)?;
-
-    // Encrypt payload (plaintext will be zeroed after this call)
-    let (payload_protected, payload_encrypted) = encrypt_payload(
-        &bytes_to_encrypt,
-        &xchacha_key,
-        &sid,
+    let (content_key, payload) =
+        encrypt_content_into_payload(content, &sid, signing.debug, "encrypt_file_document")?;
+    let protected = assemble_file_enc_protected(
+        sid,
+        &content_key,
+        members,
+        payload,
+        timestamp,
         signing.debug,
-        "encrypt_file_document",
     )?;
+    sign_and_finalize_file_document(protected, signing)
+}
 
-    // Create WRAP items for all recipients
-    let wrap = build_recipient_wraps(members, &sid, &content_key, signing.debug)?;
+/// Build encryption context and produce a ready `FilePayload`.
+///
+/// The plaintext is held inside a `Zeroizing` buffer and zeroed before this
+/// helper returns.
+fn encrypt_content_into_payload(
+    content: &[u8],
+    sid: &Uuid,
+    debug: bool,
+    caller: &str,
+) -> Result<(MasterKey, FilePayload)> {
+    let (content_key, bytes_to_encrypt, xchacha_key) = build_encrypt_context(content)?;
+    let (payload_protected, payload_encrypted) =
+        encrypt_payload(&bytes_to_encrypt, &xchacha_key, sid, debug, caller)?;
+    Ok((
+        content_key,
+        FilePayload {
+            protected: payload_protected,
+            encrypted: payload_encrypted,
+        },
+    ))
+}
 
-    // Build payload envelope
-    let payload = FilePayload {
-        protected: payload_protected,
-        encrypted: payload_encrypted,
-    };
+/// Wrap the content key for each recipient and assemble the protected header.
+fn assemble_file_enc_protected(
+    sid: Uuid,
+    content_key: &MasterKey,
+    members: &[VerifiedRecipientKey],
+    payload: FilePayload,
+    timestamp: String,
+    debug: bool,
+) -> Result<FileEncDocumentProtected> {
+    let wrap = build_recipient_wraps(members, &sid, content_key, debug)?;
+    Ok(build_file_enc_document_protected(
+        sid, wrap, payload, timestamp,
+    ))
+}
 
-    // Build FileEncDocument protected structure
-    let protected = build_file_enc_document_protected(sid, wrap, payload, timestamp);
-
-    // Generate signature over protected object
+/// Sign the protected header and produce the final `FileEncDocument`.
+fn sign_and_finalize_file_document(
+    protected: FileEncDocumentProtected,
+    signing: &SigningContext<'_>,
+) -> Result<FileEncDocument> {
     let signature = sign_file_document(
         &protected,
         signing.signing_key,
@@ -175,8 +204,6 @@ pub fn encrypt_file_document(
         signing.signer_pub.clone(),
         signing.debug,
     )?;
-
-    // Build final FileEncDocument
     Ok(FileEncDocument {
         protected,
         signature,

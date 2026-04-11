@@ -3,8 +3,8 @@
 
 //! Guards for commands that are unavailable in environment-variable key mode.
 
+use crate::app::context::env_key::is_env_key_mode;
 use crate::app::trust::CommandCapability;
-use crate::feature::context::env_key::is_env_key_mode;
 use crate::Result;
 
 pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> Result<()> {

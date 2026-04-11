@@ -90,3 +90,7 @@ fn encrypt_and_encode_entry(
     let new_entry = encrypt_entry(key, value, master_key, sid, verbose, caller, false)?;
     TokenCodec::encode_debug(codec, &new_entry, verbose, Some(key), Some(caller))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/feature_kv_entry_codec_test.rs"]
+mod entry_codec_tests;

@@ -45,12 +45,12 @@ fn save_key_pair_to_tmp(
     Ok(())
 }
 
-/// キーペアをアトミックに保存
+/// Save a key pair atomically.
 ///
-/// 1. 一時ディレクトリ <member_id>/.tmp-<uuid>/ を作成
-/// 2. private.json, public.json を書き込み
-/// 3. rename で <member_id>/<kid>/ に移動
-///    → ディレクトリは完全か存在しないかのどちらか
+/// 1. Create a temporary directory `<member_id>/.tmp-<uuid>/`
+/// 2. Write `private.json` and `public.json`
+/// 3. Rename to `<member_id>/<kid>/`
+///    The destination directory is either complete or absent.
 pub fn save_key_pair_atomic(
     keystore_root: &Path,
     member_id: &str,

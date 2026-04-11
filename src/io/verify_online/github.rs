@@ -7,28 +7,22 @@
 //! GET /user/{id} to resolve the current login, then GET /users/{login}/keys.
 //! REST only, no authentication required.
 
+use crate::io::github::http::{
+    build_http_client, fetch_github_keys, fetch_github_user_by_id, GitHubKeyRecord,
+};
 use crate::model::public_key::PublicKey;
 use crate::Result;
 use std::future::Future;
 use std::pin::Pin;
 use tracing::debug;
 
-use self::http::{build_http_client, fetch_github_keys, fetch_github_user_by_id};
 use self::matcher::compute_attestation_fingerprint;
 use self::policy::{fetch_and_match_github_keys, resolve_github_identity};
 use super::VerificationResult;
 
-pub(crate) mod http;
 mod matcher;
 mod policy;
 pub mod preflight;
-
-/// SSH key metadata fetched from GitHub.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GitHubKeyRecord {
-    pub id: i64,
-    pub key: String,
-}
 
 /// Boxed future used by GitHub API abstractions.
 pub type GitHubApiFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;

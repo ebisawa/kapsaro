@@ -3,9 +3,8 @@
 
 //! View builders for KV command output.
 
-use crate::app::kv::types::KvReadResult;
+use crate::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use crate::cli::common::output::text::print_warning_line;
-use crate::feature::kv::query::KvDisclosedEntry;
 use std::collections::BTreeMap;
 
 pub(crate) struct KvKeyView<'a> {

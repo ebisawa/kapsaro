@@ -32,71 +32,85 @@ fn build_promotion_plan(
     workspace_path: &Path,
     member_ids: Option<&[String]>,
 ) -> Result<Vec<PromotionPlan>> {
-    let incoming_dir = members_dir(workspace_path, MemberStatus::Incoming);
-    let active_dir = members_dir(workspace_path, MemberStatus::Active);
-
     let plans = match member_ids {
-        Some(ids) => ids
-            .iter()
-            .map(|member_id| {
-                let source = incoming_member_file_path(workspace_path, member_id);
-                if !source.exists() {
-                    return Err(Error::NotFound {
-                        message: format!("Member '{}' not found in incoming/", member_id),
-                    });
-                }
-
-                let destination = member_file_path(workspace_path, MemberStatus::Active, member_id);
-                if destination.exists() {
-                    return Err(Error::InvalidOperation {
-                        message: format!(
-                            "Member '{}' already exists in active/. Cannot promote from incoming/.",
-                            member_id
-                        ),
-                    });
-                }
-
-                Ok(PromotionPlan {
-                    source,
-                    destination,
-                    member_id: member_id.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>>>(),
-        None => load_json_files_in_dir(&incoming_dir)?
-            .into_iter()
-            .map(|source| {
-                let member_id = source
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(String::from)
-                    .ok_or_else(|| {
-                        Error::io(format!(
-                            "Invalid file name: {}",
-                            display_path_relative_to_cwd(&source)
-                        ))
-                    })?;
-
-                let destination = active_dir.join(format!("{}.json", member_id));
-                if destination.exists() {
-                    return Err(Error::InvalidOperation {
-                        message: format!(
-                            "Member '{}' already exists in active/. Cannot promote from incoming/.",
-                            member_id
-                        ),
-                    });
-                }
-
-                Ok(PromotionPlan {
-                    source,
-                    destination,
-                    member_id,
-                })
-            })
-            .collect::<Result<Vec<_>>>(),
-    }?;
+        Some(ids) => build_plans_from_ids(workspace_path, ids)?,
+        None => build_plans_from_incoming_dir(workspace_path)?,
+    };
     ensure_promotion_kids_are_unique(workspace_path, &plans)?;
     Ok(plans)
+}
+
+/// Build plans from a caller-supplied list of incoming member IDs.
+fn build_plans_from_ids(
+    workspace_path: &Path,
+    member_ids: &[String],
+) -> Result<Vec<PromotionPlan>> {
+    member_ids
+        .iter()
+        .map(|member_id| build_plan_for_id(workspace_path, member_id))
+        .collect()
+}
+
+fn build_plan_for_id(workspace_path: &Path, member_id: &str) -> Result<PromotionPlan> {
+    let source = incoming_member_file_path(workspace_path, member_id);
+    if !source.exists() {
+        return Err(Error::NotFound {
+            message: format!("Member '{}' not found in incoming/", member_id),
+        });
+    }
+
+    let destination = member_file_path(workspace_path, MemberStatus::Active, member_id);
+    ensure_destination_free(&destination, member_id)?;
+
+    Ok(PromotionPlan {
+        source,
+        destination,
+        member_id: member_id.to_string(),
+    })
+}
+
+/// Build plans by scanning every JSON file in `members/incoming/`.
+fn build_plans_from_incoming_dir(workspace_path: &Path) -> Result<Vec<PromotionPlan>> {
+    let incoming_dir = members_dir(workspace_path, MemberStatus::Incoming);
+    let active_dir = members_dir(workspace_path, MemberStatus::Active);
+    load_json_files_in_dir(&incoming_dir)?
+        .into_iter()
+        .map(|source| build_plan_from_incoming_file(&active_dir, source))
+        .collect()
+}
+
+fn build_plan_from_incoming_file(active_dir: &Path, source: PathBuf) -> Result<PromotionPlan> {
+    let member_id = source
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(String::from)
+        .ok_or_else(|| {
+            Error::io(format!(
+                "Invalid file name: {}",
+                display_path_relative_to_cwd(&source)
+            ))
+        })?;
+
+    let destination = active_dir.join(format!("{}.json", member_id));
+    ensure_destination_free(&destination, &member_id)?;
+
+    Ok(PromotionPlan {
+        source,
+        destination,
+        member_id,
+    })
+}
+
+fn ensure_destination_free(destination: &Path, member_id: &str) -> Result<()> {
+    if destination.exists() {
+        return Err(Error::InvalidOperation {
+            message: format!(
+                "Member '{}' already exists in active/. Cannot promote from incoming/.",
+                member_id
+            ),
+        });
+    }
+    Ok(())
 }
 
 fn execute_promotion_plan(workspace_path: &Path, plans: &[PromotionPlan]) -> Result<Vec<String>> {

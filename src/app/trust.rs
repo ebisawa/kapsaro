@@ -9,6 +9,7 @@ pub(crate) mod evaluation;
 pub(crate) mod flow;
 pub(crate) mod list;
 pub(crate) mod management;
+pub(crate) mod paths;
 pub(crate) mod policy;
 pub(crate) mod snapshot;
 pub(crate) mod store;

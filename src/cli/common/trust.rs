@@ -6,11 +6,11 @@
 use std::io::BufRead;
 
 use crate::app::context::options::CommonCommandOptions;
+use crate::app::trust::paths::trust_store_file_path;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::trust::review::print_candidate_review;
 use crate::cli::common::prompt::{prompt_yes_no, prompt_yes_no_with_reader};
-use crate::io::trust::paths::trust_store_file_path;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::support::tty;
 use crate::{Error, Result};

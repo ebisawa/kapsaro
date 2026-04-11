@@ -3,7 +3,7 @@
 
 //! Fingerprint matching helpers for GitHub verification.
 
-use super::GitHubKeyRecord;
+use crate::io::github::http::GitHubKeyRecord;
 use crate::io::ssh::protocol::fingerprint;
 use crate::io::verify_online::{VerificationResult, VerifiedGithubIdentity};
 use crate::model::public_key::PublicKey;

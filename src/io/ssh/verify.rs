@@ -136,9 +136,9 @@ fn extract_ed25519_pubkey_from_ssh(ssh_pubkey: &str) -> Result<VerifyingKey> {
 /// Verify attestation signature.
 ///
 /// Verification steps:
-/// 1. `identity.keys` オブジェクトを JCS で正規化する
-/// 2. 正規化した bytes の SHA256 を計算する
-/// 3. `pub` で `sig` を検証する（namespace は固定で `secretenv` を使用）
+/// 1. Normalize the `identity.keys` object using JCS
+/// 2. Compute the SHA256 of the normalized bytes
+/// 3. Verify `sig` with `pub` (namespace is fixed to `secretenv`)
 ///
 /// # Arguments
 ///

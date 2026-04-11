@@ -2,13 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! HTTP transport helpers for GitHub REST API access.
+//!
+//! Shared between pre-flight key verification, online verification, and
+//! key-generation account lookup.
 
-use super::GitHubKeyRecord;
 use crate::model::public_key::GithubAccount;
 use crate::{Error, Result};
 use serde::Deserialize;
 
-/// GitHub API response for user keys
+/// SSH key metadata fetched from GitHub.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubKeyRecord {
+    pub id: i64,
+    pub key: String,
+}
+
+/// GitHub API response for user keys.
 #[derive(Debug, Deserialize)]
 struct GitHubKey {
     id: i64,
@@ -22,7 +31,7 @@ struct GitHubUser {
     login: String,
 }
 
-/// Build HTTP client for GitHub API requests
+/// Build an HTTP client for GitHub API requests.
 pub(crate) fn build_http_client() -> Result<reqwest::Client> {
     let builder = reqwest::Client::builder()
         .user_agent(format!("secretenv/{}", env!("CARGO_PKG_VERSION")))
@@ -34,8 +43,7 @@ pub(crate) fn build_http_client() -> Result<reqwest::Client> {
 }
 
 fn build_github_request(client: &reqwest::Client, url: &str) -> reqwest::RequestBuilder {
-    let request = client.get(url);
-    apply_github_auth(request)
+    apply_github_auth(client.get(url))
 }
 
 fn apply_github_auth(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -45,25 +53,35 @@ fn apply_github_auth(request: reqwest::RequestBuilder) -> reqwest::RequestBuilde
     request
 }
 
-/// Resolve GitHub account ID to (id, current login) via REST API.
-pub(super) async fn fetch_github_user_by_id(
+/// Generic user lookup used by both `fetch_github_user_by_id` and
+/// `fetch_github_user_by_login`.
+///
+/// `context_label` is embedded into the "not found" error message
+/// (e.g. `"account id '42'"` or `"login 'alice'"`).
+async fn fetch_github_user_api<T, F>(
     client: &reqwest::Client,
-    account_id: u64,
-) -> Result<(u64, String)> {
-    let url = format!("https://api.github.com/user/{}", account_id);
-    let request = build_github_request(client, &url);
-    let response = request.send().await.map_err(|e| Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: format!("Failed to fetch GitHub user: {}", e),
-    })?;
+    url: &str,
+    context_label: &str,
+    transform: F,
+) -> Result<T>
+where
+    F: FnOnce(GitHubUser) -> T,
+{
+    let response = build_github_request(client, url)
+        .send()
+        .await
+        .map_err(|e| Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: format!("Failed to fetch GitHub user: {}", e),
+        })?;
 
     let status = response.status();
     if !status.is_success() {
         return Err(Error::Verify {
             rule: "V-GITHUB-API".to_string(),
             message: format!(
-                "GitHub user not found for account id '{}' (status: {})",
-                account_id, status
+                "GitHub user not found for {} (status: {})",
+                context_label, status
             ),
         });
     }
@@ -73,20 +91,46 @@ pub(super) async fn fetch_github_user_by_id(
         message: format!("Failed to parse GitHub user response: {}", e),
     })?;
 
-    Ok((user.id, user.login))
+    Ok(transform(user))
+}
+
+/// Resolve a GitHub account id to `(id, current_login)` via REST API.
+pub(crate) async fn fetch_github_user_by_id(
+    client: &reqwest::Client,
+    account_id: u64,
+) -> Result<(u64, String)> {
+    let url = format!("https://api.github.com/user/{}", account_id);
+    let label = format!("account id '{}'", account_id);
+    fetch_github_user_api(client, &url, &label, |u| (u.id, u.login)).await
+}
+
+/// Fetch a GitHub user by login via REST API (GET /users/{login}).
+pub(crate) async fn fetch_github_user_by_login(
+    client: &reqwest::Client,
+    login: &str,
+) -> Result<GithubAccount> {
+    let url = format!("https://api.github.com/users/{}", login);
+    let label = format!("login '{}'", login);
+    fetch_github_user_api(client, &url, &label, |u| GithubAccount {
+        id: u.id,
+        login: u.login,
+    })
+    .await
 }
 
 /// Fetch SSH keys from GitHub REST API (GET /users/{login}/keys).
-pub(super) async fn fetch_github_keys(
+pub(crate) async fn fetch_github_keys(
     client: &reqwest::Client,
     login: &str,
 ) -> Result<Vec<GitHubKeyRecord>> {
     let url = format!("https://api.github.com/users/{}/keys", login);
-    let request = build_github_request(client, &url);
-    let response = request.send().await.map_err(|e| Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: format!("Failed to fetch GitHub keys: {}", e),
-    })?;
+    let response = build_github_request(client, &url)
+        .send()
+        .await
+        .map_err(|e| Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: format!("Failed to fetch GitHub keys: {}", e),
+        })?;
     parse_github_keys(response).await
 }
 
@@ -110,38 +154,4 @@ async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyR
             key: key.key,
         })
         .collect())
-}
-
-/// Fetch a GitHub user by login via REST API (GET /users/{login}).
-pub(crate) async fn fetch_github_user_by_login(
-    client: &reqwest::Client,
-    login: &str,
-) -> Result<GithubAccount> {
-    let url = format!("https://api.github.com/users/{}", login);
-    let request = build_github_request(client, &url);
-    let response = request.send().await.map_err(|e| Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: format!("Failed to fetch GitHub user: {}", e),
-    })?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(Error::Verify {
-            rule: "V-GITHUB-API".to_string(),
-            message: format!(
-                "GitHub user not found for login '{}' (status: {})",
-                login, status
-            ),
-        });
-    }
-
-    let user: GitHubUser = response.json().await.map_err(|e| Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: format!("Failed to parse GitHub user response: {}", e),
-    })?;
-
-    Ok(GithubAccount {
-        id: user.id,
-        login: user.login,
-    })
 }

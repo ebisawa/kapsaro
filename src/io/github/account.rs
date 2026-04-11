@@ -3,7 +3,7 @@
 
 //! GitHub account lookup helpers for key generation.
 
-use crate::io::verify_online::github::http::{build_http_client, fetch_github_user_by_login};
+use super::http::{build_http_client, fetch_github_user_by_login};
 use crate::model::public_key::GithubAccount;
 use crate::Result;
 use std::future::Future;

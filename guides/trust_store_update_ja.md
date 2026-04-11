@@ -118,15 +118,15 @@ secretenv member verify --approve alice@example.com bob@example.com
 4. 対話的な承認確認
 
 承認すると `known_keys` に記録され、以降の読み書きで同じ `kid` への再確認は不要になります。
+すでに `known_keys` に存在する鍵は、このコマンドの結果には表示されません。
 
 出力例:
 
 ```
 ✓ approved alice@example.com
 ✓ approved bob@example.com
-- already known charlie@example.com
 
-Approved 2/3 members
+Approved 2/2 members
 ```
 
 ### 5.2 trust store の状態を確認する

@@ -4,7 +4,10 @@
 //! Integration tests for member list/show/remove/add commands
 
 use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
-use crate::test_utils::setup_test_workspace;
+use crate::test_utils::{
+    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
+    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
@@ -158,10 +161,39 @@ fn test_member_show_displays_public_key() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Member:"))
-        .stdout(predicate::str::contains(TEST_MEMBER_ID))
-        .stdout(predicate::str::contains("Key ID:"))
-        .stdout(predicate::str::contains("Format:"));
+        .stdout(predicate::str::contains(format!(
+            "\u{25CF} {}",
+            TEST_MEMBER_ID
+        )))
+        .stdout(predicate::str::contains("\nStatus\n"))
+        .stdout(predicate::str::contains("  Membership  :"))
+        .stdout(predicate::str::contains("  Verification:"))
+        .stdout(predicate::str::contains("\nKey  "))
+        .stdout(predicate::str::contains("  Algorithm   :"))
+        .stdout(predicate::str::contains("\nSSH Attestation\n"))
+        .stdout(predicate::str::contains("  Fingerprint : SHA256:"))
+        .stdout(predicate::str::contains("\nIdentity\n").not())
+        .stdout(predicate::str::contains("Public Key").not());
+}
+
+#[test]
+fn test_member_show_reports_verification_warning() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[TEST_MEMBER_ID]);
+    update_active_private_key_expires_at(temp_dir.path(), TEST_MEMBER_ID, "2020-01-01T00:00:00Z");
+    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, TEST_MEMBER_ID).unwrap();
+
+    cmd()
+        .arg("member")
+        .arg("show")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Verification: expired"))
+        .stderr(predicate::str::contains("has expired"));
 }
 
 #[test]
@@ -258,6 +290,67 @@ fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"))
         .stderr(predicate::str::contains("Specify --member-id").not());
+}
+
+#[test]
+fn test_member_verify_approve_hides_already_known_results() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    cmd()
+        .arg("member")
+        .arg("verify")
+        .arg("--approve")
+        .arg(BOB_MEMBER_ID)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("No members require approval"))
+        .stderr(predicate::str::contains(BOB_MEMBER_ID).not())
+        .stderr(predicate::str::contains("already known").not())
+        .stderr(predicate::str::contains("Approved ").not());
+}
+
+#[test]
+fn test_member_verify_approve_json_skips_already_known_results() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    let assert = cmd()
+        .arg("member")
+        .arg("verify")
+        .arg("--approve")
+        .arg(BOB_MEMBER_ID)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--json")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let json_start = stdout
+        .find('{')
+        .expect("member verify --approve --json should include JSON object");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout[json_start..])
+        .expect("member verify --approve --json should output JSON");
+
+    assert_eq!(parsed["results"], serde_json::json!([]));
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        !stderr.contains(BOB_MEMBER_ID),
+        "unexpected stderr: {}",
+        stderr
+    );
 }
 
 // ============================================================================

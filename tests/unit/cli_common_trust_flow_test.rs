@@ -68,3 +68,44 @@ fn test_build_member_approval_results_view_preserves_review_candidate() {
         result.github_login
     );
 }
+
+#[test]
+fn test_build_member_approval_results_view_skips_already_known_results() {
+    let known_result = MemberApprovalResult {
+        member_id: "alice@example.com".to_string(),
+        kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
+        verified: true,
+        approved: false,
+        review_required: false,
+        already_known: true,
+        message: "verified".to_string(),
+        fingerprint: Some("SHA256:known".to_string()),
+        github_id: Some(42),
+        github_login: Some("alice-gh".to_string()),
+        github_binding_configured: true,
+        attestor_pub: Some("ssh-ed25519 AAAA known".to_string()),
+        verified_github: None,
+    };
+    let new_result = MemberApprovalResult {
+        member_id: "bob@example.com".to_string(),
+        kid: "B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2".to_string(),
+        verified: true,
+        approved: false,
+        review_required: true,
+        already_known: false,
+        message: "verified".to_string(),
+        fingerprint: Some("SHA256:new".to_string()),
+        github_id: Some(7),
+        github_login: Some("bob-gh".to_string()),
+        github_binding_configured: true,
+        attestor_pub: Some("ssh-ed25519 AAAA new".to_string()),
+        verified_github: None,
+    };
+
+    let results = [known_result, new_result];
+    let view = build_member_approval_results_view(&results);
+
+    assert_eq!(view.results.len(), 1);
+    assert_eq!(view.results[0].member_id, "bob@example.com");
+    assert!(!view.results[0].already_known);
+}

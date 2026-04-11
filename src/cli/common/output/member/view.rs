@@ -26,15 +26,10 @@ pub(crate) struct MemberGithubClaimView<'a> {
 pub(crate) struct MemberShowView<'a> {
     pub(crate) member_id: &'a str,
     pub(crate) kid: &'a str,
-    pub(crate) format: &'a str,
     pub(crate) expires_at: &'a str,
     pub(crate) created_at: Option<&'a str>,
-    pub(crate) kem_key_type: &'a str,
-    pub(crate) kem_curve: &'a str,
-    pub(crate) sig_key_type: &'a str,
-    pub(crate) sig_curve: &'a str,
-    pub(crate) ssh_attestation_method: &'a str,
-    pub(crate) ssh_attestation_pubkey: &'a str,
+    pub(crate) algorithm: String,
+    pub(crate) ssh_fingerprint: &'a str,
     pub(crate) github_claim: Option<MemberGithubClaimView<'a>>,
     pub(crate) verification_status: &'a str,
     pub(crate) membership_status: &'a str,
@@ -96,18 +91,14 @@ pub(crate) fn build_member_list_view(result: &MemberListResult) -> MemberListVie
 }
 
 pub(crate) fn build_member_show_view(result: &MemberShowResult) -> MemberShowView<'_> {
+    let algorithm = format!("{} + {}", result.member.kem_curve, result.member.sig_curve);
     MemberShowView {
         member_id: &result.member.member_id,
         kid: &result.member.kid,
-        format: &result.member.format,
         expires_at: &result.member.expires_at,
         created_at: result.member.created_at.as_deref(),
-        kem_key_type: &result.member.kem_key_type,
-        kem_curve: &result.member.kem_curve,
-        sig_key_type: &result.member.sig_key_type,
-        sig_curve: &result.member.sig_curve,
-        ssh_attestation_method: &result.member.ssh_attestation_method,
-        ssh_attestation_pubkey: &result.member.ssh_attestation_pubkey,
+        algorithm,
+        ssh_fingerprint: &result.member.ssh_attestation_fingerprint,
         github_claim: result
             .member
             .github_claim
@@ -146,6 +137,7 @@ pub(crate) fn build_member_approval_results_view(
     MemberApprovalResultsView {
         results: results
             .iter()
+            .filter(|result| !result.already_known)
             .map(|result| MemberApprovalItemView {
                 member_id: &result.member_id,
                 kid: &result.kid,

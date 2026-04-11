@@ -19,7 +19,7 @@ use crate::cli::common::output::json::member::{
 };
 use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::text::member::{
-    print_empty_member_list as print_empty_member_list_text,
+    print_empty_member_approval_results, print_empty_member_list as print_empty_member_list_text,
     print_empty_member_verification_results,
     print_member_approval_results as print_member_approval_results_text, print_member_sections,
     print_member_show as print_member_show_text,
@@ -55,7 +55,7 @@ pub(crate) fn print_member_approval_results(
         json_output,
         view.results.is_empty(),
         || print_member_approval_results_json(&view),
-        print_empty_member_verification_results,
+        print_empty_member_approval_results,
         || print_member_approval_results_json(&view),
         || print_member_approval_results_text(&view),
     )

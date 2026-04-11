@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::errors::serialize_to_json_value;
+use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::model::public_key::PublicKey;
 use crate::Result;
 
@@ -27,18 +28,17 @@ pub(crate) fn build_member_document_view(
         MemberDocumentStatus::Expired
     };
 
+    let ssh_attestation_fingerprint =
+        build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_)?;
+
     Ok(MemberDocumentView {
         member_id: public_key.protected.member_id.clone(),
         kid: public_key.protected.kid.clone(),
-        format: public_key.protected.format.clone(),
         expires_at: public_key.protected.expires_at.clone(),
         created_at: public_key.protected.created_at.clone(),
-        kem_key_type: public_key.protected.identity.keys.kem.kty.clone(),
         kem_curve: public_key.protected.identity.keys.kem.crv.clone(),
-        sig_key_type: public_key.protected.identity.keys.sig.kty.clone(),
         sig_curve: public_key.protected.identity.keys.sig.crv.clone(),
-        ssh_attestation_method: public_key.protected.identity.attestation.method.clone(),
-        ssh_attestation_pubkey: public_key.protected.identity.attestation.pub_.clone(),
+        ssh_attestation_fingerprint,
         github_claim: public_key
             .protected
             .binding_claims

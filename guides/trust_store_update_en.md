@@ -118,15 +118,15 @@ This command performs the following for each member:
 4. Interactive approval confirmation
 
 Once approved, the key is recorded in `known_keys`, and no re-confirmation is needed for the same `kid` in subsequent read/write operations.
+Keys that already exist in `known_keys` are not shown in this command's results.
 
 Example output:
 
 ```
 ✓ approved alice@example.com
 ✓ approved bob@example.com
-- already known charlie@example.com
 
-Approved 2/3 members
+Approved 2/2 members
 ```
 
 ### 5.2 Check the trust store state

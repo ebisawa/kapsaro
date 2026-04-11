@@ -101,8 +101,8 @@ secretenv run -- ./my-app
 
 Local Trust Store について知りたい場合:
 
-- [Local Trust Store の導入（日本語）](guides/trust_store_update_ja.md)
 - [Local Trust Store Update (English)](guides/trust_store_update_en.md)
+- [Local Trust Store Update (Japanese)](guides/trust_store_update_ja.md)
 
 ## Status
 

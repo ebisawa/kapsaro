@@ -55,7 +55,7 @@ fn test_encrypt_file() {
         &create_test_private_key(&sk, &pk),
         ALICE_MEMBER_ID,
         signer_kid,
-        "sha256:test",
+        "SHA256:test",
     );
     let decrypted = decrypt_file_document(
         &verified_doc,
@@ -107,7 +107,7 @@ fn test_defence_in_depth_sid_mismatch() {
         &create_test_private_key(&sk, &pk),
         ALICE_MEMBER_ID,
         signer_kid,
-        "sha256:test",
+        "SHA256:test",
     );
     let result = decrypt_file_document(
         &verified_doc,

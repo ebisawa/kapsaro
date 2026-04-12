@@ -80,7 +80,7 @@ fn test_validate_private_key_basic() {
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
-                "fpr": "sha256:abcdef1234567890",
+                "fpr": "SHA256:abcdef1234567890",
                 "salt": "AAAAAAAAAAAAAAAAAAAAAA",
                 "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
             },

@@ -87,7 +87,7 @@ fn test_debug_hpke_single_recipient() {
         &private,
         ALICE_MEMBER_ID,
         &public.protected.kid,
-        "sha256:test",
+        "SHA256:test",
     );
     match decrypt_kv_document(
         &verified_doc,

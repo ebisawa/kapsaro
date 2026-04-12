@@ -34,7 +34,7 @@ fn test_save_and_load_private_key() {
             member_id: member_id.to_string(),
             kid: kid.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
-                fpr: "sha256:TEST123".to_string(),
+                fpr: "SHA256:TEST123".to_string(),
                 salt: "c2FsdA".to_string(),
                 aead: secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305.to_string(),
             },

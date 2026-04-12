@@ -137,8 +137,8 @@ fn test_key_new_ssh_protection() {
     match &private_key.protected.alg {
         secretenv::model::private_key::PrivateKeyAlgorithm::SshSig { fpr, salt, aead } => {
             assert!(
-                fpr.starts_with("sha256:") || fpr.starts_with("SHA256:"),
-                "protected.alg.fpr should start with sha256:/SHA256:"
+                fpr.starts_with("SHA256:"),
+                "protected.alg.fpr should start with SHA256:"
             );
             assert_eq!(
                 fpr.len(),

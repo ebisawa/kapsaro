@@ -13,6 +13,7 @@ use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{Salt, XChaChaNonce};
 use crate::feature::key::protection::binding::build_private_key_aad;
 use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use crate::model::identifiers::{alg, format};
 use crate::model::private_key::{
     EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
@@ -100,6 +101,42 @@ pub(super) fn decode_encryption_params(
     Ok((salt, nonce, ct, aad))
 }
 
+fn normalize_fingerprint_prefix(fingerprint: &str) -> String {
+    match fingerprint.get(..7) {
+        Some(prefix) if prefix.eq_ignore_ascii_case("SHA256:") => {
+            format!("SHA256:{}", &fingerprint[7..])
+        }
+        _ => fingerprint.to_string(),
+    }
+}
+
+fn verify_ssh_fingerprint_matches(private_key: &PrivateKey, ssh_pubkey: &str) -> Result<()> {
+    let expected = match &private_key.protected.alg {
+        PrivateKeyAlgorithm::SshSig { fpr, .. } => fpr,
+        _ => {
+            return Err(Error::Crypto {
+                message: "Expected SshSig algorithm for SSH-based decryption".to_string(),
+                source: None,
+            });
+        }
+    };
+    let actual = build_sha256_fingerprint(ssh_pubkey)?;
+    let normalized_expected = normalize_fingerprint_prefix(expected);
+    let normalized_actual = normalize_fingerprint_prefix(&actual);
+
+    if normalized_expected == normalized_actual {
+        return Ok(());
+    }
+
+    Err(Error::Crypto {
+        message: format!(
+            "E_PRIVATE_KEY_DECRYPT_FAILED: SSH public key fingerprint mismatch: expected '{}', got '{}'",
+            expected, actual
+        ),
+        source: None,
+    })
+}
+
 /// Decrypt and deserialize plaintext
 pub(super) fn decrypt_and_deserialize(
     enc_key: &XChaChaKey,
@@ -184,6 +221,8 @@ pub fn decrypt_private_key(
     ssh_pubkey: &str,
     debug: bool,
 ) -> Result<PrivateKeyPlaintext> {
+    verify_ssh_fingerprint_matches(private_key, ssh_pubkey)?;
+
     // Decode encryption parameters
     let (salt, nonce, ct, aad) = decode_encryption_params(private_key)?;
 

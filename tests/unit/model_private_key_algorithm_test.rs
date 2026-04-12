@@ -10,14 +10,14 @@ use secretenv::model::private_key::*;
 #[test]
 fn test_sshsig_variant_roundtrip() {
     let alg = PrivateKeyAlgorithm::SshSig {
-        fpr: "sha256:ABCDEFGH123456789".to_string(),
+        fpr: "SHA256:ABCDEFGH123456789".to_string(),
         salt: "c2FsdA".to_string(),
         aead: AEAD_XCHACHA20_POLY1305.to_string(),
     };
 
     let json = serde_json::to_value(&alg).expect("serialize");
     assert_eq!(json["kdf"], PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256);
-    assert_eq!(json["fpr"], "sha256:ABCDEFGH123456789");
+    assert_eq!(json["fpr"], "SHA256:ABCDEFGH123456789");
     assert_eq!(json["salt"], "c2FsdA");
     assert_eq!(json["aead"], AEAD_XCHACHA20_POLY1305);
 
@@ -76,7 +76,7 @@ fn test_existing_private_key_document_roundtrip() {
             member_id: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
-                fpr: "sha256:ABCDEFGH123456789".to_string(),
+                fpr: "SHA256:ABCDEFGH123456789".to_string(),
                 salt: "c2FsdA".to_string(),
                 aead: AEAD_XCHACHA20_POLY1305.to_string(),
             },

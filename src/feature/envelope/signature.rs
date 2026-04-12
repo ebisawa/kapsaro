@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Envelope signature orchestration.
+//! Envelope artifact signature orchestration.
 
-use crate::crypto::sign::{sign_bytes, verify_bytes};
+use crate::crypto::sign::{sign_artifact_bytes, verify_artifact_bytes};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
 use crate::format::file::build_file_signature_bytes;
@@ -14,7 +14,7 @@ use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::identifiers::alg;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
-use crate::model::signature::Signature;
+use crate::model::signature::ArtifactSignature;
 use crate::support::kid::build_kid_display;
 use crate::Result;
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -76,17 +76,20 @@ pub fn sign_file_document(
     signer_kid: &str,
     signer_pub: PublicKey,
     debug: bool,
-) -> Result<Signature> {
+) -> Result<ArtifactSignature> {
     if debug {
         let kid_display = build_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
-        debug!("[CRYPTO] Ed25519: sign_bytes (kid: {})", kid_display);
+        debug!(
+            "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
+            kid_display
+        );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
-    sign_bytes(
+    sign_artifact_bytes(
         &canonical_bytes,
         signing_key,
         signer_kid,
-        Some(signer_pub),
+        signer_pub,
         alg::SIGNATURE_ED25519,
     )
 }
@@ -94,16 +97,19 @@ pub fn sign_file_document(
 pub fn verify_file_signature(
     protected: &FileEncDocumentProtected,
     verifying_key: &VerifyingKey,
-    signature: &Signature,
+    signature: &ArtifactSignature,
     debug: bool,
 ) -> Result<()> {
     if debug {
         let kid_display =
             build_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
-        debug!("[VERIFY] Ed25519: verify_bytes (kid: {})", kid_display);
+        debug!(
+            "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
+            kid_display
+        );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
-    verify_bytes(
+    verify_artifact_bytes(
         &canonical_bytes,
         verifying_key,
         signature,
@@ -139,13 +145,16 @@ pub(crate) fn sign_and_append_kv_sig(
 ) -> Result<String> {
     if debug {
         let kid_display = build_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
-        debug!("[CRYPTO] Ed25519: sign_bytes (kid: {})", kid_display);
+        debug!(
+            "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
+            kid_display
+        );
     }
-    let signature = sign_bytes(
+    let signature = sign_artifact_bytes(
         unsigned.as_bytes(),
         signing_key,
         signer_kid,
-        Some(signer_pub),
+        signer_pub,
         alg::SIGNATURE_ED25519,
     )?;
     let sig_token =
@@ -156,16 +165,19 @@ pub(crate) fn sign_and_append_kv_sig(
 pub fn verify_kv_signature(
     document: &KvEncDocument,
     verifying_key: &VerifyingKey,
-    signature: &Signature,
+    signature: &ArtifactSignature,
     debug: bool,
 ) -> Result<()> {
     if debug {
         let kid_display =
             build_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
-        debug!("[VERIFY] Ed25519: verify_bytes (kid: {})", kid_display);
+        debug!(
+            "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
+            kid_display
+        );
     }
     let canonical_bytes = build_canonical_bytes(document.lines());
-    verify_bytes(
+    verify_artifact_bytes(
         &canonical_bytes,
         verifying_key,
         signature,

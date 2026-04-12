@@ -3,9 +3,9 @@
 
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::KvEncLine;
-use crate::model::signature::Signature;
+use crate::model::signature::ArtifactSignature;
 
-pub type KvFileSignature = Signature;
+pub type KvFileSignature = ArtifactSignature;
 
 #[derive(Debug, Clone)]
 pub struct KvEncDocument {

@@ -10,8 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 
-use super::signature::Signature;
-
 /// Local Trust Store top-level structure
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -19,7 +17,21 @@ pub struct TrustStoreDocument {
     /// Protected content (signature target)
     pub protected: TrustStoreProtected,
     /// Signature over protected object
-    pub signature: Signature,
+    pub signature: TrustStoreSignature,
+}
+
+/// Trust Store signature structure.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TrustStoreSignature {
+    /// Signature algorithm: "eddsa-ed25519"
+    pub alg: String,
+
+    /// Signer key statement ID in canonical Crockford Base32 form
+    pub kid: String,
+
+    /// Signature bytes (base64url, no padding)
+    pub sig: String,
 }
 
 /// Trust Store protected object (signature target)

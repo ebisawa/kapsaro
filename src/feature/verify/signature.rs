@@ -3,14 +3,14 @@
 
 //! Shared helpers for signed document verification.
 
-use crate::model::signature::Signature;
+use crate::model::signature::ArtifactSignature;
 use crate::model::verification::SignatureVerificationProof;
 use crate::Result;
 
 use super::key_loader::{load_verifying_key_from_signature, LoadedVerifyingKey};
 
 pub(crate) fn verify_signature_with_loaded_key<Verify>(
-    signature: &Signature,
+    signature: &ArtifactSignature,
     debug: bool,
     verify: Verify,
 ) -> Result<SignatureVerificationProof>
@@ -23,7 +23,7 @@ where
 }
 
 fn build_signature_verification_proof(
-    signature: &Signature,
+    signature: &ArtifactSignature,
     loaded: LoadedVerifyingKey,
 ) -> SignatureVerificationProof {
     SignatureVerificationProof::new_with_signer_public_key(

@@ -3,7 +3,7 @@
 
 //! Public key document builders used during key generation.
 
-use crate::crypto::sign::sign_bytes;
+use crate::crypto::sign::sign_detached_bytes;
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
@@ -77,16 +77,12 @@ pub fn build_public_key(params: &PublicKeyBuildParams<'_>) -> Result<PublicKey> 
     let protected_jcs = jcs::normalize(&protected)?;
     if params.debug {
         let kid_display = build_kid_display(&derived_kid).unwrap_or_else(|_| derived_kid.clone());
-        debug!("[CRYPTO] Ed25519: sign_bytes (kid: {})", kid_display);
+        debug!(
+            "[CRYPTO] Ed25519: sign_detached_bytes (kid: {})",
+            kid_display
+        );
     }
-    let signature_obj = sign_bytes(
-        &protected_jcs,
-        params.sig_sk,
-        &derived_kid,
-        None,
-        alg::SIGNATURE_ED25519,
-    )?;
-    let signature = signature_obj.sig;
+    let signature = sign_detached_bytes(&protected_jcs, params.sig_sk, alg::SIGNATURE_ED25519)?;
 
     Ok(PublicKey {
         protected,

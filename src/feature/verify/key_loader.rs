@@ -4,7 +4,7 @@
 //! Key loading for signature verification.
 
 use crate::model::public_key::PublicKey;
-use crate::model::signature::Signature;
+use crate::model::signature::ArtifactSignature;
 use crate::model::verification::VerifyingKeySource;
 use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::support::kid::kid_display_lossy;
@@ -26,21 +26,16 @@ pub struct LoadedVerifyingKey {
 /// Load verifying key from signature's embedded signer_pub.
 ///
 /// Expired keys are allowed for verification but generate a warning.
-/// If signer_pub is missing, fails with E_SIGNER_PUB_MISSING.
 pub fn load_verifying_key_from_signature(
-    signature: &Signature,
+    signature: &ArtifactSignature,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {
-    let signer_pub = signature.signer_pub.as_ref().ok_or_else(|| Error::Verify {
-        rule: "E_SIGNER_PUB_MISSING".to_string(),
-        message: "Required signer_pub is missing from signature".to_string(),
-    })?;
-    load_from_signer_pub(signature, signer_pub, debug)
+    load_from_signer_pub(signature, &signature.signer_pub, debug)
 }
 
 /// Load verifying key from embedded signer_pub.
 fn load_from_signer_pub(
-    signature: &Signature,
+    signature: &ArtifactSignature,
     signer_pub: &PublicKey,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {

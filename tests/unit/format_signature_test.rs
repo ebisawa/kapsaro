@@ -79,7 +79,7 @@ fn test_sign_file_document_returns_valid_structure() {
         secretenv::model::identifiers::alg::SIGNATURE_ED25519
     );
     assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    assert!(sig.signer_pub.is_some());
+    assert_eq!(sig.signer_pub.protected.member_id, "signer@test");
     assert!(!sig.sig.is_empty());
 }
 

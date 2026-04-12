@@ -6,7 +6,7 @@ use crate::app::context::ssh::{
 };
 use crate::test_utils::create_temp_ssh_keypair_in_dir;
 use secretenv::config::types::SshSigner;
-use secretenv::crypto::sign::sign_bytes;
+use secretenv::crypto::sign::sign_detached_bytes;
 use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
 use secretenv::feature::verify::public_key::verify_public_key_with_attestation;
 use secretenv::format::jcs;
@@ -86,15 +86,8 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
 
     public_key.protected.kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string();
     let protected_jcs = jcs::normalize(&public_key.protected).unwrap();
-    public_key.signature = sign_bytes(
-        &protected_jcs,
-        &signing_key,
-        &public_key.protected.kid,
-        None,
-        alg::SIGNATURE_ED25519,
-    )
-    .unwrap()
-    .sig;
+    public_key.signature =
+        sign_detached_bytes(&protected_jcs, &signing_key, alg::SIGNATURE_ED25519).unwrap();
 
     let error = verify_public_key_with_attestation(&public_key, false)
         .unwrap_err()

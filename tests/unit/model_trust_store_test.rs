@@ -4,10 +4,9 @@
 //! Unit tests for TrustStoreDocument model
 
 use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
-use secretenv::model::signature::Signature;
 use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
-    TrustStoreProtected,
+    TrustStoreProtected, TrustStoreSignature,
 };
 use std::collections::BTreeMap;
 
@@ -34,10 +33,9 @@ fn build_test_document() -> TrustStoreDocument {
                 "bob@example.com",
             )],
         },
-        signature: Signature {
+        signature: TrustStoreSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
-            signer_pub: None,
             sig: "signature_base64url".to_string(),
         },
     }
@@ -141,10 +139,9 @@ fn test_trust_store_empty_known_keys() {
             updated_at: "2026-03-29T12:34:56Z".to_string(),
             known_keys: vec![],
         },
-        signature: Signature {
+        signature: TrustStoreSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
-            signer_pub: None,
             sig: "signature_base64url".to_string(),
         },
     };
@@ -169,6 +166,28 @@ fn test_trust_store_protected_rejects_unknown_fields() {
         "signature": {
             "alg": "eddsa-ed25519",
             "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "sig": "test"
+        }
+    }"#;
+
+    let result = serde_json::from_str::<TrustStoreDocument>(json);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_trust_store_signature_rejects_signer_pub() {
+    let json = r#"{
+        "protected": {
+            "format": "secretenv.trust.local@2",
+            "owner_member_id": "alice@example.com",
+            "created_at": "2026-03-29T12:34:56Z",
+            "updated_at": "2026-03-29T12:34:56Z",
+            "known_keys": []
+        },
+        "signature": {
+            "alg": "eddsa-ed25519",
+            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "signer_pub": {},
             "sig": "test"
         }
     }"#;

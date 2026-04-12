@@ -93,6 +93,5 @@ fn test_sign_trust_store_produces_valid_document() {
     let doc = sign_trust_store(&protected, &signing_key, &kid).unwrap();
     assert_eq!(doc.protected.format, TRUST_LOCAL_V2);
     assert_eq!(doc.signature.kid, kid);
-    assert!(doc.signature.signer_pub.is_none());
     assert!(!doc.signature.sig.is_empty());
 }

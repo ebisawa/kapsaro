@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Common signature structure for signed document formats
+//! Artifact signature structure for signed encrypted document formats
 //!
-//! Unified signature format used by both file-enc and kv-enc.
+//! Unified signature format used by file-enc and kv-enc.
 //!
 //! # Security
 //!
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::public_key::PublicKey;
 
-/// Unified signature structure
+/// Artifact signature structure
 ///
 /// Used by both file-enc `signature` field and kv-enc `SIG` line.
 /// Simplified format without msg_hash or version fields.
@@ -24,7 +24,7 @@ use crate::model::public_key::PublicKey;
 ///
 /// - `alg`: Signature algorithm, always "eddsa-ed25519"
 /// - `kid`: signer key statement ID in canonical Crockford Base32 form
-/// - `signer_pub`: Optional PublicKey document for self-contained verification
+/// - `signer_pub`: Required PublicKey document for self-contained verification
 /// - `sig`: Ed25519 signature in base64url encoding (no padding)
 ///
 /// # Example JSON
@@ -39,16 +39,15 @@ use crate::model::public_key::PublicKey;
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct Signature {
+pub struct ArtifactSignature {
     /// Signature algorithm: "eddsa-ed25519"
     pub alg: String,
 
     /// Signer key statement ID in canonical Crockford Base32 form
     pub kid: String,
 
-    /// Signer's PublicKey document (optional, for self-contained verification)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub signer_pub: Option<PublicKey>,
+    /// Signer's PublicKey document required for self-contained verification
+    pub signer_pub: PublicKey,
 
     /// Signature bytes (base64url, no padding)
     pub sig: String,

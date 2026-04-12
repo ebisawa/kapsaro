@@ -119,7 +119,7 @@ impl Validator {
         self.validate_generic(doc)
     }
 
-    pub fn validate_signature(&self, doc: &Value) -> Result<()> {
+    pub fn validate_artifact_signature(&self, doc: &Value) -> Result<()> {
         self.validate_generic(doc)
     }
 

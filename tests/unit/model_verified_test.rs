@@ -3,6 +3,7 @@
 
 //! Tests for Verified document types
 
+use crate::keygen_helpers::make_dummy_public_key;
 use secretenv::model::file_enc::FileEncDocument;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
@@ -31,10 +32,10 @@ fn test_verified_new() {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         },
-        signature: secretenv::model::signature::Signature {
+        signature: secretenv::model::signature::ArtifactSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "test".to_string(),
         },
     };
@@ -76,10 +77,10 @@ fn test_verified_map() {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         },
-        signature: secretenv::model::signature::Signature {
+        signature: secretenv::model::signature::ArtifactSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "test".to_string(),
         },
     };
@@ -123,10 +124,10 @@ fn test_verified_into_inner() {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         },
-        signature: secretenv::model::signature::Signature {
+        signature: secretenv::model::signature::ArtifactSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "test".to_string(),
         },
     };

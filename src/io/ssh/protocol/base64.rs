@@ -4,8 +4,8 @@
 //! Base64 processing utilities for SSH formats
 
 use crate::io::ssh::SshError;
+use crate::support::codec::base64_public::decode_base64_standard;
 use crate::Result;
-use base64::{engine::general_purpose::STANDARD, Engine};
 
 /// Decode base64 content from armored format (skips BEGIN/END markers)
 ///
@@ -28,7 +28,7 @@ pub fn decode_base64_armored(armored: &str) -> Result<Vec<u8>> {
     let b64 = lines.join("");
 
     // Decode base64
-    STANDARD.decode(&b64).map_err(|e| {
+    decode_base64_standard(&b64, "armored base64").map_err(|e| {
         SshError::operation_failed_with_source(format!("Base64 decode failed: {}", e), e).into()
     })
 }

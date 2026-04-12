@@ -215,8 +215,8 @@ pub mod ssh_test;
 pub mod ssh_verify_test;
 #[path = "unit/sshsig_format_test.rs"]
 pub mod sshsig_format_test;
-#[path = "unit/support_base64url_test.rs"]
-pub mod support_base64url_test;
+#[path = "unit/support_codec_base64_test.rs"]
+pub mod support_codec_base64_test;
 #[path = "unit/support_fs_atomic_error_test.rs"]
 pub mod support_fs_atomic_error_test;
 #[path = "unit/support_fs_atomic_test.rs"]

@@ -9,7 +9,7 @@ use crate::model::identifiers::{alg, format};
 use crate::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use crate::support::base64url::b64_encode;
+use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::{Error, Result};
 
 /// Build protected header for password-based PrivateKey encryption
@@ -25,7 +25,7 @@ fn build_protected_header(
         member_id: member_id.to_string(),
         kid: kid.to_string(),
         alg: PrivateKeyAlgorithm::Argon2id {
-            salt: b64_encode(salt.as_bytes()),
+            salt: encode_base64url_nopad(salt.as_bytes()),
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: created_at.to_string(),

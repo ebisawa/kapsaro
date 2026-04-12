@@ -211,15 +211,6 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-impl From<base64::DecodeError> for Error {
-    fn from(err: base64::DecodeError) -> Self {
-        Error::Parse {
-            message: format!("Base64 decode error: {}", err),
-            source: Some(Box::new(err)),
-        }
-    }
-}
-
 impl From<crate::crypto::CryptoError> for Error {
     fn from(err: crate::crypto::CryptoError) -> Self {
         match err {

@@ -5,7 +5,7 @@
 
 use crate::format::token::TokenCodec;
 use crate::format::FormatError;
-use crate::support::base64url::b64_decode_token;
+use crate::support::codec::base64_public::decode_base64url_nopad_token;
 use crate::Result;
 
 /// Decode a token's raw bytes.
@@ -23,6 +23,6 @@ pub fn decode_token_bytes(
         .into());
     }
 
-    let data = b64_decode_token(token, "token")?;
+    let data = decode_base64url_nopad_token(token, "token")?;
     Ok((data, TokenCodec::JsonJcs))
 }

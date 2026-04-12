@@ -17,7 +17,9 @@ use crate::model::identifiers::{alg, format};
 use crate::model::private_key::{
     EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use crate::support::base64url::{b64_decode_array, b64_decode_ciphertext, b64_encode};
+use crate::support::codec::base64_public::{
+    decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
+};
 use crate::support::kid::kid_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
@@ -37,7 +39,7 @@ fn build_protected_header(
         kid: kid.clone(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: ssh_fpr.clone(),
-            salt: b64_encode(salt.as_bytes()),
+            salt: encode_base64url_nopad(salt.as_bytes()),
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: created_at.clone(),
@@ -72,8 +74,8 @@ pub(super) fn serialize_and_encrypt(
     let (ct, nonce) = xchacha::encrypt_with_nonce(enc_key, &plaintext, &aad)?;
 
     Ok(EncryptedData {
-        nonce: b64_encode(nonce.as_bytes()),
-        ct: b64_encode(ct.as_bytes()),
+        nonce: encode_base64url_nopad(nonce.as_bytes()),
+        ct: encode_base64url_nopad(ct.as_bytes()),
     })
 }
 
@@ -82,13 +84,15 @@ pub(super) fn decode_encryption_params(
     private_key: &PrivateKey,
 ) -> Result<(Salt, XChaChaNonce, Ciphertext, Aad)> {
     // Decode salt
-    let salt_bytes: [u8; 16] = b64_decode_array(private_key.protected.alg.salt(), "salt")?;
+    let salt_bytes: [u8; 16] =
+        decode_base64url_nopad_array(private_key.protected.alg.salt(), "salt")?;
     let salt = Salt::new(salt_bytes);
 
     // Decode nonce and ciphertext
-    let nonce_bytes: [u8; 24] = b64_decode_array(&private_key.encrypted.nonce, "nonce")?;
+    let nonce_bytes: [u8; 24] =
+        decode_base64url_nopad_array(&private_key.encrypted.nonce, "nonce")?;
     let nonce = XChaChaNonce::new(nonce_bytes);
-    let ct = b64_decode_ciphertext(&private_key.encrypted.ct, "ct")?;
+    let ct = decode_base64url_nopad_ciphertext(&private_key.encrypted.ct, "ct")?;
 
     // Build AAD from protected header
     let aad = build_private_key_aad(&private_key.protected)?;

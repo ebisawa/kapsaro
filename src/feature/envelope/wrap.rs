@@ -10,7 +10,7 @@ use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info
 use crate::model::common::WrapItem;
 use crate::model::identifiers::hpke;
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::support::base64url::{b64_decode_array, b64_encode};
+use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::support::kid::kid_display_lossy;
 use crate::support::limits::validate_wrap_count;
 use crate::Result;
@@ -51,7 +51,7 @@ pub fn build_wrap_item(
     let public_key = member.document();
     let info = info_builder(sid, &public_key.protected.kid)?;
     let kem_pk_bytes: [u8; 32] =
-        b64_decode_array(&public_key.protected.identity.keys.kem.x, "KEM public key")?;
+        decode_base64url_nopad_array(&public_key.protected.identity.keys.kem.x, "KEM public key")?;
     let kem_pk = X25519PublicKey::from_bytes(kem_pk_bytes);
 
     if debug {
@@ -71,8 +71,8 @@ pub fn build_wrap_item(
         rid: public_key.protected.member_id.clone(),
         kid: public_key.protected.kid.clone(),
         alg: ALG_HPKE_32_1_3.to_string(),
-        enc: b64_encode(enc.as_bytes()),
-        ct: b64_encode(ct.as_bytes()),
+        enc: encode_base64url_nopad(enc.as_bytes()),
+        ct: encode_base64url_nopad(ct.as_bytes()),
     })
 }
 

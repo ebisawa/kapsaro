@@ -6,15 +6,13 @@
 //! Loads private keys from SECRETENV_PRIVATE_KEY environment variable,
 //! decrypts using SECRETENV_KEY_PASSWORD, and validates the key material.
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
-
 use crate::feature::context::crypto::validate_and_wrap_private_key_password;
 use crate::feature::key::protection::password_encryption::decrypt_private_key_with_password;
 use crate::format::schema::document::parse_private_key_bytes;
 use crate::model::identity::MemberId;
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
 use crate::model::verified::VerifiedPrivateKey;
+use crate::support::codec::base64_secret::decode_base64url_nopad_secret_bytes;
 use crate::support::secret::{SecretBytes, SecretString};
 use crate::{Error, Result};
 
@@ -101,12 +99,7 @@ fn load_env_key_password() -> Result<SecretString> {
 }
 
 fn decode_private_key_env(encoded: &str) -> Result<SecretBytes> {
-    Ok(SecretBytes::new(URL_SAFE_NO_PAD.decode(encoded).map_err(
-        |e| Error::Parse {
-            message: format!("Failed to decode {} as Base64url: {}", ENV_PRIVATE_KEY, e),
-            source: Some(Box::new(e)),
-        },
-    )?))
+    decode_base64url_nopad_secret_bytes(encoded, ENV_PRIVATE_KEY)
 }
 
 fn parse_password_protected_private_key(json_bytes: &[u8]) -> Result<PrivateKey> {

@@ -6,9 +6,10 @@
 use crate::model::identifiers::jwk::{self, CRV_ED25519, CRV_X25519};
 use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use crate::model::public_key::{IdentityKeys, JwkOkpPublicKey};
+use crate::support::codec::base64_public::encode_base64url_nopad;
+use crate::support::codec::base64_secret::encode_base64url_nopad_secret_32;
+use crate::support::secret::SecretArray;
 use crate::Result;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
@@ -45,22 +46,17 @@ pub fn build_identity_keys(
         kem: JwkOkpPublicKey {
             kty: "OKP".to_string(),
             crv: CRV_X25519.to_string(),
-            x: URL_SAFE_NO_PAD.encode(kem_pk.as_bytes()),
+            x: encode_base64url_nopad(kem_pk.as_bytes()),
         },
         sig: JwkOkpPublicKey {
             kty: "OKP".to_string(),
             crv: CRV_ED25519.to_string(),
-            x: URL_SAFE_NO_PAD.encode(sig_pk.as_bytes()),
+            x: encode_base64url_nopad(sig_pk.as_bytes()),
         },
     })
 }
 
 /// Build private key plaintext from keypairs.
-///
-/// Note: base64::encode intermediates are not wrapped in Zeroizing.
-/// Accepted risk: the String is moved directly into JwkOkpPrivateKey
-/// which has #[zeroize(drop)]. A custom encoder would be disproportionate
-/// for 32-byte key material.
 pub fn build_private_key_plaintext(
     kem_sk: &X25519SecretKey,
     kem_pk: &X25519PublicKey,
@@ -72,14 +68,16 @@ pub fn build_private_key_plaintext(
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
                 crv: jwk::CRV_X25519.to_string(),
-                x: URL_SAFE_NO_PAD.encode(kem_pk.as_bytes()),
-                d: URL_SAFE_NO_PAD.encode(kem_sk.as_bytes()),
+                x: encode_base64url_nopad(kem_pk.as_bytes()),
+                d: encode_base64url_nopad_secret_32(&SecretArray::new(*kem_sk.as_bytes()))
+                    .into_plain_string_for_output(),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
                 crv: jwk::CRV_ED25519.to_string(),
-                x: URL_SAFE_NO_PAD.encode(sig_pk.as_bytes()),
-                d: URL_SAFE_NO_PAD.encode(sig_sk.as_bytes()),
+                x: encode_base64url_nopad(sig_pk.as_bytes()),
+                d: encode_base64url_nopad_secret_32(&SecretArray::new(*sig_sk.as_bytes()))
+                    .into_plain_string_for_output(),
             },
         },
     }

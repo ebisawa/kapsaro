@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::helpers::{
-    create_test_private_key, create_test_public_key, decrypt_file_document_for_test,
+    b64url, create_test_private_key, create_test_public_key, decrypt_file_document_for_test,
     generate_ed25519_keypair, generate_x25519_keypair, recipients_and_members,
 };
 use crate::keygen_helpers::make_decrypted_private_key_plaintext;
@@ -16,10 +16,7 @@ use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySou
 #[test]
 fn test_decrypt_file_roundtrip() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let alice =
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
     let alice_priv = create_test_private_key(&sk, &pk);
@@ -53,14 +50,8 @@ fn test_decrypt_file_roundtrip() {
 fn test_decrypt_file_multiple_recipients() {
     let (sk1, pk1) = generate_x25519_keypair([1u8; 32]);
     let (sk2, pk2) = generate_x25519_keypair([2u8; 32]);
-    let pk1_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk1.as_bytes(),
-    );
-    let pk2_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk2.as_bytes(),
-    );
+    let pk1_b64 = b64url(pk1.as_bytes());
+    let pk2_b64 = b64url(pk2.as_bytes());
     let recipients_with_keys = vec![
         (
             ALICE_MEMBER_ID.to_string(),
@@ -112,10 +103,7 @@ fn test_decrypt_file_multiple_recipients() {
 #[test]
 fn test_decrypt_file_empty_content() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -149,10 +137,7 @@ fn test_decrypt_file_empty_content() {
 fn test_decrypt_file_large_content() {
     let content = vec![0xAB; 1024 * 1024];
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -185,10 +170,7 @@ fn test_decrypt_file_large_content() {
 #[test]
 fn test_decrypt_file_wrong_member_id() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -238,10 +220,7 @@ fn test_decrypt_file_wrong_member_id() {
 fn test_decrypt_file_wrong_key() {
     let (_sk1, pk1) = generate_x25519_keypair([1u8; 32]);
     let (sk2, pk2) = generate_x25519_keypair([2u8; 32]);
-    let pk1_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk1.as_bytes(),
-    );
+    let pk1_b64 = b64url(pk1.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(

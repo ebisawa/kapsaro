@@ -105,11 +105,10 @@ fn test_derive_enc_key_info_format() {
 
 #[test]
 fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use base64::Engine;
     use secretenv::model::private_key::{
         IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext,
     };
+    use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
     // Deterministic backend avoids ssh-agent / ssh-keygen and user interaction.
     struct DeterministicBackend;
@@ -123,7 +122,7 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
         }
     }
 
-    let b64 = |data: &[u8]| URL_SAFE_NO_PAD.encode(data);
+    let b64 = |data: &[u8]| encode_base64url_nopad(data);
     let plaintext = PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {

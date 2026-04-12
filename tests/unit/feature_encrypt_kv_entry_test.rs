@@ -27,13 +27,13 @@ fn make_dummy_signer_pub(
     signing_key: &SigningKey,
     kid: &str,
 ) -> secretenv::model::public_key::PublicKey {
-    use base64::Engine;
     use secretenv::model::public_key::{
         Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
     };
+    use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
     let vk = signing_key.verifying_key();
-    let b64url = |b: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b);
+    let b64url = |b: &[u8]| encode_base64url_nopad(b);
     let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
     let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
 
@@ -70,15 +70,15 @@ fn make_dummy_signer_pub(
 }
 
 fn make_verified_member_for_test(signing_key: &SigningKey, kid: &str) -> VerifiedRecipientKey {
-    use base64::Engine;
     use ed25519_dalek::Signer;
     use secretenv::model::public_key::{
         Attestation, AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey,
         PublicKey, PublicKeyProtected, VerifiedPublicKeyAttested,
     };
     use secretenv::model::verification::{ExpiryProof, SelfSignatureProof};
+    use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
-    let b64url = |b: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b);
+    let b64url = |b: &[u8]| encode_base64url_nopad(b);
     let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
     let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
     let vk = signing_key.verifying_key();

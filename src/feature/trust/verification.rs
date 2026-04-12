@@ -13,7 +13,7 @@ use crate::model::identifiers::format::TRUST_LOCAL_V2;
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::TrustStoreDocument;
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
-use crate::support::base64url::b64_decode_array;
+use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
 use std::collections::HashSet;
@@ -89,7 +89,7 @@ fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<Verifying
         Error::crypto_with_source("Trust store keystore public key verification failed", e)
     })?;
 
-    let bytes: [u8; 32] = b64_decode_array(
+    let bytes: [u8; 32] = decode_base64url_nopad_array(
         &signer_public_key.protected.identity.keys.sig.x,
         "signer Ed25519 public key",
     )?;

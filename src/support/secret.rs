@@ -12,6 +12,51 @@ use zeroize::{Zeroize, Zeroizing};
 /// Environment variables containing secret values.
 pub type SecretEnvMap = BTreeMap<String, SecretString>;
 
+/// Fixed-size secret bytes that must be cleared from memory on drop.
+pub struct SecretArray<const N: usize>(Zeroizing<[u8; N]>);
+
+impl<const N: usize> SecretArray<N> {
+    /// Wrap fixed-size secret bytes.
+    pub fn new(bytes: [u8; N]) -> Self {
+        Self(Zeroizing::new(bytes))
+    }
+
+    /// Take ownership of a zeroizing fixed-size secret buffer without cloning.
+    pub fn from_zeroizing(bytes: Zeroizing<[u8; N]>) -> Self {
+        Self(bytes)
+    }
+
+    /// Explicitly expose the secret bytes.
+    pub fn expose_secret(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+
+    pub fn len(&self) -> usize {
+        N
+    }
+
+    pub fn is_empty(&self) -> bool {
+        N == 0
+    }
+
+    pub(crate) fn as_array(&self) -> &[u8; N] {
+        &self.0
+    }
+
+    pub(crate) fn into_zeroizing(self) -> Zeroizing<[u8; N]> {
+        self.0
+    }
+}
+
+impl<const N: usize> fmt::Debug for SecretArray<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SecretArray")
+            .field("bytes", &"[REDACTED]")
+            .field("len", &N)
+            .finish()
+    }
+}
+
 /// UTF-8 secret bytes that must be cleared from memory on drop.
 pub struct SecretBytes(Vec<u8>);
 
@@ -34,12 +79,6 @@ impl SecretBytes {
     /// Consume the secret bytes and return the owned buffer.
     pub fn into_vec(mut self) -> Vec<u8> {
         std::mem::take(&mut self.0)
-    }
-}
-
-impl AsRef<[u8]> for SecretBytes {
-    fn as_ref(&self) -> &[u8] {
-        self.as_bytes()
     }
 }
 
@@ -85,12 +124,6 @@ impl SecretString {
     /// Convert the secret text into a plain `String` at an explicit output boundary.
     pub fn into_plain_string_for_output(mut self) -> String {
         std::mem::take(&mut self.0)
-    }
-}
-
-impl AsRef<str> for SecretString {
-    fn as_ref(&self) -> &str {
-        self.as_str()
     }
 }
 

@@ -9,7 +9,8 @@
 use crate::feature::key::protection::password_encryption::encrypt_private_key_with_password;
 use crate::format::jcs;
 use crate::model::private_key::PrivateKeyPlaintext;
-use crate::support::base64url::b64_encode;
+use crate::support::codec::base64_secret::encode_base64url_nopad_secret_bytes;
+use crate::support::secret::SecretBytes;
 use crate::support::secret::SecretString;
 use crate::{Error, Result};
 
@@ -41,9 +42,8 @@ pub fn export_private_key_portable(
         plaintext, member_id, kid, created_at, expires_at, password, debug,
     )?;
 
-    let jcs_bytes = jcs::normalize(&private_key)?;
-
-    Ok(SecretString::new(b64_encode(&jcs_bytes)))
+    let jcs_bytes = SecretBytes::new(jcs::normalize(&private_key)?);
+    Ok(encode_base64url_nopad_secret_bytes(&jcs_bytes))
 }
 
 /// Validate that the password meets minimum length requirements.

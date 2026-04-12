@@ -8,6 +8,7 @@ use secretenv::io::ssh::protocol::sshsig::{
     SSHSIG_MAGIC, SSHSIG_NAMESPACE,
 };
 use secretenv::io::ssh::protocol::wire::ssh_string_encode;
+use secretenv::support::codec::base64_public::encode_base64_standard;
 use sha2::{Digest, Sha256};
 
 #[test]
@@ -155,8 +156,6 @@ fn test_parse_sshsig_blob_wrong_hashalg() {
 #[test]
 fn test_parse_sshsig_armored_valid() {
     // Real SSHSIG armored format (base64-encoded valid blob)
-    use base64::{engine::general_purpose::STANDARD, Engine};
-
     let mut blob = Vec::new();
     blob.extend_from_slice(b"SSHSIG");
     blob.extend_from_slice(&1u32.to_be_bytes());
@@ -166,7 +165,7 @@ fn test_parse_sshsig_armored_valid() {
     blob.extend_from_slice(&ssh_string_encode(b"sha256"));
     blob.extend_from_slice(&ssh_string_encode(b"test_signature_ikm"));
 
-    let b64 = STANDARD.encode(&blob);
+    let b64 = encode_base64_standard(&blob);
     let armored = format!(
         "-----BEGIN SSH SIGNATURE-----\n{}\n-----END SSH SIGNATURE-----",
         b64
@@ -179,8 +178,6 @@ fn test_parse_sshsig_armored_valid() {
 #[test]
 fn test_parse_sshsig_armored_multiline_base64() {
     // Test with line-wrapped base64
-    use base64::{engine::general_purpose::STANDARD, Engine};
-
     let mut blob = Vec::new();
     blob.extend_from_slice(b"SSHSIG");
     blob.extend_from_slice(&1u32.to_be_bytes());
@@ -190,7 +187,7 @@ fn test_parse_sshsig_armored_multiline_base64() {
     blob.extend_from_slice(&ssh_string_encode(b"sha256"));
     blob.extend_from_slice(&ssh_string_encode(b"multiline_test"));
 
-    let b64 = STANDARD.encode(&blob);
+    let b64 = encode_base64_standard(&blob);
     // Split into 64-char lines (typical SSH format)
     let lines: Vec<String> = b64
         .as_bytes()

@@ -12,7 +12,9 @@ use crate::crypto::types::primitives::XChaChaNonce;
 use crate::feature::envelope::binding::build_kv_entry_aad;
 use crate::model::identifiers::alg;
 use crate::model::kv_enc::entry::KvEntryValue;
-use crate::support::base64url::{b64_decode_array, b64_decode_ciphertext, b64_encode};
+use crate::support::codec::base64_public::{
+    decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
+};
 use crate::Result;
 use tracing::debug;
 use uuid::Uuid;
@@ -50,8 +52,8 @@ pub(crate) fn encrypt_entry(
         salt,
         k: key.to_string(),
         aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
-        nonce: b64_encode(nonce.as_bytes()),
-        ct: b64_encode(ciphertext.as_bytes()),
+        nonce: encode_base64url_nopad(nonce.as_bytes()),
+        ct: encode_base64url_nopad(ciphertext.as_bytes()),
         disclosed,
     })
 }
@@ -69,9 +71,9 @@ pub(crate) fn decrypt_entry(
 ) -> Result<Zeroizing<Vec<u8>>> {
     let cek = derive_cek(master_key, &entry.salt, sid, debug)?;
     let cek_key = XChaChaKey::from_slice(cek.as_bytes())?;
-    let nonce_bytes: [u8; 24] = b64_decode_array(&entry.nonce, "nonce")?;
+    let nonce_bytes: [u8; 24] = decode_base64url_nopad_array(&entry.nonce, "nonce")?;
     let nonce = XChaChaNonce::new(nonce_bytes);
-    let ciphertext = b64_decode_ciphertext(&entry.ct, "ct")?;
+    let ciphertext = decode_base64url_nopad_ciphertext(&entry.ct, "ct")?;
     let aad = build_kv_entry_aad(sid, &entry.k)?;
 
     if debug {

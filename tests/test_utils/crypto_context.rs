@@ -20,7 +20,7 @@ use secretenv::io::ssh::backend::SignatureBackend;
 use secretenv::model::identity::{Kid, MemberId};
 use secretenv::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use secretenv::model::verified::{DecryptionProof, VerifiedPrivateKey};
-use secretenv::support::base64url::b64_decode_array;
+use secretenv::support::codec::base64_public::decode_base64url_nopad_array;
 use std::fs;
 use tempfile::TempDir;
 
@@ -119,7 +119,7 @@ fn validate_test_private_key_material(plaintext: &PrivateKeyPlaintext) -> secret
 }
 
 fn build_test_signing_key(plaintext: &PrivateKeyPlaintext) -> secretenv::Result<SigningKey> {
-    let bytes = b64_decode_array(&plaintext.keys.sig.d, "Ed25519 private key")?;
+    let bytes = decode_base64url_nopad_array(&plaintext.keys.sig.d, "Ed25519 private key")?;
     Ok(SigningKey::from_bytes(&bytes))
 }
 

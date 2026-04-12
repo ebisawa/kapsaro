@@ -6,7 +6,7 @@
 use crate::format::jcs;
 use crate::format::token::TokenCodec;
 use crate::format::FormatError;
-use crate::support::base64url::b64_encode;
+use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::Result;
 
 /// Serialize value to token.
@@ -28,5 +28,5 @@ pub fn to_token_with_codec_impl<T: serde::Serialize>(
     let jcs_bytes = jcs::normalize_to_string(&json_value)?;
     let original_bytes = jcs_bytes.as_bytes().to_vec();
 
-    Ok(b64_encode(&original_bytes))
+    Ok(encode_base64url_nopad(&original_bytes))
 }

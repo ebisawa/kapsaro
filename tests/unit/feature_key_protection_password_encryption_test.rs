@@ -1,8 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use secretenv::feature::key::protection::password_encryption::{
@@ -12,11 +10,12 @@ use secretenv::model::private_key::{
     EncryptedData, IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm,
     PrivateKeyPlaintext, PrivateKeyProtected,
 };
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
 fn b64(data: &[u8]) -> String {
-    URL_SAFE_NO_PAD.encode(data)
+    encode_base64url_nopad(data)
 }
 
 fn build_test_plaintext() -> PrivateKeyPlaintext {

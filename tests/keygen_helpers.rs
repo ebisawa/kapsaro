@@ -6,8 +6,6 @@
 //! All test keys are generated with proper SSH attestation (via ssh-keygen) and
 //! encrypted with real SSH key protection. No test-only bypasses in production code.
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use secretenv::feature::key::protection::encryption::{
@@ -31,6 +29,11 @@ use secretenv::model::{
     verification::{ExpiryProof, SelfSignatureProof},
     verified::{DecryptionProof, VerifiedPrivateKey},
 };
+use secretenv::support::codec::base64_public::{
+    decode_base64url_nopad_array, encode_base64url_nopad,
+};
+use secretenv::support::codec::base64_secret::encode_base64url_nopad_secret_32;
+use secretenv::support::secret::SecretArray;
 use secretenv::{Error, Result};
 use std::path::Path;
 use time::OffsetDateTime;
@@ -60,7 +63,7 @@ fn build_test_ssh_context(ssh_key_path: &Path, ssh_pubkey: &str) -> Result<SshBi
 
 /// Encode bytes to base64url (no padding)
 fn b64(data: &[u8]) -> String {
-    URL_SAFE_NO_PAD.encode(data)
+    encode_base64url_nopad(data)
 }
 
 // ============================================================================
@@ -77,7 +80,8 @@ fn generate_kem_keypair() -> (JwkOkpPrivateKey, String) {
         kty: "OKP".to_string(),
         crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
         x: pub_key.clone(),
-        d: b64(&sk.to_bytes()),
+        d: encode_base64url_nopad_secret_32(&SecretArray::new(sk.to_bytes()))
+            .into_plain_string_for_output(),
     };
 
     (keypair, pub_key)
@@ -93,7 +97,8 @@ fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
         kty: "OKP".to_string(),
         crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
         x: pub_key.clone(),
-        d: b64(&sk.to_bytes()),
+        d: encode_base64url_nopad_secret_32(&SecretArray::new(sk.to_bytes()))
+            .into_plain_string_for_output(),
     };
 
     (keypair, pub_key)
@@ -121,19 +126,12 @@ pub fn keygen_test(
         secretenv::support::time::build_timestamp_display(now + time::Duration::days(365))?;
 
     // Extract signing key from keypair before moving it
-    let sig_key_bytes = URL_SAFE_NO_PAD
-        .decode(&sig_keypair.d)
-        .map_err(|e| Error::Crypto {
+    let sig_key_bytes =
+        decode_base64url_nopad_array(&sig_keypair.d, "signing key").map_err(|e| Error::Crypto {
             message: format!("Failed to decode signing key: {}", e),
-            source: Some(Box::new(e)),
+            source: None,
         })?;
-    let signing_key =
-        ed25519_dalek::SigningKey::from_bytes(sig_key_bytes.as_slice().try_into().map_err(
-            |_| Error::Crypto {
-                message: "Invalid signing key length".to_string(),
-                source: None,
-            },
-        )?);
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&sig_key_bytes);
 
     let private_key = PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {

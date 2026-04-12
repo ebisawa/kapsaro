@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::helpers::{
-    create_test_public_key, generate_ed25519_keypair, generate_x25519_keypair,
+    b64url, create_test_public_key, generate_ed25519_keypair, generate_x25519_keypair,
     recipients_and_members,
 };
 use crate::keygen_helpers::make_recipient_key;
@@ -14,10 +14,7 @@ use uuid::Uuid;
 #[test]
 fn test_encrypt_file_basic() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let alice =
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
     let recipients_with_keys = [(ALICE_MEMBER_ID.to_string(), alice)];
@@ -76,14 +73,8 @@ fn test_encrypt_file_basic() {
 fn test_encrypt_file_multiple_recipients() {
     let (_sk1, pk1) = generate_x25519_keypair([1u8; 32]);
     let (_sk2, pk2) = generate_x25519_keypair([2u8; 32]);
-    let pk1_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk1.as_bytes(),
-    );
-    let pk2_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk2.as_bytes(),
-    );
+    let pk1_b64 = b64url(pk1.as_bytes());
+    let pk2_b64 = b64url(pk2.as_bytes());
     let recipients_with_keys = [
         (
             ALICE_MEMBER_ID.to_string(),
@@ -150,10 +141,7 @@ fn test_encrypt_file_multiple_recipients() {
 #[test]
 fn test_encrypt_file_empty_content() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = [(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -188,10 +176,7 @@ fn test_encrypt_file_empty_content() {
 #[test]
 fn test_encrypt_file_large_content() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = [(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -226,10 +211,7 @@ fn test_encrypt_file_large_content() {
 #[test]
 fn test_encrypt_file_name_is_set() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = [(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -264,10 +246,7 @@ fn test_encrypt_file_name_is_set() {
 #[test]
 fn test_encrypt_file_sid_is_uuid() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -299,10 +278,7 @@ fn test_encrypt_file_sid_is_uuid() {
 #[test]
 fn test_encrypt_file_deterministic_structure() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let alice =
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
     let (recipient_ids1, members1) =
@@ -380,10 +356,7 @@ fn test_encrypt_file_no_recipient_found() {
 #[test]
 fn test_encrypt_file_signature_included() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),

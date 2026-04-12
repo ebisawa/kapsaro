@@ -3,7 +3,7 @@
 
 use std::ffi::OsString;
 
-use secretenv::support::secret::{SecretBytes, SecretString};
+use secretenv::support::secret::{SecretArray, SecretBytes, SecretString};
 use zeroize::Zeroizing;
 
 #[test]
@@ -32,4 +32,14 @@ fn test_secret_string_into_os_string() {
     let os_string = secret.into_os_string();
 
     assert_eq!(os_string, OsString::from("super-secret"));
+}
+
+#[test]
+fn test_secret_array_debug_is_redacted() {
+    let secret = SecretArray::new([7u8; 32]);
+
+    let debug = format!("{secret:?}");
+
+    assert!(debug.contains("REDACTED"), "got: {debug}");
+    assert!(!debug.contains("7"), "got: {debug}");
 }

@@ -15,7 +15,7 @@ use crate::model::public_key::{
 };
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
-use crate::support::base64url::{b64_decode, b64_decode_array};
+use crate::support::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
 use crate::support::kid::kid_display_lossy;
 use crate::{Error, Result};
 use ed25519_dalek::{Verifier, VerifyingKey};
@@ -41,14 +41,14 @@ pub fn verify_public_key(public_key: &PublicKey, debug: bool) -> Result<Verified
 
     let protected_jcs = jcs::normalize(&public_key.protected)
         .map_err(|e| Error::crypto_with_source("Failed to normalize PublicKey protected", e))?;
-    let verifying_key_bytes: [u8; 32] = b64_decode_array(
+    let verifying_key_bytes: [u8; 32] = decode_base64url_nopad_array(
         &public_key.protected.identity.keys.sig.x,
         "Ed25519 public key",
     )?;
     let verifying_key = VerifyingKey::from_bytes(&verifying_key_bytes)
         .map_err(|e| Error::crypto_with_source("Invalid Ed25519 public key", e))?;
 
-    let sig_bytes = b64_decode(&public_key.signature, "signature")
+    let sig_bytes = decode_base64url_nopad(&public_key.signature, "signature")
         .map_err(|e| Error::crypto_with_source("Failed to decode PublicKey signature", e))?;
     let sig = ed25519_dalek::Signature::from_slice(&sig_bytes)
         .map_err(|e| Error::crypto_with_source("Invalid signature format", e))?;

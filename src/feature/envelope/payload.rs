@@ -8,7 +8,7 @@ use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::XChaChaKey;
 use crate::feature::envelope::binding::build_file_payload_aad;
 use crate::model::file_enc::{FilePayloadCiphertext, FilePayloadHeader};
-use crate::support::base64url::b64_encode;
+use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::Result;
 use tracing::debug;
 
@@ -32,8 +32,8 @@ pub(crate) fn encrypt_file_payload_content(
     let aad = build_file_payload_aad(payload_header)?;
     let (ciphertext, nonce) = xchacha_encrypt_with_nonce(key, plaintext, &aad)?;
     Ok(FilePayloadCiphertext {
-        nonce: b64_encode(nonce.as_bytes()),
-        ct: b64_encode(ciphertext.as_bytes()),
+        nonce: encode_base64url_nopad(nonce.as_bytes()),
+        ct: encode_base64url_nopad(ciphertext.as_bytes()),
     })
 }
 

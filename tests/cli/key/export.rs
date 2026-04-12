@@ -5,12 +5,11 @@
 
 use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use predicates::prelude::*;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::PrivateKey;
 use secretenv::model::public_key::PublicKey;
+use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use secretenv::support::kid::build_kid_display;
 use std::fs;
 use tempfile::TempDir;
@@ -202,8 +201,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         .success();
 
     let exported = fs::read_to_string(&export_file).expect("Should read exported private key");
-    let json = URL_SAFE_NO_PAD
-        .decode(exported.trim())
+    let json = decode_base64url_nopad(exported.trim(), "exported private key")
         .expect("Should decode as base64url");
     let private_key: PrivateKey =
         serde_json::from_slice(&json).expect("Should deserialize as PrivateKey");
@@ -251,8 +249,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
     let exported = stdout.trim();
     assert!(!exported.is_empty(), "stdout should contain exported key");
 
-    let json = URL_SAFE_NO_PAD
-        .decode(exported)
+    let json = decode_base64url_nopad(exported, "stdout private key")
         .expect("Should decode stdout as base64url");
     let private_key: PrivateKey =
         serde_json::from_slice(&json).expect("Should deserialize stdout as PrivateKey");

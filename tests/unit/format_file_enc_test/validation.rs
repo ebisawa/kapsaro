@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::helpers::{
-    create_test_private_key, create_test_public_key, generate_ed25519_keypair,
+    b64url, create_test_private_key, create_test_public_key, generate_ed25519_keypair,
     generate_x25519_keypair, recipients_and_members,
 };
 use crate::keygen_helpers::make_decrypted_private_key_plaintext;
@@ -16,10 +16,7 @@ use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySou
 #[test]
 fn test_encrypt_file() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
@@ -75,10 +72,7 @@ fn test_encrypt_file() {
 #[test]
 fn test_defence_in_depth_sid_mismatch() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
         create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),

@@ -14,7 +14,9 @@ use crate::feature::envelope::unwrap::{
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::identifiers::{alg, format};
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::base64url::{b64_decode_array, b64_decode_ciphertext};
+use crate::support::codec::base64_public::{
+    decode_base64url_nopad_array, decode_base64url_nopad_ciphertext,
+};
 use crate::{Error, Result};
 use tracing::debug;
 use zeroize::Zeroizing;
@@ -81,9 +83,10 @@ pub(crate) fn decrypt_file_payload(
     let aad = build_file_payload_aad(&doc.protected.payload.protected)?;
 
     // Decode nonce and ciphertext
-    let nonce_bytes: [u8; 24] = b64_decode_array(&doc.protected.payload.encrypted.nonce, "nonce")?;
+    let nonce_bytes: [u8; 24] =
+        decode_base64url_nopad_array(&doc.protected.payload.encrypted.nonce, "nonce")?;
     let nonce = XChaChaNonce::new(nonce_bytes);
-    let ciphertext = b64_decode_ciphertext(&doc.protected.payload.encrypted.ct, "ct")?;
+    let ciphertext = decode_base64url_nopad_ciphertext(&doc.protected.payload.encrypted.ct, "ct")?;
 
     // Decrypt payload
     let xchacha_key = XChaChaKey::from_slice(content_key.as_bytes())?;

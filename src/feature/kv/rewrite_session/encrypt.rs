@@ -3,6 +3,7 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::build_signing_context;
+use crate::feature::kv::encrypt::KvValueRef;
 use crate::format::token::TokenCodec;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
@@ -18,7 +19,7 @@ pub(crate) fn encrypt_kv_map_with_key_context<V, F>(
     debug: bool,
 ) -> Result<String>
 where
-    V: AsRef<str>,
+    V: KvValueRef,
     F: FnOnce(&mut crate::model::kv_enc::header::KvWrap) -> Result<()>,
 {
     let signing = build_signing_context(key_ctx, debug)?;

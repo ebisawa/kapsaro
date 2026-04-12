@@ -8,6 +8,7 @@ use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::model::identifiers::context;
 use crate::support::kid::kid_display_lossy;
 use crate::Result;
@@ -17,6 +18,11 @@ use tracing::debug;
 
 const NON_DETERMINISTIC_SIGNATURE_MESSAGE: &str =
     "Non-deterministic signature detected: same input produced different signatures";
+
+pub(super) struct PrivateKeyUseKey {
+    pub(super) enc_key: XChaChaKey,
+    pub(super) raw_sig: Ed25519RawSignature,
+}
 
 /// Build sign_message for SSH signature.
 pub fn build_sign_message(ikm_salt_b64: &str) -> String {
@@ -51,15 +57,87 @@ pub fn derive_key_from_ssh(
     debug: bool,
 ) -> Result<XChaChaKey> {
     let message = build_sign_message(ikm_salt_b64);
+    let raw_sig =
+        sign_for_private_key_encryption(kid, backend, ssh_pubkey, message.as_bytes(), debug)?;
+    derive_key_from_raw_signature(kid, &raw_sig, hkdf_salt, debug)
+}
+
+pub(super) fn derive_key_for_private_key_use(
+    kid: &str,
+    ikm_salt_b64: &str,
+    hkdf_salt: &HkdfSalt,
+    backend: &dyn SignatureBackend,
+    ssh_pubkey: &str,
+    debug: bool,
+) -> Result<PrivateKeyUseKey> {
+    let message = build_sign_message(ikm_salt_b64);
+    let raw_sig = sign_for_private_key_use(kid, backend, ssh_pubkey, message.as_bytes(), debug)?;
+    let enc_key = derive_key_from_raw_signature(kid, &raw_sig, hkdf_salt, debug)?;
+    Ok(PrivateKeyUseKey { enc_key, raw_sig })
+}
+
+pub(super) fn diagnose_private_key_use_signature(
+    kid: &str,
+    ikm_salt_b64: &str,
+    backend: &dyn SignatureBackend,
+    ssh_pubkey: &str,
+    expected_raw_sig: &Ed25519RawSignature,
+    debug: bool,
+) -> Result<()> {
+    let message = build_sign_message(ikm_salt_b64);
+    if debug {
+        debug!(
+            "[CRYPTO] SSH: sign_for_ikm retry diagnosis (kid: {})",
+            kid_display_lossy(kid)
+        );
+    }
+    let retry_sig = backend.sign_for_ikm(ssh_pubkey, message.as_bytes())?;
+    if retry_sig != *expected_raw_sig {
+        return Err(non_deterministic_signature_error());
+    }
+    Ok(())
+}
+
+fn sign_for_private_key_encryption(
+    kid: &str,
+    backend: &dyn SignatureBackend,
+    ssh_pubkey: &str,
+    message: &[u8],
+    debug: bool,
+) -> Result<Ed25519RawSignature> {
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_for_ikm x2 determinism check (kid: {})",
             kid_display_lossy(kid)
         );
     }
-    let raw_sig = backend
-        .sign_deterministic_for_ikm(ssh_pubkey, message.as_bytes())
-        .map_err(map_determinism_error)?;
+    backend
+        .sign_deterministic_for_ikm(ssh_pubkey, message)
+        .map_err(map_determinism_error)
+}
+
+fn sign_for_private_key_use(
+    kid: &str,
+    backend: &dyn SignatureBackend,
+    ssh_pubkey: &str,
+    message: &[u8],
+    debug: bool,
+) -> Result<Ed25519RawSignature> {
+    if debug {
+        debug!(
+            "[CRYPTO] SSH: sign_for_ikm (kid: {})",
+            kid_display_lossy(kid)
+        );
+    }
+    backend.sign_for_ikm(ssh_pubkey, message)
+}
+
+fn derive_key_from_raw_signature(
+    kid: &str,
+    raw_sig: &Ed25519RawSignature,
+    hkdf_salt: &HkdfSalt,
+    debug: bool,
+) -> Result<XChaChaKey> {
     if debug {
         debug!(
             "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {})",
@@ -76,15 +154,19 @@ pub fn derive_key_from_ssh(
     XChaChaKey::from_slice(cek.as_bytes())
 }
 
+fn non_deterministic_signature_error() -> crate::Error {
+    crate::Error::Crypto {
+        message: "W_SSH_NONDETERMINISTIC: SSH signature is non-deterministic".into(),
+        source: None,
+    }
+}
+
 fn map_determinism_error(error: crate::Error) -> crate::Error {
     if error
         .to_string()
         .contains(NON_DETERMINISTIC_SIGNATURE_MESSAGE)
     {
-        return crate::Error::Crypto {
-            message: "W_SSH_NONDETERMINISTIC: SSH signature is non-deterministic".into(),
-            source: None,
-        };
+        return non_deterministic_signature_error();
     }
 
     error

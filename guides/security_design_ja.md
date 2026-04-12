@@ -959,11 +959,9 @@ enc_key = HKDF-SHA256(
 
 ### 7.6 決定論性チェック
 
-Ed25519 (RFC 8032 PureEdDSA) は仕様上決定論的署名を生成するが、実装の不備により非決定論的な署名が生成される可能性を排除するため、暗号化・復号のたびに:
+Ed25519 (RFC 8032 PureEdDSA) は仕様上決定論的署名を生成するが、実装不備による非決定論的署名の混入を避けるため、PrivateKey 保護では**暗号化時**に同一の signed_data へ SSH 鍵で 2 回署名し、抽出した Ed25519 raw signature bytes（64 bytes）が一致することを確認する。
 
-1. 同一の signed_data に対して SSH 鍵で **2 回署名**を実行
-2. 抽出した Ed25519 raw signature bytes（64 bytes）が一致することを確認
-3. 不一致の場合は `W_SSH_NONDETERMINISTIC` を出力して処理を中止
+不一致の場合は `W_SSH_NONDETERMINISTIC` を出力して処理を中止する。
 
 **理由:** 非決定論的署名では暗号化時と復号時で異なる IKM が導出され、**復号が不可能になる**。
 
@@ -972,7 +970,7 @@ Ed25519 (RFC 8032 PureEdDSA) は仕様上決定論的署名を生成するが、
 ローカルキーストア内の `private.json` を復号するには、次の条件をすべて満たす必要がある。
 
 1. `protected.alg.fpr` に対応する SSH 鍵を利用できること
-2. その SSH 鍵で同一入力に対する決定論的署名が得られること
+2. その SSH 鍵がこの方式に必要な決定論的署名を提供できること
 3. `protected.alg.ikm_salt` から署名メッセージを再構築できること
 4. `protected` が改ざんされておらず、`jcs(protected)` に対する AAD 検証が通ること
 

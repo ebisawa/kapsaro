@@ -911,11 +911,9 @@ This `enc_key` is not a stored fixed key. It is re-derived from the same SSH sig
 
 ### 7.6 Determinism Check
 
-Ed25519 (RFC 8032 PureEdDSA) generates deterministic signatures by specification, but to eliminate the possibility of non-deterministic signatures due to implementation defects, on each encryption and decryption:
+Ed25519 (RFC 8032 PureEdDSA) generates deterministic signatures by specification, but to eliminate the possibility of non-deterministic signatures due to implementation defects, PrivateKey protection performs the determinism check **during encryption** by signing the same signed_data twice and confirming that the extracted Ed25519 raw signature bytes (64 bytes) match.
 
-1. Execute **2 signatures** with the SSH key on the same signed_data
-2. Confirm that the extracted Ed25519 raw signature bytes (64 bytes) match
-3. If they do not match, output `W_SSH_NONDETERMINISTIC` and abort processing
+If they do not match, `W_SSH_NONDETERMINISTIC` is emitted and processing aborts.
 
 **Reason:** Non-deterministic signatures would derive different IKM at encryption and decryption time, making **decryption impossible**.
 
@@ -924,7 +922,7 @@ Ed25519 (RFC 8032 PureEdDSA) generates deterministic signatures by specification
 To decrypt `private.json` in the local keystore, all of the following conditions must hold.
 
 1. The SSH key corresponding to `protected.alg.fpr` must be usable
-2. That SSH key must produce deterministic signatures for identical input
+2. That SSH key must be able to provide the deterministic signatures required by this scheme
 3. The sign message must be reconstructible from `protected.alg.ikm_salt`
 4. `protected` must be untampered so that AAD verification over `jcs(protected)` succeeds
 

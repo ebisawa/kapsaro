@@ -1,16 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSH Key Protection for PrivateKey v4
+//! SSH Key Protection for PrivateKey v5
 //!
-//! PrivateKey v4 must be encrypted with an SSH Ed25519 key.
+//! PrivateKey v5 must be encrypted with an SSH Ed25519 key.
 //! This module implements the encryption and decryption process.
 
 use super::key_derivation;
 use crate::crypto::aead::xchacha;
 use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 use crate::crypto::types::keys::XChaChaKey;
-use crate::crypto::types::primitives::{Salt, XChaChaNonce};
+use crate::crypto::types::primitives::{HkdfSalt, XChaChaNonce};
 use crate::feature::key::protection::binding::build_private_key_aad;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
@@ -30,17 +30,19 @@ fn build_protected_header(
     member_id: String,
     kid: String,
     ssh_fpr: String,
-    salt: &Salt,
+    ikm_salt_b64: String,
+    hkdf_salt_b64: String,
     created_at: String,
     expires_at: String,
 ) -> PrivateKeyProtected {
     PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V4.to_string(),
+        format: format::PRIVATE_KEY_V5.to_string(),
         member_id: member_id.clone(),
         kid: kid.clone(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: ssh_fpr.clone(),
-            salt: encode_base64url_nopad(salt.as_bytes()),
+            ikm_salt: ikm_salt_b64,
+            hkdf_salt: hkdf_salt_b64,
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: created_at.clone(),
@@ -80,16 +82,10 @@ pub(super) fn serialize_and_encrypt(
     })
 }
 
-/// Decode encryption parameters from PrivateKey
-pub(super) fn decode_encryption_params(
+/// Decode ciphertext parameters from PrivateKey.
+pub(super) fn decode_ciphertext_params(
     private_key: &PrivateKey,
-) -> Result<(Salt, XChaChaNonce, Ciphertext, Aad)> {
-    // Decode salt
-    let salt_bytes: [u8; 16] =
-        decode_base64url_nopad_array(private_key.protected.alg.salt(), "salt")?;
-    let salt = Salt::new(salt_bytes);
-
-    // Decode nonce and ciphertext
+) -> Result<(XChaChaNonce, Ciphertext, Aad)> {
     let nonce_bytes: [u8; 24] =
         decode_base64url_nopad_array(&private_key.encrypted.nonce, "nonce")?;
     let nonce = XChaChaNonce::new(nonce_bytes);
@@ -98,7 +94,7 @@ pub(super) fn decode_encryption_params(
     // Build AAD from protected header
     let aad = build_private_key_aad(&private_key.protected)?;
 
-    Ok((salt, nonce, ct, aad))
+    Ok((nonce, ct, aad))
 }
 
 fn normalize_fingerprint_prefix(fingerprint: &str) -> String {
@@ -177,15 +173,18 @@ pub struct PrivateKeyEncryptionParams<'a> {
 
 /// Encrypt PrivateKey with SSH key
 pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<PrivateKey> {
-    // Generate salt
-    let salt = key_derivation::generate_salt();
+    let ikm_salt = key_derivation::generate_ikm_salt();
+    let hkdf_salt = key_derivation::generate_hkdf_salt();
+    let ikm_salt_b64 = encode_base64url_nopad(ikm_salt.as_bytes());
+    let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
 
     // Build protected header
     let protected = build_protected_header(
         params.member_id.clone(),
         params.kid.clone(),
         params.ssh_fpr.clone(),
-        &salt,
+        ikm_salt_b64.clone(),
+        hkdf_salt_b64,
         params.created_at.clone(),
         params.expires_at.clone(),
     );
@@ -193,7 +192,8 @@ pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<Pr
     // Derive encryption key
     let enc_key = key_derivation::derive_key_from_ssh(
         &params.kid,
-        &salt,
+        &ikm_salt_b64,
+        &hkdf_salt,
         params.backend,
         params.ssh_pubkey,
         params.debug,
@@ -223,13 +223,17 @@ pub fn decrypt_private_key(
 ) -> Result<PrivateKeyPlaintext> {
     verify_ssh_fingerprint_matches(private_key, ssh_pubkey)?;
 
-    // Decode encryption parameters
-    let (salt, nonce, ct, aad) = decode_encryption_params(private_key)?;
+    let hkdf_salt_bytes: [u8; 32] =
+        decode_base64url_nopad_array(private_key.protected.alg.hkdf_salt(), "hkdf_salt")?;
+    let hkdf_salt = HkdfSalt::new(hkdf_salt_bytes);
+    let ikm_salt_b64 = private_key.protected.alg.ikm_salt();
+    let (nonce, ct, aad) = decode_ciphertext_params(private_key)?;
 
     // Derive key
     let enc_key = key_derivation::derive_key_from_ssh(
         &private_key.protected.kid,
-        &salt,
+        ikm_salt_b64,
+        &hkdf_salt,
         backend,
         ssh_pubkey,
         debug,

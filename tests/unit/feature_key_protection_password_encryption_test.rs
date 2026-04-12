@@ -6,6 +6,7 @@ use rand::rngs::OsRng;
 use secretenv::feature::key::protection::password_encryption::{
     decrypt_private_key_with_password, encrypt_private_key_with_password,
 };
+use secretenv::model::identifiers::format;
 use secretenv::model::private_key::{
     EncryptedData, IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm,
     PrivateKeyPlaintext, PrivateKeyProtected,
@@ -111,7 +112,7 @@ fn test_password_encrypt_alg_kdf_is_argon2id() {
 
     // Verify kdf tag serializes correctly
     let json = serde_json::to_value(&encrypted.protected.alg).unwrap();
-    assert_eq!(json["kdf"], "argon2id-hkdf-sha256");
+    assert_eq!(json["kdf"], "argon2id-m64t3p4-hkdf-sha256");
 }
 
 #[test]
@@ -131,19 +132,20 @@ fn test_password_encrypt_preserves_metadata() {
     assert_eq!(encrypted.protected.kid, kid);
     assert_eq!(encrypted.protected.created_at, created_at);
     assert_eq!(encrypted.protected.expires_at, expires_at);
-    assert_eq!(encrypted.protected.format, "secretenv.private.key@4");
+    assert_eq!(encrypted.protected.format, format::PRIVATE_KEY_V5);
 }
 
 #[test]
 fn test_password_decrypt_rejects_sshsig_key() {
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: "secretenv.private.key@4".to_string(),
+            format: format::PRIVATE_KEY_V5.to_string(),
             member_id: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:dummy".to_string(),
-                salt: "AAAA".to_string(),
+                ikm_salt: encode_base64url_nopad(&[0u8; 32]),
+                hkdf_salt: encode_base64url_nopad(&[1u8; 32]),
                 aead: "xchacha20-poly1305".to_string(),
             },
             created_at: "2026-01-01T00:00:00Z".to_string(),
@@ -183,8 +185,13 @@ fn test_password_decrypt_rejects_unsupported_aead() {
 
     // Tamper with the AEAD field
     encrypted.protected.alg = match encrypted.protected.alg {
-        PrivateKeyAlgorithm::Argon2id { salt, .. } => PrivateKeyAlgorithm::Argon2id {
-            salt,
+        PrivateKeyAlgorithm::Argon2id {
+            ikm_salt,
+            hkdf_salt,
+            ..
+        } => PrivateKeyAlgorithm::Argon2id {
+            ikm_salt,
+            hkdf_salt,
             aead: "aes-256-gcm".to_string(),
         },
         other => other,

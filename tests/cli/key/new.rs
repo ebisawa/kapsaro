@@ -81,8 +81,8 @@ fn test_key_new_generates_private_key() {
     // Verify fields
     assert_eq!(
         private_key.protected.format,
-        format::PRIVATE_KEY_V4,
-        "Format should be secretenv.private.key@4"
+        format::PRIVATE_KEY_V5,
+        "Format should be secretenv.private.key@5"
     );
     assert_eq!(
         private_key.protected.member_id, member_id,
@@ -135,7 +135,12 @@ fn test_key_new_ssh_protection() {
 
     // Verify alg field via pattern matching
     match &private_key.protected.alg {
-        secretenv::model::private_key::PrivateKeyAlgorithm::SshSig { fpr, salt, aead } => {
+        secretenv::model::private_key::PrivateKeyAlgorithm::SshSig {
+            fpr,
+            ikm_salt,
+            hkdf_salt,
+            aead,
+        } => {
             assert!(
                 fpr.starts_with("SHA256:"),
                 "protected.alg.fpr should start with SHA256:"
@@ -145,15 +150,20 @@ fn test_key_new_ssh_protection() {
                 50,
                 "protected.alg.fpr should be 50 characters (SHA256: + 43 chars)"
             );
-            assert!(!salt.is_empty(), "protected.alg.salt should be set");
-
-            // Verify salt is base64url encoded (16 bytes = 22 chars without padding)
-            let salt_decoded =
-                decode_base64url_nopad(salt, "salt").expect("salt should be valid base64url");
+            let ikm_salt_decoded = decode_base64url_nopad(ikm_salt, "ikm_salt")
+                .expect("ikm_salt should be valid base64url");
             assert_eq!(
-                salt_decoded.len(),
-                16,
-                "salt should be 16 bytes when decoded"
+                ikm_salt_decoded.len(),
+                32,
+                "ikm_salt should be 32 bytes when decoded"
+            );
+
+            let hkdf_salt_decoded = decode_base64url_nopad(hkdf_salt, "hkdf_salt")
+                .expect("hkdf_salt should be valid base64url");
+            assert_eq!(
+                hkdf_salt_decoded.len(),
+                32,
+                "hkdf_salt should be 32 bytes when decoded"
             );
 
             assert_eq!(

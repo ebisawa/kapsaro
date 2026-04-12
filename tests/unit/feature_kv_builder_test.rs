@@ -9,6 +9,7 @@ use crate::model::common::WrapItem;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::{KvEncLine, KvEncVersion};
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -39,7 +40,7 @@ fn encode_wrap_token(wrap: &KvWrap) -> String {
 
 fn sample_entry_value(key: &str, disclosed: bool) -> KvEntryValue {
     KvEntryValue {
-        salt: "AAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        salt: encode_base64url_nopad(&[0u8; 32]),
         k: key.to_string(),
         aead: "xchacha20-poly1305".to_string(),
         nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),

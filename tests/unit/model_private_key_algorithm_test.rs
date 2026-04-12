@@ -3,7 +3,7 @@
 
 use secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305;
 use secretenv::model::identifiers::private_key::{
-    PROTECTION_METHOD_ARGON2ID_HKDF_SHA256, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
+    PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
 };
 use secretenv::model::private_key::*;
 
@@ -11,14 +11,22 @@ use secretenv::model::private_key::*;
 fn test_sshsig_variant_roundtrip() {
     let alg = PrivateKeyAlgorithm::SshSig {
         fpr: "SHA256:ABCDEFGH123456789".to_string(),
-        salt: "c2FsdA".to_string(),
+        ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         aead: AEAD_XCHACHA20_POLY1305.to_string(),
     };
 
     let json = serde_json::to_value(&alg).expect("serialize");
     assert_eq!(json["kdf"], PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256);
     assert_eq!(json["fpr"], "SHA256:ABCDEFGH123456789");
-    assert_eq!(json["salt"], "c2FsdA");
+    assert_eq!(
+        json["ikm_salt"],
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    );
+    assert_eq!(
+        json["hkdf_salt"],
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    );
     assert_eq!(json["aead"], AEAD_XCHACHA20_POLY1305);
 
     let deserialized: PrivateKeyAlgorithm = serde_json::from_value(json).expect("deserialize");
@@ -28,13 +36,21 @@ fn test_sshsig_variant_roundtrip() {
 #[test]
 fn test_argon2id_variant_roundtrip() {
     let alg = PrivateKeyAlgorithm::Argon2id {
-        salt: "YXJnb24yc2FsdA".to_string(),
+        ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         aead: AEAD_XCHACHA20_POLY1305.to_string(),
     };
 
     let json = serde_json::to_value(&alg).expect("serialize");
-    assert_eq!(json["kdf"], PROTECTION_METHOD_ARGON2ID_HKDF_SHA256);
-    assert_eq!(json["salt"], "YXJnb24yc2FsdA");
+    assert_eq!(json["kdf"], PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256);
+    assert_eq!(
+        json["ikm_salt"],
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    );
+    assert_eq!(
+        json["hkdf_salt"],
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    );
     assert_eq!(json["aead"], AEAD_XCHACHA20_POLY1305);
 
     let deserialized: PrivateKeyAlgorithm = serde_json::from_value(json).expect("deserialize");
@@ -44,11 +60,12 @@ fn test_argon2id_variant_roundtrip() {
 #[test]
 fn test_argon2id_variant_rejects_legacy_params() {
     let json = serde_json::json!({
-        "kdf": PROTECTION_METHOD_ARGON2ID_HKDF_SHA256,
+        "kdf": PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
         "m": 47104,
         "t": 1,
         "p": 1,
-        "salt": "YXJnb24yc2FsdA",
+        "ikm_salt": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "hkdf_salt": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
         "aead": AEAD_XCHACHA20_POLY1305
     });
 
@@ -60,7 +77,8 @@ fn test_argon2id_variant_rejects_legacy_params() {
 fn test_unknown_kdf_fails() {
     let json = serde_json::json!({
         "kdf": "unknown-kdf-method",
-        "salt": "c2FsdA",
+        "ikm_salt": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "hkdf_salt": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
         "aead": AEAD_XCHACHA20_POLY1305
     });
 
@@ -72,12 +90,13 @@ fn test_unknown_kdf_fails() {
 fn test_existing_private_key_document_roundtrip() {
     let doc = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V4.to_string(),
+            format: secretenv::model::identifiers::format::PRIVATE_KEY_V5.to_string(),
             member_id: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:ABCDEFGH123456789".to_string(),
-                salt: "c2FsdA".to_string(),
+                ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
                 aead: AEAD_XCHACHA20_POLY1305.to_string(),
             },
             created_at: "2024-01-15T00:00:00Z".to_string(),

@@ -113,12 +113,13 @@ fn test_aad_private_key() {
     use secretenv::model::private_key::{PrivateKeyAlgorithm, PrivateKeyProtected};
 
     let protected = PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V4.to_string(),
+        format: format::PRIVATE_KEY_V5.to_string(),
         member_id: ALICE_MEMBER_ID.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: "SHA256:ABCDEFGH123456789".to_string(),
-            salt: "AAAAAAAAAAAAAAAA".to_string(),
+            ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: "2025-01-01T00:00:00Z".to_string(),
@@ -134,7 +135,7 @@ fn test_aad_private_key() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields from protected
-    assert_eq!(parsed["format"], format::PRIVATE_KEY_V4);
+    assert_eq!(parsed["format"], format::PRIVATE_KEY_V5);
     assert_eq!(parsed["member_id"], ALICE_MEMBER_ID);
     assert_eq!(parsed["kid"], "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(parsed["alg"]["fpr"], "SHA256:ABCDEFGH123456789");

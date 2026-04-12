@@ -6,6 +6,7 @@
 use crate::keygen_helpers::make_dummy_public_key;
 use secretenv::format::schema::validator::Validator;
 use secretenv::model::identifiers::hpke;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
 #[test]
 fn test_validator_creation() {
@@ -73,16 +74,19 @@ fn test_validate_public_key_basic() {
 #[test]
 fn test_validate_private_key_basic() {
     let validator = Validator::new().unwrap();
+    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
+    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     // v3 schema (Rev11): external format with protection and encrypted fields
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V4,
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
             "member_id": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
                 "fpr": "SHA256:abcdef1234567890",
-                "salt": "AAAAAAAAAAAAAAAAAAAAAA",
+                "ikm_salt": ikm_salt,
+                "hkdf_salt": hkdf_salt,
                 "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
@@ -105,14 +109,17 @@ fn test_validate_private_key_basic() {
 #[test]
 fn test_validate_private_key_argon2id_without_params() {
     let validator = Validator::new().unwrap();
+    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
+    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V4,
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
             "member_id": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_ARGON2ID_HKDF_SHA256,
-                "salt": "AAAAAAAAAAAAAAAAAAAAAA",
+                "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
+                "ikm_salt": ikm_salt,
+                "hkdf_salt": hkdf_salt,
                 "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
@@ -135,17 +142,20 @@ fn test_validate_private_key_argon2id_without_params() {
 #[test]
 fn test_validate_private_key_argon2id_rejects_legacy_params() {
     let validator = Validator::new().unwrap();
+    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
+    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let invalid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V4,
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
             "member_id": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_ARGON2ID_HKDF_SHA256,
+                "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
                 "m": 47104,
                 "t": 1,
                 "p": 1,
-                "salt": "AAAAAAAAAAAAAAAAAAAAAA",
+                "ikm_salt": ikm_salt,
+                "hkdf_salt": hkdf_salt,
                 "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",

@@ -17,8 +17,8 @@ fn test_derive_cek() {
     // Test CEK derivation from mk + salt + sid
     let mk = [0u8; 32]; // All zeros for simplicity
     let mk_obj = MasterKey::new(mk);
-    // Fixed 16 bytes salt: all zeros
-    let salt_bytes = [0u8; 16];
+    // Fixed 32 bytes salt: all zeros
+    let salt_bytes = [0u8; 32];
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
@@ -37,8 +37,8 @@ fn test_derive_cek_different_salt() {
     // Different salt should produce different cek
     let mk = [0u8; 32];
     let mk_obj = MasterKey::new(mk);
-    let salt1_bytes = [0u8; 16];
-    let salt2_bytes = [1u8; 16];
+    let salt1_bytes = [0u8; 32];
+    let salt2_bytes = [1u8; 32];
     let salt1 = encode_base64url_nopad(&salt1_bytes);
     let salt2 = encode_base64url_nopad(&salt2_bytes);
     let sid = test_sid();
@@ -56,7 +56,7 @@ fn test_derive_cek_different_mk() {
     let mk1_obj = MasterKey::new(mk1);
     let mk2 = [1u8; 32];
     let mk2_obj = MasterKey::new(mk2);
-    let salt_bytes = [0u8; 16];
+    let salt_bytes = [0u8; 32];
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
@@ -71,7 +71,7 @@ fn test_derive_cek_different_sid() {
     // Different sid should produce different cek
     let mk = [0u8; 32];
     let mk_obj = MasterKey::new(mk);
-    let salt_bytes = [0u8; 16];
+    let salt_bytes = [0u8; 32];
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid1 = test_sid();
     let sid2 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
@@ -87,7 +87,7 @@ fn test_derive_cek_invalid_salt_length() {
     // Salt with wrong length should fail
     let mk = [0u8; 32];
     let mk_obj = MasterKey::new(mk);
-    // 8 bytes instead of 16 bytes
+    // 8 bytes instead of 32 bytes
     let salt_bytes = [0u8; 8];
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();

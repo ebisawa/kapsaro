@@ -12,6 +12,7 @@ use secretenv::model::identifiers::{alg, format, hpke, private_key};
 use secretenv::model::kv_enc::entry::KvEntryValue;
 use secretenv::model::kv_enc::header::{KvHeader, KvWrap};
 use secretenv::model::signature::ArtifactSignature;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
 
@@ -52,14 +53,17 @@ fn test_parse_public_key_str_with_schema() {
 
 #[test]
 fn test_parse_private_key_bytes_rejects_legacy_argon2_fields_error() {
+    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
+    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let private_key = serde_json::json!({
         "protected": {
-            "format": format::PRIVATE_KEY_V4,
+            "format": format::PRIVATE_KEY_V5,
             "member_id": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": private_key::PROTECTION_METHOD_ARGON2ID_HKDF_SHA256,
-                "salt": "AAAAAAAAAAAAAAAAAAAAAA",
+                "kdf": private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
+                "ikm_salt": ikm_salt,
+                "hkdf_salt": hkdf_salt,
                 "aead": alg::AEAD_XCHACHA20_POLY1305,
                 "m": 47104
             },
@@ -119,6 +123,7 @@ fn test_parse_file_enc_str_with_schema() {
 
 #[test]
 fn test_parse_kv_tokens_with_schema() {
+    let kv_salt = encode_base64url_nopad(&[0u8; 32]);
     let head = KvHeader {
         sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
         created_at: "2026-01-14T00:00:00Z".to_string(),
@@ -135,7 +140,7 @@ fn test_parse_kv_tokens_with_schema() {
         removed_recipients: None,
     };
     let entry = KvEntryValue {
-        salt: "AAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        salt: kv_salt,
         k: "DATABASE_URL".to_string(),
         aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),

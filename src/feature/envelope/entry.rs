@@ -32,7 +32,7 @@ pub(crate) fn encrypt_entry(
     caller: &str,
     disclosed: bool,
 ) -> Result<KvEntryValue> {
-    // Generate 16 bytes random salt and encode as base64url (no padding)
+    // Generate 32 bytes random salt and encode as base64url (no padding)
     let salt = generate_salt();
 
     let cek = derive_cek(master_key, &salt, sid, debug)?;

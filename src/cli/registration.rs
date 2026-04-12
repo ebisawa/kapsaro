@@ -79,7 +79,7 @@ fn resolve_registration_github_user(
 fn resolve_registration_ssh_context(
     needs_new_key: bool,
     options: &crate::app::context::options::CommonCommandOptions,
-) -> Result<Option<crate::app::context::ssh::ResolvedSshSigner>, Error> {
+) -> Result<Option<crate::app::context::ssh::ResolvedSshSigningContext>, Error> {
     if needs_new_key {
         Ok(Some(resolve_ssh_context(options)?))
     } else {

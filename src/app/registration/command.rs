@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::verification::OnlineVerificationStatus;
@@ -29,7 +29,7 @@ pub fn build_registration(
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     mode: RegistrationMode,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<RegistrationCommand> {
     let setup = resolve_member_setup(common, member_id, github_user, key_plan, ssh_ctx)?;
     build_registration_command(common, mode, setup)
@@ -118,7 +118,7 @@ fn resolve_member_setup(
     member_id: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<MemberSetupResult> {
     match key_plan {
         RegistrationKeyPlan::UseExisting { kid, expires_at } => {
@@ -137,7 +137,7 @@ fn resolve_generated_member_setup(
     common: &CommonCommandOptions,
     member_id: &str,
     github_user: Option<String>,
-    ssh_ctx: ResolvedSshSigner,
+    ssh_ctx: ResolvedSshSigningContext,
 ) -> Result<MemberSetupResult> {
     let github_account = resolve_github_account(github_user, common.verbose)?;
     let github_verification =
@@ -194,7 +194,7 @@ fn generate_member_key_result(
     common: &CommonCommandOptions,
     member_id: &str,
     github_account: Option<GithubAccount>,
-    ssh_ctx: ResolvedSshSigner,
+    ssh_ctx: ResolvedSshSigningContext,
 ) -> Result<MemberKeySetupResult> {
     let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
     let result = generate_key(KeyGenerationOptions {
@@ -239,7 +239,9 @@ fn build_existing_member_key_result(kid: String, expires_at: String) -> MemberKe
     }
 }
 
-fn require_generation_ssh_context(ssh_ctx: Option<ResolvedSshSigner>) -> Result<ResolvedSshSigner> {
+fn require_generation_ssh_context(
+    ssh_ctx: Option<ResolvedSshSigningContext>,
+) -> Result<ResolvedSshSigningContext> {
     ssh_ctx.ok_or_else(|| crate::Error::InvalidOperation {
         message: "SSH signing context is required for key generation".to_string(),
     })

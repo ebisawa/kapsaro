@@ -7,7 +7,7 @@ use crate::app::context::execution::{
     build_read_execution_warnings, resolve_read_execution, ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::trust::{build_read_signer_trust, DecryptPolicy, SignerTrustOutcome};
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::verify::file::verify_file_content;
@@ -27,7 +27,7 @@ pub(crate) fn build_decrypt_file_command(
     member_id: Option<String>,
     kid: Option<&str>,
     content: FileEncContent,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<DecryptFileCommand> {
     let execution = resolve_read_execution(options, member_id, kid, ssh_ctx)?;
     let mut warnings = build_read_execution_warnings(&execution)?;

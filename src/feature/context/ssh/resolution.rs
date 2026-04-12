@@ -8,7 +8,7 @@ use crate::config::resolution::ssh_key::{
 use crate::config::resolution::ssh_signing_method::{
     resolve_ssh_signing_method, resolve_ssh_signing_method_config,
 };
-use crate::config::types::SshSigner;
+use crate::config::types::SshSigningMethod;
 use crate::feature::context::ssh::params::{ResolvedSshCommands, SshSigningParams};
 use crate::io::ssh::protocol::SshKeyDescriptor;
 use crate::{Error, Result};
@@ -18,7 +18,7 @@ use tracing::debug;
 pub(crate) fn resolve_signing_method(
     params: &SshSigningParams,
     base_dir: Option<&Path>,
-) -> Result<SshSigner> {
+) -> Result<SshSigningMethod> {
     let signing_method_config = resolve_ssh_signing_method_config(params.signing_method, base_dir)?;
     let signing_method = resolve_ssh_signing_method(signing_method_config);
 
@@ -37,13 +37,15 @@ pub(crate) fn resolve_ssh_commands(base_dir: Option<&Path>) -> Result<ResolvedSs
 }
 
 pub(crate) fn resolve_backend_key_descriptor(
-    signing_method: SshSigner,
+    signing_method: SshSigningMethod,
     ssh_key: &Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<Option<SshKeyDescriptor>> {
     match signing_method {
-        SshSigner::SshKeygen => resolve_ssh_key_descriptor(ssh_key.clone(), base_dir).map(Some),
-        SshSigner::SshAgent => match ssh_key {
+        SshSigningMethod::SshKeygen => {
+            resolve_ssh_key_descriptor(ssh_key.clone(), base_dir).map(Some)
+        }
+        SshSigningMethod::SshAgent => match ssh_key {
             Some(path) => Ok(Some(SshKeyDescriptor::from_path(path.clone()))),
             None => Ok(None),
         },

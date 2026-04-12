@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::errors::handle_kv_key_not_found_error;
 use crate::app::trust::{build_read_signer_trust, ReadTrustPolicy, SignerTrustOutcome};
 use crate::feature::kv::decrypt::{
@@ -40,7 +40,7 @@ pub(crate) fn build_kv_read_command<P>(
     options: &CommonCommandOptions,
     member_id: Option<String>,
     file_name: Option<&str>,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<KvReadCommand>
 where
     P: ReadTrustPolicy,

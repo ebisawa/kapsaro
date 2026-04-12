@@ -6,7 +6,7 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::review::{
     ensure_text_file_matches_snapshot, ensure_workspace_members_match_snapshot,
 };
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::errors::handle_kv_key_not_found_error;
 use crate::app::trust::{
     current_self_sig_x, evaluate_signer_trust_with_proof, CommandCapability, RecipientTrustOutcome,
@@ -188,7 +188,7 @@ pub(crate) fn build_mutation_write_plan<P>(
     member_id: Option<String>,
     file_name: Option<&str>,
     allow_missing: bool,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<MutationWriteTrustPlan<P>>
 where
     P: WriteTrustPolicy,

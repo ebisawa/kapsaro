@@ -9,7 +9,7 @@
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default (auto)
 
-use crate::config::types::{SshSigner, SshSignerConfig};
+use crate::config::types::{SshSigningMethod, SshSigningMethodConfig};
 use crate::test_utils::EnvGuard;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -21,19 +21,19 @@ use super::{
 #[test]
 fn test_parse_ssh_signing_method_config_auto() {
     let result = parse_ssh_signing_method_config("auto").unwrap();
-    assert_eq!(result, SshSignerConfig::Auto);
+    assert_eq!(result, SshSigningMethodConfig::Auto);
 }
 
 #[test]
 fn test_parse_ssh_signing_method_config_ssh_agent() {
     let result = parse_ssh_signing_method_config("ssh-agent").unwrap();
-    assert_eq!(result, SshSignerConfig::SshAgent);
+    assert_eq!(result, SshSigningMethodConfig::SshAgent);
 }
 
 #[test]
 fn test_parse_ssh_signing_method_config_ssh_keygen() {
     let result = parse_ssh_signing_method_config("ssh-keygen").unwrap();
-    assert_eq!(result, SshSignerConfig::SshKeygen);
+    assert_eq!(result, SshSigningMethodConfig::SshKeygen);
 }
 
 #[test]
@@ -50,14 +50,15 @@ fn test_parse_ssh_signing_method_config_case_sensitive() {
 
 #[test]
 fn test_resolve_ssh_signing_method_config_cli_ssh_agent() {
-    let result = resolve_ssh_signing_method_config(Some(SshSigner::SshAgent), None).unwrap();
-    assert_eq!(result, SshSignerConfig::SshAgent);
+    let result = resolve_ssh_signing_method_config(Some(SshSigningMethod::SshAgent), None).unwrap();
+    assert_eq!(result, SshSigningMethodConfig::SshAgent);
 }
 
 #[test]
 fn test_resolve_ssh_signing_method_config_cli_ssh_keygen() {
-    let result = resolve_ssh_signing_method_config(Some(SshSigner::SshKeygen), None).unwrap();
-    assert_eq!(result, SshSignerConfig::SshKeygen);
+    let result =
+        resolve_ssh_signing_method_config(Some(SshSigningMethod::SshKeygen), None).unwrap();
+    assert_eq!(result, SshSigningMethodConfig::SshKeygen);
 }
 
 #[test]
@@ -68,7 +69,7 @@ fn test_resolve_ssh_signing_method_config_default_is_auto() {
     let temp = TempDir::new().unwrap();
     let result = resolve_ssh_signing_method_config(None, Some(temp.path())).unwrap();
 
-    assert_eq!(result, SshSignerConfig::Auto);
+    assert_eq!(result, SshSigningMethodConfig::Auto);
 }
 
 #[test]
@@ -79,7 +80,7 @@ fn test_resolve_ssh_signing_method_config_env_var_auto() {
 
     let result = resolve_ssh_signing_method_config(None, None).unwrap();
 
-    assert_eq!(result, SshSignerConfig::Auto);
+    assert_eq!(result, SshSigningMethodConfig::Auto);
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn test_resolve_ssh_signing_method_config_env_var_ssh_agent() {
 
     let result = resolve_ssh_signing_method_config(None, None).unwrap();
 
-    assert_eq!(result, SshSignerConfig::SshAgent);
+    assert_eq!(result, SshSigningMethodConfig::SshAgent);
 }
 
 #[test]
@@ -101,31 +102,19 @@ fn test_resolve_ssh_signing_method_config_env_var_ssh_keygen() {
 
     let result = resolve_ssh_signing_method_config(None, None).unwrap();
 
-    assert_eq!(result, SshSignerConfig::SshKeygen);
-}
-
-#[test]
-#[serial]
-fn test_resolve_ssh_signing_method_config_old_env_var_is_ignored() {
-    let _guard = EnvGuard::new(&["SECRETENV_SSH_SIGNER", "SECRETENV_SSH_SIGNING_METHOD"]);
-    std::env::set_var("SECRETENV_SSH_SIGNER", "ssh-agent");
-
-    let temp = TempDir::new().unwrap();
-    let result = resolve_ssh_signing_method_config(None, Some(temp.path())).unwrap();
-
-    assert_eq!(result, SshSignerConfig::Auto);
+    assert_eq!(result, SshSigningMethodConfig::SshKeygen);
 }
 
 #[test]
 fn test_resolve_ssh_signing_method_ssh_agent() {
-    let result = resolve_ssh_signing_method(SshSignerConfig::SshAgent);
-    assert_eq!(result, SshSigner::SshAgent);
+    let result = resolve_ssh_signing_method(SshSigningMethodConfig::SshAgent);
+    assert_eq!(result, SshSigningMethod::SshAgent);
 }
 
 #[test]
 fn test_resolve_ssh_signing_method_ssh_keygen() {
-    let result = resolve_ssh_signing_method(SshSignerConfig::SshKeygen);
-    assert_eq!(result, SshSigner::SshKeygen);
+    let result = resolve_ssh_signing_method(SshSigningMethodConfig::SshKeygen);
+    assert_eq!(result, SshSigningMethod::SshKeygen);
 }
 
 #[test]
@@ -137,9 +126,9 @@ fn test_resolve_ssh_signing_method_auto_with_agent() {
     std::env::set_var("HOME", temp_dir.path());
     std::env::set_var("SSH_AUTH_SOCK", "/tmp/dummy-agent.sock");
 
-    let result = resolve_ssh_signing_method(SshSignerConfig::Auto);
+    let result = resolve_ssh_signing_method(SshSigningMethodConfig::Auto);
 
-    assert_eq!(result, SshSigner::SshAgent);
+    assert_eq!(result, SshSigningMethod::SshAgent);
 }
 
 #[test]
@@ -151,9 +140,9 @@ fn test_resolve_ssh_signing_method_auto_without_agent() {
     std::env::set_var("HOME", temp_dir.path());
     std::env::remove_var("SSH_AUTH_SOCK");
 
-    let result = resolve_ssh_signing_method(SshSignerConfig::Auto);
+    let result = resolve_ssh_signing_method(SshSigningMethodConfig::Auto);
 
-    assert_eq!(result, SshSigner::SshKeygen);
+    assert_eq!(result, SshSigningMethod::SshKeygen);
 }
 
 #[test]
@@ -165,13 +154,13 @@ fn test_resolve_ssh_signing_method_auto_with_explicit_key_prefers_agent_when_ava
     std::env::set_var("HOME", temp_dir.path());
     std::env::set_var("SSH_AUTH_SOCK", "/tmp/dummy-agent.sock");
 
-    let result = resolve_ssh_signing_method(SshSignerConfig::Auto);
+    let result = resolve_ssh_signing_method(SshSigningMethodConfig::Auto);
 
-    assert_eq!(result, SshSigner::SshAgent);
+    assert_eq!(result, SshSigningMethod::SshAgent);
 }
 
 #[test]
 fn test_ssh_signing_method_display() {
-    assert_eq!(format!("{}", SshSigner::SshAgent), "ssh-agent");
-    assert_eq!(format!("{}", SshSigner::SshKeygen), "ssh-keygen");
+    assert_eq!(format!("{}", SshSigningMethod::SshAgent), "ssh-agent");
+    assert_eq!(format!("{}", SshSigningMethod::SshKeygen), "ssh-keygen");
 }

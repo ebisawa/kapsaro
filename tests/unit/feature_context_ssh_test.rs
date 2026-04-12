@@ -7,7 +7,7 @@ use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
 use crate::test_utils::{setup_test_keystore, stub_ssh_keygen};
-use secretenv::config::types::SshSigner;
+use secretenv::config::types::SshSigningMethod;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
@@ -20,7 +20,7 @@ fn test_resolve_and_build_ssh_signing_context_default() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: true,
@@ -39,7 +39,7 @@ fn test_resolve_and_build_ssh_signing_context_verbose() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: true,
         check_determinism: true,
@@ -75,7 +75,7 @@ fn test_resolve_ssh_key_candidates_with_explicit_key() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: true,
@@ -98,7 +98,7 @@ fn test_build_ssh_signing_context_from_selected_key() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: true,
@@ -119,7 +119,7 @@ fn test_resolve_agent_with_explicit_key_loads_pubkey_from_file() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshAgent),
+        signing_method: Some(SshSigningMethod::SshAgent),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: true,
@@ -158,7 +158,7 @@ fn test_resolve_agent_with_explicit_nonexistent_key_fails() {
 
     let params = SshSigningParams {
         ssh_key: Some(nonexistent_key),
-        signing_method: Some(SshSigner::SshAgent),
+        signing_method: Some(SshSigningMethod::SshAgent),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: true,
@@ -186,7 +186,7 @@ fn test_build_ssh_signing_context_skips_determinism_check_when_disabled() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: false,
@@ -206,7 +206,7 @@ fn test_build_ssh_signing_context_checks_determinism_when_enabled() {
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
         verbose: false,
         check_determinism: true,

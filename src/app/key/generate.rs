@@ -3,7 +3,7 @@
 
 use crate::app::context::identity::resolve_github_user_input;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::key::types::KeyNewResult;
@@ -39,7 +39,7 @@ pub fn generate_key_command(
     expires_at_arg: &Option<String>,
     valid_for_arg: &Option<String>,
     no_activate: bool,
-    ssh_ctx: ResolvedSshSigner,
+    ssh_ctx: ResolvedSshSigningContext,
 ) -> Result<KeyNewResult> {
     let github_user = resolve_github_user_input(github_user_arg, options.home.as_deref())?;
     let (created_at, expires_at) = resolve_key_timestamps(expires_at_arg, valid_for_arg)?;

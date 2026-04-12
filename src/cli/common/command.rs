@@ -8,7 +8,7 @@ use crate::app::context::execution::{resolve_write_execution, ExecutionContext};
 use crate::app::context::identity::{build_missing_member_id_error, resolve_member_id_input};
 use crate::app::context::member::resolve_required_member;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::file::decrypt::DecryptFileCommand;
 use crate::app::file::encrypt::EncryptFileCommand;
 use crate::app::kv::mutation::{build_mutation_write_plan, MutationWriteTrustPlan};
@@ -54,7 +54,7 @@ pub(crate) trait WriteCommandPlan {
 pub(crate) fn resolve_command_input(
     common: &CommonOptions,
     member_id: Option<String>,
-) -> Result<(CommonCommandOptions, Option<ResolvedSshSigner>)> {
+) -> Result<(CommonCommandOptions, Option<ResolvedSshSigningContext>)> {
     let options = resolve_options(common);
     let ssh_ctx = resolve_ssh_context_optional(&options, member_id)?;
     Ok((options, ssh_ctx))

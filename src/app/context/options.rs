@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use crate::config::types::SshSigner;
+use crate::config::types::SshSigningMethod;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::resolver::KeystoreResolver;
 use crate::Result;
@@ -15,7 +15,7 @@ pub(crate) struct CommonCommandOptions {
     pub identity: Option<PathBuf>,
     pub verbose: bool,
     pub workspace: Option<PathBuf>,
-    pub ssh_signer: Option<SshSigner>,
+    pub ssh_signing_method: Option<SshSigningMethod>,
 }
 
 impl CommonCommandOptions {

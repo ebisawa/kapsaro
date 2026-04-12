@@ -5,7 +5,7 @@ use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
 use crate::test_utils::create_temp_ssh_keypair_in_dir;
-use secretenv::config::types::SshSigner;
+use secretenv::config::types::SshSigningMethod;
 use secretenv::crypto::sign::sign_detached_bytes;
 use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
 use secretenv::feature::verify::public_key::verify_public_key_with_attestation;
@@ -25,13 +25,13 @@ fn generate_real_ssh_attested_public_key(
 
     let params = SshSigningParams {
         ssh_key: Some(ssh_priv),
-        signing_method: Some(SshSigner::SshKeygen),
+        signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(home_dir.clone()),
         verbose: false,
         check_determinism: true,
     };
     let candidates = resolve_ssh_key_candidates_with_params(&params).unwrap();
-    let ssh_signer =
+    let ssh_signing_context =
         build_ssh_signing_context_with_params(&params, &candidates[0].public_key).unwrap();
 
     let result = generate_key(KeyGenerationOptions {
@@ -43,7 +43,7 @@ fn generate_real_ssh_attested_public_key(
         debug: false,
         github_account: None,
         verbose: false,
-        ssh_binding: ssh_signer.into_ssh_binding(),
+        ssh_binding: ssh_signing_context.into_ssh_binding(),
     })
     .unwrap();
 

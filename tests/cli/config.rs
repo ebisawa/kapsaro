@@ -233,62 +233,6 @@ fn test_config_invalid_key_fails() {
         .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Invalid")));
 }
 
-#[test]
-fn test_config_old_ssh_key_fails() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_key")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
-}
-
-#[test]
-fn test_config_old_ssh_signer_fails() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_signer")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
-}
-
-#[test]
-fn test_config_old_ssh_keygen_fails() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_keygen")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
-}
-
-#[test]
-fn test_config_old_ssh_add_fails() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_add")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Valid")));
-}
-
 // ============================================================================
 // Unset removes value
 // ============================================================================

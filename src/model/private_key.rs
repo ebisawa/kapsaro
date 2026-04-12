@@ -1,14 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! PrivateKey v4 model.
+//! PrivateKey v5 model.
 //!
 //! SSH Ed25519 encrypted private key storage for secretenv.
 
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-/// PrivateKey v4 document (SSH encrypted).
+/// PrivateKey v5 document (encrypted).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct PrivateKey {
@@ -23,7 +23,7 @@ pub struct PrivateKey {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct PrivateKeyProtected {
-    /// Format identifier: "secretenv.private.key@4"
+    /// Format identifier: "secretenv.private.key@5"
     pub format: String,
 
     /// Member ID (RFC 5322 email format)
@@ -51,19 +51,31 @@ pub enum PrivateKeyAlgorithm {
     #[serde(rename = "sshsig-ed25519-hkdf-sha256")]
     SshSig {
         fpr: String,
-        salt: String,
+        ikm_salt: String,
+        hkdf_salt: String,
         aead: String,
     },
     /// Argon2id password-based key derivation
-    #[serde(rename = "argon2id-hkdf-sha256")]
-    Argon2id { salt: String, aead: String },
+    #[serde(rename = "argon2id-m64t3p4-hkdf-sha256")]
+    Argon2id {
+        ikm_salt: String,
+        hkdf_salt: String,
+        aead: String,
+    },
 }
 
 impl PrivateKeyAlgorithm {
-    /// Salt value (common to all variants)
-    pub fn salt(&self) -> &str {
+    /// IKM salt value.
+    pub fn ikm_salt(&self) -> &str {
         match self {
-            Self::SshSig { salt, .. } | Self::Argon2id { salt, .. } => salt,
+            Self::SshSig { ikm_salt, .. } | Self::Argon2id { ikm_salt, .. } => ikm_salt,
+        }
+    }
+
+    /// HKDF salt value.
+    pub fn hkdf_salt(&self) -> &str {
+        match self {
+            Self::SshSig { hkdf_salt, .. } | Self::Argon2id { hkdf_salt, .. } => hkdf_salt,
         }
     }
 

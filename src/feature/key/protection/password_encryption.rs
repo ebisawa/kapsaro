@@ -3,29 +3,32 @@
 
 //! Password-based private key encryption/decryption using Argon2id + XChaCha20-Poly1305.
 
-use super::encryption::{decode_encryption_params, decrypt_and_deserialize, serialize_and_encrypt};
+use super::encryption::{decode_ciphertext_params, decrypt_and_deserialize, serialize_and_encrypt};
 use super::password_key_derivation;
+use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::model::identifiers::{alg, format};
 use crate::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use crate::support::codec::base64_public::encode_base64url_nopad;
+use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::{Error, Result};
 
 /// Build protected header for password-based PrivateKey encryption
 fn build_protected_header(
     member_id: &str,
     kid: &str,
-    salt: &crate::crypto::types::primitives::Salt,
+    ikm_salt_b64: String,
+    hkdf_salt_b64: String,
     created_at: &str,
     expires_at: &str,
 ) -> PrivateKeyProtected {
     PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V4.to_string(),
+        format: format::PRIVATE_KEY_V5.to_string(),
         member_id: member_id.to_string(),
         kid: kid.to_string(),
         alg: PrivateKeyAlgorithm::Argon2id {
-            salt: encode_base64url_nopad(salt.as_bytes()),
+            ikm_salt: ikm_salt_b64,
+            hkdf_salt: hkdf_salt_b64,
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: created_at.to_string(),
@@ -43,11 +46,23 @@ pub fn encrypt_private_key_with_password(
     password: &str,
     debug: bool,
 ) -> Result<PrivateKey> {
-    let salt = password_key_derivation::generate_salt();
+    let ikm_salt = password_key_derivation::generate_ikm_salt();
+    let hkdf_salt = password_key_derivation::generate_hkdf_salt();
+    let ikm_salt_b64 = encode_base64url_nopad(ikm_salt.as_bytes());
+    let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
 
-    let protected = build_protected_header(member_id, kid, &salt, created_at, expires_at);
+    let protected = build_protected_header(
+        member_id,
+        kid,
+        ikm_salt_b64,
+        hkdf_salt_b64,
+        created_at,
+        expires_at,
+    );
 
-    let enc_key = password_key_derivation::derive_key_from_password(password, &salt, kid, debug)?;
+    let enc_key = password_key_derivation::derive_key_from_password(
+        password, &ikm_salt, &hkdf_salt, kid, debug,
+    )?;
 
     let encrypted = serialize_and_encrypt(
         plaintext,
@@ -90,11 +105,18 @@ pub fn decrypt_private_key_with_password(
         }
     }
 
-    let (salt, nonce, ct, aad) = decode_encryption_params(private_key)?;
+    let ikm_salt_bytes: [u8; 32] =
+        decode_base64url_nopad_array(private_key.protected.alg.ikm_salt(), "ikm_salt")?;
+    let hkdf_salt_bytes: [u8; 32] =
+        decode_base64url_nopad_array(private_key.protected.alg.hkdf_salt(), "hkdf_salt")?;
+    let ikm_salt = PrivateKeyIkmSalt::new(ikm_salt_bytes);
+    let hkdf_salt = HkdfSalt::new(hkdf_salt_bytes);
+    let (nonce, ct, aad) = decode_ciphertext_params(private_key)?;
 
     let enc_key = password_key_derivation::derive_key_from_password(
         password,
-        &salt,
+        &ikm_salt,
+        &hkdf_salt,
         &private_key.protected.kid,
         debug,
     )?;

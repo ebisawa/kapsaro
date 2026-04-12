@@ -13,6 +13,7 @@ use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key
 use predicates::prelude::*;
 use secretenv::io::keystore::member::find_active_key_document;
 use secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::fs;
 use tempfile::TempDir;
 
@@ -27,25 +28,30 @@ fn create_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::
     fs::write(member_dir.join("active"), kid).unwrap();
 
     // Create a dummy private.json (minimal structure for testing)
+    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
+    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let private_json = format!(
         r#"{{
-    "format": "secretenv.private.key@4",
-    "member_id": "{}",
-    "kid": "{}",
-    "protection": {{
-        "method": "{}",
-        "fpr": "SHA256:dummy",
-        "salt": "AAAAAAAAAAAAAAAAAAAAAA"
+    "protected": {{
+        "format": "secretenv.private.key@5",
+        "member_id": "{}",
+        "kid": "{}",
+        "alg": {{
+            "kdf": "{}",
+            "fpr": "SHA256:dummy",
+            "ikm_salt": "{}",
+            "hkdf_salt": "{}",
+            "aead": "xchacha20-poly1305"
+        }},
+        "created_at": "2026-01-16T00:00:00Z",
+        "expires_at": "2027-01-16T00:00:00Z"
     }},
     "encrypted": {{
-        "aead": "xchacha20-poly1305",
         "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "ct": "dGVzdA"
-    }},
-    "created_at": "2026-01-16T00:00:00Z",
-    "expires_at": "2027-01-16T00:00:00Z"
+    }}
 }}"#,
-        member_id, kid, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256
+        member_id, kid, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256, ikm_salt, hkdf_salt
     );
     fs::write(kid_dir.join("private.json"), private_json).unwrap();
 

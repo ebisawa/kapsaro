@@ -6,7 +6,7 @@
 use crate::crypto::kdf;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
-use crate::crypto::types::primitives::Salt;
+use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::model::identifiers::context;
 use crate::support::kid::kid_display_lossy;
 use crate::Result;
@@ -16,15 +16,22 @@ use rand::RngCore;
 use tracing::debug;
 use zeroize::Zeroizing;
 
-const ARGON2_MEMORY_COST_KIB: u32 = 47104;
-const ARGON2_TIME_COST: u32 = 1;
-const ARGON2_PARALLELISM: u32 = 1;
+const ARGON2_MEMORY_COST_KIB: u32 = 65536;
+const ARGON2_TIME_COST: u32 = 3;
+const ARGON2_PARALLELISM: u32 = 4;
 
-/// Generate a random 16-byte salt
-pub fn generate_salt() -> Salt {
-    let mut salt_bytes = [0u8; 16];
+/// Generate a random salt for Argon2id input.
+pub fn generate_ikm_salt() -> PrivateKeyIkmSalt {
+    let mut salt_bytes = [0u8; 32];
     OsRng.fill_bytes(&mut salt_bytes);
-    Salt::new(salt_bytes)
+    PrivateKeyIkmSalt::new(salt_bytes)
+}
+
+/// Generate a random salt for HKDF-Extract.
+pub fn generate_hkdf_salt() -> HkdfSalt {
+    let mut salt_bytes = [0u8; 32];
+    OsRng.fill_bytes(&mut salt_bytes);
+    HkdfSalt::new(salt_bytes)
 }
 
 /// Derive an encryption key from a password using Argon2id + HKDF-SHA256
@@ -34,7 +41,8 @@ pub fn generate_salt() -> Salt {
 /// 2. IKM + salt -> HKDF-SHA256 (with kid-bound info) -> XChaChaKey
 pub fn derive_key_from_password(
     password: &str,
-    salt: &Salt,
+    ikm_salt: &PrivateKeyIkmSalt,
+    hkdf_salt: &HkdfSalt,
     kid: &str,
     debug_enabled: bool,
 ) -> Result<XChaChaKey> {
@@ -47,7 +55,7 @@ pub fn derive_key_from_password(
             ARGON2_PARALLELISM
         );
     }
-    let ikm = argon2id_hash(password, salt)?;
+    let ikm = argon2id_hash(password, ikm_salt)?;
 
     if debug_enabled {
         debug!(
@@ -57,15 +65,15 @@ pub fn derive_key_from_password(
     }
     let info = Info::from_string(&format!(
         "{}:{}",
-        context::PASSWORD_PRIVATE_KEY_ENC_INFO_PREFIX_V4,
+        context::PASSWORD_PRIVATE_KEY_ENC_INFO_PREFIX_V5,
         kid
     ));
-    let cek = kdf::expand_to_array(&Ikm::from(ikm.as_ref()), Some(salt), &info)?;
+    let cek = kdf::expand_to_array(&Ikm::from(ikm.as_ref()), Some(hkdf_salt), &info)?;
     XChaChaKey::from_slice(cek.as_bytes())
 }
 
 /// Hash password with Argon2id, returning a 32-byte IKM wrapped in Zeroizing
-fn argon2id_hash(password: &str, salt: &Salt) -> Result<Zeroizing<[u8; 32]>> {
+fn argon2id_hash(password: &str, salt: &PrivateKeyIkmSalt) -> Result<Zeroizing<[u8; 32]>> {
     let argon2_params = fixed_argon2_params()?;
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,

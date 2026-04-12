@@ -5,6 +5,7 @@ use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use secretenv::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
 use secretenv::feature::key::portable_export::export_private_key_portable;
+use secretenv::model::identifiers::format;
 use secretenv::model::private_key::{
     EncryptedData, IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm,
     PrivateKeyPlaintext, PrivateKeyProtected,
@@ -167,7 +168,8 @@ fn test_env_key_rejects_invalid_format() {
             member_id: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::Argon2id {
-                salt: "AAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ikm_salt: encode_base64url_nopad(&[0u8; 32]),
+                hkdf_salt: encode_base64url_nopad(&[1u8; 32]),
                 aead: "xchacha20-poly1305".to_string(),
             },
             created_at: "2026-01-01T00:00:00Z".to_string(),
@@ -203,12 +205,13 @@ fn test_env_key_rejects_sshsig_algorithm() {
     // Build a PrivateKey with SshSig algorithm and encode it
     let sshsig_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: "secretenv.private.key@4".to_string(),
+            format: format::PRIVATE_KEY_V5.to_string(),
             member_id: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:dummy".to_string(),
-                salt: "AAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ikm_salt: encode_base64url_nopad(&[0u8; 32]),
+                hkdf_salt: encode_base64url_nopad(&[1u8; 32]),
                 aead: "xchacha20-poly1305".to_string(),
             },
             created_at: "2026-01-01T00:00:00Z".to_string(),

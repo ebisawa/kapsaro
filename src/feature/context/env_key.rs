@@ -108,7 +108,7 @@ fn parse_password_protected_private_key(json_bytes: &[u8]) -> Result<PrivateKey>
         PrivateKeyAlgorithm::Argon2id { .. } => Ok(private_key),
         _ => Err(Error::Config {
             message: format!(
-                "{} must contain a password-protected key (argon2id-hkdf-sha256)",
+                "{} must contain a password-protected key (argon2id-m64t3p4-hkdf-sha256)",
                 ENV_PRIVATE_KEY
             ),
         }),

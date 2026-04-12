@@ -266,10 +266,10 @@ fn test_derive_key_from_ssh_preserves_ssh_backend_errors() {
         }
     }
 
-    let salt = secretenv::crypto::types::primitives::Salt::new([7u8; 16]);
     let result = secretenv::feature::key::protection::key_derivation::derive_key_from_ssh(
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        &salt,
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        &secretenv::crypto::types::primitives::HkdfSalt::new([7u8; 32]),
         &FailingBackend,
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
         false,
@@ -313,10 +313,10 @@ fn test_derive_key_from_ssh_maps_non_deterministic_error() {
         }
     }
 
-    let salt = secretenv::crypto::types::primitives::Salt::new([9u8; 16]);
     let result = secretenv::feature::key::protection::key_derivation::derive_key_from_ssh(
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        &salt,
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        &secretenv::crypto::types::primitives::HkdfSalt::new([9u8; 32]),
         &NonDeterministicBackend {
             counter: Cell::new(0),
         },

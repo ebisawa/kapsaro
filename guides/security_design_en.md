@@ -718,7 +718,7 @@ graph TB
 1. MK generation      — 32 bytes, CSPRNG
 2. HPKE wrap          — wrap MK with each recipient's public key (info = AAD)
 3. For each entry:
-   a. salt generation — 16 bytes, CSPRNG
+   a. salt generation — 32 bytes, CSPRNG
    b. CEK derivation  — HKDF-SHA256(MK, salt, sid)
    c. AEAD encryption — encrypt VALUE with CEK using XChaCha20-Poly1305
 4. Ed25519 signature  — sign canonical_bytes of all lines (see §8.3)
@@ -741,11 +741,11 @@ As with file-enc (§5.5), **signature verification precedes decryption**.
 ### 6.2 CEK Derivation
 
 ```
-salt_bytes = base64url_decode(entry.salt)   // 16 bytes
+salt_bytes = base64url_decode(entry.salt)   // 32 bytes
 
 CEK = HKDF-SHA256(
     ikm    = MK,                            // 32 bytes
-    salt   = salt_bytes,                    // 16 bytes
+    salt   = salt_bytes,                    // 32 bytes
     info   = jcs({
         "p":   "secretenv:kv:cek@3",
         "sid": <HEAD.sid>
@@ -854,7 +854,7 @@ When loading keys from the local keystore, if `private.json` is used, the siblin
 
 `private.json` itself has two layers.
 
-- `protected`: header fields such as `member_id`, `kid`, `alg.fpr`, `alg.salt`, `created_at`, and `expires_at`; these define the decryption conditions and tamper-detection scope
+- `protected`: header fields such as `member_id`, `kid`, `alg.fpr`, `alg.ikm_salt`, `alg.hkdf_salt`, `created_at`, and `expires_at`; these define the decryption conditions and tamper-detection scope
 - `encrypted`: the ciphertext containing the actual SecretEnv private key material
 
 Here `alg.fpr` is only an identifier for the SSH key used to protect that key generation. It is not the SSH private key itself.
@@ -863,11 +863,11 @@ Here `alg.fpr` is only an identifier for the SSH key used to protect that key ge
 
 ```mermaid
 graph LR
-    Msg["Sign message<br/>(kid + salt)"] -->|SSHSIG signing| SSHSign["SSH Ed25519 signature"]
+    Msg["Sign message<br/>(prefix + ikm_salt)"] -->|SSHSIG signing| SSHSign["SSH Ed25519 signature"]
     SSHKey["SSH private key<br/>(identified by alg.fpr)"] --> SSHSign
     SSHSign -->|"raw signature<br/>64 bytes"| IKM["IKM"]
     IKM --> HKDF["HKDF-SHA256"]
-    Salt["alg.salt<br/>(16 bytes)"] --> HKDF
+    Salt["alg.hkdf_salt<br/>(32 bytes)"] --> HKDF
     HKDF -->|32 bytes| EncKey["enc_key"]
     EncKey --> AEAD["XChaCha20-Poly1305"]
     Plaintext["Private key material<br/>(keys JSON)"] --> AEAD
@@ -878,12 +878,11 @@ graph LR
 ### 7.3 Sign Message
 
 ```
-secretenv:key-protection@4
-{kid}
-{hex(salt)}
+secretenv:key-protection-ikm@5
+{ikm_salt}
 ```
 
-Each line is separated by LF (`0x0A`). Since `member_id` is an arbitrary string, it is not used for cryptographic purposes; only canonical `kid` is used.
+Each line is separated by LF (`0x0A`). `ikm_salt` is the base64url string stored in `protected.alg.ikm_salt`. `kid` is excluded from the sign message and used only in HKDF context binding.
 
 ### 7.4 SSHSIG signed_data
 
@@ -902,8 +901,8 @@ SSH_STRING   SHA256(sign_message)
 ```
 enc_key = HKDF-SHA256(
     ikm    = ed25519_raw_signature_bytes,    // 64 bytes
-    salt   = protected.alg.salt,             // 16 bytes
-    info   = "secretenv:private-key-enc@4:{kid}",
+    salt   = protected.alg.hkdf_salt,        // 32 bytes
+    info   = "secretenv:sshsig-private-key-enc@5:{kid}",
     length = 32
 )
 ```
@@ -926,7 +925,7 @@ To decrypt `private.json` in the local keystore, all of the following conditions
 
 1. The SSH key corresponding to `protected.alg.fpr` must be usable
 2. That SSH key must produce deterministic signatures for identical input
-3. The sign message must be reconstructible from `protected.alg.salt` and `kid`
+3. The sign message must be reconstructible from `protected.alg.ikm_salt`
 4. `protected` must be untampered so that AAD verification over `jcs(protected)` succeeds
 
 Conversely, an attacker does not necessarily need to steal the SSH private key file itself; any actor with equivalent signing capability can derive `enc_key`.
@@ -945,10 +944,10 @@ The high-level local keystore protection flow is:
 
 1. Load `private.json`
 2. When loading from the local keystore, also load the sibling `public.json` from the same `kid` directory, verify it as a PublicKey, and confirm `member_id` / `kid` consistency
-3. Read `kid`, `salt`, and the SSH key fingerprint from `protected`
-4. Rebuild the sign message from `kid + salt`
+3. Read `kid`, `ikm_salt`, `hkdf_salt`, and the SSH key fingerprint from `protected`
+4. Rebuild the sign message from `prefix + ikm_salt`
 5. Ask the SSH key to sign and extract raw Ed25519 signature bytes as IKM
-6. Derive `enc_key` via HKDF
+6. Derive `enc_key` via HKDF using `hkdf_salt` and `info = "secretenv:sshsig-private-key-enc@5:{kid}"`
 7. Decrypt the ciphertext using `jcs(protected)` as AAD
 
 This means the SSH key is both an authentication mechanism for local keystore access and, in practice, the source of decryption capability.
@@ -972,9 +971,9 @@ Since PrivateKey protection derives IKM from SSH signatures, **any entity that c
 
 Operationally, local keystore file permissions and SSH key handling must not be treated as separate concerns. Even if `private.json` has safe filesystem permissions, any actor on the same host that can freely use the SSH key or agent socket can ultimately decrypt the SecretEnv private key as well.
 
-### 7.9 Password-Based Key Protection (`argon2id-hkdf-sha256`)
+### 7.9 Password-Based Key Protection (`argon2id-m64t3p4-hkdf-sha256`)
 
-As an alternative to SSH-based protection, SecretEnv supports password-based private key protection using `argon2id-hkdf-sha256`. This scheme is designed for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
+As an alternative to SSH-based protection, SecretEnv supports password-based private key protection using `argon2id-m64t3p4-hkdf-sha256`. This scheme is designed for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
 
 #### 7.9.1 Use Case
 
@@ -983,17 +982,17 @@ Many CI platforms provide "secret variables" that are stored securely and expose
 #### 7.9.2 Key Derivation Pipeline
 
 ```
-Password + salt (16 bytes, random) → Argon2id (m=47104, t=1, p=1) → 32-byte IKM
-IKM + salt → HKDF-SHA256 (info: "secretenv:password-private-key-enc@4:{kid}") → 32-byte encryption key
+Password + ikm_salt (32 bytes, random) → Argon2id (m=65536, t=3, p=4) → 32-byte IKM
+IKM + hkdf_salt (32 bytes, random) → HKDF-SHA256 (info: "secretenv:password-private-key-enc@5:{kid}") → 32-byte encryption key
 ```
 
-The salt is intentionally reused for both Argon2id and HKDF steps. This is safe because the two algorithms have different internal structures and the salt serves different roles in each (Argon2id uses it as a salt parameter, HKDF uses it as the salt input to HKDF-Extract).
+`ikm_salt` is dedicated to Argon2id and `hkdf_salt` is dedicated to HKDF-Extract, keeping their responsibilities clearly separated.
 
-The HKDF info string (`secretenv:password-private-key-enc@4:{kid}`) differs from the SSH-based scheme (`secretenv:private-key-enc@4:{kid}`) to ensure domain separation between the two key derivation paths.
+The HKDF info string (`secretenv:password-private-key-enc@5:{kid}`) differs from the SSH-based scheme (`secretenv:sshsig-private-key-enc@5:{kid}`) to ensure domain separation between the two key derivation paths.
 
 #### 7.9.3 Argon2id Parameters and Password Requirements
 
-- Default parameters at export time: m=47104 (46 MiB), t=1, p=1 (OWASP recommended)
+- Fixed parameters at export time: m=65536 (64 MiB), t=3, p=4
 - Parameters are fixed by the implementation and are not serialized in the private key document
 - Minimum password length: 8 characters. This is the implementation-enforced floor, not a recommendation. Users are responsible for choosing a sufficiently strong password. For offline brute-force resistance, 20 or more random characters (or a passphrase with equivalent entropy) is strongly recommended.
 
@@ -1538,7 +1537,7 @@ graph TB
     end
 
     subgraph private_key["PrivateKey (local keystore)"]
-        PK_ENC["secretenv.private.key@4<br/>SSH signature-based encryption"]
+        PK_ENC["secretenv.private.key@5<br/>SSH signature-based encryption"]
     end
 
     subgraph file_enc["file-enc"]

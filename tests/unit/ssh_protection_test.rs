@@ -4,7 +4,7 @@
 use secretenv::crypto::kdf::expand_to_array;
 use secretenv::crypto::types::data::{Ikm, Info};
 use secretenv::crypto::types::keys::XChaChaKey;
-use secretenv::crypto::types::primitives::Salt;
+use secretenv::crypto::types::primitives::HkdfSalt;
 use secretenv::feature::key::protection::encryption::{
     decrypt_private_key, encrypt_private_key, PrivateKeyEncryptionParams,
 };
@@ -13,7 +13,7 @@ use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::model::identifiers::context::{
-    SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V4, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V4,
+    SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5,
 };
 use secretenv::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
@@ -44,44 +44,32 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
     }
 }
 
-fn derive_enc_key(raw_sig: &[u8], salt: &Salt, kid: &str) -> secretenv::Result<XChaChaKey> {
+fn derive_enc_key(raw_sig: &[u8], salt: &HkdfSalt, kid: &str) -> secretenv::Result<XChaChaKey> {
     let ikm = Ikm::from(raw_sig);
-    let info = Info::from_string(&format!("{}:{}", SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V4, kid));
+    let info = Info::from_string(&format!("{}:{}", SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5, kid));
     let cek = expand_to_array(&ikm, Some(salt), &info)?;
     XChaChaKey::from_slice(cek.as_bytes())
 }
 
 #[test]
 fn test_build_sign_message() {
-    let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
-    let salt = Salt::new([0u8; 16]);
+    let ikm_salt = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-    let message = build_sign_message(kid, &salt);
+    let message = build_sign_message(ikm_salt);
 
-    // Should start with protocol identifier
-    assert!(message.starts_with(&format!("{}\n", SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V4)));
-
-    // Should contain kid
-    assert!(message.contains(kid));
-
-    // Should contain hex-encoded salt
-    let salt_hex = hex::encode(salt.as_bytes());
-    assert!(message.contains(&salt_hex));
+    assert!(message.starts_with(&format!("{}\n", SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5)));
+    assert!(message.ends_with(ikm_salt));
 }
 
 #[test]
 fn test_build_sign_message_format() {
-    let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
-    let salt = Salt::new([0xAB; 16]);
+    let ikm_salt = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 
-    let message = build_sign_message(kid, &salt);
+    let message = build_sign_message(ikm_salt);
 
-    // Format: "{prefix}\n{kid}\n{hex(salt)}"
     let expected = format!(
-        "{}\n{}\n{}",
-        SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V4,
-        kid,
-        hex::encode(salt.as_bytes())
+        "{}\n{}",
+        SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5, ikm_salt
     );
 
     assert_eq!(message, expected);
@@ -91,7 +79,7 @@ fn test_build_sign_message_format() {
 fn test_derive_enc_key() {
     // Test key derivation from signature
     let raw_sig = [0u8; 64]; // Simulated Ed25519 signature
-    let salt = Salt::new([1u8; 16]);
+    let salt = HkdfSalt::new([1u8; 32]);
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let enc_key = derive_enc_key(&raw_sig, &salt, kid).unwrap();
@@ -108,7 +96,7 @@ fn test_derive_enc_key() {
 fn test_derive_enc_key_different_inputs() {
     // Different inputs should produce different keys
     let raw_sig = [0u8; 64];
-    let salt = Salt::new([1u8; 16]);
+    let salt = HkdfSalt::new([1u8; 32]);
     let kid1 = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
     let kid2 = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
 
@@ -122,13 +110,13 @@ fn test_derive_enc_key_different_inputs() {
 fn test_derive_enc_key_info_format() {
     // Verify the info string format
     let raw_sig = [0u8; 64];
-    let salt = Salt::new([1u8; 16]);
+    let salt = HkdfSalt::new([1u8; 32]);
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     // This should not panic
     derive_enc_key(&raw_sig, &salt, kid).unwrap();
 
-    // The info should be "secretenv:private-key-enc@3:{kid}"
+    // The info should be "secretenv:sshsig-private-key-enc@5:{kid}"
     // We can't directly test the internal info, but we can verify it's consistent
 }
 

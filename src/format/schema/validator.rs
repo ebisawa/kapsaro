@@ -3,7 +3,7 @@
 
 //! JSON Schema validator.
 
-use crate::model::identifiers::format::{FILE_ENC_V3, PRIVATE_KEY_V4, PUBLIC_KEY_V4};
+use crate::model::identifiers::format::{FILE_ENC_V3, PRIVATE_KEY_V5, PUBLIC_KEY_V4};
 use crate::support::fs::load_text;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -100,7 +100,7 @@ impl Validator {
     }
 
     pub fn validate_private_key(&self, doc: &Value) -> Result<()> {
-        self.validate(doc, PRIVATE_KEY_V4)
+        self.validate(doc, PRIVATE_KEY_V5)
     }
 
     pub fn validate_file_enc_document(&self, doc: &Value) -> Result<()> {

@@ -19,6 +19,8 @@ pub use test_utils::keygen_helpers;
 pub mod cli_set_member_id_test;
 #[path = "unit/config_types_test.rs"]
 pub mod config_types_test;
+#[path = "unit/crypto_kdf_test.rs"]
+pub mod crypto_kdf_test;
 #[path = "unit/crypto_sign_ed25519_test.rs"]
 pub mod crypto_sign_ed25519_test;
 #[path = "unit/crypto_test.rs"]

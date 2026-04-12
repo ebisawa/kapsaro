@@ -30,12 +30,13 @@ fn test_save_and_load_private_key() {
 
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V4.to_string(),
+            format: secretenv::model::identifiers::format::PRIVATE_KEY_V5.to_string(),
             member_id: member_id.to_string(),
             kid: kid.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TEST123".to_string(),
-                salt: "c2FsdA".to_string(),
+                ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
                 aead: secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305.to_string(),
             },
             created_at: "2024-01-01T00:00:00Z".to_string(),

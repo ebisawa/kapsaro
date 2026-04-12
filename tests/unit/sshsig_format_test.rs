@@ -7,6 +7,7 @@ use secretenv::io::ssh::protocol::sshsig::{
     build_sshsig_signed_data, parse_sshsig_armored, parse_sshsig_blob, SSHSIG_HASHALG,
     SSHSIG_MAGIC, SSHSIG_NAMESPACE,
 };
+use secretenv::io::ssh::protocol::types::SshsigBlob;
 use secretenv::io::ssh::protocol::wire::ssh_string_encode;
 use secretenv::support::codec::base64_public::encode_base64_standard;
 use sha2::{Digest, Sha256};
@@ -262,4 +263,10 @@ fn test_parse_sshsig_blob_roundtrip() {
 
     let signature = parse_sshsig_blob(&blob).unwrap();
     assert_eq!(signature.as_bytes(), b"test_signature_ikm");
+}
+
+#[test]
+fn test_sshsig_blob_debug_is_redacted() {
+    let blob = SshsigBlob::new(vec![1u8; 8]);
+    assert_eq!(format!("{:?}", blob), "SshsigBlob([REDACTED])");
 }

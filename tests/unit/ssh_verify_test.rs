@@ -6,6 +6,7 @@
 //! Tests for verify_sshsig validation logic
 
 use secretenv::io::ssh::external::traits::SshKeygen;
+use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::io::ssh::verify::verify_sshsig;
 use std::path::Path;
 
@@ -19,7 +20,12 @@ impl SshKeygen for StubSshKeygen {
     fn derive_public_key(&self, _key_path: &Path) -> secretenv::Result<String> {
         unimplemented!()
     }
-    fn sign(&self, _key_path: &Path, _namespace: &str, _data: &[u8]) -> secretenv::Result<String> {
+    fn sign(
+        &self,
+        _key_path: &Path,
+        _namespace: &str,
+        _data: &[u8],
+    ) -> secretenv::Result<Ed25519RawSignature> {
         unimplemented!()
     }
     fn verify(

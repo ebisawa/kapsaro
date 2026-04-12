@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 ///
 /// This is wrapped in Zeroizing for secure memory clearing, as it is used as
 /// input keying material for key derivation and contains sensitive cryptographic data.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Ed25519RawSignature(Zeroizing<[u8; 64]>);
 
 impl PartialEq for Ed25519RawSignature {
@@ -23,6 +23,12 @@ impl PartialEq for Ed25519RawSignature {
 }
 
 impl Eq for Ed25519RawSignature {}
+
+impl std::fmt::Debug for Ed25519RawSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Ed25519RawSignature([REDACTED])")
+    }
+}
 
 impl Ed25519RawSignature {
     /// Create a new Ed25519RawSignature from 64 bytes
@@ -40,8 +46,8 @@ impl Ed25519RawSignature {
     }
 
     /// Convert to a vector of bytes
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
+    pub fn to_vec(&self) -> Zeroizing<Vec<u8>> {
+        Zeroizing::new(self.0.to_vec())
     }
 
     /// Try to create from a slice

@@ -7,12 +7,12 @@ use super::signature_backend::SignatureBackend;
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::protocol::sshsig::SSHSIG_NAMESPACE;
-use crate::io::ssh::protocol::types::{Ed25519RawSignature, SshsigArmored};
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::Result;
 
 /// ssh-keygen backend (Method B)
 ///
-/// Invokes `ssh-keygen -Y sign` via the `SshKeygen` trait and parses SSHSIG output.
+/// Invokes `ssh-keygen -Y sign` via the `SshKeygen` trait.
 /// Requires:
 /// - OpenSSH 8.0+ with `-Y sign` support
 /// - Key file (private or public key):
@@ -51,9 +51,7 @@ impl SignatureBackend for SshKeygenBackend {
         challenge_bytes: &[u8],
     ) -> Result<Ed25519RawSignature> {
         let key_path = self.key_descriptor.as_path();
-        let armored = self
-            .ssh_keygen
-            .sign(key_path, SSHSIG_NAMESPACE, challenge_bytes)?;
-        SshsigArmored::new(armored).extract_ed25519_raw()
+        self.ssh_keygen
+            .sign(key_path, SSHSIG_NAMESPACE, challenge_bytes)
     }
 }

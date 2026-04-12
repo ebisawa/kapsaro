@@ -11,6 +11,7 @@ use secretenv::io::ssh::external::pubkey::{
 };
 use secretenv::io::ssh::external::traits::{SshAdd, SshKeygen};
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::Result;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -83,7 +84,12 @@ impl SshKeygen for MockSshKeygen {
         }
     }
 
-    fn sign(&self, _key_path: &std::path::Path, _namespace: &str, _data: &[u8]) -> Result<String> {
+    fn sign(
+        &self,
+        _key_path: &std::path::Path,
+        _namespace: &str,
+        _data: &[u8],
+    ) -> Result<Ed25519RawSignature> {
         unreachable!("sign is not used in this test");
     }
 

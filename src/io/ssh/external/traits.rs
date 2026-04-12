@@ -6,6 +6,7 @@
 //! These traits enable dependency injection of ssh-keygen and ssh-add commands,
 //! allowing mock implementations for testing without `#[cfg(test)]` conditional compilation.
 
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::Result;
 use std::path::Path;
 
@@ -16,9 +17,9 @@ pub trait SshKeygen: Send + Sync {
     /// `ssh-keygen -y -f <key_path>` — derive public key from private key.
     fn derive_public_key(&self, key_path: &Path) -> Result<String>;
 
-    /// `ssh-keygen -Y sign` — produce an SSHSIG armored signature.
-    /// Temp file creation/deletion is managed internally.
-    fn sign(&self, key_path: &Path, namespace: &str, data: &[u8]) -> Result<String>;
+    /// `ssh-keygen -Y sign` — produce an Ed25519 raw signature for IKM derivation.
+    /// Implementations must avoid persisting secret signature material on disk.
+    fn sign(&self, key_path: &Path, namespace: &str, data: &[u8]) -> Result<Ed25519RawSignature>;
 
     /// `ssh-keygen -Y verify` — verify an SSHSIG armored signature.
     /// Temp files (allowed_signers, signature) are managed internally.

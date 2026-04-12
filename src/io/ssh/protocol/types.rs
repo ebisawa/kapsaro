@@ -6,10 +6,8 @@
 //! Provides type-safe wrappers for different SSH signature formats to prevent
 //! confusion between raw Ed25519 signatures, SSH signature blobs, and SSHSIG blobs.
 
-mod armored;
 mod blob;
 mod signature;
 
-pub use armored::SshsigArmored;
 pub use blob::{SshSignatureBlob, SshsigBlob};
 pub use signature::Ed25519RawSignature;

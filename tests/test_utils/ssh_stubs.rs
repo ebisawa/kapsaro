@@ -16,12 +16,13 @@ impl SshKeygen for StubSshKeygen {
         )
     }
 
-    fn sign(&self, _key_path: &Path, _namespace: &str, _data: &[u8]) -> secretenv::Result<String> {
-        Ok("-----BEGIN SSH SIGNATURE-----\n\
-            U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n\
-            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\n\
-            -----END SSH SIGNATURE-----\n"
-            .to_string())
+    fn sign(
+        &self,
+        _key_path: &Path,
+        _namespace: &str,
+        _data: &[u8],
+    ) -> secretenv::Result<Ed25519RawSignature> {
+        Ok(Ed25519RawSignature::new([0u8; 64]))
     }
 
     fn verify(

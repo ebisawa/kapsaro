@@ -5,7 +5,7 @@ use clap::Args;
 use std::path::PathBuf;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::config::types::SshSigner;
+use crate::config::types::SshSigningMethod;
 
 /// Common options shared across all commands
 #[derive(Debug, Clone, Args)]
@@ -45,11 +45,11 @@ pub struct CommonOptions {
 
 impl CommonOptions {
     /// Resolve SSH signing method from --ssh-agent / --ssh-keygen flags
-    pub fn ssh_signer(&self) -> Option<SshSigner> {
+    pub fn ssh_signing_method(&self) -> Option<SshSigningMethod> {
         if self.ssh_agent {
-            Some(SshSigner::SshAgent)
+            Some(SshSigningMethod::SshAgent)
         } else if self.ssh_keygen {
-            Some(SshSigner::SshKeygen)
+            Some(SshSigningMethod::SshKeygen)
         } else {
             None
         }
@@ -63,7 +63,7 @@ impl From<&CommonOptions> for CommonCommandOptions {
             identity: value.identity.clone(),
             verbose: value.verbose,
             workspace: value.workspace.clone(),
-            ssh_signer: value.ssh_signer(),
+            ssh_signing_method: value.ssh_signing_method(),
         }
     }
 }

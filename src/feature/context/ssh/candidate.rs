@@ -4,7 +4,7 @@
 use crate::config::resolution::ssh_key::{
     resolve_ssh_key_candidate, resolve_ssh_key_descriptor, SshKeySource,
 };
-use crate::config::types::SshSigner;
+use crate::config::types::SshSigningMethod;
 use crate::feature::context::ssh::params::SshSigningParams;
 use crate::feature::context::ssh::resolution::{
     build_not_found_error, resolve_signing_method, resolve_ssh_commands,
@@ -27,8 +27,8 @@ pub(crate) fn resolve_ssh_key_candidates(
     let ssh_add = DefaultSshAdd::new(commands.ssh_add_path);
 
     match signing_method {
-        SshSigner::SshKeygen => resolve_file_candidates(params, &ssh_keygen),
-        SshSigner::SshAgent => resolve_agent_candidates(params, &ssh_keygen, &ssh_add),
+        SshSigningMethod::SshKeygen => resolve_file_candidates(params, &ssh_keygen),
+        SshSigningMethod::SshAgent => resolve_agent_candidates(params, &ssh_keygen, &ssh_add),
     }
 }
 

@@ -19,7 +19,7 @@ const DEFAULT_SSH_KEYGEN_PATH: &str = "ssh-keygen";
 /// `Auto` selects ssh-agent if available, otherwise ssh-keygen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
-pub enum SshSignerConfig {
+pub enum SshSigningMethodConfig {
     /// Automatically select based on ssh-agent availability
     #[default]
     Auto,
@@ -35,18 +35,18 @@ pub enum SshSignerConfig {
 /// LocalIdentityEncrypted operations (SA-SIG-KDF).
 /// This is the resolved (concrete) method, not the user's configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SshSigner {
+pub enum SshSigningMethod {
     /// Use ssh-agent protocol directly (method A)
     SshAgent,
     /// Use ssh-keygen -Y sign with SSHSIG parsing (method B)
     SshKeygen,
 }
 
-impl std::fmt::Display for SshSigner {
+impl std::fmt::Display for SshSigningMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SshSigner::SshAgent => write!(f, "ssh-agent"),
-            SshSigner::SshKeygen => write!(f, "ssh-keygen"),
+            SshSigningMethod::SshAgent => write!(f, "ssh-agent"),
+            SshSigningMethod::SshKeygen => write!(f, "ssh-keygen"),
         }
     }
 }
@@ -60,7 +60,7 @@ impl std::fmt::Display for SshSigner {
 ///
 /// - `ssh_add_path`: `"ssh-add"`
 /// - `ssh_keygen_path`: `"ssh-keygen"`
-/// - `ssh_signing_method`: `SshSignerConfig::Auto`
+/// - `ssh_signing_method`: `SshSigningMethodConfig::Auto`
 ///
 /// # TOML Example
 ///
@@ -89,9 +89,9 @@ pub struct SshConfig {
     /// Signing method to use
     ///
     /// Determines how SSH signatures are obtained for LocalIdentityEncrypted.
-    /// Default: `SshSignerConfig::Auto`
+    /// Default: `SshSigningMethodConfig::Auto`
     #[serde(default, rename = "ssh_signing_method")]
-    pub signing_method: SshSignerConfig,
+    pub signing_method: SshSigningMethodConfig,
 }
 
 impl Default for SshConfig {
@@ -99,7 +99,7 @@ impl Default for SshConfig {
         Self {
             ssh_add_path: DEFAULT_SSH_ADD_PATH.to_string(),
             ssh_keygen_path: DEFAULT_SSH_KEYGEN_PATH.to_string(),
-            signing_method: SshSignerConfig::default(),
+            signing_method: SshSigningMethodConfig::default(),
         }
     }
 }

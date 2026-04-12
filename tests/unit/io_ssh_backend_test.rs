@@ -4,7 +4,7 @@
 //! Unit tests for Signature Backend abstraction (Phase 12.1 - TDD Red phase)
 
 use crate::test_utils::{stub_agent_signer, stub_ssh_keygen};
-use secretenv::config::types::SshSigner;
+use secretenv::config::types::SshSigningMethod;
 use secretenv::io::ssh::agent::client::DefaultAgentSigner;
 use secretenv::io::ssh::backend::factory::build_backend;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
@@ -81,7 +81,7 @@ fn test_backend_trait_non_deterministic_error() {
 #[test]
 fn test_backend_factory_ssh_agent() {
     let backend = build_backend(
-        SshSigner::SshAgent,
+        SshSigningMethod::SshAgent,
         stub_ssh_keygen(),
         Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
             "/dummy",
@@ -97,7 +97,7 @@ fn test_backend_factory_ssh_agent() {
 #[test]
 fn test_backend_factory_ssh_keygen() {
     let backend = build_backend(
-        SshSigner::SshKeygen,
+        SshSigningMethod::SshKeygen,
         stub_ssh_keygen(),
         Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
             "/home/user/.ssh/id_ed25519",
@@ -259,7 +259,7 @@ fn test_ssh_agent_backend_no_auth_sock() {
 fn test_determinism_check_with_real_backend_type() {
     // Test that determinism check works with boxed trait objects
     let backend = build_backend(
-        SshSigner::SshAgent,
+        SshSigningMethod::SshAgent,
         stub_ssh_keygen(),
         Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
             "/dummy",

@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::config::types::SshSigner;
+use crate::config::types::SshSigningMethod;
 
 pub(crate) fn build_test_command_options(
     home: &Path,
@@ -22,7 +22,7 @@ pub(crate) fn build_test_signing_command_options(
         identity: Some(home.join(".ssh").join("test_ed25519")),
         verbose: false,
         workspace: Some(workspace.to_path_buf()),
-        ssh_signer: Some(SshSigner::SshKeygen),
+        ssh_signing_method: Some(SshSigningMethod::SshKeygen),
     }
 }
 
@@ -31,13 +31,13 @@ fn build_test_command_options_with(
     workspace: Option<&Path>,
     identity: Option<&Path>,
     verbose: bool,
-    ssh_signer: Option<SshSigner>,
+    ssh_signing_method: Option<SshSigningMethod>,
 ) -> CommonCommandOptions {
     CommonCommandOptions {
         home: Some(home.to_path_buf()),
         identity: identity.map(Path::to_path_buf),
         verbose,
         workspace: workspace.map(Path::to_path_buf),
-        ssh_signer,
+        ssh_signing_method,
     }
 }

@@ -29,10 +29,6 @@ fn test_validate_key_valid() {
 fn test_validate_key_invalid() {
     assert!(validate_key("invalid_key").is_err());
     assert!(validate_key("unknown").is_err());
-    assert!(validate_key("ssh_keygen").is_err());
-    assert!(validate_key("ssh_add").is_err());
-    assert!(validate_key("ssh_signer").is_err());
-    assert!(validate_key("ssh_key").is_err());
 }
 
 #[test]

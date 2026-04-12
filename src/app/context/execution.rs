@@ -5,7 +5,7 @@ use crate::app::context::crypto::{load_crypto_context, load_crypto_context_from_
 use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::ResolvedCommandPaths;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::expiry::{build_key_expiry_warning, build_signing_key_expiry_warning};
 use crate::model::identity::MemberId;
@@ -19,12 +19,12 @@ pub(crate) struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    /// Resolve workspace, signer, member ID, and key material for a command.
-    fn load_with_signer(
+    /// Resolve workspace, SSH signing context, member ID, and key material for a command.
+    fn load_with_signing_context(
         options: &CommonCommandOptions,
         member_id: Option<String>,
         explicit_kid: Option<&str>,
-        ssh_ctx: ResolvedSshSigner,
+        ssh_ctx: ResolvedSshSigningContext,
     ) -> Result<Self> {
         let resolved = resolve_command_member(options, member_id)?;
         let workspace_root = resolved.paths.workspace_root.clone();
@@ -71,10 +71,12 @@ pub(crate) fn resolve_read_execution(
     options: &CommonCommandOptions,
     member_id: Option<String>,
     explicit_kid: Option<&str>,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<ExecutionContext> {
     match ssh_ctx {
-        Some(ctx) => ExecutionContext::load_with_signer(options, member_id, explicit_kid, ctx),
+        Some(ctx) => {
+            ExecutionContext::load_with_signing_context(options, member_id, explicit_kid, ctx)
+        }
         None => resolve_env_execution(options, member_id, explicit_kid),
     }
 }
@@ -82,10 +84,10 @@ pub(crate) fn resolve_read_execution(
 pub(crate) fn resolve_write_execution(
     options: &CommonCommandOptions,
     member_id: Option<String>,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<ExecutionContext> {
     match ssh_ctx {
-        Some(ctx) => ExecutionContext::load_with_signer(options, member_id, None, ctx),
+        Some(ctx) => ExecutionContext::load_with_signing_context(options, member_id, None, ctx),
         None => resolve_env_execution(options, member_id, None),
     }
 }

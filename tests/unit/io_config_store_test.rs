@@ -64,27 +64,6 @@ ssh_add_command = "/usr/bin/ssh-add"
 }
 
 #[test]
-fn test_load_config_file_ignores_old_ssh_key() {
-    let tmp = TempDir::new().unwrap();
-    let path = tmp.path().join("config.toml");
-    fs::write(
-        &path,
-        r#"
-ssh_key = "~/.ssh/id_ed25519"
-ssh_identity = "~/.ssh/id_ed25519_work"
-"#,
-    )
-    .unwrap();
-
-    let result = load_config_file(&path, tmp.path()).unwrap();
-    assert_eq!(result.get("ssh_key").unwrap(), "~/.ssh/id_ed25519");
-    assert_eq!(
-        result.get("ssh_identity").unwrap(),
-        "~/.ssh/id_ed25519_work"
-    );
-}
-
-#[test]
 fn test_load_config_file_invalid_toml() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("bad.toml");

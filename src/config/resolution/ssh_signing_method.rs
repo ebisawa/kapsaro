@@ -16,11 +16,11 @@ use std::path::Path;
 use super::common::resolve_string_required;
 
 /// Parse an SSH signing method config string.
-pub(crate) fn parse_ssh_signing_method_config(s: &str) -> Result<types::SshSignerConfig> {
+pub(crate) fn parse_ssh_signing_method_config(s: &str) -> Result<types::SshSigningMethodConfig> {
     match s {
-        "auto" => Ok(types::SshSignerConfig::Auto),
-        "ssh-agent" => Ok(types::SshSignerConfig::SshAgent),
-        "ssh-keygen" => Ok(types::SshSignerConfig::SshKeygen),
+        "auto" => Ok(types::SshSigningMethodConfig::Auto),
+        "ssh-agent" => Ok(types::SshSigningMethodConfig::SshAgent),
+        "ssh-keygen" => Ok(types::SshSigningMethodConfig::SshKeygen),
         _ => Err(Error::InvalidArgument {
             message: format!(
                 "Invalid signing method '{}'. Expected 'auto', 'ssh-agent', or 'ssh-keygen'",
@@ -39,14 +39,14 @@ pub(crate) fn parse_ssh_signing_method_config(s: &str) -> Result<types::SshSigne
 /// 3. Global config (`SECRETENV_HOME/config.toml`)
 /// 4. Default (auto)
 pub(crate) fn resolve_ssh_signing_method_config(
-    ssh_signing_method_opt: Option<types::SshSigner>,
+    ssh_signing_method_opt: Option<types::SshSigningMethod>,
     base_dir: Option<&Path>,
-) -> Result<types::SshSignerConfig> {
-    // Priority 1: CLI option (explicit SshSigner → convert to Config)
+) -> Result<types::SshSigningMethodConfig> {
+    // Priority 1: CLI option (explicit SshSigningMethod → convert to Config)
     if let Some(signer) = ssh_signing_method_opt {
         return Ok(match signer {
-            types::SshSigner::SshAgent => types::SshSignerConfig::SshAgent,
-            types::SshSigner::SshKeygen => types::SshSignerConfig::SshKeygen,
+            types::SshSigningMethod::SshAgent => types::SshSigningMethodConfig::SshAgent,
+            types::SshSigningMethod::SshKeygen => types::SshSigningMethodConfig::SshKeygen,
         });
     }
 
@@ -62,19 +62,21 @@ pub(crate) fn resolve_ssh_signing_method_config(
     parse_ssh_signing_method_config(&signing_method)
 }
 
-/// Resolve SshSignerConfig to a concrete SshSigner.
+/// Resolve SshSigningMethodConfig to a concrete SshSigningMethod.
 ///
 /// For `Auto`, ssh-agent is preferred when an agent socket is available;
 /// otherwise falls back to ssh-keygen.
-pub(crate) fn resolve_ssh_signing_method(config: types::SshSignerConfig) -> types::SshSigner {
+pub(crate) fn resolve_ssh_signing_method(
+    config: types::SshSigningMethodConfig,
+) -> types::SshSigningMethod {
     match config {
-        types::SshSignerConfig::SshAgent => types::SshSigner::SshAgent,
-        types::SshSignerConfig::SshKeygen => types::SshSigner::SshKeygen,
-        types::SshSignerConfig::Auto => {
+        types::SshSigningMethodConfig::SshAgent => types::SshSigningMethod::SshAgent,
+        types::SshSigningMethodConfig::SshKeygen => types::SshSigningMethod::SshKeygen,
+        types::SshSigningMethodConfig::Auto => {
             if crate::io::ssh::agent::socket::is_agent_socket_available() {
-                types::SshSigner::SshAgent
+                types::SshSigningMethod::SshAgent
             } else {
-                types::SshSigner::SshKeygen
+                types::SshSigningMethod::SshKeygen
             }
         }
     }

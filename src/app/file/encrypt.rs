@@ -7,7 +7,7 @@ use crate::app::context::execution::{
     build_write_execution_warnings, resolve_write_execution, ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::trust::{
     current_self_sig_x, EncryptPolicy, RecipientTrustOutcome, WriteRecipientTrustPlan,
 };
@@ -32,7 +32,7 @@ pub(crate) fn build_encrypt_file_command(
     options: &CommonCommandOptions,
     member_id: Option<String>,
     input_path: &Path,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<EncryptFileCommand> {
     let execution = resolve_encrypt_execution(options, member_id, ssh_ctx)?;
     let workspace_root = require_encrypt_workspace(&execution)?;
@@ -74,7 +74,7 @@ pub(crate) fn execute_encrypt_file_command(
 fn resolve_encrypt_execution(
     options: &CommonCommandOptions,
     member_id: Option<String>,
-    ssh_ctx: Option<ResolvedSshSigner>,
+    ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<ExecutionContext> {
     let execution = resolve_write_execution(options, member_id, ssh_ctx)?;
     enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;

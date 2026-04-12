@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::app::context::member::{resolve_key_owner, resolve_required_member};
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigner;
+use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::key::export::save_exported_public_key;
 use crate::app::key::types::{KeyExportPrivateResult, KeyListResult};
 use crate::feature::key::manage::common::{resolve_active_kid, resolve_keystore_root};
@@ -71,7 +71,7 @@ pub fn export_private_key_command(
     member_id: String,
     kid: Option<String>,
     password: &str,
-    ssh_ctx: ResolvedSshSigner,
+    ssh_ctx: ResolvedSshSigningContext,
 ) -> Result<KeyExportPrivateResult> {
     let loaded = load_and_decrypt_private_key(
         options.home.clone(),

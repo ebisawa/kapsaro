@@ -46,7 +46,7 @@ fn save_signed_trust_store(home: &TempDir) {
 }
 
 #[test]
-fn test_list_known_keys_succeeds_without_ssh_signer() {
+fn test_list_known_keys_succeeds_without_ssh_signing_method() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
 

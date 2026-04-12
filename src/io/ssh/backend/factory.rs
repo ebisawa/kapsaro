@@ -6,7 +6,7 @@
 use super::signature_backend::SignatureBackend;
 use super::ssh_agent::SshAgentBackend;
 use super::ssh_keygen::SshKeygenBackend;
-use crate::config::types::SshSigner;
+use crate::config::types::SshSigningMethod;
 use crate::io::ssh::agent::client::DefaultAgentSigner;
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
@@ -23,13 +23,15 @@ use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 ///
 /// Boxed SignatureBackend implementation
 pub fn build_backend(
-    method: SshSigner,
+    method: SshSigningMethod,
     ssh_keygen: Box<dyn SshKeygen>,
     key_descriptor: Option<SshKeyDescriptor>,
 ) -> crate::Result<Box<dyn SignatureBackend>> {
     match method {
-        SshSigner::SshAgent => Ok(Box::new(SshAgentBackend::new(Box::new(DefaultAgentSigner)))),
-        SshSigner::SshKeygen => {
+        SshSigningMethod::SshAgent => {
+            Ok(Box::new(SshAgentBackend::new(Box::new(DefaultAgentSigner))))
+        }
+        SshSigningMethod::SshKeygen => {
             let key_descriptor = key_descriptor.ok_or_else(|| crate::Error::Config {
                 message: "SSH key descriptor is required for ssh-keygen signing".to_string(),
             })?;

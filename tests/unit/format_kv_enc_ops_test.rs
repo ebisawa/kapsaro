@@ -50,7 +50,7 @@ fn decrypt_kv_document_for_test(
     let verified_doc = VerifiedKvEncDocument::new(doc, proof);
     // Wrap private key in Decrypted for API
     let decrypted_key =
-        make_decrypted_private_key_plaintext(private, member_id, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(private, member_id, kid, "SHA256:test");
     let kv_map_zeroizing =
         decrypt_kv_document(&verified_doc, member_id, kid, &decrypted_key, false).unwrap();
     // Convert Zeroizing<Vec<u8>> to String at the boundary
@@ -357,7 +357,7 @@ fn setup_crypto_ctx_for_test(
     let signing_key = signing_key_from_private(private_key);
 
     let verified_private =
-        make_decrypted_private_key_plaintext(private_key, member_id, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(private_key, member_id, kid, "SHA256:test");
 
     // Derive workspace path from keystore_root (sibling directory)
     let workspace_path = keystore_root.parent().map(|p| p.join("workspace"));

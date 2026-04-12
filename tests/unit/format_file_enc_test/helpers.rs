@@ -35,7 +35,7 @@ pub(super) fn decrypt_file_document_for_test(
     );
     let verified_doc = VerifiedFileEncDocument::new(file_enc_doc.clone(), proof);
     let decrypted_key =
-        make_decrypted_private_key_plaintext(private_key, member_id, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(private_key, member_id, kid, "SHA256:test");
     decrypt_file_document(&verified_doc, member_id, kid, &decrypted_key, false).unwrap()
 }
 

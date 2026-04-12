@@ -10,10 +10,39 @@ use secretenv::feature::key::protection::encryption::{
 };
 use secretenv::feature::key::protection::key_derivation::build_sign_message;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
+use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::model::identifiers::context::{
     SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V4, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V4,
 };
+use secretenv::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use std::cell::Cell;
+
+const TEST_SSH_PUBKEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
+const OTHER_SSH_PUBKEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkB6jid+Y/7wt0S+9jTJGX1UytxIHOO3GXVPZPY1OYT test-key-1";
+
+fn build_test_plaintext() -> PrivateKeyPlaintext {
+    let b64 = |data: &[u8]| encode_base64url_nopad(data);
+    PrivateKeyPlaintext {
+        keys: IdentityKeysPrivate {
+            kem: JwkOkpPrivateKey {
+                kty: "OKP".to_string(),
+                crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                x: b64(&[2u8; 32]),
+                d: b64(&[1u8; 32]),
+            },
+            sig: JwkOkpPrivateKey {
+                kty: "OKP".to_string(),
+                crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                x: b64(&[4u8; 32]),
+                d: b64(&[3u8; 32]),
+            },
+        },
+    }
+}
 
 fn derive_enc_key(raw_sig: &[u8], salt: &Salt, kid: &str) -> secretenv::Result<XChaChaKey> {
     let ikm = Ikm::from(raw_sig);
@@ -105,11 +134,6 @@ fn test_derive_enc_key_info_format() {
 
 #[test]
 fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
-    use secretenv::model::private_key::{
-        IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext,
-    };
-    use secretenv::support::codec::base64_public::encode_base64url_nopad;
-
     // Deterministic backend avoids ssh-agent / ssh-keygen and user interaction.
     struct DeterministicBackend;
     impl SignatureBackend for DeterministicBackend {
@@ -122,28 +146,12 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
         }
     }
 
-    let b64 = |data: &[u8]| encode_base64url_nopad(data);
-    let plaintext = PrivateKeyPlaintext {
-        keys: IdentityKeysPrivate {
-            kem: JwkOkpPrivateKey {
-                kty: "OKP".to_string(),
-                crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
-                x: b64(&[2u8; 32]),
-                d: b64(&[1u8; 32]),
-            },
-            sig: JwkOkpPrivateKey {
-                kty: "OKP".to_string(),
-                crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
-                x: b64(&[4u8; 32]),
-                d: b64(&[3u8; 32]),
-            },
-        },
-    };
+    let plaintext = build_test_plaintext();
 
     let member_id = "alice";
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
-    let ssh_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForTestsOnly alice@test";
-    let ssh_fpr = "sha256:test-fpr";
+    let ssh_pubkey = TEST_SSH_PUBKEY;
+    let ssh_fpr = build_sha256_fingerprint(ssh_pubkey).unwrap();
     let created_at = "2026-01-01T00:00:00Z";
     let expires_at = "2027-01-01T00:00:00Z";
 
@@ -165,5 +173,103 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
     let decrypted = decrypt_private_key(&encrypted, &backend, ssh_pubkey, false)
         .expect("decrypt_private_key should succeed");
 
+    assert_eq!(decrypted, plaintext);
+}
+
+#[test]
+fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
+    struct CountingBackend {
+        calls: Cell<u32>,
+    }
+
+    impl SignatureBackend for CountingBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            self.calls.set(self.calls.get() + 1);
+            Ok(Ed25519RawSignature::new([0xCD; 64]))
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+
+    let backend = CountingBackend {
+        calls: Cell::new(0),
+    };
+    let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_id: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &backend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .unwrap();
+
+    let err = decrypt_private_key(&encrypted, &backend, OTHER_SSH_PUBKEY, false).unwrap_err();
+    let err_msg = err.to_string();
+    let expected = build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap();
+    let actual = build_sha256_fingerprint(OTHER_SSH_PUBKEY).unwrap();
+
+    assert_eq!(backend.calls.get(), 2, "encrypt path should sign twice");
+    assert!(
+        err_msg.contains("E_PRIVATE_KEY_DECRYPT_FAILED"),
+        "error should use private key decrypt failure code: {err_msg}"
+    );
+    assert!(
+        err_msg.contains(&expected),
+        "error should contain expected fingerprint: {err_msg}"
+    );
+    assert!(
+        err_msg.contains(&actual),
+        "error should contain actual fingerprint: {err_msg}"
+    );
+    assert_eq!(
+        backend.calls.get(),
+        2,
+        "decrypt path must not call the backend when fingerprint mismatches"
+    );
+}
+
+#[test]
+fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
+    struct DeterministicBackend;
+    impl SignatureBackend for DeterministicBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+
+    let backend = DeterministicBackend;
+    let ssh_fpr = build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap().replacen(
+        "SHA256:",
+        &"SHA256:".to_ascii_lowercase(),
+        1,
+    );
+    let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_id: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &backend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr,
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .unwrap();
+
+    let decrypted = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap();
     assert_eq!(decrypted, plaintext);
 }

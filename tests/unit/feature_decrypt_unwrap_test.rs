@@ -473,7 +473,7 @@ fn test_unwrap_master_key_for_file() {
 
     // Wrap private key in Decrypted for unwrap API
     let decrypted_key =
-        make_decrypted_private_key_plaintext(&private_key, ALICE_MEMBER_ID, kid, "sha256:test");
+        make_decrypted_private_key_plaintext(&private_key, ALICE_MEMBER_ID, kid, "SHA256:test");
 
     // Wrap in VerifiedFileEncDocument (tests use freshly encrypted content, treated as verified)
     let proof = SignatureVerificationProof::new(
@@ -547,7 +547,7 @@ fn test_unwrap_master_key_for_file_wrong_member() {
         },
         "bob@example.com",
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GJ",
-        "sha256:test",
+        "SHA256:test",
     );
 
     let result = unwrap_master_key_for_file(
@@ -595,7 +595,7 @@ fn test_unwrap_master_key_from_wrap_item() {
         &private_key_plaintext,
         ALICE_MEMBER_ID,
         &public_key.protected.kid,
-        "sha256:test",
+        "SHA256:test",
     );
     let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
     let unwrapped_key = unwrap_master_key(
@@ -646,7 +646,7 @@ fn test_hpke_aad_binding_defence_in_depth() {
         &private_key_plaintext,
         ALICE_MEMBER_ID,
         &public_key.protected.kid,
-        "sha256:test",
+        "SHA256:test",
     );
     let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
 

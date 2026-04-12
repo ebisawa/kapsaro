@@ -117,7 +117,7 @@ fn test_aad_private_key() {
         member_id: ALICE_MEMBER_ID.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         alg: PrivateKeyAlgorithm::SshSig {
-            fpr: "sha256:ABCDEFGH123456789".to_string(),
+            fpr: "SHA256:ABCDEFGH123456789".to_string(),
             salt: "AAAAAAAAAAAAAAAA".to_string(),
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         },
@@ -137,6 +137,6 @@ fn test_aad_private_key() {
     assert_eq!(parsed["format"], format::PRIVATE_KEY_V4);
     assert_eq!(parsed["member_id"], ALICE_MEMBER_ID);
     assert_eq!(parsed["kid"], "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    assert_eq!(parsed["alg"]["fpr"], "sha256:ABCDEFGH123456789");
+    assert_eq!(parsed["alg"]["fpr"], "SHA256:ABCDEFGH123456789");
     assert_eq!(parsed["expires_at"], "2027-01-15T00:00:00Z");
 }

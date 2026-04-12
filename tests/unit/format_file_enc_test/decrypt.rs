@@ -203,7 +203,7 @@ fn test_decrypt_file_wrong_member_id() {
         &create_test_private_key(&sk, &pk),
         BOB_MEMBER_ID,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GJ",
-        "sha256:test",
+        "SHA256:test",
     );
 
     let result = decrypt_file_document(
@@ -256,7 +256,7 @@ fn test_decrypt_file_wrong_key() {
         &create_test_private_key(&sk2, &pk2),
         ALICE_MEMBER_ID,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "sha256:test",
+        "SHA256:test",
     );
 
     let result = decrypt_file_document(

@@ -3,7 +3,10 @@
 
 //! Member verification - online verification of member binding claims.
 
-use crate::feature::verify::public_key::verify_public_key_for_verification;
+use crate::feature::verify::public_key::{
+    verify_public_key_for_verification_context, MEMBER_VERIFICATION_INPUT_CONTEXT,
+    WORKSPACE_MEMBER_FILE_CONTEXT,
+};
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
 use crate::io::workspace::members::{
@@ -50,7 +53,11 @@ pub fn load_and_verify_member_file(
         });
     }
 
-    let verified = verify_public_key_for_verification(&public_key, debug)?;
+    let verified = verify_public_key_for_verification_context(
+        &public_key,
+        debug,
+        WORKSPACE_MEMBER_FILE_CONTEXT,
+    )?;
     Ok(VerifiedMemberFile {
         member_id: verified
             .verified_public_key
@@ -176,7 +183,11 @@ fn build_verified_candidate_from_public_key(
     public_key: &PublicKey,
     verbose: bool,
 ) -> Result<VerifiedMemberCandidate> {
-    let verified = verify_public_key_for_verification(public_key, verbose)?;
+    let verified = verify_public_key_for_verification_context(
+        public_key,
+        verbose,
+        MEMBER_VERIFICATION_INPUT_CONTEXT,
+    )?;
     Ok(VerifiedMemberCandidate {
         member_id: public_key.protected.member_id.clone(),
         public_key: public_key.clone(),

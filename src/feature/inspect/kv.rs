@@ -153,7 +153,7 @@ pub(crate) fn build_kv_inspect_output(doc: &KvEncDocument) -> Result<InspectOutp
         vec![format!("  Total Entries: {}", data.entries.len())],
     ));
     Ok(InspectOutput {
-        title: "KV-Enc v3 Metadata".to_string(),
+        title: "KV-Enc Metadata".to_string(),
         sections,
     })
 }

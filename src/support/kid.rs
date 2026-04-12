@@ -7,6 +7,7 @@ use crate::{Error, Result};
 
 const KID_LENGTH: usize = 32;
 const DISPLAY_GROUP_SIZE: usize = 4;
+const HALF_DISPLAY_LENGTH: usize = 16;
 
 /// Normalize user-provided `kid` input to canonical serialized form.
 pub fn normalize_kid(input: &str) -> Result<String> {
@@ -95,11 +96,35 @@ pub fn build_kid_display(canonical_kid: &str) -> Result<String> {
     Ok(output)
 }
 
+/// Build the first half of the human-friendly dashed display form of a canonical `kid`.
+pub fn build_kid_half_display(canonical_kid: &str) -> Result<String> {
+    let canonical = normalize_kid(canonical_kid)?;
+    let half = &canonical[..HALF_DISPLAY_LENGTH];
+    let mut output =
+        String::with_capacity(HALF_DISPLAY_LENGTH + (HALF_DISPLAY_LENGTH / DISPLAY_GROUP_SIZE - 1));
+
+    for (index, chunk) in half.as_bytes().chunks(DISPLAY_GROUP_SIZE).enumerate() {
+        if index > 0 {
+            output.push('-');
+        }
+        output.push_str(std::str::from_utf8(chunk).expect("canonical kid must stay ASCII"));
+    }
+
+    Ok(output)
+}
+
 /// Build dashed display form for human-facing output.
 ///
 /// This function is **lossy**: if `kid` is not a valid canonical `kid`, it returns the input as-is.
 pub fn kid_display_lossy(kid: &str) -> String {
     build_kid_display(kid).unwrap_or_else(|_| kid.to_string())
+}
+
+/// Build dashed half-display form for human-facing output.
+///
+/// This function is **lossy**: if `kid` is not a valid canonical `kid`, it returns the input as-is.
+pub fn kid_half_display_lossy(kid: &str) -> String {
+    build_kid_half_display(kid).unwrap_or_else(|_| kid.to_string())
 }
 
 fn is_crockford_base32_byte(byte: u8) -> bool {

@@ -117,24 +117,15 @@ fn build_online_section(
     ))
 }
 
-const SEPARATOR_WIDTH: usize = 44;
-
 fn render_inspect_output(
     title: &str,
     sections: &[crate::feature::inspect::InspectSection],
 ) -> String {
-    let title_style = Style::new().bold().cyan();
+    let title_style = Style::new().bold();
     let section_style = Style::new().bold();
-    let dim_style = Style::new().dim();
-
-    let separator = dim_style
-        .apply_to("\u{2500}".repeat(SEPARATOR_WIDTH))
-        .to_string();
 
     let mut out = String::new();
     out.push_str(&format!("{}\n", title_style.apply_to(title)));
-    out.push_str(&separator);
-    out.push('\n');
     out.push('\n');
     for (index, section) in sections.iter().enumerate() {
         out.push_str(&format!("{}\n", section_style.apply_to(&section.title)));
@@ -146,7 +137,6 @@ fn render_inspect_output(
             out.push('\n');
         }
     }
-    out.push_str(&separator);
     out.push('\n');
     out
 }

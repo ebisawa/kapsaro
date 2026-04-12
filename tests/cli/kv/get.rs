@@ -171,6 +171,27 @@ fn test_get_all() {
 }
 
 #[test]
+fn test_get_all_verbose_logs_public_key_verification_contexts() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_key();
+
+    cmd()
+        .arg("get")
+        .arg("--all")
+        .arg("--verbose")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("(keystore sibling public.json, "))
+        .stdout(predicate::str::contains("(embedded signer_pub, "))
+        .stdout(predicate::str::contains("(active member/read trust, "))
+        .stdout(predicate::str::contains("(workspace active member recipient validation, ").not());
+}
+
+#[test]
 fn test_get_all_with_key() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_multiple_keys();
 

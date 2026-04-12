@@ -108,7 +108,7 @@ fn test_inspect_kv_enc_shows_metadata() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("KV-Enc v3 Metadata"))
+        .stdout(predicate::str::contains("KV-Enc Metadata"))
         .stdout(predicate::str::contains("Header"))
         .stdout(predicate::str::contains("Wrap Data"))
         .stdout(predicate::str::contains("Entries"))

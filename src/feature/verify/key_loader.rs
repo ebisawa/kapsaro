@@ -11,7 +11,7 @@ use crate::support::kid::kid_display_lossy;
 use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
 
-use super::public_key::verify_public_key_for_verification;
+use super::public_key::{verify_public_key_for_verification_context, EMBEDDED_SIGNER_PUB_CONTEXT};
 
 /// Result of loading a verifying key from a signature
 #[derive(Debug)]
@@ -55,12 +55,14 @@ fn build_loaded_verifying_key(
     source_label: &str,
     debug: bool,
 ) -> Result<LoadedVerifyingKey> {
-    let verified = verify_public_key_for_verification(public_key, debug).map_err(|e| {
-        Error::crypto_with_source(
-            format!("PublicKey document verification failed ({})", source_label),
-            e,
-        )
-    })?;
+    let verified =
+        verify_public_key_for_verification_context(public_key, debug, EMBEDDED_SIGNER_PUB_CONTEXT)
+            .map_err(|e| {
+                Error::crypto_with_source(
+                    format!("PublicKey document verification failed ({})", source_label),
+                    e,
+                )
+            })?;
 
     let doc = verified.verified_public_key.document();
     if expected_kid != doc.protected.kid {

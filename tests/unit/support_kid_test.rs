@@ -5,12 +5,14 @@
 
 use secretenv::format::kid::derive_public_key_kid;
 use secretenv::support::kid::{
-    build_kid_display, normalize_kid, normalize_kid_query, resolve_unique_kid,
+    build_kid_display, build_kid_half_display, normalize_kid, normalize_kid_query,
+    resolve_unique_kid,
 };
 use serde_json::json;
 
 const CANONICAL_KID: &str = "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N";
 const DISPLAY_KID: &str = "RDKJ-8YHM-PPJH-W7QC-3446-GPNX-HNRT-X61N";
+const HALF_DISPLAY_KID: &str = "RDKJ-8YHM-PPJH-W7QC";
 
 #[test]
 fn test_normalize_kid_accepts_display_and_lowercase_forms() {
@@ -67,6 +69,14 @@ fn test_resolve_unique_kid_rejects_ambiguous_prefix() {
 #[test]
 fn test_build_kid_display_groups_canonical_form_by_four() {
     assert_eq!(build_kid_display(CANONICAL_KID).unwrap(), DISPLAY_KID);
+}
+
+#[test]
+fn test_build_kid_half_display_uses_first_four_groups() {
+    assert_eq!(
+        build_kid_half_display(CANONICAL_KID).unwrap(),
+        HALF_DISPLAY_KID
+    );
 }
 
 #[test]

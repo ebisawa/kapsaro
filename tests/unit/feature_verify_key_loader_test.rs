@@ -9,32 +9,11 @@ use crate::test_utils::setup_test_workspace_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::verify::key_loader::load_verifying_key_from_signature;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::signature::Signature;
+use secretenv::model::signature::ArtifactSignature;
 use secretenv::model::verification::VerifyingKeySource;
 use std::fs;
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
-
-/// load_verifying_key_from_signature fails with E_SIGNER_PUB_MISSING
-/// when signer_pub is not embedded in the signature
-#[test]
-fn test_load_verifying_key_from_signature_missing_signer_pub_fails() {
-    let signature = Signature {
-        alg: "eddsa-ed25519".to_string(),
-        kid: "SOME_KID_0000000000000000".to_string(),
-        signer_pub: None,
-        sig: "dummy".to_string(),
-    };
-
-    let result = load_verifying_key_from_signature(&signature, false);
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("signer_pub is missing"),
-        "Expected E_SIGNER_PUB_MISSING error, got: {}",
-        err_msg
-    );
-}
 
 /// load_verifying_key_from_signature extracts key from embedded signer_pub.
 #[test]
@@ -50,10 +29,10 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
         serde_json::from_str(&content).unwrap();
     let kid = public_key.protected.kid.clone();
 
-    let signature = Signature {
+    let signature = ArtifactSignature {
         alg: "eddsa-ed25519".to_string(),
         kid: kid.clone(),
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         sig: "dummy".to_string(), // sig field not used during key loading
     };
 
@@ -85,10 +64,10 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succ
     let kid = kids.first().unwrap();
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
 
-    let signature = Signature {
+    let signature = ArtifactSignature {
         alg: "eddsa-ed25519".to_string(),
         kid: kid.clone(),
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         sig: "dummy".to_string(),
     };
 
@@ -109,10 +88,10 @@ fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds(
     let kid = kids.first().unwrap();
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
 
-    let signature = Signature {
+    let signature = ArtifactSignature {
         alg: "eddsa-ed25519".to_string(),
         kid: kid.clone(),
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         sig: "dummy".to_string(),
     };
 
@@ -137,10 +116,10 @@ fn test_load_verifying_key_from_signature_kid_mismatch() {
         serde_json::from_str(&content).unwrap();
 
     // Create a signature with a different kid than what's in the embedded public key
-    let signature = Signature {
+    let signature = ArtifactSignature {
         alg: "eddsa-ed25519".to_string(),
         kid: "MISMATCHED_KID_000000000000".to_string(),
-        signer_pub: Some(public_key),
+        signer_pub: public_key,
         sig: "dummy".to_string(),
     };
 

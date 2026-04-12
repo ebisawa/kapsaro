@@ -4,7 +4,7 @@
 //! Unit tests for crypto module
 
 use secretenv::crypto::kem::{X25519PublicKey, X25519SecretKey};
-use secretenv::crypto::sign::{sign_bytes, verify_bytes};
+use secretenv::crypto::sign::{sign_trust_store_bytes, verify_trust_store_bytes};
 use secretenv::model::identifiers::alg::SIGNATURE_ED25519;
 use serde::{Deserialize, Serialize};
 
@@ -243,15 +243,14 @@ fn test_ed25519_sign_verify_roundtrip() {
 
     // JCS normalize the document
     let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
-    let signature = sign_bytes(
+    let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
-    verify_bytes(
+    verify_trust_store_bytes(
         &canonical_bytes,
         &verifying_key,
         &signature,
@@ -272,15 +271,17 @@ fn test_ed25519_wrong_key_error() {
     };
 
     let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
-    let signature = sign_bytes(
+    let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &alice_sk,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
-    assert!(verify_bytes(&canonical_bytes, &bob_vk, &signature, SIGNATURE_ED25519,).is_err());
+    assert!(
+        verify_trust_store_bytes(&canonical_bytes, &bob_vk, &signature, SIGNATURE_ED25519,)
+            .is_err()
+    );
 }
 
 #[test]
@@ -295,11 +296,10 @@ fn test_ed25519_tampered_document_error() {
     };
 
     let original_canonical = secretenv::format::jcs::normalize(&original_doc).unwrap();
-    let signature = sign_bytes(
+    let signature = sign_trust_store_bytes(
         &original_canonical,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
@@ -311,7 +311,7 @@ fn test_ed25519_tampered_document_error() {
     };
 
     let tampered_canonical = secretenv::format::jcs::normalize(&tampered_doc).unwrap();
-    assert!(verify_bytes(
+    assert!(verify_trust_store_bytes(
         &tampered_canonical,
         &verifying_key,
         &signature,
@@ -332,11 +332,10 @@ fn test_ed25519_signature_structure() {
     };
 
     let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
-    let signature = sign_bytes(
+    let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
@@ -358,15 +357,14 @@ fn test_ed25519_payload_hash_verification() {
     };
 
     let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
-    let signature = sign_bytes(
+    let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
-    verify_bytes(
+    verify_trust_store_bytes(
         &canonical_bytes,
         &verifying_key,
         &signature,
@@ -387,19 +385,17 @@ fn test_ed25519_deterministic_signing() {
     };
 
     let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
-    let sig1 = sign_bytes(
+    let sig1 = sign_trust_store_bytes(
         &canonical_bytes,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
-    let sig2 = sign_bytes(
+    let sig2 = sign_trust_store_bytes(
         &canonical_bytes,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
@@ -419,15 +415,14 @@ fn test_ed25519_jcs_normalization_applied() {
     };
 
     let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
-    let signature = sign_bytes(
+    let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &signing_key,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        None,
         SIGNATURE_ED25519,
     )
     .unwrap();
-    verify_bytes(
+    verify_trust_store_bytes(
         &canonical_bytes,
         &verifying_key,
         &signature,

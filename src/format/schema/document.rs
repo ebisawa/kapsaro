@@ -10,7 +10,7 @@ use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::model::signature::Signature;
+use crate::model::signature::ArtifactSignature;
 use crate::support::fs::load_text_with_limit;
 use crate::support::json_limits::validate_json_limits;
 use crate::support::limits::validate_wrap_count;
@@ -109,8 +109,8 @@ pub fn parse_kv_entry_token(token: &str) -> Result<KvEntryValue> {
     parse_json_token(token, "KV entry token", Validator::validate_kv_entry)
 }
 
-pub fn parse_kv_signature_token(token: &str) -> Result<Signature> {
-    parse_json_token(token, "SIG token", Validator::validate_signature)
+pub fn parse_kv_signature_token(token: &str) -> Result<ArtifactSignature> {
+    parse_json_token(token, "SIG token", Validator::validate_artifact_signature)
 }
 
 fn parse_json_document_file<T>(path: &Path, kind: &str, validate: ValidateJsonFn) -> Result<T>

@@ -3,12 +3,13 @@
 
 //! Unit tests for FileEncDocument model
 
+use crate::keygen_helpers::make_dummy_public_key;
 use secretenv::model::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
 };
 use secretenv::model::identifiers::hpke;
-use secretenv::model::signature::Signature;
+use secretenv::model::signature::ArtifactSignature;
 use uuid::Uuid;
 
 fn create_test_payload_envelope() -> FilePayload {
@@ -47,10 +48,10 @@ fn test_file_enc_document_basic() {
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
-        signature: Signature {
+        signature: ArtifactSignature {
             alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "signature_base64url".to_string(),
         },
     };
@@ -88,10 +89,10 @@ fn test_recipients_derived_from_wrap() {
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
-        signature: Signature {
+        signature: ArtifactSignature {
             alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "sig".to_string(),
         },
     };
@@ -116,10 +117,10 @@ fn test_payload_serialization() {
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
-        signature: Signature {
+        signature: ArtifactSignature {
             alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "sig".to_string(),
         },
     };
@@ -145,4 +146,38 @@ fn test_payload_serialization() {
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],
         "xchacha20-poly1305"
     );
+}
+
+#[test]
+fn test_file_enc_document_signature_requires_signer_pub() {
+    let json = serde_json::json!({
+        "protected": {
+            "format": secretenv::model::identifiers::format::FILE_ENC_V3,
+            "sid": "01234567-89ab-cdef-0123-456789abcdef",
+            "wrap": [],
+            "payload": {
+                "protected": {
+                    "format": secretenv::model::identifiers::format::FILE_PAYLOAD_V3,
+                    "sid": "01234567-89ab-cdef-0123-456789abcdef",
+                    "alg": {
+                        "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
+                    }
+                },
+                "encrypted": {
+                    "nonce": "nonce_base64url",
+                    "ct": "ciphertext_base64url"
+                }
+            },
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z"
+        },
+        "signature": {
+            "alg": secretenv::model::identifiers::alg::SIGNATURE_ED25519,
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "sig": "signature_base64url"
+        }
+    });
+
+    let result = serde_json::from_value::<FileEncDocument>(json);
+    assert!(result.is_err());
 }

@@ -12,8 +12,8 @@ use secretenv::feature::inspect::{build_inspect_view, InspectOutput};
 use secretenv::feature::verify::file::verify_file_document_report;
 use secretenv::feature::verify::kv::signature::verify_kv_document_report;
 use secretenv::format::content::EncryptedContent;
+use secretenv::format::schema::document::parse_kv_signature_token;
 use secretenv::format::token::TokenCodec;
-use secretenv::model::signature::Signature;
 use secretenv::model::verification::VerifyingKeySource;
 use std::fs;
 
@@ -460,18 +460,19 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
 
     // Read encrypted content and corrupt the signature
     let mut kv_content = fs::read_to_string(&encrypted_path).unwrap();
+    let lines: Vec<&str> = kv_content.lines().collect();
     // Replace the SIG line with an invalid signature
-    let invalid_signature = Signature {
-        alg: "eddsa-ed25519".to_string(),
-        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-        signer_pub: None,
-        sig:
-            "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-                .to_string(),
-    };
+    let original_signature_line = lines
+        .iter()
+        .find(|line| line.starts_with(":SIG "))
+        .expect("SIG line should exist");
+    let mut invalid_signature =
+        parse_kv_signature_token(original_signature_line.trim_start_matches(":SIG ")).unwrap();
+    invalid_signature.sig =
+        "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+            .to_string();
     let invalid_signature_token =
         TokenCodec::encode(TokenCodec::JsonJcs, &invalid_signature).unwrap();
-    let lines: Vec<&str> = kv_content.lines().collect();
     let mut new_lines = Vec::new();
     for line in &lines {
         if line.starts_with(":SIG ") {
@@ -613,14 +614,13 @@ fn test_verify_kv_document_report_failure_wrong_key() {
     let mut kv_content = fs::read_to_string(&encrypted_path).unwrap();
     let lines: Vec<&str> = kv_content.lines().collect();
     let mut new_lines = Vec::new();
-    let wrong_kid_signature = Signature {
-        alg: "eddsa-ed25519".to_string(),
-        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GG".to_string(),
-        signer_pub: None,
-        sig:
-            "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-                .to_string(),
-    };
+    let original_signature_line = lines
+        .iter()
+        .find(|line| line.starts_with(":SIG "))
+        .expect("SIG line should exist");
+    let mut wrong_kid_signature =
+        parse_kv_signature_token(original_signature_line.trim_start_matches(":SIG ")).unwrap();
+    wrong_kid_signature.kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GG".to_string();
     let wrong_kid_signature_token =
         TokenCodec::encode(TokenCodec::JsonJcs, &wrong_kid_signature).unwrap();
     for line in &lines {
@@ -639,8 +639,8 @@ fn test_verify_kv_document_report_failure_wrong_key() {
     assert!(report.signer_member_id.is_none());
     assert!(report.source.is_none());
     assert!(
-        report.message.contains("signer_pub is missing"),
-        "Expected E_SIGNER_PUB_MISSING error, got: {}",
+        report.message.contains("kid mismatch"),
+        "Expected kid mismatch error, got: {}",
         report.message
     );
 }

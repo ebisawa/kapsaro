@@ -59,10 +59,9 @@ fn test_encrypt_file_document() {
 
     // Verify structure
     assert_eq!(file_enc_doc.protected.format, FILE_ENC_V3);
-    // Verify signer_pub is always embedded in output signature
-    assert!(
-        file_enc_doc.signature.signer_pub.is_some(),
-        "signature.signer_pub must be present in file-enc output"
+    assert_eq!(
+        file_enc_doc.signature.signer_pub.protected.member_id,
+        ALICE_MEMBER_ID
     );
 
     // Decrypt and verify
@@ -154,10 +153,7 @@ fn test_encrypt_kv_document_via_inner_api() {
     let doc = parse_kv_document(&encrypted).unwrap();
     let sig_token = &doc.signature_token;
     let sig = secretenv::format::schema::document::parse_kv_signature_token(sig_token).unwrap();
-    assert!(
-        sig.signer_pub.is_some(),
-        "signature.signer_pub must be present in kv-enc output"
-    );
+    assert_eq!(sig.signer_pub.protected.member_id, ALICE_MEMBER_ID);
 
     // Decrypt and verify
     let verified_doc = verify_kv_document(&doc, false).unwrap();

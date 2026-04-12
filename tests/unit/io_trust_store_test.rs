@@ -5,10 +5,9 @@
 
 use secretenv::io::trust::store::{load_trust_store, save_trust_store};
 use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
-use secretenv::model::signature::Signature;
 use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
-    TrustStoreProtected,
+    TrustStoreProtected, TrustStoreSignature,
 };
 use std::collections::BTreeMap;
 #[cfg(unix)]
@@ -37,10 +36,9 @@ fn build_test_document(owner: &str) -> TrustStoreDocument {
                 extra: BTreeMap::new(),
             }],
         },
-        signature: Signature {
+        signature: TrustStoreSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
-            signer_pub: None,
             sig: "test_signature".to_string(),
         },
     }

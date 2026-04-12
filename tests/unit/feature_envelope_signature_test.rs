@@ -20,25 +20,25 @@ fn make_dummy_public_key(kid: &str) -> PublicKey {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: "X25519".to_string(),
-                        x: "dummy".to_string(),
+                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: "Ed25519".to_string(),
-                        x: "dummy".to_string(),
+                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                     },
                 },
                 attestation: Attestation {
-                    method: "test".to_string(),
-                    pub_: "test".to_string(),
-                    sig: "dummy".to_string(),
+                    method: "ssh-sign".to_string(),
+                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                    sig: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ".to_string(),
                 },
             },
             binding_claims: None,
             expires_at: "2099-01-01T00:00:00Z".to_string(),
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
         },
-        signature: "dummy".to_string(),
+        signature: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
     }
 }
 

@@ -61,7 +61,7 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
             let kid_display = build_kid_display(&sig.kid).unwrap_or_else(|_| sig.kid.clone());
             push_line(out, format!("  Algorithm:   {}", sig.alg));
             push_line(out, format!("  Kid:         {}", kid_display));
-            append_signer_info(sig.signer_pub.as_ref(), out);
+            append_signer_info(Some(&sig.signer_pub), out);
             push_line(
                 out,
                 format!("  Sig:         {}...", &sig.sig[..sig.sig.len().min(40)]),

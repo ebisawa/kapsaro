@@ -1,6 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::keygen_helpers::make_dummy_public_key;
 use secretenv::feature::verify::file::verify_file_document;
 use secretenv::feature::verify::kv::signature::verify_kv_document;
 use secretenv::model::common::WrapItem;
@@ -11,7 +12,7 @@ use secretenv::model::file_enc::{
 use secretenv::model::identifiers::{alg, format, hpke};
 use secretenv::model::kv_enc::document::KvEncDocument;
 use secretenv::model::kv_enc::header::{KvHeader, KvWrap};
-use secretenv::model::signature::Signature;
+use secretenv::model::signature::ArtifactSignature;
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
 
@@ -50,10 +51,10 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
             created_at: "2026-01-14T00:00:00Z".to_string(),
             updated_at: "2026-01-14T00:00:00Z".to_string(),
         },
-        signature: Signature {
+        signature: ArtifactSignature {
             alg: alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: None,
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "invalid".to_string(),
         },
     };

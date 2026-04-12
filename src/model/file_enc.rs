@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::common::{RemovedRecipient, WrapItem};
-use super::signature::Signature;
+use super::signature::ArtifactSignature;
 use super::verification::SignatureVerificationProof;
 
 /// FileEncDocument v3 top-level structure
@@ -20,7 +20,7 @@ pub struct FileEncDocument {
     /// Protected content (signature target)
     pub protected: FileEncDocumentProtected,
     /// Signature over protected object
-    pub signature: Signature,
+    pub signature: ArtifactSignature,
 }
 
 /// FileEncDocument protected object (signature target)

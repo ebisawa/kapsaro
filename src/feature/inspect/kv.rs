@@ -100,7 +100,7 @@ fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectS
             build_section_lines(|out| {
                 push_line(out, format!("  Algorithm:   {}", signature.alg));
                 push_line(out, format!("  Kid:         {}", kid_display));
-                append_signer_info(signature.signer_pub.as_ref(), out);
+                append_signer_info(Some(&signature.signer_pub), out);
                 push_line(
                     out,
                     format!(

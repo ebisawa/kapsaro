@@ -51,7 +51,7 @@ fn test_trust_store_schema_valid_document() {
 }
 
 #[test]
-fn test_trust_store_schema_accepts_legacy_signer_pub() {
+fn test_trust_store_schema_rejects_signer_pub() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
@@ -72,7 +72,7 @@ fn test_trust_store_schema_accepts_legacy_signer_pub() {
     .unwrap();
 
     let validator = embedded_trust_validator().unwrap();
-    validator.validate_trust_store(&doc).unwrap();
+    assert!(validator.validate_trust_store(&doc).is_err());
 }
 
 #[test]

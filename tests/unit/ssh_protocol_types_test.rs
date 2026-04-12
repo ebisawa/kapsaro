@@ -23,6 +23,20 @@ fn test_ed25519_raw_signature_invalid_length() {
 }
 
 #[test]
+fn test_ed25519_raw_signature_debug_is_redacted() {
+    let sig = Ed25519RawSignature::new([7u8; 64]);
+    assert_eq!(format!("{:?}", sig), "Ed25519RawSignature([REDACTED])");
+}
+
+#[test]
+fn test_ed25519_raw_signature_to_vec_returns_zeroizing_bytes() {
+    let sig = Ed25519RawSignature::new([9u8; 64]);
+    let bytes = sig.to_vec();
+    assert_eq!(bytes.len(), 64);
+    assert!(bytes.iter().all(|byte| *byte == 9));
+}
+
+#[test]
 fn test_ssh_signature_blob_extract_from_raw_64() {
     let mut raw = [0u8; 64];
     for (i, b) in raw.iter_mut().enumerate() {
@@ -77,4 +91,10 @@ fn test_ssh_signature_blob_rejects_wrong_sig_length() {
     let blob = SshSignatureBlob::new(blob_bytes);
     let err = blob.extract_ed25519_raw().unwrap_err().to_string();
     assert!(err.contains("expected 64"));
+}
+
+#[test]
+fn test_ssh_signature_blob_debug_is_redacted() {
+    let blob = SshSignatureBlob::new(vec![1u8; 8]);
+    assert_eq!(format!("{:?}", blob), "SshSignatureBlob([REDACTED])");
 }

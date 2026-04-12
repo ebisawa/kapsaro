@@ -13,16 +13,20 @@ use zeroize::Zeroizing;
 ///
 /// Format: `string algorithm` + `string signature`
 /// This is the format returned by SSHSIG parsing and used in SSH protocol.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SshSignatureBlob(Vec<u8>);
+#[derive(Clone)]
+pub struct SshSignatureBlob(Zeroizing<Vec<u8>>);
 
 impl SshSignatureBlob {
     pub fn new(bytes: Vec<u8>) -> Self {
+        Self(Zeroizing::new(bytes))
+    }
+
+    pub fn from_zeroizing(bytes: Zeroizing<Vec<u8>>) -> Self {
         Self(bytes)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        self.0.as_slice()
     }
 
     pub fn extract_ed25519_raw(&self) -> Result<Ed25519RawSignature> {
@@ -62,17 +66,35 @@ impl SshSignatureBlob {
     }
 }
 
+impl PartialEq for SshSignatureBlob {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl Eq for SshSignatureBlob {}
+
+impl std::fmt::Debug for SshSignatureBlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SshSignatureBlob([REDACTED])")
+    }
+}
+
 /// SSHSIG blob (complete SSHSIG format)
-#[derive(Debug, Clone)]
-pub struct SshsigBlob(Vec<u8>);
+#[derive(Clone)]
+pub struct SshsigBlob(Zeroizing<Vec<u8>>);
 
 impl SshsigBlob {
     pub fn new(bytes: Vec<u8>) -> Self {
+        Self(Zeroizing::new(bytes))
+    }
+
+    pub fn from_zeroizing(bytes: Zeroizing<Vec<u8>>) -> Self {
         Self(bytes)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        self.0.as_slice()
     }
 
     pub fn extract_signature_blob(&self) -> Result<SshSignatureBlob> {
@@ -82,5 +104,11 @@ impl SshsigBlob {
     pub fn extract_ed25519_raw(&self) -> Result<Ed25519RawSignature> {
         let sig_blob = self.extract_signature_blob()?;
         sig_blob.extract_ed25519_raw()
+    }
+}
+
+impl std::fmt::Debug for SshsigBlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SshsigBlob([REDACTED])")
     }
 }

@@ -7,13 +7,15 @@ use super::traits::SshKeygen;
 use super::{build_ssh_child_env, temp_file};
 use crate::io::process::configure_child_env_os;
 use crate::io::ssh::agent::socket::resolve_agent_socket_path;
+use crate::io::ssh::protocol::sshsig::parse_sshsig_armored;
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::io::ssh::SshError;
-use crate::support::fs::load_text;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use zeroize::Zeroizing;
 
 /// Default implementation of `SshKeygen` that invokes the system `ssh-keygen` binary.
 pub struct DefaultSshKeygen {
@@ -65,7 +67,7 @@ impl SshKeygen for DefaultSshKeygen {
             })
     }
 
-    fn sign(&self, key_path: &Path, namespace: &str, data: &[u8]) -> Result<String> {
+    fn sign(&self, key_path: &Path, namespace: &str, data: &[u8]) -> Result<Ed25519RawSignature> {
         let is_public_key = key_path
             .extension()
             .map(|ext| ext == "pub")
@@ -78,11 +80,9 @@ impl SshKeygen for DefaultSshKeygen {
             )))
         })?;
 
-        let msg_file = temp_file::save_temp_bytes(data)?;
-        let output =
-            execute_sign_command(&self.ssh_keygen_path, key_path_str, namespace, &msg_file)?;
+        let output = execute_sign_command(&self.ssh_keygen_path, key_path_str, namespace, data)?;
         check_sign_output(&output, is_public_key)?;
-        load_signature_file(&msg_file)
+        parse_sign_stdout(output.stdout)
     }
 
     fn verify(
@@ -145,28 +145,23 @@ fn execute_sign_command(
     ssh_keygen_path: &str,
     key_path_str: &str,
     namespace: &str,
-    msg_file: &tempfile::NamedTempFile,
+    data: &[u8],
 ) -> Result<std::process::Output> {
-    // Remove any pre-existing .sig file to prevent ssh-keygen from prompting
-    // "Overwrite (y/n)?". When stdin is closed (as with Command::output()),
-    // ssh-keygen silently skips writing on EOF, returning exit 0 with stale
-    // content — which can cause false non-determinism errors.
-    let sig_path = build_sig_path(msg_file);
-    let _ = std::fs::remove_file(&sig_path);
-
-    let mut command = Command::new(ssh_keygen_path);
+    let mut child = Command::new(ssh_keygen_path);
     configure_child_env_os(
-        &mut command,
+        &mut child,
         &build_ssh_child_env(resolve_agent_socket_path().ok().as_deref()),
     );
 
-    command
+    let mut child = child
         .args(["-Y", "sign"])
         .args(["-f", key_path_str])
         .args(["-n", namespace])
         .args(["-O", "hashalg=sha256"])
-        .arg(msg_file.path())
-        .output()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| {
             Error::from(SshError::operation_failed_with_source(
                 format!(
@@ -176,13 +171,23 @@ fn execute_sign_command(
                 ),
                 e,
             ))
-        })
-}
+        })?;
 
-fn build_sig_path(msg_file: &tempfile::NamedTempFile) -> std::path::PathBuf {
-    let mut sig_path_str = msg_file.path().to_string_lossy().into_owned();
-    sig_path_str.push_str(".sig");
-    std::path::PathBuf::from(sig_path_str)
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(data).map_err(|e| {
+            Error::from(SshError::operation_failed_with_source(
+                "Failed to write to stdin",
+                e,
+            ))
+        })?;
+    }
+
+    child.wait_with_output().map_err(|e| {
+        Error::from(SshError::operation_failed_with_source(
+            "Failed to wait for ssh-keygen",
+            e,
+        ))
+    })
 }
 
 fn check_sign_output(output: &std::process::Output, is_public_key: bool) -> Result<()> {
@@ -205,8 +210,23 @@ fn check_sign_output(output: &std::process::Output, is_public_key: bool) -> Resu
     .into())
 }
 
-fn load_signature_file(msg_file: &tempfile::NamedTempFile) -> Result<String> {
-    load_text(&build_sig_path(msg_file))
+fn parse_sign_stdout(stdout: Vec<u8>) -> Result<Ed25519RawSignature> {
+    let stdout = Zeroizing::new(stdout);
+    if stdout.iter().all(|byte| byte.is_ascii_whitespace()) {
+        return Err(SshError::operation_failed(
+            "ssh-keygen -Y sign produced empty signature output",
+        )
+        .into());
+    }
+
+    let armored = std::str::from_utf8(stdout.as_slice()).map_err(|e| {
+        Error::from(SshError::operation_failed_with_source(
+            "Invalid UTF-8 in ssh-keygen output",
+            e,
+        ))
+    })?;
+    let blob = parse_sshsig_armored(armored)?;
+    blob.extract_ed25519_raw()
 }
 
 fn check_verify_output(output: std::process::Output) -> Result<()> {

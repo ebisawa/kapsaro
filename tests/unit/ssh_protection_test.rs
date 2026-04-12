@@ -51,6 +51,13 @@ fn derive_enc_key(raw_sig: &[u8], salt: &HkdfSalt, kid: &str) -> secretenv::Resu
     XChaChaKey::from_slice(cek.as_bytes())
 }
 
+fn tamper_base64url(input: &str) -> String {
+    let mut chars: Vec<char> = input.chars().collect();
+    let first = chars.first_mut().expect("base64url must be non-empty");
+    *first = if *first == 'A' { 'B' } else { 'A' };
+    chars.into_iter().collect()
+}
+
 #[test]
 fn test_build_sign_message() {
     let ikm_salt = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -122,14 +129,17 @@ fn test_derive_enc_key_info_format() {
 
 #[test]
 fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
-    // Deterministic backend avoids ssh-agent / ssh-keygen and user interaction.
-    struct DeterministicBackend;
-    impl SignatureBackend for DeterministicBackend {
+    struct CountingBackend {
+        calls: Cell<u32>,
+    }
+
+    impl SignatureBackend for CountingBackend {
         fn sign_for_ikm(
             &self,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
+            self.calls.set(self.calls.get() + 1);
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
     }
@@ -143,7 +153,9 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
     let created_at = "2026-01-01T00:00:00Z";
     let expires_at = "2027-01-01T00:00:00Z";
 
-    let backend = DeterministicBackend;
+    let backend = CountingBackend {
+        calls: Cell::new(0),
+    };
 
     let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
@@ -162,6 +174,11 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
         .expect("decrypt_private_key should succeed");
 
     assert_eq!(decrypted, plaintext);
+    assert_eq!(
+        backend.calls.get(),
+        3,
+        "encrypt uses 2 signatures, decrypt uses 1"
+    );
 }
 
 #[test]
@@ -260,4 +277,176 @@ fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
 
     let decrypted = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap();
     assert_eq!(decrypted, plaintext);
+}
+
+#[test]
+fn test_decrypt_private_key_retries_signature_only_after_failure() {
+    struct CountingBackend {
+        calls: Cell<u32>,
+    }
+
+    impl SignatureBackend for CountingBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            self.calls.set(self.calls.get() + 1);
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+    let backend = CountingBackend {
+        calls: Cell::new(0),
+    };
+    let mut encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_id: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &backend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .unwrap();
+    encrypted.encrypted.ct = tamper_base64url(&encrypted.encrypted.ct);
+
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+    let err_msg = err.to_string();
+
+    assert!(
+        err_msg.contains("E_PRIVATE_KEY_DECRYPT_FAILED"),
+        "decrypt failure should use private key error code: {err_msg}"
+    );
+    assert_eq!(
+        backend.calls.get(),
+        4,
+        "encrypt uses 2 signatures and decrypt failure retries once for diagnosis"
+    );
+}
+
+#[test]
+fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
+    struct EncryptBackend;
+
+    impl SignatureBackend for EncryptBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    struct RetryDiagnosticBackend {
+        calls: Cell<u32>,
+    }
+
+    impl SignatureBackend for RetryDiagnosticBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            self.calls.set(self.calls.get() + 1);
+            let fill = if self.calls.get() == 1 { 0xAB } else { 0xAC };
+            Ok(Ed25519RawSignature::new([fill; 64]))
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+    let mut encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_id: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &EncryptBackend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .unwrap();
+    encrypted.encrypted.ct = tamper_base64url(&encrypted.encrypted.ct);
+
+    let backend = RetryDiagnosticBackend {
+        calls: Cell::new(0),
+    };
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+
+    assert!(
+        err.to_string().contains("W_SSH_NONDETERMINISTIC"),
+        "retry diagnosis should report non-deterministic signatures: {err}"
+    );
+    assert_eq!(
+        backend.calls.get(),
+        2,
+        "decrypt should retry once after failure"
+    );
+}
+
+#[test]
+fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
+    struct EncryptBackend;
+
+    impl SignatureBackend for EncryptBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    struct FailingBackend {
+        calls: Cell<u32>,
+    }
+
+    impl SignatureBackend for FailingBackend {
+        fn sign_for_ikm(
+            &self,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            self.calls.set(self.calls.get() + 1);
+            Err(secretenv::Error::Ssh {
+                message: "synthetic decrypt ssh failure".to_string(),
+                source: None,
+            })
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+    let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_id: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &EncryptBackend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .unwrap();
+
+    let backend = FailingBackend {
+        calls: Cell::new(0),
+    };
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+
+    assert!(
+        err.to_string().contains("synthetic decrypt ssh failure"),
+        "initial ssh signing failure should be preserved: {err}"
+    );
+    assert_eq!(
+        backend.calls.get(),
+        1,
+        "initial ssh signing failure must not retry"
+    );
 }

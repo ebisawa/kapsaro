@@ -229,8 +229,7 @@ pub fn decrypt_private_key(
     let ikm_salt_b64 = private_key.protected.alg.ikm_salt();
     let (nonce, ct, aad) = decode_ciphertext_params(private_key)?;
 
-    // Derive key
-    let enc_key = key_derivation::derive_key_from_ssh(
+    let derived = key_derivation::derive_key_for_private_key_use(
         &private_key.protected.kid,
         ikm_salt_b64,
         &hkdf_salt,
@@ -239,14 +238,49 @@ pub fn decrypt_private_key(
         debug,
     )?;
 
-    // Decrypt and deserialize
-    decrypt_and_deserialize(
-        &enc_key,
+    match decrypt_and_deserialize(
+        &derived.enc_key,
         &nonce,
         &aad,
         &ct,
         &private_key.protected.kid,
         debug,
         "decrypt_private_key",
-    )
+    ) {
+        Ok(plaintext) => Ok(plaintext),
+        Err(error) => handle_private_key_use_failure(
+            private_key,
+            backend,
+            ssh_pubkey,
+            &derived.raw_sig,
+            error,
+            debug,
+        ),
+    }
+}
+
+fn handle_private_key_use_failure(
+    private_key: &PrivateKey,
+    backend: &dyn SignatureBackend,
+    ssh_pubkey: &str,
+    raw_sig: &crate::io::ssh::protocol::types::Ed25519RawSignature,
+    error: Error,
+    debug: bool,
+) -> Result<PrivateKeyPlaintext> {
+    key_derivation::diagnose_private_key_use_signature(
+        &private_key.protected.kid,
+        private_key.protected.alg.ikm_salt(),
+        backend,
+        ssh_pubkey,
+        raw_sig,
+        debug,
+    )?;
+    Err(map_private_key_decrypt_error(error))
+}
+
+fn map_private_key_decrypt_error(error: Error) -> Error {
+    Error::Crypto {
+        message: "E_PRIVATE_KEY_DECRYPT_FAILED: private key decryption failed".to_string(),
+        source: Some(Box::new(error)),
+    }
 }

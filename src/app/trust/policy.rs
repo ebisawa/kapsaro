@@ -87,6 +87,7 @@ pub(crate) struct UnsetPolicy;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ImportPolicy;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RewrapInputPolicy;
 

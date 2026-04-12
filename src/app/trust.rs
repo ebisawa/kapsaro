@@ -31,8 +31,10 @@ pub(crate) use policy::{
     CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ReadTrustPolicy,
     RewrapInputPolicy, RunPolicy, SetPolicy, TrustPolicy, UnsetPolicy, WriteTrustPolicy,
 };
+#[allow(unused_imports)]
 pub(crate) use snapshot::{
-    CommandTrustSnapshot, TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
+    load_read_trust_context, CommandTrustSnapshot, TrustContext, WorkspaceMemberSnapshot,
+    WriteRecipientTrustPlan,
 };
 
 #[cfg(test)]

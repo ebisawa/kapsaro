@@ -4,9 +4,10 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::app::trust::RewrapInputPolicy;
-use crate::app::trust::{current_self_sig_x, CommandTrustSnapshot, WorkspaceMemberSnapshot};
-use crate::feature::verify::public_key::verify_public_key_for_verification;
+use crate::app::trust::{current_self_sig_x, load_read_trust_context};
+use crate::feature::verify::public_key::{
+    verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
+};
 use crate::format::kv::KV_ENC_EXTENSION;
 use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::io::workspace::members::{
@@ -34,15 +35,14 @@ pub(crate) fn build_rewrap_batch_plan(
     ensure_workspace_member_kid_uniqueness(&workspace.root_path)?;
     let incoming_index = load_incoming_index(&workspace.root_path)?;
     let artifact_snapshots = load_encrypted_file_snapshots(&workspace.root_path)?;
-    let workspace_members = WorkspaceMemberSnapshot::load(&workspace.root_path, options.verbose)?;
-    let pre_promotion_trust = CommandTrustSnapshot::<RewrapInputPolicy>::from_workspace_members(
+    let pre_promotion_trust = load_read_trust_context(
         options,
-        workspace_members,
+        &workspace.root_path,
         &execution.member_id,
         Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        options.verbose,
     )?
-    .trust_context()
-    .clone();
+    .trust_ctx;
     let incoming_report = build_incoming_report(&incoming_index, options.verbose)?;
     if artifact_snapshots.is_empty() {
         return Err(Error::NotFound {
@@ -128,7 +128,11 @@ fn build_incoming_candidate(
     snapshot: &IncomingSnapshot,
     debug: bool,
 ) -> Result<IncomingPromotionCandidate> {
-    let review = match verify_public_key_for_verification(&snapshot.public_key, debug) {
+    let review = match verify_public_key_for_verification_context(
+        &snapshot.public_key,
+        debug,
+        WORKSPACE_INCOMING_MEMBER_CONTEXT,
+    ) {
         Ok(_) => build_pending_review(snapshot),
         Err(error) => IncomingVerificationItem {
             member_id: snapshot.public_key.protected.member_id.clone(),

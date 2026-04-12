@@ -9,7 +9,7 @@ use crate::app::trust::enforcement::{
     build_signer_identity, enforce_signer_trust, SignerTrustOutcome,
 };
 use crate::app::trust::policy::{CommandCapability, ReadTrustPolicy, TrustPolicy};
-use crate::app::trust::snapshot::{CommandTrustSnapshot, TrustContext};
+use crate::app::trust::snapshot::{load_read_trust_context, TrustContext};
 use crate::feature::trust::judgment::judge_signer_trust_with_additional;
 use crate::feature::trust::judgment::AdditionalKnownKeyCache;
 use crate::model::verification::SignatureVerificationProof;
@@ -38,18 +38,18 @@ where
                     P::CAPABILITY.label()
                 ),
             })?;
-    let trust_snapshot = CommandTrustSnapshot::<P>::load(
+    let loaded = load_read_trust_context(
         options,
         &workspace.root_path,
         &execution.member_id,
         Some(current_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?;
-    let trust_ctx = trust_snapshot.trust_context();
+    let trust_ctx = &loaded.trust_ctx;
     let outcome = evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, &[])?;
     Ok(ReadSignerTrustPlan {
         outcome,
-        warnings: trust_ctx.permission_warnings.clone(),
+        warnings: loaded.warnings,
     })
 }
 

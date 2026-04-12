@@ -4,7 +4,9 @@
 //! Trust Store document verification (spec §9.6 + §10).
 
 use crate::crypto::sign::verify_trust_store_bytes;
-use crate::feature::verify::public_key::verify_public_key_for_verification;
+use crate::feature::verify::public_key::{
+    verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
+};
 use crate::format::schema::validator::embedded_trust_validator;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
@@ -85,7 +87,12 @@ fn load_signer_public_key(doc: &TrustStoreDocument, keystore_root: &Path) -> Res
 }
 
 fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifyingKey> {
-    let _verified = verify_public_key_for_verification(signer_public_key, false).map_err(|e| {
+    let _verified = verify_public_key_for_verification_context(
+        signer_public_key,
+        false,
+        TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
+    )
+    .map_err(|e| {
         Error::crypto_with_source("Trust store keystore public key verification failed", e)
     })?;
 

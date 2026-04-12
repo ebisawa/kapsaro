@@ -16,7 +16,7 @@ use crate::model::public_key::{
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
 use crate::support::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::{kid_display_lossy, kid_half_display_lossy};
 use crate::{Error, Result};
 use ed25519_dalek::{Verifier, VerifyingKey};
 use time::OffsetDateTime;
@@ -28,6 +28,17 @@ pub struct VerifiedPublicKeyForVerification {
     pub warnings: Vec<String>,
 }
 
+const DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT: &str = "public key";
+pub(crate) const KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT: &str = "keystore sibling public.json";
+pub(crate) const EMBEDDED_SIGNER_PUB_CONTEXT: &str = "embedded signer_pub";
+pub(crate) const WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT: &str = "active member/read trust";
+pub(crate) const WORKSPACE_ACTIVE_MEMBER_RECIPIENT_CONTEXT: &str =
+    "workspace active member recipient validation";
+pub(crate) const WORKSPACE_MEMBER_FILE_CONTEXT: &str = "workspace member file";
+pub(crate) const MEMBER_VERIFICATION_INPUT_CONTEXT: &str = "member verification input public key";
+pub(crate) const WORKSPACE_INCOMING_MEMBER_CONTEXT: &str = "workspace incoming member";
+pub(crate) const TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT: &str = "trust store keystore public key";
+
 /// Verify PublicKey document self-signature only and return VerifiedPublicKey
 ///
 /// # Arguments
@@ -37,7 +48,16 @@ pub struct VerifiedPublicKeyForVerification {
 /// # Returns
 /// `VerifiedPublicKey` if self-signature is valid, error otherwise
 pub fn verify_public_key(public_key: &PublicKey, debug: bool) -> Result<VerifiedPublicKey> {
+    verify_public_key_with_context(public_key, debug, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
+}
+
+pub fn verify_public_key_with_context(
+    public_key: &PublicKey,
+    debug: bool,
+    context: &str,
+) -> Result<VerifiedPublicKey> {
     validate_derived_kid(public_key)?;
+    log_public_key_verification(debug, public_key, context, "self-signature");
 
     let protected_jcs = jcs::normalize(&public_key.protected)
         .map_err(|e| Error::crypto_with_source("Failed to normalize PublicKey protected", e))?;
@@ -57,10 +77,6 @@ pub fn verify_public_key(public_key: &PublicKey, debug: bool) -> Result<Verified
         Error::crypto_with_source("PublicKey self-signature verification failed", e)
     })?;
 
-    if debug {
-        debug!("[VERIFY] PublicKey self-signature verified");
-    }
-
     let proof = SelfSignatureProof::new();
     Ok(VerifiedPublicKey::new(public_key.clone(), proof))
 }
@@ -77,18 +93,23 @@ pub fn verify_public_key_with_attestation(
     public_key: &PublicKey,
     debug: bool,
 ) -> Result<VerifiedPublicKeyAttested> {
-    let verified = verify_public_key(public_key, debug)?;
+    verify_public_key_with_attestation_context(public_key, debug, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
+}
+
+pub fn verify_public_key_with_attestation_context(
+    public_key: &PublicKey,
+    debug: bool,
+    context: &str,
+) -> Result<VerifiedPublicKeyAttested> {
+    let verified = verify_public_key_with_context(public_key, debug, context)?;
 
     // Verify attestation
+    log_public_key_verification(debug, public_key, context, "attestation");
     verify_attestation(
         &public_key.protected.identity.keys,
         &public_key.protected.identity.attestation.pub_,
         &public_key.protected.identity.attestation.sig,
     )?;
-
-    if debug {
-        debug!("[VERIFY] PublicKey attestation verified");
-    }
 
     let proof = AttestationProof {
         method: public_key.protected.identity.attestation.method.clone(),
@@ -108,7 +129,16 @@ pub fn verify_public_key_for_verification(
     public_key: &PublicKey,
     debug: bool,
 ) -> Result<VerifiedPublicKeyForVerification> {
-    let verified_public_key = verify_public_key_with_attestation(public_key, debug)?;
+    verify_public_key_for_verification_context(public_key, debug, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
+}
+
+pub fn verify_public_key_for_verification_context(
+    public_key: &PublicKey,
+    debug: bool,
+    context: &str,
+) -> Result<VerifiedPublicKeyForVerification> {
+    let verified_public_key =
+        verify_public_key_with_attestation_context(public_key, debug, context)?;
     let mut warnings = Vec::new();
     if let Some(warning) = public_key_expiry_warning(verified_public_key.document())? {
         warnings.push(warning);
@@ -131,10 +161,30 @@ pub fn verify_recipient_public_keys(
     keys.iter()
         .map(|key| {
             enforce_recipient_key_not_expired(key)?;
-            let attested = verify_public_key_with_attestation(key, debug)?;
+            let attested = verify_public_key_with_attestation_context(
+                key,
+                debug,
+                WORKSPACE_ACTIVE_MEMBER_RECIPIENT_CONTEXT,
+            )?;
             Ok(VerifiedRecipientKey::new(attested, ExpiryProof::new()))
         })
         .collect()
+}
+
+fn log_public_key_verification(
+    debug_enabled: bool,
+    public_key: &PublicKey,
+    context: &str,
+    verification_target: &str,
+) {
+    if debug_enabled {
+        debug!(
+            "[VERIFY] PublicKey: verify {} ({}, {})",
+            verification_target,
+            context,
+            kid_half_display_lossy(&public_key.protected.kid)
+        );
+    }
 }
 
 fn validate_derived_kid(public_key: &PublicKey) -> Result<()> {

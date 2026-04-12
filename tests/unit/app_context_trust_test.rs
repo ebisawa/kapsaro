@@ -8,8 +8,8 @@ use crate::app::member::approval::MemberApprovalResult;
 use crate::app::trust::list::list_known_keys;
 use crate::app::trust::{
     build_signer_identity, enforce_policy_strict_key_checking, enforce_recipients_trust,
-    enforce_signer_trust, evaluate_signer_trust_with_proof, CommandCapability,
-    CommandTrustSnapshot, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy,
+    enforce_signer_trust, evaluate_signer_trust_with_proof, load_read_trust_context,
+    CommandCapability, CommandTrustSnapshot, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy,
     RecipientTrustOutcome, RewrapInputPolicy, RunPolicy, SetPolicy, SignerTrustOutcome,
     TrustContext, UnsetPolicy,
 };
@@ -28,7 +28,10 @@ use crate::model::public_key::{
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
 use crate::test_utils::ALICE_MEMBER_ID;
-use crate::test_utils::{kid, member_id, save_public_key, setup_test_keystore_from_fixtures};
+use crate::test_utils::{
+    kid, member_id, save_public_key, setup_test_keystore_from_fixtures,
+    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+};
 
 const VALID_TEST_KID: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 
@@ -315,6 +318,44 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
     .unwrap();
 
     assert_eq!(result, SignerTrustOutcome::Accepted);
+}
+
+#[test]
+fn test_load_read_trust_context_allows_expired_active_member_with_warning() {
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let workspace = dir.path().join("workspace");
+    update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_ID, "2020-01-01T00:00:00Z");
+    sync_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
+    let options = build_test_command_options(dir.path(), Some(&workspace));
+
+    let loaded =
+        load_read_trust_context(&options, &workspace, ALICE_MEMBER_ID, None, false).unwrap();
+
+    assert_eq!(loaded.trust_ctx.active_members_by_kid.len(), 1);
+    assert!(loaded
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("expired")));
+}
+
+#[test]
+fn test_write_trust_snapshot_rejects_expired_active_member() {
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let workspace = dir.path().join("workspace");
+    update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_ID, "2020-01-01T00:00:00Z");
+    sync_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
+    let options = build_test_command_options(dir.path(), Some(&workspace));
+
+    let error = CommandTrustSnapshot::<EncryptPolicy>::load(
+        &options,
+        &workspace,
+        ALICE_MEMBER_ID,
+        None,
+        false,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("expired"));
 }
 
 #[test]

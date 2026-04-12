@@ -16,6 +16,9 @@ use crate::config::resolution::strict_key_checking::resolve_strict_key_checking;
 use crate::config::types::ResolvedStrictKeyChecking;
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
 use crate::feature::trust::judgment::{ActiveMemberSnapshot, SelfTrustSet};
+use crate::feature::verify::public_key::{
+    verify_public_key_for_verification_context, WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
+};
 use crate::io::workspace::members::load_active_member_files;
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
 use crate::model::trust_store::KnownKey;
@@ -129,6 +132,11 @@ pub(crate) struct CommandTrustSnapshot<P> {
     _policy: PhantomData<P>,
 }
 
+pub(crate) struct ReadTrustContextLoad {
+    pub(crate) trust_ctx: TrustContext,
+    pub(crate) warnings: Vec<String>,
+}
+
 impl<P> CommandTrustSnapshot<P>
 where
     P: TrustPolicy,
@@ -171,6 +179,28 @@ where
     pub(crate) fn workspace_members(&self) -> &WorkspaceMemberSnapshot {
         &self.workspace_members
     }
+}
+
+pub(crate) fn load_read_trust_context(
+    options: &CommonCommandOptions,
+    workspace_path: &Path,
+    self_member_id: &str,
+    self_sig_x: Option<[u8; 32]>,
+    debug: bool,
+) -> Result<ReadTrustContextLoad> {
+    let verified_active_members = load_active_member_index_for_read_trust(workspace_path, debug)?;
+    let trust_ctx = load_trust_context(
+        options,
+        verified_active_members.active_members_by_kid,
+        self_member_id,
+        self_sig_x,
+    )?;
+    let mut warnings = trust_ctx.permission_warnings.clone();
+    warnings.extend(verified_active_members.warnings);
+    Ok(ReadTrustContextLoad {
+        trust_ctx,
+        warnings,
+    })
 }
 
 pub(crate) struct WriteRecipientTrustPlan<P> {
@@ -255,6 +285,49 @@ fn load_trust_context(
         strict_key_checking,
         is_interactive,
         permission_warnings,
+    })
+}
+
+struct VerifiedActiveMemberIndex {
+    active_members_by_kid: BTreeMap<String, PublicKey>,
+    warnings: Vec<String>,
+}
+
+fn load_active_member_index_for_read_trust(
+    workspace_path: &Path,
+    debug: bool,
+) -> Result<VerifiedActiveMemberIndex> {
+    let active_members = load_active_member_files(workspace_path)?;
+    if active_members.is_empty() {
+        return Err(crate::Error::NotFound {
+            message: "No active members found in workspace".to_string(),
+        });
+    }
+
+    let mut active_members_by_kid = BTreeMap::new();
+    let mut warnings = Vec::new();
+    for member in active_members {
+        let verified = verify_public_key_for_verification_context(
+            &member,
+            debug,
+            WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
+        )?;
+        warnings.extend(verified.warnings);
+        let verified_member = verified.verified_public_key.document().clone();
+        let kid = verified_member.protected.kid.clone();
+        if active_members_by_kid
+            .insert(kid.clone(), verified_member)
+            .is_some()
+        {
+            return Err(crate::Error::Config {
+                message: format!("Ambiguous key: kid '{}' found in multiple members", kid),
+            });
+        }
+    }
+
+    Ok(VerifiedActiveMemberIndex {
+        active_members_by_kid,
+        warnings,
     })
 }
 

@@ -10,6 +10,19 @@
 //! - file-enc detection (JSON with "format": "secretenv.file@3")
 
 use secretenv::format::detection::{detect_format, InputFormat};
+use secretenv::support::limits::MAX_JSON_DEPTH;
+
+fn deeply_nested_json(depth: usize) -> String {
+    let mut json = String::new();
+    for _ in 0..depth {
+        json.push_str(r#"{"nested":"#);
+    }
+    json.push_str(r#""value""#);
+    for _ in 0..depth {
+        json.push('}');
+    }
+    json
+}
 
 #[test]
 fn test_detect_kv_enc_v3() {
@@ -54,6 +67,16 @@ fn test_detect_file_enc_top_level_format_rejected() {
     let content = r#"{"format":"secretenv.file@3","protected":{"sid":"550e8400-e29b-41d4-a716-446655440000","wrap":[],"payload":{"protected":{"format":"secretenv.file.payload@3","sid":"550e8400-e29b-41d4-a716-446655440000","alg":{"aead":"xchacha20-poly1305"}},"encrypted":{"nonce":"...","ct":"..."}},"created_at":"2026-01-19T10:00:00Z","updated_at":"2026-01-19T10:00:00Z"},"signature":{"alg":"eddsa-ed25519","kid":"...","sig":"..."}}"#;
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::Unknown);
+}
+
+#[test]
+fn test_detect_file_enc_rejects_json_exceeding_depth_limit() {
+    let result = detect_format(&deeply_nested_json(MAX_JSON_DEPTH + 1));
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("nesting depth exceeds limit"));
 }
 
 #[test]

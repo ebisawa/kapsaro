@@ -2,6 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use secretenv::support::limits::MAX_JSON_DEPTH;
+
+fn deeply_nested_json(depth: usize) -> String {
+    let mut json = String::new();
+    for _ in 0..depth {
+        json.push_str(r#"{"nested":"#);
+    }
+    json.push_str(r#""value""#);
+    for _ in 0..depth {
+        json.push('}');
+    }
+    json
+}
 
 #[test]
 fn file_enc_detect_rejects_non_json() {
@@ -19,6 +32,27 @@ fn kv_enc_detect_rejects_json() {
 fn encrypted_content_detect_rejects_unknown() {
     let result = EncryptedContent::detect("random text".to_string());
     assert!(result.is_err());
+}
+
+#[test]
+fn file_enc_detect_rejects_json_exceeding_depth_limit() {
+    let result = FileEncContent::detect(deeply_nested_json(MAX_JSON_DEPTH + 1));
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("nesting depth exceeds limit"));
+}
+
+#[test]
+fn encrypted_content_detect_rejects_json_exceeding_depth_limit() {
+    let result = EncryptedContent::detect(deeply_nested_json(MAX_JSON_DEPTH + 1));
+    assert!(result.is_err());
+    let err = match result {
+        Ok(_) => panic!("expected depth-limit error"),
+        Err(err) => err,
+    };
+    assert!(err.to_string().contains("nesting depth exceeds limit"));
 }
 
 #[test]

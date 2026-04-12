@@ -9,9 +9,9 @@ use crate::feature::verify::SignatureVerificationReport;
 use crate::format::content::KvEncContent;
 use crate::format::kv::document::parse_kv_document;
 use crate::format::schema::document::parse_kv_signature_token;
+use crate::model::common::validate_wrap_items;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
-use crate::support::limits::validate_wrap_count;
 use crate::Result;
 
 pub fn verify_kv_content(content: &KvEncContent, debug: bool) -> Result<VerifiedKvEncDocument> {
@@ -36,7 +36,7 @@ pub fn verify_kv_document_report(content: &str, debug: bool) -> SignatureVerific
 }
 
 pub fn verify_kv_document(doc: &KvEncDocument, debug: bool) -> Result<VerifiedKvEncDocument> {
-    validate_wrap_count(doc.wrap.wrap.len(), "Document")?;
+    validate_wrap_items(&doc.wrap.wrap, "Document")?;
     let signature = parse_kv_signature_token(&doc.signature_token)?;
     let proof = verify_signature_with_loaded_key(&signature, debug, |loaded| {
         verify_kv_signature(doc, &loaded.verifying_key, &signature, debug)

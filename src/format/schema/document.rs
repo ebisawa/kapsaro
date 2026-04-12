@@ -5,6 +5,7 @@
 
 use crate::format::schema::validator::{embedded_validator, Validator};
 use crate::format::token::decode_token_bytes;
+use crate::model::common::validate_wrap_items;
 use crate::model::file_enc::FileEncDocument;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
@@ -13,7 +14,6 @@ use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
 use crate::support::fs::load_text_with_limit;
 use crate::support::json_limits::validate_json_limits;
-use crate::support::limits::validate_wrap_count;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -179,11 +179,11 @@ where
 }
 
 fn validate_file_enc_limits(doc: FileEncDocument) -> Result<FileEncDocument> {
-    validate_wrap_count(doc.protected.wrap.len(), "FileEncDocument")?;
+    validate_wrap_items(&doc.protected.wrap, "FileEncDocument")?;
     Ok(doc)
 }
 
 fn validate_kv_wrap_limits(wrap: KvWrap) -> Result<KvWrap> {
-    validate_wrap_count(wrap.wrap.len(), "WRAP token")?;
+    validate_wrap_items(&wrap.wrap, "WRAP token")?;
     Ok(wrap)
 }

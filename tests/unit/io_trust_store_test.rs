@@ -9,6 +9,7 @@ use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
+use secretenv::support::limits::MAX_JSON_DEPTH;
 use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -42,6 +43,18 @@ fn build_test_document(owner: &str) -> TrustStoreDocument {
             sig: "test_signature".to_string(),
         },
     }
+}
+
+fn deeply_nested_json(depth: usize) -> String {
+    let mut json = String::new();
+    for _ in 0..depth {
+        json.push_str(r#"{"nested":"#);
+    }
+    json.push_str(r#""value""#);
+    for _ in 0..depth {
+        json.push('}');
+    }
+    json
 }
 
 #[test]
@@ -115,6 +128,24 @@ fn test_load_trust_store_invalid_json_fails() {
 
     let result = load_trust_store(&path, dir.path());
     assert!(result.is_err());
+}
+
+#[test]
+fn test_load_trust_store_rejects_json_exceeding_depth_limit_before_parse() {
+    let dir = TempDir::new().unwrap();
+    let base_dir = dir.path().join("secretenv");
+    let trust_dir = base_dir.join("trust");
+    let path = trust_dir.join("alice@example.com.json");
+    std::fs::create_dir_all(&trust_dir).unwrap();
+    std::fs::write(&path, deeply_nested_json(MAX_JSON_DEPTH + 1)).unwrap();
+
+    let result = load_trust_store(&path, &base_dir);
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("nesting depth exceeds limit"));
 }
 
 #[cfg(unix)]

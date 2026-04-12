@@ -6,6 +6,7 @@
 use super::SignatureVerificationReport;
 use crate::feature::envelope::signature::verify_file_signature;
 use crate::format::content::FileEncContent;
+use crate::model::common::validate_wrap_items;
 use crate::model::file_enc::FileEncDocument;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::Result;
@@ -40,7 +41,7 @@ pub fn verify_file_document_report(
 ///
 /// Returns `Ok(VerifiedFileEncDocument)` if signature is valid, error otherwise.
 pub fn verify_file_document(doc: &FileEncDocument, debug: bool) -> Result<VerifiedFileEncDocument> {
-    crate::support::limits::validate_wrap_count(doc.protected.wrap.len(), "Document")?;
+    validate_wrap_items(&doc.protected.wrap, "Document")?;
     let signature = &doc.signature;
     let protected = doc.protected_for_signing();
     let proof = verify_signature_with_loaded_key(signature, debug, |loaded| {

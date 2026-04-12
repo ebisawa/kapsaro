@@ -8,6 +8,7 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::ResolvedSshSigner;
 use crate::app::key::export::save_exported_public_key;
 use crate::app::key::types::{KeyExportPrivateResult, KeyListResult};
+use crate::feature::key::manage::common::{resolve_active_kid, resolve_keystore_root};
 use crate::feature::key::manage::export::export_key;
 use crate::feature::key::manage::mutation::{activate_key, remove_key};
 use crate::feature::key::manage::private_load::load_and_decrypt_private_key;
@@ -52,6 +53,17 @@ pub fn export_key_command(
     let result = export_key(options.home.clone(), member_id, kid)?;
     save_exported_public_key(out, &result.public_key)?;
     Ok(result)
+}
+
+/// Validate that the specified KID exists before expensive operations.
+pub fn validate_kid(
+    options: &CommonCommandOptions,
+    member_id: &str,
+    kid: Option<String>,
+) -> Result<()> {
+    let keystore_root = resolve_keystore_root(options.home.clone())?;
+    resolve_active_kid(&keystore_root, member_id, kid)?;
+    Ok(())
 }
 
 pub fn export_private_key_command(

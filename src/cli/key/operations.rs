@@ -5,6 +5,7 @@
 
 use crate::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, remove_key_command,
+    validate_kid,
 };
 use crate::cli::common::command::{resolve_options, resolve_required_member_id};
 use crate::cli::common::output::text::key::{
@@ -66,6 +67,7 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
 
     let options = resolve_options(&args.common);
     let member_id = resolve_required_member_id(&options, args.member_id.clone(), false)?;
+    validate_kid(&options, &member_id, args.kid.clone())?;
     let ssh_ctx = resolve_ssh_context_for_active_key(&options, Some(member_id.clone()))?;
     let password = prompt_export_password()?;
 

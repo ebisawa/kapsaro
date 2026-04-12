@@ -16,6 +16,8 @@ use rand::RngCore;
 use tracing::debug;
 use zeroize::Zeroizing;
 
+// RFC 9106 Section 4 "second recommended" option for Argon2id:
+// m=64 MiB, t=3, p=4
 const ARGON2_MEMORY_COST_KIB: u32 = 65536;
 const ARGON2_TIME_COST: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;

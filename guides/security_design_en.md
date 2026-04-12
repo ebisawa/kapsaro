@@ -992,7 +992,7 @@ The HKDF info string (`secretenv:password-private-key-enc@5:{kid}`) differs from
 
 #### 7.9.3 Argon2id Parameters and Password Requirements
 
-- Fixed parameters at export time: m=65536 (64 MiB), t=3, p=4
+- Fixed parameters at export time: m=65536 (64 MiB), t=3, p=4 — following the "second recommended" option from RFC 9106, Section 4
 - Parameters are fixed by the implementation and are not serialized in the private key document
 - Minimum password length: 8 characters. This is the implementation-enforced floor, not a recommendation. Users are responsible for choosing a sufficiently strong password. For offline brute-force resistance, 20 or more random characters (or a passphrase with equivalent entropy) is strongly recommended.
 

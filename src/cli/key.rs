@@ -33,7 +33,7 @@ pub struct KeyArgs {
 pub enum KeyCommand {
     /// Activate a key
     Activate(ActivateArgs),
-    /// Export key material
+    /// Export a key
     Export(ExportArgs),
     /// List keys
     List(ListArgs),
@@ -114,6 +114,9 @@ pub struct RemoveArgs {
 }
 
 #[derive(Args)]
+#[command(override_usage = "\
+secretenv key export [OPTIONS] -o <OUT> [KID]
+       secretenv key export --private [OPTIONS] [--stdout] [KID]")]
 pub struct ExportArgs {
     /// Common options shared across commands
     #[command(flatten)]

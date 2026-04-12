@@ -26,6 +26,16 @@ fn test_wrap_item() -> WrapItem {
     }
 }
 
+fn test_wrap_item_with(rid: &str, kid: &str) -> WrapItem {
+    WrapItem {
+        rid: rid.to_string(),
+        kid: kid.to_string(),
+        alg: hpke::ALG_HPKE_32_1_3.to_string(),
+        enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        ct: "AAAAAAAAAAAAAAAA".to_string(),
+    }
+}
+
 #[test]
 fn test_verify_file_document_rejects_wrap_count_over_limit() {
     let sid = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
@@ -84,4 +94,70 @@ fn test_verify_kv_document_rejects_wrap_count_over_limit() {
     let result = verify_kv_document(&doc, false);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("wrap count"));
+}
+
+#[test]
+fn test_verify_file_document_rejects_duplicate_wrap_rid() {
+    let sid = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
+    let doc = FileEncDocument {
+        protected: FileEncDocumentProtected {
+            format: format::FILE_ENC_V3.to_string(),
+            sid,
+            wrap: vec![
+                test_wrap_item_with("alice@example.com", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+                test_wrap_item_with("alice@example.com", "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D"),
+            ],
+            removed_recipients: None,
+            payload: FilePayload {
+                protected: FilePayloadHeader {
+                    format: format::FILE_PAYLOAD_V3.to_string(),
+                    sid,
+                    alg: FileEncAlgorithm {
+                        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                    },
+                },
+                encrypted: FilePayloadCiphertext {
+                    nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                    ct: "AAAAAAAAAAAAAAAA".to_string(),
+                },
+            },
+            created_at: "2026-01-14T00:00:00Z".to_string(),
+            updated_at: "2026-01-14T00:00:00Z".to_string(),
+        },
+        signature: ArtifactSignature {
+            alg: alg::SIGNATURE_ED25519.to_string(),
+            kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            sig: "invalid".to_string(),
+        },
+    };
+
+    let result = verify_file_document(&doc, false);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("E_DUPLICATE_RID"));
+}
+
+#[test]
+fn test_verify_kv_document_rejects_duplicate_wrap_rid() {
+    let doc = KvEncDocument::new(
+        ":SECRETENV_KV 3\n".to_string(),
+        Vec::new(),
+        KvHeader {
+            sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            created_at: "2026-01-14T00:00:00Z".to_string(),
+            updated_at: "2026-01-14T00:00:00Z".to_string(),
+        },
+        KvWrap {
+            wrap: vec![
+                test_wrap_item_with("alice@example.com", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+                test_wrap_item_with("alice@example.com", "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D"),
+            ],
+            removed_recipients: None,
+        },
+        "invalid".to_string(),
+    );
+
+    let result = verify_kv_document(&doc, false);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("E_DUPLICATE_RID"));
 }

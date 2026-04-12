@@ -5,7 +5,10 @@
 //!
 //! Shared structures used by file-enc and kv-enc formats
 
+use crate::support::limits::validate_wrap_count;
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// Wrapped key item (HPKE-encrypted content key)
 ///
@@ -43,6 +46,23 @@ pub struct RemovedRecipient {
 
     /// Timestamp when the recipient was removed (RFC 3339)
     pub removed_at: String,
+}
+
+/// Validate wrap items against shared structural constraints.
+pub fn validate_wrap_items(wrap_items: &[WrapItem], context: &str) -> Result<()> {
+    validate_wrap_count(wrap_items.len(), context)?;
+
+    let mut seen_rids = HashSet::new();
+    for item in wrap_items {
+        if !seen_rids.insert(item.rid.as_str()) {
+            return Err(Error::Verify {
+                rule: "E_DUPLICATE_RID".to_string(),
+                message: format!("{} contains duplicate rid '{}' in wrap", context, item.rid),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 /// Normalizes a list of recipients by sorting and removing duplicates

@@ -5,6 +5,7 @@
 
 use crate::model::trust_store::TrustStoreDocument;
 use crate::support::fs::{atomic, check_permission_chain, load_text_with_limit};
+use crate::support::json_limits::validate_json_limits;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -44,6 +45,7 @@ pub fn save_trust_store(path: &Path, document: &TrustStoreDocument) -> Result<()
 }
 
 fn parse_trust_store(content: &str, path: &Path) -> Result<TrustStoreDocument> {
+    validate_json_limits(content.as_bytes())?;
     serde_json::from_str(content).map_err(|e| Error::Parse {
         message: format!(
             "Failed to parse trust store {}: {}",

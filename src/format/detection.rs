@@ -10,6 +10,7 @@
 
 use crate::format::kv::HEADER_LINE_PREFIX;
 use crate::model::identifiers::format;
+use crate::support::json_limits::validate_json_limits;
 use crate::Result;
 
 /// Detected input format
@@ -71,6 +72,7 @@ fn detect_file_enc(content: &str) -> Result<Option<InputFormat>> {
         return Ok(None);
     }
 
+    validate_json_limits(content.as_bytes())?;
     let value = match serde_json::from_str::<serde_json::Value>(content) {
         Ok(v) => v,
         Err(_) => return Ok(None),

@@ -267,3 +267,81 @@ fn test_parse_kv_wrap_token_rejects_wrap_count_over_limit() {
     let err = result.unwrap_err().to_string();
     assert!(err.contains("wrap count") || err.contains("1000"));
 }
+
+#[test]
+fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
+    let sid = "123e4567-e89b-12d3-a456-426614174000";
+    let file_enc = serde_json::json!({
+        "protected": {
+            "format": format::FILE_ENC_V3,
+            "sid": sid,
+            "payload": {
+                "protected": {
+                    "format": format::FILE_PAYLOAD_V3,
+                    "sid": sid,
+                    "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
+                },
+                "encrypted": {
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAA"
+                }
+            },
+            "wrap": [
+                {
+                    "rid": "alice@example.com",
+                    "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                    "alg": hpke::ALG_HPKE_32_1_3,
+                    "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAA"
+                },
+                {
+                    "rid": "alice@example.com",
+                    "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+                    "alg": hpke::ALG_HPKE_32_1_3,
+                    "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAA"
+                }
+            ],
+            "created_at": "2026-01-14T00:00:00Z",
+            "updated_at": "2026-01-14T00:00:00Z"
+        },
+        "signature": {
+            "alg": alg::SIGNATURE_ED25519,
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "signer_pub": make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+        }
+    });
+
+    let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("E_DUPLICATE_RID"));
+}
+
+#[test]
+fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rid() {
+    let wrap = KvWrap {
+        wrap: vec![
+            WrapItem {
+                rid: "alice@example.com".to_string(),
+                kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ct: "AAAAAAAAAAAAAAAA".to_string(),
+            },
+            WrapItem {
+                rid: "alice@example.com".to_string(),
+                kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
+                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ct: "AAAAAAAAAAAAAAAA".to_string(),
+            },
+        ],
+        removed_recipients: None,
+    };
+    let wrap_token = TokenCodec::encode(TokenCodec::JsonJcs, &wrap).unwrap();
+
+    let result = parse_kv_wrap_token(&wrap_token);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("E_DUPLICATE_RID"));
+}

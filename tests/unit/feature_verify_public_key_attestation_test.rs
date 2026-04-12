@@ -5,8 +5,6 @@ use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
 use crate::test_utils::create_temp_ssh_keypair_in_dir;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use secretenv::config::types::SshSigner;
 use secretenv::crypto::sign::sign_bytes;
 use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
@@ -14,6 +12,7 @@ use secretenv::feature::verify::public_key::verify_public_key_with_attestation;
 use secretenv::format::jcs;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::model::identifiers::alg;
+use secretenv::support::codec::base64_public::decode_base64url_nopad_array;
 use serial_test::serial;
 use tempfile::TempDir;
 
@@ -81,11 +80,8 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
         crate::test_utils::keygen_test("attestation-test@example.com", &ssh_priv, &ssh_pub_content)
             .unwrap();
 
-    let signing_key_bytes: [u8; 32] = URL_SAFE_NO_PAD
-        .decode(&private_key_plaintext.keys.sig.d)
-        .unwrap()
-        .try_into()
-        .unwrap();
+    let signing_key_bytes =
+        decode_base64url_nopad_array(&private_key_plaintext.keys.sig.d, "sig.d").unwrap();
     let signing_key = ed25519_dalek::SigningKey::from_bytes(&signing_key_bytes);
 
     public_key.protected.kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string();

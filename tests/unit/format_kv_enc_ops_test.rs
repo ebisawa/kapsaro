@@ -343,11 +343,9 @@ fn test_wrap_line_with_many_recipients() {
 fn signing_key_from_private(
     private_key: &secretenv::model::private_key::PrivateKeyPlaintext,
 ) -> ed25519_dalek::SigningKey {
-    use base64::Engine;
-    let sig_d: Vec<u8> = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(&private_key.keys.sig.d)
-        .unwrap();
-    ed25519_dalek::SigningKey::from_bytes(sig_d.as_slice().try_into().unwrap())
+    use secretenv::support::codec::base64_public::decode_base64url_nopad_array;
+    let sig_d = decode_base64url_nopad_array(&private_key.keys.sig.d, "sig.d").unwrap();
+    ed25519_dalek::SigningKey::from_bytes(&sig_d)
 }
 
 fn setup_crypto_ctx_for_test(

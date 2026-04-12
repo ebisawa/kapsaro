@@ -11,6 +11,7 @@ use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::public_key::VerifiedRecipientKey;
+use crate::support::secret::SecretString;
 use crate::Result;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -20,6 +21,25 @@ use zeroize::Zeroizing;
 
 use super::builder::KvDocumentBuilder;
 use super::entry_codec::encode_kv_entries_to_tokens;
+
+pub trait KvValueRef {
+    fn as_kv_value(&self) -> &str;
+}
+
+impl<T> KvValueRef for T
+where
+    T: AsRef<str>,
+{
+    fn as_kv_value(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+impl KvValueRef for SecretString {
+    fn as_kv_value(&self) -> &str {
+        self.as_str()
+    }
+}
 
 /// Build KV encryption context: generate master key, create HEAD/WRAP structures
 pub(crate) fn build_kv_encryption(
@@ -59,14 +79,14 @@ pub(crate) fn encrypt_kv_entries<V>(
     disclosed: bool,
 ) -> Result<Vec<(String, KvEntryValue)>>
 where
-    V: AsRef<str>,
+    V: KvValueRef,
 {
     let mut entries: Vec<_> = kv_map
         .iter()
         .map(|(key, value)| {
             encrypt_entry(
                 key,
-                value.as_ref(),
+                value.as_kv_value(),
                 master_key,
                 sid,
                 debug,
@@ -101,7 +121,7 @@ pub fn encrypt_kv_document<V>(
     token_codec: TokenCodec,
 ) -> Result<String>
 where
-    V: AsRef<str>,
+    V: KvValueRef,
 {
     encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
@@ -115,7 +135,7 @@ pub(crate) fn encrypt_kv_document_with_disclosed<V>(
     disclosed: bool,
 ) -> Result<String>
 where
-    V: AsRef<str>,
+    V: KvValueRef,
 {
     encrypt_and_sign_kv_map(kv_map, members, signing, token_codec, disclosed, |_| Ok(()))
 }
@@ -129,7 +149,7 @@ pub fn encrypt_and_sign_kv_map<V, F>(
     mutate_wrap: F,
 ) -> Result<String>
 where
-    V: AsRef<str>,
+    V: KvValueRef,
     F: FnOnce(&mut KvWrap) -> Result<()>,
 {
     let timestamp = crate::support::time::current_timestamp()?;

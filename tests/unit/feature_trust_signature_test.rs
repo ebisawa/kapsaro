@@ -3,13 +3,12 @@
 
 //! Unit tests for trust store signing
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
 use secretenv::model::trust_store::TrustStoreProtected;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
 /// Build a minimal PublicKey JSON that passes schema + self-signature verification.
 ///
@@ -24,12 +23,12 @@ fn build_self_signed_public_key(
     use secretenv::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey};
 
     let verifying_key: VerifyingKey = signing_key.into();
-    let sig_x = URL_SAFE_NO_PAD.encode(verifying_key.to_bytes());
+    let sig_x = encode_base64url_nopad(&verifying_key.to_bytes());
 
     // Generate X25519 KEM key pair
     let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
     let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
-    let kem_x = URL_SAFE_NO_PAD.encode(kem_pk.as_bytes());
+    let kem_x = encode_base64url_nopad(kem_pk.as_bytes());
 
     let identity_keys = IdentityKeys {
         kem: JwkOkpPublicKey {

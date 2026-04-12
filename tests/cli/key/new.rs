@@ -5,11 +5,11 @@
 
 use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
-use base64::Engine;
 use predicates::prelude::*;
 use secretenv::io::ssh::protocol::constants as ssh_constants;
 use secretenv::model::identifiers::{alg, format};
 use secretenv::model::{private_key::PrivateKey, public_key::PublicKey};
+use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use std::fs;
 use tempfile::TempDir;
 
@@ -148,9 +148,8 @@ fn test_key_new_ssh_protection() {
             assert!(!salt.is_empty(), "protected.alg.salt should be set");
 
             // Verify salt is base64url encoded (16 bytes = 22 chars without padding)
-            let salt_decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .decode(salt)
-                .expect("salt should be valid base64url");
+            let salt_decoded =
+                decode_base64url_nopad(salt, "salt").expect("salt should be valid base64url");
             assert_eq!(
                 salt_decoded.len(),
                 16,
@@ -175,8 +174,7 @@ fn test_key_new_ssh_protection() {
     );
 
     // Verify nonce is base64url encoded (24 bytes = 32 chars without padding)
-    let nonce_decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(&private_key.encrypted.nonce)
+    let nonce_decoded = decode_base64url_nopad(&private_key.encrypted.nonce, "nonce")
         .expect("nonce should be valid base64url");
     assert_eq!(
         nonce_decoded.len(),
@@ -250,9 +248,11 @@ fn test_key_new_generates_attestation() {
     );
 
     // Verify sig is base64url encoded
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(&public_key.protected.identity.attestation.sig)
-        .expect("attestation.sig should be valid base64url");
+    decode_base64url_nopad(
+        &public_key.protected.identity.attestation.sig,
+        "attestation.sig",
+    )
+    .expect("attestation.sig should be valid base64url");
 
     // Keep temp directories alive
     drop(ssh_temp);
@@ -290,8 +290,7 @@ fn test_key_new_generates_self_sig() {
     assert!(!public_key.signature.is_empty(), "self_sig should be set");
 
     // Verify self_sig is base64url encoded
-    let self_sig_decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(&public_key.signature)
+    let self_sig_decoded = decode_base64url_nopad(&public_key.signature, "self_sig")
         .expect("self_sig should be valid base64url");
 
     // Ed25519 signature should be 64 bytes

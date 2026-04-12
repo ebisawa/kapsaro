@@ -7,7 +7,8 @@
 
 use ed25519_dalek::SigningKey;
 use secretenv::feature::context::crypto::{validate_ed25519_consistency, validate_okp_key};
-use secretenv::support::base64url::b64_encode;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv::support::secret::SecretArray;
 
 // ============================================================================
 // validate_okp_key tests
@@ -15,8 +16,8 @@ use secretenv::support::base64url::b64_encode;
 
 #[test]
 fn test_validate_okp_key_wrong_kty() {
-    let d = b64_encode(&[0u8; 32]);
-    let x = b64_encode(&[1u8; 32]);
+    let d = encode_base64url_nopad(&[0u8; 32]);
+    let x = encode_base64url_nopad(&[1u8; 32]);
     let result = validate_okp_key("RSA", "Ed25519", "Ed25519", &d, &x, "Sig");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
@@ -25,8 +26,8 @@ fn test_validate_okp_key_wrong_kty() {
 
 #[test]
 fn test_validate_okp_key_wrong_crv() {
-    let d = b64_encode(&[0u8; 32]);
-    let x = b64_encode(&[1u8; 32]);
+    let d = encode_base64url_nopad(&[0u8; 32]);
+    let x = encode_base64url_nopad(&[1u8; 32]);
     let result = validate_okp_key("OKP", "P-256", "Ed25519", &d, &x, "Sig");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
@@ -35,8 +36,8 @@ fn test_validate_okp_key_wrong_crv() {
 
 #[test]
 fn test_validate_okp_key_wrong_d_length() {
-    let d = b64_encode(&[0u8; 16]); // 16 bytes instead of 32
-    let x = b64_encode(&[1u8; 32]);
+    let d = encode_base64url_nopad(&[0u8; 16]); // 16 bytes instead of 32
+    let x = encode_base64url_nopad(&[1u8; 32]);
     let result = validate_okp_key("OKP", "Ed25519", "Ed25519", &d, &x, "Sig");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
@@ -45,8 +46,8 @@ fn test_validate_okp_key_wrong_d_length() {
 
 #[test]
 fn test_validate_okp_key_wrong_x_length() {
-    let d = b64_encode(&[0u8; 32]);
-    let x = b64_encode(&[1u8; 16]); // 16 bytes instead of 32
+    let d = encode_base64url_nopad(&[0u8; 32]);
+    let x = encode_base64url_nopad(&[1u8; 16]); // 16 bytes instead of 32
     let result = validate_okp_key("OKP", "Ed25519", "Ed25519", &d, &x, "Sig");
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
@@ -57,8 +58,8 @@ fn test_validate_okp_key_wrong_x_length() {
 fn test_validate_okp_key() {
     let signing_key = SigningKey::from_bytes(&[42u8; 32]);
     let verifying_key = signing_key.verifying_key();
-    let d = b64_encode(signing_key.as_bytes());
-    let x = b64_encode(verifying_key.as_bytes());
+    let d = encode_base64url_nopad(signing_key.as_bytes());
+    let x = encode_base64url_nopad(verifying_key.as_bytes());
 
     let result = validate_okp_key("OKP", "Ed25519", "Ed25519", &d, &x, "Sig");
     assert!(result.is_ok());
@@ -73,7 +74,7 @@ fn test_validate_okp_key() {
 
 #[test]
 fn test_validate_ed25519_consistency_mismatch() {
-    let d_bytes = [42u8; 32];
+    let d_bytes = SecretArray::new([42u8; 32]);
     // Use a different public key that doesn't match the private key
     let wrong_x_bytes = [0u8; 32];
     let result = validate_ed25519_consistency(&d_bytes, &wrong_x_bytes);
@@ -86,9 +87,9 @@ fn test_validate_ed25519_consistency_mismatch() {
 fn test_validate_ed25519_consistency() {
     let signing_key = SigningKey::from_bytes(&[42u8; 32]);
     let verifying_key = signing_key.verifying_key();
-    let d_bytes = signing_key.as_bytes();
+    let d_bytes = SecretArray::new(*signing_key.as_bytes());
     let x_bytes = verifying_key.as_bytes();
 
-    let result = validate_ed25519_consistency(d_bytes, x_bytes);
+    let result = validate_ed25519_consistency(&d_bytes, x_bytes);
     assert!(result.is_ok());
 }

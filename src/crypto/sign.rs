@@ -17,8 +17,8 @@
 use crate::crypto::{crypto_error, crypto_operation_failed};
 use crate::model::public_key::PublicKey;
 use crate::model::signature::Signature;
+use crate::support::codec::base64_public::{decode_base64url_nopad, encode_base64url_nopad};
 use crate::Result;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 
 /// Signs bytes using Ed25519 (RFC 8032 PureEdDSA).
@@ -48,7 +48,7 @@ pub fn sign_bytes(
 ) -> Result<Signature> {
     // Sign canonical_bytes directly (RFC 8032 PureEdDSA)
     let signature_bytes = signing_key.sign(canonical_bytes);
-    let sig_b64 = URL_SAFE_NO_PAD.encode(signature_bytes.to_bytes());
+    let sig_b64 = encode_base64url_nopad(&signature_bytes.to_bytes());
 
     Ok(Signature {
         alg: signature_alg.to_string(),
@@ -85,8 +85,7 @@ pub fn verify_bytes(
     }
 
     // Step 2: Decode signature and validate length (must be 64 bytes for Ed25519)
-    let sig_bytes = URL_SAFE_NO_PAD
-        .decode(&signature.sig)
+    let sig_bytes = decode_base64url_nopad(&signature.sig, "signature")
         .map_err(|_| crypto_operation_failed("Invalid signature Base64"))?;
     if sig_bytes.len() != 64 {
         return Err(crypto_error(

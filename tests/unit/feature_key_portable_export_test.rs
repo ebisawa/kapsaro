@@ -1,8 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use secretenv::feature::key::portable_export::export_private_key_portable;
@@ -10,9 +8,10 @@ use secretenv::feature::key::protection::password_encryption::decrypt_private_ke
 use secretenv::model::private_key::{
     IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext,
 };
+use secretenv::support::codec::base64_public::{decode_base64url_nopad, encode_base64url_nopad};
 
 fn b64(data: &[u8]) -> String {
-    URL_SAFE_NO_PAD.encode(data)
+    encode_base64url_nopad(data)
 }
 
 fn build_test_plaintext() -> PrivateKeyPlaintext {
@@ -92,8 +91,7 @@ fn test_export_roundtrip() {
     .expect("export should succeed");
 
     // Decode base64url
-    let json_bytes = URL_SAFE_NO_PAD
-        .decode(exported.as_str())
+    let json_bytes = decode_base64url_nopad(exported.as_str(), "portable export")
         .expect("should be valid base64url");
 
     // Deserialize to PrivateKey
@@ -126,8 +124,7 @@ fn test_export_preserves_metadata() {
     )
     .expect("export should succeed");
 
-    let json_bytes = URL_SAFE_NO_PAD
-        .decode(exported.as_str())
+    let json_bytes = decode_base64url_nopad(exported.as_str(), "portable export")
         .expect("should be valid base64url");
     let private_key: PrivateKey =
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");
@@ -153,8 +150,7 @@ fn test_export_uses_argon2id_kdf() {
     )
     .expect("export should succeed");
 
-    let json_bytes = URL_SAFE_NO_PAD
-        .decode(exported.as_str())
+    let json_bytes = decode_base64url_nopad(exported.as_str(), "portable export")
         .expect("should be valid base64url");
     let private_key: PrivateKey =
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");

@@ -5,7 +5,7 @@
 
 use secretenv::crypto::types::keys::MasterKey;
 use secretenv::feature::envelope::cek::derive_cek;
-use secretenv::support::base64url::b64_encode;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use uuid::Uuid;
 
 fn test_sid() -> Uuid {
@@ -19,7 +19,7 @@ fn test_derive_cek() {
     let mk_obj = MasterKey::new(mk);
     // Fixed 16 bytes salt: all zeros
     let salt_bytes = [0u8; 16];
-    let salt = b64_encode(&salt_bytes);
+    let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
     let cek = derive_cek(&mk_obj, &salt, &sid, false).unwrap();
@@ -39,8 +39,8 @@ fn test_derive_cek_different_salt() {
     let mk_obj = MasterKey::new(mk);
     let salt1_bytes = [0u8; 16];
     let salt2_bytes = [1u8; 16];
-    let salt1 = b64_encode(&salt1_bytes);
-    let salt2 = b64_encode(&salt2_bytes);
+    let salt1 = encode_base64url_nopad(&salt1_bytes);
+    let salt2 = encode_base64url_nopad(&salt2_bytes);
     let sid = test_sid();
 
     let cek1 = derive_cek(&mk_obj, &salt1, &sid, false).unwrap();
@@ -57,7 +57,7 @@ fn test_derive_cek_different_mk() {
     let mk2 = [1u8; 32];
     let mk2_obj = MasterKey::new(mk2);
     let salt_bytes = [0u8; 16];
-    let salt = b64_encode(&salt_bytes);
+    let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
     let cek1 = derive_cek(&mk1_obj, &salt, &sid, false).unwrap();
@@ -72,7 +72,7 @@ fn test_derive_cek_different_sid() {
     let mk = [0u8; 32];
     let mk_obj = MasterKey::new(mk);
     let salt_bytes = [0u8; 16];
-    let salt = b64_encode(&salt_bytes);
+    let salt = encode_base64url_nopad(&salt_bytes);
     let sid1 = test_sid();
     let sid2 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
 
@@ -89,7 +89,7 @@ fn test_derive_cek_invalid_salt_length() {
     let mk_obj = MasterKey::new(mk);
     // 8 bytes instead of 16 bytes
     let salt_bytes = [0u8; 8];
-    let salt = b64_encode(&salt_bytes);
+    let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
     let result = derive_cek(&mk_obj, &salt, &sid, false);

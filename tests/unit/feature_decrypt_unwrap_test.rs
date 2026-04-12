@@ -654,11 +654,11 @@ fn test_hpke_aad_binding_defence_in_depth() {
     // This should fail because the wrap was created with aad=info
     use secretenv::crypto::kem::open_base;
     use secretenv::crypto::types::data::{Aad, Ciphertext, Enc};
-    use secretenv::support::base64url::b64_decode;
+    use secretenv::support::codec::base64_public::decode_base64url_nopad;
 
-    let enc_bytes = b64_decode(&wrap_item.enc, "enc").unwrap();
+    let enc_bytes = decode_base64url_nopad(&wrap_item.enc, "enc").unwrap();
     let enc = Enc::from(enc_bytes);
-    let ct_bytes = b64_decode(&wrap_item.ct, "ct").unwrap();
+    let ct_bytes = decode_base64url_nopad(&wrap_item.ct, "ct").unwrap();
     let ct = Ciphertext::from(ct_bytes);
 
     let info = build_file_wrap_info(&sid, kid).unwrap();

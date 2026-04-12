@@ -1,8 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use secretenv::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
@@ -11,6 +9,7 @@ use secretenv::model::private_key::{
     EncryptedData, IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm,
     PrivateKeyPlaintext, PrivateKeyProtected,
 };
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
 use crate::test_utils::EnvGuard;
 
@@ -19,7 +18,7 @@ const ENV_KEY_PASSWORD: &str = "SECRETENV_KEY_PASSWORD";
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
 fn b64(data: &[u8]) -> String {
-    URL_SAFE_NO_PAD.encode(data)
+    encode_base64url_nopad(data)
 }
 
 fn build_test_plaintext() -> PrivateKeyPlaintext {
@@ -181,7 +180,7 @@ fn test_env_key_rejects_invalid_format() {
     };
 
     let json = serde_json::to_vec(&bad_format_key).expect("serialize");
-    let encoded = URL_SAFE_NO_PAD.encode(&json);
+    let encoded = encode_base64url_nopad(&json);
 
     std::env::set_var(ENV_PRIVATE_KEY, &encoded);
     std::env::set_var(ENV_KEY_PASSWORD, "test-password");
@@ -222,7 +221,7 @@ fn test_env_key_rejects_sshsig_algorithm() {
     };
 
     let json = serde_json::to_vec(&sshsig_key).expect("serialize");
-    let encoded = URL_SAFE_NO_PAD.encode(&json);
+    let encoded = encode_base64url_nopad(&json);
 
     std::env::set_var(ENV_PRIVATE_KEY, &encoded);
     std::env::set_var(ENV_KEY_PASSWORD, "test-password");

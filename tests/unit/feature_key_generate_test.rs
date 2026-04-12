@@ -11,8 +11,6 @@
 
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use secretenv::feature::key::generate::KeyGenerationOptions;
 use secretenv::feature::key::material::{build_identity_keys, generate_keypairs};
@@ -29,6 +27,7 @@ use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::model::identifiers::jwk::{CRV_ED25519, CRV_X25519};
 use secretenv::model::public_key::{Attestation, GithubAccount, Identity};
 use secretenv::model::ssh::SshDeterminismStatus;
+use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use tempfile::TempDir;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
@@ -66,19 +65,19 @@ fn test_build_private_key_plaintext_base64url_encoded() {
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
 
     // All x and d fields must be valid base64url
-    let kem_x = URL_SAFE_NO_PAD.decode(&plaintext.keys.kem.x);
+    let kem_x = decode_base64url_nopad(&plaintext.keys.kem.x, "kem.x");
     assert!(kem_x.is_ok(), "kem.x must be valid base64url");
     assert_eq!(kem_x.unwrap().len(), 32, "X25519 public key is 32 bytes");
 
-    let kem_d = URL_SAFE_NO_PAD.decode(&plaintext.keys.kem.d);
+    let kem_d = decode_base64url_nopad(&plaintext.keys.kem.d, "kem.d");
     assert!(kem_d.is_ok(), "kem.d must be valid base64url");
     assert_eq!(kem_d.unwrap().len(), 32, "X25519 secret key is 32 bytes");
 
-    let sig_x = URL_SAFE_NO_PAD.decode(&plaintext.keys.sig.x);
+    let sig_x = decode_base64url_nopad(&plaintext.keys.sig.x, "sig.x");
     assert!(sig_x.is_ok(), "sig.x must be valid base64url");
     assert_eq!(sig_x.unwrap().len(), 32, "Ed25519 public key is 32 bytes");
 
-    let sig_d = URL_SAFE_NO_PAD.decode(&plaintext.keys.sig.d);
+    let sig_d = decode_base64url_nopad(&plaintext.keys.sig.d, "sig.d");
     assert!(sig_d.is_ok(), "sig.d must be valid base64url");
     assert_eq!(sig_d.unwrap().len(), 32, "Ed25519 secret key is 32 bytes");
 }
@@ -212,7 +211,7 @@ fn test_build_public_key_self_signature_valid_base64url() {
     );
 
     // Signature should be valid base64url
-    let decoded = URL_SAFE_NO_PAD.decode(&public_key.signature);
+    let decoded = decode_base64url_nopad(&public_key.signature, "signature");
     assert!(decoded.is_ok(), "signature must be valid base64url");
 
     // Ed25519 signature is 64 bytes

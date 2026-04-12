@@ -3,7 +3,7 @@
 
 use crate::model::identity::{Kid, MemberId};
 use crate::model::public_key::PublicKey;
-use crate::support::base64url::b64_decode_array;
+use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,7 +38,7 @@ impl TrustIdentity {
         Self::try_new(
             public_key.protected.member_id.clone(),
             public_key.protected.kid.clone(),
-            b64_decode_array(
+            decode_base64url_nopad_array(
                 &public_key.protected.identity.keys.sig.x,
                 "signer Ed25519 public key",
             )?,

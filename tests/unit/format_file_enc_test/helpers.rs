@@ -14,6 +14,11 @@ use secretenv::model::{
         VerifiedRecipientKey,
     },
 };
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
+
+pub(super) fn b64url(data: &[u8]) -> String {
+    encode_base64url_nopad(data)
+}
 
 pub(super) fn decrypt_file_document_for_test(
     file_enc_doc: &secretenv::model::file_enc::FileEncDocument,
@@ -105,14 +110,8 @@ pub(super) fn create_test_private_key(
     sk: &X25519SecretKey,
     pk: &X25519PublicKey,
 ) -> PrivateKeyPlaintext {
-    let sk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        sk.as_bytes(),
-    );
-    let pk_b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        pk.as_bytes(),
-    );
+    let sk_b64 = b64url(sk.as_bytes());
+    let pk_b64 = b64url(pk.as_bytes());
 
     PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {

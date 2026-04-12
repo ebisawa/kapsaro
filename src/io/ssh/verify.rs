@@ -12,9 +12,8 @@ use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
 use crate::model::public_key::IdentityKeys;
+use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::Result;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::{Verifier, VerifyingKey};
 
 /// Validate SSHSIG inputs before verification.
@@ -75,20 +74,13 @@ pub fn build_attestation_signed_data(identity_keys: &IdentityKeys) -> Result<Vec
 
 /// Decode attestation signature from base64url
 fn decode_attestation_signature(sig_b64url: &str) -> Result<ed25519_dalek::Signature> {
-    let sig_bytes = URL_SAFE_NO_PAD.decode(sig_b64url).map_err(|e| {
-        crate::Error::from(SshError::operation_failed_with_source(
-            format!("Failed to decode attestation signature: {}", e),
-            e,
-        ))
-    })?;
-
-    if sig_bytes.len() != 64 {
-        return Err(SshError::operation_failed(format!(
-            "Invalid attestation signature length: expected 64 bytes, got {}",
-            sig_bytes.len()
-        ))
-        .into());
-    }
+    let sig_bytes: [u8; 64] = decode_base64url_nopad_array(sig_b64url, "attestation signature")
+        .map_err(|e| {
+            crate::Error::from(SshError::operation_failed_with_source(
+                format!("Failed to decode attestation signature: {}", e),
+                e,
+            ))
+        })?;
 
     ed25519_dalek::Signature::from_slice(&sig_bytes).map_err(|e| {
         SshError::operation_failed_with_source(format!("Invalid Ed25519 signature: {}", e), e)

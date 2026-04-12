@@ -3,7 +3,7 @@
 
 //! Shared support utilities.
 
-pub mod base64url;
+pub mod codec;
 pub mod fs;
 pub mod json_limits;
 pub mod kid;

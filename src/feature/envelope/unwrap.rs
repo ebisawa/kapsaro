@@ -12,7 +12,9 @@ use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info
 use crate::model::common::WrapItem;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::base64url::{b64_decode, b64_decode_ciphertext};
+use crate::support::codec::base64_public::{
+    decode_base64url_nopad, decode_base64url_nopad_ciphertext,
+};
 use crate::support::kid::kid_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
@@ -76,9 +78,9 @@ pub fn decode_wrap_item_fields(wrap_item: &WrapItem) -> Result<(Enc, Ciphertext)
             source: None,
         });
     }
-    let enc_bytes = b64_decode(&wrap_item.enc, "enc")?;
+    let enc_bytes = decode_base64url_nopad(&wrap_item.enc, "enc")?;
     let enc = Enc::from(enc_bytes);
-    let ct = b64_decode_ciphertext(&wrap_item.ct, "ct")?;
+    let ct = decode_base64url_nopad_ciphertext(&wrap_item.ct, "ct")?;
     Ok((enc, ct))
 }
 

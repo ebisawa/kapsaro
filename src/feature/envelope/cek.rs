@@ -8,7 +8,7 @@ use crate::crypto::types::data::Ikm;
 use crate::crypto::types::keys::{Cek, MasterKey};
 use crate::crypto::types::primitives::Salt;
 use crate::feature::envelope::binding::build_kv_cek_info;
-use crate::support::base64url::{b64_decode_array, b64_encode};
+use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::Result;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -27,7 +27,7 @@ pub fn derive_cek(mk: &MasterKey, salt_b64: &str, sid: &Uuid, debug: bool) -> Re
     if debug {
         debug!("[CRYPTO] HKDF-SHA256: expand");
     }
-    let salt_bytes: [u8; 16] = b64_decode_array(salt_b64, "salt")?;
+    let salt_bytes: [u8; 16] = decode_base64url_nopad_array(salt_b64, "salt")?;
     let salt = Salt::new(salt_bytes);
     let ikm = Ikm::from(mk.as_bytes().to_vec());
     let info = build_kv_cek_info(sid)?;
@@ -39,5 +39,5 @@ pub(crate) fn generate_salt() -> String {
     let mut salt_bytes = [0u8; 16];
     OsRng.fill_bytes(&mut salt_bytes);
     let salt_obj = Salt::new(salt_bytes);
-    b64_encode(salt_obj.as_bytes())
+    encode_base64url_nopad(salt_obj.as_bytes())
 }

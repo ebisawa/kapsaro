@@ -13,10 +13,9 @@ use crate::model::identifiers::alg;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, PublicKey,
 };
+use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::support::kid::build_kid_display;
 use crate::Result;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use ed25519_dalek::SigningKey;
 use serde::Serialize;
 use tracing::debug;
@@ -112,7 +111,7 @@ pub fn build_attestation(
             ))
         })?;
 
-    let sig_b64url = URL_SAFE_NO_PAD.encode(raw_sig.as_bytes());
+    let sig_b64url = encode_base64url_nopad(raw_sig.as_bytes());
 
     Ok(Attestation {
         method: ssh::ATTESTATION_METHOD_SSH_SIGN.to_string(),

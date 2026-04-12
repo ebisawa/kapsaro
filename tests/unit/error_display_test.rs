@@ -9,6 +9,7 @@
 use secretenv::crypto::CryptoError;
 use secretenv::format::FormatError;
 use secretenv::io::ssh::SshError;
+use secretenv::support::codec::base64_public::decode_base64_standard;
 use secretenv::Error;
 use std::error::Error as StdError;
 
@@ -134,15 +135,12 @@ fn test_from_serde_json_error_wraps_as_parse() {
 }
 
 #[test]
-fn test_from_base64_decode_error_wraps_as_parse() {
-    use base64::engine::general_purpose::STANDARD;
-    use base64::Engine;
-    let decode_err = STANDARD.decode("!!!not-base64!!!").unwrap_err();
-    let err: Error = decode_err.into();
+fn test_base64_decode_reports_parse_error() {
+    let err = decode_base64_standard("!!!not-base64!!!", "field").unwrap_err();
     match err {
         Error::Parse { message, source } => {
-            assert!(message.contains("Base64 decode error:"));
-            assert!(source.is_some());
+            assert!(message.contains("field"), "got: {message}");
+            assert!(source.is_none());
         }
         other => panic!("expected Error::Parse, got {:?}", other),
     }

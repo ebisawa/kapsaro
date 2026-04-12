@@ -5,7 +5,6 @@
 
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
-use zeroize::Zeroizing;
 
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
@@ -18,8 +17,10 @@ use crate::model::identifiers::jwk;
 use crate::model::identity::{Kid, MemberId};
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
-use crate::support::base64url::{b64_decode, b64_decode_secret_array};
+use crate::support::codec::base64_public::decode_base64url_nopad_array;
+use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
 use crate::support::kid::kid_display_lossy;
+use crate::support::secret::SecretArray;
 use crate::{Error, Result};
 
 pub struct LocalKeyAccess {
@@ -101,8 +102,9 @@ impl<'a> ResolvedDecryptionKey<'a> {
 }
 
 pub(crate) fn build_signing_key(plaintext: &PrivateKeyPlaintext) -> Result<SigningKey> {
-    let sig_key_bytes = b64_decode_secret_array(&plaintext.keys.sig.d, "Ed25519 private key")?;
-    Ok(SigningKey::from_bytes(&sig_key_bytes))
+    let sig_key_bytes =
+        decode_base64url_nopad_secret_32(&plaintext.keys.sig.d, "Ed25519 private key")?;
+    Ok(SigningKey::from_bytes(sig_key_bytes.as_array()))
 }
 
 /// Validate an OKP key (kty, crv, d/x length).
@@ -113,7 +115,7 @@ pub fn validate_okp_key(
     d: &str,
     x: &str,
     label: &str,
-) -> Result<(Zeroizing<Vec<u8>>, Vec<u8>)> {
+) -> Result<(SecretArray<32>, [u8; 32])> {
     if kty != "OKP" {
         return Err(Error::Crypto {
             message: format!("Invalid {} key type: expected 'OKP', got '{}'", label, kty),
@@ -129,43 +131,17 @@ pub fn validate_okp_key(
             source: None,
         });
     }
-    let d_bytes = Zeroizing::new(b64_decode(d, &format!("{} private key", label))?);
-    let x_bytes = b64_decode(x, &format!("{} public key", label))?;
-    if d_bytes.len() != 32 {
-        return Err(Error::Crypto {
-            message: format!(
-                "Invalid {} private key length: expected 32 bytes, got {}",
-                label,
-                d_bytes.len()
-            ),
-            source: None,
-        });
-    }
-    if x_bytes.len() != 32 {
-        return Err(Error::Crypto {
-            message: format!(
-                "Invalid {} public key length: expected 32 bytes, got {}",
-                label,
-                x_bytes.len()
-            ),
-            source: None,
-        });
-    }
+    let d_bytes = decode_base64url_nopad_secret_32(d, &format!("{} private key", label))?;
+    let x_bytes = decode_base64url_nopad_array(x, &format!("{} public key", label))?;
     Ok((d_bytes, x_bytes))
 }
 
 /// Verify Ed25519 key pair consistency: private key must derive to the given public key.
-pub fn validate_ed25519_consistency(sig_d_bytes: &[u8], sig_x_bytes: &[u8]) -> Result<()> {
-    if sig_d_bytes.len() != 32 {
-        return Err(Error::Crypto {
-            message: "Failed to convert Sig private key to array".to_string(),
-            source: None,
-        });
-    }
-
-    let mut sig_d_array = Zeroizing::new([0u8; 32]);
-    sig_d_array.as_mut().copy_from_slice(sig_d_bytes);
-    let signing_key = SigningKey::from_bytes(&sig_d_array);
+pub fn validate_ed25519_consistency(
+    sig_d_bytes: &SecretArray<32>,
+    sig_x_bytes: &[u8; 32],
+) -> Result<()> {
+    let signing_key = SigningKey::from_bytes(sig_d_bytes.as_array());
     let derived_vk = signing_key.verifying_key();
     let derived_x_bytes = derived_vk.as_bytes();
     if derived_x_bytes != sig_x_bytes {

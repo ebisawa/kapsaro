@@ -8,7 +8,7 @@
 use crate::crypto::crypto_operation_failed;
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::base64url::b64_decode_secret_array;
+use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
 use crate::Result;
 use hpke::{
     aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::X25519HkdfSha256, Deserializable,
@@ -120,6 +120,8 @@ pub fn open_base(
 /// a VerifiedPrivateKey structure.
 pub fn decode_kem_secret_key(private_key: &VerifiedPrivateKey) -> Result<X25519SecretKey> {
     let kem_sk_bytes =
-        b64_decode_secret_array(&private_key.document().keys.kem.d, "KEM private key")?;
-    Ok(X25519SecretKey::from_zeroizing(kem_sk_bytes))
+        decode_base64url_nopad_secret_32(&private_key.document().keys.kem.d, "KEM private key")?;
+    Ok(X25519SecretKey::from_zeroizing(
+        kem_sk_bytes.into_zeroizing(),
+    ))
 }

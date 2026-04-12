@@ -22,7 +22,6 @@ serde_jcs = "0.2"
 jsonschema = "0.45"
 
 # Encoding
-base64 = "0.22"
 hex = "0.4"
 
 # UUID generation

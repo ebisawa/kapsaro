@@ -8,12 +8,12 @@
 use crate::keygen_helpers::make_verified_members;
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use base64::Engine;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
 use secretenv::format::content::{EncryptedContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::fs;
 use tempfile::TempDir;
 
@@ -88,8 +88,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
     .unwrap();
 
     let mut file_enc_doc_tampered = file_enc_doc.clone();
-    file_enc_doc_tampered.signature.sig =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"tampered_signature");
+    file_enc_doc_tampered.signature.sig = encode_base64url_nopad(b"tampered_signature");
     let json = serde_json::to_string_pretty(&file_enc_doc_tampered).unwrap();
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false);

@@ -5,7 +5,7 @@ use super::*;
 use crate::crypto::types::keys::XChaChaKey;
 use crate::model::file_enc::{FileEncAlgorithm, FilePayloadHeader};
 use crate::model::identifiers::{alg, format};
-use crate::support::base64url::b64_decode;
+use crate::support::codec::base64_public::decode_base64url_nopad;
 use uuid::Uuid;
 
 #[test]
@@ -26,8 +26,8 @@ fn encrypt_file_payload_content_returns_valid_ciphertext() {
     assert!(result.is_ok());
 
     let ciphertext = result.unwrap();
-    assert!(b64_decode(&ciphertext.nonce, "nonce").is_ok());
-    assert!(b64_decode(&ciphertext.ct, "ct").is_ok());
+    assert!(decode_base64url_nopad(&ciphertext.nonce, "nonce").is_ok());
+    assert!(decode_base64url_nopad(&ciphertext.ct, "ct").is_ok());
     assert!(!ciphertext.ct.is_empty());
     assert!(!ciphertext.nonce.is_empty());
 }

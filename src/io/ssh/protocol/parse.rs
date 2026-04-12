@@ -5,14 +5,13 @@
 
 use super::constants::KEY_TYPE_ED25519;
 use crate::io::ssh::SshError;
+use crate::support::codec::base64_public::decode_base64_standard;
 use crate::Result;
 
 /// Decode the base64 key blob from an OpenSSH public key line.
 ///
 /// Expected format: `ssh-ed25519 <base64_blob> [comment]`
 pub fn decode_ssh_public_key_blob(ssh_pubkey: &str) -> Result<Vec<u8>> {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
-
     let line = ssh_pubkey.trim();
     if line.is_empty() {
         return Err(SshError::operation_failed("Public key line is empty").into());
@@ -34,7 +33,7 @@ pub fn decode_ssh_public_key_blob(ssh_pubkey: &str) -> Result<Vec<u8>> {
         .into());
     }
 
-    STANDARD.decode(fields[1]).map_err(|e| {
+    decode_base64_standard(fields[1], "base64").map_err(|e| {
         crate::Error::from(SshError::operation_failed_with_source(
             format!("Failed to decode base64: {}", e),
             e,

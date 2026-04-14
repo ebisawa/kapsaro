@@ -56,6 +56,13 @@ impl From<crate::io::workspace::members::MemberStatus> for RegistrationTarget {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActiveMembershipState {
+    None,
+    SameKey,
+    DifferentKey,
+}
+
 #[derive(Debug, Clone)]
 pub struct MemberSetupResult {
     pub member_id: String,
@@ -87,7 +94,7 @@ pub struct RegistrationCommand {
     pub target: RegistrationTarget,
     pub is_new_workspace: bool,
     pub conflict_exists: bool,
-    pub already_active: bool,
+    pub active_membership: ActiveMembershipState,
 }
 
 #[derive(Debug, Clone)]

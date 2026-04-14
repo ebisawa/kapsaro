@@ -32,12 +32,21 @@ fn test_promote_specified_selects_only_specified() {
 }
 
 #[test]
-fn test_promote_specified_conflict_error() {
+fn test_promote_specified_replaces_existing_active_member_with_same_member_id() {
     let tmp = setup_workspace_with_incoming(&["alice"]);
-    fs::write(tmp.path().join("members/active/alice.json"), "{}").unwrap();
-    let result = promote_specified_incoming_members(tmp.path(), &["alice".to_string()]);
-    assert!(result.is_err());
-    assert!(tmp.path().join("members/incoming/alice.json").exists());
+    fs::write(
+        tmp.path().join("members/active/alice.json"),
+        build_public_key_json("alice", &test_kid(9)),
+    )
+    .unwrap();
+
+    let promoted = promote_specified_incoming_members(tmp.path(), &["alice".to_string()]).unwrap();
+
+    assert_eq!(promoted, vec!["alice".to_string()]);
+    assert!(!tmp.path().join("members/incoming/alice.json").exists());
+    let active = fs::read_to_string(tmp.path().join("members/active/alice.json")).unwrap();
+    assert!(active.contains(&test_kid(0)));
+    assert!(!active.contains(&test_kid(9)));
 }
 
 #[test]
@@ -106,6 +115,40 @@ fn test_promote_specified_rejects_duplicate_kids_within_batch() {
     assert!(error.contains("kid"));
     assert!(tmp.path().join("members/incoming/alice.json").exists());
     assert!(tmp.path().join("members/incoming/bob.json").exists());
+}
+
+#[test]
+fn test_promote_specified_rejects_kid_conflict_with_incoming_member_during_rotation() {
+    // alice has a staged new key in incoming with KID_1
+    // bob also has KID_1 in incoming — this conflict must be detected even though
+    // incoming members were not checked by the old implementation
+    let tmp = TempDir::new().unwrap();
+    let active_dir = tmp.path().join("members/active");
+    let incoming_dir = tmp.path().join("members/incoming");
+    fs::create_dir_all(&active_dir).unwrap();
+    fs::create_dir_all(&incoming_dir).unwrap();
+    fs::write(
+        active_dir.join("alice.json"),
+        build_public_key_json("alice", &test_kid(0)),
+    )
+    .unwrap();
+    fs::write(
+        incoming_dir.join("alice.json"),
+        build_public_key_json("alice", &test_kid(1)),
+    )
+    .unwrap();
+    fs::write(
+        incoming_dir.join("bob.json"),
+        build_public_key_json("bob", &test_kid(1)),
+    )
+    .unwrap();
+
+    let result = promote_specified_incoming_members(tmp.path(), &["bob".to_string()]);
+    let error = result.unwrap_err().to_string();
+
+    assert!(error.contains("kid"));
+    assert!(tmp.path().join("members/incoming/bob.json").exists());
+    assert!(!tmp.path().join("members/active/bob.json").exists());
 }
 
 #[test]

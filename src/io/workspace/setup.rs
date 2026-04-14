@@ -25,19 +25,56 @@ fn save_gitkeep(dir: &Path) -> Result<()> {
 /// Ensure workspace structure exists - create if missing.
 pub fn ensure_workspace_structure(workspace_path: &Path) -> Result<bool> {
     let active_dir = workspace_path.join("members").join("active");
+    let incoming_dir = workspace_path.join("members").join("incoming");
     let secrets_dir = workspace_path.join("secrets");
+    let required_dirs = [&active_dir, &incoming_dir, &secrets_dir];
 
-    if active_dir.exists() && secrets_dir.exists() {
+    if required_dirs.iter().all(|dir| dir.exists()) {
         return Ok(false);
     }
 
-    let incoming_dir = workspace_path.join("members").join("incoming");
-    for dir in [&active_dir, &incoming_dir, &secrets_dir] {
+    for dir in required_dirs {
         ensure_dir(dir)?;
         save_gitkeep(dir)?;
     }
 
     Ok(true)
+}
+
+/// Return true when the workspace already has at least one active member file.
+pub fn workspace_has_active_members(workspace_path: &Path) -> Result<bool> {
+    let active_dir = workspace_path.join("members").join("active");
+    if !active_dir.is_dir() {
+        return Ok(false);
+    }
+
+    for entry in std::fs::read_dir(&active_dir).map_err(|e| {
+        Error::io_with_source(
+            format!(
+                "Failed to read active members directory {}: {}",
+                display_path_relative_to_cwd(&active_dir),
+                e
+            ),
+            e,
+        )
+    })? {
+        let entry = entry.map_err(|e| {
+            Error::io_with_source(
+                format!(
+                    "Failed to read active member entry in {}: {}",
+                    display_path_relative_to_cwd(&active_dir),
+                    e
+                ),
+                e,
+            )
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// Verify that workspace structure already exists.

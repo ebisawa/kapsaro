@@ -16,11 +16,12 @@ use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::io::trust::paths::trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
 use crate::io::verify_online::VerifiedGithubIdentity;
+use crate::io::workspace::members::load_member_file_from_path;
 use crate::model::public_key::{BindingClaims, GithubAccount};
 use crate::test_utils::{
     build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace,
-    setup_trust_store_for_workspace, sync_active_public_key_to_workspace,
-    update_active_private_key_expires_at, EnvGuard,
+    setup_trust_store_for_workspace, stage_active_public_key_to_workspace_incoming,
+    sync_active_public_key_to_workspace, update_active_private_key_expires_at, EnvGuard,
 };
 
 const ALICE_MEMBER_ID: &str = "alice@example.com";
@@ -124,8 +125,13 @@ fn test_build_rewrap_trust_treats_accepted_promotions_as_already_reviewed() {
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
     let mut plan = build_rewrap_batch_plan(&options, &execution).unwrap();
     plan.artifact_snapshots.clear();
-    let review_plan =
-        build_promotion_review_plan(plan.incoming_report.as_ref().unwrap(), &[], true).unwrap();
+    let review_plan = build_promotion_review_plan(
+        plan.incoming_report.as_ref().unwrap(),
+        &[],
+        &plan.pre_promotion_trust.self_trust,
+        true,
+    )
+    .unwrap();
 
     let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates).unwrap();
 
@@ -218,8 +224,13 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
     let mut plan = build_rewrap_batch_plan(&options, &execution).unwrap();
     plan.artifact_snapshots.clear();
-    let review_plan =
-        build_promotion_review_plan(plan.incoming_report.as_ref().unwrap(), &[], true).unwrap();
+    let review_plan = build_promotion_review_plan(
+        plan.incoming_report.as_ref().unwrap(),
+        &[],
+        &plan.pre_promotion_trust.self_trust,
+        true,
+    )
+    .unwrap();
     let mut accepted = review_plan.prompt_candidates;
     let candidate = accepted.first_mut().unwrap();
     candidate.public_key.protected.binding_claims = Some(BindingClaims {
@@ -304,8 +315,13 @@ fn test_build_rewrap_trust_uses_pre_promotion_snapshot_for_signer_review() {
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
     let mut plan = build_rewrap_batch_plan(&options, &execution).unwrap();
     plan.pre_promotion_trust.is_interactive = true;
-    let review_plan =
-        build_promotion_review_plan(plan.incoming_report.as_ref().unwrap(), &[], true).unwrap();
+    let review_plan = build_promotion_review_plan(
+        plan.incoming_report.as_ref().unwrap(),
+        &[],
+        &plan.pre_promotion_trust.self_trust,
+        true,
+    )
+    .unwrap();
 
     let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates).unwrap();
 
@@ -380,4 +396,66 @@ fn test_build_rewrap_batch_plan_freezes_input_artifact_snapshot() {
 
     assert_eq!(snapshotted, original);
     assert_ne!(fs::read_to_string(&secret_path).unwrap(), snapshotted);
+}
+
+#[test]
+fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_key() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let active_member_path = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    let old_active = load_member_file_from_path(&active_member_path).unwrap();
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_ID,
+        &old_key_ctx,
+    );
+    update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_ID,
+        &build_expiring_soon_timestamp(365),
+    );
+    stage_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
+        .unwrap();
+    fs::write(
+        workspace_dir.join("secrets").join("default.kvenc"),
+        "VERSION secretenv.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
+    )
+    .unwrap();
+
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let mut plan = build_rewrap_batch_plan(&options, &execution).unwrap();
+    plan.artifact_snapshots.clear();
+    let review_plan = build_promotion_review_plan(
+        plan.incoming_report.as_ref().unwrap(),
+        &plan.pre_promotion_trust.known_keys,
+        &plan.pre_promotion_trust.self_trust,
+        true,
+    )
+    .unwrap();
+    let accepted = review_plan.auto_accepted_candidates.clone();
+
+    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
+
+    assert_eq!(accepted.len(), 1);
+    assert!(review_plan.prompt_candidates.is_empty());
+    assert!(trust_plan.accepted_promotion_candidates.is_empty());
+    assert_eq!(trust_plan.post_promotion_members.len(), 1);
+    assert_eq!(
+        trust_plan.post_promotion_members[0].protected.member_id,
+        ALICE_MEMBER_ID
+    );
+    assert_eq!(
+        trust_plan.post_promotion_members[0].protected.kid,
+        accepted[0].review.kid
+    );
+    assert_ne!(
+        trust_plan.post_promotion_members[0].protected.kid,
+        old_active.protected.kid
+    );
 }

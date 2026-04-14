@@ -70,9 +70,13 @@ fn load_post_promotion_members(
         return Ok((members, Vec::new()));
     }
 
+    let self_member_id = trust_ctx.self_trust.member_id();
     let mut accepted_promotion_candidates = Vec::new();
     for candidate in accepted_promotions {
-        members.push(candidate.public_key.clone());
+        replace_post_promotion_member(&mut members, &candidate.public_key);
+        if Some(candidate.review.member_id.as_str()) == self_member_id {
+            continue;
+        }
         accepted_promotion_candidates.push(ApprovedKnownKey::from_review(
             &candidate.review.member_id,
             &candidate.review.kid,
@@ -80,8 +84,21 @@ fn load_post_promotion_members(
             candidate.review.verified_github.as_ref(),
         ));
     }
+    members.sort_by(|left, right| left.protected.member_id.cmp(&right.protected.member_id));
 
     Ok((members, accepted_promotion_candidates))
+}
+
+fn replace_post_promotion_member(members: &mut Vec<PublicKey>, candidate: &PublicKey) {
+    if let Some(existing) = members
+        .iter_mut()
+        .find(|member| member.protected.member_id == candidate.protected.member_id)
+    {
+        *existing = candidate.clone();
+        return;
+    }
+
+    members.push(candidate.clone());
 }
 
 fn build_post_promotion_index(members: &[PublicKey]) -> Result<BTreeMap<String, PublicKey>> {

@@ -60,7 +60,6 @@ fn build_plan_for_id(workspace_path: &Path, member_id: &str) -> Result<Promotion
     }
 
     let destination = member_file_path(workspace_path, MemberStatus::Active, member_id);
-    ensure_destination_free(&destination, member_id)?;
 
     Ok(PromotionPlan {
         source,
@@ -92,25 +91,12 @@ fn build_plan_from_incoming_file(active_dir: &Path, source: PathBuf) -> Result<P
         })?;
 
     let destination = active_dir.join(format!("{}.json", member_id));
-    ensure_destination_free(&destination, &member_id)?;
 
     Ok(PromotionPlan {
         source,
         destination,
         member_id,
     })
-}
-
-fn ensure_destination_free(destination: &Path, member_id: &str) -> Result<()> {
-    if destination.exists() {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "Member '{}' already exists in active/. Cannot promote from incoming/.",
-                member_id
-            ),
-        });
-    }
-    Ok(())
 }
 
 fn execute_promotion_plan(workspace_path: &Path, plans: &[PromotionPlan]) -> Result<Vec<String>> {
@@ -121,9 +107,19 @@ fn execute_promotion_plan(workspace_path: &Path, plans: &[PromotionPlan]) -> Res
     ensure_members_dir(workspace_path, MemberStatus::Active)?;
 
     for plan in plans {
-        fs::rename(&plan.source, &plan.destination).map_err(|e| {
+        let source_content = fs::read_to_string(&plan.source).map_err(|e| {
             Error::io_with_source(
-                format!("Failed to promote member '{}': {}", plan.member_id, e),
+                format!("Failed to load incoming member '{}': {}", plan.member_id, e),
+                e,
+            )
+        })?;
+        atomic::save_text(&plan.destination, &source_content)?;
+        fs::remove_file(&plan.source).map_err(|e| {
+            Error::io_with_source(
+                format!(
+                    "Failed to clean incoming member '{}': {}",
+                    plan.member_id, e
+                ),
                 e,
             )
         })?;
@@ -178,14 +174,6 @@ fn promote_snapshotted_member(
             Some(&snapshot.source_content),
             &subject_display,
         )?;
-        if destination.exists() {
-            return Err(Error::InvalidOperation {
-                message: format!(
-                    "Member '{}' already exists in active/. Cannot promote from incoming/.",
-                    snapshot.member_id
-                ),
-            });
-        }
         atomic::save_text(&destination, &snapshot.source_content)?;
         fs::remove_file(&snapshot.source_path).map_err(|e| {
             Error::io_with_source(
@@ -230,7 +218,21 @@ fn ensure_promotion_kids_are_unique(workspace_path: &Path, plans: &[PromotionPla
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    check_workspace_member_kid_uniqueness(workspace_path, &candidates, &[], &[MemberStatus::Active])
+    let ignored_existing = plans
+        .iter()
+        .flat_map(|plan| {
+            [
+                (MemberStatus::Active, plan.member_id.clone()),
+                (MemberStatus::Incoming, plan.member_id.clone()),
+            ]
+        })
+        .collect::<Vec<_>>();
+    check_workspace_member_kid_uniqueness(
+        workspace_path,
+        &candidates,
+        &ignored_existing,
+        &[MemberStatus::Active, MemberStatus::Incoming],
+    )
 }
 
 fn ensure_snapshotted_promotion_kids_are_unique(

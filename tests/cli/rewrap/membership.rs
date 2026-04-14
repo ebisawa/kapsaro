@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::test_utils::{setup_member_key_context, setup_trust_store_for_workspace};
+use crate::test_utils::{
+    build_expiring_soon_timestamp, setup_member_key_context, setup_trust_store_for_workspace,
+    stage_active_public_key_to_workspace_incoming, update_active_private_key_expires_at,
+};
 use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyBuildParams};
 use secretenv::io::trust::paths::trust_store_file_path;
 use secretenv::io::workspace::members::load_member_file_from_path;
@@ -35,6 +38,34 @@ fn rewrite_member_with_github_binding(
     .unwrap();
     fs::write(
         member_file,
+        serde_json::to_string_pretty(&public_key).unwrap(),
+    )
+    .unwrap();
+}
+
+fn rewrite_member_with_foreign_identity(
+    temp_dir: &tempfile::TempDir,
+    source_member_file: &std::path::Path,
+    target_member_file: &std::path::Path,
+    target_member_id: &str,
+    signer_member_id: &str,
+) {
+    let key_ctx = setup_member_key_context(temp_dir, signer_member_id, None);
+    let source = load_member_file_from_path(source_member_file).unwrap();
+    let created_at = source.protected.created_at.clone().unwrap();
+    let expires_at = source.protected.expires_at.clone();
+    let public_key = build_public_key(&PublicKeyBuildParams {
+        member_id: target_member_id,
+        identity: source.protected.identity,
+        created_at: &created_at,
+        expires_at: &expires_at,
+        sig_sk: &key_ctx.signing_key,
+        debug: false,
+        github_account: None,
+    })
+    .unwrap();
+    fs::write(
+        target_member_file,
         serde_json::to_string_pretty(&public_key).unwrap(),
     )
     .unwrap();
@@ -177,6 +208,101 @@ fn test_rewrap_non_interactive_skips_online_verify_for_known_incoming_github_bin
     );
     let rids_after = get_kv_rids(&kv_path);
     assert!(rids_after.contains(&BOB_MEMBER_ID.to_string()));
+}
+
+#[test]
+fn test_rewrap_non_interactive_auto_accepts_self_rotation() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_ID,
+        &old_key_ctx,
+    );
+
+    let mut common_opts = default_common_options();
+    common_opts.home = Some(temp_dir.path().to_path_buf());
+    common_opts.workspace = Some(workspace_dir.clone());
+    common_opts.quiet = true;
+    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
+
+    let kv_path = create_kv_file(
+        &workspace_dir,
+        common_opts.clone(),
+        ALICE_MEMBER_ID,
+        "self_rotation",
+        &[("KEY", "value")],
+    );
+    let before = get_kv_rids(&kv_path);
+    assert_eq!(before, vec![ALICE_MEMBER_ID.to_string()]);
+
+    update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_ID,
+        &build_expiring_soon_timestamp(365),
+    );
+    stage_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
+        .unwrap();
+
+    tty::set_interactive_override(Some(false));
+    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_ID));
+    tty::set_interactive_override(None);
+
+    assert!(
+        result.is_ok(),
+        "Rewrap should auto-accept self rotation in non-interactive mode: {:?}",
+        result.err()
+    );
+    let after = get_kv_rids(&kv_path);
+    assert_eq!(after, vec![ALICE_MEMBER_ID.to_string()]);
+}
+
+#[test]
+fn test_rewrap_rejects_self_incoming_when_local_identity_mismatches() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    let mut common_opts = default_common_options();
+    common_opts.home = Some(temp_dir.path().to_path_buf());
+    common_opts.workspace = Some(workspace_dir.clone());
+    common_opts.quiet = true;
+    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
+
+    let _kv_path = create_kv_file(
+        &workspace_dir,
+        common_opts.clone(),
+        ALICE_MEMBER_ID,
+        "self_mismatch",
+        &[("KEY", "value")],
+    );
+
+    let bob_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    let alice_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    rewrite_member_with_foreign_identity(
+        &temp_dir,
+        &bob_active,
+        &alice_incoming,
+        ALICE_MEMBER_ID,
+        BOB_MEMBER_ID,
+    );
+
+    tty::set_interactive_override(Some(false));
+    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_ID));
+    tty::set_interactive_override(None);
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("E_REWRAP_SELF_PROMOTION_MISMATCH"));
 }
 
 #[test]

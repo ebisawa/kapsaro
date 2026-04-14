@@ -8,12 +8,13 @@ use crate::app::registration::command::{
 };
 use crate::app::registration::key_plan::resolve_registration_key_plan;
 use crate::app::registration::types::{RegistrationCommand, RegistrationMode};
+use crate::app::registration::{prepare_init_workspace, InitWorkspaceState};
 use crate::cli::common::command::{resolve_options, resolve_required_member_id};
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt;
 use crate::cli::options::CommonOptions;
 use crate::Error;
-use output::{print_missing_key_notice, print_registration_outcome};
+use output::{print_init_noop_message, print_missing_key_notice, print_registration_outcome};
 
 pub(crate) fn execute_registration_command(
     common: CommonOptions,
@@ -23,6 +24,14 @@ pub(crate) fn execute_registration_command(
     mode: RegistrationMode,
 ) -> Result<(), Error> {
     let options = resolve_options(&common);
+    if let RegistrationMode::Init = mode {
+        let init_workspace = prepare_init_workspace(&options)?;
+        if init_workspace.state == InitWorkspaceState::NoOp {
+            print_init_noop_message(&init_workspace.workspace_path);
+            return Ok(());
+        }
+    }
+
     let keystore_root = options.resolve_keystore_root()?;
     let member_id = resolve_required_member_id(&options, member_id, true)?;
     let key_plan = resolve_registration_key_plan(&member_id, &keystore_root)?;
@@ -32,7 +41,6 @@ pub(crate) fn execute_registration_command(
     }
     let github_user = resolve_registration_github_user(needs_new_key, github_user, &options)?;
 
-    eprintln!();
     let ssh_ctx = resolve_registration_ssh_context(needs_new_key, &options)?;
     let command = match mode {
         RegistrationMode::Init | RegistrationMode::Join => {

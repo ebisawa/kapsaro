@@ -57,7 +57,7 @@ SecretEnv is an offline-first encrypted file sharing CLI tool for safely sharing
 | **Context binding** | `sid` / `kid` / `k` / `p` in info / AAD | Bind `sid` / `kid` / `k` / `p` into HPKE info and payload AAD so reuse and substitution do not hold across contexts | The implementation preserves the intended binding points | Security weakens if a future change removes a binding |
 | **Key consistency** | PublicKey self-signature | Protect each PublicKey with a self-signature so tampering with an existing key statement does not hold | The original private key is not compromised | It does not prevent creation of a brand new malicious key |
 | **Current-trust decision** | `members/active` + `known_keys` | Treat `members/active` as the authorization source and `known_keys` as an approval cache, with separate read-path and write-path checks | Repo governance and user approvals work as intended | Weak against bootstrap TOFU, repo compromise, and misapproval |
-| **Stronger key identity evidence** | SSH attestation + manual approval + online verify | The layers are not misrepresented as equivalent proofs | Manual approval is executed correctly | Weak against first-contact MITM and GitHub/SSH compromise |
+| **Stronger key identity evidence** | SSH attestation + manual approval + online verify | The layers are not misrepresented as equivalent proofs; online verify is treated as supplementary evidence with a present-time check | Manual approval is executed correctly | Weak against first-contact MITM and GitHub/SSH compromise |
 | **Portable private key use** | Password export or SSH-based protection | CI use meets the stated trust conditions | Used only in a trusted CI context | Storing both secrets in the same backend is not independent defense |
 
 ### 1.3 Terminology Used Here
@@ -186,6 +186,10 @@ The local trust store is a signed JSON document in `secretenv.trust.local@2` for
 **Layer 4: Manual approval and online verify**
 
 When approving an unseen `kid`, the user reviews the `kid`, the `attestation.pub` fingerprint, and when available the GitHub account `id` / `login`. This is a TOFU model similar to SSH `known_hosts`: it does not cryptographically establish identity, but provides evidence for an acceptance decision. GitHub API online verification is supplementary evidence and does not establish identity on its own.
+
+The important detail is that online verify is not a historical proof but a **present-time check**. It answers "is this PublicKey's `attestation.pub` still present in that GitHub account's current SSH key set at verification time?" rather than "was it ever registered there in the past?" As a result, once the key owner removes that SSH public key from GitHub, future online verification that depends on that key will fail.
+
+Operationally, this can be used as a lightweight revocation channel. For example, after suspected SSH attestor-key compromise, after offboarding, or after completing a key rotation, removing the old SSH public key from GitHub makes future trust updates and fresh approval flows less likely to accept that old key. This does not cryptographically invalidate existing attestation signatures, and it does not automatically revoke already approved `known_keys` entries or repository state in `members/active`. Online verify failure should therefore be interpreted as "stop future approvals for this key," while removal of existing trust or membership still requires separate action.
 
 **Limited exceptions: non-member acceptance and `SECRETENV_STRICT_KEY_CHECKING=no`**
 
@@ -1006,18 +1010,11 @@ Environment variables (`SECRETENV_KEY_PASSWORD`) persist in process memory and m
 
 #### 7.9.5 Public Key Verification with Environment Variable-Based Key Loading
 
-Loading keys via environment variables permits only `run`, `decrypt`, `get`, and `list`. At key-load time, the implementation only decrypts the exported PrivateKey from `SECRETENV_PRIVATE_KEY` with `SECRETENV_KEY_PASSWORD` and validates the PrivateKey document itself. `list` is metadata-only and does not require key loading.
+Environment variable-based key loading is limited to `run`, `decrypt`, `get`, and `list`. At load time, the implementation decrypts `SECRETENV_PRIVATE_KEY` with `SECRETENV_KEY_PASSWORD` and validates only the exported PrivateKey itself. `list` is metadata-only and does not require key loading.
 
-The key-load path performs the following checks:
+In this mode, the implementation must not resolve or compare the caller's own PublicKey from workspace `members/active/` during key loading. The state of `members/active/` is therefore not a load-time failure condition for environment variable-based key loading.
 
-1. Base64url-decode `SECRETENV_PRIVATE_KEY`
-2. Decrypt it with `SECRETENV_KEY_PASSWORD`
-3. Validate the PrivateKey document structure and protection method
-4. Validate keypair consistency for `sig.d` / `sig.x` and `kem.d` / `kem.x`
-
-The implementation must not resolve the caller's own PublicKey from `members/active/` during environment-variable key loading. Therefore the absence of `members/active/<member_id>.json`, or mismatches in that file, are not load-time failures when loading keys via environment variables.
-
-However, `run`, `decrypt`, and `get` still use the normal signature-verification and member-resolution rules, which may read from the workspace checkout. The checkout remains outside the trust boundary in environment variable-based key loading as well. Therefore environment variable-based key loading may be used only in a trusted CI context that satisfies all of the following:
+However, `run`, `decrypt`, and `get` may still read from the workspace checkout during normal verification and member resolution. The checkout therefore remains outside the trust boundary in this mode as well. Environment variable-based key loading may be used only in a trusted CI context that satisfies all of the following:
 
 - **trusted workflow**: the workflow / job definition that consumes secrets is maintainer-controlled and cannot be modified or triggered from attacker-controlled PR content
 - **trusted ref**: the checkout consumed by secretenv is a protected branch, protected tag, post-merge ref, or equivalent trusted ref
@@ -1039,12 +1036,11 @@ Typical allowed cases are post-merge workflows on protected branches and deploy 
 
 ### 8.0 signature_v4 Common Format
 
-All signed artifacts in file-enc, kv-enc, and the local trust store use a common signature structure called `signature_v4`. This structure has the following security properties.
+Signed artifacts in file-enc, kv-enc, and the local trust store use a common structure called `signature_v4`. The important properties are:
 
-- **Self-contained verification**: The signer's PublicKey (`signer_pub`) is required to be embedded in the signature. This allows signature verification and signer identification to complete without relying on an external keystore or workspace lookup.
-- **Explicit key statement**: Including `kid` makes it clear which self-signed key statement was used for signing.
-- **Fixed verification chain**: The implementation first verifies the self-signature, attestation, expiration, and `kid` match of `signer_pub`, and then verifies the artifact signature using that key.
-- **Ed25519 raw signature**: The signature value is base64url-encoded Ed25519 raw signature bytes (64 bytes), with a fixed length of 86 characters.
+- The signer's PublicKey (`signer_pub`) is embedded so verification is self-contained
+- `kid` identifies which key statement was used for signing
+- Verification treats signer-key validation and artifact-signature validation as one fixed chain
 
 Artifacts that omit `signer_pub` are rejected fail-closed. SecretEnv does not support legacy fallback signer lookup from workspace `members/active`.
 
@@ -1060,78 +1056,29 @@ Artifacts that omit `signer_pub` are rejected fail-closed. SecretEnv does not su
 
 ### 8.2 file-enc Signature
 
-```
-canonical_bytes = jcs(protected)
-signature = ed25519_sign(sig_priv, canonical_bytes)
-```
-
-- The `protected` object is JCS-canonicalized and signed directly (RFC 8032 PureEdDSA)
-- `wrap`, `payload`, and `removed_recipients` are all contained within `protected` and are therefore protected by the signature
-- The `signature` field is not included in the signed data
+In file-enc, the implementation signs the canonicalized `protected` object. As a result, the entire `protected` section, including `wrap`, `payload`, and `removed_recipients`, is covered by tamper detection. The `signature` field itself is not part of the signed data.
 
 ### 8.3 kv-enc Signature
 
-Procedure for constructing canonical_bytes:
-
-1. Normalize line endings in the input file to LF (0x0A) (CRLF to LF)
-2. Concatenate, in order, all lines including the first line `:SECRETENV_KV 3`, excluding the `:SIG` line
-3. Append the **line terminator** LF (0x0A) to the end of each line
-4. Use space (0x20) as the **field separator** within each line, not tab
-
-Concrete byte-level example:
-
-```
-:SECRETENV_KV 3\n      <- line terminator: LF (0x0A)
-:HEAD <token>\n         <- field separator: space (0x20), line terminator: LF
-:WRAP <token>\n         <- field separator: space (0x20), line terminator: LF
-DATABASE_URL <token>\n  <- field separator: space (0x20), line terminator: LF
-```
-
-**Distinction**: The LF in step 3 is the **line terminator**, while the space in step 4 is the **field separator** between the line header and the token. These have different roles.
-
-```
-canonical_bytes = concat_lines_with_lf(all_lines_except_SIG)
-signature = ed25519_sign(sig_priv, canonical_bytes)
-```
+In kv-enc, the implementation signs canonical bytes derived from the document body excluding the `:SIG` line. This makes the full document content, including `:HEAD`, `:WRAP`, and all entry lines, subject to tamper detection. The detailed canonicalization rules are left to the PRD.
 
 ### 8.4 Cryptographic Verification of Signed Artifacts
 
-The verification key for signature verification is always obtained from the embedded `signer_pub`.
-
-1. Verify `signature.signer_pub` as a PublicKey
-2. Check its self-signature, expiration, re-derived `kid`, `kid` match, and attestation
-3. Confirm `signature.kid == signer_pub.protected.kid`
-4. Use `signer_pub.protected.identity.keys.sig.x` as the verification key for the artifact signature itself
-
-Artifacts that omit `signer_pub` are rejected fail-closed. The implementation must not use workspace `members/active/`, `members/incoming/`, or the local keystore as signer lookup sources.
+The verification key is always taken from the embedded `signer_pub`. The implementation first validates `signer_pub` itself and then verifies the artifact signature with that key. Artifacts that omit `signer_pub` are rejected fail-closed, and signer lookup must not fall back to the workspace or local keystore.
 
 ### 8.5 PublicKey Self-Signature
 
-A PublicKey carries a self-signature over its `protected` object:
-
-```
-canonical_bytes = jcs(protected)
-signature = ed25519_sign(identity.keys.sig private key, canonical_bytes)
-```
-
-This confirms that the holder of the corresponding private key created this PublicKey.
+A PublicKey carries a self-signature over its `protected` object. This confirms that the holder of the corresponding private key created that PublicKey.
 
 ### 8.6 SSH Attestation
 
-SSH-key attestation over `identity.keys` in a PublicKey:
-
-1. JCS-canonicalize `identity.keys`
-2. Compute the SHA256 of the canonicalized bytes
-3. Sign with the SSH key (namespace: `secretenv`)
-4. Extract and store the Ed25519 raw signature bytes (64 bytes)
-
-This enables offline verification of the binding between the SecretEnv key pair and the SSH key.
+SSH attestation states that the SecretEnv key pair in the PublicKey is bound to a specific SSH key. This enables offline verification of that binding, independently of any external account lookup.
 
 ### 8.7 Online Verification (GitHub)
 
-When `binding_claims.github_account` exists, the fingerprint of `attestation.pub` is checked against the public keys obtained from the GitHub API. This confirms that the SSH key is registered to the claimed GitHub account.
+When `binding_claims.github_account` exists, online verify checks that the attested SSH key is registered to the claimed GitHub account. This is an additional account-binding check, not a replacement for cryptographic verification.
 
-`member verify` targets only `members/active`. Online verification for `members/incoming` candidates is not performed by ordinary `member verify`; it is performed only during interactive `rewrap` when a candidate still needs a trust update. A `kid` that already exists in `known_keys` may skip re-verification.
+Ordinary `member verify` is used for active members. Online verification for incoming candidates is needed only in trust-review flows. A `kid` that is already present in `known_keys` does not need to be re-verified every time.
 
 ---
 
@@ -1177,20 +1124,17 @@ On write paths such as `encrypt`, `set`, `unset`, `import`, and `rewrap`, curren
 
 ### 9.4 Local Trust Store and Approval Cache
 
-The local trust store is signed JSON in the `secretenv.trust.local@2` format, stored at `<SECRETENV_HOME>/trust/<owner_member_id>.json`. Its role is not to serve as the authority for current trust, but as an approval cache.
+The local trust store is not the authority for current trust. Its role is to act as an approval cache for keys that the user has already reviewed.
 
-The local trust store is the main exception to the general `signer_pub` rule. Trust-store signatures are verified with the owner's local keystore PublicKey resolved by `(protected.owner_member_id, signature.kid)`, not by embedded `signer_pub`.
+The trust store is the main exception to the general `signer_pub` rule. Its signature is verified with the owner's PublicKey from the local keystore, not with embedded `signer_pub`.
 
-The implementation must verify at least the following.
+The important points are:
 
-- `signature.kid` matches the selected local keystore PublicKey's `protected.kid`
-- the selected local keystore PublicKey's `protected.member_id == protected.owner_member_id`
-- `known_keys` contains no duplicate `kid` and no duplicate `(member_id, kid)`
-- When comparing a candidate PublicKey against `known_keys`, if the same `kid` exists under a different `member_id`, fail as an integrity anomaly
+- `known_keys` is a TOFU record, not the authorization authority
+- the store's integrity is checked, but it is not a complete defense if the local trusted area is already compromised
+- an invalid trust store must not be silently discarded or recreated without explicit user consent
 
-Updates must be written completely to a temporary file in the same directory and then atomically replaced. Permissions weaker than `0600` must produce a warning. The signature is used for integrity checks, corruption detection, and format validation, but it does not prevent coherent replacement or rollback if the local trusted area is compromised. If the trust store cannot be verified, the CLI warns and may delete the invalid cache only after explicit user confirmation; otherwise it fails closed.
-
-For incoming candidates, manual review is required only for `kid`s that are not already present in `known_keys`. A candidate with `binding_claims.github_account` must succeed in online verify at that review point, while a candidate without that binding may still be approved through warning-backed manual review only.
+For incoming candidates, manual review is needed for unapproved `kid`s. When `binding_claims.github_account` is present, online verify is part of that approval decision. Candidates without that binding may still be approved through warning-backed manual review.
 
 ### 9.5 Non-Member Acceptance and Limited Exceptions
 
@@ -1203,23 +1147,11 @@ Non-member acceptance is a mechanism that interactively accepts, on a one-shot a
 
 ### 9.6 `SECRETENV_STRICT_KEY_CHECKING` Behavior
 
-The environment variable `SECRETENV_STRICT_KEY_CHECKING` controls whether the `known_keys` approval cache check is enforced. This section consolidates the rules that appear across §2.5, §9.2, §9.3, and §12.1.
+The environment variable `SECRETENV_STRICT_KEY_CHECKING` controls whether the `known_keys` approval-cache check is enforced on the read path.
 
-**What `SECRETENV_STRICT_KEY_CHECKING=no` skips:**
+With `SECRETENV_STRICT_KEY_CHECKING=no`, only the `known_keys` check is skipped. Authorization via `members/active` and cryptographic signature verification remain mandatory.
 
-- The `known_keys` check (Layer 3 of the trust model): the requirement that the signer's or recipient's `kid` exists in the local trust store's `known_keys`
-
-**What it does NOT skip:**
-
-- The `members/active` authorization check (Layer 2): the signer's `(member_id, kid)` must still be in the current member set
-- Cryptographic signature verification (Layer 1): `signer_pub` verification, self-signature, attestation, and artifact signature checks remain mandatory
-
-**Scope:**
-
-- Applies only to explicitly requested **read paths** (`decrypt`, `get`, `run`)
-- Does **not** apply to write paths (`encrypt`, `set`, `unset`, `import`, `rewrap`)
-- May be used in interactive runs when the operator explicitly sets it
-- Has no implicit auto-update effect on `known_keys`
+This setting applies only to explicitly requested read paths, never to write paths, and it does not implicitly update `known_keys`.
 
 **CI considerations:** Setting `SECRETENV_STRICT_KEY_CHECKING=no` permanently in a CI environment effectively disables the approval cache for all read operations. This is acceptable only when the CI context is trusted (§7.9.5). Avoid setting it globally in development environments where TOFU approval provides meaningful protection.
 

@@ -83,6 +83,10 @@ impl SelfTrustSet {
         self.load_keystore_identity(identity)
     }
 
+    pub fn member_id(&self) -> Option<&str> {
+        self.member_id.as_ref().map(MemberId::as_str)
+    }
+
     fn load_keystore_identity(&self, identity: &TrustIdentity) -> Result<bool> {
         let Some(member_id) = self.member_id.as_ref() else {
             return Ok(false);

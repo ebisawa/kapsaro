@@ -51,6 +51,7 @@ secretenv init --member-id alice@example.com
 ```
 
 `.secretenv/` ディレクトリが作成され、鍵ペアの生成と最初のメンバー登録が行われます。
+既に workspace がある場合、`init` は何もしません。既存 workspace への参加や鍵の staging には `secretenv join` を使ってください。
 
 ### 2. シークレットの追加
 

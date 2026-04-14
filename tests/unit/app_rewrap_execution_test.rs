@@ -28,7 +28,10 @@ use crate::io::workspace::members::{
     incoming_member_file_path, load_active_member_files, load_incoming_member_files,
     load_member_file_from_path,
 };
-use crate::test_utils::{setup_member_key_context, setup_test_workspace, EnvGuard};
+use crate::test_utils::{
+    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace,
+    stage_active_public_key_to_workspace_incoming, update_active_private_key_expires_at, EnvGuard,
+};
 
 const ALICE_MEMBER_ID: &str = "alice@example.com";
 const BOB_MEMBER_ID: &str = "bob@example.com";
@@ -196,6 +199,35 @@ fn test_apply_rewrap_promotions_moves_accepted_members_to_active() {
     assert!(active_members
         .iter()
         .any(|member| member.protected.member_id == BOB_MEMBER_ID));
+    assert!(incoming_members.is_empty());
+}
+
+#[test]
+fn test_apply_rewrap_promotions_replaces_existing_active_member_on_rotation() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let active_path = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", ALICE_MEMBER_ID));
+    let old_active = load_member_file_from_path(&active_path).unwrap();
+    update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_ID,
+        &build_expiring_soon_timestamp(365),
+    );
+    stage_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
+        .unwrap();
+
+    let alice = find_incoming_candidate(&workspace_dir, ALICE_MEMBER_ID);
+
+    apply_rewrap_promotions(&workspace_dir, &[alice]).unwrap();
+
+    let active_members = load_active_member_files(&workspace_dir).unwrap();
+    let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
+    assert_eq!(active_members.len(), 1);
+    assert_eq!(active_members[0].protected.member_id, ALICE_MEMBER_ID);
+    assert_ne!(active_members[0].protected.kid, old_active.protected.kid);
     assert!(incoming_members.is_empty());
 }
 

@@ -106,6 +106,7 @@ where
     let review_plan = promotion::build_promotion_review_plan(
         report,
         &plan.pre_promotion_trust.known_keys,
+        &plan.pre_promotion_trust.self_trust,
         plan.pre_promotion_trust.is_interactive,
     )?;
     let session = promotion::build_promotion_review_session(&review_plan, verbose)?;

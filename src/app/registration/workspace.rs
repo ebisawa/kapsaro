@@ -9,12 +9,25 @@ use crate::io::keystore::storage::load_public_key;
 use crate::io::workspace::detection::resolve_workspace_creation_path;
 use crate::io::workspace::members::{
     active_member_file_path, ensure_member_document_kid_is_unique, incoming_member_file_path,
-    MemberStatus,
+    load_member_file_from_path, MemberStatus,
 };
 use crate::io::workspace::setup;
 use crate::Result;
 
-use super::types::{RegistrationMode, RegistrationResult, RegistrationTarget};
+use super::types::{
+    ActiveMembershipState, RegistrationMode, RegistrationResult, RegistrationTarget,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InitWorkspaceState {
+    Bootstrap,
+    NoOp,
+}
+
+pub(crate) struct InitWorkspacePreparation {
+    pub workspace_path: PathBuf,
+    pub state: InitWorkspaceState,
+}
 
 pub(crate) struct RegistrationPaths {
     pub workspace_path: PathBuf,
@@ -22,7 +35,25 @@ pub(crate) struct RegistrationPaths {
     pub target: RegistrationTarget,
     pub is_new_workspace: bool,
     pub conflict_exists: bool,
-    pub already_active: bool,
+}
+
+pub(crate) fn prepare_init_workspace(
+    common: &CommonCommandOptions,
+) -> Result<InitWorkspacePreparation> {
+    let workspace_path = resolve_workspace_creation_path(common.workspace.clone())?;
+    let has_active_members = setup::workspace_has_active_members(&workspace_path)?;
+    if has_active_members {
+        setup::ensure_workspace_structure(&workspace_path)?;
+        return Ok(InitWorkspacePreparation {
+            workspace_path,
+            state: InitWorkspaceState::NoOp,
+        });
+    }
+
+    Ok(InitWorkspacePreparation {
+        workspace_path,
+        state: InitWorkspaceState::Bootstrap,
+    })
 }
 
 pub(crate) fn register_member(
@@ -75,15 +106,36 @@ pub(crate) fn resolve_registration_paths(
     let target = registration_target(mode);
     let conflict_exists =
         member_file_path(&workspace_path, member_id, RegistrationTarget::from(target)).exists();
-    let already_active = resolve_already_active(mode, &workspace_path, member_id);
     Ok(RegistrationPaths {
         workspace_path,
         keystore_root,
         target: RegistrationTarget::from(target),
         is_new_workspace,
         conflict_exists,
-        already_active,
     })
+}
+
+pub(crate) fn resolve_active_membership_state(
+    mode: RegistrationMode,
+    workspace_path: &Path,
+    member_id: &str,
+    kid: &str,
+) -> Result<ActiveMembershipState> {
+    if mode != RegistrationMode::Join {
+        return Ok(ActiveMembershipState::None);
+    }
+
+    let active_path = active_member_file_path(workspace_path, member_id);
+    if !active_path.exists() {
+        return Ok(ActiveMembershipState::None);
+    }
+
+    let active_member = load_member_file_from_path(&active_path)?;
+    if active_member.protected.kid == kid {
+        Ok(ActiveMembershipState::SameKey)
+    } else {
+        Ok(ActiveMembershipState::DifferentKey)
+    }
 }
 
 fn member_file_path(workspace_path: &Path, member_id: &str, target: RegistrationTarget) -> PathBuf {
@@ -135,11 +187,4 @@ fn registration_target(mode: RegistrationMode) -> MemberStatus {
         RegistrationMode::Init => MemberStatus::Active,
         RegistrationMode::Join => MemberStatus::Incoming,
     }
-}
-
-fn resolve_already_active(mode: RegistrationMode, workspace_path: &Path, member_id: &str) -> bool {
-    if mode != RegistrationMode::Join {
-        return false;
-    }
-    active_member_file_path(workspace_path, member_id).exists()
 }

@@ -18,6 +18,15 @@ pub(crate) fn print_created_workspace_summary(workspace_path: &Path) {
     eprintln!("  Created secrets/");
 }
 
+pub(crate) fn print_init_noop_summary(workspace_path: &Path) {
+    eprintln!(
+        "Workspace already initialized at {}",
+        format_workspace_display(workspace_path)
+    );
+    eprintln!("`secretenv init` only bootstraps a new workspace and first member.");
+    eprintln!("Use `secretenv join` to submit a key to an existing workspace.");
+}
+
 pub(crate) fn print_registration_next_steps(mode: RegistrationMode, is_new_workspace: bool) {
     match mode {
         RegistrationMode::Init if is_new_workspace => {
@@ -27,7 +36,7 @@ pub(crate) fn print_registration_next_steps(mode: RegistrationMode, is_new_works
             eprintln!("Ready! Create a PR to share your public key with the team.");
             if mode == RegistrationMode::Join {
                 eprintln!(
-                    "An existing member needs to run 'secretenv rewrap' to approve your membership."
+                    "An active member needs to run 'secretenv rewrap' to promote the incoming key and sync secrets."
                 );
             }
         }

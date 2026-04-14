@@ -7,6 +7,7 @@ use crate::app::rewrap::types::{
     IncomingPromotionCandidate, IncomingVerificationCategory, IncomingVerificationItem,
     IncomingVerificationReport,
 };
+use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey};
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
@@ -74,12 +75,12 @@ fn make_candidate(
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: "X25519".to_string(),
-                        x: "kem-x".to_string(),
+                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: "Ed25519".to_string(),
-                        x: "sig-x".to_string(),
+                        x: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
                     },
                 },
                 attestation: Attestation {
@@ -107,6 +108,12 @@ fn known_key(member_id: &str) -> KnownKey {
     }
 }
 
+fn self_trust() -> SelfTrustSet {
+    let identity =
+        TrustIdentity::from_public_key(&binding_configured_result("alice").public_key).unwrap();
+    SelfTrustSet::new("alice", [*identity.sig_x()])
+}
+
 #[test]
 fn test_build_promotion_review_plan_keeps_failed_candidates_without_aborting_batch() {
     let report = make_report(
@@ -121,7 +128,7 @@ fn test_build_promotion_review_plan_keeps_failed_candidates_without_aborting_bat
         vec![],
     );
 
-    let result = build_promotion_review_plan(&report, &[], true).unwrap();
+    let result = build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
 
     assert_eq!(result.failed_candidates.len(), 1);
     assert_eq!(result.failed_candidates[0].review.member_id, "bob");
@@ -143,7 +150,7 @@ fn test_build_promotion_review_plan_not_configured_non_interactive_errors() {
         )],
     );
 
-    let result = build_promotion_review_plan(&report, &[], false);
+    let result = build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), false);
 
     assert!(result.is_err());
     assert!(result
@@ -166,7 +173,8 @@ fn test_build_promotion_review_plan_failed_only_non_interactive_still_succeeds()
         vec![],
     );
 
-    let result = build_promotion_review_plan(&report, &[], false).unwrap();
+    let result =
+        build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), false).unwrap();
 
     assert_eq!(result.failed_candidates.len(), 1);
     assert!(result.auto_accepted_candidates.is_empty());
@@ -177,7 +185,13 @@ fn test_build_promotion_review_plan_failed_only_non_interactive_still_succeeds()
 fn test_build_promotion_review_plan_auto_accepts_known_kid() {
     let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
 
-    let result = build_promotion_review_plan(&report, &[known_key("alice")], false).unwrap();
+    let result = build_promotion_review_plan(
+        &report,
+        &[known_key("alice")],
+        &SelfTrustSet::default(),
+        false,
+    )
+    .unwrap();
 
     assert_eq!(result.auto_accepted_candidates.len(), 1);
     assert_eq!(result.auto_accepted_candidates[0].review.member_id, "alice");
@@ -196,7 +210,12 @@ fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_p
         extra: BTreeMap::new(),
     };
 
-    let result = build_promotion_review_plan(&report, &[conflicting_known_key], true);
+    let result = build_promotion_review_plan(
+        &report,
+        &[conflicting_known_key],
+        &SelfTrustSet::default(),
+        true,
+    );
 
     assert!(result.is_err());
     assert!(result
@@ -219,7 +238,8 @@ fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_
             None,
         )],
     );
-    let review_plan = build_promotion_review_plan(&report, &[], true).unwrap();
+    let review_plan =
+        build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
 
     let session = build_promotion_review_session_with_verifier(&review_plan, |_candidate| {
         panic!("online verifier should not run for candidates without GitHub binding");
@@ -237,7 +257,8 @@ fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_
 #[test]
 fn test_build_promotion_review_session_moves_failed_online_verification_to_failed_candidates() {
     let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
-    let review_plan = build_promotion_review_plan(&report, &[], true).unwrap();
+    let review_plan =
+        build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
 
     let session = build_promotion_review_session_with_verifier(&review_plan, |candidate| {
         let mut reviewed = candidate.clone();
@@ -264,7 +285,8 @@ fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_
             None,
         )],
     );
-    let review_plan = build_promotion_review_plan(&report, &[], true).unwrap();
+    let review_plan =
+        build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
 
     let session = build_promotion_review_session_with_verifier(&review_plan, |candidate| {
         let mut reviewed = candidate.clone();
@@ -301,4 +323,65 @@ fn test_build_promotion_review_session_empty_report_produces_empty_view() {
     assert!(session.view().failed_candidates.is_empty());
     assert!(session.view().prompt_candidates.is_empty());
     assert!(session.into_accepted_candidates(&[]).is_empty());
+}
+
+#[test]
+fn test_build_promotion_review_plan_auto_accepts_self_candidate_without_known_key() {
+    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+
+    let result = build_promotion_review_plan(&report, &[], &self_trust(), false).unwrap();
+
+    assert_eq!(result.auto_accepted_candidates.len(), 1);
+    assert_eq!(result.auto_accepted_candidates[0].review.member_id, "alice");
+    assert!(result.prompt_candidates.is_empty());
+}
+
+#[test]
+fn test_build_promotion_review_plan_rejects_self_candidate_when_identity_mismatches() {
+    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let mismatched_self_trust = SelfTrustSet::new("alice", [[7u8; 32]]);
+
+    let result = build_promotion_review_plan(&report, &[], &mismatched_self_trust, true);
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("E_REWRAP_SELF_PROMOTION_MISMATCH"));
+}
+
+#[test]
+fn test_build_promotion_review_plan_rejects_self_candidate_when_local_identity_is_missing() {
+    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+
+    let result =
+        build_promotion_review_plan(&report, &[], &SelfTrustSet::new("alice", [[7u8; 32]]), true);
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("E_REWRAP_SELF_PROMOTION_MISMATCH"));
+}
+
+#[test]
+fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candidate() {
+    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let conflicting_known_key = KnownKey {
+        kid: kid_for("alice").to_string(),
+        member_id: "bob".to_string(),
+        approved_at: "2026-04-01T00:00:00Z".to_string(),
+        approved_via: KnownKeyApprovalVia::ManualReview,
+        evidence: None,
+        extra: BTreeMap::new(),
+    };
+
+    let result =
+        build_promotion_review_plan(&report, &[conflicting_known_key], &self_trust(), true);
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("candidate has member_id 'alice'"));
 }

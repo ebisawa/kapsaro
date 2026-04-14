@@ -73,7 +73,7 @@ fn test_init_new_workspace_new_key_output() {
 }
 
 #[test]
-fn test_init_existing_workspace_new_key_output() {
+fn test_init_existing_workspace_noop_output() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
     let home_dir2 = tempfile::TempDir::new().unwrap();
 
@@ -88,55 +88,26 @@ fn test_init_existing_workspace_new_key_output() {
         .assert()
         .success();
 
-    let missing_key_message = format!(
-        "No local key found for '{}'. Generating a new key...",
-        BOB_MEMBER_ID
-    );
-    let using_ssh_key_message = "Using SSH key:";
-    let ssh_determinism_message = "SSH signature determinism: OK";
-    let generated_key_message = format!("Generated key for '{}':", BOB_MEMBER_ID);
-
-    let assert = cmd()
+    cmd()
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-id")
         .arg(BOB_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir2.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stderr(predicate::str::contains(&missing_key_message))
-        .stderr(predicate::str::contains(using_ssh_key_message))
-        .stderr(predicate::str::contains(ssh_determinism_message))
-        .stderr(predicate::str::contains(&generated_key_message))
-        .stderr(predicate::str::contains(format!(
-            "Added '{}' to members/active/",
-            BOB_MEMBER_ID
-        )))
+        .stderr(predicate::str::contains("Workspace already initialized"))
         .stderr(predicate::str::contains(
-            "Ready! Create a PR to share your public key with the team.",
-        ));
-
-    assert_stderr_order(
-        &assert.get_output().stderr,
-        &missing_key_message,
-        using_ssh_key_message,
-    );
-    assert_stderr_order(
-        &assert.get_output().stderr,
-        using_ssh_key_message,
-        ssh_determinism_message,
-    );
-    assert_stderr_order(
-        &assert.get_output().stderr,
-        ssh_determinism_message,
-        &generated_key_message,
-    );
+            "`secretenv init` only bootstraps a new workspace",
+        ))
+        .stderr(predicate::str::contains("Use `secretenv join`"))
+        .stderr(predicate::str::contains("Added").not())
+        .stderr(predicate::str::contains("Using SSH key:").not());
 }
 
 #[test]
-fn test_init_existing_workspace_existing_key_output() {
+fn test_init_existing_workspace_output_does_not_start_with_blank_line() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
     cmd()
@@ -150,25 +121,20 @@ fn test_init_existing_workspace_existing_key_output() {
         .assert()
         .success();
 
-    cmd()
+    let assert = cmd()
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .arg("--member-id")
-        .arg(TEST_MEMBER_ID)
-        .arg("--force")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stderr(predicate::str::contains(format!(
-            "Using existing key for '{}'",
-            TEST_MEMBER_ID
-        )))
-        .stderr(predicate::str::contains(format!(
-            "Added '{}' to members/active/",
-            TEST_MEMBER_ID
-        )));
+        .stderr(predicate::str::contains("Workspace already initialized"));
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        !stderr.starts_with('\n'),
+        "stderr should not start with a blank line: {stderr:?}"
+    );
 }
 
 #[test]
@@ -190,15 +156,10 @@ fn test_init_already_member_ci_output() {
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .arg("--member-id")
-        .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env("CI", "true")
         .assert()
         .success()
-        .stderr(predicate::str::contains(format!(
-            "Member '{}' already exists in workspace",
-            TEST_MEMBER_ID
-        )));
+        .stderr(predicate::str::contains("Workspace already initialized"))
+        .stderr(predicate::str::contains("Use `secretenv join`"));
 }

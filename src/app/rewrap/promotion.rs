@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use crate::app::trust::TrustApprovalCandidate;
 use crate::feature::member::verification::verify_member_public_keys;
+use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::feature::trust::known_keys::{assess_known_key, KnownKeyAssessment};
 use crate::io::verify_online::VerificationStatus;
 use crate::model::identity::{Kid, MemberId};
@@ -63,6 +64,7 @@ impl PromotionReviewSession {
 pub(crate) fn build_promotion_review_plan(
     report: &IncomingVerificationReport,
     known_keys: &[KnownKey],
+    self_trust: &SelfTrustSet,
     is_interactive: bool,
 ) -> Result<IncomingPromotionReviewPlan> {
     let mut auto_accepted_candidates = Vec::new();
@@ -72,11 +74,16 @@ pub(crate) fn build_promotion_review_plan(
         .iter()
         .chain(report.not_configured.iter())
     {
-        match assess_known_key(
+        let known_key_state = assess_known_key(
             known_keys,
             &candidate.review.kid,
             &candidate.review.member_id,
-        )? {
+        )?;
+        if is_self_promotion_candidate(candidate, self_trust)? {
+            auto_accepted_candidates.push(candidate.clone());
+            continue;
+        }
+        match known_key_state {
             KnownKeyAssessment::Existing => auto_accepted_candidates.push(candidate.clone()),
             KnownKeyAssessment::New => prompt_candidates.push(candidate.clone()),
         }
@@ -102,6 +109,31 @@ pub(crate) fn build_promotion_review_plan(
         failed_candidates: report.failed.clone(),
         auto_accepted_candidates,
         prompt_candidates,
+    })
+}
+
+fn is_self_promotion_candidate(
+    candidate: &IncomingPromotionCandidate,
+    self_trust: &SelfTrustSet,
+) -> Result<bool> {
+    let Some(self_member_id) = self_trust.member_id() else {
+        return Ok(false);
+    };
+    if candidate.review.member_id != self_member_id {
+        return Ok(false);
+    }
+
+    let identity = TrustIdentity::from_public_key(&candidate.public_key)?;
+    if self_trust.contains_identity(&identity)? {
+        return Ok(true);
+    }
+
+    Err(Error::Verify {
+        rule: "E_REWRAP_SELF_PROMOTION_MISMATCH".to_string(),
+        message: format!(
+            "Incoming self key '{}' ({}) did not match local keystore identity",
+            candidate.review.member_id, candidate.review.kid
+        ),
     })
 }
 

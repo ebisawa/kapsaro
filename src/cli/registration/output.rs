@@ -9,11 +9,12 @@ use crate::cli::common::output::text::key::{
 };
 use crate::cli::common::output::text::print_warning_line;
 use crate::cli::common::output::text::registration::{
-    print_created_workspace_summary, print_registration_next_steps,
+    print_created_workspace_summary, print_init_noop_summary, print_registration_next_steps,
 };
 use crate::cli::key::common::print_key_generation_binding_info;
 use crate::support::kid::build_kid_display;
 use crate::Error;
+use std::path::Path;
 
 pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Result<(), Error> {
     match outcome.result {
@@ -43,8 +44,11 @@ pub(super) fn print_missing_key_notice(member_id: &str) {
     );
 }
 
+pub(super) fn print_init_noop_message(workspace_path: &Path) {
+    print_init_noop_summary(workspace_path);
+}
+
 fn print_existing_member_message(outcome: &RegistrationOutcome) {
-    eprintln!();
     eprintln!("Already a member of this workspace.");
     let kid_display = build_kid_display(&outcome.key_result.kid)
         .unwrap_or_else(|_| outcome.key_result.kid.clone());

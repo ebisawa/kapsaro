@@ -7,6 +7,7 @@
 
 use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
 use predicates::prelude::*;
+use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
 
@@ -22,6 +23,12 @@ fn assert_stderr_order(stderr: &[u8], first: &str, second: &str) {
         first_index < second_index,
         "Expected '{first}' before '{second}' in stderr: {stderr}"
     );
+}
+
+fn load_member_kid(path: &std::path::Path) -> String {
+    let content = fs::read_to_string(path).unwrap();
+    let json: Value = serde_json::from_str(&content).unwrap();
+    json["protected"]["kid"].as_str().unwrap().to_string()
 }
 
 // ============================================================================
@@ -61,7 +68,10 @@ fn test_join_existing_workspace() {
         .stderr(predicate::str::contains(using_ssh_key_message))
         .stderr(predicate::str::contains(ssh_determinism_message))
         .stderr(predicate::str::contains(&generated_key_message))
-        .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_ID)));
+        .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_ID)))
+        .stderr(predicate::str::contains(
+            "An active member needs to run 'secretenv rewrap' to promote the incoming key and sync secrets.",
+        ));
 
     assert_stderr_order(
         &assert.get_output().stderr,
@@ -268,5 +278,107 @@ fn test_init_then_join_different_member() {
             .join("bob@example.com.json")
             .exists(),
         "bob member file should exist in members/incoming/ after join"
+    );
+}
+
+#[test]
+fn test_join_reports_existing_active_member_without_leading_blank_line() {
+    let workspace_dir = TempDir::new().unwrap();
+    let home_dir = TempDir::new().unwrap();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+
+    cmd()
+        .arg("init")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let assert = cmd()
+        .arg("join")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Already a member of this workspace.",
+        ));
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        !stderr.starts_with('\n'),
+        "stderr should not start with a blank line: {stderr:?}"
+    );
+}
+
+#[test]
+fn test_join_stages_new_generation_for_existing_active_member() {
+    let workspace_dir = TempDir::new().unwrap();
+    let home_dir = TempDir::new().unwrap();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+
+    cmd()
+        .arg("init")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let active_path = workspace_dir
+        .path()
+        .join("members/active")
+        .join(format!("{TEST_MEMBER_ID}.json"));
+    let active_kid = load_member_kid(&active_path);
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let incoming_path = workspace_dir
+        .path()
+        .join("members/incoming")
+        .join(format!("{TEST_MEMBER_ID}.json"));
+    assert!(
+        !incoming_path.exists(),
+        "incoming member file should not exist before rotation join"
+    );
+
+    cmd()
+        .arg("join")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(format!(
+            "Added '{}' to members/incoming/",
+            TEST_MEMBER_ID
+        )));
+
+    let incoming_kid = load_member_kid(&incoming_path);
+    assert_ne!(
+        incoming_kid, active_kid,
+        "rotation join should stage a new kid"
     );
 }

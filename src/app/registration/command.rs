@@ -11,10 +11,12 @@ use crate::model::public_key::GithubAccount;
 use crate::Result;
 
 use super::types::{
-    MemberKeySetupResult, MemberSetupResult, RegistrationCommand, RegistrationKeyPlan,
-    RegistrationMode, RegistrationOutcome, RegistrationResult,
+    ActiveMembershipState, MemberKeySetupResult, MemberSetupResult, RegistrationCommand,
+    RegistrationKeyPlan, RegistrationMode, RegistrationOutcome, RegistrationResult,
 };
-use super::workspace::{register_member, resolve_registration_paths};
+use super::workspace::{
+    register_member, resolve_active_membership_state, resolve_registration_paths,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationDecision {
@@ -69,10 +71,13 @@ pub fn build_registration_decision(
     force: bool,
     prompt_available: bool,
 ) -> Result<RegistrationDecision> {
-    if command.already_active {
-        return Ok(RegistrationDecision::Return(
-            RegistrationResult::AlreadyExists,
-        ));
+    match command.active_membership {
+        ActiveMembershipState::SameKey => {
+            return Ok(RegistrationDecision::Return(
+                RegistrationResult::AlreadyExists,
+            ));
+        }
+        ActiveMembershipState::None | ActiveMembershipState::DifferentKey => {}
     }
 
     if !command.conflict_exists {
@@ -165,6 +170,12 @@ fn build_registration_command(
     setup: MemberSetupResult,
 ) -> Result<RegistrationCommand> {
     let paths = resolve_registration_paths(common, mode, &setup.member_id)?;
+    let active_membership = resolve_active_membership_state(
+        mode,
+        &paths.workspace_path,
+        &setup.member_id,
+        setup.kid(),
+    )?;
     Ok(RegistrationCommand {
         mode,
         workspace_path: paths.workspace_path,
@@ -173,7 +184,7 @@ fn build_registration_command(
         target: paths.target,
         is_new_workspace: paths.is_new_workspace,
         conflict_exists: paths.conflict_exists,
-        already_active: paths.already_active,
+        active_membership,
     })
 }
 

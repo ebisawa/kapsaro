@@ -167,6 +167,37 @@ pub fn sync_active_public_key_to_workspace(
     })
 }
 
+// Used by library tests (via crate::test_utils) — not referenced in the integration test binary.
+#[allow(dead_code)]
+pub fn stage_active_public_key_to_workspace_incoming(
+    home: &Path,
+    workspace: &Path,
+    member_id: &str,
+) -> Result<(), Error> {
+    let active_key = find_active_key_document(member_id, &home.join("keys"))?.ok_or_else(|| {
+        Error::NotFound {
+            message: format!("Active key not found for member: {}", member_id),
+        }
+    })?;
+    let member_path = workspace
+        .join("members")
+        .join("incoming")
+        .join(format!("{member_id}.json"));
+    std::fs::write(
+        &member_path,
+        serde_json::to_string_pretty(&active_key.public_key).unwrap(),
+    )
+    .map_err(|error| {
+        Error::io_with_source(
+            format!(
+                "Failed to write workspace incoming member file: {}",
+                member_path.display()
+            ),
+            error,
+        )
+    })
+}
+
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};

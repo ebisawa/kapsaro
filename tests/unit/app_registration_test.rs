@@ -8,7 +8,10 @@ use crate::app::registration::key_plan::resolve_registration_key_plan;
 use crate::app::registration::types::{RegistrationKeyPlan, RegistrationMode, RegistrationResult};
 use crate::app_test_utils::build_test_command_options;
 use crate::io::keystore::storage::load_public_key;
-use crate::test_utils::setup_test_keystore_from_fixtures;
+use crate::test_utils::{
+    build_expiring_soon_timestamp, setup_test_keystore_from_fixtures, setup_test_workspace,
+    update_active_private_key_expires_at,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -235,4 +238,28 @@ fn test_build_registration_decision_rejects_join_conflict_non_interactive() {
             .contains("already exists. Use --force to overwrite"),
         "unexpected error: {error}"
     );
+}
+
+#[test]
+fn test_build_registration_decision_allows_join_rotation_when_active_kid_differs() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
+    let common = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
+    let expires_at = build_expiring_soon_timestamp(365);
+    update_active_private_key_expires_at(temp_dir.path(), "alice@example.com", &expires_at);
+
+    let key_plan =
+        resolve_registration_key_plan("alice@example.com", &temp_dir.path().join("keys")).unwrap();
+    let prepared = build_registration(
+        &common,
+        "alice@example.com".to_string(),
+        None,
+        key_plan,
+        RegistrationMode::Join,
+        None,
+    )
+    .unwrap();
+
+    let decision = build_registration_decision(&prepared, false, false).unwrap();
+
+    assert_eq!(decision, RegistrationDecision::Apply { overwrite: false });
 }

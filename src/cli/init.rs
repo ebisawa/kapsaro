@@ -3,11 +3,12 @@
 
 //! init command implementation
 //!
-//! Creates workspace structure and registers member:
-//! 1. Determines member_id (CLI arg → config → keystore → TTY prompt)
-//! 2. Ensures key exists (generates if missing)
-//! 3. Creates workspace structure (members/, secrets/)
-//! 4. Registers member (with TTY confirmation for overwrites)
+//! Bootstraps a new workspace:
+//! 1. If the workspace already has active members, exit without changes
+//! 2. Determines member_id (CLI arg → config → keystore → TTY prompt)
+//! 3. Ensures key exists (generates if missing)
+//! 4. Creates workspace structure (members/, secrets/)
+//! 5. Registers the first member directly in active/
 
 use clap::Args;
 
@@ -22,10 +23,6 @@ pub struct InitArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Force overwrite existing member file
-    #[arg(long, short = 'f')]
-    pub force: bool,
-
     /// GitHub user (login name, used only when generating a new key)
     #[arg(long)]
     pub github_user: Option<String>,
@@ -39,7 +36,7 @@ pub struct InitArgs {
 pub fn run(args: InitArgs) -> Result<(), Error> {
     execute_registration_command(
         args.common,
-        args.force,
+        false,
         args.github_user,
         args.member_id,
         RegistrationMode::Init,

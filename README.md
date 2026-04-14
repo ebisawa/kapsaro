@@ -51,6 +51,7 @@ secretenv init --member-id alice@example.com
 ```
 
 This creates a `.secretenv/` directory, generates your key pair, and registers you as the first member.
+If the workspace already exists, `init` does nothing. Use `secretenv join` to submit a key to an existing workspace.
 
 ### 2. Add secrets
 

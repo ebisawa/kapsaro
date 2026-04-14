@@ -1,15 +1,11 @@
 # secretenv User Guide
 
-> A self-contained guide for teams getting started with secretenv.
-
----
-
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Design Philosophy](#2-design-philosophy)
-3. [Core Concepts](#3-core-concepts)
-4. [Security Model](#4-security-model)
+2. [What to Know Before You Start](#2-what-to-know-before-you-start)
+3. [Common Terms](#3-common-terms)
+4. [Security Basics for Users](#4-security-basics-for-users)
 5. [Installation](#5-installation)
 6. [Quick Start (Team Leader)](#6-quick-start-team-leader)
 7. [Joining as a New Member](#7-joining-as-a-new-member)
@@ -18,10 +14,9 @@
 10. [Member Management](#10-member-management)
 11. [Key Management and Rotation](#11-key-management-and-rotation)
 12. [CI/CD Integration](#12-cicd-integration)
-13. [Operational Guidelines](#13-operational-guidelines)
-14. [FAQ](#14-faq)
-15. [Command Reference](#15-command-reference)
-16. [Configuration Reference](#16-configuration-reference)
+13. [FAQ](#13-faq)
+14. [Command Reference](#14-command-reference)
+15. [Configuration Reference](#15-configuration-reference)
 
 ---
 
@@ -46,182 +41,130 @@ secretenv is a CLI tool that solves these problems by **managing encrypted secre
 
 ### What it does not solve
 
-secretenv intentionally omits certain features. These are listed explicitly to prevent overreliance.
-
-- **Insider misuse**: It cannot prevent a legitimate member from misusing decrypted content
-- **Revoking past disclosures**: Removing a member does not invalidate values they previously obtained (see [Chapter 10](#10-member-management))
-- **Large-scale ACL management**: There is no central policy engine defining who should have access to which secret
-- **Key leakage protection**: If local key files are compromised, defense relies on OS-level security
+secretenv is not a complete solution to every security problem. It does not automatically solve what happens after decryption, how to revoke values that were already seen, or how to protect compromised machines and keys. See [Chapter 4](#4-security-basics-for-users) for these assumptions and limits.
 
 ---
 
-## 2. Design Philosophy
+## 2. What to Know Before You Start
 
-### Offline-First
+### Start with the big picture
 
-All core operations in secretenv — encryption, decryption, signature verification, rewrap — work without a network connection. Online verification via the GitHub API is an optional feature, not a requirement.
+It helps to think about secretenv in this order:
 
-This design ensures consistent operation during network outages or in air-gapped environments.
+1. The team shares encrypted secrets and member information in a workspace inside the Git repository
+2. Each user has their own public key and private key
+3. New members and rotated keys are reviewed, then approved as secret recipients
 
-### Git Integration Model
+The next sections explain the tool in that order.
 
-secretenv manages the `.secretenv/` directory via Git. This has important implications.
+### Share the workspace through Git
 
-**PR review becomes a security gate**: When a new member joins, their public key file is submitted as a PR. Existing members review and merge it just like a code review — no separate approval system is needed.
-
-**Change history is automatic**: `git log` tracks who added or removed members and when secrets were updated.
-
-**Do not add `.secretenv/` to `.gitignore`**. This directory is intentionally managed by Git.
-
-### Policy-Less Design
-
-secretenv has no policy file defining "who can access which secret." Instead, **the encrypted file itself remembers who the recipients are**.
-
-Each encrypted file contains a content key (wrap) encrypted for each recipient. Only the member holding the corresponding private key can decrypt their wrap, extract the content key, and read the secret.
-
-### Diff-Friendly kv-enc
-
-The `kv-enc` format for managing `.env`-style secrets **encrypts each entry individually**.
-
-When only one key's value is updated, only that entry changes — others remain untouched. This minimizes Git diffs and makes review easier. Adding a new entry also does not require decrypting existing entries.
-
-### Disclosure Tracking
-
-When a member is removed and `rewrap` is run, the disclosure history (`removed_recipients`) is recorded in the encrypted file.
-
-This tracks the fact that "a removed member previously had access to this secret." Use `secretenv inspect` to review this history and decide whether to update secret values.
-
----
-
-## 3. Core Concepts
-
-This chapter defines terms that appear frequently throughout the guide. Reading this before the command chapters will make everything easier to understand.
-
-### Workspace
-
-The `.secretenv/` directory inside a Git repository is the Workspace. It stores encrypted files and member information shared by the team.
+The workspace is the `.secretenv/` directory in your Git repository. This is where the team shares secrets and member information.
 
 ```
 .secretenv/
 ├── members/
-│   ├── active/       ← public keys of approved members
-│   └── incoming/     ← public keys of pending members
-├── secrets/          ← encrypted secrets
-└── config.toml       ← local configuration (optional)
+│   ├── active/
+│   └── incoming/
+├── secrets/
+└── config.toml
 ```
 
-secretenv automatically searches for `.secretenv/` from the current directory upward, stopping at the Git repository root. This means workspace auto-detection **only works when the current directory is inside a Git repository**. To use secretenv outside a Git repository, specify the workspace explicitly with the `-w` / `--workspace` option or the `SECRETENV_WORKSPACE` environment variable.
+- `members/active/`: public keys for current members
+- `members/incoming/`: public keys waiting for approval or rotation
+- `secrets/`: encrypted secrets
 
-The command examples in this guide assume that **the current directory is inside the target Git repository** unless otherwise noted.
+`.secretenv/` is part of normal operation, so do not add it to `.gitignore`.
 
-### Member ID
+### Understand the role of the keys first
 
-`member_id` is an ASCII identifier. It must start with an alphanumeric character (`A-Za-z0-9`), may contain only `A-Za-z0-9._@+-`, and its length is 1 to 254 characters (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`). It resembles an email address, but `@` is not required. No actual email is sent or received; it simply serves as a unique identifier within the team.
+Each user has their own key pair.
 
-### kid (Key Statement ID)
+- A **public key** can be shared with the team
+- A **private key** must stay with that user
 
-`kid` identifies a self-signed key statement. The canonical stored form is a 32-character Crockford Base32 string without hyphens, for example `7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD`.
+The basic idea of public-key encryption is simple: **encrypt with a public key, decrypt with the matching private key**. In secretenv, secrets are encrypted for recipients' public keys, so only users with the matching private keys can decrypt them. In other words, it does not depend on securely distributing one team-wide shared secret key.
 
-CLI output, logs, and review screens usually show a dashed display form such as `7M2Q-9D4R-1H8V-W6PK-T3XN-C5JY-2F9A-R8GD`. Input is case-insensitive and hyphen-agnostic, so both forms refer to the same key statement.
+With shared-key encryption, everyone who needs access must somehow receive the same secret key securely, so **how to distribute that shared secret** becomes an operational problem in itself. With public-key encryption, you only distribute public keys, so you do not need to distribute the secret material that must remain private.
 
-A single member can have multiple kids. Encrypted files record which kid was used, local keystore paths and JSON documents use the canonical no-dash form, and human-facing output uses the dashed display form.
+The important rule is that **a private key must never be shared with anyone else**. Giving someone your private key is effectively giving them the ability to read secrets as you. Do not commit it to Git, paste it into chat, or share it carelessly through backups or exports.
 
-### kv-enc (KV Encrypted Format)
+By contrast, **a public key is something you should actively share even though it is called a "key."** A public key alone normally cannot decrypt the secret. That is why it is safe to commit public-key files under `members/active/` or `members/incoming/`.
 
-An encrypted version of `KEY=VALUE` pairs equivalent to a `.env` file. File extension: `.kvenc`.
+The difficult part is **knowing whose public key it really is**. A public key can be safe to share and still be falsely presented as "Alice's key" by an attacker. In practice, the hard problem is not distributing public keys, but deciding **which person a given public key should be trusted to represent**.
 
-Because each entry is encrypted independently, updating one key does not affect others, and Git diffs are minimal. kv-enc is recommended for day-to-day secrets management.
+### How a member becomes usable
 
-### file-enc (File Encrypted Format)
+New members and rotated keys first go into `members/incoming/`. They become usable recipients only after an existing member reviews the PR and runs `secretenv rewrap`.
 
-A format that encrypts an entire file (text or binary). File extension: `.encrypted`. Suitable for sharing certificates and binary files.
+In practice, **PR review is part of member approval**. During review, you are not only checking that "a public key was added" but also deciding whether that key should be trusted as belonging to that person. Do not merge unfamiliar public keys casually.
 
-### active / incoming
+### Two formats you will use most
 
-Represents a member's approval state.
+- **kv-enc**: For `.env`-style key-value secrets. This is the recommended default for day-to-day use.
+- **file-enc**: For encrypting an entire file such as a certificate or binary.
 
-- **incoming**: A member who has just submitted a join request via `secretenv join`. Not yet included as a recipient in encrypted files.
-- **active**: A member approved by an existing member via `rewrap`. Included as a recipient in encrypted files.
-
-### rewrap
-
-The operation that updates recipient information in all encrypted files after members are added or removed.
-
-- Promotes incoming members to active
-- Synchronizes the active member list with recipients in all encrypted files
-- For kv-enc, regenerates the content key (MK) and re-encrypts all entries when a member is removed
-
-### Local Trust Store and TOFU Approval Cache
-
-The local trust store (`~/.config/secretenv/trust/`) is a TOFU approval cache that stores previously approved `kid`s as `known_keys`.
-
-- `kid`s approved during `member verify --approve` or interactive `rewrap` review are recorded there
-- Later read-path and write-path operations use `known_keys` to avoid asking again for the same `kid`
-- If the trust store is corrupted, forged, or the corresponding local keystore public key is missing, SecretEnv warns and asks whether to delete it and continue with an empty cache
-
-See [Chapter 10](#10-member-management) for the operational workflow.
+For operations, see [Chapter 8](#8-daily-usage-kv-store) and [Chapter 9](#9-file-encryption-and-decryption).
 
 ---
 
-## 4. Security Model
+## 3. Common Terms
 
-### Trust Model (4 Layers)
+### Workspace
 
-secretenv decides whether to accept a signed artifact through four layers. Trust is established through a combination of layers, not a single mechanism.
+The workspace is the `.secretenv/` directory in a Git repository. When you run secretenv inside a Git repository, it usually finds the workspace automatically. Outside a Git repository, specify it explicitly with `-w` / `--workspace`.
 
-| Layer | Mechanism | What it checks | Limitation |
-|-------|-----------|---------------|------------|
-| Layer 1: Cryptographic verification | Self-signature + SSH attestation | Key authenticity, consistency, and binding | Does not prove identity |
-| Layer 2: Authorization | `members/active` directory | Whether the signer/recipient is a current member | Depends on repository governance (PR review) |
-| Layer 3: Approval cache | `known_keys` in local trust store | Whether this `kid` was previously approved | Does not imply current membership |
-| Layer 4: Manual approval + online verify | `member verify` / interactive `rewrap`, GitHub API | Supplementary evidence for identity decisions | Invalid if GitHub account is compromised |
+### `active` / `incoming`
 
-- **Layer 1** verifies the embedded `signer_pub` in each signed artifact: self-signature (key consistency), SSH attestation (key binding), `kid` match, and expiration. This happens automatically without consulting the workspace.
-- **Layer 2** checks that the signer's `(member_id, kid)` exists in `members/active`. This is the authorization source for current membership, but depends on PR review, not cryptography.
-- **Layer 3** checks the local trust store (`~/.config/secretenv/trust/`) for previously approved `kid`s. The trust-store file itself is verified with the owner's local keystore public key selected by `signature.kid`. If verification fails, SecretEnv warns, asks whether to delete the corrupted cache, and can continue with an empty cache only after explicit confirmation. Use `secretenv member verify --approve` to populate it. Use `secretenv trust list` / `trust remove` / `trust purge` to manage it.
-- **Layer 4** provides human review: during `rewrap` promotion or `member verify`, the operator sees the GitHub account, SSH fingerprint, and `kid` to make a TOFU approval decision.
+- **incoming**: A public key that is not approved yet
+- **active**: An approved public key that can be a recipient of secrets
 
-For the full security analysis, see the [Security Design](security_design_en.md) document (§2.5).
+### `rewrap`
 
-### Threat Model
+The operation that updates recipient information after a member change or key rotation. It is also what turns an `incoming` key into an active one.
 
-| Attacker | Capability | Defense |
-|----------|-----------|---------|
-| Repository tamperer | Can modify files in `.secretenv/` | Tampering detected by signature verification |
-| Malicious insider | Retains decrypted content as a legitimate member | Tracked via disclosure history (recovery impossible) |
-| Public key substitution attack | Forges a member's public key file | Defended by self-signature, attestation, and online verification |
-| Key rotation attack | Attempts to reuse wraps bound to older key statements | kid is included in HPKE info, so statement mismatch is detected |
-| First-contact MITM | Replaces bootstrap-time kid or attestation fingerprint with attacker-controlled values | TOFU-based manual review and out-of-band verification |
-| Local trust store tamperer | Can write to or roll back `~/.config/secretenv/trust/` | Trust-store signature for corruption detection, OS/filesystem access control |
+### `member_id`
 
-**Assumptions**: This defense model assumes that write access to the repository is properly managed. On GitHub, changes to `members/active/` are verified through PR review. `members/active` is the authorization source for the current member set, but it is not a cryptographic trust anchor. The local trust store (`~/.config/secretenv/trust/`) is assumed to be protected by OS-level access control. Bootstrap-time and first-seen `kid` trust decisions rely on TOFU.
+A string that identifies a member. It often looks like an email address, but it does not have to be a real email address. It only needs to be unique within the team.
 
-### Trust Boundary
+### `kid`
 
-```
-[Trusted (secure)]
-  Local machine
-  ~/.config/secretenv/keys/   ← local keystore
-  ~/.config/secretenv/trust/  ← local trust store (TOFU approval cache)
-  SSH Ed25519 private key
+An ID that identifies a key. A single member can have multiple keys, so `kid` tells you which one is being used. You will mostly see it in `key list` and `rewrap` output.
 
-[Workspace (potentially tampered)]
-  .secretenv/members/active/    ← authorization source for current member set
-  .secretenv/members/incoming/  ← pending join requests
-  .secretenv/secrets/           ← defended by signature verification
+### Local trust store
 
-[External systems (optional)]
-  GitHub API                    ← used only for online verification
-```
+The local record of approved keys under `~/.config/secretenv/trust/`. Commands such as `member verify --approve` store approvals there so you are not asked the same question repeatedly.
 
-### Role of the SSH Key
+---
 
-In secretenv, the SSH key is not the key that directly decrypts workspace secrets. It has two roles:
+## 4. Security Basics for Users
 
-1. Protect the secretenv private key stored locally under `~/.config/secretenv/keys/`
-2. Through attestation, show which SSH key backs that secretenv key
+### What secretenv protects
 
-The key that actually decrypts and signs file-enc / kv-enc data is the secretenv private key after it has been unlocked locally. Think of the SSH key as the outer key that makes the local secretenv private key usable.
+Secrets stored in Git are encrypted, and signatures are verified. Even if the repository is shared, the content cannot be read without the right private key.
+
+### What secretenv does not automatically protect
+
+- What legitimate members do after they decrypt a secret
+- Copies or memories of values that were already seen
+- Leakage of the local machine or private keys themselves
+
+Removing a member does not erase secrets they already saw. If needed, rotate the secret values themselves.
+
+### Role of the SSH key
+
+The SSH Ed25519 key is not the key that directly decrypts workspace secrets. It is used to protect the local secretenv private key and to show which SSH key is backing that secretenv key.
+
+In workflows that use GitHub-backed online verify, the tool also checks whether `attestation.pub` is still present in that GitHub account's **current** SSH public-key list. Removing an SSH public key from GitHub therefore stops future online verification that depends on that key. This does not erase existing attestation, but it is a practical way to stop future approvals or trust updates that rely on that key.
+
+### Practical rules when in doubt
+
+- Do not merge unfamiliar public keys in PRs
+- Do not share private keys or SSH keys with others
+- If leakage or loss is suspected, rotate with `key new` → `join` → `rewrap`
+- If you use GitHub-backed verification, remove old SSH public keys from GitHub after the migration is complete
+
+If you need the deeper design background, see [Security Design](security_design_en.md).
 
 ---
 
@@ -270,29 +213,6 @@ ssh-add ~/.ssh/id_ed25519
 ssh-keygen -t ed25519 -C "your@email.com"
 ```
 
-### Configuration (Optional)
-
-You can save frequently used options to a configuration file.
-
-```bash
-# Set default member_id (allows omitting --member-id going forward)
-secretenv config set member_id alice@example.com
-
-# Set GitHub account (for online verification)
-secretenv config set github_user alice-gh
-
-# Set SSH signing method (default "auto" works for most cases)
-# auto: tries ssh-agent first, then ssh-keygen
-# ssh-agent: use SSH agent
-# ssh-keygen: use ssh-keygen command
-secretenv config set ssh_signing_method auto
-
-# Set SSH key (select a specific key when multiple keys are loaded in ssh-agent)
-secretenv config set ssh_identity ~/.ssh/id_ed25519_work
-```
-
-The configuration file is located at `~/.config/secretenv/config.toml`.
-
 ---
 
 ## 6. Quick Start (Team Leader)
@@ -336,8 +256,10 @@ Added 'alice@example.com' to members/active/
 `init` automatically:
 
 - Creates the `.secretenv/` directory structure
-- Generates an HPKE key pair locally (`~/.config/secretenv/keys/alice@example.com/<canonical-kid>/`)
+- Generates your local key pair in the keystore
 - Registers your public key at `members/active/alice@example.com.json`
+
+If the workspace already exists with active members, `init` exits without changes. Use `join` to submit a key to an existing workspace.
 
 ### Step 3: Add your first secrets
 
@@ -394,10 +316,10 @@ Generated and activated key for 'bob@example.com':
 Added 'bob@example.com' to members/incoming/
 
 Ready! Create a PR to share your public key with the team.
-An existing member needs to run 'secretenv rewrap' to approve your membership.
+An active member needs to run 'secretenv rewrap' so you can start reading secrets.
 ```
 
-Unlike `init`, `join` does not create a Workspace — it only places your public key in `members/incoming/`.
+Unlike `init`, `join` does not create a Workspace — it only places your public key in `members/incoming/`. Existing active members can also use `join` after `key new` to stage a rotated key generation in `members/incoming/`.
 
 ### Step 3: Create a PR
 
@@ -549,6 +471,8 @@ A signature is attached automatically during encryption.
 secretenv decrypt ca.pem.encrypted --out certs/ca.pem
 ```
 
+Do not manage decrypted plaintext files in Git. `.secretenv/` belongs in Git, but decrypted `.env` files, certificates, and other plaintext outputs should be covered by `.gitignore`.
+
 ### Inspecting Metadata
 
 You can examine an encrypted file's metadata without decrypting it.
@@ -565,6 +489,8 @@ Information displayed:
 - Encryption algorithm
 - Created and updated timestamps
 - Disclosure history (records of access by removed members)
+
+`inspect` is also useful for periodic audits. Check that there are no unnecessary recipients, no disclosure-history entries you need to review, the signer is what you expect, and no nearly expired keys are still in use.
 
 ### When to Use Which Format
 
@@ -590,12 +516,10 @@ When a new member submits a PR via `secretenv join`, follow this flow to approve
 # 1. After merging the new member's PR, pull the latest
 git pull
 
-# 2. Run rewrap
-#    - Automatically runs online verification (GitHub API lookup)
-#    - TOFU review (visually verify the displayed key information)
+# 2. Run rewrap and review the displayed key information
 secretenv rewrap
 
-# TOFU review example:
+# Example:
 # Member bob@example.com
 #   GitHub account id: 12345678 (bob-gh)
 #   SSH key fingerprint: SHA256:xxxxx...
@@ -609,13 +533,17 @@ git push
 
 After `rewrap` completes:
 - `members/incoming/bob@example.com.json` moves to `members/active/`
-- Bob's wrap (encrypted content key) is added to all encrypted files
+- Bob is added as a recipient in all encrypted files
 
 **Recommended**: After rewrap, register the new member's key in your local trust store to avoid approval prompts on future operations:
 
 ```bash
 secretenv member verify --approve
 ```
+
+When incoming members exist, `rewrap` asks for interactive approval. Review the displayed key information and approve it only after deciding that the public key really belongs to that person. If there are no incoming members, `rewrap` usually runs non-interactively because it only needs to synchronize recipient data.
+
+Also note that `rewrap` is not supported when CI/CD uses environment variable-based key loading. Run `rewrap` on a developer machine.
 
 ### Listing Members
 
@@ -643,12 +571,18 @@ secretenv member verify --approve
 secretenv member verify --approve alice@example.com bob@example.com
 ```
 
-`member verify --approve` targets only `members/active`. It performs offline verification and, when needed, online verification, then shows the `kid`, GitHub account `id`, the `login` when available, and the SSH fingerprint for review. Only approved non-self `kid`s are written to `known_keys` in the local trust store. Your own keys that already exist in the local keystore are treated as self-trusted for the approval-cache check and are not normally added to `known_keys`, but this does not bypass the current `members/active` check.
+`member verify --approve` is the command you use to review the keys of current active members and save the result on your machine. The command shows identifying information for each key so you can decide whether "this public key really belongs to this person" before approving it. Approved keys are stored in your local trust store, so later operations no longer need to ask for the same confirmation again.
 
 ### Managing the Local Trust Store
 
+The local trust store is **where your machine remembers which public keys you have already reviewed and approved**. When an approved key is stored there, later decrypt or verification operations do not need to ask you the same question every time.
+
+`trust list` shows the approved keys currently saved on your machine. `trust remove` and `trust purge` delete those local records. The local trust store basically grows over time as approvals accumulate, so these commands are useful when you want to clean up entries that are no longer relevant, remove keys that are no longer used, or force yourself to review a key again.
+
+In normal use, approvals are usually recorded automatically through `member verify --approve` or interactive approval flows, so you do not need to manage the trust store manually every day. Use these commands when you want to undo an approval, clean up old approvals, or force yourself to review a key again from scratch.
+
 ```bash
-# List approved known_keys
+# List approved keys
 secretenv trust list
 
 # Remove one kid from the local trust store
@@ -658,46 +592,61 @@ secretenv trust remove <kid>
 secretenv trust purge --older-than 180d --force
 ```
 
-`trust remove` and `trust purge` change only the local approval cache. They do not modify workspace membership or recipients in encrypted files.
+`trust remove` and `trust purge` change **only the records on your own machine**. They do not modify workspace membership or recipients in encrypted files. In other words, these commands do not change who is in the team; they change how much you will be asked to re-confirm on later operations.
 
 ### Removing Members
+
+Use this when you no longer want a member to read future versions of your secrets: for example when someone leaves the team, changes role, loses a device, or should otherwise lose access. Think of it as a two-step process. First, `member remove` takes the member out of the workspace member list. Then `rewrap` updates the encrypted files themselves. After that, the removed member can no longer decrypt the **updated** secrets.
 
 **Important**: Removing a member and running rewrap **does not invalidate secret values that member previously obtained**. It is cryptographically impossible to "revoke past disclosures."
 
 ```bash
-# 1. Remove the member from the workspace
+# 1. Remove the member from the workspace member list
 secretenv member remove alice@example.com
 
-# 2. Run rewrap (removes alice from all encrypted files)
-#    For kv-enc: content key (MK) is regenerated and all entries are re-encrypted
-#    For file-enc: alice's wrap is removed
+# 2. Update recipient information in encrypted files
 secretenv rewrap
 
-# 3. Commit
+# 3. Commit the change
 git add .secretenv/
 git commit -m "Remove alice from secretenv"
 ```
 
+At this point, what has changed is **future access**. The secret values themselves have not changed yet, so you still need the follow-up work below.
+
 ### Required Steps After Removal
 
-1. **Update secret values**: Change any values the removed member knew to new values.
+Removing the member and running `rewrap` is not enough by itself. Any values the removed member may already know should be changed if they still matter.
 
 ```bash
 secretenv set API_KEY "new-api-key"
 secretenv set DATABASE_PASSWORD "new-password"
 ```
 
-2. **Review disclosure history**: Use `secretenv inspect` to check disclosure records for the removed member.
+Then use `secretenv inspect` to see which files still show disclosure history for that member. This helps you decide which secrets need rotation.
 
-3. **Clear disclosure history**: After updating secret values, you can clear the disclosure history.
+After you finish updating the values, you can clear the disclosure history if needed.
 
 ```bash
 secretenv rewrap --clear-disclosure-history
 ```
 
+In practice, member removal is not complete until you have handled the **secret values that person may already know**, not just the membership records. At the same time, review access in the real services outside secretenv as well, such as GitHub, AWS, databases, and SaaS tools.
+
 ---
 
 ## 11. Key Management and Rotation
+
+This chapter is about keeping your own keys usable and safe over time. You will mostly come here when a key is nearing expiration, when compromise is suspected, or when you want to clean up old keys.
+
+### Key Management Principles
+
+At minimum, follow these rules:
+
+- **Public keys may be shared, private keys must not**: only public keys belong in PRs. Private keys stay in your local `~/.config/secretenv/keys/` and must not be committed to Git or sent through chat
+- **You are also responsible for the SSH key that protects the private key**: the secretenv private key is protected by your SSH Ed25519 key, so careless copying or use on unsafe machines is a real risk
+- **Device security is part of key management**: screen lock, disk encryption, account protection, and backup hygiene all matter because they protect the keys indirectly
+- **Rotate immediately if compromise or loss is suspected**: if your private key, SSH key, or machine may be unsafe, run `key new` → `join` → `rewrap` and rotate secret values when needed
 
 ### Key States
 
@@ -707,22 +656,28 @@ secretenv rewrap --clear-disclosure-history
 | available | Can decrypt but is not used for encryption or signing. |
 | expired | Past expiration date. Can still decrypt (with a warning). |
 
+In everyday use, only the `active` key is used for new encryption and signing. `available` or `expired` keys may still remain because older secrets may still need them for decryption.
+
 ### Listing Keys
 
 ```bash
 secretenv key list
 ```
 
-The CLI displays kids in dashed display form. Local keystore paths and JSON documents use the canonical no-dash form. Commands such as `key activate`, `key remove`, and `key export` accept either form, and `key list` is ordered by `created_at` descending with canonical `kid` as the tiebreaker.
+Use `key list` when you want to check which key is currently active, whether old keys are still present, or whether an expiration date is approaching. It is a good first step before rotation or cleanup.
+
+The CLI may show kids with hyphens, but commands such as `key activate`, `key remove`, and `key export` accept both hyphenated and non-hyphenated input.
 
 ### Regular Rotation
 
+Rotation is not only for scheduled expiry. You should also rotate when compromise of the private key or the protecting SSH key is suspected. The high-level flow is: create a new key, share the new public key with the team, then update secret recipients to use it.
+
 Keys expire one year after generation by default. Warnings appear starting 30 days before expiration.
 
-**Summary**: (1) `key new` → (2) `init --force` → (3) PR and merge → (4) `rewrap` → (5) commit → (6) remove old key after transition period.
+**Summary**: (1) `key new` → (2) `join` → (3) PR and merge → (4) `rewrap` → (5) commit → (6) remove old key after transition period.
 
 ```bash
-# 1. Generate a new key (automatically becomes active)
+# 1. Generate a new local key (it becomes active automatically)
 secretenv key new
 
 # Specify an expiration date
@@ -730,38 +685,59 @@ secretenv key new --expires-at 2028-01-01T00:00:00Z
 secretenv key new --valid-for 2y    # 2 years
 secretenv key new --valid-for 180d  # 180 days
 
-# 2. Update your public key in the workspace
-secretenv init --force
+# 2. Submit the new public key to the workspace
+secretenv join
 
-# 3. Create and merge a PR
-git add .secretenv/members/active/alice@example.com.json
+# 3. Create a PR and get it reviewed/merged
+git add .secretenv/members/incoming/alice@example.com.json
 git commit -m "Rotate alice's key"
 git push
 
-# 4. After merge: update wraps in all secrets with the new key
+# 4. After merge, switch secret recipient data to the new key
 secretenv rewrap
 
-# 5. Commit
+# 5. Commit that change
 git add .secretenv/secrets/
 git commit -m "Rewrap secrets for alice's new key"
 git push
 
-# 6. Keep the old key for now (may be needed to decrypt past secrets)
-#    Remove after a sufficient transition period
+# 6. Keep the old key for a while, then remove it later
 secretenv key remove <old_kid>
 ```
 
+The important point is that `key new` alone changes only your local machine. The workspace does not start using the new key until you share it with `join` and update recipients with `rewrap`.
+
+If your team relies on GitHub online verify, it is useful to **remove the old SSH public key from GitHub after the migration is complete**. Online verify checks whether the key is registered on GitHub now, so deleting the old SSH key makes old attestations backed by that SSH key less likely to pass future approval or trust-update flows. This does not invalidate the old attestation by itself, so review `members/active` and remove stale `known_keys` entries separately when needed.
+
+### When Private-Key Compromise Is Suspected
+
+If you suspect compromise of your private key, SSH key, or machine, switch to a new key with the same basic flow as regular rotation: `key new` → `join` → `rewrap`. The important difference is that **you should not keep the old key around the way you might during a normal scheduled rotation**.
+
+Create and share the new key first, then run `rewrap` after the PR is merged so recipients move to the new key. To limit further damage after suspected compromise, run `rewrap --rotate-key` if needed so the encrypted files are rebuilt with fresh content keys. Also rotate the actual secret values, such as API keys and passwords, if they may have been exposed through the compromised key.
+
+Finally, remove the compromised old key from your local machine:
+
+```bash
+secretenv key remove <compromised_old_kid>
+```
+
+This avoids leaving the leaked key on your machine as one of your retained old keys. During a normal scheduled rotation you may keep an old key for a while, but suspected compromise should be handled differently.
+
+If the suspected compromise involves the SSH attestor key, removing it locally is not enough. In GitHub-backed workflows, **remove that SSH public key from GitHub as well**. That causes future online verification for keys backed by that SSH key to fail, which makes it easier to keep that key out of future approval flows.
+
 ### Content Key Rotation
 
-Separately from member key rotation, you can rotate the content keys (MK/DEK) of encrypted files themselves.
+Separately from member key rotation, you can also rotate the content keys (MK/DEK) of the encrypted files themselves. Use this when a member was removed or when you suspect leakage and want the files themselves rebuilt with fresh key material.
 
 ```bash
 secretenv rewrap --rotate-key
 ```
 
-This regenerates the MK/DEK for all files, invalidating any content keys previously obtained by removed members.
+This regenerates the MK/DEK for all files, so old content keys no longer work against the new file versions. It does not erase plaintext that someone already decrypted and copied elsewhere.
 
 ### Activating a Specific Key
+
+Use this when you have multiple local keys and want to switch which one will be used for future encryption and signing. This changes **only your local machine**; it does not update recipients in the workspace by itself.
 
 ```bash
 secretenv key activate <kid>
@@ -769,7 +745,7 @@ secretenv key activate <kid>
 
 ### Recommended Old Key Retention Period
 
-Before deleting an old key, confirm:
+Do not delete an old key too early. You may still need it to read older secrets or to bridge a transition period where not everyone has pulled the rewrapped data yet. Before deleting it, confirm:
 
 - All team members have obtained encrypted files rewrapped with the new key
 - No operations remain that require decrypting secrets encrypted with the old key
@@ -784,11 +760,13 @@ secretenv supports CI/CD environments through portable private key export and en
 
 ### Overview
 
+Read this chapter only if your CI system needs to **read secrets**. The intended model is not to manage keys or run `rewrap` from CI. Instead, create a dedicated CI key on a developer machine, give that key to CI securely, and use CI only for read-only commands such as `get`, `run`, or `decrypt`.
+
 In CI environments, secretenv reads the private key and password from environment variables instead of the local keystore. Environment variable-based key loading guarantees read-only commands: `run`, `decrypt`, `get`, and `list` are supported.
 
-CI runners are typically ephemeral and do not have a local trust store (`~/.config/secretenv/trust/`). This means the approval cache (Layer 3 of the trust model) is unavailable. To allow read operations to succeed, set `SECRETENV_STRICT_KEY_CHECKING=no` for the CI job. This skips only the `known_keys` cache check — the `members/active` authorization check (Layer 2) and cryptographic signature verification (Layer 1) remain enforced.
+CI runners are usually temporary environments and do not keep a local trust store (`~/.config/secretenv/trust/`). For trusted CI jobs that need to read secrets signed by other members, set `SECRETENV_STRICT_KEY_CHECKING=no`. This skips only the check that depends on your machine's saved approval history; current member checks and signature verification still remain in place.
 
-The workspace checkout remains input to signature verification. Environment variable-based key loading must therefore be limited to **trusted workflow / trusted ref / trusted runner** contexts.
+Even so, you should not treat the checked-out workspace as trusted by default. Limit environment variable-based key loading to jobs that run on trusted workflows, trusted refs, and trusted runners.
 
 ### Allowed CI Contexts
 
@@ -806,7 +784,7 @@ The workspace checkout remains input to signature verification. Environment vari
 
 ### Minimal CI Requirements
 
-Only three things are needed in a trusted CI context:
+Only three things are needed in a trusted CI context. In other words, you do not need to reproduce a developer machine's SSH or local-keystore setup inside CI:
 
 1. `SECRETENV_PRIVATE_KEY` environment variable — the exported private key (Base64url-encoded)
 2. `SECRETENV_KEY_PASSWORD` environment variable — the password used during export
@@ -814,7 +792,7 @@ Only three things are needed in a trusted CI context:
 
 No `SECRETENV_HOME`, local keystore, SSH key, or config file is required.
 
-If a trusted CI job has no local trust store and must run a read-path command against artifacts signed by other active members, explicitly set `SECRETENV_STRICT_KEY_CHECKING=no` only for that job. This skips only the `known_keys` check. It does not skip the `members/active` check, does not skip cryptographic signature verification, and does not auto-update `known_keys`.
+If a trusted CI job has no local trust store and must run read commands against artifacts signed by other active members, set `SECRETENV_STRICT_KEY_CHECKING=no` only for that job. This skips only the local approval-history check. It does not skip current member checks, does not skip signature verification, and does not auto-update the trust store.
 
 ### Setup Workflow
 
@@ -825,17 +803,17 @@ Create a dedicated member for CI (do not reuse a human member's key).
 ```bash
 # On a developer machine with SSH key access
 secretenv key new --member-id ci@example.com
-secretenv init --member-id ci@example.com --force
+secretenv join --member-id ci@example.com
 ```
 
 #### Step 2: Add the CI Member to Recipients
 
 ```bash
-git add .secretenv/members/active/ci@example.com.json
+git add .secretenv/members/incoming/ci@example.com.json
 git commit -m "Add CI member"
 git push
 
-# After merge: add CI member to all encrypted files
+# After merge: promote the incoming key and add the CI member to all encrypted files
 secretenv rewrap
 git add .secretenv/secrets/
 git commit -m "Rewrap secrets for CI member"
@@ -912,10 +890,10 @@ secretenv decrypt ca.pem.encrypted --out ca.pem
 
 ### Supported Operations
 
-Environment variable-based key loading guarantees only the secret-operation commands currently implemented for env dispatch:
+At the moment, environment variable-based key loading supports only these read operations:
 
-- **Decryption** (`run`, `decrypt`, `get`): uses the KEM private key from the environment variable
-- **Listing** (`list`): shows kv-enc key names as metadata only
+- **Decryption** (`run`, `decrypt`, `get`)
+- **Listing** (`list`)
 
 All other commands remain unavailable when loading keys via environment variables:
 
@@ -928,65 +906,14 @@ All other commands remain unavailable when loading keys via environment variable
 
 - **Password exposure**: `SECRETENV_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
 - **Trusted CI only**: Use environment variable-based key loading only in trusted workflow / trusted ref / trusted runner contexts. Attacker-controlled checkouts must not be used as signature-verification input.
-- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: This is an explicit read-path exception for jobs that cannot use a local trust store. It has no effect on write commands and does not auto-update `known_keys`.
+- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: This is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not auto-update local approval history.
 - **Dedicated CI member**: Always use a dedicated CI member rather than a human member's key. This allows independent rotation and revocation.
 - **Key rotation**: Rotate the CI member key and re-export with `key export --private` on a developer machine with SSH signer and local keystore access, then update the CI platform's secret store.
 - **Least privilege**: Only add the CI member to the secrets it actually needs access to.
 
 ---
 
-## 13. Operational Guidelines
-
-### Checklist When a Member Leaves
-
-1. Remove the member with `secretenv member remove <member_id>`
-2. Update all encrypted files with `secretenv rewrap`
-3. Commit with `git add .secretenv/ && git commit -m "Remove <member>"`
-4. Review disclosure history with `secretenv inspect`
-5. Update any secret values (API keys, passwords, etc.) the departing member may have known
-6. After updating, clear disclosure history with `secretenv rewrap --clear-disclosure-history`
-7. Confirm access revocation in related services (GitHub, AWS, databases, etc.)
-
-### Obligation to Rotate Secret Values
-
-**Cryptographic removal is not information erasure.** `member remove` + `rewrap` prevents the member from decrypting new secrets going forward, but it cannot invalidate values they have already decrypted.
-
-For true security, always rotate any values that departing or removed members may have known.
-
-### Interactive Approval in `rewrap`
-
-When incoming members exist, `rewrap` requires interactive approval: the operator must visually verify each candidate's key information (GitHub account, SSH fingerprint) and confirm with `y`. If no incoming members exist (i.e., only recipient synchronization is needed), `rewrap` runs non-interactively.
-
-Note: Environment variable-based key loading for CI/CD does not support `rewrap`. See [Chapter 12: CI/CD Integration](#12-cicd-integration) for details.
-
-### Regular Auditing with `secretenv inspect`
-
-```bash
-# Check metadata for each encrypted file
-secretenv inspect .secretenv/secrets/default.kvenc
-
-# Things to verify:
-# - No unnecessary members in recipients
-# - No notable entries in removed_recipients (disclosure history)
-# - Signer is correct
-# - No nearly-expired keys are being used
-```
-
-### What Not to Add to `.gitignore`
-
-Do not add the entire `.secretenv/` directory to `.gitignore`. It is intentionally managed by Git.
-
-However, decrypted plaintext files should be added to `.gitignore`.
-
-```gitignore
-# Ignore decrypted temporary files
-*.pem
-.env
-```
-
----
-
-## 14. FAQ
+## 13. FAQ
 
 ### General
 
@@ -1004,7 +931,7 @@ No. Encryption, decryption, and key management all happen locally. There is no d
 
 ### Q: Do I need to manage a shared secret key for the team?
 
-No. secretenv uses public-key cryptography (HPKE), so there is no shared secret key for the entire team. Each member's public key is used for individual encryption, eliminating the burden of distributing, managing, and rotating a common password or shared key.
+No. secretenv uses public-key cryptography, so there is no shared secret key for the whole team. Secrets are encrypted separately for each member's public key, which removes the need to distribute, manage, or rotate a common password or shared key.
 
 ### Q: Is it safe to commit public key files to GitHub?
 
@@ -1014,7 +941,7 @@ Decrypting secrets requires the private key stored locally at `~/.config/secrete
 
 ### Q: Is it safe to make the repository public if secrets are encrypted?
 
-Encrypted files are protected by modern cryptography (HPKE, XChaCha20-Poly1305), making decryption without the private key extremely difficult. However, making a repository public carries operational risks beyond encryption strength (key leakage, future advances in cryptanalysis, etc.). For highly sensitive data, keeping the repository private is recommended.
+Encrypted files are protected by strong modern cryptography, so decryption without the private key is extremely difficult. That said, making a repository public still carries operational risks beyond the cryptography itself. For highly sensitive data, keeping the repository private is recommended.
 
 ### SSH Keys
 
@@ -1024,7 +951,7 @@ If you already have an Ed25519 key (e.g., for GitHub), you can reuse it. Otherwi
 
 ### Q: Why is the SSH agent needed?
 
-secretenv private keys (HPKE private keys) are protected by an SSH Ed25519 key instead of a passphrase. Every secretenv operation requires decryption using the SSH key, so using an SSH agent is convenient to avoid entering a passphrase each time.
+secretenv private keys are protected by an SSH Ed25519 key instead of a passphrase. Every secretenv operation requires decryption using that SSH key, so using an SSH agent is convenient if you want to avoid entering credentials repeatedly.
 
 In environments where an SSH agent is unavailable, you can switch to signing with the `ssh-keygen` command using the `--ssh-keygen` option.
 
@@ -1071,7 +998,15 @@ secretenv run -n staging -- ./my-app
 
 Each Git repository can have its own independent `.secretenv/`. Run `secretenv init` in each project to manage them as independent Workspaces.
 
-Even if the same member participates in multiple projects, their HPKE key is registered as an independent recipient in each Workspace.
+Even if the same member participates in multiple projects, their public key is registered independently in each workspace.
+
+### Q: Can I control sharing per encrypted file?
+
+Not in the usual single-workspace setup. In secretenv, encrypted files are shared with all members in that workspace's `members/active`.
+
+If you need different sharing groups, the practical approach is to **use multiple workspaces**. Because you can switch the target workspace with `-w` / `--workspace`, you can operate separate workspaces for groups such as "whole development team," "production operators only," or "members of one specific project." In that model, the workspace itself becomes the sharing group.
+
+This is a more exceptional operating pattern, so it is easier to think in terms of one workspace for one shared team by default. Consider splitting workspaces only when you clearly need different sharing scopes.
 
 ### Q: What happens if encrypted files conflict in Git?
 
@@ -1101,7 +1036,7 @@ Run `ssh-add -l` to check. If empty, add your key with `ssh-add ~/.ssh/id_ed2551
 
 ### Q: "Key expired" warnings or errors
 
-Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 11](#11-key-management-and-rotation): generate a new key with `secretenv key new`, update the workspace with `secretenv init --force`, then run `secretenv rewrap`.
+Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 11](#11-key-management-and-rotation): generate a new key with `secretenv key new`, stage it with `secretenv join`, then run `secretenv rewrap` after the PR is merged.
 
 ### Q: Unexpected approval prompts when decrypting
 
@@ -1113,7 +1048,7 @@ This means your SSH key produced different signatures for the same input on two 
 
 ---
 
-## 15. Command Reference
+## 14. Command Reference
 
 ### Common Options (Available for All Commands)
 
@@ -1132,8 +1067,8 @@ This means your SSH key produced different signatures for the same input on two 
 
 | Command | Description |
 |---------|-------------|
-| `secretenv init [--member-id <id>] [--force]` | Initialize a Workspace or re-register yourself (added directly to active) |
-| `secretenv join [--member-id <id>] [--force]` | Request to join an existing Workspace (added to incoming) |
+| `secretenv init [--member-id <id>]` | Bootstrap a new Workspace and register the first member in active |
+| `secretenv join [--member-id <id>] [--force]` | Request to join an existing Workspace or stage a rotated key (added to incoming) |
 
 ### KV Operations
 
@@ -1164,18 +1099,18 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv member list` | List all members |
 | `secretenv member show <member_id>` | Show details for a specific member |
 | `secretenv member verify [<member_id>...]` | Verify active member public keys (with online verification) |
-| `secretenv member verify --approve [<member_id>...]` | Verify active members and save approved `kid`s into the local trust store |
+| `secretenv member verify --approve [<member_id>...]` | Review active member keys and save the approval result in the local trust store |
 | `secretenv member add <file>` | Add a member's public key file to incoming |
 | `secretenv member remove <member_id>` | Remove a member from the Workspace |
-| `secretenv rewrap [--rotate-key] [--clear-disclosure-history]` | Promote incoming → active and sync recipients in all encrypted files |
+| `secretenv rewrap [--rotate-key] [--clear-disclosure-history]` | Activate pending members and update recipient information in all encrypted files |
 
 ### Local Trust Store
 
 | Command | Description |
 |---------|-------------|
-| `secretenv trust list` | List `known_keys` in the local trust store |
-| `secretenv trust remove <kid>` | Remove a specific `kid` from the local trust store |
-| `secretenv trust purge --older-than <duration> [-f, --force]` | Remove approvals older than the given duration from the local trust store |
+| `secretenv trust list` | List approved keys saved in the local trust store |
+| `secretenv trust remove <kid>` | Remove the approval record for a specific key from the local trust store |
+| `secretenv trust purge --older-than <duration> [-f, --force]` | Remove approval records older than the given duration from the local trust store |
 
 ### Key Management
 
@@ -1201,7 +1136,30 @@ Configuration keys: `member_id`, `ssh_signing_method` (`auto` / `ssh-agent` / `s
 
 ---
 
-## 16. Configuration Reference
+## 15. Configuration Reference
+
+### Common Optional Configuration
+
+You only need these settings if you want to avoid typing the same options repeatedly. They are not required during initial installation.
+
+```bash
+# Set default member_id (allows omitting --member-id going forward)
+secretenv config set member_id alice@example.com
+
+# Set GitHub account (for online verification)
+secretenv config set github_user alice-gh
+
+# Set SSH signing method (default "auto" works for most cases)
+# auto: tries ssh-agent first, then ssh-keygen
+# ssh-agent: use SSH agent
+# ssh-keygen: use ssh-keygen command
+secretenv config set ssh_signing_method auto
+
+# Set SSH key (select a specific key when multiple keys are loaded in ssh-agent)
+secretenv config set ssh_identity ~/.ssh/id_ed25519_work
+```
+
+The configuration file is located at `~/.config/secretenv/config.toml`.
 
 secretenv resolves configuration values from multiple sources in the following priority order:
 
@@ -1246,16 +1204,16 @@ If the config file does not exist, secretenv falls back to environment variables
 | `SECRETENV_SSH_SIGNING_METHOD` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
 | `SECRETENV_GITHUB_USER` | Default GitHub login name for `key new` | (none) |
 | `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected from git root) |
-| `SECRETENV_STRICT_KEY_CHECKING` | Trust store strict checking for read-path: `yes`, `no` | `yes` |
+| `SECRETENV_STRICT_KEY_CHECKING` | Whether to check local approval history during read operations: `yes`, `no` | `yes` |
 | `SECRETENV_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
 | `SECRETENV_KEY_PASSWORD` | Password for `SECRETENV_PRIVATE_KEY` (CI/CD) | (none) |
 
 **Notes:**
 
 - `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 12](#12-cicd-integration) for details.
-- `SECRETENV_STRICT_KEY_CHECKING=no` disables the `known_keys` check on the read path. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking.
+- `SECRETENV_STRICT_KEY_CHECKING=no` skips only the local approval-history check during read operations. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking.
 - `SECRETENV_WORKSPACE` overrides the automatic workspace detection from the git repository root. Useful when running commands outside the repository tree.
 
 ---
 
-*This guide covers everything needed for day-to-day secretenv usage. For detailed cryptographic specifications and internal design, refer to the project's internal documentation.*
+*This guide covers what most users need for day-to-day secretenv usage. If you need deeper design background, refer to the related design documents.*

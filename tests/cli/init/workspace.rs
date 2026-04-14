@@ -33,3 +33,31 @@ fn test_init_creates_workspace() {
         .exists());
     assert!(workspace_dir.path().join("secrets/.gitkeep").exists());
 }
+
+#[test]
+fn test_init_completes_incomplete_workspace_structure() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
+
+    std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
+
+    cmd()
+        .arg("init")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    assert!(workspace_dir
+        .path()
+        .join("members/incoming/.gitkeep")
+        .exists());
+    assert!(workspace_dir.path().join("secrets/.gitkeep").exists());
+    assert!(workspace_dir
+        .path()
+        .join(format!("members/active/{}.json", TEST_MEMBER_ID))
+        .exists());
+}

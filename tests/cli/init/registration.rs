@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::setup_init_env;
-use crate::cli::common::{cmd, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
 use std::fs;
 
 #[test]
@@ -37,44 +37,40 @@ fn test_init_registers_member() {
 }
 
 #[test]
-fn test_init_force_overwrite_member() {
+fn test_init_existing_workspace_does_not_register_new_member() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
+    let home_dir2 = tempfile::TempDir::new().unwrap();
 
     cmd()
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-id")
-        .arg(TEST_MEMBER_ID)
+        .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
-    let member_file = workspace_dir
+    cmd()
+        .arg("init")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-id")
+        .arg(BOB_MEMBER_ID)
+        .env("SECRETENV_HOME", home_dir2.path())
+        .assert()
+        .success();
+
+    assert!(!workspace_dir
         .path()
-        .join(format!("members/active/{}.json", TEST_MEMBER_ID));
-    fs::write(&member_file, "modified content").unwrap();
-
-    cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-id")
-        .arg(TEST_MEMBER_ID)
-        .arg("--force")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    let new_content = fs::read_to_string(&member_file).unwrap();
-    assert_ne!(new_content, "modified content");
-    let _: secretenv::model::public_key::PublicKey = serde_json::from_str(&new_content).unwrap();
+        .join(format!("members/active/{}.json", BOB_MEMBER_ID))
+        .exists());
+    assert!(!home_dir2.path().join("keys").join(BOB_MEMBER_ID).exists());
 }
 
 #[test]
-fn test_init_existing_key_ignores_github_user_input() {
+fn test_init_existing_workspace_succeeds_without_member_id() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
     cmd()
@@ -92,13 +88,23 @@ fn test_init_existing_key_ignores_github_user_input() {
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .arg("--member-id")
-        .arg(TEST_MEMBER_ID)
-        .arg("--force")
-        .arg("--github-user")
-        .arg("definitely-not-a-real-github-user-for-secretenv-tests")
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("CI", "true")
         .assert()
-        .success();
+        .success()
+        .stderr(predicates::str::contains("Workspace already initialized"));
+}
+
+#[test]
+fn test_init_rejects_force_option() {
+    let (workspace_dir, _home_dir, _ssh_temp, _ssh_priv) = setup_init_env();
+
+    cmd()
+        .arg("init")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--force")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("--force"));
 }

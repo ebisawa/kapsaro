@@ -7,6 +7,7 @@ pub(crate) mod command;
 pub(crate) mod key_plan;
 pub(crate) mod types;
 mod workspace;
+pub(crate) use workspace::{prepare_init_workspace, InitWorkspaceState};
 
 #[cfg(test)]
 #[path = "../../tests/unit/app_registration_test.rs"]

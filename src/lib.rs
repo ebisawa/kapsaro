@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! secretenv - Serverless CLI for secure secret sharing
+//! secretenv - Offline-first CLI for sharing encrypted .env files and other secrets through Git
 
 pub(crate) mod app;
 pub mod cli;

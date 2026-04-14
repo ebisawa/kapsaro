@@ -1,14 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use ed25519_dalek::SigningKey;
-use rand::rngs::OsRng;
 use secretenv::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
+use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
 use secretenv::feature::key::portable_export::export_private_key_portable;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::{
-    EncryptedData, IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm,
-    PrivateKeyPlaintext, PrivateKeyProtected,
+    EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
@@ -18,33 +16,14 @@ const ENV_PRIVATE_KEY: &str = "SECRETENV_PRIVATE_KEY";
 const ENV_KEY_PASSWORD: &str = "SECRETENV_KEY_PASSWORD";
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
-fn b64(data: &[u8]) -> String {
-    encode_base64url_nopad(data)
-}
-
 fn build_test_plaintext() -> PrivateKeyPlaintext {
-    let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-    let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
-
-    let sig_sk = SigningKey::generate(&mut OsRng);
-    let sig_pk = ed25519_dalek::VerifyingKey::from(&sig_sk);
-
-    PrivateKeyPlaintext {
-        keys: IdentityKeysPrivate {
-            kem: JwkOkpPrivateKey {
-                kty: "OKP".to_string(),
-                crv: "X25519".to_string(),
-                x: b64(kem_pk.as_bytes()),
-                d: b64(&kem_sk.to_bytes()),
-            },
-            sig: JwkOkpPrivateKey {
-                kty: "OKP".to_string(),
-                crv: "Ed25519".to_string(),
-                x: b64(&sig_pk.to_bytes()),
-                d: b64(&sig_sk.to_bytes()),
-            },
-        },
-    }
+    let keypairs = generate_keypairs().unwrap();
+    build_private_key_plaintext(
+        &keypairs.kem_sk,
+        &keypairs.kem_pk,
+        &keypairs.sig_sk,
+        &keypairs.sig_pk,
+    )
 }
 
 fn build_exported_key(plaintext: &PrivateKeyPlaintext, password: &str) -> String {

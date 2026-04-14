@@ -20,7 +20,8 @@ use crate::Error;
 use crate::Result;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use std::path::{Path, PathBuf};
-use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
+
+use crate::crypto::kem::{X25519PublicKey, X25519SecretKey};
 
 /// Options for key generation.
 pub struct KeyGenerationOptions {

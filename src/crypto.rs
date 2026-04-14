@@ -40,5 +40,6 @@ pub fn crypto_error_with_source(
 pub mod aead;
 pub mod kdf;
 pub mod kem;
+pub(crate) mod rng;
 pub mod sign;
 pub mod types;

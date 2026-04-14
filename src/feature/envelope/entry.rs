@@ -33,7 +33,7 @@ pub(crate) fn encrypt_entry(
     disclosed: bool,
 ) -> Result<KvEntryValue> {
     // Generate 32 bytes random salt and encode as base64url (no padding)
-    let salt = generate_salt();
+    let salt = generate_salt()?;
 
     let cek = derive_cek(master_key, &salt, sid, debug)?;
     let cek_key = XChaChaKey::from_slice(cek.as_bytes())?;

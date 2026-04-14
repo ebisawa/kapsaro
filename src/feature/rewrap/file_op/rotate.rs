@@ -3,6 +3,7 @@
 
 //! Rotate content key for file-enc content.
 
+use crate::crypto::rng::fill_secret_array;
 use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::feature::context::crypto::CryptoContext;
@@ -15,9 +16,6 @@ use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
-use rand::rngs::OsRng;
-use rand::RngCore;
-use zeroize::Zeroizing;
 
 /// Rotate content key for file-enc content.
 pub fn rotate_file_key(
@@ -33,8 +31,7 @@ pub fn rotate_file_key(
     let plaintext_bytes =
         decrypt_file_payload(verified, &old_content_key, debug, "rotate_file_key")?;
     let plaintext_obj = Plaintext::from(plaintext_bytes.as_slice());
-    let mut new_content_key_bytes = Zeroizing::new([0u8; 32]);
-    OsRng.fill_bytes(new_content_key_bytes.as_mut());
+    let new_content_key_bytes = fill_secret_array::<32>()?;
     let new_content_key = MasterKey::from_zeroizing(new_content_key_bytes);
     let new_xchacha_key = XChaChaKey::from_slice(new_content_key.as_bytes())?;
     protected.payload.encrypted = encrypt_file_payload_content(

@@ -3,6 +3,7 @@
 
 //! File payload encryption operations
 
+use crate::crypto::rng::fill_secret_array;
 use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::feature::envelope::payload::encrypt_file_payload_content;
@@ -17,8 +18,6 @@ use crate::model::identifiers::{alg, format};
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::time::current_timestamp;
 use crate::Result;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -56,8 +55,7 @@ fn validate_recipient_members(
 /// Returns plaintext wrapped in Zeroizing to ensure it's zeroed after encryption.
 fn build_encrypt_context(content: &[u8]) -> Result<(MasterKey, Zeroizing<Vec<u8>>, XChaChaKey)> {
     // Generate content key (32 bytes random)
-    let mut content_key_bytes = Zeroizing::new([0u8; 32]);
-    OsRng.fill_bytes(content_key_bytes.as_mut());
+    let content_key_bytes = fill_secret_array::<32>()?;
     let content_key = MasterKey::from_zeroizing(content_key_bytes);
     let xchacha_key = XChaChaKey::from_slice(content_key.as_bytes())?;
 

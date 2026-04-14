@@ -3,6 +3,7 @@
 
 //! KV encryption operations
 
+use crate::crypto::rng::fill_secret_array;
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::envelope::entry::encrypt_entry;
 use crate::feature::envelope::signature::SigningContext;
@@ -13,11 +14,8 @@ use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::secret::SecretString;
 use crate::Result;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::collections::HashMap;
 use uuid::Uuid;
-use zeroize::Zeroizing;
 
 use super::builder::KvDocumentBuilder;
 use super::entry_codec::encode_kv_entries_to_tokens;
@@ -48,8 +46,7 @@ pub(crate) fn build_kv_encryption(
     timestamp: &str,
 ) -> Result<(MasterKey, KvHeader, KvWrap)> {
     // Generate master key
-    let mut master_key_bytes = Zeroizing::new([0u8; 32]);
-    OsRng.fill_bytes(master_key_bytes.as_mut());
+    let master_key_bytes = fill_secret_array::<32>()?;
     let master_key = MasterKey::from_zeroizing(master_key_bytes);
 
     // Create HEAD token

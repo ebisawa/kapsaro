@@ -3,7 +3,7 @@
 
 use crate::keygen_helpers::{make_decrypted_private_key_plaintext, make_recipient_key};
 use ed25519_dalek::SigningKey;
-use secretenv::crypto::kem::{X25519PublicKey, X25519SecretKey};
+use secretenv::crypto::kem::{public_key_from_secret, X25519PublicKey, X25519SecretKey};
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
@@ -45,13 +45,10 @@ pub(super) fn generate_x25519_keypair(seed: [u8; 32]) -> (X25519SecretKey, X2551
     clamped[31] &= 127;
     clamped[31] |= 64;
 
-    let secret = x25519_dalek::StaticSecret::from(clamped);
-    let public = x25519_dalek::PublicKey::from(&secret);
+    let secret = X25519SecretKey::from_bytes(clamped);
+    let public = public_key_from_secret(&secret).unwrap();
 
-    (
-        X25519SecretKey::from_bytes(clamped),
-        X25519PublicKey::from_bytes(*public.as_bytes()),
-    )
+    (secret, public)
 }
 
 pub(super) fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {

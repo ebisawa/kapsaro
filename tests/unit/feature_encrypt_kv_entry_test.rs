@@ -4,8 +4,8 @@
 //! Unit tests for feature/encrypt/kv entry operations (set/unset) via KvDocumentBuilder
 
 use ed25519_dalek::SigningKey;
-use rand::rngs::OsRng;
 use secretenv::feature::envelope::signature::SigningContext;
+use secretenv::feature::key::material::generate_keypairs;
 use secretenv::feature::kv::builder::KvDocumentBuilder;
 use secretenv::feature::kv::encrypt::encrypt_kv_document;
 use secretenv::format::kv::document::parse_kv_document;
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 fn make_signing_ctx_for_test() -> (SigningKey, String) {
     (
-        SigningKey::generate(&mut OsRng),
+        SigningKey::from_bytes(&[7u8; 32]),
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
     )
 }
@@ -34,8 +34,8 @@ fn make_dummy_signer_pub(
 
     let vk = signing_key.verifying_key();
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
-    let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-    let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
+    let keypairs = generate_keypairs().unwrap();
+    let kem_pk = keypairs.kem_pk;
 
     PublicKey {
         protected: PublicKeyProtected {
@@ -79,8 +79,8 @@ fn make_verified_member_for_test(signing_key: &SigningKey, kid: &str) -> Verifie
     use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
-    let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-    let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
+    let keypairs = generate_keypairs().unwrap();
+    let kem_pk = keypairs.kem_pk;
     let vk = signing_key.verifying_key();
 
     let test_pk = PublicKey {

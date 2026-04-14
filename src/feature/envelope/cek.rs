@@ -4,14 +4,13 @@
 //! CEK Derivation for kv-enc
 
 use crate::crypto::kdf;
+use crate::crypto::rng::fill_random_array;
 use crate::crypto::types::data::Ikm;
 use crate::crypto::types::keys::{Cek, MasterKey};
 use crate::crypto::types::primitives::KvSalt;
 use crate::feature::envelope::binding::build_kv_cek_info;
 use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::Result;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -35,9 +34,7 @@ pub fn derive_cek(mk: &MasterKey, salt_b64: &str, sid: &Uuid, debug: bool) -> Re
 }
 
 /// Generate a random salt for kv-enc entry encryption
-pub(crate) fn generate_salt() -> String {
-    let mut salt_bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut salt_bytes);
-    let salt_obj = KvSalt::new(salt_bytes);
-    encode_base64url_nopad(salt_obj.as_bytes())
+pub(crate) fn generate_salt() -> Result<String> {
+    let salt_obj = KvSalt::new(fill_random_array::<32>()?);
+    Ok(encode_base64url_nopad(salt_obj.as_bytes()))
 }

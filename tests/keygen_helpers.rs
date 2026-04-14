@@ -6,8 +6,8 @@
 //! All test keys are generated with proper SSH attestation (via ssh-keygen) and
 //! encrypted with real SSH key protection. No test-only bypasses in production code.
 
-use ed25519_dalek::{SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
+use secretenv::crypto::kem::generate_keypair as generate_kem_material;
+use secretenv::feature::key::material::generate_keypairs;
 use secretenv::feature::key::protection::encryption::{
     encrypt_private_key, PrivateKeyEncryptionParams,
 };
@@ -72,15 +72,14 @@ fn b64(data: &[u8]) -> String {
 
 /// Generate X25519 KEM key pair
 fn generate_kem_keypair() -> (JwkOkpPrivateKey, String) {
-    let sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-    let pk = x25519_dalek::PublicKey::from(&sk);
+    let (sk, pk) = generate_kem_material().unwrap();
 
     let pub_key = b64(pk.as_bytes());
     let keypair = JwkOkpPrivateKey {
         kty: "OKP".to_string(),
         crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
         x: pub_key.clone(),
-        d: encode_base64url_nopad_secret_32(&SecretArray::new(sk.to_bytes()))
+        d: encode_base64url_nopad_secret_32(&SecretArray::new(*sk.as_bytes()))
             .into_plain_string_for_output(),
     };
 
@@ -89,8 +88,9 @@ fn generate_kem_keypair() -> (JwkOkpPrivateKey, String) {
 
 /// Generate Ed25519 signing key pair
 fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
-    let sk = SigningKey::generate(&mut OsRng);
-    let pk: VerifyingKey = (&sk).into();
+    let generated = generate_keypairs().unwrap();
+    let sk = generated.sig_sk;
+    let pk = generated.sig_pk;
 
     let pub_key = b64(&pk.to_bytes());
     let keypair = JwkOkpPrivateKey {

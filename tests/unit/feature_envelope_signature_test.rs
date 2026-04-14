@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ed25519_dalek::SigningKey;
-use rand::rngs::OsRng;
 
 use super::*;
 use crate::model::public_key::{
@@ -44,7 +43,7 @@ fn make_dummy_public_key(kid: &str) -> PublicKey {
 
 #[test]
 fn test_sign_and_append_kv_sig_produces_sig_line() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = SigningKey::from_bytes(&[11u8; 32]);
     let kid = "test-kid";
     let unsigned = ":SECRETENV_KV 3\n:HEAD {}\n:WRAP {}\nKEY token\n";
 
@@ -67,7 +66,7 @@ fn test_sign_and_append_kv_sig_produces_sig_line() {
 
 #[test]
 fn test_sign_and_append_kv_sig_preserves_unsigned_content() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = SigningKey::from_bytes(&[13u8; 32]);
     let unsigned = ":SECRETENV_KV 3\n:HEAD tok\n:WRAP tok\nA val\nB val\n";
 
     let signed = sign_and_append_kv_sig(

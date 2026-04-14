@@ -14,7 +14,7 @@ use hpke::{
     aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::X25519HkdfSha256, Deserializable,
     Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, TryRngCore};
 use zeroize::Zeroizing;
 
 /// X25519 secret key with Zeroizing memory protection
@@ -53,6 +53,39 @@ type Kem = X25519HkdfSha256;
 type Kdf = HkdfSha256;
 type Aead = ChaCha20Poly1305;
 
+fn serialize_private_key(private_key: &<Kem as KemTrait>::PrivateKey) -> Zeroizing<[u8; 32]> {
+    let mut bytes = Zeroizing::new([0u8; 32]);
+    private_key.write_exact(bytes.as_mut());
+    bytes
+}
+
+fn serialize_public_key(public_key: &<Kem as KemTrait>::PublicKey) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    public_key.write_exact(&mut bytes);
+    bytes
+}
+
+/// Generate a new X25519 key pair using the HPKE KEM implementation.
+pub fn generate_keypair() -> Result<(X25519SecretKey, X25519PublicKey)> {
+    let mut os_rng = OsRng;
+    let mut csprng = os_rng.unwrap_mut();
+    let (secret_key, public_key) = Kem::gen_keypair(&mut csprng);
+    Ok((
+        X25519SecretKey::from_zeroizing(serialize_private_key(&secret_key)),
+        X25519PublicKey::from_bytes(serialize_public_key(&public_key)),
+    ))
+}
+
+/// Derive the public key for a secret key.
+pub fn public_key_from_secret(secret_key: &X25519SecretKey) -> Result<X25519PublicKey> {
+    let secret_key_hpke = <Kem as KemTrait>::PrivateKey::from_bytes(secret_key.as_bytes())
+        .map_err(|_| crypto_operation_failed("Invalid recipient secret key"))?;
+    let public_key_hpke = Kem::sk_to_pk(&secret_key_hpke);
+    Ok(X25519PublicKey::from_bytes(serialize_public_key(
+        &public_key_hpke,
+    )))
+}
+
 /// Encrypts plaintext using HPKE Base mode.
 /// Returns (enc: 32-byte encapsulated key, ciphertext with 16-byte tag).
 pub fn seal_base(
@@ -64,11 +97,13 @@ pub fn seal_base(
     let pk_recip_hpke = <Kem as KemTrait>::PublicKey::from_bytes(pk_recip.as_bytes())
         .map_err(|_| crypto_operation_failed("Invalid recipient public key"))?;
 
+    let mut os_rng = OsRng;
+    let mut csprng = os_rng.unwrap_mut();
     let (enc, mut sender_ctx) = hpke::setup_sender::<Aead, Kdf, Kem, _>(
         &OpModeS::Base,
         &pk_recip_hpke,
         info.as_bytes(),
-        &mut OsRng,
+        &mut csprng,
     )
     .map_err(|_| crypto_operation_failed("HPKE setup sender failed"))?;
 

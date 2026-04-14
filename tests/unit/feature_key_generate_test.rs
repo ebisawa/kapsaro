@@ -12,6 +12,7 @@
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use secretenv::crypto::kem::{public_key_from_secret, X25519SecretKey};
 use secretenv::feature::key::generate::KeyGenerationOptions;
 use secretenv::feature::key::material::{build_identity_keys, generate_keypairs};
 use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyBuildParams};
@@ -29,7 +30,6 @@ use secretenv::model::public_key::{Attestation, GithubAccount, Identity};
 use secretenv::model::ssh::SshDeterminismStatus;
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use tempfile::TempDir;
-use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
 // ============================================================================
 // build_private_key_plaintext tests (indirect via keygen_test)
@@ -479,9 +479,9 @@ fn test_generate_keypairs() {
 
 #[test]
 fn test_build_identity_keys() {
-    let kem_sk = X25519SecretKey::random_from_rng(rand::rngs::OsRng);
-    let kem_pk = X25519PublicKey::from(&kem_sk);
-    let sig_sk = SigningKey::generate(&mut rand::rngs::OsRng);
+    let kem_sk = X25519SecretKey::from_bytes([1u8; 32]);
+    let kem_pk = public_key_from_secret(&kem_sk).unwrap();
+    let sig_sk = SigningKey::from_bytes(&[2u8; 32]);
     let sig_pk: VerifyingKey = sig_sk.verifying_key();
 
     let identity_keys = build_identity_keys(&kem_pk, &sig_pk).unwrap();

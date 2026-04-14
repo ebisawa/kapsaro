@@ -50,16 +50,16 @@ fn test_derive_key_different_ikm_salts_differ() {
 
 #[test]
 fn test_generate_salt_lengths() {
-    assert_eq!(generate_ikm_salt().as_bytes().len(), 32);
-    assert_eq!(generate_hkdf_salt().as_bytes().len(), 32);
+    assert_eq!(generate_ikm_salt().unwrap().as_bytes().len(), 32);
+    assert_eq!(generate_hkdf_salt().unwrap().as_bytes().len(), 32);
 }
 
 #[test]
 fn test_generate_salt_randomness() {
-    let ikm_salt1 = generate_ikm_salt();
-    let ikm_salt2 = generate_ikm_salt();
-    let hkdf_salt1 = generate_hkdf_salt();
-    let hkdf_salt2 = generate_hkdf_salt();
+    let ikm_salt1 = generate_ikm_salt().unwrap();
+    let ikm_salt2 = generate_ikm_salt().unwrap();
+    let hkdf_salt1 = generate_hkdf_salt().unwrap();
+    let hkdf_salt2 = generate_hkdf_salt().unwrap();
     assert_ne!(ikm_salt1.as_bytes(), ikm_salt2.as_bytes());
     assert_ne!(hkdf_salt1.as_bytes(), hkdf_salt2.as_bytes());
 }

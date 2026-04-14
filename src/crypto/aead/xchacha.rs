@@ -9,6 +9,7 @@
 //! - ChaCha20 stream cipher + Poly1305 MAC
 
 use crate::crypto::crypto_operation_failed;
+use crate::crypto::rng::fill_random_bytes;
 use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::XChaChaNonce;
@@ -17,8 +18,6 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305,
 };
-use rand::rngs::OsRng;
-use rand::RngCore;
 use zeroize::Zeroizing;
 
 /// Nonce size for XChaCha20-Poly1305 (24 bytes)
@@ -110,7 +109,7 @@ pub fn encrypt_with_nonce(
     aad: &Aad,
 ) -> Result<(Ciphertext, XChaChaNonce)> {
     let mut nonce_bytes = [0u8; NONCE_SIZE];
-    OsRng.fill_bytes(&mut nonce_bytes);
+    fill_random_bytes(&mut nonce_bytes)?;
     let nonce = XChaChaNonce::new(nonce_bytes);
 
     let ciphertext = encrypt(key, &nonce, aad, plaintext)?;

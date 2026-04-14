@@ -173,8 +173,8 @@ pub struct PrivateKeyEncryptionParams<'a> {
 
 /// Encrypt PrivateKey with SSH key
 pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<PrivateKey> {
-    let ikm_salt = key_derivation::generate_ikm_salt();
-    let hkdf_salt = key_derivation::generate_hkdf_salt();
+    let ikm_salt = key_derivation::generate_ikm_salt()?;
+    let hkdf_salt = key_derivation::generate_hkdf_salt()?;
     let ikm_salt_b64 = encode_base64url_nopad(ikm_salt.as_bytes());
     let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
 

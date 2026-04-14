@@ -4,6 +4,7 @@
 //! SSH key derivation for PrivateKey protection
 
 use crate::crypto::kdf;
+use crate::crypto::rng::fill_random_array;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
@@ -12,8 +13,6 @@ use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::model::identifiers::context;
 use crate::support::kid::kid_display_lossy;
 use crate::Result;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use tracing::debug;
 
 const NON_DETERMINISTIC_SIGNATURE_MESSAGE: &str =
@@ -34,17 +33,13 @@ pub fn build_sign_message(ikm_salt_b64: &str) -> String {
 }
 
 /// Generate a random IKM salt for SSH-based key derivation.
-pub fn generate_ikm_salt() -> PrivateKeyIkmSalt {
-    let mut salt_bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut salt_bytes);
-    PrivateKeyIkmSalt::new(salt_bytes)
+pub fn generate_ikm_salt() -> Result<PrivateKeyIkmSalt> {
+    Ok(PrivateKeyIkmSalt::new(fill_random_array::<32>()?))
 }
 
 /// Generate a random HKDF salt for SSH-based key derivation.
-pub fn generate_hkdf_salt() -> HkdfSalt {
-    let mut salt_bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut salt_bytes);
-    HkdfSalt::new(salt_bytes)
+pub fn generate_hkdf_salt() -> Result<HkdfSalt> {
+    Ok(HkdfSalt::new(fill_random_array::<32>()?))
 }
 
 /// Derive encryption key for a PrivateKey using SSH signature

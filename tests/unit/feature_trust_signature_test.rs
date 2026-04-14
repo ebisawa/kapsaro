@@ -4,7 +4,7 @@
 //! Unit tests for trust store signing
 
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
+use secretenv::feature::key::material::generate_keypairs;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
 use secretenv::model::trust_store::TrustStoreProtected;
@@ -26,8 +26,7 @@ fn build_self_signed_public_key(
     let sig_x = encode_base64url_nopad(&verifying_key.to_bytes());
 
     // Generate X25519 KEM key pair
-    let kem_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-    let kem_pk = x25519_dalek::PublicKey::from(&kem_sk);
+    let kem_pk = generate_keypairs().unwrap().kem_pk;
     let kem_x = encode_base64url_nopad(kem_pk.as_bytes());
 
     let identity_keys = IdentityKeys {
@@ -79,7 +78,7 @@ fn build_self_signed_public_key(
 
 #[test]
 fn test_sign_trust_store_produces_valid_document() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = SigningKey::from_bytes(&[5u8; 32]);
     let (_public_key, kid) = build_self_signed_public_key("alice@example.com", &signing_key);
 
     let protected = TrustStoreProtected {

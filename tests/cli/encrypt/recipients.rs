@@ -37,8 +37,10 @@ fn test_encrypt_recipients_are_all_active_members() {
     let args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(output_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(args).unwrap();
 
@@ -69,8 +71,10 @@ fn test_encrypt_workspace_required() {
         let args = encrypt::EncryptArgs {
             common: common_opts,
             member_id: Some(ALICE_MEMBER_ID.to_string()),
-            input: input_path,
             out: Some(test_dir.join("out.encrypted")),
+            stdout: false,
+            stdin: false,
+            input: Some(input_path),
         };
         let result = encrypt::run(args);
         assert!(result.is_err(), "Should fail without workspace");

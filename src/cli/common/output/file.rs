@@ -9,11 +9,26 @@ use crate::{Error, Result};
 
 pub(crate) fn resolve_encrypted_output_path(
     explicit_out: Option<&PathBuf>,
-    input_path: &Path,
+    write_stdout: bool,
+    input_path: Option<&Path>,
+    from_stdin: bool,
 ) -> Result<Option<PathBuf>> {
+    if write_stdout {
+        return Ok(None);
+    }
+
     if let Some(out) = explicit_out {
         return Ok(Some(out.clone()));
     }
+
+    if from_stdin {
+        return Err(Error::invalid_argument(
+            "--stdin requires either --out or --stdout",
+        ));
+    }
+
+    let input_path = input_path
+        .ok_or_else(|| Error::invalid_argument("INPUT is required unless --stdin is used"))?;
 
     let input_filename = input_path
         .file_name()

@@ -460,6 +460,12 @@ secretenv encrypt certs/ca.pem
 
 # Specify an output path
 secretenv encrypt certs/ca.pem --out .secretenv/secrets/ca.pem.encrypted
+
+# Encrypt from stdin and save to a file
+cat certs/ca.pem | secretenv encrypt --stdin --out .secretenv/secrets/ca.pem.encrypted
+
+# Encrypt from stdin and emit file-enc JSON to stdout
+cat certs/ca.pem | secretenv encrypt --stdin --stdout > ca.pem.encrypted
 ```
 
 A signature is attached automatically during encryption.
@@ -1088,7 +1094,8 @@ This means your SSH key produced different signatures for the same input on two 
 
 | Command | Description |
 |---------|-------------|
-| `secretenv encrypt <file> [--out <path>]` | Encrypt a file (file-enc) |
+| `secretenv encrypt <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
+| `secretenv encrypt --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
 | `secretenv decrypt <file> --out <path>` | Decrypt a file |
 | `secretenv inspect <file>` | Display encrypted file metadata (no decryption needed) |
 

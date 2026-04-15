@@ -25,8 +25,10 @@ fn test_encrypt_file_with_workspace() {
     let args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(output_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(args).unwrap();
 
@@ -57,8 +59,10 @@ fn test_encrypt_no_active_members_error() {
     let args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(workspace_dir.join("output.encrypted")),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     let result = encrypt::run(args);
     assert!(result.is_err(), "Should fail with no active members");

@@ -65,8 +65,10 @@ fn test_encrypt_uses_member_file_contents_not_filename() {
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path.clone(),
         out: Some(encrypted_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path.clone()),
     };
 
     encrypt::run(encrypt_args).unwrap();

@@ -27,8 +27,10 @@ fn test_encrypt_always_produces_file_enc_for_binary() {
     let args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(output_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(args).unwrap();
 
@@ -58,8 +60,10 @@ fn test_encrypt_always_produces_file_enc_for_dotenv() {
     let args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(output_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(args).unwrap();
 

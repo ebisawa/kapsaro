@@ -461,6 +461,12 @@ secretenv encrypt certs/ca.pem
 
 # 出力先を指定
 secretenv encrypt certs/ca.pem --out .secretenv/secrets/ca.pem.encrypted
+
+# stdin から暗号化してファイルへ保存
+cat certs/ca.pem | secretenv encrypt --stdin --out .secretenv/secrets/ca.pem.encrypted
+
+# stdin から暗号化して file-enc JSON を stdout に出力
+cat certs/ca.pem | secretenv encrypt --stdin --stdout > ca.pem.encrypted
 ```
 
 暗号化と同時に署名が付与されます。
@@ -1089,7 +1095,8 @@ SSH 鍵が同じ入力に対して2回連続で異なる署名を生成したこ
 
 | コマンド | 説明 |
 |---------|------|
-| `secretenv encrypt <file> [--out <path>]` | ファイルを暗号化（file-enc） |
+| `secretenv encrypt <file> [--out <path> \| --stdout]` | ファイルを暗号化（file-enc） |
+| `secretenv encrypt --stdin (--out <path> \| --stdout)` | stdin 入力を file-enc として暗号化 |
 | `secretenv decrypt <file> --out <path>` | ファイルを復号 |
 | `secretenv inspect <file>` | 暗号ファイルのメタデータを表示（復号不要） |
 

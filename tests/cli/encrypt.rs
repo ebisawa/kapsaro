@@ -7,6 +7,7 @@
 
 pub mod basic;
 pub mod format_detection;
+pub mod help;
 pub mod output_path;
 pub mod recipients;
 pub mod workspace;

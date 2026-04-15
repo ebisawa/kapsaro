@@ -1,8 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
 use crate::app::context::execution::{
     build_write_execution_warnings, resolve_write_execution, ExecutionContext,
 };
@@ -16,7 +14,6 @@ use crate::feature::encrypt::encrypt_file_content;
 use crate::feature::envelope::signature::build_signing_context;
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::support::fs::load_bytes;
 use crate::{Error, Result};
 
 pub(crate) struct EncryptFileCommand {
@@ -31,12 +28,11 @@ pub(crate) struct EncryptFileCommand {
 pub(crate) fn build_encrypt_file_command(
     options: &CommonCommandOptions,
     member_id: Option<String>,
-    input_path: &Path,
+    input_bytes: Vec<u8>,
     ssh_ctx: Option<ResolvedSshSigningContext>,
 ) -> Result<EncryptFileCommand> {
     let execution = resolve_encrypt_execution(options, member_id, ssh_ctx)?;
     let workspace_root = require_encrypt_workspace(&execution)?;
-    let input_bytes = load_encrypt_input_bytes(input_path)?;
     let trust_plan = WriteRecipientTrustPlan::<EncryptPolicy>::load(
         options,
         &workspace_root.root_path,
@@ -88,8 +84,4 @@ fn require_encrypt_workspace(execution: &ExecutionContext) -> Result<WorkspaceRo
         .ok_or_else(|| Error::Config {
             message: "Workspace is required for encrypt".to_string(),
         })
-}
-
-fn load_encrypt_input_bytes(input_path: &Path) -> Result<Vec<u8>> {
-    load_bytes(input_path)
 }

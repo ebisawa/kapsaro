@@ -118,8 +118,10 @@ fn create_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(member_id.to_string()),
-        input: input_path,
         out: Some(encrypted_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(encrypt_args).unwrap();
 
@@ -564,8 +566,10 @@ fn test_verify_file_document_report() {
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
         member_id: Some(CAROL_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(encrypted_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(encrypt_args).unwrap();
 

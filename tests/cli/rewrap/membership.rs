@@ -378,8 +378,10 @@ fn test_rewrap_removes_member_file_enc() {
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts.clone(),
         member_id: Some(ALICE_MEMBER_ID.to_string()),
-        input: input_path,
         out: Some(encrypted_path.clone()),
+        stdout: false,
+        stdin: false,
+        input: Some(input_path),
     };
     encrypt::run(encrypt_args).unwrap();
     assert!(encrypted_path.exists(), "Encrypted file should exist");

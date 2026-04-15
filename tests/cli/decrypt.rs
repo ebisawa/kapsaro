@@ -101,6 +101,18 @@ fn test_decrypt_help() {
 }
 
 #[test]
+fn test_decrypt_help_aligns_multiline_usage() {
+    cmd()
+        .arg("decrypt")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Usage: secretenv decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       secretenv decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)",
+        ));
+}
+
+#[test]
 fn test_decrypt_missing_input() {
     cmd()
         .arg("decrypt")
@@ -385,7 +397,9 @@ fn test_decrypt_detects_file_enc_format_version3() {
         .env("SECRETENV_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("requires --out option"));
+        .stderr(predicate::str::contains(
+            "requires either --out or --stdout",
+        ));
 }
 
 #[test]
@@ -575,4 +589,309 @@ fn test_decrypt_nonexistent_file_fails() {
         .arg("/nonexistent/path/to/file.kvenc")
         .assert()
         .failure();
+}
+
+#[test]
+fn test_decrypt_file_with_stdout_writes_bytes_to_stdout() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let plaintext = b"SECRET_VALUE=hello_stdout\n";
+    let input_file = home_dir.path().join("stdout-secret.txt");
+    let encrypted_file = home_dir.path().join("stdout-secret.txt.encrypted");
+    fs::write(&input_file, plaintext).unwrap();
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--out")
+        .arg(&encrypted_file)
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let assert = cmd()
+        .arg("decrypt")
+        .arg(&encrypted_file)
+        .arg("--stdout")
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Decrypted to:").not());
+
+    assert_eq!(assert.get_output().stdout, plaintext);
+}
+
+#[test]
+fn test_decrypt_stdin_with_out_writes_decrypted_file() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let plaintext = b"SECRET_VALUE=stdin_out\n";
+    let input_file = home_dir.path().join("stdin-out-secret.txt");
+    let encrypted_file = home_dir.path().join("stdin-out-secret.txt.encrypted");
+    let decrypted_file = home_dir.path().join("stdin-out-secret.txt.decrypted");
+    fs::write(&input_file, plaintext).unwrap();
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--out")
+        .arg(&encrypted_file)
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let encrypted = fs::read_to_string(&encrypted_file).unwrap();
+
+    cmd()
+        .arg("decrypt")
+        .arg("--stdin")
+        .arg("--out")
+        .arg(&decrypted_file)
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin(encrypted)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("stdin-out-secret.txt.decrypted"));
+
+    assert_eq!(fs::read(&decrypted_file).unwrap(), plaintext);
+}
+
+#[test]
+fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let plaintext = b"SECRET_VALUE=stdin_stdout\n";
+    let input_file = home_dir.path().join("stdin-stdout-secret.txt");
+    let encrypted_file = home_dir.path().join("stdin-stdout-secret.txt.encrypted");
+    fs::write(&input_file, plaintext).unwrap();
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--out")
+        .arg(&encrypted_file)
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let encrypted = fs::read_to_string(&encrypted_file).unwrap();
+
+    let assert = cmd()
+        .arg("decrypt")
+        .arg("--stdin")
+        .arg("--stdout")
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin(encrypted)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Decrypted to:").not());
+
+    assert_eq!(assert.get_output().stdout, plaintext);
+}
+
+#[test]
+fn test_decrypt_file_requires_out_or_stdout() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let plaintext = b"SECRET_VALUE=needs_output\n";
+    let input_file = home_dir.path().join("needs-output.txt");
+    let encrypted_file = home_dir.path().join("needs-output.txt.encrypted");
+    fs::write(&input_file, plaintext).unwrap();
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--out")
+        .arg(&encrypted_file)
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("decrypt")
+        .arg(&encrypted_file)
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "requires either --out or --stdout",
+        ));
+}
+
+#[test]
+fn test_decrypt_rejects_stdout_and_out_together() {
+    let temp_dir = TempDir::new().unwrap();
+    let input_file = temp_dir.path().join("test.enc");
+    let output_file = temp_dir.path().join("output.dat");
+    create_test_encrypted_file(&input_file);
+
+    cmd()
+        .arg("decrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--stdout")
+        .arg("--out")
+        .arg(&output_file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--stdout").and(predicate::str::contains("--out")));
+}
+
+#[test]
+fn test_decrypt_rejects_input_and_stdin_together() {
+    let temp_dir = TempDir::new().unwrap();
+    let input_file = temp_dir.path().join("test.enc");
+    create_test_encrypted_file(&input_file);
+
+    cmd()
+        .arg("decrypt")
+        .arg(input_file.to_str().unwrap())
+        .arg("--stdin")
+        .arg("--stdout")
+        .write_stdin(fs::read_to_string(&input_file).unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--stdin").and(predicate::str::contains("<INPUT>")));
+}
+
+#[test]
+fn test_decrypt_stdin_rejects_kv_enc_format() {
+    let temp_dir = TempDir::new().unwrap();
+    let content = r#":SECRETENV_KV 3
+:HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
+:WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
+DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
+"#;
+
+    create_test_keystore(
+        &temp_dir,
+        ALICE_MEMBER_ID,
+        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
+    );
+
+    cmd()
+        .arg("decrypt")
+        .arg("--stdin")
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .write_stdin(content)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Expected file-enc format"));
+}
+
+#[test]
+fn test_decrypt_stdin_rejects_plain_kv_format() {
+    let temp_dir = TempDir::new().unwrap();
+
+    create_test_keystore(
+        &temp_dir,
+        ALICE_MEMBER_ID,
+        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
+    );
+
+    cmd()
+        .arg("decrypt")
+        .arg("--stdin")
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .write_stdin("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Expected file-enc format"));
+}
+
+#[test]
+fn test_decrypt_stdin_rejects_unknown_format() {
+    let temp_dir = TempDir::new().unwrap();
+
+    create_test_keystore(
+        &temp_dir,
+        ALICE_MEMBER_ID,
+        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
+    );
+
+    cmd()
+        .arg("decrypt")
+        .arg("--stdin")
+        .arg("--member-id")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .write_stdin("This is just some random text that doesn't match any format\n")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Expected file-enc format"));
+}
+
+#[test]
+fn test_decrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let plaintext = vec![0x00, 0x01, 0x02, b'a', b'\n', 0xff];
+
+    let encrypt = cmd()
+        .arg("encrypt")
+        .arg("--stdin")
+        .arg("--stdout")
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin(plaintext.clone())
+        .assert()
+        .success();
+
+    let assert = cmd()
+        .arg("decrypt")
+        .arg("--stdin")
+        .arg("--stdout")
+        .arg("--member-id")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin(encrypt.get_output().stdout.clone())
+        .assert()
+        .success();
+
+    assert_eq!(assert.get_output().stdout, plaintext);
 }

@@ -4,6 +4,7 @@
 //! decrypt command - file-enc decryption
 
 use clap::Args;
+use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::app::file::decrypt::{build_decrypt_file_command, execute_decrypt_file_command};
@@ -11,7 +12,7 @@ use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_read_command_with_trust, ReadCommandLabels,
 };
-use crate::cli::common::output::file::save_decrypted_output;
+use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::CommonOptions;
 use crate::format::content::FileEncContent;
@@ -20,6 +21,9 @@ use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::{Error, Result};
 
 #[derive(Args)]
+#[command(
+    override_usage = "secretenv decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       secretenv decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)"
+)]
 pub struct DecryptArgs {
     /// Common options shared across commands
     #[command(flatten)]
@@ -33,12 +37,21 @@ pub struct DecryptArgs {
     #[arg(long, short = 'm')]
     pub member_id: Option<String>,
 
-    /// Output file path (required)
-    #[arg(long, short = 'o')]
+    /// Output file path
+    #[arg(long, short = 'o', conflicts_with = "stdout")]
     pub out: Option<PathBuf>,
 
+    /// Write decrypted content to stdout
+    #[arg(long, conflicts_with = "out")]
+    pub stdout: bool,
+
+    /// Read encrypted content from stdin
+    #[arg(long, conflicts_with = "input")]
+    pub stdin: bool,
+
     /// Input file path
-    pub input: PathBuf,
+    #[arg(required_unless_present = "stdin")]
+    pub input: Option<PathBuf>,
 }
 
 // ============================================================================
@@ -46,15 +59,11 @@ pub struct DecryptArgs {
 // ============================================================================
 
 pub fn run(args: DecryptArgs) -> Result<()> {
-    let content = FileEncContent::detect(load_text_with_limit(
-        &args.input,
-        MAX_JSON_DOCUMENT_READ_SIZE,
-        "file-enc file",
+    let content = FileEncContent::detect(resolve_decrypt_input_content(
+        args.input.as_ref(),
+        args.stdin,
     )?)?;
-    // Require --out option only after the input was confirmed as file-enc.
-    let out_path = args.out.as_ref().ok_or_else(|| Error::Config {
-        message: "requires --out option".to_string(),
-    })?;
+    let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
     let options = resolve_options(&args.common);
     let plaintext_bytes = run_with_trust_store_reset_recovery(
         &options,
@@ -81,6 +90,45 @@ pub fn run(args: DecryptArgs) -> Result<()> {
         },
     )?;
 
-    save_decrypted_output(out_path, plaintext_bytes.as_ref(), args.common.quiet)?;
+    save_decrypted_output(
+        output_path.as_deref(),
+        plaintext_bytes.as_ref(),
+        args.common.quiet,
+    )?;
     Ok(())
+}
+
+fn resolve_decrypt_input_content(input_path: Option<&PathBuf>, from_stdin: bool) -> Result<String> {
+    if from_stdin {
+        return load_decrypt_input_from_stdin();
+    }
+
+    input_path
+        .map(|path| load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "file-enc file"))
+        .transpose()?
+        .ok_or_else(|| Error::invalid_argument("INPUT is required unless --stdin is used"))
+}
+
+fn load_decrypt_input_from_stdin() -> Result<String> {
+    let max_bytes = MAX_JSON_DOCUMENT_READ_SIZE;
+    let stdin = io::stdin();
+    let mut reader = stdin.lock().take((max_bytes + 1) as u64);
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+
+    if bytes.len() > max_bytes {
+        return Err(Error::Parse {
+            message: format!(
+                "file-enc input exceeds maximum size limit ({} bytes > {} bytes): stdin",
+                bytes.len(),
+                max_bytes
+            ),
+            source: None,
+        });
+    }
+
+    String::from_utf8(bytes).map_err(|e| Error::Parse {
+        message: format!("Failed to read stdin as UTF-8: {}", e),
+        source: Some(Box::new(e)),
+    })
 }

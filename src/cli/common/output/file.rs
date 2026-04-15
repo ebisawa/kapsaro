@@ -1,6 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::support::fs::atomic;
@@ -69,13 +70,37 @@ pub(crate) fn save_encrypted_output(
 }
 
 pub(crate) fn save_decrypted_output(
-    output_path: &Path,
+    output_path: Option<&Path>,
     plaintext_bytes: &[u8],
     quiet: bool,
 ) -> Result<()> {
-    atomic::save_bytes(output_path, plaintext_bytes)?;
-    print_output_notice("Decrypted to", output_path, quiet);
+    match output_path {
+        Some(path) => {
+            atomic::save_bytes(path, plaintext_bytes)?;
+            print_output_notice("Decrypted to", path, quiet);
+        }
+        None => {
+            let stdout = io::stdout();
+            let mut writer = stdout.lock();
+            writer.write_all(plaintext_bytes)?;
+            writer.flush()?;
+        }
+    }
     Ok(())
+}
+
+pub(crate) fn resolve_decrypted_output_path(
+    explicit_out: Option<&PathBuf>,
+    write_stdout: bool,
+) -> Result<Option<PathBuf>> {
+    if write_stdout {
+        return Ok(None);
+    }
+
+    explicit_out
+        .cloned()
+        .map(Some)
+        .ok_or_else(|| Error::invalid_argument("requires either --out or --stdout"))
 }
 
 fn print_output_notice(label: &str, output_path: &Path, quiet: bool) {

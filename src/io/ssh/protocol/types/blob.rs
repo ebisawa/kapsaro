@@ -97,12 +97,12 @@ impl SshsigBlob {
         self.0.as_slice()
     }
 
-    pub fn extract_signature_blob(&self) -> Result<SshSignatureBlob> {
-        parse_sshsig_blob(self.as_bytes())
+    pub fn extract_signature_blob(&self, expected_namespace: &str) -> Result<SshSignatureBlob> {
+        parse_sshsig_blob(self.as_bytes(), expected_namespace)
     }
 
-    pub fn extract_ed25519_raw(&self) -> Result<Ed25519RawSignature> {
-        let sig_blob = self.extract_signature_blob()?;
+    pub fn extract_ed25519_raw(&self, expected_namespace: &str) -> Result<Ed25519RawSignature> {
+        let sig_blob = self.extract_signature_blob(expected_namespace)?;
         sig_blob.extract_ed25519_raw()
     }
 }

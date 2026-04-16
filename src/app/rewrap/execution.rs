@@ -2,25 +2,46 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::execution::ExecutionContext;
-use crate::app::context::review::{
-    ensure_public_key_snapshot_matches, ensure_text_file_matches_snapshot,
-};
+use crate::app::context::review::ensure_public_key_snapshot_matches;
 use crate::app::trust::approval::{commit_known_key_approvals, ApprovedKnownKey};
+use crate::app::trust::flow::review_rewrap_signer_requirements_with_handlers;
+use crate::app::trust::{
+    current_self_sig_x, evaluate_signer_trust_with_proof, load_read_trust_context,
+    CommandCapability, TrustApprovalCandidate, TrustContext,
+};
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
 use crate::feature::rewrap::{rewrap_content as rewrap_feature_content, RewrapRequest};
+use crate::feature::verify::file::verify_file_content;
+use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::format::content::EncryptedContent;
 use crate::io::workspace::members::{
     load_active_member_files, promote_snapshotted_incoming_members, IncomingMemberPromotionSnapshot,
 };
-use crate::support::fs::{atomic, lock};
+use crate::model::verification::SignatureVerificationProof;
+use crate::support::fs::{atomic, load_text_with_limit};
+use crate::support::limits::encrypted_file_read_limit;
 use crate::Result;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::types::{
-    RewrapArtifactSnapshot, RewrapBatchOutcome, RewrapBatchPlan, RewrapBatchRequest,
-    RewrapFileFailure, RewrapFileSuccess, VerifiedPostPromotionRecipients,
+    RewrapBatchOutcome, RewrapBatchPlan, RewrapBatchRequest, RewrapFileFailure, RewrapFileSuccess,
+    RewrapSignerRequirement, VerifiedPostPromotionRecipients,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CapturedArtifact {
+    file_path: PathBuf,
+    content: String,
+}
+
+struct RewrapBatchExecutionContext<'a> {
+    plan: &'a RewrapBatchPlan,
+    execution: &'a ExecutionContext,
+    request: &'a RewrapBatchRequest,
+    post_promotion_members: &'a VerifiedPostPromotionRecipients,
+    current_recipients: &'a [String],
+}
 
 pub(crate) fn apply_rewrap_promotions(
     workspace_root: &Path,
@@ -41,51 +62,80 @@ pub(crate) fn apply_rewrap_promotions(
     promote_snapshotted_incoming_members(workspace_root, &snapshots)
 }
 
-pub(crate) fn execute_confirmed_rewrap_batch(
+pub(crate) fn execute_confirmed_rewrap_batch<ConfirmKnown, ConfirmNonMember>(
     request: &RewrapBatchRequest,
     plan: &RewrapBatchPlan,
     expected_post_promotion_members: &[crate::model::public_key::PublicKey],
     execution: ExecutionContext,
     approvals: &[ApprovedKnownKey],
-) -> Result<RewrapBatchOutcome> {
+    mut confirm_known: ConfirmKnown,
+    mut confirm_non_member: ConfirmNonMember,
+) -> Result<RewrapBatchOutcome>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str, &Path) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
+{
     let promoted_member_ids =
         apply_rewrap_promotions(&plan.workspace_root, &request.accepted_promotions)?;
     let actual_post_promotion_members = load_verified_post_promotion_members(
         &plan.workspace_root,
         expected_post_promotion_members,
     )?;
-    // Persist approvals before execution: the user's review decision is
-    // durable regardless of whether individual artifacts succeed or fail.
-    let approval_warnings = if approvals.is_empty() {
-        Vec::new()
-    } else {
-        commit_known_key_approvals(&request.options, &execution, approvals)?.warnings
-    };
-    let mut outcome =
-        execute_rewrap_batch(request, plan, execution, &actual_post_promotion_members)?;
+    enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
+    let mut approval_warnings = save_known_key_approvals(&request.options, &execution, approvals)?;
+    let mut outcome = execute_rewrap_batch(
+        request,
+        plan,
+        execution,
+        &actual_post_promotion_members,
+        &mut confirm_known,
+        &mut confirm_non_member,
+    )?;
     outcome.promoted_member_ids = promoted_member_ids;
+    approval_warnings.extend(outcome.warnings);
     outcome.warnings = approval_warnings;
     Ok(outcome)
 }
 
 /// Execute a batch rewrap over already planned files.
-pub(crate) fn execute_rewrap_batch(
+pub(crate) fn execute_rewrap_batch<ConfirmKnown, ConfirmNonMember>(
     request: &RewrapBatchRequest,
     plan: &RewrapBatchPlan,
     execution: ExecutionContext,
     post_promotion_members: &VerifiedPostPromotionRecipients,
-) -> Result<RewrapBatchOutcome> {
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+) -> Result<RewrapBatchOutcome>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str, &Path) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
+{
     enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
     let mut processed_files = Vec::new();
     let mut failed_files = Vec::new();
+    let mut warnings = Vec::new();
+    let current_recipients = collect_current_recipient_ids(post_promotion_members);
+    let ctx = RewrapBatchExecutionContext {
+        plan,
+        execution: &execution,
+        request,
+        post_promotion_members,
+        current_recipients: &current_recipients,
+    };
 
-    for snapshot in &plan.artifact_snapshots {
-        match process_rewrap_file(snapshot, plan, &execution, request, post_promotion_members) {
+    for file_path in &plan.artifact_paths {
+        match process_rewrap_file(
+            file_path,
+            &ctx,
+            &mut warnings,
+            confirm_known,
+            confirm_non_member,
+        ) {
             Ok(()) => processed_files.push(RewrapFileSuccess {
-                output_path: snapshot.file_path.clone(),
+                output_path: file_path.clone(),
             }),
             Err(error) => failed_files.push(RewrapFileFailure {
-                output_path: snapshot.file_path.clone(),
+                output_path: file_path.clone(),
                 error_message: error.user_message().to_string(),
             }),
         }
@@ -95,7 +145,7 @@ pub(crate) fn execute_rewrap_batch(
         processed_files,
         failed_files,
         promoted_member_ids: Vec::new(),
-        warnings: Vec::new(),
+        warnings,
     })
 }
 
@@ -120,34 +170,155 @@ fn ensure_post_promotion_members_match(
     )
 }
 
-fn process_rewrap_file(
-    snapshot: &RewrapArtifactSnapshot,
-    plan: &RewrapBatchPlan,
+fn save_known_key_approvals(
+    options: &crate::app::context::options::CommonCommandOptions,
     execution: &ExecutionContext,
-    request: &RewrapBatchRequest,
-    post_promotion_members: &VerifiedPostPromotionRecipients,
-) -> Result<()> {
-    let file_path_buf = snapshot.file_path.clone();
-    lock::with_file_lock(&file_path_buf, || {
-        ensure_rewrap_artifact_matches_snapshot(snapshot)?;
-        let content = EncryptedContent::detect(snapshot.content.clone())?;
-        let rewrap_request = RewrapRequest {
-            member_id: &execution.member_id,
-            key_ctx: &execution.key_ctx,
-            workspace_root: Some(plan.workspace_root.as_path()),
-            target_members: Some(post_promotion_members.verified_members()),
-            rotate_key: request.rotate_key,
-            clear_disclosure_history: request.clear_disclosure_history,
-            debug: request.options.verbose,
-        };
-        let rewritten = rewrap_feature_content(&content, &rewrap_request)?;
+    approvals: &[ApprovedKnownKey],
+) -> Result<Vec<String>> {
+    if approvals.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(commit_known_key_approvals(options, execution, approvals)?.warnings)
+}
 
-        atomic::save_text(&snapshot.file_path, &rewritten)
+fn collect_current_recipient_ids(
+    post_promotion_members: &VerifiedPostPromotionRecipients,
+) -> Vec<String> {
+    let mut recipients = post_promotion_members
+        .verified_members()
+        .iter()
+        .map(|member| member.document().protected.member_id.clone())
+        .collect::<Vec<_>>();
+    recipients.sort();
+    recipients
+}
+
+fn process_rewrap_file<ConfirmKnown, ConfirmNonMember>(
+    file_path: &Path,
+    ctx: &RewrapBatchExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+) -> Result<()>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str, &Path) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
+{
+    let captured = load_captured_artifact(file_path)?;
+    let content = EncryptedContent::detect(captured.content.clone())?;
+    review_captured_artifact_signer(
+        &captured,
+        &content,
+        ctx,
+        warnings,
+        confirm_known,
+        confirm_non_member,
+    )?;
+    let rewrap_request = RewrapRequest {
+        member_id: &ctx.execution.member_id,
+        key_ctx: &ctx.execution.key_ctx,
+        workspace_root: Some(ctx.plan.workspace_root.as_path()),
+        target_members: Some(ctx.post_promotion_members.verified_members()),
+        rotate_key: ctx.request.rotate_key,
+        clear_disclosure_history: ctx.request.clear_disclosure_history,
+        debug: ctx.request.options.verbose,
+    };
+    let rewritten = rewrap_feature_content(&content, &rewrap_request)?;
+    atomic::save_text(&captured.file_path, &rewritten)
+}
+
+fn load_captured_artifact(file_path: &Path) -> Result<CapturedArtifact> {
+    let content = load_text_with_limit(
+        file_path,
+        encrypted_file_read_limit(file_path),
+        "encrypted artifact",
+    )?;
+    Ok(CapturedArtifact {
+        file_path: file_path.to_path_buf(),
+        content,
     })
 }
 
-fn ensure_rewrap_artifact_matches_snapshot(snapshot: &RewrapArtifactSnapshot) -> Result<()> {
-    ensure_text_file_matches_snapshot(&snapshot.file_path, Some(&snapshot.content), "Rewrap input")
+fn review_captured_artifact_signer<ConfirmKnown, ConfirmNonMember>(
+    captured: &CapturedArtifact,
+    content: &EncryptedContent,
+    ctx: &RewrapBatchExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+) -> Result<()>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str, &Path) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
+{
+    let trust_ctx = load_rewrap_signer_trust_context(ctx.request, ctx.plan, ctx.execution)?;
+    let Some(requirement) =
+        build_rewrap_signer_requirement(captured, content, &trust_ctx, ctx.current_recipients)?
+    else {
+        return Ok(());
+    };
+    let approvals = review_rewrap_signer_requirements_with_handlers(
+        std::slice::from_ref(&requirement),
+        "rewrap input signer",
+        "signer trust",
+        confirm_known,
+        confirm_non_member,
+    )?;
+    warnings.extend(save_known_key_approvals(
+        &ctx.request.options,
+        ctx.execution,
+        &approvals,
+    )?);
+    Ok(())
+}
+
+fn load_rewrap_signer_trust_context(
+    request: &RewrapBatchRequest,
+    plan: &RewrapBatchPlan,
+    execution: &ExecutionContext,
+) -> Result<TrustContext> {
+    let mut trust_ctx = load_read_trust_context(
+        &request.options,
+        &plan.workspace_root,
+        &execution.member_id,
+        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        request.options.verbose,
+    )?
+    .trust_ctx;
+    trust_ctx.active_members_by_kid = plan.pre_promotion_trust.active_members_by_kid.clone();
+    trust_ctx.is_interactive = plan.pre_promotion_trust.is_interactive;
+    Ok(trust_ctx)
+}
+
+fn build_rewrap_signer_requirement(
+    captured: &CapturedArtifact,
+    content: &EncryptedContent,
+    trust_ctx: &TrustContext,
+    current_recipients: &[String],
+) -> Result<Option<RewrapSignerRequirement>> {
+    let proof = extract_signature_proof(content)?;
+    let outcome = evaluate_signer_trust_with_proof(
+        trust_ctx,
+        &proof,
+        CommandCapability::Rewrap,
+        current_recipients,
+    )?;
+    if matches!(outcome, crate::app::trust::SignerTrustOutcome::Accepted) {
+        return Ok(None);
+    }
+    Ok(Some(RewrapSignerRequirement {
+        file_path: captured.file_path.clone(),
+        outcome,
+    }))
+}
+
+fn extract_signature_proof(content: &EncryptedContent) -> Result<SignatureVerificationProof> {
+    match content {
+        EncryptedContent::FileEnc(file_content) => {
+            Ok(verify_file_content(file_content, false)?.proof.clone())
+        }
+        EncryptedContent::KvEnc(kv_content) => Ok(verify_kv_content(kv_content, false)?.proof),
+    }
 }
 
 #[cfg(test)]

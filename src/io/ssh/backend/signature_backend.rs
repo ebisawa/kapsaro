@@ -7,41 +7,47 @@ use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::io::ssh::SshError;
 use crate::Result;
 
-/// Signature backend producing SSHSIG-compatible signature blobs (IKM)
+/// Signature backend producing SSHSIG-compatible signature blobs
 ///
 /// This trait abstracts the signature acquisition mechanism.
-/// Both implementations (ssh-agent and ssh-keygen) produce equivalent IKM:
+/// Both implementations (ssh-agent and ssh-keygen) produce equivalent output:
 /// Ed25519 raw signature bytes (64 bytes, RFC 8709), derived from the SSH
 /// signature blob (SSH wire `string algorithm` + `string signature`).
 pub trait SignatureBackend {
-    /// Sign challenge_bytes and return signature blob (IKM)
+    /// Sign message bytes in a specific SSHSIG namespace.
     ///
     /// # Arguments
     ///
+    /// * `namespace` - SSHSIG namespace for the signature context
     /// * `ssh_pubkey` - SSH public key in authorized_keys format
-    /// * `challenge_bytes` - Data to sign (will be wrapped in SSHSIG signed_data)
+    /// * `message` - Raw message to wrap in SSHSIG signed_data and sign
     ///
     /// # Returns
     ///
-    /// Ed25519 raw signature (64 bytes) suitable for use as IKM in SA-SIG-KDF.
+    /// Ed25519 raw signature (64 bytes) extracted from the SSHSIG output.
     ///
     /// # Errors
     ///
     /// Returns detailed diagnostic errors if signing fails
-    fn sign_for_ikm(&self, ssh_pubkey: &str, challenge_bytes: &[u8])
-        -> Result<Ed25519RawSignature>;
+    fn sign_sshsig(
+        &self,
+        namespace: &str,
+        ssh_pubkey: &str,
+        message: &[u8],
+    ) -> Result<Ed25519RawSignature>;
 
-    /// Sign challenge bytes and ensure the derived IKM is deterministic.
+    /// Sign message bytes and ensure the derived signature is deterministic.
     ///
     /// This signs the same challenge twice and returns the first signature only
     /// when both results match byte-for-byte.
-    fn sign_deterministic_for_ikm(
+    fn sign_sshsig_deterministic(
         &self,
+        namespace: &str,
         ssh_pubkey: &str,
-        challenge_bytes: &[u8],
+        message: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let sig1 = self.sign_for_ikm(ssh_pubkey, challenge_bytes)?;
-        let sig2 = self.sign_for_ikm(ssh_pubkey, challenge_bytes)?;
+        let sig1 = self.sign_sshsig(namespace, ssh_pubkey, message)?;
+        let sig2 = self.sign_sshsig(namespace, ssh_pubkey, message)?;
 
         if sig1 != sig2 {
             return Err(SshError::operation_failed(
@@ -61,8 +67,13 @@ pub trait SignatureBackend {
     /// # Errors
     ///
     /// Returns error if signatures differ or signing fails
-    fn check_determinism(&self, ssh_pubkey: &str, challenge_bytes: &[u8]) -> Result<()> {
-        let _ = self.sign_deterministic_for_ikm(ssh_pubkey, challenge_bytes)?;
+    fn check_sshsig_determinism(
+        &self,
+        namespace: &str,
+        ssh_pubkey: &str,
+        message: &[u8],
+    ) -> Result<()> {
+        let _ = self.sign_sshsig_deterministic(namespace, ssh_pubkey, message)?;
         Ok(())
     }
 }

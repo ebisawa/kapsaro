@@ -82,7 +82,7 @@ impl SshKeygen for DefaultSshKeygen {
 
         let output = execute_sign_command(&self.ssh_keygen_path, key_path_str, namespace, data)?;
         check_sign_output(&output, is_public_key)?;
-        parse_sign_stdout(output.stdout)
+        parse_sign_stdout(output.stdout, namespace)
     }
 
     fn verify(
@@ -210,7 +210,7 @@ fn check_sign_output(output: &std::process::Output, is_public_key: bool) -> Resu
     .into())
 }
 
-fn parse_sign_stdout(stdout: Vec<u8>) -> Result<Ed25519RawSignature> {
+fn parse_sign_stdout(stdout: Vec<u8>, expected_namespace: &str) -> Result<Ed25519RawSignature> {
     let stdout = Zeroizing::new(stdout);
     if stdout.iter().all(|byte| byte.is_ascii_whitespace()) {
         return Err(SshError::operation_failed(
@@ -225,7 +225,7 @@ fn parse_sign_stdout(stdout: Vec<u8>) -> Result<Ed25519RawSignature> {
             e,
         ))
     })?;
-    let blob = parse_sshsig_armored(armored)?;
+    let blob = parse_sshsig_armored(armored, expected_namespace)?;
     blob.extract_ed25519_raw()
 }
 

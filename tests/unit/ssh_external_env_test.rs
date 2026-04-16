@@ -5,7 +5,7 @@ use secretenv::io::ssh::external::add::DefaultSshAdd;
 use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
 use secretenv::io::ssh::external::traits::SshAdd;
 use secretenv::io::ssh::external::traits::SshKeygen;
-use secretenv::io::ssh::protocol::sshsig::SSHSIG_NAMESPACE;
+use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use secretenv::io::ssh::protocol::wire::ssh_string_encode;
 use secretenv::support::codec::base64_public::encode_base64_standard;
 use std::fs;
@@ -29,7 +29,7 @@ fn build_test_sshsig_armored(raw_sig: [u8; 64]) -> String {
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
     sshsig_blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    sshsig_blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    sshsig_blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     sshsig_blob.extend_from_slice(&ssh_string_encode(b""));
     sshsig_blob.extend_from_slice(&ssh_string_encode(b"sha256"));
 
@@ -112,7 +112,7 @@ exec /usr/bin/ssh-keygen \"$@\"\n",
     fs::set_permissions(&script_path, perms).unwrap();
 
     let signature = DefaultSshKeygen::new(script_path.to_string_lossy().into_owned())
-        .sign(&ssh_priv, SSHSIG_NAMESPACE, b"stdin-signature-test")
+        .sign(&ssh_priv, KEY_PROTECTION_NAMESPACE, b"stdin-signature-test")
         .unwrap();
 
     assert_eq!(signature.as_bytes().len(), 64);
@@ -167,7 +167,7 @@ if [ \"$input\" != \"public-key-agent-signature-test\" ]; then\n\
 fi\n\
 /bin/cat <<'EOF'\n\
 {armored}EOF\n",
-        namespace = SSHSIG_NAMESPACE,
+        namespace = KEY_PROTECTION_NAMESPACE,
         pub_path = ssh_pub.display(),
         armored = armored,
     );
@@ -179,7 +179,7 @@ fi\n\
     let signature = DefaultSshKeygen::new(script_path.to_string_lossy().into_owned())
         .sign(
             &ssh_pub,
-            SSHSIG_NAMESPACE,
+            KEY_PROTECTION_NAMESPACE,
             b"public-key-agent-signature-test",
         )
         .unwrap();

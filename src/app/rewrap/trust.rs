@@ -4,22 +4,13 @@
 use std::collections::BTreeMap;
 
 use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::{
-    enforce_recipients_trust_with_additional, evaluate_signer_trust_with_proof, CommandCapability,
-    SignerTrustOutcome, TrustContext,
-};
+use crate::app::trust::{enforce_recipients_trust_with_additional, TrustContext};
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::feature::verify::file::verify_file_content;
-use crate::feature::verify::kv::signature::verify_kv_content;
-use crate::format::content::EncryptedContent;
 use crate::model::public_key::PublicKey;
 use crate::{Error, Result};
 
-use super::types::{
-    IncomingPromotionCandidate, RewrapArtifactSnapshot, RewrapBatchPlan, RewrapSignerRequirement,
-    RewrapTrustPlan,
-};
+use super::types::{IncomingPromotionCandidate, RewrapBatchPlan, RewrapTrustPlan};
 
 pub(crate) fn build_rewrap_trust(
     plan: &RewrapBatchPlan,
@@ -41,16 +32,12 @@ pub(crate) fn build_rewrap_trust(
         &post_promotion_members,
         &accepted_known_keys,
     )?;
-    let current_recipients = collect_recipient_member_ids(&post_promotion_members);
-    let signer_requirements = collect_signer_requirements(plan, trust_ctx, &current_recipients)?;
-
     let mut warnings = trust_ctx.permission_warnings.clone();
     warnings.extend(recipient_expiry_warnings);
 
     Ok(RewrapTrustPlan {
         warnings,
         recipient_trust,
-        signer_requirements,
         accepted_promotion_candidates,
         post_promotion_members,
     })
@@ -115,63 +102,4 @@ fn build_post_promotion_index(members: &[PublicKey]) -> Result<BTreeMap<String, 
         }
     }
     Ok(index)
-}
-
-fn collect_recipient_member_ids(members: &[PublicKey]) -> Vec<String> {
-    let mut recipients: Vec<String> = members
-        .iter()
-        .map(|member| member.protected.member_id.clone())
-        .collect();
-    recipients.sort();
-    recipients
-}
-
-fn collect_signer_requirements(
-    plan: &RewrapBatchPlan,
-    trust_ctx: &TrustContext,
-    current_recipients: &[String],
-) -> Result<Vec<RewrapSignerRequirement>> {
-    let mut requirements = Vec::new();
-
-    for snapshot in &plan.artifact_snapshots {
-        if let Some(requirement) =
-            evaluate_file_signer_requirement(snapshot, trust_ctx, current_recipients)?
-        {
-            requirements.push(requirement);
-        }
-    }
-
-    Ok(requirements)
-}
-
-fn evaluate_file_signer_requirement(
-    snapshot: &RewrapArtifactSnapshot,
-    trust_ctx: &TrustContext,
-    current_recipients: &[String],
-) -> Result<Option<RewrapSignerRequirement>> {
-    let content = EncryptedContent::detect(snapshot.content.clone())?;
-    let proof = match content {
-        EncryptedContent::FileEnc(file_content) => {
-            verify_file_content(&file_content, false)?.proof.clone()
-        }
-        EncryptedContent::KvEnc(kv_content) => {
-            { verify_kv_content(&kv_content, false)?.proof }.clone()
-        }
-    };
-
-    let outcome = evaluate_signer_trust_with_proof(
-        trust_ctx,
-        &proof,
-        CommandCapability::Rewrap,
-        current_recipients,
-    )?;
-
-    if matches!(outcome, SignerTrustOutcome::Accepted) {
-        return Ok(None);
-    }
-
-    Ok(Some(RewrapSignerRequirement {
-        file_path: snapshot.file_path.clone(),
-        outcome,
-    }))
 }

@@ -134,8 +134,9 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
     }
 
     impl SignatureBackend for CountingBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -188,8 +189,9 @@ fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
     }
 
     impl SignatureBackend for CountingBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -245,8 +247,9 @@ fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
 fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
     struct DeterministicBackend;
     impl SignatureBackend for DeterministicBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -286,8 +289,9 @@ fn test_decrypt_private_key_retries_signature_only_after_failure() {
     }
 
     impl SignatureBackend for CountingBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -333,8 +337,9 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
     struct EncryptBackend;
 
     impl SignatureBackend for EncryptBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -347,8 +352,9 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
     }
 
     impl SignatureBackend for RetryDiagnosticBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -394,8 +400,9 @@ fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
     struct EncryptBackend;
 
     impl SignatureBackend for EncryptBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -408,8 +415,9 @@ fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
     }
 
     impl SignatureBackend for FailingBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {

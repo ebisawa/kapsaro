@@ -6,7 +6,6 @@
 use super::signature_backend::SignatureBackend;
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use crate::io::ssh::protocol::sshsig::SSHSIG_NAMESPACE;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::Result;
 
@@ -45,13 +44,13 @@ impl SshKeygenBackend {
 }
 
 impl SignatureBackend for SshKeygenBackend {
-    fn sign_for_ikm(
+    fn sign_sshsig(
         &self,
+        namespace: &str,
         _ssh_pubkey: &str,
-        challenge_bytes: &[u8],
+        message: &[u8],
     ) -> Result<Ed25519RawSignature> {
         let key_path = self.key_descriptor.as_path();
-        self.ssh_keygen
-            .sign(key_path, SSHSIG_NAMESPACE, challenge_bytes)
+        self.ssh_keygen.sign(key_path, namespace, message)
     }
 }

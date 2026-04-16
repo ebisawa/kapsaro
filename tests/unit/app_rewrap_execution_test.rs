@@ -10,7 +10,7 @@ use crate::app::rewrap::execution::{
 };
 use crate::app::rewrap::plan::build_rewrap_batch_plan;
 use crate::app::rewrap::types::{
-    IncomingPromotionCandidate, RewrapArtifactSnapshot, RewrapBatchPlan, RewrapBatchRequest,
+    IncomingPromotionCandidate, RewrapBatchPlan, RewrapBatchRequest,
     VerifiedPostPromotionRecipients,
 };
 use crate::app::trust::approval::ApprovedKnownKey;
@@ -44,12 +44,13 @@ fn strict_key_checking_guard() -> EnvGuard {
 
 fn encrypt_file_for_members(
     home: &std::path::Path,
+    signer_member_id: &str,
     signer_kid: &str,
     key_ctx: &crate::feature::context::crypto::CryptoContext,
     recipient_ids: &[&str],
 ) -> String {
     let keystore_root = home.join("keys");
-    let signer_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, signer_kid).unwrap();
+    let signer_pub = load_public_key(&keystore_root, signer_member_id, signer_kid).unwrap();
     let recipient_members = recipient_ids
         .iter()
         .map(|member_id| {
@@ -121,7 +122,7 @@ fn build_empty_plan(
         workspace_root: workspace_dir.to_path_buf(),
         pre_promotion_trust,
         incoming_report: None,
-        artifact_snapshots: Vec::new(),
+        artifact_paths: Vec::new(),
     }
 }
 
@@ -163,6 +164,8 @@ fn test_execute_rewrap_batch_does_not_promote_members() {
         &build_verified_post_promotion_recipients(
             load_active_member_files(&workspace_dir).unwrap(),
         ),
+        &mut |_candidate, _context_label, _path| Ok(true),
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
     )
     .unwrap();
 
@@ -268,10 +271,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         .trust_context()
         .clone(),
         incoming_report: None,
-        artifact_snapshots: vec![RewrapArtifactSnapshot {
-            file_path: invalid_file.clone(),
-            content: fs::read_to_string(&invalid_file).unwrap(),
-        }],
+        artifact_paths: vec![invalid_file.clone()],
     };
     let request = RewrapBatchRequest {
         options,
@@ -294,6 +294,8 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         &expected_post_promotion_members,
         execution,
         &approvals,
+        |_candidate, _context_label, _path| Ok(true),
+        |_candidate, _context_label, _recipients, _path| Ok(true),
     )
     .unwrap();
 
@@ -363,6 +365,8 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
         &expected_post_promotion_members,
         execution,
         &approvals,
+        |_candidate, _context_label, _path| Ok(true),
+        |_candidate, _context_label, _recipients, _path| Ok(true),
     );
 
     assert!(result.is_err());
@@ -438,13 +442,15 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
     let alice_kid = execution.key_ctx.kid.clone();
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
+        ALICE_MEMBER_ID,
         &alice_kid,
         &execution.key_ctx,
         &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
     );
     let secret_path = workspace_dir.join("secrets").join("snapshot-file.json");
-    fs::write(&secret_path, encrypted).unwrap();
-    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    fs::write(&secret_path, &encrypted).unwrap();
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
@@ -459,7 +465,15 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
             .collect::<Vec<_>>(),
     );
 
-    let outcome = execute_rewrap_batch(&request, &plan, execution, &fixed_members).unwrap();
+    let outcome = execute_rewrap_batch(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &mut |_candidate, _context_label, _path| Ok(true),
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
+    )
+    .unwrap();
 
     assert_eq!(outcome.failed_files.len(), 0);
     let rewritten = fs::read_to_string(&secret_path).unwrap();
@@ -475,7 +489,7 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
 }
 
 #[test]
-fn test_execute_rewrap_batch_rejects_artifact_mismatch_after_review() {
+fn test_execute_rewrap_batch_uses_current_artifact_content_at_execution_time() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -483,6 +497,7 @@ fn test_execute_rewrap_batch_rejects_artifact_mismatch_after_review() {
     let alice_kid = execution.key_ctx.kid.clone();
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
+        ALICE_MEMBER_ID,
         &alice_kid,
         &execution.key_ctx,
         &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
@@ -490,14 +505,9 @@ fn test_execute_rewrap_batch_rejects_artifact_mismatch_after_review() {
     let secret_path = workspace_dir.join("secrets").join("stale-file.json");
     fs::write(&secret_path, &encrypted).unwrap();
 
-    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    let tampered = encrypt_file_for_members(
-        temp_dir.path(),
-        &alice_kid,
-        &execution.key_ctx,
-        &[ALICE_MEMBER_ID],
-    );
-    fs::write(&secret_path, &tampered).unwrap();
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
+    fs::write(&secret_path, "not encrypted").unwrap();
 
     let request = RewrapBatchRequest {
         options,
@@ -508,14 +518,318 @@ fn test_execute_rewrap_batch_rejects_artifact_mismatch_after_review() {
     let fixed_members =
         build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
 
-    let outcome = execute_rewrap_batch(&request, &plan, execution, &fixed_members).unwrap();
+    let outcome = execute_rewrap_batch(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &mut |_candidate, _context_label, _path| Ok(true),
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
+    )
+    .unwrap();
 
     assert!(outcome.processed_files.is_empty());
     assert_eq!(outcome.failed_files.len(), 1);
     assert!(outcome.failed_files[0]
         .error_message
-        .contains("changed since review"));
-    assert_eq!(fs::read_to_string(&secret_path).unwrap(), tampered);
+        .contains("Expected file-enc or kv-enc format"));
+    assert_eq!(fs::read_to_string(&secret_path).unwrap(), "not encrypted");
+}
+
+#[test]
+fn test_execute_rewrap_batch_uses_captured_content_after_live_path_changes() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let bob_signed = encrypt_file_for_members(
+        temp_dir.path(),
+        BOB_MEMBER_ID,
+        &bob_key_ctx.kid,
+        &bob_key_ctx,
+        &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+    );
+    let secret_path = workspace_dir.join("secrets").join("captured-file.json");
+    fs::write(&secret_path, &bob_signed).unwrap();
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
+    let request = RewrapBatchRequest {
+        options,
+        rotate_key: false,
+        clear_disclosure_history: false,
+        accepted_promotions: Vec::new(),
+    };
+    let fixed_members =
+        build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
+    let mut prompt_count = 0usize;
+
+    let outcome = execute_rewrap_batch(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &mut |_candidate, _context_label, path| {
+            prompt_count += 1;
+            fs::write(path, "tampered-after-capture").unwrap();
+            Ok(true)
+        },
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
+    )
+    .unwrap();
+
+    assert_eq!(prompt_count, 1);
+    assert_eq!(outcome.processed_files.len(), 1);
+    let rewritten = fs::read_to_string(&secret_path).unwrap();
+    assert_ne!(rewritten, "tampered-after-capture");
+    assert!(rewritten.contains(ALICE_MEMBER_ID));
+}
+
+#[test]
+fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_review() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let first_path = workspace_dir.join("secrets").join("one.json");
+    let second_path = workspace_dir.join("secrets").join("two.json");
+    fs::write(
+        &first_path,
+        encrypt_file_for_members(
+            temp_dir.path(),
+            BOB_MEMBER_ID,
+            &bob_key_ctx.kid,
+            &bob_key_ctx,
+            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        ),
+    )
+    .unwrap();
+    fs::write(
+        &second_path,
+        encrypt_file_for_members(
+            temp_dir.path(),
+            BOB_MEMBER_ID,
+            &bob_key_ctx.kid,
+            &bob_key_ctx,
+            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        ),
+    )
+    .unwrap();
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
+    let request = RewrapBatchRequest {
+        options: options.clone(),
+        rotate_key: false,
+        clear_disclosure_history: false,
+        accepted_promotions: Vec::new(),
+    };
+    let fixed_members =
+        build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
+    let mut prompt_count = 0usize;
+
+    let outcome = execute_rewrap_batch(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &mut |_candidate, _context_label, _path| {
+            prompt_count += 1;
+            Ok(true)
+        },
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
+    )
+    .unwrap();
+
+    assert_eq!(prompt_count, 1);
+    assert_eq!(outcome.processed_files.len(), 2);
+    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let loaded = load_trust_store(&trust_path, temp_dir.path())
+        .unwrap()
+        .unwrap();
+    assert!(loaded
+        .document
+        .protected
+        .known_keys
+        .iter()
+        .any(|entry| entry.member_id == BOB_MEMBER_ID && bob_key_ctx.kid == entry.kid));
+}
+
+#[test]
+fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let bob_path = workspace_dir.join("secrets").join("reject.json");
+    let alice_path = workspace_dir.join("secrets").join("accepted.json");
+    fs::write(
+        &bob_path,
+        encrypt_file_for_members(
+            temp_dir.path(),
+            BOB_MEMBER_ID,
+            &bob_key_ctx.kid,
+            &bob_key_ctx,
+            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        ),
+    )
+    .unwrap();
+    fs::write(
+        &alice_path,
+        encrypt_file_for_members(
+            temp_dir.path(),
+            ALICE_MEMBER_ID,
+            &execution.key_ctx.kid,
+            &execution.key_ctx,
+            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        ),
+    )
+    .unwrap();
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
+    let request = RewrapBatchRequest {
+        options,
+        rotate_key: false,
+        clear_disclosure_history: false,
+        accepted_promotions: Vec::new(),
+    };
+    let fixed_members =
+        build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
+    let bob_canonical = bob_path.canonicalize().unwrap();
+
+    let outcome = execute_rewrap_batch(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &mut |_candidate, _context_label, path| Ok(path != bob_canonical.as_path()),
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.processed_files.len(), 1);
+    assert_eq!(outcome.failed_files.len(), 1);
+    assert_eq!(outcome.failed_files[0].output_path, bob_canonical);
+    assert!(outcome.failed_files[0]
+        .error_message
+        .contains("Manual signer trust was rejected"));
+    let accepted_output = fs::read_to_string(&alice_path).unwrap();
+    assert!(accepted_output.contains(ALICE_MEMBER_ID));
+}
+
+#[test]
+fn test_execute_rewrap_batch_does_not_create_artifact_lock_file() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let secret_path = workspace_dir.join("secrets").join("default.json");
+    fs::write(
+        &secret_path,
+        encrypt_file_for_members(
+            temp_dir.path(),
+            ALICE_MEMBER_ID,
+            &execution.key_ctx.kid,
+            &execution.key_ctx,
+            &[ALICE_MEMBER_ID],
+        ),
+    )
+    .unwrap();
+    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    let request = RewrapBatchRequest {
+        options,
+        rotate_key: false,
+        clear_disclosure_history: false,
+        accepted_promotions: Vec::new(),
+    };
+    let fixed_members =
+        build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
+
+    let outcome = execute_rewrap_batch(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &mut |_candidate, _context_label, _path| Ok(true),
+        &mut |_candidate, _context_label, _recipients, _path| Ok(true),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.processed_files.len(), 1);
+    assert!(!workspace_dir
+        .join("secrets")
+        .join(".default.json.lock")
+        .exists());
+}
+
+#[test]
+fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_review() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let secret_path = workspace_dir.join("secrets").join("incoming-signer.json");
+    fs::write(
+        &secret_path,
+        encrypt_file_for_members(
+            temp_dir.path(),
+            BOB_MEMBER_ID,
+            &bob_key_ctx.kid,
+            &bob_key_ctx,
+            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        ),
+    )
+    .unwrap();
+
+    let bob_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    let bob_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    fs::rename(&bob_active, &bob_incoming).unwrap();
+
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
+    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
+    let bob_public = load_member_file_from_path(&bob_incoming).unwrap();
+    let request = RewrapBatchRequest {
+        options,
+        rotate_key: false,
+        clear_disclosure_history: false,
+        accepted_promotions: vec![bob_candidate.clone()],
+    };
+    let approvals = vec![ApprovedKnownKey::from_review(
+        &bob_candidate.review.member_id,
+        &bob_candidate.review.kid,
+        bob_candidate.review.attestor_pub.clone(),
+        None,
+    )];
+    let mut expected_post_promotion_members = load_active_member_files(&workspace_dir).unwrap();
+    expected_post_promotion_members.push(bob_public);
+    let mut non_member_prompts = 0usize;
+
+    let outcome = execute_confirmed_rewrap_batch(
+        &request,
+        &plan,
+        &expected_post_promotion_members,
+        execution,
+        &approvals,
+        |_candidate, _context_label, _path| Ok(true),
+        |_candidate, _context_label, _recipients, _path| {
+            non_member_prompts += 1;
+            Ok(true)
+        },
+    )
+    .unwrap();
+
+    assert_eq!(non_member_prompts, 1);
+    assert_eq!(outcome.processed_files.len(), 1);
+    assert!(outcome.failed_files.is_empty());
 }
 
 #[test]
@@ -566,6 +880,8 @@ fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mi
         &expected_post_promotion_members,
         execution,
         &[],
+        |_candidate, _context_label, _path| Ok(true),
+        |_candidate, _context_label, _recipients, _path| Ok(true),
     );
 
     assert!(result.is_err());
@@ -583,12 +899,13 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
+        ALICE_MEMBER_ID,
         &execution.key_ctx.kid,
         &execution.key_ctx,
         &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
     );
     let secret_path = workspace_dir.join("secrets").join("invalid-recipient.json");
-    fs::write(&secret_path, encrypted).unwrap();
+    fs::write(&secret_path, &encrypted).unwrap();
     let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     let request = RewrapBatchRequest {
         options,
@@ -614,6 +931,8 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
         &expected_post_promotion_members,
         execution,
         &[],
+        |_candidate, _context_label, _path| Ok(true),
+        |_candidate, _context_label, _recipients, _path| Ok(true),
     );
 
     assert!(result.is_err());
@@ -622,8 +941,5 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
         Ok(_) => panic!("expected invalid recipient verification error"),
     };
     assert!(err.contains("expired") || err.contains("self-signature"));
-    assert_eq!(
-        fs::read_to_string(&secret_path).unwrap(),
-        plan.artifact_snapshots[0].content
-    );
+    assert_eq!(fs::read_to_string(&secret_path).unwrap(), encrypted);
 }

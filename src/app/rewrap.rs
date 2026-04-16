@@ -6,9 +6,7 @@
 use crate::app::context::execution::build_write_execution_warnings;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::flow::{
-    review_recipient_trust_with_handler, review_rewrap_signer_requirements_with_handlers,
-};
+use crate::app::trust::flow::review_recipient_trust_with_handler;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::Result;
 use std::path::PathBuf;
@@ -68,18 +66,15 @@ where
     };
     let trust_plan = trust::build_rewrap_trust(&plan, &request.accepted_promotions)?;
     emit_warnings(&trust_plan.warnings);
-    let approvals = confirm_rewrap_trust(
-        &trust_plan,
-        confirm_known,
-        confirm_non_member,
-        confirm_recipients,
-    )?;
+    let approvals = confirm_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
     let mut outcome = execution::execute_confirmed_rewrap_batch(
         &request,
         &plan,
         &trust_plan.post_promotion_members,
         input.execution,
         &approvals,
+        confirm_known,
+        confirm_non_member,
     )?;
     emit_warnings(&outcome.warnings);
     outcome.warnings.clear();
@@ -117,16 +112,11 @@ where
     Ok(session.into_accepted_candidates(&accepted_member_ids))
 }
 
-fn confirm_rewrap_trust<ConfirmKnown, ConfirmNonMember, ConfirmRecipients>(
+fn confirm_rewrap_recipient_trust<ConfirmRecipients>(
     trust_plan: &RewrapTrustPlan,
-    confirm_known: ConfirmKnown,
-    confirm_non_member: ConfirmNonMember,
     confirm_recipients: ConfirmRecipients,
 ) -> Result<Vec<ApprovedKnownKey>>
 where
-    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str, &std::path::Path) -> Result<bool>,
-    ConfirmNonMember:
-        FnMut(&TrustApprovalCandidate, &str, &[String], &std::path::Path) -> Result<bool>,
     ConfirmRecipients:
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
 {
@@ -135,13 +125,6 @@ where
         "rewrap recipients",
         confirm_recipients,
     )?;
-    approvals.extend(review_rewrap_signer_requirements_with_handlers(
-        &trust_plan.signer_requirements,
-        "rewrap input signer",
-        "signer trust",
-        confirm_known,
-        confirm_non_member,
-    )?);
     approvals.extend(trust_plan.accepted_promotion_candidates.clone());
     Ok(approvals)
 }

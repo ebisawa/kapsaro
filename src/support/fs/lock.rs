@@ -25,15 +25,14 @@ where
         ))
     })?;
     let lock_file_name = format!(".{}.lock", file_name);
-    let lock_path = path
-        .parent()
-        .map(|p| p.join(&lock_file_name))
+    let lock_path = lock_parent_dir(path)
+        .map(|parent| parent.join(&lock_file_name))
         .unwrap_or_else(|| Path::new(&lock_file_name).to_path_buf());
 
     // Ensure the directory exists before opening the lock file.
     // This is required for cases like `secretenv config set ...` where
     // SECRETENV_HOME/config.toml's parent directory may not be created yet.
-    if let Some(lock_parent) = lock_path.parent() {
+    if let Some(lock_parent) = lock_parent_dir(&lock_path) {
         ensure_dir_restricted(lock_parent).map_err(|e| {
             Error::io(format!(
                 "Failed to create directory for lock file '{}': {}",
@@ -61,4 +60,9 @@ where
         .map_err(|e| Error::io(format!("Failed to acquire lock: {}", e)))?;
 
     f()
+}
+
+fn lock_parent_dir(path: &Path) -> Option<&Path> {
+    path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty() && *parent != Path::new("."))
 }

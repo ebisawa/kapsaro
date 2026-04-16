@@ -391,6 +391,7 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
         clear_disclosure_history: false,
         member_id: Some(ALICE_MEMBER_ID.to_string()),
         rotate_key: false,
+        targets: Vec::new(),
     };
     rewrap::run(rewrap_args).unwrap();
 

@@ -471,6 +471,8 @@ cat certs/ca.pem | secretenv encrypt --stdin --stdout > ca.pem.encrypted
 
 暗号化と同時に署名が付与されます。
 
+batch の `rewrap` は、`--target` を指定しない場合に workspace の `.secretenv/secrets/` 配下を自動的に対象にします。特定の file-enc だけを rewrap したい場合は、`secretenv rewrap --target <path>` を使うと、その指定ファイルだけが対象になります。
+
 ### 復号
 
 ```bash
@@ -1110,7 +1112,7 @@ SSH 鍵が同じ入力に対して2回連続で異なる署名を生成したこ
 | `secretenv member verify --approve [<member_id>...]` | active メンバーの鍵を確認し、承認結果を local trust store に保存 |
 | `secretenv member add <file>` | メンバーの公開鍵ファイルを incoming に追加 |
 | `secretenv member remove <member_id>` | メンバーを Workspace から削除 |
-| `secretenv rewrap [--rotate-key] [--clear-disclosure-history]` | 承認待ちメンバーを有効化し、全暗号ファイルの受信者情報を更新 |
+| `secretenv rewrap [--rotate-key] [--clear-disclosure-history] [--target <path>...]` | 承認待ちメンバーを有効化し、`--target` 未指定時は workspace の全暗号ファイル、指定時はその対象ファイルだけの受信者情報を更新 |
 
 ### ローカル trust store
 

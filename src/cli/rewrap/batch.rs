@@ -22,6 +22,7 @@ pub(crate) fn execute_batch_rewrap(args: &RewrapArgs) -> Result<()> {
             execution,
             rotate_key: args.rotate_key,
             clear_disclosure_history: args.clear_disclosure_history,
+            explicit_targets: args.targets.clone(),
         },
         print_warnings,
         |review_view| confirm_incoming_promotions(review_view, &mut std::io::stdin().lock()),

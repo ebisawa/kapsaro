@@ -470,6 +470,8 @@ cat certs/ca.pem | secretenv encrypt --stdin --stdout > ca.pem.encrypted
 
 A signature is attached automatically during encryption.
 
+Batch `rewrap` automatically covers files under `.secretenv/secrets/` only when `--target` is not provided. If you want to rewrap only a specific file-enc artifact, use `secretenv rewrap --target <path>` so only the specified file is processed.
+
 ### Decrypting
 
 ```bash
@@ -1109,7 +1111,7 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv member verify --approve [<member_id>...]` | Review active member keys and save the approval result in the local trust store |
 | `secretenv member add <file>` | Add a member's public key file to incoming |
 | `secretenv member remove <member_id>` | Remove a member from the Workspace |
-| `secretenv rewrap [--rotate-key] [--clear-disclosure-history]` | Activate pending members and update recipient information in all encrypted files |
+| `secretenv rewrap [--rotate-key] [--clear-disclosure-history] [--target <path>...]` | Activate pending members and update recipient information in all workspace encrypted files when `--target` is omitted, or only the specified target files when it is provided |
 
 ### Local Trust Store
 

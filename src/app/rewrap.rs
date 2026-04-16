@@ -11,6 +11,7 @@ use crate::app::trust::flow::{
 };
 use crate::app::trust::TrustApprovalCandidate;
 use crate::Result;
+use std::path::PathBuf;
 
 pub(crate) mod execution;
 pub(crate) mod plan;
@@ -29,6 +30,7 @@ pub(crate) struct RewrapBatchCommandInput {
     pub execution: ExecutionContext,
     pub rotate_key: bool,
     pub clear_disclosure_history: bool,
+    pub explicit_targets: Vec<PathBuf>,
 }
 
 pub(crate) fn execute_rewrap_batch_command<
@@ -56,7 +58,8 @@ where
 {
     emit_warnings(&build_write_execution_warnings(&input.execution)?);
     let request = build_rewrap_batch_request(&input);
-    let plan = plan::build_rewrap_batch_plan(&request.options, &input.execution)?;
+    let plan =
+        plan::build_rewrap_batch_plan(&request.options, &input.execution, &input.explicit_targets)?;
     let accepted_promotions =
         collect_accepted_promotions(&plan, request.options.verbose, &mut confirm_promotions)?;
     let request = RewrapBatchRequest {

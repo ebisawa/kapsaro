@@ -7,7 +7,10 @@
 
 use secretenv::support::fs::lock::with_file_lock;
 use std::fs;
+use std::path::Path;
 use tempfile::TempDir;
+
+use crate::test_utils::with_temp_cwd;
 
 #[test]
 fn test_with_file_lock() {
@@ -88,4 +91,20 @@ fn test_lock_file_created_with_0600() {
         Ok(())
     })
     .unwrap();
+}
+
+#[test]
+fn test_with_file_lock_accepts_relative_filename_in_current_directory() {
+    let temp_dir = TempDir::new().unwrap();
+
+    with_temp_cwd(temp_dir.path(), || {
+        let result = with_file_lock(Path::new("relative.txt"), || {
+            fs::write("relative.txt", "locked content").unwrap();
+            Ok::<(), secretenv::Error>(())
+        });
+
+        assert!(result.is_ok());
+        assert!(temp_dir.path().join("relative.txt").exists());
+        assert!(temp_dir.path().join(".relative.txt.lock").exists());
+    });
 }

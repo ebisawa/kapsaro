@@ -26,12 +26,13 @@ impl SshAgentBackend {
 }
 
 impl SignatureBackend for SshAgentBackend {
-    fn sign_for_ikm(
+    fn sign_sshsig(
         &self,
+        namespace: &str,
         ssh_pubkey: &str,
-        challenge_bytes: &[u8],
+        message: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let sshsig_signed_data = sshsig::build_sshsig_signed_data(challenge_bytes);
+        let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace);
 
         self.agent_signer.sign(ssh_pubkey, &sshsig_signed_data)
     }

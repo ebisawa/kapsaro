@@ -21,7 +21,11 @@ pub(crate) fn probe_determinism(
         return Ok(SshDeterminismStatus::Skipped);
     }
 
-    let determinism = match backend.check_determinism(ssh_pub, SSH_DETERMINISM_CHECK_MESSAGE) {
+    let determinism = match backend.check_sshsig_determinism(
+        ssh::KEY_PROTECTION_NAMESPACE,
+        ssh_pub,
+        SSH_DETERMINISM_CHECK_MESSAGE,
+    ) {
         Ok(()) => Ok(SshDeterminismStatus::Verified),
         Err(error) if is_non_deterministic_signature_error(&error) => {
             Ok(SshDeterminismStatus::Failed {

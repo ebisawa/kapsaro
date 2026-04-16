@@ -16,7 +16,7 @@ use crate::io::workspace::members::{
 use crate::model::public_key::PublicKey;
 use crate::support::fs::list_dir;
 use crate::support::fs::load_text_with_limit;
-use crate::support::limits::{encrypted_file_read_limit, MAX_JSON_DOCUMENT_READ_SIZE};
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 use super::types::{
     IncomingPromotionCandidate, IncomingVerificationCategory, IncomingVerificationItem,
-    IncomingVerificationReport, RewrapArtifactSnapshot, RewrapBatchPlan,
+    IncomingVerificationReport, RewrapBatchPlan,
 };
 
 /// Resolve workspace inputs, incoming promotion candidates, and target files.
@@ -36,7 +36,7 @@ pub(crate) fn build_rewrap_batch_plan(
     let workspace = require_workspace(options, "rewrap")?;
     ensure_workspace_member_kid_uniqueness(&workspace.root_path)?;
     let incoming_index = load_incoming_index(&workspace.root_path)?;
-    let artifact_snapshots = load_encrypted_file_snapshots(&workspace.root_path, explicit_targets)?;
+    let artifact_paths = collect_rewrap_target_paths(&workspace.root_path, explicit_targets)?;
     let pre_promotion_trust = load_read_trust_context(
         options,
         &workspace.root_path,
@@ -46,7 +46,7 @@ pub(crate) fn build_rewrap_batch_plan(
     )?
     .trust_ctx;
     let incoming_report = build_incoming_report(&incoming_index, options.verbose)?;
-    if artifact_snapshots.is_empty() {
+    if artifact_paths.is_empty() {
         return Err(Error::NotFound {
             message:
                 "No encrypted files found in workspace secrets/ and no explicit rewrap targets were provided"
@@ -58,7 +58,7 @@ pub(crate) fn build_rewrap_batch_plan(
         workspace_root: workspace.root_path,
         pre_promotion_trust,
         incoming_report,
-        artifact_snapshots,
+        artifact_paths,
     })
 }
 
@@ -88,23 +88,6 @@ fn is_encrypted_file(path: &Path) -> bool {
         return false;
     };
     name.ends_with(KV_ENC_EXTENSION) || name.ends_with(".json") || name.ends_with(".encrypted")
-}
-
-fn load_encrypted_file_snapshots(
-    workspace_root: &Path,
-    explicit_targets: &[PathBuf],
-) -> Result<Vec<RewrapArtifactSnapshot>> {
-    collect_rewrap_target_paths(workspace_root, explicit_targets)?
-        .into_iter()
-        .map(|file_path| {
-            let content = load_text_with_limit(
-                &file_path,
-                encrypted_file_read_limit(&file_path),
-                "encrypted artifact",
-            )?;
-            Ok(RewrapArtifactSnapshot { file_path, content })
-        })
-        .collect()
 }
 
 fn collect_rewrap_target_paths(

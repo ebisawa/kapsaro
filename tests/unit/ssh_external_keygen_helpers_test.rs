@@ -9,7 +9,7 @@
 #![cfg(any(unix, windows))]
 
 use super::{check_sign_output, check_verify_output, parse_sign_stdout};
-use crate::io::ssh::protocol::sshsig::SSHSIG_NAMESPACE;
+use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::wire::ssh_string_encode;
 use crate::support::codec::base64_public::encode_base64_standard;
 use crate::Error;
@@ -119,7 +119,7 @@ fn test_parse_sign_stdout_extracts_ed25519_signature() {
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
     sshsig_blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    sshsig_blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    sshsig_blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     sshsig_blob.extend_from_slice(&ssh_string_encode(b""));
     sshsig_blob.extend_from_slice(&ssh_string_encode(b"sha256"));
 
@@ -133,13 +133,13 @@ fn test_parse_sign_stdout_extracts_ed25519_signature() {
         encode_base64_standard(&sshsig_blob)
     );
 
-    let signature = parse_sign_stdout(armored.into_bytes()).unwrap();
+    let signature = parse_sign_stdout(armored.into_bytes(), KEY_PROTECTION_NAMESPACE).unwrap();
     assert_eq!(signature.as_bytes(), &raw_sig);
 }
 
 #[test]
 fn test_parse_sign_stdout_rejects_empty_output() {
-    let err = parse_sign_stdout(Vec::new()).unwrap_err();
+    let err = parse_sign_stdout(Vec::new(), KEY_PROTECTION_NAMESPACE).unwrap_err();
     assert!(err
         .to_string()
         .contains("ssh-keygen -Y sign produced empty signature output"));
@@ -147,7 +147,7 @@ fn test_parse_sign_stdout_rejects_empty_output() {
 
 #[test]
 fn test_parse_sign_stdout_rejects_invalid_utf8() {
-    let err = parse_sign_stdout(vec![0xFF]).unwrap_err();
+    let err = parse_sign_stdout(vec![0xFF], KEY_PROTECTION_NAMESPACE).unwrap_err();
     assert!(err
         .to_string()
         .contains("Invalid UTF-8 in ssh-keygen output"));

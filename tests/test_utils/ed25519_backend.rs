@@ -46,12 +46,13 @@ impl Ed25519DirectBackend {
 }
 
 impl SignatureBackend for Ed25519DirectBackend {
-    fn sign_for_ikm(
+    fn sign_sshsig(
         &self,
+        namespace: &str,
         _ssh_pubkey: &str,
-        challenge_bytes: &[u8],
+        message: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let sshsig_signed_data = sshsig::build_sshsig_signed_data(challenge_bytes);
+        let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace);
         let signature = self.signing_key.sign(&sshsig_signed_data);
         Ok(Ed25519RawSignature::new(signature.to_bytes()))
     }

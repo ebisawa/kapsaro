@@ -11,6 +11,7 @@ use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::backend::ssh_agent::SshAgentBackend;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
+use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 
@@ -19,8 +20,9 @@ fn test_backend_trait_determinism_check() {
     // Mock backend for testing
     struct DeterministicBackend;
     impl SignatureBackend for DeterministicBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -34,10 +36,10 @@ fn test_backend_trait_determinism_check() {
     }
 
     let backend = DeterministicBackend;
-    let result = backend.check_determinism("fake-key", b"test");
+    let result = backend.check_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     assert!(result.is_ok());
     let signature = backend
-        .sign_deterministic_for_ikm("fake-key", b"test")
+        .sign_sshsig_deterministic(KEY_PROTECTION_NAMESPACE, "fake-key", b"test")
         .expect("deterministic signing should succeed");
     assert_eq!(signature.as_bytes()[0], 1);
 }
@@ -50,8 +52,9 @@ fn test_backend_trait_non_deterministic_error() {
         counter: Cell<u8>,
     }
     impl SignatureBackend for NonDeterministicBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -66,7 +69,7 @@ fn test_backend_trait_non_deterministic_error() {
     let backend = NonDeterministicBackend {
         counter: Cell::new(0),
     };
-    let result = backend.check_determinism("fake-key", b"test");
+    let result = backend.check_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(
@@ -74,7 +77,8 @@ fn test_backend_trait_non_deterministic_error() {
         "Error message should mention determinism: {}",
         err_msg
     );
-    let signature_result = backend.sign_deterministic_for_ikm("fake-key", b"test");
+    let signature_result =
+        backend.sign_sshsig_deterministic(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     assert!(signature_result.is_err());
 }
 
@@ -140,7 +144,7 @@ fn test_ssh_agent_backend_real() {
     let pubkey = first_line.unwrap();
     let challenge = b"test challenge for ssh-agent backend";
 
-    let result = backend.sign_for_ikm(pubkey, challenge);
+    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, pubkey, challenge);
     assert!(
         result.is_ok(),
         "ssh-agent backend should succeed with loaded key: {:?}",
@@ -204,7 +208,7 @@ fn test_ssh_keygen_backend_real() {
     let pubkey = first_line.unwrap();
     let challenge = b"test challenge for ssh-keygen backend";
 
-    let result = backend.sign_for_ikm(pubkey, challenge);
+    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, pubkey, challenge);
     assert!(
         result.is_ok(),
         "ssh-keygen backend should succeed: {:?}",
@@ -225,7 +229,7 @@ fn test_ssh_keygen_backend_command_not_found() {
         Box::new(DefaultSshKeygen::new("/nonexistent/ssh-keygen")),
         SshKeyDescriptor::from_path(std::path::PathBuf::from("/dummy/key")),
     );
-    let result = backend.sign_for_ikm("fake-key", b"test");
+    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
 
     assert!(result.is_err(), "Should fail with nonexistent command");
     let err_msg = result.unwrap_err().to_string();
@@ -245,7 +249,7 @@ fn test_ssh_agent_backend_no_auth_sock() {
     std::env::remove_var("SSH_AUTH_SOCK");
 
     let backend = SshAgentBackend::new(Box::new(DefaultAgentSigner));
-    let result = backend.sign_for_ikm("fake-key", b"test");
+    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
 
     // Restore SSH_AUTH_SOCK
     if let Some(val) = original {
@@ -268,7 +272,7 @@ fn test_determinism_check_with_real_backend_type() {
     .unwrap();
 
     // This will fail (no agent available in test), but we're testing the API
-    let result = backend.check_determinism("fake-key", b"test");
+    let result = backend.check_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     // Either succeeds (unlikely in test env) or fails with agent error (expected)
     // Just verify it doesn't panic
     let _ = result;
@@ -283,7 +287,7 @@ fn test_backend_error_messages_include_diagnostics() {
         Box::new(DefaultSshKeygen::new("/nonexistent/ssh-keygen")),
         SshKeyDescriptor::from_path(std::path::PathBuf::from("/dummy/key")),
     );
-    let result = backend.sign_for_ikm("fake-key", b"test");
+    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     if let Err(e) = result {
         let msg = e.to_string();
         // Should suggest alternatives or diagnostic steps
@@ -296,7 +300,7 @@ fn test_backend_error_messages_include_diagnostics() {
 
     // Test 2: ssh-agent with invalid key
     let backend = SshAgentBackend::new(Box::new(DefaultAgentSigner));
-    let result = backend.sign_for_ikm("fake-key", b"test");
+    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
 
     assert!(result.is_err(), "Should fail with invalid key");
 }

@@ -10,6 +10,7 @@ use crate::test_utils::{setup_test_keystore, stub_ssh_keygen};
 use secretenv::config::types::SshSigningMethod;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
+use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv::model::ssh::SshDeterminismStatus;
 
@@ -60,7 +61,8 @@ fn test_check_determinism_via_context() {
         SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
     ));
 
-    let result = backend.check_determinism(
+    let result = backend.check_sshsig_determinism(
+        KEY_PROTECTION_NAMESPACE,
         &ssh_pub,
         secretenv::model::identifiers::context::SSH_DETERMINISM_CHECK_MESSAGE,
     );

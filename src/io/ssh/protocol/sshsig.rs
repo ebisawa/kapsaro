@@ -16,9 +16,6 @@ use sha2::{Digest, Sha256};
 /// SSHSIG magic bytes (6-byte literal)
 pub const SSHSIG_MAGIC: &[u8] = b"SSHSIG";
 
-/// SSHSIG namespace for secretenv local identity encryption
-pub const SSHSIG_NAMESPACE: &str = "secretenv";
-
 /// Hash algorithm used in SSHSIG (must be "sha256")
 pub const SSHSIG_HASHALG: &str = "sha256";
 
@@ -37,12 +34,12 @@ pub const SSHSIG_HASHALG: &str = "sha256";
 /// # Arguments
 ///
 /// * `message` - The original message to be signed (will be hashed with SHA-256)
-/// * `namespace` - The namespace string (e.g., "secretenv" for attestation)
+/// * `namespace` - The SSHSIG namespace for the signature context
 ///
 /// # Returns
 ///
 /// Byte vector ready to be signed by ssh-agent or ssh-keygen
-pub fn build_sshsig_signed_data_with_namespace(message: &[u8], namespace: &str) -> Vec<u8> {
+pub fn build_sshsig_signed_data(message: &[u8], namespace: &str) -> Vec<u8> {
     let hash = Sha256::digest(message);
 
     let mut result = Vec::new();
@@ -54,41 +51,6 @@ pub fn build_sshsig_signed_data_with_namespace(message: &[u8], namespace: &str) 
 
     result
 }
-
-/// Build sshsig_signed_data_bytes
-///
-/// This constructs the data structure that gets signed by SSH keys:
-///
-/// ```text
-/// byte[6]      MAGIC
-/// SSH_STRING   namespace
-/// SSH_STRING   reserved (empty)
-/// SSH_STRING   hash_algorithm ("sha256")
-/// SSH_STRING   H(message)
-/// ```
-///
-/// # Arguments
-///
-/// * `message` - The original message to be signed (will be hashed with SHA-256)
-///
-/// # Returns
-///
-/// Byte vector ready to be signed by ssh-agent or ssh-keygen
-///
-/// Uses the default namespace `SSHSIG_NAMESPACE` for local identity encryption.
-///
-/// # Examples
-///
-/// ```
-/// use secretenv::io::ssh::protocol::sshsig::build_sshsig_signed_data;
-/// let challenge = b"my challenge";
-/// let signed_data = build_sshsig_signed_data(challenge);
-/// // Pass signed_data to ssh-agent or ssh-keygen for signing
-/// ```
-pub fn build_sshsig_signed_data(message: &[u8]) -> Vec<u8> {
-    build_sshsig_signed_data_with_namespace(message, SSHSIG_NAMESPACE)
-}
-
 /// Validate SSHSIG magic and version
 ///
 /// Returns the remaining bytes after magic and version fields.
@@ -132,11 +94,11 @@ fn validate_sshsig_header(blob: &[u8]) -> Result<&[u8]> {
 }
 
 /// Validate SSHSIG namespace field
-fn validate_namespace(namespace: &[u8]) -> Result<()> {
-    if namespace != SSHSIG_NAMESPACE.as_bytes() {
+fn validate_namespace(namespace: &[u8], expected_namespace: &str) -> Result<()> {
+    if namespace != expected_namespace.as_bytes() {
         return Err(SshError::operation_failed(format!(
             "SSHSIG namespace mismatch: expected '{}', got '{}'",
-            SSHSIG_NAMESPACE,
+            expected_namespace,
             String::from_utf8_lossy(namespace)
         ))
         .into());
@@ -176,7 +138,7 @@ fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
 /// byte[6]      MAGIC ("SSHSIG")
 /// uint32       version (must be 1)
 /// SSH_STRING   publickey
-/// SSH_STRING   namespace (must match SSHSIG_NAMESPACE)
+/// SSH_STRING   namespace (must match the expected namespace)
 /// SSH_STRING   reserved (must be empty)
 /// SSH_STRING   hash_algorithm (must be "sha256")
 /// SSH_STRING   signature  <-- SSH signature blob (string algorithm + string signature)
@@ -185,6 +147,7 @@ fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
 /// # Arguments
 ///
 /// * `blob` - Raw SSHSIG binary blob
+/// * `expected_namespace` - Namespace that the SSHSIG blob must carry
 ///
 /// # Returns
 ///
@@ -199,13 +162,13 @@ fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
 /// # Examples
 ///
 /// ```ignore
-/// use secretenv::io::ssh::parse_sshsig_blob;
+/// use secretenv::io::ssh::protocol::sshsig::parse_sshsig_blob;
 /// let blob = /* SSHSIG binary data */;
-/// let sig_blob = parse_sshsig_blob(&blob)?;
+/// let sig_blob = parse_sshsig_blob(&blob, "secretenv-key-protection")?;
 /// let ikm = sig_blob.extract_ed25519_raw()?;
 /// // Use ikm for HKDF key derivation
 /// ```
-pub fn parse_sshsig_blob(blob: &[u8]) -> Result<SshSignatureBlob> {
+pub fn parse_sshsig_blob(blob: &[u8], expected_namespace: &str) -> Result<SshSignatureBlob> {
     // Validate magic and version
     let mut cursor = validate_sshsig_header(blob)?;
 
@@ -215,7 +178,7 @@ pub fn parse_sshsig_blob(blob: &[u8]) -> Result<SshSignatureBlob> {
 
     // Parse and validate namespace
     let (namespace, rest) = ssh_string_decode(cursor)?;
-    validate_namespace(namespace)?;
+    validate_namespace(namespace, expected_namespace)?;
     cursor = rest;
 
     // Parse and validate reserved field
@@ -247,6 +210,7 @@ pub fn parse_sshsig_blob(blob: &[u8]) -> Result<SshSignatureBlob> {
 /// # Arguments
 ///
 /// * `armored` - Armored SSHSIG string (output from ssh-keygen -Y sign)
+/// * `expected_namespace` - Namespace that the SSHSIG blob must carry
 ///
 /// # Returns
 ///
@@ -262,12 +226,12 @@ pub fn parse_sshsig_blob(blob: &[u8]) -> Result<SshSignatureBlob> {
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use secretenv::io::ssh::protocol::sshsig::parse_sshsig_armored;
 /// let armored = std::fs::read_to_string("message.sig")?;
-/// let sig_blob = parse_sshsig_armored(&armored)?;
+/// let sig_blob = parse_sshsig_armored(&armored, "secretenv-key-protection")?;
 /// let ikm = sig_blob.extract_ed25519_raw()?;
 /// # Ok(())
 /// # }
 /// ```
-pub fn parse_sshsig_armored(armored: &str) -> Result<SshSignatureBlob> {
+pub fn parse_sshsig_armored(armored: &str, expected_namespace: &str) -> Result<SshSignatureBlob> {
     let blob = decode_base64_armored(armored)?;
-    parse_sshsig_blob(&blob)
+    parse_sshsig_blob(&blob, expected_namespace)
 }

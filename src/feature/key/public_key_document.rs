@@ -99,7 +99,11 @@ pub fn build_attestation(
 
     let raw_sig = ssh_binding
         .backend
-        .sign_for_ikm(&ssh_binding.public_key, &identity_keys_jcs)
+        .sign_sshsig(
+            ssh::ATTESTATION_NAMESPACE,
+            &ssh_binding.public_key,
+            &identity_keys_jcs,
+        )
         .map_err(|e| {
             crate::Error::from(SshError::operation_failed_with_source(
                 format!("Failed to sign attestation: {}", e),

@@ -254,8 +254,9 @@ fn test_derive_key_from_ssh_preserves_ssh_backend_errors() {
     struct FailingBackend;
 
     impl SignatureBackend for FailingBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _ssh_pubkey: &str,
             _challenge_bytes: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {
@@ -301,8 +302,9 @@ fn test_derive_key_from_ssh_maps_non_deterministic_error() {
     }
 
     impl SignatureBackend for NonDeterministicBackend {
-        fn sign_for_ikm(
+        fn sign_sshsig(
             &self,
+            _namespace: &str,
             _ssh_pubkey: &str,
             _challenge_bytes: &[u8],
         ) -> secretenv::Result<Ed25519RawSignature> {

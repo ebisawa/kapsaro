@@ -15,13 +15,7 @@ pub(crate) struct RewrapBatchPlan {
     pub(crate) workspace_root: PathBuf,
     pub(crate) pre_promotion_trust: TrustContext,
     pub(crate) incoming_report: Option<IncomingVerificationReport>,
-    pub(crate) artifact_snapshots: Vec<RewrapArtifactSnapshot>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RewrapArtifactSnapshot {
-    pub(crate) file_path: PathBuf,
-    pub(crate) content: String,
+    pub(crate) artifact_paths: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,7 +28,6 @@ pub(crate) struct RewrapSignerRequirement {
 pub(crate) struct RewrapTrustPlan {
     pub(crate) warnings: Vec<String>,
     pub(crate) recipient_trust: RecipientTrustOutcome,
-    pub(crate) signer_requirements: Vec<RewrapSignerRequirement>,
     pub(crate) accepted_promotion_candidates: Vec<ApprovedKnownKey>,
     pub(crate) post_promotion_members: Vec<PublicKey>,
 }

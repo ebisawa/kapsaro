@@ -8,6 +8,7 @@ use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv::io::ssh::backend::SignatureBackend;
 use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
+use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use tempfile::TempDir;
 
@@ -24,8 +25,12 @@ fn test_ed25519_direct_backend_produces_same_signature_as_ssh_keygen() {
 
     let challenge = b"test challenge for compatibility";
 
-    let sig_direct = direct.sign_for_ikm(&ssh_pub_content, challenge).unwrap();
-    let sig_keygen = keygen.sign_for_ikm(&ssh_pub_content, challenge).unwrap();
+    let sig_direct = direct
+        .sign_sshsig(KEY_PROTECTION_NAMESPACE, &ssh_pub_content, challenge)
+        .unwrap();
+    let sig_keygen = keygen
+        .sign_sshsig(KEY_PROTECTION_NAMESPACE, &ssh_pub_content, challenge)
+        .unwrap();
 
     assert_eq!(
         sig_direct.as_bytes(),
@@ -42,8 +47,9 @@ fn test_ed25519_direct_backend_is_deterministic() {
     let backend = Ed25519DirectBackend::new(&ssh_priv).unwrap();
     let challenge = b"determinism test";
 
-    // sign_deterministic_for_ikm calls sign_for_ikm twice and checks equality
-    let result = backend.sign_deterministic_for_ikm(&ssh_pub_content, challenge);
+    // sign_sshsig_deterministic calls sign_sshsig twice and checks equality
+    let result =
+        backend.sign_sshsig_deterministic(KEY_PROTECTION_NAMESPACE, &ssh_pub_content, challenge);
     assert!(result.is_ok(), "Ed25519 signing must be deterministic");
 }
 
@@ -55,10 +61,10 @@ fn test_ed25519_direct_backend_different_challenges_produce_different_sigs() {
     let backend = Ed25519DirectBackend::new(&ssh_priv).unwrap();
 
     let sig1 = backend
-        .sign_for_ikm(&ssh_pub_content, b"challenge A")
+        .sign_sshsig(KEY_PROTECTION_NAMESPACE, &ssh_pub_content, b"challenge A")
         .unwrap();
     let sig2 = backend
-        .sign_for_ikm(&ssh_pub_content, b"challenge B")
+        .sign_sshsig(KEY_PROTECTION_NAMESPACE, &ssh_pub_content, b"challenge B")
         .unwrap();
 
     assert_ne!(

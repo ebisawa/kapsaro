@@ -9,6 +9,7 @@ use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::model::identifiers::context;
 use crate::support::kid::kid_display_lossy;
@@ -82,11 +83,15 @@ pub(super) fn diagnose_private_key_use_signature(
     let message = build_sign_message(ikm_salt_b64);
     if debug {
         debug!(
-            "[CRYPTO] SSH: sign_for_ikm retry diagnosis (kid: {})",
+            "[CRYPTO] SSH: sign_sshsig retry diagnosis (kid: {})",
             kid_display_lossy(kid)
         );
     }
-    let retry_sig = backend.sign_for_ikm(ssh_pubkey, message.as_bytes())?;
+    let retry_sig = backend.sign_sshsig(
+        ssh::KEY_PROTECTION_NAMESPACE,
+        ssh_pubkey,
+        message.as_bytes(),
+    )?;
     if retry_sig != *expected_raw_sig {
         return Err(non_deterministic_signature_error());
     }
@@ -102,12 +107,12 @@ fn sign_for_private_key_encryption(
 ) -> Result<Ed25519RawSignature> {
     if debug {
         debug!(
-            "[CRYPTO] SSH: sign_for_ikm x2 determinism check (kid: {})",
+            "[CRYPTO] SSH: sign_sshsig x2 determinism check (kid: {})",
             kid_display_lossy(kid)
         );
     }
     backend
-        .sign_deterministic_for_ikm(ssh_pubkey, message)
+        .sign_sshsig_deterministic(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
         .map_err(map_determinism_error)
 }
 
@@ -120,11 +125,11 @@ fn sign_for_private_key_use(
 ) -> Result<Ed25519RawSignature> {
     if debug {
         debug!(
-            "[CRYPTO] SSH: sign_for_ikm (kid: {})",
+            "[CRYPTO] SSH: sign_sshsig (kid: {})",
             kid_display_lossy(kid)
         );
     }
-    backend.sign_for_ikm(ssh_pubkey, message)
+    backend.sign_sshsig(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
 }
 
 fn derive_key_from_raw_signature(

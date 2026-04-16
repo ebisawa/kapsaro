@@ -166,7 +166,7 @@ Signed artifacts always include `signature.signer_pub`, and the signature verifi
 This layer establishes cryptographic authenticity through the following properties:
 
 - **Self-signature (key consistency)**: The self-signature included in a PublicKey shows that the entity that created this PublicKey holds the corresponding private key. This supports **consistency** of the key, but does not establish **identity**. An attacker who creates a new SecretEnv key pair can generate a PublicKey with a valid self-signature. The role of self-signature is limited to **tamper prevention** of existing PublicKeys. Modifying any field of a PublicKey in `members/active/` or `members/incoming/` will cause self-signature verification to fail.
-- **SSH attestation (key binding)**: SSH attestation cryptographically ties a SecretEnv key pair to an SSH key. However, who owns the SSH key itself cannot be determined by attestation alone. An attacker can generate valid attestation by attesting their SecretEnv key with their own SSH key.
+- **SSH attestation (key binding)**: SSH attestation cryptographically ties a SecretEnv key pair to an SSH key. The attestation signed_data is fixed to the SSHSIG namespace `secretenv-attestation`, which separates this signature context from PrivateKey protection. However, who owns the SSH key itself cannot be determined by attestation alone. An attacker can generate valid attestation by attesting their SecretEnv key with their own SSH key.
 
 **Layer 2: Authorization (`members/active`)**
 
@@ -391,10 +391,10 @@ This diagram intentionally separates the SSH key from the SecretEnv key pair.
 - The **SSH key** is an external authentication key already owned by the user; it does not directly encrypt or sign SecretEnv workspace payloads
 - The **SecretEnv key pair** is the application-specific key material used for encryption, decryption, signing, and verification inside the workspace
 - The SSH key has only two roles
-  - **attestation**: show which SSH key backs a SecretEnv public key
-  - **PrivateKey protection**: derive the `enc_key` used to unlock the SecretEnv private key stored in the local keystore
+  - **attestation**: show which SSH key backs a SecretEnv public key. The SSHSIG namespace is `secretenv-attestation`
+  - **PrivateKey protection**: derive the `enc_key` used to unlock the SecretEnv private key stored in the local keystore. The SSHSIG namespace is `secretenv-key-protection`
 
-Therefore, the SSH key is not the SecretEnv key pair itself. It is an outer key used to support provenance checks and local protection of the SecretEnv key pair.
+Therefore, the SSH key is not the SecretEnv key pair itself. It is an outer key used to support provenance checks and local protection of the SecretEnv key pair. Even when the same SSH key is reused for both roles, the signature contexts are separated by namespace.
 
 ### 4.2 Key Parameter Summary
 
@@ -867,7 +867,7 @@ Here `alg.fpr` is only an identifier for the SSH key used to protect that key ge
 
 ```mermaid
 graph LR
-    Msg["Sign message<br/>(prefix + ikm_salt)"] -->|SSHSIG signing| SSHSign["SSH Ed25519 signature"]
+    Msg["Sign message<br/>(prefix + ikm_salt)"] -->|"SSHSIG signing<br/>(namespace: secretenv-key-protection)"| SSHSign["SSH Ed25519 signature"]
     SSHKey["SSH private key<br/>(identified by alg.fpr)"] --> SSHSign
     SSHSign -->|"raw signature<br/>64 bytes"| IKM["IKM"]
     IKM --> HKDF["HKDF-SHA256"]
@@ -894,7 +894,7 @@ SSH signatures conform to the SSHSIG format:
 
 ```
 byte[6]      "SSHSIG"
-SSH_STRING   namespace = "secretenv"
+SSH_STRING   namespace = "secretenv-key-protection"
 SSH_STRING   reserved = ""
 SSH_STRING   hash_algorithm = "sha256"
 SSH_STRING   SHA256(sign_message)
@@ -956,7 +956,7 @@ This means the SSH key is both an authentication mechanism for local keystore ac
 
 ### 7.8 Trust Assumptions
 
-Since PrivateKey protection derives IKM from SSH signatures, **any entity that can execute `sign_for_ikm` can derive the encryption key and decrypt the PrivateKey**. This equivalence is an intentional design decision, but the following is stated to clarify trust boundaries.
+Since PrivateKey protection derives IKM from SSH signatures, **any entity that can request SSH signatures in the `secretenv-key-protection` namespace can derive the encryption key and decrypt the PrivateKey**. This equivalence is an intentional design decision, but the following is stated to clarify trust boundaries.
 
 | Entity | Can decrypt | Notes |
 |--------|------------|-------|

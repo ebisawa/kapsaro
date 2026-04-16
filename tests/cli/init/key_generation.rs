@@ -49,7 +49,7 @@ fn test_init_with_verbose_option() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[CRYPTO] SSH: sign_for_ikm"));
+        .stdout(predicate::str::contains("[CRYPTO] SSH: sign_sshsig"));
 }
 
 #[test]

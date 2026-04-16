@@ -65,8 +65,8 @@ pub fn build_attestation_signed_data(identity_keys: &IdentityKeys) -> Result<Vec
         ))
     })?;
 
-    // Build signed_data with namespace "secretenv"
-    Ok(sshsig::build_sshsig_signed_data_with_namespace(
+    // Build signed_data with the attestation namespace
+    Ok(sshsig::build_sshsig_signed_data(
         &identity_keys_jcs,
         ssh::ATTESTATION_NAMESPACE,
     ))
@@ -130,7 +130,7 @@ fn extract_ed25519_pubkey_from_ssh(ssh_pubkey: &str) -> Result<VerifyingKey> {
 /// Verification steps:
 /// 1. Normalize the `identity.keys` object using JCS
 /// 2. Compute the SHA256 of the normalized bytes
-/// 3. Verify `sig` with `pub` (namespace is fixed to `secretenv`)
+/// 3. Verify `sig` with `pub` using the attestation namespace
 ///
 /// # Arguments
 ///

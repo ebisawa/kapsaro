@@ -3,9 +3,9 @@
 
 //! Unit tests for SSHSIG format parsing (Phase 11.1 - TDD Red phase)
 
+use secretenv::io::ssh::protocol::constants::{ATTESTATION_NAMESPACE, KEY_PROTECTION_NAMESPACE};
 use secretenv::io::ssh::protocol::sshsig::{
-    build_sshsig_signed_data, parse_sshsig_armored, parse_sshsig_blob, SSHSIG_HASHALG,
-    SSHSIG_MAGIC, SSHSIG_NAMESPACE,
+    build_sshsig_signed_data, parse_sshsig_armored, parse_sshsig_blob, SSHSIG_HASHALG, SSHSIG_MAGIC,
 };
 use secretenv::io::ssh::protocol::types::SshsigBlob;
 use secretenv::io::ssh::protocol::wire::ssh_string_encode;
@@ -15,20 +15,20 @@ use sha2::{Digest, Sha256};
 #[test]
 fn test_build_sshsig_signed_data_format() {
     let message = b"test message";
-    let result = build_sshsig_signed_data(message);
+    let result = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
 
     // Check magic
     assert_eq!(&result[0..6], SSHSIG_MAGIC);
 
     // Check it contains namespace
     let result_str = String::from_utf8_lossy(&result);
-    assert!(result_str.contains(SSHSIG_NAMESPACE));
+    assert!(result_str.contains(KEY_PROTECTION_NAMESPACE));
 }
 
 #[test]
 fn test_build_sshsig_signed_data_includes_hash() {
     let message = b"test";
-    let result = build_sshsig_signed_data(message);
+    let result = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
 
     let hash = Sha256::digest(message);
     // Hash should be in the output (as SSH_STRING)
@@ -38,8 +38,8 @@ fn test_build_sshsig_signed_data_includes_hash() {
 #[test]
 fn test_build_sshsig_signed_data_deterministic() {
     let message = b"determinism test";
-    let result1 = build_sshsig_signed_data(message);
-    let result2 = build_sshsig_signed_data(message);
+    let result1 = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
+    let result2 = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
 
     assert_eq!(
         result1, result2,
@@ -50,7 +50,7 @@ fn test_build_sshsig_signed_data_deterministic() {
 #[test]
 fn test_build_sshsig_signed_data_contains_hashalg() {
     let message = b"hashalg test";
-    let result = build_sshsig_signed_data(message);
+    let result = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
 
     let result_str = String::from_utf8_lossy(&result);
     assert!(result_str.contains(SSHSIG_HASHALG));
@@ -67,19 +67,19 @@ fn test_parse_sshsig_blob_valid() {
     blob.extend_from_slice(&ssh_string_encode(
         b"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakePublicKeyData123456789",
     )); // pubkey
-    blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes())); // namespace
+    blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes())); // namespace
     blob.extend_from_slice(&ssh_string_encode(b"")); // reserved (empty)
     blob.extend_from_slice(&ssh_string_encode(b"sha256")); // hashalg
     blob.extend_from_slice(&ssh_string_encode(b"signature_data_here")); // signature
 
-    let signature = parse_sshsig_blob(&blob).unwrap();
+    let signature = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE).unwrap();
     assert_eq!(signature.as_bytes(), b"signature_data_here");
 }
 
 #[test]
 fn test_parse_sshsig_blob_invalid_magic() {
     let blob = b"WRONGMAGIC";
-    let result = parse_sshsig_blob(blob);
+    let result = parse_sshsig_blob(blob, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("magic") || err_msg.contains("SSHSIG"));
@@ -88,7 +88,7 @@ fn test_parse_sshsig_blob_invalid_magic() {
 #[test]
 fn test_parse_sshsig_blob_too_short() {
     let blob = b"SSH"; // Only 3 bytes
-    let result = parse_sshsig_blob(blob);
+    let result = parse_sshsig_blob(blob, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("short") || err_msg.contains("Insufficient"));
@@ -100,7 +100,7 @@ fn test_parse_sshsig_blob_wrong_version() {
     blob.extend_from_slice(b"SSHSIG");
     blob.extend_from_slice(&999u32.to_be_bytes()); // wrong version
 
-    let result = parse_sshsig_blob(&blob);
+    let result = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("version") || err_msg.contains("999"));
@@ -113,9 +113,9 @@ fn test_parse_sshsig_blob_wrong_namespace() {
     blob.extend_from_slice(&1u32.to_be_bytes());
 
     blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    blob.extend_from_slice(&ssh_string_encode(b"wrong.namespace")); // wrong!
+    blob.extend_from_slice(&ssh_string_encode(ATTESTATION_NAMESPACE.as_bytes()));
 
-    let result = parse_sshsig_blob(&blob);
+    let result = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("namespace") || err_msg.contains("mismatch"));
@@ -128,10 +128,10 @@ fn test_parse_sshsig_blob_non_empty_reserved() {
     blob.extend_from_slice(&1u32.to_be_bytes());
 
     blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     blob.extend_from_slice(&ssh_string_encode(b"not_empty")); // reserved must be empty!
 
-    let result = parse_sshsig_blob(&blob);
+    let result = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("reserved") || err_msg.contains("empty"));
@@ -144,11 +144,11 @@ fn test_parse_sshsig_blob_wrong_hashalg() {
     blob.extend_from_slice(&1u32.to_be_bytes());
 
     blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     blob.extend_from_slice(&ssh_string_encode(b""));
     blob.extend_from_slice(&ssh_string_encode(b"sha512")); // wrong hash algorithm!
 
-    let result = parse_sshsig_blob(&blob);
+    let result = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("hash") || err_msg.contains("sha"));
@@ -161,7 +161,7 @@ fn test_parse_sshsig_armored_valid() {
     blob.extend_from_slice(b"SSHSIG");
     blob.extend_from_slice(&1u32.to_be_bytes());
     blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     blob.extend_from_slice(&ssh_string_encode(b""));
     blob.extend_from_slice(&ssh_string_encode(b"sha256"));
     blob.extend_from_slice(&ssh_string_encode(b"test_signature_ikm"));
@@ -172,7 +172,7 @@ fn test_parse_sshsig_armored_valid() {
         b64
     );
 
-    let result = parse_sshsig_armored(&armored).unwrap();
+    let result = parse_sshsig_armored(&armored, KEY_PROTECTION_NAMESPACE).unwrap();
     assert_eq!(result.as_bytes(), b"test_signature_ikm");
 }
 
@@ -183,7 +183,7 @@ fn test_parse_sshsig_armored_multiline_base64() {
     blob.extend_from_slice(b"SSHSIG");
     blob.extend_from_slice(&1u32.to_be_bytes());
     blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     blob.extend_from_slice(&ssh_string_encode(b""));
     blob.extend_from_slice(&ssh_string_encode(b"sha256"));
     blob.extend_from_slice(&ssh_string_encode(b"multiline_test"));
@@ -201,13 +201,13 @@ fn test_parse_sshsig_armored_multiline_base64() {
         lines.join("\n")
     );
 
-    let result = parse_sshsig_armored(&armored).unwrap();
+    let result = parse_sshsig_armored(&armored, KEY_PROTECTION_NAMESPACE).unwrap();
     assert_eq!(result.as_bytes(), b"multiline_test");
 }
 
 #[test]
 fn test_parse_sshsig_armored_no_markers() {
-    let result = parse_sshsig_armored("just random text without markers");
+    let result = parse_sshsig_armored("just random text without markers", KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     // The error message should mention base64 or content (case-insensitive)
@@ -226,7 +226,7 @@ fn test_parse_sshsig_armored_no_markers() {
 fn test_parse_sshsig_armored_invalid_base64() {
     let armored =
         "-----BEGIN SSH SIGNATURE-----\n!!!invalid_base64!!!\n-----END SSH SIGNATURE-----";
-    let result = parse_sshsig_armored(armored);
+    let result = parse_sshsig_armored(armored, KEY_PROTECTION_NAMESPACE);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("base64") || err_msg.contains("decode"));
@@ -236,14 +236,14 @@ fn test_parse_sshsig_armored_invalid_base64() {
 #[test]
 fn test_build_sshsig_signed_data_structure() {
     let message = b"test";
-    let result = build_sshsig_signed_data(message);
+    let result = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
 
     // Check magic
     assert_eq!(&result[0..6], SSHSIG_MAGIC);
 
     // Should contain namespace
     let result_str = String::from_utf8_lossy(&result);
-    assert!(result_str.contains(SSHSIG_NAMESPACE));
+    assert!(result_str.contains(KEY_PROTECTION_NAMESPACE));
 
     // Should contain hash algorithm
     assert!(result_str.contains(SSHSIG_HASHALG));
@@ -256,12 +256,36 @@ fn test_parse_sshsig_blob_roundtrip() {
     blob.extend_from_slice(SSHSIG_MAGIC);
     blob.extend_from_slice(&1u32.to_be_bytes());
     blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    blob.extend_from_slice(&ssh_string_encode(SSHSIG_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
     blob.extend_from_slice(&ssh_string_encode(b""));
     blob.extend_from_slice(&ssh_string_encode(b"sha256"));
     blob.extend_from_slice(&ssh_string_encode(b"test_signature_ikm"));
 
-    let signature = parse_sshsig_blob(&blob).unwrap();
+    let signature = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE).unwrap();
+    assert_eq!(signature.as_bytes(), b"test_signature_ikm");
+}
+
+#[test]
+fn test_build_sshsig_signed_data_varies_by_namespace() {
+    let message = b"namespace separation";
+    let key_protection = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
+    let attestation = build_sshsig_signed_data(message, ATTESTATION_NAMESPACE);
+
+    assert_ne!(key_protection, attestation);
+}
+
+#[test]
+fn test_parse_sshsig_blob_accepts_attestation_namespace_when_expected() {
+    let mut blob = Vec::new();
+    blob.extend_from_slice(SSHSIG_MAGIC);
+    blob.extend_from_slice(&1u32.to_be_bytes());
+    blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
+    blob.extend_from_slice(&ssh_string_encode(ATTESTATION_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&ssh_string_encode(b""));
+    blob.extend_from_slice(&ssh_string_encode(b"sha256"));
+    blob.extend_from_slice(&ssh_string_encode(b"test_signature_ikm"));
+
+    let signature = parse_sshsig_blob(&blob, ATTESTATION_NAMESPACE).unwrap();
     assert_eq!(signature.as_bytes(), b"test_signature_ikm");
 }
 

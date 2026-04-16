@@ -17,6 +17,7 @@ use crate::model::public_key::PublicKey;
 use crate::support::fs::list_dir;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::{encrypted_file_read_limit, MAX_JSON_DOCUMENT_READ_SIZE};
+use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -30,11 +31,12 @@ use super::types::{
 pub(crate) fn build_rewrap_batch_plan(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
+    explicit_targets: &[PathBuf],
 ) -> Result<RewrapBatchPlan> {
     let workspace = require_workspace(options, "rewrap")?;
     ensure_workspace_member_kid_uniqueness(&workspace.root_path)?;
     let incoming_index = load_incoming_index(&workspace.root_path)?;
-    let artifact_snapshots = load_encrypted_file_snapshots(&workspace.root_path)?;
+    let artifact_snapshots = load_encrypted_file_snapshots(&workspace.root_path, explicit_targets)?;
     let pre_promotion_trust = load_read_trust_context(
         options,
         &workspace.root_path,
@@ -46,7 +48,9 @@ pub(crate) fn build_rewrap_batch_plan(
     let incoming_report = build_incoming_report(&incoming_index, options.verbose)?;
     if artifact_snapshots.is_empty() {
         return Err(Error::NotFound {
-            message: "No encrypted files found in workspace secrets/".to_string(),
+            message:
+                "No encrypted files found in workspace secrets/ and no explicit rewrap targets were provided"
+                    .to_string(),
         });
     }
 
@@ -86,8 +90,11 @@ fn is_encrypted_file(path: &Path) -> bool {
     name.ends_with(KV_ENC_EXTENSION) || name.ends_with(".json") || name.ends_with(".encrypted")
 }
 
-fn load_encrypted_file_snapshots(workspace_root: &Path) -> Result<Vec<RewrapArtifactSnapshot>> {
-    find_encrypted_files_in_workspace(workspace_root)?
+fn load_encrypted_file_snapshots(
+    workspace_root: &Path,
+    explicit_targets: &[PathBuf],
+) -> Result<Vec<RewrapArtifactSnapshot>> {
+    collect_rewrap_target_paths(workspace_root, explicit_targets)?
         .into_iter()
         .map(|file_path| {
             let content = load_text_with_limit(
@@ -98,6 +105,43 @@ fn load_encrypted_file_snapshots(workspace_root: &Path) -> Result<Vec<RewrapArti
             Ok(RewrapArtifactSnapshot { file_path, content })
         })
         .collect()
+}
+
+fn collect_rewrap_target_paths(
+    workspace_root: &Path,
+    explicit_targets: &[PathBuf],
+) -> Result<Vec<PathBuf>> {
+    let mut paths = BTreeMap::new();
+    let candidate_paths = if explicit_targets.is_empty() {
+        find_encrypted_files_in_workspace(workspace_root)?
+    } else {
+        explicit_targets.to_vec()
+    };
+    for path in candidate_paths {
+        insert_rewrap_target_path(&mut paths, path)?;
+    }
+    Ok(paths.into_values().collect())
+}
+
+fn insert_rewrap_target_path(paths: &mut BTreeMap<PathBuf, PathBuf>, path: PathBuf) -> Result<()> {
+    let canonical = path.canonicalize().map_err(|e| {
+        Error::io_with_source(
+            format!(
+                "Failed to resolve rewrap target {}: {}",
+                display_path_relative_to_cwd(&path),
+                e
+            ),
+            e,
+        )
+    })?;
+    if !canonical.is_file() {
+        return Err(Error::invalid_argument(format!(
+            "Rewrap target must be a file: {}",
+            display_path_relative_to_cwd(&path)
+        )));
+    }
+    paths.entry(canonical).or_insert(path);
+    Ok(())
 }
 
 fn build_incoming_report(

@@ -8,6 +8,7 @@ use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::CommonOptions;
 use crate::Result;
 use clap::Args;
+use std::path::PathBuf;
 
 mod batch;
 mod promotion;
@@ -29,6 +30,10 @@ pub struct RewrapArgs {
     /// Rotate content key (full re-encryption)
     #[arg(long)]
     pub rotate_key: bool,
+
+    /// Explicit encrypted artifact path to rewrap; when specified, only these files are processed
+    #[arg(long = "target", value_name = "path")]
+    pub targets: Vec<PathBuf>,
 }
 
 pub fn run(args: RewrapArgs) -> Result<()> {

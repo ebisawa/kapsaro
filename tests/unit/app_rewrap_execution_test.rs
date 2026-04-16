@@ -444,7 +444,7 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
     );
     let secret_path = workspace_dir.join("secrets").join("snapshot-file.json");
     fs::write(&secret_path, encrypted).unwrap();
-    let plan = build_rewrap_batch_plan(&options, &execution).unwrap();
+    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
@@ -490,7 +490,7 @@ fn test_execute_rewrap_batch_rejects_artifact_mismatch_after_review() {
     let secret_path = workspace_dir.join("secrets").join("stale-file.json");
     fs::write(&secret_path, &encrypted).unwrap();
 
-    let plan = build_rewrap_batch_plan(&options, &execution).unwrap();
+    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     let tampered = encrypt_file_for_members(
         temp_dir.path(),
         &alice_kid,
@@ -589,7 +589,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
     );
     let secret_path = workspace_dir.join("secrets").join("invalid-recipient.json");
     fs::write(&secret_path, encrypted).unwrap();
-    let plan = build_rewrap_batch_plan(&options, &execution).unwrap();
+    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,

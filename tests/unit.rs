@@ -15,6 +15,8 @@ pub mod test_utils;
 // Key generation helpers (re-exported from test_utils to avoid duplicate module)
 pub use test_utils::keygen_helpers;
 
+#[path = "unit/cli_rewrap_args_test.rs"]
+pub mod cli_rewrap_args_test;
 #[path = "unit/cli_set_member_id_test.rs"]
 pub mod cli_set_member_id_test;
 #[path = "unit/config_types_test.rs"]

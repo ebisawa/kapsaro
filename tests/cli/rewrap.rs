@@ -36,6 +36,7 @@ fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArg
         member_id: Some(member_id.to_string()),
         rotate_key: false,
         clear_disclosure_history: false,
+        targets: Vec::new(),
     }
 }
 

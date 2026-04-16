@@ -27,16 +27,14 @@ pub fn handle_kv_key_not_found_error(error: Error, input_path: &Path, key: &str)
                 };
             }
         }
-        Error::NotFound { message } => {
-            if message.contains(key) && message.contains("not found") {
-                return Error::NotFound {
-                    message: format!(
-                        "{} in {}",
-                        message,
-                        display_path_relative_to_cwd(input_path)
-                    ),
-                };
-            }
+        Error::NotFound { message } if message.contains(key) && message.contains("not found") => {
+            return Error::NotFound {
+                message: format!(
+                    "{} in {}",
+                    message,
+                    display_path_relative_to_cwd(input_path)
+                ),
+            };
         }
         _ => {}
     }

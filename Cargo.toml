@@ -1,6 +1,6 @@
 [package]
 name = "secretenv"
-version = "0.4.1-alpha"
+version = "0.6.1-alpha"
 edition = "2021"
 authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
 description = "Offline-first CLI for sharing encrypted .env files and other secrets through Git"

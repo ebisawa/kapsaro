@@ -10,9 +10,9 @@ SecretEnv protects team secrets (`.env` files, certificates, API keys) using mod
 
 **What SecretEnv guarantees by design:** confidentiality of encrypted content, tamper detection via signatures, cryptographic binding to prevent component swapping, and self-contained signature verification without external key servers.
 
-**What SecretEnv does NOT guarantee:** prevention of insider misuse after decryption, recovery of previously disclosed secrets, strong forward secrecy, or identity assurance beyond TOFU (Trust On First Use). These are explicit non-goals, not oversights. In particular, compromise of the SSH private key used for PrivateKey protection must be treated as compromise of every SecretEnv key generation protected by that SSH key, so historical ciphertexts addressed to those generations become decryptable.
+**What SecretEnv does NOT guarantee:** prevention of insider misuse after decryption, recovery of previously disclosed secrets, strong forward secrecy, or identity assurance beyond TOFU (Trust On First Use). These are explicit non-goals, not oversights. In particular, if both the SSH private key used for PrivateKey protection and the corresponding local keystore are compromised, historical ciphertexts addressed to the SecretEnv key generations protected by that SSH key become decryptable. In normal operation these live on the same workstation, so this is treated as the realistic consequence of a breach of the local trusted boundary.
 
-**What users are responsible for:** managing SSH keys properly (passphrases, disabling agent forwarding), reviewing PR changes to `members/active/`, verifying new members through out-of-band channels during TOFU approval, and rotating actual secret values when members are removed.
+**What users are responsible for:** managing the local trusted boundary properly (the workstation, local keystore, and SSH key / signing inputs), reviewing PR changes to `members/active/`, verifying new members through out-of-band channels during TOFU approval, and rotating actual secret values when members are removed.
 
 Users can judge whether SecretEnv is safe to operate in their environment by checking whether they can sustain these operational responsibilities.
 
@@ -31,7 +31,7 @@ This document primarily serves two audiences. Each audience may focus on differe
 | Audience | Primary sections | Purpose |
 |----------|-----------------|---------|
 | **Security reviewers / auditors** | §2 (threat model), §3 (primitives), §10 (context binding), §11 (attack scenarios), §12 (checkpoints), §13 (limitations) | Evaluate the security claims, assumptions, residual risks, and review points |
-| **Users / operators / decision makers** | Executive Summary, §1 (overview), §2.1–§2.4 (threat model summary), §7.8–§9 (operational assumptions and trust boundary), §13 (limitations), Appendix B (operations checklist) | Decide whether SecretEnv can be operated safely in their environment and what limits they must accept |
+| **Users / operators / decision makers** | Executive Summary, §1 (overview), §2.1–§2.4 (threat model summary), §7.4–§9 (operational assumptions and trust boundary), §13 (limitations), Appendix B (operations checklist) | Decide whether SecretEnv can be operated safely in their environment and what limits they must accept |
 
 ---
 
@@ -142,14 +142,16 @@ graph TB
 - Workspace `members/active/` and `members/incoming/` — untrusted repository data. PublicKeys themselves are verified by self-signature and attestation, while use of these directories as the authority for current membership depends on repo governance
 - Workspace `secrets/` directory — verified by signatures
 
-The SSH private key therefore sits inside the trust boundary not only as an authentication asset but as the effective root of SecretEnv PrivateKey recovery. If that key, or an agent that can sign with it, is compromised, every SecretEnv key generation protected by that SSH key must be treated as compromised, and historical ciphertexts addressed to those generations become decryptable.
+Within this trust boundary, the SSH private key serves not only as an authentication asset but also as part of the effective root of SecretEnv PrivateKey recovery (detailed in §7.2). Compromise of the SSH private key alone, however, does not immediately let an attacker decrypt SecretEnv key generations: access to the local keystore is additionally required. In normal operation the SSH key and the local keystore live on the same workstation, so once the local trusted boundary is breached, historical ciphertexts addressed to those key generations must be treated as decryptable.
+
+By contrast, access to ssh-agent or SSH signing capability should not be treated as an independent threat by itself. The meaningful failure case is broader compromise of the local trusted boundary, including access to the local keystore and the authority to invoke SecretEnv against it. That is a compromise of the trusted local environment, not a distinct SecretEnv-specific attack class.
 
 ### 2.4 Design Scope Summary
 
 | Item | Implication |
 |------|----------------------|
 | **Guaranteed by design** | Confidentiality, tamper detection, context binding, key-generation binding, key consistency, self-contained signature verification via `signer_pub` |
-| **Depends on operational assumptions** | Identity decisions, review of `members/active` changes, TOFU approval, protection of the local trust-store area, protection of SSH private keys / agent sockets, safe CI execution conditions |
+| **Depends on operational assumptions** | Identity decisions, review of `members/active` changes, TOFU approval, protection of the local trusted area (workstation, local keystore, local trust store, SSH keys / signing inputs), safe CI execution conditions |
 | **Not guaranteed** | Insider misuse prevention, recovery of prior disclosure, strong forward secrecy, bootstrap authenticity, whole-workspace substitution, centralized authorization policy |
 | **Most important implementation checks** | Signature verification order, preserving bindings, mandatory `signer_pub`, no signer lookup fallback, separation of `members/active` vs `known_keys` |
 
@@ -763,22 +765,29 @@ For recipient removal, the behavior differs by format. In file-enc, the removed 
 
 ## 7. PrivateKey Protection
 
-### 7.1 Passwordless Design via SSH Key Reuse
+### 7.1 Overview
 
-SecretEnv's PrivateKey (KEM private key + signing private key) is encrypted and protected using the user's existing SSH Ed25519 key. This eliminates the need for password management specific to SecretEnv.
+SecretEnv's PrivateKey (KEM private key + signing private key) is encrypted and stored in the user's local keystore. What is protected here is not the ciphertexts in the workspace but the SecretEnv private key itself within the local keystore. The recovered SecretEnv private key is then used for HPKE unwrap and Ed25519 signing.
 
-What is protected here is the SecretEnv private key stored in the local keystore. The SSH key does not directly decrypt workspace secrets. Instead, it first unlocks the SecretEnv private key in the local keystore, and the recovered SecretEnv private key is then used for HPKE unwrap and Ed25519 signing.
+### 7.1.1 Protection Targets and the Two Protection Modes
 
-### 7.1.1 Relationship Between the SSH Key and the SecretEnv Key Pair
+SecretEnv offers two modes for encrypting the PrivateKey.
+
+- SSH-based protection (§7.2): uses the user's existing SSH Ed25519 key. Intended for normal interactive use and eliminates the need to manage a SecretEnv-specific password.
+- Password-based protection (§7.3): uses Argon2id + HKDF over a user-supplied password. Intended for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
+
+Both modes share the local keystore layout (§7.1.3) but are kept distinct through separate key-derivation paths and explicit HKDF info strings that enforce domain separation. Trust assumptions common to both are covered in §7.4.
+
+### 7.1.2 Relationship Between the SSH Key and the SecretEnv Key Pair
 
 - The SSH key is an **existing user-owned authentication key** outside SecretEnv
 - The SecretEnv key pair is an **application-specific key pair** managed per `kid`
 - On the PublicKey side, the SSH key appears in attestation, showing which SSH key is bound to the SecretEnv key pair
 - On the PrivateKey side, the same SSH key protects the encrypted SecretEnv private key stored in the local keystore
 
-Therefore, the SSH key and the SecretEnv key pair are not fused into a single key. One SSH key may protect multiple generations of SecretEnv keys, while the actual file-enc / kv-enc cryptographic operations are performed by the SecretEnv key pair after it has been decrypted.
+The SSH key and the SecretEnv key pair are therefore not fused into a single key. One SSH key may protect multiple generations of SecretEnv keys, while the actual file-enc / kv-enc cryptographic operations are performed by the SecretEnv key pair after it has been decrypted.
 
-### 7.1.2 What Is Stored in the local keystore
+### 7.1.3 Local Keystore Layout
 
 Each `kid` directory in the local keystore (a key-statement directory) contains two files.
 
@@ -794,41 +803,37 @@ When loading keys from the local keystore, if `private.json` is used, the siblin
 
 Here `alg.fpr` is only an identifier for the SSH key used to protect that key generation. It is not the SSH private key itself.
 
-### 7.2 Key Derivation Pipeline
+### 7.2 SSH-Based Protection
 
-SSH-based PrivateKey protection uses existing SSH signing capability as the source of decryption capability. The pipeline is as follows.
+SSH-based protection uses existing SSH signing capability as the source of decryption capability, achieving a passwordless PrivateKey protection scheme. The SSH private key itself is not used as an encryption key; instead, a symmetric key (`enc_key`) derived from an SSH signature via HKDF is used as the AEAD key.
+
+### 7.2.1 Key Derivation Pipeline
+
+The protection path is a three-stage pipeline.
 
 | Stage | Input | Output | Security meaning |
 | --- | --- | --- | --- |
-| SSHSIG signing | Sign message containing `ikm_salt`, namespace `secretenv-key-protection` | Raw Ed25519 signature bytes | Only an actor that can use the SSH key can proceed |
-| HKDF-SHA256 | Raw signature bytes, `hkdf_salt`, and `kid`-scoped info | `enc_key` | Derives a symmetric key that is domain-separated per key generation |
+| SSHSIG signing | Sign message (`secretenv:key-protection-ikm@5` and `ikm_salt`), namespace `secretenv-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Only an actor that can use the SSH key can proceed |
+| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `secretenv:sshsig-private-key-enc@5:{kid}` | `enc_key` | Derives a symmetric key that is domain-separated per key generation |
 | XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Protects the SecretEnv private key material while detecting tampering in the entire header |
 
-### 7.3 Sign Message
+Signatures follow the OpenSSH `PROTOCOL.sshsig` format, and the namespace `secretenv-key-protection` is deliberately separate from the attestation namespace `secretenv-attestation`. `kid` is intentionally excluded from the SSH sign message itself and is placed in the HKDF info string so that the `enc_key` values derived for different key generations from the same SSH key remain mutually independent.
 
-The sign message is composed from the versioned marker `secretenv:key-protection-ikm@5` and `ikm_salt`. `kid` is intentionally excluded from the SSH message itself and is used instead in the later HKDF info for domain separation.
+AAD is `jcs(protected)`, so the full decryption context — `format`, `member_id`, `kid`, algorithm identifiers, fingerprint, salts, timestamps, and expiration — is covered by tamper detection. `enc_key` is not a stored fixed key; it is re-derived from the same SSH signing capability during both encryption and decryption.
 
-### 7.4 SSHSIG signed_data
+### 7.2.2 Determinism Check
 
-SSH signatures follow the OpenSSH `PROTOCOL.sshsig` format, using namespace `secretenv-key-protection` and hash algorithm `sha256`. This namespace is deliberately separate from the attestation namespace `secretenv-attestation`.
+Ed25519 (RFC 8032 PureEdDSA) is expected to be deterministic. During encryption, SecretEnv signs the same signed_data twice and confirms that the extracted raw signature bytes match. If they do not, processing aborts.
 
-### 7.5 Encryption Key Derivation
+The reason is that using the signature value as IKM makes non-determinism fatal: encryption and decryption would derive different `enc_key` values and decryption would fail. This check also serves to exclude non-deterministic signers such as FIDO2 Ed25519-SK tokens from this mode early.
 
-`enc_key` is derived as `HKDF-SHA256(ikm = raw signature bytes, salt = hkdf_salt, info = "secretenv:sshsig-private-key-enc@5:{kid}")`. It is not a stored fixed key; it is re-derived from the same SSH signing capability during both encryption and decryption.
-
-### 7.5.1 Confidentiality of the Signature Value Used as IKM
+### 7.2.3 Confidentiality of the Signature Value Used as IKM
 
 The raw Ed25519 signature value used here as IKM is not treated like an ordinary signature value that can be freely exposed for verification. In this path, the signature value itself is directly tied to PrivateKey decryption capability, so it is treated as secret material rather than as a public signature artifact.
 
 The implementation-side memory-hygiene and logging-hygiene implications are discussed later in §12.3, "Memory Handling of Secrets."
 
-### 7.6 Determinism Check
-
-Ed25519 (RFC 8032 PureEdDSA) is expected to be deterministic. During encryption, SecretEnv signs the same signed_data twice and confirms that the extracted raw signature bytes match. If they do not, processing aborts.
-
-The reason is that using the signature value as IKM makes non-determinism fatal: encryption and decryption would derive different `enc_key` values and decryption would fail.
-
-### 7.6.1 Conditions for Successful Decryption
+### 7.2.4 Conditions for Successful Decryption
 
 To decrypt `private.json` in the local keystore, all of the following conditions must hold.
 
@@ -837,66 +842,35 @@ To decrypt `private.json` in the local keystore, all of the following conditions
 3. The sign message must be reconstructible from `protected.alg.ikm_salt`
 4. `protected` must be untampered so that AAD verification over `jcs(protected)` succeeds
 
-Conversely, an attacker does not necessarily need to steal the SSH private key file itself; any actor with equivalent signing capability can derive `enc_key`.
+Given these, actual decryption proceeds in three steps.
 
-### 7.7 AAD
+1. When loading from the local keystore, verify the sibling `public.json` and confirm `member_id` / `kid` consistency
+2. Reconstruct IKM and `enc_key` from the target private.json protected header (`ikm_salt`, `hkdf_salt`, `kid`) plus SSH signing capability
+3. Decrypt using `jcs(protected)` as AAD so that header tampering is detected
 
-AAD is `jcs(protected)`. This means the full decryption context, including `format`, `member_id`, `kid`, algorithm identifiers, fingerprint, salts, timestamps, and expiration, is covered by tamper detection.
+The SSH key therefore serves not only as the access control mechanism for the local keystore, but also as the practical source of decryption capability. Conversely, an attacker does not necessarily need to steal the SSH private key file itself; any actor that can read the target private.json protected header and issue equivalent signing requests can derive `enc_key`. The broader implications are discussed in §7.4.
 
-### 7.7.1 How to Read the Decryption Flow
-
-The high-level flow has three important steps.
-
-1. When loading from the local keystore, verify the sibling `public.json` and confirm `member_id` / `kid` consistency.
-2. Reconstruct IKM from `ikm_salt` plus SSH signing capability, then derive `enc_key` with `hkdf_salt` and `kid`-scoped info.
-3. Decrypt using `jcs(protected)` as AAD so that header tampering is detected.
-
-This makes the SSH key not only the access control mechanism for the local keystore, but also the practical source of decryption capability.
-
-### 7.8 Trust Assumptions
-
-Because PrivateKey protection derives IKM from SSH signatures, any entity that can request SSH signatures in the `secretenv-key-protection` namespace can derive the encryption key and decrypt the PrivateKey. This equivalence is intentional and defines an important trust-boundary consequence.
-
-| Entity | Can decrypt | Notes |
-|--------|------------|-------|
-| Local user (direct file access) | **Yes** | Normal use |
-| ssh-agent (local) | **Yes** | Can issue signing requests if key is loaded |
-| ssh-agent forwarding | **Yes** | Can issue signing requests from remote host. Weakens protection. |
-| Local malware | **Yes** | If it can access key files or agent socket |
-| CI/CD environment | **Yes** | If SSH key is deployed. Dedicated key recommended. |
-| Hardware token (FIDO2) | **No** | Ed25519-SK uses non-deterministic signatures, so IKM derivation is impossible. Detected by §7.6 determinism check. |
-
-With agent forwarding enabled, a process on the remote host can send signing requests to the local `ssh-agent`, which in turn gives that environment effective PrivateKey decryption capability. SecretEnv therefore treats disabling agent forwarding as an important operational safeguard.
-
-The tradeoff is explicit: SecretEnv reuses the existing SSH trust anchor to avoid additional password or master-key management, but that means the protection level of the SSH key becomes the upper bound of the protection level for the SecretEnv private key.
-
-### 7.9 Password-Based Key Protection (`argon2id-m64t3p4-hkdf-sha256`)
+### 7.3 Password-Based Protection
 
 As an alternative to SSH-based protection, SecretEnv supports password-based private key protection using `argon2id-m64t3p4-hkdf-sha256`. This scheme is designed for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
 
-#### 7.9.1 Use Case
+### 7.3.1 Use Case
 
 Many CI platforms provide "secret variables" that are stored securely and exposed as environment variables at runtime. This protection scheme enables exporting a SecretEnv private key in a portable, password-protected format that can be registered as a CI secret variable and used without any SSH infrastructure.
 
-#### 7.9.2 Key Derivation Pipeline
+### 7.3.2 Key Derivation Pipeline
 
-In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `secretenv:password-private-key-enc@5:{kid}`, which is intentionally distinct from the SSH-based path for domain separation.
+In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `secretenv:password-private-key-enc@5:{kid}`, which is intentionally distinct from the SSH-based path (`secretenv:sshsig-private-key-enc@5:{kid}`) for domain separation.
 
 `ikm_salt` is reserved for Argon2id and `hkdf_salt` for HKDF so that the two derivation steps remain clearly separated.
 
-#### 7.9.3 Argon2id Parameters and Password Requirements
+### 7.3.3 Argon2id Parameters and Password Requirements
 
 - Fixed parameters at export time: m=65536 (64 MiB), t=3, p=4 — following the "second recommended" option from RFC 9106, Section 4
 - Parameters are fixed by the implementation and are not serialized in the private key document
 - Minimum password length: 8 characters. This is the implementation-enforced floor, not a recommendation. Users are responsible for choosing a sufficiently strong password. For offline brute-force resistance, 20 or more random characters (or a passphrase with equivalent entropy) is strongly recommended.
 
-#### 7.9.4 Security Trade-offs in CI Environments
-
-Environment variables remain exposed to process-memory and CI-runtime handling, so password-based protection mainly adds value when the exported blob leaks by itself.
-
-By contrast, if `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are stored in the same secret backend, the password offers little independent protection against compromise of that backend. Its value becomes meaningfully higher only when the two can be placed in separate trust domains.
-
-#### 7.9.5 Environment Variable-Based Key Loading and Trusted CI Boundaries
+### 7.3.4 CI Boundary and Environment Variable-Based Key Loading
 
 Environment variable-based key loading is intended only for read-oriented execution contexts such as CI. At load time, the implementation validates only the exported PrivateKey itself and must not resolve the caller's own PublicKey from workspace `members/active/`.
 
@@ -906,7 +880,31 @@ This mode is acceptable only in trusted CI contexts where:
 - the checkout consumed by SecretEnv is a protected branch, protected tag, post-merge ref, or equivalent trusted ref
 - the runner handling secrets is trusted and is not shared with untrusted workloads
 
-In short, this mode must not be used in attacker-controlled CI contexts.
+This mode must not be used in attacker-controlled CI contexts.
+
+As a security trade-off, environment variables remain exposed to process-memory and CI-runtime handling, so password-based protection mainly adds value when the exported blob leaks by itself. If `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are stored in the same secret backend, the password offers little independent protection against compromise of that backend. Its value becomes meaningfully higher only when the two can be placed in separate trust domains.
+
+### 7.4 Trust Assumptions
+
+SecretEnv's PrivateKey protection reuses the existing SSH key as a trust anchor, avoiding the need to manage a separate password or master key. Its effective protection strength, however, is determined by the entire local trusted boundary, not by the SSH key alone.
+
+Under SSH-based protection, any entity that can access all three of the following can re-derive `enc_key` and decrypt the PrivateKey:
+
+1. the target private.json `protected` header
+2. authority to request SSH signatures in the `secretenv-key-protection` namespace
+3. `encrypted.ct`
+
+The effective protection target therefore includes not only the SSH key but also the local keystore and the execution authority to invoke that PrivateKey. Under normal operation these elements are assumed to reside together within the user's trusted local environment; once that boundary is broken, PrivateKey protection must be treated as lost. This is not a risk category that SecretEnv attempts to mitigate individually.
+
+| Entity | Can decrypt | Notes |
+|--------|------------|-------|
+| Local user (trusted local environment) | **Yes** | Normal use |
+| Local malware | **Yes (out of scope)** | Once an attacker can read the local keystore or invoke the protected PrivateKey under user authority, PrivateKey protection must be treated as lost |
+| Hijacked user session | **Yes (out of scope)** | Applies when the attacker can operate SecretEnv or access the local keystore with the user's authority |
+| Another process with user-level or admin/root-level authority | **Yes (out of scope)** | Regardless of how signing capability is reached, the local trusted boundary must be treated as broken |
+| Hardware token (FIDO2) | **No** | Ed25519-SK uses non-deterministic signatures, so IKM derivation is impossible. Detected by the §7.2.2 determinism check. |
+
+The key takeaway is to evaluate threats against the local trusted boundary as a whole, rather than carving out individual SSH mechanisms such as key files, `ssh-agent`, or agent forwarding. Whether signing capability is reached via a key file, an agent socket, or equivalent execution authority does not change the conclusion. Agent forwarding in particular is not a standalone SecretEnv-specific risk; what matters is whether the forwarded environment can also reach protected SecretEnv records or key material, and that situation is itself a failure of the local trusted boundary.
 
 ---
 
@@ -1251,7 +1249,7 @@ SecretEnv does not guarantee complete erasure from process memory. Memory zeroiz
 HPKE Base mode provides ephemeral-key isolation per wrap via ephemeral keys. However:
 
 - If a recipient's long-term private key is compromised, **all existing wraps** for that recipient become decryptable
-- If the SSH private key used for PrivateKey protection is compromised, every SecretEnv private-key generation protected by that SSH key becomes effectively compromised, so all historical ciphertexts addressed to those generations become decryptable
+- If both the SSH private key used for PrivateKey protection and the corresponding local keystore are compromised, every SecretEnv private-key generation protected by that SSH key becomes effectively compromised, so all historical ciphertexts addressed to those generations become decryptable
 - Running `rewrap --rotate-key` to regenerate the Content Key after compromise can limit damage to future newly encrypted data
 
 **Design intent:** SecretEnv does not claim strong system-wide forward secrecy. `--rotate-key` is a post-compromise damage-limitation measure, not a mechanism that restores protection for historical data.
@@ -1395,14 +1393,14 @@ This checklist summarizes the key operational responsibilities that users should
 - Can your team enforce Git and PR review controls on changes to `members/active/`?
 - Can you verify `kid` values and SSH key fingerprints through an out-of-band channel during TOFU approval?
 - Can you rotate the actual secret values referenced by `disclosed` entries when a member is removed?
-- Can you adequately protect SSH keys, `ssh-agent`, or a trusted CI context in your environment?
+- Can you adequately protect the local trusted area (workstation, local keystore, local trust store, SSH keys / signing inputs) and your trusted CI context?
 - Can your organization accept the explicit limits around irrecoverable past disclosure and the lack of centralized policy enforcement?
 
 **SSH Key Management (§7)**
 
 - Set a passphrase on all SSH Ed25519 private keys used with SecretEnv
-- Disable SSH agent forwarding in environments where SecretEnv is used (§7.8)
-- Use a dedicated SSH key for CI/CD environments rather than reusing personal keys
+- Understand that compromise of the local trusted boundary is outside SecretEnv's protection goals, and protect the workstation and local key-storage area accordingly (§7.4)
+- For CI/CD, use the password-based exported-key model from §7.3 rather than SSH-based key protection
 
 **Workspace Governance (§2.2, §9)**
 
@@ -1423,10 +1421,10 @@ This checklist summarizes the key operational responsibilities that users should
 - After removing a member, rotate the actual secret values (database passwords, API keys, certificates) that the removed member had access to
 - Review `disclosed` entries to identify which secrets need rotation
 
-**CI/CD Security (§7.9)**
+**CI/CD Security (§7.3)**
 
-- Place `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` in separate trust domains when possible (§7.9.4)
-- Use environment variable-based key loading only in trusted CI contexts (§7.9.5)
+- Place `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` in separate trust domains when possible (§7.3.4)
+- Use environment variable-based key loading only in trusted CI contexts (§7.3.4)
 - Never expose secrets to untrusted PR workflows or attacker-controlled checkouts
 
 **Local Trust Store (§9.4, §13.7)**

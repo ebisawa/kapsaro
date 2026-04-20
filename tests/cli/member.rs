@@ -248,7 +248,7 @@ fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_ID)
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
@@ -268,28 +268,28 @@ fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
-        .env_remove("SECRETENV_MEMBER_ID")
+        .env_remove("SECRETENV_MEMBER_HANDLE")
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Specify --member-id"));
+        .stderr(predicate::str::contains("Specify --member-handle"));
 
     cmd()
         .arg("member")
         .arg("verify")
         .arg("--approve")
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(ALICE_MEMBER_ID)
         .arg(BOB_MEMBER_ID)
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
-        .env_remove("SECRETENV_MEMBER_ID")
+        .env_remove("SECRETENV_MEMBER_HANDLE")
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"))
-        .stderr(predicate::str::contains("Specify --member-id").not());
+        .stderr(predicate::str::contains("Specify --member-handle").not());
 }
 
 #[test]
@@ -306,7 +306,7 @@ fn test_member_verify_approve_hides_already_known_results() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_ID)
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success()
@@ -331,7 +331,7 @@ fn test_member_verify_approve_json_skips_already_known_results() {
         .arg(&workspace_dir)
         .arg("--json")
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_ID", ALICE_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_ID)
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success();

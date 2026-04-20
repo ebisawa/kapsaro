@@ -115,8 +115,8 @@ fn resolve_env_execution(
 fn reject_env_member_override(member_id: &Option<String>) -> Result<()> {
     if member_id.is_some() {
         return Err(Error::InvalidArgument {
-            message: "--member-id cannot be used in environment variable key mode \
-                     (member_id is derived from SECRETENV_PRIVATE_KEY)"
+            message: "--member-handle cannot be used in environment variable key mode \
+                     (member handle is derived from SECRETENV_PRIVATE_KEY)"
                 .to_string(),
         });
     }

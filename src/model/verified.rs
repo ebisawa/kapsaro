@@ -12,7 +12,7 @@ use super::private_key::PrivateKeyPlaintext;
 /// Proof of successful decryption and validation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptionProof {
-    /// Member ID from the encrypted document
+    /// Member handle from the encrypted document
     pub(crate) member_id: String,
     /// Key statement ID from the encrypted document
     pub(crate) kid: String,

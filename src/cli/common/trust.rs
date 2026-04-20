@@ -3,6 +3,7 @@
 
 //! Shared CLI prompts for trust decisions.
 
+#[cfg(test)]
 use std::io::BufRead;
 
 use crate::app::context::options::CommonCommandOptions;
@@ -10,7 +11,9 @@ use crate::app::trust::paths::trust_store_file_path;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::trust::review::print_candidate_review;
-use crate::cli::common::prompt::{prompt_yes_no, prompt_yes_no_with_reader};
+use crate::cli::common::prompt::prompt_yes_no;
+#[cfg(test)]
+use crate::cli::common::prompt::prompt_yes_no_with_reader;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::support::tty;
 use crate::{Error, Result};
@@ -91,15 +94,44 @@ fn recover_invalid_trust_store(
     owner_member_id: &str,
     error: Error,
 ) -> Result<()> {
-    recover_invalid_trust_store_with_reader(
-        options,
-        owner_member_id,
-        error,
-        std::io::stdin().lock(),
-        tty::is_interactive(),
-    )
+    if !tty::is_interactive() {
+        return Err(Error::InvalidOperation {
+            message: format!(
+                "{} (non-interactive mode cannot confirm trust store reset)",
+                error.user_message()
+            ),
+        });
+    }
+
+    let base_dir = options.resolve_base_dir()?;
+    let path = trust_store_file_path(&base_dir, owner_member_id);
+    print_warning(error.user_message());
+    if !confirm_trust_store_reset(&path)? {
+        return Err(Error::InvalidOperation {
+            message: "Local trust store reset was declined".to_string(),
+        });
+    }
+
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| {
+            Error::io_with_source(
+                format!(
+                    "Failed to remove invalid local trust store {}: {}",
+                    display_path_relative_to_cwd(&path),
+                    e
+                ),
+                e,
+            )
+        })?;
+    }
+    eprintln!(
+        "Deleted local trust store '{}'. Continuing with an empty trust cache.",
+        display_path_relative_to_cwd(&path)
+    );
+    Ok(())
 }
 
+#[cfg(test)]
 fn recover_invalid_trust_store_with_reader<R>(
     options: &CommonCommandOptions,
     owner_member_id: &str,
@@ -147,17 +179,22 @@ where
     Ok(())
 }
 
+#[cfg(test)]
 fn confirm_trust_store_reset_with_reader<R>(path: &std::path::Path, reader: R) -> Result<bool>
 where
     R: BufRead,
 {
-    prompt_yes_no_with_reader(
-        &format!(
-            "Delete invalid local trust store '{}' and continue with an empty trust cache?",
-            display_path_relative_to_cwd(path)
-        ),
-        false,
-        reader,
+    prompt_yes_no_with_reader(&trust_store_reset_prompt(path), false, reader)
+}
+
+fn confirm_trust_store_reset(path: &std::path::Path) -> Result<bool> {
+    prompt_yes_no(&trust_store_reset_prompt(path), false)
+}
+
+fn trust_store_reset_prompt(path: &std::path::Path) -> String {
+    format!(
+        "Delete invalid local trust store '{}' and continue with an empty trust cache?",
+        display_path_relative_to_cwd(path)
     )
 }
 

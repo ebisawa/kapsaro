@@ -100,7 +100,7 @@ fn print_key_info(key_info: &KeyInfoView<'_>, verbose: bool) {
     println!("  Kid:        {}{}", kid_display, active_marker);
     if verbose {
         println!("  Format:     {}", key_info.format);
-        println!("  Member ID:  {}", key_info.member_id);
+        println!("  Member Handle: {}", key_info.member_id);
         println!("  Created:    {}", key_info.created_at);
     }
     println!("  Expires:    {}", key_info.expires_at);

@@ -45,7 +45,7 @@ pub fn load_and_verify_member_file(
     if public_key.protected.member_id != fallback_member_id {
         return Err(Error::InvalidArgument {
             message: format!(
-                "Member ID mismatch in {}: expected '{}', found '{}'",
+                "Member handle mismatch in {}: expected '{}', found '{}'",
                 display_path_relative_to_cwd(member_file),
                 fallback_member_id,
                 public_key.protected.member_id

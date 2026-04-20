@@ -161,27 +161,6 @@ impl ResolvedStrictKeyChecking {
     }
 }
 
-/// Identity-related configuration
-///
-/// Contains the local member identifier for this user.
-///
-/// # TOML Example
-///
-/// ```toml
-/// [identity]
-/// member_id = "alice@example.com"
-/// ```
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct IdentityConfig {
-    /// Member identifier
-    ///
-    /// Must match pattern: ^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$
-    /// Empty string indicates not configured (will prompt on first use).
-    /// Default: `""`
-    #[serde(default)]
-    pub member_id: String,
-}
-
 /// Top-level configuration document
 ///
 /// Root structure for `~/.config/secretenv/config.toml`.
@@ -189,15 +168,14 @@ pub struct IdentityConfig {
 /// # Format
 ///
 /// Must include `format = "secretenv/config@1"` for version validation.
+/// `member_handle` is required.
 /// The `ssh` section is optional and uses defaults if omitted.
 ///
 /// # TOML Example
 ///
 /// ```toml
 /// format = "secretenv/config@1"
-///
-/// [identity]
-/// member_id = "alice@example.com"
+/// member_handle = "alice@example.com"
 ///
 /// [ssh]
 /// ssh_signing_method = "auto"
@@ -209,11 +187,10 @@ pub struct ConfigDocument {
     /// Used for forward compatibility. Loading will fail if format is unsupported.
     pub format: String,
 
-    /// Identity configuration
+    /// Member handle
     ///
-    /// Contains the local member identifier. Defaults to empty if omitted.
-    #[serde(default)]
-    pub identity: IdentityConfig,
+    /// User-facing selector used across SecretEnv workspaces.
+    pub member_handle: String,
 
     /// SSH configuration
     ///

@@ -93,6 +93,7 @@ default = []
 # CLI testing
 assert_cmd = "2"
 predicates = "3"
+libc = "0.2"
 
 # Serial test execution
 serial_test = "3"

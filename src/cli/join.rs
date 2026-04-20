@@ -4,7 +4,7 @@
 //! join command implementation
 //!
 //! Joins an existing workspace without creating directory structure:
-//! 1. Determines member_id (CLI arg → config → keystore → TTY prompt)
+//! 1. Determines member handle (CLI arg → config → keystore → TTY prompt)
 //! 2. Ensures key exists (generates if missing)
 //! 3. Verifies workspace exists (errors if not found)
 //! 4. Registers member (with TTY confirmation for overwrites)
@@ -30,8 +30,8 @@ pub struct JoinArgs {
     #[arg(long)]
     pub github_user: Option<String>,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 }
 

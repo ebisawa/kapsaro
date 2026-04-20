@@ -136,7 +136,7 @@ fn test_set_without_workspace_fails() {
         .stderr(
             predicate::str::contains("SSH key")
                 .or(predicate::str::contains("workspace"))
-                .or(predicate::str::contains("member_id not configured")),
+                .or(predicate::str::contains("member handle not configured")),
         );
 }
 
@@ -236,7 +236,7 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
         .arg("initial_value")
         .arg("--workspace")
         .arg(&workspace_dir)
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir)
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
@@ -253,7 +253,7 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
         .arg("updated_value")
         .arg("--workspace")
         .arg(&workspace_dir)
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir)
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())

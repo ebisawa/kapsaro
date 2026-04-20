@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 fn write_global_config(temp_home: &TempDir, member_id: &str) {
     let config_path = temp_home.path().join("config.toml");
-    fs::write(config_path, format!("member_id = \"{}\"\n", member_id)).unwrap();
+    fs::write(config_path, format!("member_handle = \"{}\"\n", member_id)).unwrap();
 }
 
 fn setup_keystore(temp_dir: &TempDir, member_ids: &[&str]) {
@@ -25,10 +25,10 @@ fn setup_keystore(temp_dir: &TempDir, member_ids: &[&str]) {
 #[test]
 #[serial]
 fn test_resolve_member_id_from_cli_argument() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::set_var("SECRETENV_MEMBER_ID", "env-member");
+    env::set_var("SECRETENV_MEMBER_HANDLE", "env-member");
     write_global_config(&temp_home, "config-member");
     setup_keystore(&temp_home, &["keystore-member"]);
 
@@ -44,13 +44,13 @@ fn test_resolve_member_id_from_cli_argument() {
 #[test]
 #[serial]
 fn test_resolve_member_id_cli_invalid_error() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
     setup_keystore(&temp_home, &[]);
 
     let result = super::resolve_member_id_with_fallback(
-        Some("invalid member id!".to_string()),
+        Some("invalid member handle!".to_string()),
         Some(temp_home.path()),
     );
 
@@ -60,10 +60,10 @@ fn test_resolve_member_id_cli_invalid_error() {
 #[test]
 #[serial]
 fn test_resolve_member_id_from_env_var() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::set_var("SECRETENV_MEMBER_ID", "env-member");
+    env::set_var("SECRETENV_MEMBER_HANDLE", "env-member");
     write_global_config(&temp_home, "config-member");
     setup_keystore(&temp_home, &["keystore-member"]);
 
@@ -75,10 +75,10 @@ fn test_resolve_member_id_from_env_var() {
 #[test]
 #[serial]
 fn test_resolve_member_id_env_invalid_error() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::set_var("SECRETENV_MEMBER_ID", "invalid member!");
+    env::set_var("SECRETENV_MEMBER_HANDLE", "invalid member!");
     setup_keystore(&temp_home, &[]);
 
     let result = super::resolve_member_id_with_fallback(None, Some(temp_home.path()));
@@ -89,10 +89,10 @@ fn test_resolve_member_id_env_invalid_error() {
 #[test]
 #[serial]
 fn test_resolve_member_id_from_global_config() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::remove_var("SECRETENV_MEMBER_ID");
+    env::remove_var("SECRETENV_MEMBER_HANDLE");
     write_global_config(&temp_home, "config-member");
     setup_keystore(&temp_home, &["keystore-member"]);
 
@@ -104,10 +104,10 @@ fn test_resolve_member_id_from_global_config() {
 #[test]
 #[serial]
 fn test_resolve_member_id_config_invalid_error() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::remove_var("SECRETENV_MEMBER_ID");
+    env::remove_var("SECRETENV_MEMBER_HANDLE");
     write_global_config(&temp_home, "invalid member!");
     setup_keystore(&temp_home, &[]);
 
@@ -119,10 +119,10 @@ fn test_resolve_member_id_config_invalid_error() {
 #[test]
 #[serial]
 fn test_resolve_member_id_from_keystore_single_member() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::remove_var("SECRETENV_MEMBER_ID");
+    env::remove_var("SECRETENV_MEMBER_HANDLE");
     setup_keystore(&temp_home, &["keystore-member"]);
 
     let result = super::resolve_member_id_with_fallback(None, Some(temp_home.path())).unwrap();
@@ -133,10 +133,10 @@ fn test_resolve_member_id_from_keystore_single_member() {
 #[test]
 #[serial]
 fn test_resolve_member_id_keystore_multiple_members_returns_none() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::remove_var("SECRETENV_MEMBER_ID");
+    env::remove_var("SECRETENV_MEMBER_HANDLE");
     setup_keystore(&temp_home, &["alice", "bob"]);
 
     let result = super::resolve_member_id_with_fallback(None, Some(temp_home.path())).unwrap();
@@ -147,10 +147,10 @@ fn test_resolve_member_id_keystore_multiple_members_returns_none() {
 #[test]
 #[serial]
 fn test_resolve_member_id_keystore_empty_returns_none() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::remove_var("SECRETENV_MEMBER_ID");
+    env::remove_var("SECRETENV_MEMBER_HANDLE");
     setup_keystore(&temp_home, &[]);
 
     let result = super::resolve_member_id_with_fallback(None, Some(temp_home.path())).unwrap();
@@ -161,10 +161,10 @@ fn test_resolve_member_id_keystore_empty_returns_none() {
 #[test]
 #[serial]
 fn test_resolve_member_id_priority_cli_over_env() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::set_var("SECRETENV_MEMBER_ID", "env-member");
+    env::set_var("SECRETENV_MEMBER_HANDLE", "env-member");
     setup_keystore(&temp_home, &[]);
 
     let result = super::resolve_member_id_with_fallback(
@@ -179,10 +179,10 @@ fn test_resolve_member_id_priority_cli_over_env() {
 #[test]
 #[serial]
 fn test_resolve_member_id_priority_env_over_config() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::set_var("SECRETENV_MEMBER_ID", "env-member");
+    env::set_var("SECRETENV_MEMBER_HANDLE", "env-member");
     write_global_config(&temp_home, "config-member");
     setup_keystore(&temp_home, &[]);
 
@@ -194,10 +194,10 @@ fn test_resolve_member_id_priority_env_over_config() {
 #[test]
 #[serial]
 fn test_resolve_member_id_priority_config_over_keystore() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    env::remove_var("SECRETENV_MEMBER_ID");
+    env::remove_var("SECRETENV_MEMBER_HANDLE");
     write_global_config(&temp_home, "config-member");
     setup_keystore(&temp_home, &["keystore-member"]);
 

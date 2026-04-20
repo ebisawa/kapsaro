@@ -26,7 +26,7 @@ pub struct PrivateKeyProtected {
     /// Format identifier: "secretenv.private.key@5"
     pub format: String,
 
-    /// Member ID (ASCII identifier; allows .@_+-)
+    /// Member handle serialized with the on-wire field name `member_id`
     pub member_id: String,
 
     /// Statement ID (canonical Crockford Base32, 32 characters)

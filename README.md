@@ -47,7 +47,7 @@ cargo install --path .
 
 ```bash
 cd /path/to/your-git-repo
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 ```
 
 This creates a `.secretenv/` directory, generates your key pair, and registers you as the first member.

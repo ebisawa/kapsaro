@@ -1,12 +1,15 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
 use std::io::BufRead;
 
 use crate::app::member::mutation::{preview_member_removal, remove_member};
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::member::print_member_remove_summary;
 use crate::cli::common::output::text::{print_warning, print_warning_line};
+use crate::cli::common::prompt::prompt_yes_no;
+#[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::support::tty;
@@ -48,14 +51,30 @@ fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemove
 }
 
 fn confirm_member_remove(force: bool, member_id: &str) -> Result<(), Error> {
-    confirm_member_remove_with_reader(
-        force,
-        member_id,
-        tty::is_interactive(),
-        std::io::stdin().lock(),
-    )
+    if force {
+        return Ok(());
+    }
+    if !tty::is_interactive() {
+        return Err(Error::invalid_operation(format!(
+            "Refusing to remove member '{}' without --force in non-interactive mode",
+            member_id
+        )));
+    }
+
+    if prompt_yes_no(
+        &format!("Remove member '{}' from the workspace?", member_id),
+        false,
+    )? {
+        return Ok(());
+    }
+
+    Err(Error::invalid_operation(format!(
+        "Member removal cancelled for '{}'",
+        member_id
+    )))
 }
 
+#[cfg(test)]
 fn confirm_member_remove_with_reader<R>(
     force: bool,
     member_id: &str,

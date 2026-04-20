@@ -123,9 +123,9 @@ The workspace is the `.secretenv/` directory in a Git repository. When you run s
 
 The operation that updates recipient information after a member change or key rotation. It is also what turns an `incoming` key into an active one.
 
-### `member_id`
+### `member handle`
 
-A string that identifies a member. It often looks like an email address, but it does not have to be a real email address. It only needs to be unique within the team.
+A self-asserted handle that a user keeps using across SecretEnv workspaces. It often looks like an email address, but it does not have to be a real email address or a verified external identifier.
 
 ### `kid`
 
@@ -247,7 +247,7 @@ cd my-project
 ### Step 2: Initialize the Workspace
 
 ```bash
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 ```
 
 Output:
@@ -315,7 +315,7 @@ cd my-project
 ### Step 2: Submit a join request
 
 ```bash
-secretenv join --member-id bob@example.com
+secretenv join --member-handle bob@example.com
 ```
 
 Output:
@@ -822,8 +822,8 @@ Create a dedicated member for CI (do not reuse a human member's key).
 
 ```bash
 # On a developer machine with SSH key access
-secretenv key new --member-id ci@example.com
-secretenv join --member-id ci@example.com
+secretenv key new --member-handle ci@example.com
+secretenv join --member-handle ci@example.com
 ```
 
 #### Step 2: Add the CI Member to Recipients
@@ -844,7 +844,7 @@ git push
 
 ```bash
 # Run this on a developer machine with SSH signer and local keystore access
-secretenv key export --private --member-id ci@example.com --out ci-key.txt
+secretenv key export --private --member-handle ci@example.com --out ci-key.txt
 # You will be prompted to enter and confirm a password (minimum 8 characters)
 ```
 
@@ -1085,8 +1085,8 @@ This means your SSH key produced different signatures for the same input on two 
 
 | Command | Description |
 |---------|-------------|
-| `secretenv init [--member-id <id>]` | Bootstrap a new Workspace and register the first member in active |
-| `secretenv join [--member-id <id>] [--force]` | Request to join an existing Workspace or stage a rotated key (added to incoming) |
+| `secretenv init [--member-handle <id>]` | Bootstrap a new Workspace and register the first member in active |
+| `secretenv join [--member-handle <id>] [--force]` | Request to join an existing Workspace or stage a rotated key (added to incoming) |
 
 ### KV Operations
 
@@ -1116,11 +1116,11 @@ This means your SSH key produced different signatures for the same input on two 
 | Command | Description |
 |---------|-------------|
 | `secretenv member list` | List all members |
-| `secretenv member show <member_id>` | Show details for a specific member |
-| `secretenv member verify [<member_id>...]` | Verify active member public keys (with online verification) |
-| `secretenv member verify --approve [<member_id>...]` | Review active member keys and save the approval result in the local trust store |
+| `secretenv member show <member_handle>` | Show details for a specific member |
+| `secretenv member verify [<member_handle>...]` | Verify active member public keys (with online verification) |
+| `secretenv member verify --approve [<member_handle>...]` | Review active member keys and save the approval result in the local trust store |
 | `secretenv member add <file>` | Add a member's public key file to incoming |
-| `secretenv member remove <member_id>` | Remove a member from the Workspace |
+| `secretenv member remove <member_handle>` | Remove a member from the Workspace |
 | `secretenv rewrap [--rotate-key] [--clear-disclosure-history] [--target <path>...]` | Activate pending members and update recipient information in all workspace encrypted files when `--target` is omitted, or only the specified target files when it is provided |
 
 ### Local Trust Store
@@ -1139,8 +1139,8 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv key list` | List keys |
 | `secretenv key activate <kid>` | Activate a specific key |
 | `secretenv key remove <kid>` | Remove a key |
-| `secretenv key export [<kid>] [--member-id <id>] --out <path>` | Export public key |
-| `secretenv key export --private [<kid>] [--member-id <id>] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
+| `secretenv key export [<kid>] [--member-handle <id>] --out <path>` | Export public key |
+| `secretenv key export --private [<kid>] [--member-handle <id>] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
 
 ### Configuration
 
@@ -1151,7 +1151,7 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv config list` | List all configuration values |
 | `secretenv config unset <key>` | Remove a configuration value |
 
-Configuration keys: `member_id`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `github_user`
+Configuration keys: `member_handle`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `github_user`
 
 ---
 
@@ -1162,8 +1162,8 @@ Configuration keys: `member_id`, `ssh_signing_method` (`auto` / `ssh-agent` / `s
 You only need these settings if you want to avoid typing the same options repeatedly. They are not required during initial installation.
 
 ```bash
-# Set default member_id (allows omitting --member-id going forward)
-secretenv config set member_id alice@example.com
+# Set default member handle (allows omitting --member-handle going forward)
+secretenv config set member_handle alice@example.com
 
 # Set GitHub account (for online verification)
 secretenv config set github_user alice-gh
@@ -1195,7 +1195,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 
 | Key | Description | Default | CLI Option | Environment Variable |
 |-----|-------------|---------|------------|---------------------|
-| `member_id` | Default member identifier (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-id` | `SECRETENV_MEMBER_ID` |
+| `member_handle` | Default member handle (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-handle` | `SECRETENV_MEMBER_HANDLE` |
 | `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `SECRETENV_SSH_IDENTITY` |
 | `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `SECRETENV_SSH_SIGNING_METHOD` |
 | `ssh_keygen_command` | Path to `ssh-keygen` command | `ssh-keygen` | — | — |
@@ -1205,7 +1205,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 Example:
 
 ```toml
-member_id = "alice@example.com"
+member_handle = "alice@example.com"
 ssh_identity = "~/.ssh/id_ed25519"
 ssh_signing_method = "auto"
 github_user = "alice-gh"
@@ -1218,7 +1218,7 @@ If the config file does not exist, secretenv falls back to environment variables
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SECRETENV_HOME` | Base directory for secretenv configuration and keys | `~/.config/secretenv/` |
-| `SECRETENV_MEMBER_ID` | Default member identifier | (none) |
+| `SECRETENV_MEMBER_HANDLE` | Default member handle | (none) |
 | `SECRETENV_SSH_IDENTITY` | Path to SSH private key file (Ed25519) | `~/.ssh/id_ed25519` |
 | `SECRETENV_SSH_SIGNING_METHOD` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
 | `SECRETENV_GITHUB_USER` | Default GitHub login name for `key new` | (none) |

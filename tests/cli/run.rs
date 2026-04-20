@@ -82,7 +82,7 @@ fn test_run_error_when_workspace_not_found() {
         .stderr(
             predicate::str::contains("workspace")
                 .or(predicate::str::contains("not found"))
-                .or(predicate::str::contains("member_id not configured")),
+                .or(predicate::str::contains("member handle not configured")),
         );
 
     drop(ssh_temp);
@@ -103,7 +103,7 @@ fn test_run_error_when_default_file_not_exists() {
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())

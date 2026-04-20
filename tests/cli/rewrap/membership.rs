@@ -2,15 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::cli::common::{run_command_with_pty, secretenv_bin};
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_trust_store_for_workspace,
-    stage_active_public_key_to_workspace_incoming, update_active_private_key_expires_at,
+    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace_from_fixtures,
+    setup_trust_store_for_workspace, stage_active_public_key_to_workspace_incoming,
+    update_active_private_key_expires_at,
 };
 use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyBuildParams};
+use secretenv::io::keystore::active::set_active_kid;
+use secretenv::io::keystore::storage::list_kids;
 use secretenv::io::trust::paths::trust_store_file_path;
 use secretenv::io::workspace::members::load_member_file_from_path;
 use secretenv::model::public_key::GithubAccount;
 use secretenv::support::tty;
+#[cfg(unix)]
+use std::process::Command as StdCommand;
 
 fn rewrite_member_with_github_binding(
     temp_dir: &tempfile::TempDir,
@@ -256,6 +262,83 @@ fn test_rewrap_non_interactive_auto_accepts_self_rotation() {
     );
     let after = get_kv_rids(&kv_path);
     assert_eq!(after, vec![ALICE_MEMBER_ID.to_string()]);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+
+    let mut common_opts = default_common_options();
+    common_opts.home = Some(temp_dir.path().to_path_buf());
+    common_opts.workspace = Some(workspace_dir.clone());
+    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
+    let alice_kid = list_kids(&temp_dir.path().join("keys"), ALICE_MEMBER_ID)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    set_active_kid(ALICE_MEMBER_ID, &alice_kid, &temp_dir.path().join("keys")).unwrap();
+
+    let bob_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    let bob_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", BOB_MEMBER_ID));
+    fs::rename(&bob_active, &bob_incoming).unwrap();
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
+    let kv_path = create_kv_file(
+        &workspace_dir,
+        common_opts.clone(),
+        ALICE_MEMBER_ID,
+        "pty_accept",
+        &[("KEY", "value")],
+    );
+
+    let mut command = StdCommand::new(secretenv_bin());
+    command
+        .arg("rewrap")
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_ID)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env(
+            "SECRETENV_SSH_IDENTITY",
+            temp_dir.path().join(".ssh").join("test_ed25519"),
+        )
+        .env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen")
+        .env_remove("CI");
+
+    let result = run_command_with_pty(&mut command, "Accept?", b"y\r");
+
+    assert!(
+        result.status.success(),
+        "interactive rewrap should succeed after carriage return input\n{}",
+        result.output
+    );
+    assert!(
+        result.output.contains("Accept?"),
+        "interactive output should include Accept prompt\n{}",
+        result.output
+    );
+    assert!(
+        !result.output.contains("^M"),
+        "interactive output should not echo literal carriage-return markers\n{}",
+        result.output
+    );
+
+    let rids_after = get_kv_rids(&kv_path);
+    assert!(
+        rids_after.contains(&BOB_MEMBER_ID.to_string()),
+        "BOB should be added after interactive PTY acceptance"
+    );
 }
 
 #[test]
@@ -549,6 +632,8 @@ fn test_rewrap_rejects_duplicate_kid_workspace_before_processing() {
         .arg("rewrap")
         .arg("--workspace")
         .arg(&workspace_dir)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_ID)
         .env("SECRETENV_HOME", temp_dir.path())
         .env(
             "SECRETENV_SSH_IDENTITY",

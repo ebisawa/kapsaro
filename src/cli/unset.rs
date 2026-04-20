@@ -4,6 +4,7 @@
 //! unset command - remove a key from default kv-enc file
 
 use clap::Args;
+#[cfg(test)]
 use std::io::BufRead;
 
 use crate::app::kv::mutation::unset_kv_command;
@@ -13,6 +14,8 @@ use crate::cli::common::command::{
     run_kv_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::text::print_optional_status;
+use crate::cli::common::prompt::prompt_yes_no;
+#[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::CommonOptions;
@@ -29,8 +32,8 @@ pub struct UnsetArgs {
     #[arg(long, short = 'f')]
     pub force: bool,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Secret store name; defaults to "default"
@@ -74,9 +77,28 @@ pub fn run(args: UnsetArgs) -> Result<()> {
 }
 
 fn confirm_unset_operation(force: bool, key: &str) -> Result<()> {
-    confirm_unset_operation_with_reader(force, key, tty::is_interactive(), std::io::stdin().lock())
+    if force {
+        return Ok(());
+    }
+    if !tty::is_interactive() {
+        return Err(Error::InvalidOperation {
+            message: format!(
+                "Refusing to unset '{}' without --force in non-interactive mode",
+                key
+            ),
+        });
+    }
+
+    if prompt_yes_no(&format!("Remove '{}' from the secret store?", key), false)? {
+        return Ok(());
+    }
+
+    Err(Error::InvalidOperation {
+        message: format!("Unset operation cancelled for '{}'", key),
+    })
 }
 
+#[cfg(test)]
 fn confirm_unset_operation_with_reader<R>(
     force: bool,
     key: &str,

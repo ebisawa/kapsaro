@@ -39,8 +39,8 @@ fn test_user_message_not_found() {
 
 #[test]
 fn test_user_message_invalid_argument() {
-    let error = Error::invalid_argument("Member ID mismatch");
-    assert_eq!(error.user_message(), "Member ID mismatch");
+    let error = Error::invalid_argument("Member handle mismatch");
+    assert_eq!(error.user_message(), "Member handle mismatch");
 }
 
 #[test]

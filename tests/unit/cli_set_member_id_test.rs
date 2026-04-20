@@ -7,8 +7,15 @@ use secretenv::cli::{Cli, Commands};
 
 #[test]
 fn test_cli_set_parses_member_id_option() {
-    let cli =
-        Cli::try_parse_from(["secretenv", "set", "FOO", "BAR", "--member-id", "ebisawa"]).unwrap();
+    let cli = Cli::try_parse_from([
+        "secretenv",
+        "set",
+        "FOO",
+        "BAR",
+        "--member-handle",
+        "ebisawa",
+    ])
+    .unwrap();
 
     match cli.command {
         Commands::Set(args) => {
@@ -24,7 +31,7 @@ fn test_cli_member_verify_parses_member_id_option() {
         "secretenv",
         "member",
         "verify",
-        "--member-id",
+        "--member-handle",
         "alice@example.com",
         "bob@example.com",
     ]);
@@ -41,7 +48,7 @@ fn test_cli_trust_remove_parses_member_id_option() {
         "secretenv",
         "trust",
         "remove",
-        "--member-id",
+        "--member-handle",
         "alice@example.com",
         "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0",
     ])
@@ -56,7 +63,7 @@ fn test_cli_trust_purge_parses_member_id_option() {
         "secretenv",
         "trust",
         "purge",
-        "--member-id",
+        "--member-handle",
         "alice@example.com",
         "--older-than",
         "1d",

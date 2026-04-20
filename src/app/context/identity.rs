@@ -39,12 +39,12 @@ pub(crate) fn build_missing_member_id_error(include_prompt_hint: bool) -> Error 
 
     Error::Config {
         message: format!(
-            "member_id not configured.\n\
-             member_id is required but could not be determined.\n\
+            "member handle not configured.\n\
+             member handle is required but could not be determined.\n\
              Options:\n\
-             1. Specify --member-id <id>\n\
-             2. Set environment variable: export SECRETENV_MEMBER_ID=<id>\n\
-             3. Set in config: secretenv config set member_id <id>{prompt_hint}"
+             1. Specify --member-handle <handle>\n\
+             2. Set environment variable: export SECRETENV_MEMBER_HANDLE=<handle>\n\
+             3. Set in config: secretenv config set member_handle <handle>{prompt_hint}"
         ),
     }
 }

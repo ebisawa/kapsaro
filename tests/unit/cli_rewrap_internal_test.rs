@@ -9,7 +9,7 @@ use crate::app::rewrap::promotion::{
 use crate::app::trust::TrustApprovalCandidate;
 use crate::test_utils::{kid as test_kid, member_id as test_member_id};
 
-use super::confirm_incoming_promotions;
+use super::{confirm_incoming_promotions_with_reader, promotion_prompt_label};
 
 fn make_prompt(member_id: &str) -> PromotionReviewPrompt {
     let kid = match member_id {
@@ -50,7 +50,7 @@ fn test_confirm_incoming_promotions_accepts_single_prompt() {
     let review_view = make_review_view(vec![], vec![make_prompt("alice")]);
     let mut input = Cursor::new(b"y\n" as &[u8]);
 
-    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+    let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
 
     assert_eq!(result, vec!["alice".to_string()]);
 }
@@ -60,7 +60,7 @@ fn test_confirm_incoming_promotions_rejects_single_prompt() {
     let review_view = make_review_view(vec![], vec![make_prompt("alice")]);
     let mut input = Cursor::new(b"n\n" as &[u8]);
 
-    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+    let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
 
     assert!(result.is_empty());
 }
@@ -70,7 +70,7 @@ fn test_confirm_incoming_promotions_accepts_mixed_prompt_responses() {
     let review_view = make_review_view(vec![], vec![make_prompt("alice"), make_prompt("bob")]);
     let mut input = Cursor::new(b"y\nn\n" as &[u8]);
 
-    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+    let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
 
     assert_eq!(result, vec!["alice".to_string()]);
 }
@@ -86,7 +86,7 @@ fn test_confirm_incoming_promotions_ignores_failed_candidates() {
     );
     let mut input = Cursor::new(b"y\n" as &[u8]);
 
-    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+    let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
 
     assert_eq!(result, vec!["alice".to_string()]);
 }
@@ -96,7 +96,12 @@ fn test_confirm_incoming_promotions_empty_view_returns_empty() {
     let review_view = make_review_view(vec![], vec![]);
     let mut input = Cursor::new(b"" as &[u8]);
 
-    let result = confirm_incoming_promotions(&review_view, &mut input).unwrap();
+    let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
 
     assert!(result.is_empty());
+}
+
+#[test]
+fn test_promotion_prompt_label_has_no_indent() {
+    assert_eq!(promotion_prompt_label(), "Accept?");
 }

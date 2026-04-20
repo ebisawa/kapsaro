@@ -16,10 +16,10 @@ fn write_global_config(temp_home: &TempDir, lines: &[&str]) {
 
 #[test]
 fn test_resolve_required_member_id_with_prompt_uses_config_without_prompt() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", home.path());
-    write_global_config(&home, &["member_id = \"config-member\""]);
+    write_global_config(&home, &["member_handle = \"config-member\""]);
     let options = build_test_command_options(home.path(), None);
 
     let mut prompted = false;
@@ -35,7 +35,7 @@ fn test_resolve_required_member_id_with_prompt_uses_config_without_prompt() {
 
 #[test]
 fn test_resolve_required_member_id_with_prompt_uses_prompt_when_enabled() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
@@ -53,7 +53,7 @@ fn test_resolve_required_member_id_with_prompt_uses_prompt_when_enabled() {
 
 #[test]
 fn test_resolve_required_member_id_with_prompt_errors_when_prompt_disabled() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
@@ -63,7 +63,9 @@ fn test_resolve_required_member_id_with_prompt_errors_when_prompt_disabled() {
     })
     .unwrap_err();
 
-    assert!(error.user_message().contains("member_id not configured"));
+    assert!(error
+        .user_message()
+        .contains("member handle not configured"));
     assert!(!error
         .user_message()
         .contains("Run in an interactive terminal for prompt"));
@@ -71,7 +73,7 @@ fn test_resolve_required_member_id_with_prompt_errors_when_prompt_disabled() {
 
 #[test]
 fn test_resolve_required_member_id_with_prompt_errors_with_hint_when_prompt_unavailable() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
@@ -81,7 +83,9 @@ fn test_resolve_required_member_id_with_prompt_errors_with_hint_when_prompt_unav
     })
     .unwrap_err();
 
-    assert!(error.user_message().contains("member_id not configured"));
+    assert!(error
+        .user_message()
+        .contains("member handle not configured"));
     assert!(error
         .user_message()
         .contains("Run in an interactive terminal for prompt"));

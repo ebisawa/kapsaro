@@ -99,8 +99,8 @@ fn test_resolve_read_execution_rejects_member_id_in_env_mode() {
         None,
     ));
     assert!(
-        err.contains("--member-id cannot be used"),
-        "Expected --member-id rejection error, got: {}",
+        err.contains("--member-handle cannot be used"),
+        "Expected --member-handle rejection error, got: {}",
         err
     );
 }
@@ -169,8 +169,8 @@ fn test_resolve_write_execution_rejects_member_id_in_env_mode() {
         None,
     ));
     assert!(
-        err.contains("--member-id cannot be used"),
-        "Expected --member-id rejection error, got: {}",
+        err.contains("--member-handle cannot be used"),
+        "Expected --member-handle rejection error, got: {}",
         err
     );
 }
@@ -183,7 +183,7 @@ fn test_resolve_required_member_uses_config_resolution_member_id() {
     std::fs::create_dir_all(home.path()).unwrap();
     std::fs::write(
         home.path().join("config.toml"),
-        "member_id = 'alice@example.com'\n",
+        "member_handle = 'alice@example.com'\n",
     )
     .unwrap();
     let options = build_test_command_options(home.path(), Some(workspace.path()));

@@ -52,6 +52,6 @@ fn test_error_when_workspace_not_found() {
         .stderr(
             predicate::str::contains("SSH key")
                 .or(predicate::str::contains("workspace"))
-                .or(predicate::str::contains("member_id not configured")),
+                .or(predicate::str::contains("member handle not configured")),
         );
 }

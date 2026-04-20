@@ -23,8 +23,8 @@ pub struct ImportArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Secret store name; defaults to "default"

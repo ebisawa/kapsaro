@@ -47,7 +47,7 @@ cargo install --path .
 
 ```bash
 cd /path/to/your-git-repo
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 ```
 
 `.secretenv/` ディレクトリが作成され、鍵ペアの生成と最初のメンバー登録が行われます。

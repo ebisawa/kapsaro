@@ -26,10 +26,10 @@ fn setup_keystore(temp_dir: &TempDir, member_ids: &[&str]) {
 
 #[test]
 fn test_resolve_member_id_input_uses_fallback_sources() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    write_global_config(&temp_home, &["member_id = \"config-member\""]);
+    write_global_config(&temp_home, &["member_handle = \"config-member\""]);
     setup_keystore(&temp_home, &["keystore-member"]);
 
     let result = resolve_member_id_input(None, Some(temp_home.path())).unwrap();
@@ -39,7 +39,7 @@ fn test_resolve_member_id_input_uses_fallback_sources() {
 
 #[test]
 fn test_require_member_id_input_errors_when_missing() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_ID"]);
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
     let temp_home = TempDir::new().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
     setup_keystore(&temp_home, &[]);
@@ -49,7 +49,7 @@ fn test_require_member_id_input_errors_when_missing() {
     assert!(
         error
             .user_message()
-            .contains("member_id is required but could not be determined"),
+            .contains("member handle is required but could not be determined"),
         "unexpected error: {}",
         error.user_message()
     );

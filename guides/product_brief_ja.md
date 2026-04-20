@@ -40,7 +40,7 @@ SecretEnv は、秘密情報の共有を「暗号化」と「Git 運用」の両
 
 ```bash
 # 初期セットアップ
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 
 # .env を一括取り込み
 secretenv import .env
@@ -84,7 +84,7 @@ secretenv run -n prod -- ./deploy.sh
 
 ```bash
 # 新メンバー
-secretenv join --member-id bob@example.com
+secretenv join --member-handle bob@example.com
 # -> 承認待ちの参加申請を作る
 
 # 既存メンバー
@@ -120,7 +120,7 @@ SecretEnv はポータブルな秘密鍵エクスポートを通じて CI/CD 環
 
 ```bash
 # 開発マシンで: CI メンバーの鍵をエクスポート
-secretenv key export --private --member-id ci@example.com --out ci-key.txt
+secretenv key export --private --member-handle ci@example.com --out ci-key.txt
 ```
 
 `SECRETENV_PRIVATE_KEY` と `SECRETENV_KEY_PASSWORD` を CI のシークレット変数に登録すれば、SSH 鍵、SSH エージェント、ローカルキーストアなしで `secretenv run` や `secretenv get` を使えます。
@@ -178,7 +178,7 @@ Git リポジトリのディレクトリで以下を実行します。secretenv 
 cd /path/to/your-repo
 
 # 1. workspace を作成
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 
 # 2. 既存 .env を取り込む
 secretenv import .env

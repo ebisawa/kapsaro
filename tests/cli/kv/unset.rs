@@ -24,7 +24,7 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(TEST_MEMBER_ID)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
@@ -139,7 +139,7 @@ fn test_unset_requires_member_id_before_confirmation() {
         .assert()
         .failure()
         .stderr(
-            predicate::str::contains("member_id not configured")
+            predicate::str::contains("member handle not configured")
                 .and(predicate::str::contains("without --force in non-interactive mode").not()),
         );
 }

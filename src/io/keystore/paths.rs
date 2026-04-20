@@ -23,7 +23,7 @@ pub fn get_keystore_root_from_base(base_dir: &Path) -> PathBuf {
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_id` - Member handle
 ///
 /// # Returns
 ///
@@ -37,7 +37,7 @@ pub fn get_member_keystore_path_from_root(keystore_root: &Path, member_id: &str)
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_id` - Member handle
 /// * `kid` - Key ID
 ///
 /// # Returns
@@ -52,7 +52,7 @@ pub fn get_key_path_from_root(keystore_root: &Path, member_id: &str, kid: &str) 
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_id` - Member handle
 /// * `kid` - Key ID
 ///
 /// # Returns
@@ -71,7 +71,7 @@ pub fn get_private_key_file_path_from_root(
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_id` - Member handle
 /// * `kid` - Key ID
 ///
 /// # Returns
@@ -90,7 +90,7 @@ pub fn get_public_key_file_path_from_root(
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_id` - Member handle
 ///
 /// # Returns
 ///

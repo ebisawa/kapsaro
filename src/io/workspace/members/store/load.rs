@@ -99,7 +99,7 @@ pub fn load_member_files(workspace_path: &Path, member_ids: &[String]) -> Result
         if public_key.protected.member_id != *member_id {
             return Err(Error::InvalidArgument {
                 message: format!(
-                    "Member ID mismatch: file '{}' contains ID '{}'",
+                    "Member handle mismatch: file '{}' contains '{}'",
                     member_id, public_key.protected.member_id
                 ),
             });

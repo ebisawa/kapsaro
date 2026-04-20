@@ -313,12 +313,12 @@ pub fn setup_test_workspace(member_ids: &[&str]) -> (TempDir, PathBuf) {
         .unwrap();
     }
 
-    // Write config.toml with first member_id for auto-resolution
+    // Write config.toml with the first member handle for auto-resolution
     if let Some(first_member_id) = member_ids.first() {
         let config_path = temp_dir.path().join("config.toml");
         fs::write(
             &config_path,
-            format!("member_id = \"{}\"\n", first_member_id),
+            format!("member_handle = \"{}\"\n", first_member_id),
         )
         .unwrap();
     }

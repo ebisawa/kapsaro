@@ -77,7 +77,7 @@ pub(crate) fn is_prompt_available() -> bool {
 
 pub(crate) fn prompt_member_id() -> Result<String> {
     Input::new()
-        .with_prompt("Enter your member ID (alphanumeric and .@_+-)")
+        .with_prompt("Enter your member handle (alphanumeric and .@_+-)")
         .validate_with(|input: &String| {
             validation::validate_member_id(input)
                 .map(|_| ())

@@ -33,8 +33,8 @@ pub struct DecryptArgs {
     #[arg(long, short = 'k')]
     pub kid: Option<String>,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Output file path

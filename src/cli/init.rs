@@ -5,7 +5,7 @@
 //!
 //! Bootstraps a new workspace:
 //! 1. If the workspace already has active members, exit without changes
-//! 2. Determines member_id (CLI arg → config → keystore → TTY prompt)
+//! 2. Determines member handle (CLI arg → config → keystore → TTY prompt)
 //! 3. Ensures key exists (generates if missing)
 //! 4. Creates workspace structure (members/, secrets/)
 //! 5. Registers the first member directly in active/
@@ -27,8 +27,8 @@ pub struct InitArgs {
     #[arg(long)]
     pub github_user: Option<String>,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 }
 

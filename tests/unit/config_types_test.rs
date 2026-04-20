@@ -21,9 +21,13 @@ fn test_default_config() {
 
 #[test]
 fn test_config_deserialize_minimal() {
-    let toml = r#"format = "secretenv/config@1""#;
+    let toml = r#"
+format = "secretenv/config@1"
+member_handle = "alice@example.com"
+"#;
     let doc: ConfigDocument = toml::from_str(toml).unwrap();
     assert_eq!(doc.format, "secretenv/config@1");
+    assert_eq!(doc.member_handle, "alice@example.com");
     assert!(matches!(
         doc.ssh.signing_method,
         SshSigningMethodConfig::Auto
@@ -34,6 +38,7 @@ fn test_config_deserialize_minimal() {
 fn test_config_deserialize_full() {
     let toml = r#"
 format = "secretenv/config@1"
+member_handle = "alice@example.com"
 
 [ssh]
 ssh_add_path = "/usr/bin/ssh-add"
@@ -41,6 +46,7 @@ ssh_keygen_path = "/usr/bin/ssh-keygen"
 ssh_signing_method = "ssh-agent"
 "#;
     let doc: ConfigDocument = toml::from_str(toml).unwrap();
+    assert_eq!(doc.member_handle, "alice@example.com");
     assert_eq!(doc.ssh.ssh_add_path, "/usr/bin/ssh-add");
     assert!(matches!(
         doc.ssh.signing_method,
@@ -50,7 +56,10 @@ ssh_signing_method = "ssh-agent"
 
 #[test]
 fn test_config_invalid_format() {
-    let toml = r#"format = "secretenv/config@999""#;
+    let toml = r#"
+format = "secretenv/config@999"
+member_handle = "alice@example.com"
+"#;
     let doc: ConfigDocument = toml::from_str(toml).unwrap();
     // load_config() should reject this format later
     assert_eq!(doc.format, "secretenv/config@999");
@@ -105,11 +114,13 @@ fn test_signing_method_config_deserialization() {
 fn test_config_deserialize_auto() {
     let toml = r#"
 format = "secretenv/config@1"
+member_handle = "alice@example.com"
 
 [ssh]
 ssh_signing_method = "auto"
 "#;
     let doc: ConfigDocument = toml::from_str(toml).unwrap();
+    assert_eq!(doc.member_handle, "alice@example.com");
     assert!(matches!(
         doc.ssh.signing_method,
         SshSigningMethodConfig::Auto

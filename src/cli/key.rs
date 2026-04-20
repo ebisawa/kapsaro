@@ -57,8 +57,8 @@ pub struct NewArgs {
     #[arg(long)]
     pub github_user: Option<String>,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Do not activate the generated key
@@ -76,8 +76,8 @@ pub struct ListArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 }
 
@@ -87,8 +87,8 @@ pub struct ActivateArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Key ID to activate [default: newest valid key]
@@ -105,8 +105,8 @@ pub struct RemoveArgs {
     #[arg(long, short = 'f')]
     pub force: bool,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Key ID to remove
@@ -122,8 +122,8 @@ pub struct ExportArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to use
-    #[arg(long, short = 'm')]
+    /// Member handle to use
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Key ID to export [default: active key]

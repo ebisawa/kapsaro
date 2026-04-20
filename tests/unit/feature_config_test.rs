@@ -16,7 +16,7 @@ use tempfile::TempDir;
 
 #[test]
 fn test_validate_key_valid() {
-    assert!(validate_key("member_id").is_ok());
+    assert!(validate_key("member_handle").is_ok());
     assert!(validate_key("ssh_identity").is_ok());
     assert!(validate_key("ssh_keygen_command").is_ok());
     assert!(validate_key("ssh_add_command").is_ok());
@@ -44,10 +44,10 @@ fn test_resolve_config_value_global() {
     }
 
     // Set global config
-    set_config_value(&global_config_path, "member_id", "global@example.com").unwrap();
+    set_config_value(&global_config_path, "member_handle", "global@example.com").unwrap();
 
     // Resolve config value
-    let resolution = resolve_config_value("member_id", Some(_temp_dir.path())).unwrap();
+    let resolution = resolve_config_value("member_handle", Some(_temp_dir.path())).unwrap();
 
     assert_eq!(resolution.value, Some("global@example.com".to_string()));
     assert_eq!(resolution.scope, Some("global".to_string()));
@@ -80,7 +80,7 @@ fn test_load_global_config() {
     }
 
     // Set global config
-    set_config_value(&global_config_path, "member_id", "global@example.com").unwrap();
+    set_config_value(&global_config_path, "member_handle", "global@example.com").unwrap();
 
     // Load global config
     let config = load_global_config(Some(_temp_dir.path())).unwrap();

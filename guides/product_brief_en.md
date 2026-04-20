@@ -40,7 +40,7 @@ SecretEnv organizes secret sharing around both encryption and Git-based team wor
 
 ```bash
 # Initial setup
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 
 # Import an existing .env file
 secretenv import .env
@@ -84,7 +84,7 @@ secretenv run -n prod -- ./deploy.sh
 
 ```bash
 # New member
-secretenv join --member-id bob@example.com
+secretenv join --member-handle bob@example.com
 # -> creates a pending join request
 
 # Existing member
@@ -120,7 +120,7 @@ SecretEnv supports CI/CD environments through portable private key export:
 
 ```bash
 # On a developer machine: export the CI member's key
-secretenv key export --private --member-id ci@example.com --out ci-key.txt
+secretenv key export --private --member-handle ci@example.com --out ci-key.txt
 ```
 
 Register `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` as CI secret variables. The CI job can then use `secretenv run` and `secretenv get` without any SSH key, SSH agent, or local keystore.
@@ -178,7 +178,7 @@ Run the following commands inside a Git repository directory. secretenv auto-det
 cd /path/to/your-repo
 
 # 1. Create the workspace
-secretenv init --member-id alice@example.com
+secretenv init --member-handle alice@example.com
 
 # 2. Import the existing .env file
 secretenv import .env

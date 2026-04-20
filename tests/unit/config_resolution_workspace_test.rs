@@ -12,7 +12,7 @@ fn returns_none_when_no_workspace_in_config() {
     let config_path = tmp.path().join("config.toml");
     fs::write(
         &config_path,
-        "format = \"secretenv/config@1\"\nmember_id = \"alice\"\n",
+        "format = \"secretenv/config@1\"\nmember_handle = \"alice\"\n",
     )
     .unwrap();
 

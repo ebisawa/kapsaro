@@ -229,7 +229,7 @@ fn test_trust_remove_requires_member_id_when_keystore_is_ambiguous() {
         .arg(home.path().join(".ssh").join("test_ed25519"))
         .assert()
         .failure()
-        .stderr(predicate::str::contains("member_id not configured"));
+        .stderr(predicate::str::contains("member handle not configured"));
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn test_trust_remove_accepts_member_id_when_keystore_is_ambiguous() {
         .arg("trust")
         .arg("remove")
         .arg(KID_BOB)
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(ALICE_MEMBER_ID)
         .arg("--home")
         .arg(home.path())
@@ -372,7 +372,7 @@ fn test_trust_purge_accepts_member_id_when_keystore_is_ambiguous() {
     cmd()
         .arg("trust")
         .arg("purge")
-        .arg("--member-id")
+        .arg("--member-handle")
         .arg(ALICE_MEMBER_ID)
         .arg("--older-than")
         .arg("1d")

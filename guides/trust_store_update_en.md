@@ -160,7 +160,7 @@ The trust store is automatically created when you first approve another member's
 ```bash
 # 1. New member joins (placed in incoming)
 #    Run on the new member's side
-secretenv join --member-id newuser@example.com
+secretenv join --member-handle newuser@example.com
 
 # 2. After reviewing and merging the new member's PR,
 #    verify and approve if not yet done

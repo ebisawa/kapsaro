@@ -44,7 +44,7 @@ fn test_load_config_file_valid() {
     fs::write(
         &path,
         r#"
-member_id = "alice@example.com"
+member_handle = "alice@example.com"
 ssh_signing_method = "ssh-agent"
 ssh_keygen_command = "/usr/bin/ssh-keygen"
 ssh_add_command = "/usr/bin/ssh-add"
@@ -54,7 +54,7 @@ ssh_add_command = "/usr/bin/ssh-add"
 
     let result = load_config_file(&path, tmp.path()).unwrap();
     assert_eq!(result.len(), 4);
-    assert_eq!(result.get("member_id").unwrap(), "alice@example.com");
+    assert_eq!(result.get("member_handle").unwrap(), "alice@example.com");
     assert_eq!(result.get("ssh_signing_method").unwrap(), "ssh-agent");
     assert_eq!(
         result.get("ssh_keygen_command").unwrap(),
@@ -111,22 +111,22 @@ fn test_set_config_value_new_file() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("new_config.toml");
 
-    set_config_value(&path, "member_id", "bob@example.com").unwrap();
+    set_config_value(&path, "member_handle", "bob@example.com").unwrap();
 
     let config = load_config_file(&path, tmp.path()).unwrap();
-    assert_eq!(config.get("member_id").unwrap(), "bob@example.com");
+    assert_eq!(config.get("member_handle").unwrap(), "bob@example.com");
 }
 
 #[test]
 fn test_set_config_value_update_existing() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("config.toml");
-    fs::write(&path, "member_id = \"old@example.com\"\n").unwrap();
+    fs::write(&path, "member_handle = \"old@example.com\"\n").unwrap();
 
-    set_config_value(&path, "member_id", "new@example.com").unwrap();
+    set_config_value(&path, "member_handle", "new@example.com").unwrap();
 
     let config = load_config_file(&path, tmp.path()).unwrap();
-    assert_eq!(config.get("member_id").unwrap(), "new@example.com");
+    assert_eq!(config.get("member_handle").unwrap(), "new@example.com");
 }
 
 // ---------------------------------------------------------------------------
@@ -139,16 +139,16 @@ fn test_unset_config_value() {
     let path = tmp.path().join("config.toml");
     fs::write(
         &path,
-        "member_id = \"alice@example.com\"\nssh_signing_method = \"ssh-agent\"\n",
+        "member_handle = \"alice@example.com\"\nssh_signing_method = \"ssh-agent\"\n",
     )
     .unwrap();
 
-    unset_config_value(&path, "member_id").unwrap();
+    unset_config_value(&path, "member_handle").unwrap();
 
     let config = load_config_file(&path, tmp.path()).unwrap();
     assert!(
-        !config.contains_key("member_id"),
-        "member_id should be removed"
+        !config.contains_key("member_handle"),
+        "member_handle should be removed"
     );
     assert_eq!(
         config.get("ssh_signing_method").unwrap(),
@@ -161,7 +161,7 @@ fn test_unset_config_value() {
 fn test_unset_config_value_not_found() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("config.toml");
-    fs::write(&path, "member_id = \"alice@example.com\"\n").unwrap();
+    fs::write(&path, "member_handle = \"alice@example.com\"\n").unwrap();
 
     let result = unset_config_value(&path, "nonexistent_key");
     assert!(result.is_err(), "removing nonexistent key should fail");
@@ -180,11 +180,11 @@ fn test_load_config_file_warns_on_insecure_parent_directory_permissions() {
     let base_dir = tmp.path().join("secretenv");
     let path = base_dir.join("config.toml");
     fs::create_dir_all(&base_dir).unwrap();
-    fs::write(&path, "member_id = \"alice@example.com\"\n").unwrap();
+    fs::write(&path, "member_handle = \"alice@example.com\"\n").unwrap();
     fs::set_permissions(&base_dir, fs::Permissions::from_mode(0o755)).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
 
     let result = load_config_file(&path, &base_dir).unwrap();
 
-    assert_eq!(result.get("member_id").unwrap(), "alice@example.com");
+    assert_eq!(result.get("member_handle").unwrap(), "alice@example.com");
 }

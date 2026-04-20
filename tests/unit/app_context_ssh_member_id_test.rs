@@ -12,7 +12,7 @@ fn test_resolve_ssh_context_by_active_key_honors_member_id_option() {
     let base_dir = TempDir::new().unwrap();
 
     // Create a keystore with multiple member directories.
-    // This would normally require --member-id (or config/env) to disambiguate.
+    // This would normally require --member-handle (or config/env) to disambiguate.
     let keys_dir = base_dir.path().join("keys");
     fs::create_dir_all(keys_dir.join("alice@example.com")).unwrap();
     fs::create_dir_all(keys_dir.join("bob@example.com")).unwrap();

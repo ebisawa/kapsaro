@@ -25,7 +25,7 @@ pub(crate) fn execute_batch_rewrap(args: &RewrapArgs) -> Result<()> {
             explicit_targets: args.targets.clone(),
         },
         print_warnings,
-        |review_view| confirm_incoming_promotions(review_view, &mut std::io::stdin().lock()),
+        confirm_incoming_promotions,
         |candidate, context_label, _path| confirm_known_key_approval(candidate, context_label),
         |candidate, context_label, current_recipients, _path| {
             confirm_non_member_acceptance(candidate, context_label, current_recipients)

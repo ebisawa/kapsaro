@@ -29,7 +29,7 @@ use zeroize::Zeroizing;
 /// # Arguments
 /// * `wrap_items` - Slice of WrapItems to search
 /// * `kid` - Key ID to find
-/// * `member_id` - Member ID for error messages and rid-mismatch validation
+/// * `member_id` - Member handle for error messages and rid-mismatch validation
 ///
 /// # Returns
 /// Reference to the matching WrapItem, or an error if not found
@@ -230,7 +230,7 @@ pub fn unwrap_master_key_from_item(
 /// # Arguments
 /// * `sid` - Session ID (UUID)
 /// * `wrap_items` - Slice of WrapItems to search
-/// * `member_id` - Member ID for error messages
+/// * `member_id` - Member handle for error messages
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - VerifiedPrivateKey containing the KEM private key
 /// * `debug` - Enable debug logging

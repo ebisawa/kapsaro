@@ -63,7 +63,7 @@ pub struct KnownKey {
     /// Key ID (canonical Crockford Base32)
     pub kid: String,
 
-    /// Member ID associated with this key
+    /// Member handle associated with this key
     pub member_id: String,
 
     /// Approval timestamp (RFC 3339 UTC, trailing 'Z')

@@ -37,8 +37,8 @@ pub struct ListArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID (owner of the trust store to list)
-    #[arg(long, short = 'm')]
+    /// Member handle (owner of the trust store to list)
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 }
 
@@ -48,8 +48,8 @@ pub struct RemoveArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID (owner of the trust store to update)
-    #[arg(long, short = 'm')]
+    /// Member handle (owner of the trust store to update)
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Key ID to remove
@@ -62,8 +62,8 @@ pub struct PurgeArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID (owner of the trust store to update)
-    #[arg(long, short = 'm')]
+    /// Member handle (owner of the trust store to update)
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Remove entries older than this duration (e.g. "180d")

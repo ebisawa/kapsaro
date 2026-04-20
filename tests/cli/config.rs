@@ -35,7 +35,7 @@ fn test_config_set_and_get() {
     cmd()
         .arg("config")
         .arg("set")
-        .arg("member_id")
+        .arg("member_handle")
         .arg("test@example.com")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
@@ -45,7 +45,7 @@ fn test_config_set_and_get() {
     cmd()
         .arg("config")
         .arg("get")
-        .arg("member_id")
+        .arg("member_handle")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .success()
@@ -156,7 +156,7 @@ fn test_config_set_and_list() {
     cmd()
         .arg("config")
         .arg("set")
-        .arg("member_id")
+        .arg("member_handle")
         .arg("test@example.com")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
@@ -169,7 +169,7 @@ fn test_config_set_and_list() {
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("member_id"));
+        .stdout(predicate::str::contains("member_handle"));
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn test_config_get_nonexistent_key() {
     cmd()
         .arg("config")
         .arg("get")
-        .arg("member_id")
+        .arg("member_handle")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .failure();
@@ -245,7 +245,7 @@ fn test_config_unset_removes_value() {
     cmd()
         .arg("config")
         .arg("set")
-        .arg("member_id")
+        .arg("member_handle")
         .arg("test@example.com")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
@@ -255,7 +255,7 @@ fn test_config_unset_removes_value() {
     cmd()
         .arg("config")
         .arg("get")
-        .arg("member_id")
+        .arg("member_handle")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .success()
@@ -265,7 +265,7 @@ fn test_config_unset_removes_value() {
     cmd()
         .arg("config")
         .arg("unset")
-        .arg("member_id")
+        .arg("member_handle")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .success();
@@ -274,7 +274,7 @@ fn test_config_unset_removes_value() {
     cmd()
         .arg("config")
         .arg("get")
-        .arg("member_id")
+        .arg("member_handle")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .failure();

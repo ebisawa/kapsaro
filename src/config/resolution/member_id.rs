@@ -1,13 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Member ID resolution
+//! Member handle resolution
 //!
-//! Resolves member_id based on the following priority order:
-//! 1. CLI argument (--member-id)
-//! 2. Environment variable (SECRETENV_MEMBER_ID)
+//! Resolves the member handle based on the following priority order:
+//! 1. CLI argument (--member-handle)
+//! 2. Environment variable (SECRETENV_MEMBER_HANDLE)
 //! 3. Global config (SECRETENV_HOME/config.toml)
-//! 4. Single member_id in keystore
+//! 4. Single member entry in keystore
 
 use crate::io::config as io_config;
 use crate::io::keystore::member::load_single_member_id_from_keystore;
@@ -18,7 +18,7 @@ use std::path::Path;
 
 use super::common::resolve_string_with_priority;
 
-/// Resolve member_id from non-interactive sources and return `None` when unresolved.
+/// Resolve the member handle from non-interactive sources and return `None` when unresolved.
 pub(crate) fn resolve_member_id_with_fallback(
     member_id_opt: Option<String>,
     base_dir: Option<&Path>,
@@ -26,8 +26,8 @@ pub(crate) fn resolve_member_id_with_fallback(
     // Priority 1-3: Use common resolution logic
     if let Some(member_id) = resolve_string_with_priority(
         member_id_opt,
-        Some("SECRETENV_MEMBER_ID"),
-        "member_id",
+        Some("SECRETENV_MEMBER_HANDLE"),
+        "member_handle",
         base_dir,
         None,
     )? {

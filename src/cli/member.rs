@@ -73,7 +73,8 @@ pub struct ShowArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to show
+    /// Member handle to show
+    #[arg(value_name = "MEMBER_HANDLE")]
     pub member_id: String,
 }
 
@@ -83,7 +84,8 @@ pub struct RemoveArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to remove
+    /// Member handle to remove
+    #[arg(value_name = "MEMBER_HANDLE")]
     pub member_id: String,
 
     /// Force removal without confirmation
@@ -97,15 +99,16 @@ pub struct VerifyArgs {
     #[command(flatten)]
     pub common: CommonOptions,
 
-    /// Member ID to use for trust store owner resolution
-    #[arg(long, short = 'm')]
+    /// Member handle to use for trust store owner resolution
+    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
     pub member_id: Option<String>,
 
     /// Approve verified members and add to local trust store
     #[arg(long)]
     pub approve: bool,
 
-    /// Member IDs to verify (verifies all members if not specified)
+    /// Member handles to verify (verifies all members if not specified)
+    #[arg(value_name = "MEMBER_HANDLE")]
     pub member_ids: Vec<String>,
 }
 

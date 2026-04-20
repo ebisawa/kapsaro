@@ -31,7 +31,7 @@ pub struct PublicKeyProtected {
     /// Format identifier: "secretenv.public.key@4"
     pub format: String,
 
-    /// Member ID (RFC 5322 email format)
+    /// Member ID (ASCII identifier; allows .@_+-)
     pub member_id: String,
 
     /// Statement ID (canonical Crockford Base32, 32 characters)

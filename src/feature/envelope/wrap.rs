@@ -63,7 +63,7 @@ pub fn build_wrap_item(
     }
 
     let master_key_plaintext = Plaintext::from(master_key.as_bytes().to_vec());
-    // HPKE AAD = info (defence-in-depth: bind at both KDF and AEAD layers)
+    // Reuse the same canonical context bytes for both HPKE info and AAD.
     let aad = Aad::from(info.as_bytes());
     let (enc, ct) = seal_base(&kem_pk, &info, &aad, &master_key_plaintext)?;
 

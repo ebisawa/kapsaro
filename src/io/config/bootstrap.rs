@@ -7,7 +7,7 @@
 
 use crate::support::validation;
 
-/// Validate member_id using common validator (RFC 5322 email format)
+/// Validate member_id using the common ASCII identifier rules
 pub fn validate_member_id(input: &str) -> std::result::Result<(), String> {
     validation::validate_member_id(input).map_err(|e| e.to_string())
 }

@@ -169,13 +169,13 @@ impl ResolvedStrictKeyChecking {
 ///
 /// ```toml
 /// [identity]
-/// member_id = "alice"
+/// member_id = "alice@example.com"
 /// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityConfig {
     /// Member identifier
     ///
-    /// Must match pattern: ^[a-z][a-z0-9-]{0,31}$
+    /// Must match pattern: ^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$
     /// Empty string indicates not configured (will prompt on first use).
     /// Default: `""`
     #[serde(default)]
@@ -197,7 +197,7 @@ pub struct IdentityConfig {
 /// format = "secretenv/config@1"
 ///
 /// [identity]
-/// member_id = "alice"
+/// member_id = "alice@example.com"
 ///
 /// [ssh]
 /// ssh_signing_method = "auto"

@@ -5,7 +5,7 @@
 
 use crate::{Error, Result};
 
-/// Validate member_id (RFC 5322 email format)
+/// Validate member_id using the common ASCII identifier rules
 ///
 /// Allows: alphanumeric (A-Z, a-z, 0-9) + special chars (.@_+-)
 /// Must start with alphanumeric, max 254 chars

@@ -151,6 +151,18 @@ Secrets stored in Git are encrypted, and signatures are verified. Even if the re
 
 Removing a member does not erase secrets they already saw. If needed, rotate the secret values themselves.
 
+### What remains visible as plaintext metadata
+
+What secretenv protects cryptographically is the secret value or the file content in file-enc. Some metadata remains visible in plaintext because it is needed for operation and audit.
+
+- kv-enc key names
+- Recipient lists (`member_id` / `kid`)
+- The signer's `kid`
+- Created and updated timestamps
+- Disclosure history
+
+This is why `list` can show key names without decryption and `inspect` can show recipients, timestamps, and disclosure history without decryption. If you need to conceal environment-variable names, recipient relationships, timestamps, or disclosure history themselves, you need additional operational controls. Depending on the case, use repository access control or split workspaces.
+
 ### Role of the SSH key
 
 The SSH Ed25519 key is not the key that directly decrypts workspace secrets. It is used to protect the local secretenv private key and to show which SSH key is backing that secretenv key.
@@ -880,12 +892,10 @@ jobs:
         run: secretenv run -- ./deploy.sh
 ```
 
-This example assumes a **trusted post-merge workflow on a protected branch**. Do not reuse the same pattern for `pull_request` or `pull_request_target` jobs that expose secrets.
-
 ### Example: Generic CI Configuration
 
 ```bash
-# Any CI platform that checks out a trusted ref and supports secret environment variables
+# Any CI platform with secret environment variables
 export SECRETENV_PRIVATE_KEY="<registered secret>"
 export SECRETENV_KEY_PASSWORD="<registered secret>"
 export SECRETENV_STRICT_KEY_CHECKING=no
@@ -913,10 +923,10 @@ All other commands remain unavailable when loading keys via environment variable
 ### Security Considerations
 
 - **Password exposure**: `SECRETENV_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
-- **Trusted CI only**: Use environment variable-based key loading only in trusted workflow / trusted ref / trusted runner contexts. Attacker-controlled checkouts must not be used as signature-verification input.
-- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: This is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not auto-update local approval history.
-- **Dedicated CI member**: Always use a dedicated CI member rather than a human member's key. This allows independent rotation and revocation.
-- **Key rotation**: Rotate the CI member key and re-export with `key export --private` on a developer machine with SSH signer and local keystore access, then update the CI platform's secret store.
+- **Trusted CI only**: Follow the allowed and forbidden CI contexts described earlier in this chapter. Attacker-controlled checkouts must not be used as signature-verification input.
+- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not auto-update local approval history.
+- **Dedicated CI member**: Use the dedicated CI member created in the setup steps; do not reuse a human member's key. This allows independent rotation and revocation.
+- **Key rotation**: Re-export and secret-store updates should be done on a developer machine with SSH signer and local keystore access, just like the initial setup. Do not perform this inside CI jobs.
 - **Least privilege**: Only add the CI member to the secrets it actually needs access to.
 
 ---
@@ -1185,7 +1195,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 
 | Key | Description | Default | CLI Option | Environment Variable |
 |-----|-------------|---------|------------|---------------------|
-| `member_id` | Default member identifier (pattern: `^[a-z][a-z0-9-]{0,31}$`) | (none) | `-m` / `--member-id` | `SECRETENV_MEMBER_ID` |
+| `member_id` | Default member identifier (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-id` | `SECRETENV_MEMBER_ID` |
 | `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `SECRETENV_SSH_IDENTITY` |
 | `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `SECRETENV_SSH_SIGNING_METHOD` |
 | `ssh_keygen_command` | Path to `ssh-keygen` command | `ssh-keygen` | — | — |
@@ -1195,7 +1205,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 Example:
 
 ```toml
-member_id = "alice"
+member_id = "alice@example.com"
 ssh_identity = "~/.ssh/id_ed25519"
 ssh_signing_method = "auto"
 github_user = "alice-gh"

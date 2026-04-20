@@ -452,7 +452,7 @@ Because `kid` is derived from the PublicKey contents, **`kid` equality implies s
 
 ### 4.5 Key Rotation
 
-Key rotation is performed by the `rewrap` command. The behavior differs between file-enc and kv-enc and between recipient changes and explicit `--rotate-key`. See §6.7 for the full comparison after both protocols have been introduced.
+Key rotation is performed by the `rewrap` command. The behavior differs between file-enc and kv-enc and between recipient changes and explicit `--rotate-key`. See §6.8 for the full comparison after both protocols have been introduced.
 
 ---
 
@@ -460,7 +460,7 @@ Key rotation is performed by the `rewrap` command. The behavior differs between 
 
 file-enc encrypts a single file for multiple recipients. A random per-file key (DEK) encrypts the entire content using XChaCha20-Poly1305, and each recipient receives a HPKE-wrapped copy of the DEK. The complete structure is signed with Ed25519, and tampering is detected before any decryption occurs.
 
-### 5.0 Data Structure Overview
+### 5.1 Data Structure Overview
 
 file-enc is a JSON-based signed container. The elements that matter most for review are the following.
 
@@ -474,7 +474,91 @@ file-enc is a JSON-based signed container. The elements that matter most for rev
 
 `wrap[].rid` is informational and helpful for review, but it is not the cryptographic lookup key. Recipient binding is keyed by `kid`.
 
-### 5.1 Encryption Flow
+The full document layout is as follows.
+
+```json
+{
+  "protected": {
+    "format": "secretenv.file@3",
+    "sid": "<UUID>",
+    "wrap": [
+      {
+        "rid": "<member_id>",
+        "kid": "<canonical kid>",
+        "alg": "hpke-32-1-3",
+        "enc": "<b64url>",
+        "ct": "<b64url>"
+      }
+    ],
+    "removed_recipients": [
+      {
+        "rid": "<member_id>",
+        "kid": "<canonical kid>",
+        "removed_at": "<RFC3339>"
+      }
+    ],
+    "payload": {
+      "protected": {
+        "format": "secretenv.file.payload@3",
+        "sid": "<UUID>",
+        "alg": { "aead": "xchacha20-poly1305" }
+      },
+      "encrypted": {
+        "nonce": "<b64url>",
+        "ct": "<b64url>"
+      }
+    },
+    "created_at": "<RFC3339>",
+    "updated_at": "<RFC3339>"
+  },
+  "signature": {
+    "...": "artifact signature"
+  }
+}
+```
+
+This layout places `wrap`, optional `removed_recipients`, and `payload` inside `protected`, so they are all covered by the outer signature. The payload also carries its own `payload.protected` header, whose JCS-canonicalized form becomes the AEAD AAD, giving the payload header its own binding layer in addition to the outer signature.
+
+### 5.2 Encryption Flow
+
+```mermaid
+graph TB
+    subgraph recipients["Recipients（PublicKey）"]
+        PK1["PublicKey 1<br/>kid: 7M2Q..."]
+        PK2["PublicKey 2<br/>kid: 9N4R..."]
+    end
+
+    subgraph hpke["HPKE 処理"]
+        HPKE1[HPKE wrap]
+        HPKE2[HPKE wrap]
+    end
+
+    subgraph wrap["HPKE Wrap"]
+        W1["wrap_item 1<br/>kid: 7M2Q..."]
+        W2["wrap_item 2<br/>kid: 9N4R..."]
+    end
+
+    DEK["DEK<br/>32 bytes<br/>CSPRNG"]
+
+    subgraph payload["Payload"]
+        PT[Plaintext file]
+        AEAD[AEAD encryption<br/>XChaCha20-Poly1305]
+        CT["Ciphertext"]
+    end
+
+    PK1 --> HPKE1
+    DEK --> HPKE1
+    HPKE1 --> W1
+    PK2 --> HPKE2
+    DEK --> HPKE2
+    HPKE2 --> W2
+    DEK --> AEAD
+    PT --> AEAD
+    AEAD --> CT
+
+    style DEK fill:#FFE4B5
+    style CT fill:#FFB6C1
+```
 
 1. Generate the DEK as 32 bytes of cryptographically secure randomness.
 2. For each recipient, wrap that DEK with HPKE Base mode (`hpke-32-1-3`).
@@ -483,26 +567,26 @@ file-enc is a JSON-based signed container. The elements that matter most for rev
 
 This order keeps key delivery, payload binding, and document integrity as distinct protection layers.
 
-### 5.2 DEK Generation
+### 5.3 DEK Generation
 
 - The DEK is 32 bytes of cryptographically secure randomness, generated independently for each artifact.
 - In file-enc, the DEK is the central confidentiality key for the file payload.
 - The implementation aims to zeroize it after use, although complete erasure remains best-effort as discussed in §12.3.
 
-### 5.3 HPKE wrap
+### 5.4 HPKE wrap
 
 - The HPKE suite is `hpke-32-1-3`; the relevant parameters are described in §3.1 and §3.2.
 - The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:file:hpke-wrap@3`, and the file identifier `sid`.
 - HPKE `info` and `AAD` use the same JCS-canonicalized context bytes. This keeps the key-schedule path and AEAD-verification path aligned and makes implementation drift surface early as unwrap failure.
 - The recipient member ID remains operationally important, but cryptographic wrap binding is keyed by `kid`.
 
-### 5.4 Payload Encryption
+### 5.5 Payload Encryption
 
 - The payload header carries `format = secretenv.file.payload@3`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
 - `jcs(payload.protected)` is used as AAD, with a random 24-byte nonce for XChaCha20-Poly1305.
 - Keeping `sid` at the payload layer binds the payload to the file context independently of the outer signature.
 
-### 5.5 Decryption Flow
+### 5.6 Decryption Flow
 
 1. Perform structural validation, `signer_pub` validation, and artifact-signature verification.
 2. Apply the trust policy from §9 to determine whether the artifact is acceptable in the current workspace.
@@ -518,7 +602,7 @@ The key invariant is that SecretEnv never decrypts before signature verification
 
 kv-enc encrypts `.env`-style key-value entries individually. It uses a two-layer key structure: a Master Key (MK) is HPKE-wrapped for each recipient, and per-entry Content Encryption Keys (CEKs) are derived from the MK via HKDF. This design enables partial decryption of individual entries and efficient updates without re-encrypting the entire file.
 
-### 6.0 Data Structure Overview
+### 6.1 Data Structure Overview
 
 kv-enc is a line-based signed document. The structures that matter most for review are the following.
 
@@ -532,7 +616,21 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 Each token is represented as a JCS-canonicalized JSON object encoded in base64url.
 
-### 6.1 Design Rationale for Two-Layer Key Structure
+The full document layout is as follows.
+
+```text
+:SECRETENV_KV 3
+:HEAD <token>
+:WRAP <token>
+<KEY> <token>
+<KEY> <token>
+...
+:SIG <token>
+```
+
+`:HEAD` carries the file `sid` and timestamps. `:WRAP` carries the MK wrap set and removal history. Each KEY-line token is a self-contained encrypted unit containing `salt`, `k`, `aead`, `nonce`, and `ct`. The signature covers the entire body except `:SIG`, and the canonical signed form is the LF-terminated concatenation of the data lines.
+
+### 6.2 Design Rationale for Two-Layer Key Structure
 
 kv-enc uses one MK per file, while each entry CEK is derived as `HKDF-SHA256(MK, salt, sid)`.
 
@@ -543,7 +641,66 @@ This two-layer structure exists for four reasons.
 - Recipient addition can reuse the existing MK and add only new wraps.
 - Recipient removal must rotate the MK so removed recipients cannot continue deriving future entry keys.
 
-### 6.1.1 Encryption/Decryption Flow Overview
+### 6.2.1 Encryption/Decryption Flow Overview
+
+```mermaid
+graph TB
+    subgraph recipients["Recipients（PublicKey）"]
+        PK1["PublicKey 1<br/>kid: 7M2Q..."]
+        PK2["PublicKey 2<br/>kid: 9N4R..."]
+    end
+
+    subgraph hpke["HPKE 処理"]
+        HPKE1[HPKE wrap]
+        HPKE2[HPKE wrap]
+    end
+
+    subgraph wrap["HPKE Wrap"]
+        W1["wrap_item 1<br/>kid: 7M2Q..."]
+        W2["wrap_item 2<br/>kid: 9N4R..."]
+    end
+
+    MK["MK<br/>32 bytes<br/>CSPRNG"]
+
+    subgraph cek["CEK 導出"]
+        CEK1["CEK1<br/>HKDF(MK, salt1, sid)"]
+        CEK2["CEK2<br/>HKDF(MK, salt2, sid)"]
+    end
+
+    subgraph p_entries["Plaintext Entries"]
+        PE1["Plaintext: DATABASE_URL"]
+        PE2["Plaintext: API_KEY"]
+    end
+
+    subgraph aead["AEAD Encryption"]
+        AEAD1["XChaCha20-Poly1305"]
+        AEAD2["XChaCha20-Poly1305"]
+    end
+
+    subgraph entries["Encrypted Entries"]
+        E1["Ciphertext: DATABASE_URL"]
+        E2["Ciphertext: API_KEY"]
+    end
+
+    PK1 --> HPKE1
+    MK --> HPKE1
+    HPKE1 --> W1
+    PK2 --> HPKE2
+    MK --> HPKE2
+    HPKE2 --> W2
+    MK -->|HKDF-SHA256| CEK1
+    MK -->|HKDF-SHA256| CEK2
+    CEK1 --> AEAD1
+    PE1 --> AEAD1
+    AEAD1 --> E1
+    CEK2 --> AEAD2
+    PE2 --> AEAD2
+    AEAD2 --> E2
+
+    style MK fill:#FFE4B5
+    style CEK1 fill:#90EE90
+    style CEK2 fill:#90EE90
+```
 
 On encryption, SecretEnv first generates the MK and HPKE-wraps it to each recipient. It then generates a salt for each entry, derives a CEK using HKDF with `sid` in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
 
@@ -551,39 +708,39 @@ On decryption, it verifies the signature first, applies the trust policy from §
 
 As with file-enc, signature verification always precedes decryption.
 
-### 6.2 CEK Derivation
+### 6.3 CEK Derivation
 
 - CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:kv:cek@3` and `sid`.
 - The salt is independently generated for each entry.
 - Including `sid` in the derivation context ensures that copying an entry to a different file does not reproduce the same CEK.
 
-### 6.3 Entry AAD
+### 6.4 Entry AAD
 
 - Entry AAD includes the dotenv key name `k`, the file identifier `sid`, and the protocol identifier `p = secretenv:kv:payload@3`.
 - Including `k` prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - `salt` is already consumed by HKDF, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
-### 6.4 HPKE wrap (kv)
+### 6.5 HPKE wrap (kv)
 
 - kv-enc wraps also include `kid`, `sid`, and `p = secretenv:kv:hpke-wrap@3`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into unwrap failure.
 
-### 6.5 Partial Decryption (get / set)
+### 6.6 Partial Decryption (get / set)
 
 The main benefit of kv-enc is that it can operate on individual entries without decrypting the whole document.
 
 - `get` verifies the signature, unwraps the MK, derives the CEK for the requested key, and decrypts only that entry.
 - `set` follows the same validation path, then generates a fresh salt and CEK only for the updated entry before regenerating the signature.
 
-### 6.6 Behavior on Recipient Removal
+### 6.7 Behavior on Recipient Removal
 
 When a recipient is removed, kv-enc regenerates the MK and re-encrypts all entries under CEKs derived from the new MK. This prevents a removed recipient who retained the old MK from continuing to derive future entry keys.
 
 At the same time, `removed_recipients` and `disclosed` are updated so operators can decide which real secret values must also be rotated in external systems. These are operational visibility aids, not recovery mechanisms.
 
-### 6.7 Key Rotation Behavior Across Both Formats
+### 6.8 Key Rotation Behavior Across Both Formats
 
 `rewrap` updates wrap entries (recipient addition/removal). `rewrap --rotate-key` regenerates the content key and re-encrypts the entire payload.
 
@@ -598,7 +755,7 @@ At the same time, `removed_recipients` and `disclosed` are updated so operators 
 
 For recipient addition, both formats maintain the content key and add new wrap entries.
 
-For recipient removal, the behavior differs by format. In file-enc, the removed recipient's wrap entry is deleted and a removal history is recorded, but the DEK is unchanged. In kv-enc, the MK is always regenerated and all entries are re-encrypted. This is because the MK is a long-lived key from which per-entry CEKs are derived (§6.2) — if a removed member retains knowledge of the old MK (e.g., from a prior decryption session), they could derive CEKs for entries added after their removal. Regenerating the MK eliminates this risk.
+For recipient removal, the behavior differs by format. In file-enc, the removed recipient's wrap entry is deleted and a removal history is recorded, but the DEK is unchanged. In kv-enc, the MK is always regenerated and all entries are re-encrypted. This is because the MK is a long-lived key from which per-entry CEKs are derived (§6.3) — if a removed member retains knowledge of the old MK (e.g., from a prior decryption session), they could derive CEKs for entries added after their removal. Regenerating the MK eliminates this risk.
 
 `--rotate-key` forces full re-encryption in both formats regardless of recipient changes, and is intended as a post-compromise damage-limitation measure.
 
@@ -1260,7 +1417,7 @@ This checklist summarizes the key operational responsibilities that users should
 - Review `binding_claims.github_account` information during `member verify --approve`
 - Do not approve keys without verifying the identity of the key holder
 
-**Key Rotation and Member Removal (§6.7, §13.1, §13.2)**
+**Key Rotation and Member Removal (§6.8, §13.1, §13.2)**
 
 - Run `rewrap --rotate-key` after suspected key compromise
 - After removing a member, rotate the actual secret values (database passwords, API keys, certificates) that the removed member had access to

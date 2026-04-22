@@ -44,3 +44,42 @@ pub fn validate_member_id(id: &str) -> Result<()> {
 
     Ok(())
 }
+
+/// Validate a KV file basename supplied via `-n/--name`.
+///
+/// The name is interpolated into `<workspace>/secrets/<name>.kvenc`, so it must
+/// be a safe basename. Rejects anything that could escape the secrets directory
+/// or resolve to a non-obvious path.
+pub fn validate_kv_file_basename(name: &str) -> Result<()> {
+    if name.is_empty() {
+        return Err(Error::InvalidArgument {
+            message: "name cannot be empty".to_string(),
+        });
+    }
+
+    if name.starts_with('.') {
+        return Err(Error::InvalidArgument {
+            message: format!("name must not start with '.': '{}'", name),
+        });
+    }
+
+    if name == ".." {
+        return Err(Error::InvalidArgument {
+            message: "name must not be '..'".to_string(),
+        });
+    }
+
+    if let Some(c) = name
+        .bytes()
+        .find(|&b| b == b'/' || b == b'\\' || b == 0 || !(0x20..=0x7E).contains(&b))
+    {
+        return Err(Error::InvalidArgument {
+            message: format!(
+                "invalid byte 0x{:02x} in name (only printable ASCII without '/' or '\\\\')",
+                c
+            ),
+        });
+    }
+
+    Ok(())
+}

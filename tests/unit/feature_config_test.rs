@@ -17,6 +17,7 @@ use tempfile::TempDir;
 #[test]
 fn test_validate_key_valid() {
     assert!(validate_key("member_handle").is_ok());
+    assert!(validate_key("workspace").is_ok());
     assert!(validate_key("ssh_identity").is_ok());
     assert!(validate_key("ssh_keygen_command").is_ok());
     assert!(validate_key("ssh_add_command").is_ok());
@@ -50,6 +51,25 @@ fn test_resolve_config_value_global() {
     let resolution = resolve_config_value("member_handle", Some(_temp_dir.path())).unwrap();
 
     assert_eq!(resolution.value, Some("global@example.com".to_string()));
+    assert_eq!(resolution.scope, Some("global".to_string()));
+}
+
+#[test]
+fn test_resolve_workspace_config_value_global() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
+    let _temp_dir = TempDir::new().unwrap();
+    std::env::set_var("SECRETENV_HOME", _temp_dir.path().to_str().unwrap());
+    let global_config_path = get_global_config_path().unwrap();
+
+    if let Some(parent) = global_config_path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+
+    set_config_value(&global_config_path, "workspace", "~/workspace/.secretenv").unwrap();
+
+    let resolution = resolve_config_value("workspace", Some(_temp_dir.path())).unwrap();
+
+    assert_eq!(resolution.value, Some("~/workspace/.secretenv".to_string()));
     assert_eq!(resolution.scope, Some("global".to_string()));
 }
 

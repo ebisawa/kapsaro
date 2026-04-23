@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
 use crate::feature::member::add::add_member_from_file;
+use crate::feature::verify::file::verify_file_content;
+use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::EncryptedContent;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::kv::KV_ENC_EXTENSION;
@@ -93,14 +95,19 @@ fn is_encrypted_artifact(path: &Path) -> bool {
 fn artifact_contains_member(path: &Path, member_id: &str) -> Result<bool> {
     let content =
         load_text_with_limit(path, encrypted_file_read_limit(path), "encrypted artifact")?;
-    let recipients = match EncryptedContent::detect(content)? {
-        EncryptedContent::FileEnc(file_content) => file_content.parse()?.recipients(),
-        EncryptedContent::KvEnc(kv_content) => {
-            let document = kv_content.parse()?;
-            extract_recipients_from_wrap(document.wrap())
-        }
-    };
+    let recipients = verified_artifact_recipients(content)?;
     Ok(recipients.iter().any(|recipient| recipient == member_id))
+}
+
+fn verified_artifact_recipients(content: String) -> Result<Vec<String>> {
+    match EncryptedContent::detect(content)? {
+        EncryptedContent::FileEnc(file_content) => Ok(verify_file_content(&file_content, false)?
+            .document()
+            .recipients()),
+        EncryptedContent::KvEnc(kv_content) => Ok(extract_recipients_from_wrap(
+            verify_kv_content(&kv_content, false)?.document().wrap(),
+        )),
+    }
 }
 
 fn format_artifact_warning(path: &Path, error: &Error) -> String {

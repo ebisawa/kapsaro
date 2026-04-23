@@ -4,7 +4,6 @@
 //! Application-layer orchestration for config commands.
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::paths::ResolvedCommandPaths;
 use crate::feature::config::{self};
 use crate::io::config::store::{set_config_value, unset_config_value};
 use crate::{Error, Result};
@@ -27,15 +26,15 @@ pub(crate) struct ConfigUnsetResult {
 }
 
 pub(crate) fn get_config_command(options: &CommonCommandOptions, key: &str) -> Result<String> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    get_config(key, &paths.base_dir)
+    let base_dir = options.resolve_base_dir()?;
+    get_config(key, &base_dir)
 }
 
 pub(crate) fn list_config_command(
     options: &CommonCommandOptions,
 ) -> Result<BTreeMap<String, String>> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    list_config(&paths.base_dir)
+    let base_dir = options.resolve_base_dir()?;
+    list_config(&base_dir)
 }
 
 pub(crate) fn set_config_command(
@@ -43,16 +42,16 @@ pub(crate) fn set_config_command(
     key: &str,
     value: &str,
 ) -> Result<ConfigSetResult> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    set_config(key, value, &paths.base_dir)
+    let base_dir = options.resolve_base_dir()?;
+    set_config(key, value, &base_dir)
 }
 
 pub(crate) fn unset_config_command(
     options: &CommonCommandOptions,
     key: &str,
 ) -> Result<ConfigUnsetResult> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    unset_config(key, &paths.base_dir)
+    let base_dir = options.resolve_base_dir()?;
+    unset_config(key, &base_dir)
 }
 
 fn get_config(key: &str, base_dir: &std::path::Path) -> Result<String> {

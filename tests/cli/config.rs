@@ -5,7 +5,7 @@
 //!
 //! Tests the config command subcommands: get, set, unset, list.
 
-use crate::cli::common::cmd;
+use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_ID};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -74,6 +74,29 @@ fn test_config_set_and_get_ssh_identity() {
         .assert()
         .success()
         .stdout(predicate::str::contains("~/.ssh/id_ed25519_work"));
+}
+
+#[test]
+fn test_config_set_and_get_workspace() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("workspace")
+        .arg("~/projects/demo/.secretenv")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("workspace")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("~/projects/demo/.secretenv"));
 }
 
 #[test]
@@ -171,6 +194,54 @@ fn test_config_set_and_list() {
         .assert()
         .success()
         .stdout(predicate::str::contains("member_handle"));
+}
+
+#[test]
+fn test_config_list_includes_workspace() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("workspace")
+        .arg("/tmp/secretenv/.secretenv")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("list")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("workspace"))
+        .stdout(predicate::str::contains("/tmp/secretenv/.secretenv"));
+}
+
+#[test]
+fn test_workspace_config_is_used_for_workspace_commands() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let outside_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("member")
+        .arg("list")
+        .current_dir(outside_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(TEST_MEMBER_ID));
 }
 
 #[test]
@@ -299,6 +370,36 @@ fn test_config_unset_removes_value() {
         .arg("config")
         .arg("get")
         .arg("member_handle")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_config_unset_removes_workspace_value() {
+    let home_dir = TempDir::new().unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("workspace")
+        .arg("/tmp/secretenv/.secretenv")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("unset")
+        .arg("workspace")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("get")
+        .arg("workspace")
         .env("SECRETENV_HOME", home_dir.path())
         .assert()
         .failure();

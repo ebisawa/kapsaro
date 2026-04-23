@@ -8,7 +8,8 @@ use super::store::{
     check_workspace_member_kid_uniqueness, load_json_files_in_dir,
     load_verified_member_file_from_path, MemberKidCandidate,
 };
-use crate::support::fs::{atomic, ensure_text_file_matches_snapshot, lock};
+use crate::support::fs::{atomic, ensure_text_file_matches_snapshot, load_text_with_limit, lock};
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
@@ -107,12 +108,15 @@ fn execute_promotion_plan(workspace_path: &Path, plans: &[PromotionPlan]) -> Res
     ensure_members_dir(workspace_path, MemberStatus::Active)?;
 
     for plan in plans {
-        let source_content = fs::read_to_string(&plan.source).map_err(|e| {
-            Error::io_with_source(
-                format!("Failed to load incoming member '{}': {}", plan.member_id, e),
-                e,
-            )
-        })?;
+        // Re-verify the source at promotion time and route through the
+        // hardened reader so a symlinked incoming file is rejected instead
+        // of followed to an arbitrary location.
+        load_verified_member_file_from_path(&plan.source)?;
+        let source_content = load_text_with_limit(
+            &plan.source,
+            MAX_JSON_DOCUMENT_READ_SIZE,
+            "incoming member file",
+        )?;
         atomic::save_text(&plan.destination, &source_content)?;
         fs::remove_file(&plan.source).map_err(|e| {
             Error::io_with_source(

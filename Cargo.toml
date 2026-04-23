@@ -46,10 +46,6 @@ sha2 = "0.10"
 # Cryptography - Ed25519 signatures
 ed25519-dalek = "2"
 
-# SSH agent client (for SA-SIG-KDF v1)
-ssh-agent-client-rs = "1.1"
-ssh-key = { version = "0.6", features = ["ed25519"] }
-
 # Cryptography - Argon2id password hashing
 argon2 = { version = "0.5", features = ["alloc"] }
 

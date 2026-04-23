@@ -96,14 +96,6 @@ pub fn load_member_files(workspace_path: &Path, member_ids: &[String]) -> Result
 
     for member_id in member_ids {
         let (public_key, _status) = load_member_file(workspace_path, member_id)?;
-        if public_key.protected.member_id != *member_id {
-            return Err(Error::InvalidArgument {
-                message: format!(
-                    "Member handle mismatch: file '{}' contains '{}'",
-                    member_id, public_key.protected.member_id
-                ),
-            });
-        }
         members.push(public_key);
     }
 
@@ -139,7 +131,7 @@ pub fn load_member_file(
     member_id: &str,
 ) -> Result<(PublicKey, MemberStatus)> {
     if let Some((path, status)) = find_member_path(workspace_path, member_id) {
-        let key = load_member_file_from_path(&path)?;
+        let key = load_verified_member_file_from_path(&path)?;
         return Ok((key, status));
     }
 
@@ -183,8 +175,8 @@ pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {
 /// bulk loader that derives the "current member set" or the default recipient
 /// list from on-disk contents must reject mismatches here, otherwise a PR
 /// that only edits `alice.json` could smuggle bob's key into the recipient
-/// set. Point loaders that already validate against an expected stem (e.g.
-/// `load_member_files`) can keep calling `load_member_file_from_path`.
+/// set. Point loaders that are bound to a specific member_id should normally
+/// route through this helper as well.
 pub fn load_verified_member_file_from_path(path: &Path) -> Result<PublicKey> {
     let public_key = load_member_file_from_path(path)?;
     let stem = path

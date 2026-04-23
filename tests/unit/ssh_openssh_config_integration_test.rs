@@ -100,3 +100,59 @@ fn test_find_identity_agent_tilde_expansion() {
     let path = result.unwrap();
     assert_eq!(path, expected_path);
 }
+
+#[cfg(unix)]
+#[test]
+fn test_find_identity_agent_rejects_symlinked_config_file() {
+    use std::os::unix::fs::symlink;
+
+    let _guard = EnvGuard::new(&["HOME"]);
+    let temp_dir = TempDir::new().unwrap();
+    let home = temp_dir.path();
+    env::set_var("HOME", home.to_str().unwrap());
+
+    let ssh_dir = home.join(".ssh");
+    fs::create_dir_all(&ssh_dir).unwrap();
+    let real_config = home.join("real_config");
+    fs::write(
+        &real_config,
+        r#"Host *
+    IdentityAgent "~/test/agent.sock"
+"#,
+    )
+    .unwrap();
+    symlink(&real_config, ssh_dir.join("config")).unwrap();
+
+    let result = find_identity_agent();
+    assert!(result.is_err());
+    let message = result.unwrap_err().to_string();
+    assert!(message.contains("symlink"), "unexpected error: {message}");
+}
+
+#[test]
+fn test_find_identity_agent_rejects_oversized_config_file() {
+    let _guard = EnvGuard::new(&["HOME"]);
+    let temp_dir = TempDir::new().unwrap();
+    let home = temp_dir.path();
+    env::set_var("HOME", home.to_str().unwrap());
+
+    let ssh_dir = home.join(".ssh");
+    fs::create_dir_all(&ssh_dir).unwrap();
+    let config_path = ssh_dir.join("config");
+    fs::write(
+        &config_path,
+        format!(
+            "Host *\n    IdentityAgent \"~/test/agent.sock\"\n#{}\n",
+            "a".repeat(2 * 1024 * 1024)
+        ),
+    )
+    .unwrap();
+
+    let result = find_identity_agent();
+    assert!(result.is_err());
+    let message = result.unwrap_err().to_string();
+    assert!(
+        message.contains("maximum size limit"),
+        "unexpected error: {message}"
+    );
+}

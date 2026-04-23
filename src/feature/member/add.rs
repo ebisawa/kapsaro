@@ -6,7 +6,8 @@
 use super::verification::load_and_verify_member_file;
 use crate::format::schema::document::parse_public_key_str;
 use crate::io::workspace::members::{save_member_content, MemberStatus};
-use crate::support::fs::load_text;
+use crate::support::fs::load_text_with_limit;
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::Result;
 use std::path::Path;
@@ -20,7 +21,7 @@ pub fn add_member_from_file(
     file_path: &Path,
     force: bool,
 ) -> Result<String> {
-    let content = load_text(file_path)?;
+    let content = load_text_with_limit(file_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
 
     let public_key = parse_public_key_str(&content, &display_path_relative_to_cwd(file_path))?;
     load_and_verify_member_file(file_path, Some(&public_key.protected.member_id), false)?;

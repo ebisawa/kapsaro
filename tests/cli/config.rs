@@ -7,6 +7,7 @@
 
 use crate::cli::common::cmd;
 use predicates::prelude::*;
+use std::fs;
 use tempfile::TempDir;
 
 // ============================================================================
@@ -196,6 +197,29 @@ fn test_config_set_creates_home_dir_if_missing() {
         home_dir.join("config.toml").exists(),
         "Expected config.toml to be written"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_config_set_rejects_symlinked_lock_file() {
+    use std::os::unix::fs::symlink;
+
+    let home_dir = TempDir::new().unwrap();
+    let victim = home_dir.path().join("victim.txt");
+    fs::write(&victim, "original").unwrap();
+    symlink(&victim, home_dir.path().join(".config.toml.lock")).unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("member_handle")
+        .arg("test@example.com")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("symlink"));
+
+    assert_eq!(fs::read_to_string(&victim).unwrap(), "original");
 }
 
 // ============================================================================

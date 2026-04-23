@@ -6,6 +6,7 @@
 //! Tests for load_config_file, set_config_value, and unset_config_value functions.
 
 use secretenv::io::config::store::{load_config_file, set_config_value, unset_config_value};
+use secretenv::support::limits::MAX_CONFIG_FILE_SIZE;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -63,6 +64,22 @@ ssh_add_command = "/usr/bin/ssh-add"
     assert_eq!(result.get("ssh_add_command").unwrap(), "/usr/bin/ssh-add");
 }
 
+#[cfg(unix)]
+#[test]
+fn test_load_config_file_rejects_symlinked_config_file() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = TempDir::new().unwrap();
+    let target = tmp.path().join("target.toml");
+    let path = tmp.path().join("config.toml");
+    fs::write(&target, "member_handle = \"alice@example.com\"\n").unwrap();
+    symlink(&target, &path).unwrap();
+
+    let error = load_config_file(&path, tmp.path()).unwrap_err();
+
+    assert!(error.to_string().contains("symlink"));
+}
+
 #[test]
 fn test_load_config_file_invalid_toml() {
     let tmp = TempDir::new().unwrap();
@@ -77,6 +94,17 @@ fn test_load_config_file_invalid_toml() {
         "error should mention invalid TOML, got: {}",
         err_msg
     );
+}
+
+#[test]
+fn test_load_config_file_rejects_oversized_file() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("config.toml");
+    fs::write(&path, "a".repeat(MAX_CONFIG_FILE_SIZE + 1)).unwrap();
+
+    let error = load_config_file(&path, tmp.path()).unwrap_err();
+
+    assert!(error.to_string().contains("maximum size limit"));
 }
 
 #[test]
@@ -127,6 +155,23 @@ fn test_set_config_value_update_existing() {
 
     let config = load_config_file(&path, tmp.path()).unwrap();
     assert_eq!(config.get("member_handle").unwrap(), "new@example.com");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_set_config_value_rejects_symlinked_lock_file() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("config.toml");
+    let victim = tmp.path().join("victim.txt");
+    fs::write(&victim, "original").unwrap();
+    symlink(&victim, tmp.path().join(".config.toml.lock")).unwrap();
+
+    let error = set_config_value(&path, "member_handle", "alice@example.com").unwrap_err();
+
+    assert!(error.to_string().contains("symlink"));
+    assert_eq!(fs::read_to_string(&victim).unwrap(), "original");
 }
 
 // ---------------------------------------------------------------------------

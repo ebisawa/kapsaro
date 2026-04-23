@@ -14,7 +14,9 @@ use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
-use super::common::{expand_tilde, get_default_ssh_key_path, resolve_string_with_priority};
+use super::common::{
+    expand_tilde, get_default_ssh_key_path, resolve_string_with_source, ResolvedStringSource,
+};
 
 /// Source of SSH key configuration
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,48 +57,18 @@ pub(crate) fn resolve_ssh_key_candidate(
     ssh_key_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<ResolvedSshKey> {
-    // Priority 1: CLI option
     if let Some(ssh_key) = ssh_key_opt {
-        let exists = ssh_key.exists();
-        return Ok(ResolvedSshKey {
-            path: ssh_key,
-            source: SshKeySource::Cli,
-            exists,
-        });
+        return Ok(build_resolved_ssh_key(ssh_key, SshKeySource::Cli));
     }
 
-    // Priority 2: Environment variable
-    if let Ok(ssh_key_str) = std::env::var("SECRETENV_SSH_IDENTITY") {
-        let ssh_key = PathBuf::from(ssh_key_str);
-        let exists = ssh_key.exists();
-        return Ok(ResolvedSshKey {
-            path: ssh_key,
-            source: SshKeySource::Env,
-            exists,
-        });
+    if let Some(candidate) = resolve_configured_ssh_key_candidate(base_dir)? {
+        return Ok(candidate);
     }
 
-    // Priority 3: Global config
-    if let Some(ssh_key_path_str) =
-        resolve_string_with_priority(None, None, "ssh_identity", base_dir, None)?
-    {
-        let expanded = expand_tilde(&ssh_key_path_str)?;
-        let exists = expanded.exists();
-        return Ok(ResolvedSshKey {
-            path: expanded,
-            source: SshKeySource::GlobalConfig,
-            exists,
-        });
-    }
-
-    // Priority 4: Default path (~/.ssh/id_ed25519)
-    let default_path = get_default_ssh_key_path()?;
-    let exists = default_path.exists();
-    Ok(ResolvedSshKey {
-        path: default_path,
-        source: SshKeySource::Default,
-        exists,
-    })
+    Ok(build_resolved_ssh_key(
+        get_default_ssh_key_path()?,
+        SshKeySource::Default,
+    ))
 }
 
 pub(crate) fn build_ssh_key_not_found_error(candidate: &ResolvedSshKey) -> Error {
@@ -150,6 +122,42 @@ pub(crate) fn resolve_ssh_key_descriptor(
         return Err(build_ssh_key_not_found_error(&candidate));
     }
     Ok(SshKeyDescriptor::from_path(candidate.path))
+}
+
+fn resolve_configured_ssh_key_candidate(base_dir: Option<&Path>) -> Result<Option<ResolvedSshKey>> {
+    resolve_string_with_source(
+        None,
+        Some("SECRETENV_SSH_IDENTITY"),
+        "ssh_identity",
+        base_dir,
+        None,
+    )?
+    .map(build_candidate_from_source)
+    .transpose()
+}
+
+fn build_candidate_from_source(
+    (path, source): (String, ResolvedStringSource),
+) -> Result<ResolvedSshKey> {
+    match source {
+        ResolvedStringSource::Env => Ok(build_resolved_ssh_key(
+            PathBuf::from(path),
+            SshKeySource::Env,
+        )),
+        ResolvedStringSource::GlobalConfig => Ok(build_resolved_ssh_key(
+            expand_tilde(&path)?,
+            SshKeySource::GlobalConfig,
+        )),
+        _ => unreachable!("unexpected SSH key source"),
+    }
+}
+
+fn build_resolved_ssh_key(path: PathBuf, source: SshKeySource) -> ResolvedSshKey {
+    ResolvedSshKey {
+        exists: path.exists(),
+        path,
+        source,
+    }
 }
 
 #[cfg(test)]

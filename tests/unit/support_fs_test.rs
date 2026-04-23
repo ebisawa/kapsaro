@@ -4,8 +4,9 @@
 //! Unit tests for support/fs module.
 
 use secretenv::support::fs::{
-    check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted, list_dir,
-    load_bytes_with_limit, load_text, load_text_with_limit,
+    check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted,
+    ensure_text_file_matches_snapshot_with_limit, list_dir, load_bytes_with_limit, load_text,
+    load_text_with_limit,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -268,4 +269,67 @@ fn test_load_bytes_with_limit_caps_streaming_read() {
         "unexpected error: {message}"
     );
     assert!(message.contains("capped read"));
+}
+
+#[test]
+fn test_ensure_text_file_matches_snapshot_with_limit_accepts_matching_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&file_path, "same content").unwrap();
+
+    let result = ensure_text_file_matches_snapshot_with_limit(
+        &file_path,
+        Some("same content"),
+        "Reviewed file",
+        64,
+    );
+
+    assert!(result.is_ok(), "expected snapshot match to succeed");
+}
+
+#[test]
+fn test_ensure_text_file_matches_snapshot_with_limit_rejects_oversized_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&file_path, "abcdef").unwrap();
+
+    let error = ensure_text_file_matches_snapshot_with_limit(
+        &file_path,
+        Some("abcdef"),
+        "Reviewed file",
+        5,
+    )
+    .unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("changed since review"),
+        "unexpected error: {message}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ensure_text_file_matches_snapshot_with_limit_rejects_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real_path = temp_dir.path().join("real.txt");
+    let link_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&real_path, "same content").unwrap();
+    symlink(&real_path, &link_path).unwrap();
+
+    let error = ensure_text_file_matches_snapshot_with_limit(
+        &link_path,
+        Some("same content"),
+        "Reviewed file",
+        64,
+    )
+    .unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("changed since review"),
+        "unexpected error: {message}"
+    );
 }

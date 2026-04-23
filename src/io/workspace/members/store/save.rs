@@ -6,22 +6,13 @@ use super::super::paths::{
 };
 use super::uniqueness::ensure_member_document_kid_is_unique;
 use crate::format::schema::document::parse_public_key_str;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::fs::atomic;
 use crate::{Error, Result};
 use std::fs;
 use std::path::Path;
 
 fn save_member_file(path: &Path, content: &str) -> Result<()> {
-    fs::write(path, content).map_err(|e| {
-        Error::io_with_source(
-            format!(
-                "Failed to write {}: {}",
-                display_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )
-    })
+    atomic::save_text(path, content)
 }
 
 pub fn save_member_content(

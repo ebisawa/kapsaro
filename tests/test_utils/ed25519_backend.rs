@@ -9,9 +9,12 @@
 
 use ed25519_dalek::{Signer, SigningKey};
 use secretenv::io::ssh::backend::SignatureBackend;
+use secretenv::io::ssh::protocol::base64::decode_base64_armored;
 use secretenv::io::ssh::protocol::sshsig;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
+use secretenv::io::ssh::protocol::wire::ssh_string_decode;
 use secretenv::Result;
+use std::fs;
 use std::path::Path;
 
 /// Test-only SignatureBackend that signs directly with Ed25519
@@ -25,21 +28,7 @@ pub struct Ed25519DirectBackend {
 impl Ed25519DirectBackend {
     /// Load Ed25519 private key from OpenSSH format file
     pub fn new(ssh_key_path: &Path) -> Result<Self> {
-        let private_key = ssh_key::PrivateKey::read_openssh_file(ssh_key_path).map_err(|e| {
-            secretenv::Error::Ssh {
-                message: format!("Failed to read SSH key: {}", e),
-                source: Some(Box::new(e)),
-            }
-        })?;
-
-        let key_data = private_key.key_data();
-        let ed25519_keypair = key_data.ed25519().ok_or_else(|| secretenv::Error::Ssh {
-            message: "SSH key is not Ed25519".to_string(),
-            source: None,
-        })?;
-
-        let secret_bytes: [u8; 32] = ed25519_keypair.private.to_bytes();
-
+        let secret_bytes = load_ed25519_secret_key(ssh_key_path)?;
         let signing_key = SigningKey::from_bytes(&secret_bytes);
         Ok(Self { signing_key })
     }
@@ -55,5 +44,99 @@ impl SignatureBackend for Ed25519DirectBackend {
         let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace);
         let signature = self.signing_key.sign(&sshsig_signed_data);
         Ok(Ed25519RawSignature::new(signature.to_bytes()))
+    }
+}
+
+fn load_ed25519_secret_key(ssh_key_path: &Path) -> Result<[u8; 32]> {
+    let armored = fs::read_to_string(ssh_key_path).map_err(|e| secretenv::Error::Ssh {
+        message: format!("Failed to read SSH key: {}", e),
+        source: Some(Box::new(e)),
+    })?;
+    let decoded = decode_base64_armored(&armored)?;
+    parse_openssh_ed25519_secret_key(decoded.as_ref())
+}
+
+fn parse_openssh_ed25519_secret_key(data: &[u8]) -> Result<[u8; 32]> {
+    const MAGIC: &[u8] = b"openssh-key-v1\0";
+
+    let Some(mut rest) = data.strip_prefix(MAGIC) else {
+        return Err(unsupported_ssh_key("missing openssh-key-v1 header"));
+    };
+
+    let (ciphername, next) = ssh_string_decode(rest)?;
+    rest = next;
+    let (kdfname, next) = ssh_string_decode(rest)?;
+    rest = next;
+    let (kdfoptions, next) = ssh_string_decode(rest)?;
+    rest = next;
+
+    if ciphername != b"none" || kdfname != b"none" || !kdfoptions.is_empty() {
+        return Err(unsupported_ssh_key(
+            "encrypted OpenSSH private keys are not supported in this test backend",
+        ));
+    }
+
+    let key_count = read_u32(&mut rest, "public key count")?;
+    if key_count != 1 {
+        return Err(unsupported_ssh_key(
+            "expected exactly one key in OpenSSH private key",
+        ));
+    }
+
+    let (_public_blob, next) = ssh_string_decode(rest)?;
+    rest = next;
+    let (private_blob, _rest) = ssh_string_decode(rest)?;
+    parse_private_section(private_blob)
+}
+
+fn parse_private_section(mut data: &[u8]) -> Result<[u8; 32]> {
+    let check1 = read_u32(&mut data, "checkint")?;
+    let check2 = read_u32(&mut data, "checkint")?;
+    if check1 != check2 {
+        return Err(unsupported_ssh_key(
+            "OpenSSH private key checkints do not match",
+        ));
+    }
+
+    let (key_type, next) = ssh_string_decode(data)?;
+    data = next;
+    if key_type != b"ssh-ed25519" {
+        return Err(unsupported_ssh_key("SSH key is not Ed25519"));
+    }
+
+    let (_public_key, next) = ssh_string_decode(data)?;
+    data = next;
+    let (private_key, next) = ssh_string_decode(data)?;
+    data = next;
+
+    if private_key.len() != 64 {
+        return Err(unsupported_ssh_key(
+            "invalid OpenSSH Ed25519 private key length",
+        ));
+    }
+
+    let (_comment, _padding) = ssh_string_decode(data)?;
+
+    let mut secret = [0u8; 32];
+    secret.copy_from_slice(&private_key[..32]);
+    Ok(secret)
+}
+
+fn read_u32(data: &mut &[u8], field_name: &str) -> Result<u32> {
+    if data.len() < 4 {
+        return Err(unsupported_ssh_key(format!(
+            "missing {} in OpenSSH private key",
+            field_name
+        )));
+    }
+    let value = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+    *data = &data[4..];
+    Ok(value)
+}
+
+fn unsupported_ssh_key(message: impl Into<String>) -> secretenv::Error {
+    secretenv::Error::Ssh {
+        message: message.into(),
+        source: None,
     }
 }

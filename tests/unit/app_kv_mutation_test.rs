@@ -96,6 +96,39 @@ fn test_execute_set_rejects_file_created_after_missing_review() {
     });
 }
 
+#[cfg(unix)]
+#[test]
+fn test_execute_set_rejects_symlinked_existing_file_after_review() {
+    use std::os::unix::fs::symlink;
+
+    let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+
+    with_temp_cwd(temp_dir.path(), || {
+        let initial = evaluate_set_plan(&options, None);
+        set_kv_command(&initial, vec![KvInputEntry::new("KEY1", "value1")], None).unwrap();
+
+        let reviewed = evaluate_set_plan(&options, None);
+        let kv_path = workspace_dir.join("secrets").join("default.kvenc");
+        let reviewed_content = fs::read_to_string(&kv_path).unwrap();
+        let victim_path = workspace_dir.join("victim.kvenc");
+        fs::write(&victim_path, &reviewed_content).unwrap();
+        fs::remove_file(&kv_path).unwrap();
+        symlink(&victim_path, &kv_path).unwrap();
+
+        let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY2", "value2")], None);
+
+        match result {
+            Err(err) => assert!(err.to_string().contains("changed since review")),
+            Ok(_) => panic!("expected mismatch error"),
+        }
+        assert_eq!(fs::read_to_string(&victim_path).unwrap(), reviewed_content);
+    });
+}
+
 #[test]
 fn test_execute_set_rejects_active_member_snapshot_change_after_review() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);

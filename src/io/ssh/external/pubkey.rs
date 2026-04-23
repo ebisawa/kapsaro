@@ -8,7 +8,8 @@ use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::SshError;
-use crate::support::fs::load_text;
+use crate::support::fs::load_text_with_limit;
+use crate::support::limits::MAX_SSH_PUBLIC_KEY_FILE_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::Path;
@@ -49,7 +50,12 @@ fn ssh_error(message: impl Into<String>) -> Error {
 /// - File is empty or contains invalid UTF-8
 /// - Key type is not ssh-ed25519
 pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
-    let content = load_text(pub_key_path).map_err(|error| {
+    let content = load_text_with_limit(
+        pub_key_path,
+        MAX_SSH_PUBLIC_KEY_FILE_SIZE,
+        "SSH public key file",
+    )
+    .map_err(|error| {
         let message = format!(
             "Failed to read public key file {}: {}",
             display_path_relative_to_cwd(pub_key_path),

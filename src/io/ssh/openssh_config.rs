@@ -11,7 +11,8 @@
 //! - `Host *` block matching (for global settings)
 //! - Comments and empty lines
 
-use crate::support::fs::load_text;
+use crate::support::fs::load_text_with_limit;
+use crate::support::limits::MAX_SSH_CONFIG_FILE_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::PathBuf;
@@ -45,7 +46,8 @@ pub fn find_identity_agent() -> Result<Option<PathBuf>> {
         return Ok(None);
     }
 
-    let content = load_text(&config_path).map_err(|e| {
+    let content = load_text_with_limit(&config_path, MAX_SSH_CONFIG_FILE_SIZE, "SSH config file")
+        .map_err(|e| {
         Error::io(format!(
             "Failed to read SSH config file {}: {}",
             display_path_relative_to_cwd(&config_path),

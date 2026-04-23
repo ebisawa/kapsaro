@@ -8,7 +8,9 @@ use super::store::{
     check_workspace_member_kid_uniqueness, load_json_files_in_dir,
     load_verified_member_file_from_path, MemberKidCandidate,
 };
-use crate::support::fs::{atomic, ensure_text_file_matches_snapshot, load_text_with_limit, lock};
+use crate::support::fs::{
+    atomic, ensure_text_file_matches_snapshot_with_limit, load_text_with_limit, lock,
+};
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -173,10 +175,11 @@ fn promote_snapshotted_member(
     let destination = member_file_path(workspace_path, MemberStatus::Active, &snapshot.member_id);
     with_promotion_file_locks(&snapshot.source_path, &destination, || {
         let subject_display = format!("Incoming member '{}'", snapshot.member_id);
-        ensure_text_file_matches_snapshot(
+        ensure_text_file_matches_snapshot_with_limit(
             &snapshot.source_path,
             Some(&snapshot.source_content),
             &subject_display,
+            MAX_JSON_DOCUMENT_READ_SIZE,
         )?;
         atomic::save_text(&destination, &snapshot.source_content)?;
         fs::remove_file(&snapshot.source_path).map_err(|e| {

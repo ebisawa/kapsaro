@@ -15,6 +15,18 @@ pub const MAX_KV_ENC_FILE_SIZE: usize = 16 * 1024 * 1024;
 /// Maximum JSON document file size in bytes for pre-read validation.
 pub const MAX_JSON_DOCUMENT_READ_SIZE: usize = 24 * 1024 * 1024;
 
+/// Maximum SSH public key file size in bytes.
+pub const MAX_SSH_PUBLIC_KEY_FILE_SIZE: usize = 64 * 1024;
+
+/// Maximum OpenSSH config file size in bytes.
+pub const MAX_SSH_CONFIG_FILE_SIZE: usize = 1024 * 1024;
+
+/// Maximum global config.toml size in bytes.
+pub const MAX_CONFIG_FILE_SIZE: usize = 1024 * 1024;
+
+/// Maximum active kid file size in bytes.
+pub const MAX_ACTIVE_KID_FILE_SIZE: usize = 256;
+
 /// Maximum number of KEY lines in a kv-enc document
 pub const MAX_KV_KEY_LINES: usize = 10_000;
 

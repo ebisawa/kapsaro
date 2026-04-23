@@ -257,6 +257,59 @@ fn test_save_member_content_force_overwrite() {
     assert!(content.contains("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE"));
 }
 
+#[cfg(unix)]
+#[test]
+fn test_save_member_content_rejects_symlinked_target_on_force_overwrite() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = TempDir::new().unwrap();
+    let incoming_dir = tmp.path().join("members/incoming");
+    let victim_path = tmp.path().join("victim.txt");
+    fs::create_dir_all(&incoming_dir).unwrap();
+    fs::write(&victim_path, "original").unwrap();
+    symlink(&victim_path, incoming_dir.join("alice.json")).unwrap();
+
+    let error = save_member_content(
+        tmp.path(),
+        MemberStatus::Incoming,
+        "alice",
+        &build_public_key_json("alice", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE"),
+        true,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("symlink"));
+    assert_eq!(fs::read_to_string(&victim_path).unwrap(), "original");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_save_member_content_rejects_symlinked_incoming_directory() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = TempDir::new().unwrap();
+    let members_dir = tmp.path().join("members");
+    let outside_dir = tmp.path().join("outside");
+    fs::create_dir_all(&members_dir).unwrap();
+    fs::create_dir(&outside_dir).unwrap();
+    symlink(&outside_dir, members_dir.join("incoming")).unwrap();
+
+    let error = save_member_content(
+        tmp.path(),
+        MemberStatus::Incoming,
+        "alice",
+        &build_public_key_json("alice", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE"),
+        false,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("symlink"));
+    assert!(
+        !outside_dir.join("alice.json").exists(),
+        "member file must not be written outside the workspace"
+    );
+}
+
 #[test]
 fn test_save_member_content_rejects_kid_conflict_with_active_member() {
     let tmp = TempDir::new().unwrap();

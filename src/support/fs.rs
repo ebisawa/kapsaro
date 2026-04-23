@@ -9,7 +9,7 @@ pub mod lock;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
-use std::fs::ReadDir;
+use std::fs::{File, ReadDir};
 use std::io::Read;
 use std::path::Path;
 
@@ -27,34 +27,14 @@ pub fn load_bytes(path: &Path) -> Result<Vec<u8>> {
     })
 }
 
-/// Read a file as bytes with a pre-read size limit.
+/// Read a file as bytes with a streaming size cap.
+///
+/// Refuses symlinks and non-regular files (FIFO, device, socket, directory)
+/// and never reads more than `max_bytes + 1` bytes, so adversarial FIFOs or
+/// character devices cannot make the read hang or exhaust memory.
 pub fn load_bytes_with_limit(path: &Path, max_bytes: usize, subject: &str) -> Result<Vec<u8>> {
-    validate_file_size_before_read(path, max_bytes, subject)?;
-
-    let mut file = fs::File::open(path).map_err(|e| {
-        Error::io_with_source(
-            format!(
-                "Failed to read file {}: {}",
-                display_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )
-    })?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes).map_err(|e| {
-        Error::io_with_source(
-            format!(
-                "Failed to read file {}: {}",
-                display_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )
-    })?;
-
-    validate_loaded_size(path, bytes.len(), max_bytes, subject)?;
-    Ok(bytes)
+    let mut file = open_regular_file(path)?;
+    read_capped(&mut file, max_bytes, subject, path)
 }
 
 /// Read a UTF-8 text file with consistent path-aware error messages.
@@ -280,8 +260,19 @@ pub fn check_permission_chain(_path: &Path, _logical_root: &Path) -> Vec<String>
     Vec::new()
 }
 
-fn validate_file_size_before_read(path: &Path, max_bytes: usize, subject: &str) -> Result<()> {
-    let metadata = fs::metadata(path).map_err(|e| {
+/// Open a path as a regular file, rejecting symlinks, FIFOs, devices, sockets,
+/// and directories.
+///
+/// A `symlink_metadata` pre-check rejects symlinks and any non-regular file
+/// type before calling `open`, because opening a FIFO without `O_NONBLOCK`
+/// would block until a writer appears. On Unix the open itself adds
+/// `O_NOFOLLOW | O_NONBLOCK` to close the final-component swap race without
+/// blocking if the swap produced a FIFO. A post-open `file_type()` check
+/// rejects anything that slipped through the race. A residual TOCTOU window
+/// on intermediate path components is accepted: anyone with write on the
+/// parent is already inside the local-adversary threat model.
+fn open_regular_file(path: &Path) -> Result<File> {
+    let pre_meta = fs::symlink_metadata(path).map_err(|e| {
         Error::io_with_source(
             format!(
                 "Failed to read file {}: {}",
@@ -291,8 +282,103 @@ fn validate_file_size_before_read(path: &Path, max_bytes: usize, subject: &str) 
             e,
         )
     })?;
+    let pre_ty = pre_meta.file_type();
+    if pre_ty.is_symlink() {
+        return Err(Error::InvalidOperation {
+            message: format!(
+                "refusing to read symlink: {}",
+                display_path_relative_to_cwd(path)
+            ),
+        });
+    }
+    if !pre_ty.is_file() {
+        return Err(Error::InvalidOperation {
+            message: format!(
+                "refusing to read non-regular file: {}",
+                display_path_relative_to_cwd(path)
+            ),
+        });
+    }
 
-    validate_loaded_size(path, metadata.len() as usize, max_bytes, subject)
+    let file = open_no_follow(path)?;
+
+    let post_meta = file.metadata().map_err(|e| {
+        Error::io_with_source(
+            format!(
+                "Failed to read file {}: {}",
+                display_path_relative_to_cwd(path),
+                e
+            ),
+            e,
+        )
+    })?;
+    if !post_meta.file_type().is_file() {
+        return Err(Error::InvalidOperation {
+            message: format!(
+                "refusing to read non-regular file: {}",
+                display_path_relative_to_cwd(path)
+            ),
+        });
+    }
+
+    Ok(file)
+}
+
+#[cfg(unix)]
+fn open_no_follow(path: &Path) -> Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|e| {
+            Error::io_with_source(
+                format!(
+                    "Failed to read file {}: {}",
+                    display_path_relative_to_cwd(path),
+                    e
+                ),
+                e,
+            )
+        })
+}
+
+#[cfg(not(unix))]
+fn open_no_follow(path: &Path) -> Result<File> {
+    fs::File::open(path).map_err(|e| {
+        Error::io_with_source(
+            format!(
+                "Failed to read file {}: {}",
+                display_path_relative_to_cwd(path),
+                e
+            ),
+            e,
+        )
+    })
+}
+
+/// Read up to `max_bytes` from `file` via a streaming cap.
+///
+/// Uses `Read::take(max + 1)` so a file whose metadata lies (e.g., FIFO
+/// reporting length 0) or that yields unbounded output (e.g., `/dev/zero`)
+/// cannot exhaust memory: at most `max_bytes + 1` bytes are read before the
+/// size check fires.
+fn read_capped(file: &mut File, max_bytes: usize, subject: &str, path: &Path) -> Result<Vec<u8>> {
+    let initial = std::cmp::min(max_bytes.saturating_add(1), 64 * 1024);
+    let mut buf = Vec::with_capacity(initial);
+    let cap = (max_bytes as u64).saturating_add(1);
+    file.take(cap).read_to_end(&mut buf).map_err(|e| {
+        Error::io_with_source(
+            format!(
+                "Failed to read file {}: {}",
+                display_path_relative_to_cwd(path),
+                e
+            ),
+            e,
+        )
+    })?;
+    validate_loaded_size(path, buf.len(), max_bytes, subject)?;
+    Ok(buf)
 }
 
 fn validate_loaded_size(path: &Path, size: usize, max_bytes: usize, subject: &str) -> Result<()> {

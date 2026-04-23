@@ -138,3 +138,51 @@ fn test_save_json_restricted_creates_file_with_0600() {
     let file_mode = fs::metadata(&file_path).unwrap().permissions().mode() & 0o777;
     assert_eq!(file_mode, 0o600);
 }
+
+#[cfg(unix)]
+#[test]
+fn test_save_text_rejects_symlinked_parent_directory() {
+    use std::os::unix::fs::symlink;
+    let temp_dir = TempDir::new().unwrap();
+    let real_parent = temp_dir.path().join("outside");
+    fs::create_dir(&real_parent).unwrap();
+    let fake_parent = temp_dir.path().join("secrets");
+    symlink(&real_parent, &fake_parent).unwrap();
+    let target = fake_parent.join("trapped.txt");
+
+    let error = save_text(&target, "should not land").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("parent directory is a symlink"),
+        "unexpected error: {message}"
+    );
+    assert!(
+        !real_parent.join("trapped.txt").exists(),
+        "write must not land in the symlink target"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_save_text_rejects_symlinked_target() {
+    use std::os::unix::fs::symlink;
+    let temp_dir = TempDir::new().unwrap();
+    let real_path = temp_dir.path().join("outside.txt");
+    fs::write(&real_path, "original").unwrap();
+    let fake_path = temp_dir.path().join("in.txt");
+    symlink(&real_path, &fake_path).unwrap();
+
+    let error = save_text(&fake_path, "should not overwrite").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("target is a symlink"),
+        "unexpected error: {message}"
+    );
+    assert_eq!(
+        fs::read_to_string(&real_path).unwrap(),
+        "original",
+        "write must not have followed the symlink"
+    );
+}

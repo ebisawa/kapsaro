@@ -774,7 +774,7 @@ PrivateKey protection is designed as a two-layer structure.
 - Layer 1: the local keystore itself sits inside the trust boundary. OS / filesystem access controls and ownership of the keystore directory confine access to `private.json` to processes acting under the same user's authority. In normal operation this is the primary defense.
 - Layer 2: the contents of `private.json` (the encrypted portion holding the key material) are themselves encrypted under a symmetric key. That symmetric key is a per-use ephemeral value, re-derived each time the PrivateKey is needed. This layer adds confidentiality in case the PrivateKey file itself leaks outside the trust boundary.
 
-Two modes re-derive that Layer-2 symmetric key. The PrivateKey material's format and storage location are shared between both modes: they use the same local keystore layout (§7.1.2) and the same ciphertext field. The two modes are kept distinct through separate key-derivation paths and explicit HKDF info strings that enforce domain separation.
+Two modes re-derive that Layer-2 symmetric key. The PrivateKey material's format and storage location are shared between both modes: they use the same local keystore layout (§7.1.2) and the same ciphertext field. However, the SSH-based and password-based modes use different derivation procedures and different HKDF info strings, so a key derived for one mode cannot be reused as if it belonged to the other.
 
 - SSH-based protection (§7.2): derives the symmetric key from a signature produced by the user's existing SSH Ed25519 key. Intended for normal interactive use and eliminates the need to manage a SecretEnv-specific password.
 - Password-based protection (§7.3): derives the symmetric key from a user-supplied password via Argon2id + HKDF. Intended for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
@@ -810,23 +810,39 @@ Here `alg.fpr` is only an identifier for the SSH key used to protect that key ge
 
 SSH-based protection re-derives the symmetric key that encrypts the contents of the PrivateKey file (`private.json`) from an SSH signature each time the PrivateKey file has to be read. This is how the scheme keeps the PrivateKey file encrypted without any SecretEnv-specific password.
 
-The symmetric key used to encrypt the file contents (`enc_key`) is a separate, HKDF-derived key built from the SSH signature's output, distinct from the SSH private key itself. `enc_key` is treated as a per-use ephemeral value and is re-derived by repeating the same procedure whenever the PrivateKey file is opened. Reconstruction requires both the SSH key's signing capability and the target `private.json`'s `protected` header (including `ikm_salt`, `hkdf_salt`, and `kid`); when both are available, the same symmetric key can be reconstructed at any time.
+The symmetric key used to encrypt the file contents (`enc_key`) is a separate, HKDF-derived key built from the SSH signature's output, distinct from the SSH private key itself. `enc_key` is treated as a per-use ephemeral value and is re-derived by repeating the same procedure whenever the PrivateKey file is opened. Re-deriving `enc_key` requires both the SSH key's signing capability and the target `private.json`'s `protected` header.
 
 ### 7.2.1 Key Derivation Pipeline
 
 The protection path is a three-stage pipeline.
 
-| Stage | Input | Output | Security meaning |
+| Stage | Input | Output | Security role |
 | --- | --- | --- | --- |
-| SSHSIG signing | Sign message (`secretenv:key-protection-ikm@5` and `ikm_salt`), namespace `secretenv-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Only an actor that can use the SSH key can proceed |
-| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `secretenv:sshsig-private-key-enc@5:{kid}` | `enc_key` | Derives a symmetric key that is domain-separated per key generation |
-| XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Protects the SecretEnv private key material while detecting tampering in the entire header |
+| SSHSIG signing | Sign message (`secretenv:key-protection-ikm@5` and `ikm_salt`), namespace `secretenv-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
+| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `secretenv:sshsig-private-key-enc@5:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
+| XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Encrypts the private key material and makes tampering in the `protected` header fail at decryption time |
 
-What this pipeline produces is the symmetric key that encrypts and decrypts the PrivateKey file's contents. The PrivateKey material itself is recovered as the AEAD-decrypted output of that file.
+The following diagram visualizes this derivation path.
 
-Signatures follow the OpenSSH `PROTOCOL.sshsig` format, and the namespace `secretenv-key-protection` is deliberately separate from the attestation namespace `secretenv-attestation`. `kid` is intentionally excluded from the SSH sign message itself and is placed in the HKDF info string so that the `enc_key` values derived for different key generations from the same SSH key remain mutually independent.
+```mermaid
+graph LR
+    Msg["Sign message<br/>(prefix + ikm_salt)"] -->|"SSHSIG signature<br/>(namespace: secretenv-key-protection)"| SSHSign["SSH Ed25519 signature"]
+    SSHKey["SSH private key<br/>(identified by alg.fpr)"] --> SSHSign
+    SSHSign -->|"raw signature<br/>64 bytes"| IKM["IKM"]
+    IKM --> HKDF["HKDF-SHA256"]
+    Salt["alg.hkdf_salt<br/>(32 bytes)"] --> HKDF
+    HKDF -->|32 bytes| EncKey["enc_key"]
+    EncKey --> AEAD["XChaCha20-Poly1305"]
+    Plaintext["Secret key material<br/>(keys JSON)"] --> AEAD
+    AAD["AAD = jcs(protected)"] --> AEAD
+    AEAD --> CT["encrypted.ct"]
+```
 
-AAD is `jcs(protected)`, so the full decryption context — `format`, `member_id`, `kid`, algorithm identifiers, fingerprint, salts, timestamps, and expiration — is covered by tamper detection. `enc_key` is not a stored fixed key; it is re-derived from the same SSH signing capability during both encryption and decryption.
+The `enc_key` produced by this pipeline is the symmetric key used to encrypt and decrypt `encrypted.ct` in `private.json`. If AEAD decryption succeeds, the inner SecretEnv private key material is recovered.
+
+Signatures follow OpenSSH `PROTOCOL.sshsig`. The `secretenv-key-protection` namespace is separate from the attestation namespace `secretenv-attestation`, so SSH signatures used for attestation and for PrivateKey protection cannot be confused. In addition, `kid` is not part of the SSH sign message itself; it is placed in the HKDF info string so that the same SSH key still yields different `enc_key` values for different key generations.
+
+AAD is `jcs(protected)`. This makes the entire `protected` header part of tamper detection during decryption. `enc_key` is not a stored fixed key; it is re-derived from SSH signing capability during both encryption and decryption.
 
 ### 7.2.2 Determinism Check
 

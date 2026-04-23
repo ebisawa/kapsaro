@@ -454,6 +454,55 @@ fn test_member_remove_nonexistent_fails() {
         .failure();
 }
 
+#[test]
+fn test_member_remove_warns_on_tampered_artifact_but_continues() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    let input_file = home_dir.path().join("member-remove.txt");
+    let encrypted_file = workspace_dir
+        .path()
+        .join("secrets")
+        .join("member-remove.json");
+    fs::write(&input_file, b"member remove preview").unwrap();
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--out")
+        .arg(&encrypted_file)
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let mut value: Value =
+        serde_json::from_str(&fs::read_to_string(&encrypted_file).unwrap()).unwrap();
+    value["protected"]["updated_at"] = Value::String("2026-01-01T00:00:01Z".to_string());
+    fs::write(
+        &encrypted_file,
+        serde_json::to_string_pretty(&value).unwrap(),
+    )
+    .unwrap();
+
+    cmd()
+        .arg("member")
+        .arg("remove")
+        .arg(TEST_MEMBER_ID)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--force")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("member-remove.json"))
+        .stderr(predicate::str::contains("Signature verification failed"));
+}
+
 // ============================================================================
 // member add
 // ============================================================================

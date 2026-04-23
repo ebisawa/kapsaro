@@ -17,7 +17,8 @@ pub use store::{
     find_active_member_by_kid, list_active_member_ids, list_active_member_paths,
     list_incoming_member_paths, list_member_file_paths, load_active_member_files,
     load_active_member_index_by_kid, load_incoming_member_files, load_member_file,
-    load_member_file_from_path, load_member_files, save_member_content,
+    load_member_file_from_path, load_member_files, load_verified_member_file_from_path,
+    save_member_content,
 };
 
 #[cfg(test)]

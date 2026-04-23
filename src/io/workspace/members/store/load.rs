@@ -48,7 +48,7 @@ fn load_sorted_members_from_dir(dir: &Path) -> Result<Vec<PublicKey>> {
     let paths = load_json_files_in_dir(dir)?;
     let mut members = paths
         .into_iter()
-        .map(|path| load_member_file_from_path(&path))
+        .map(|path| load_verified_member_file_from_path(&path))
         .collect::<Result<Vec<_>>>()?;
     members.sort_by(|a, b| a.protected.member_id.cmp(&b.protected.member_id));
     Ok(members)
@@ -175,4 +175,34 @@ pub fn list_member_file_paths(
 
 pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {
     parse_public_key_file(path)
+}
+
+/// Load a member file and require that its stem matches `protected.member_id`.
+///
+/// The spec places each PublicKey at `members/active/<member_id>.json`. Any
+/// bulk loader that derives the "current member set" or the default recipient
+/// list from on-disk contents must reject mismatches here, otherwise a PR
+/// that only edits `alice.json` could smuggle bob's key into the recipient
+/// set. Point loaders that already validate against an expected stem (e.g.
+/// `load_member_files`) can keep calling `load_member_file_from_path`.
+pub fn load_verified_member_file_from_path(path: &Path) -> Result<PublicKey> {
+    let public_key = load_member_file_from_path(path)?;
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| Error::InvalidArgument {
+            message: format!(
+                "Member file has no readable stem: {}",
+                display_path_relative_to_cwd(path)
+            ),
+        })?;
+    if stem != public_key.protected.member_id {
+        return Err(Error::InvalidArgument {
+            message: format!(
+                "Member handle mismatch: file '{}' contains '{}'",
+                stem, public_key.protected.member_id
+            ),
+        });
+    }
+    Ok(public_key)
 }

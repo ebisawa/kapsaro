@@ -11,7 +11,8 @@ use crate::feature::verify::public_key::{
 use crate::format::kv::KV_ENC_EXTENSION;
 use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::io::workspace::members::{
-    ensure_workspace_member_kid_uniqueness, list_incoming_member_paths, load_member_file_from_path,
+    ensure_workspace_member_kid_uniqueness, list_incoming_member_paths,
+    load_verified_member_file_from_path,
 };
 use crate::model::public_key::PublicKey;
 use crate::support::fs::list_dir;
@@ -239,7 +240,7 @@ struct IncomingSnapshot {
 fn load_incoming_index(workspace_root: &Path) -> Result<BTreeMap<String, IncomingSnapshot>> {
     let mut index = BTreeMap::new();
     for source_path in list_incoming_member_paths(workspace_root)? {
-        let public_key = load_member_file_from_path(&source_path)?;
+        let public_key = load_verified_member_file_from_path(&source_path)?;
         let source_content =
             load_text_with_limit(&source_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
         index.insert(

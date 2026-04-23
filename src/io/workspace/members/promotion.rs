@@ -5,8 +5,8 @@ use super::paths::{
     ensure_members_dir, incoming_member_file_path, member_file_path, members_dir, MemberStatus,
 };
 use super::store::{
-    check_workspace_member_kid_uniqueness, load_json_files_in_dir, load_member_file_from_path,
-    MemberKidCandidate,
+    check_workspace_member_kid_uniqueness, load_json_files_in_dir,
+    load_verified_member_file_from_path, MemberKidCandidate,
 };
 use crate::support::fs::{atomic, ensure_text_file_matches_snapshot, lock};
 use crate::support::path::display_path_relative_to_cwd;
@@ -210,7 +210,7 @@ fn ensure_promotion_kids_are_unique(workspace_path: &Path, plans: &[PromotionPla
     let candidates = plans
         .iter()
         .map(|plan| {
-            let public_key = load_member_file_from_path(&plan.source)?;
+            let public_key = load_verified_member_file_from_path(&plan.source)?;
             Ok(MemberKidCandidate {
                 member_id: plan.member_id.clone(),
                 kid: public_key.protected.kid,

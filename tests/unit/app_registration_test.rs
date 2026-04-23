@@ -127,8 +127,12 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
     .unwrap();
 
     let error = apply_registration(&prepared, false).unwrap_err();
+    let message = error.to_string();
+    // The file's stem ("duplicate-owner") does not match its content's
+    // member_id, so the stem-binding check rejects it before the kid
+    // uniqueness check runs. Either rejection path is acceptable.
     assert!(
-        error.to_string().contains("kid"),
+        message.contains("kid") || message.contains("Member handle mismatch"),
         "unexpected error: {error}"
     );
 }

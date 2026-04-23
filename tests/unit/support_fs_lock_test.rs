@@ -93,6 +93,47 @@ fn test_lock_file_created_with_0600() {
     .unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn test_with_file_lock_rejects_symlinked_lock_file() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("config.toml");
+    let victim_path = temp_dir.path().join("victim.txt");
+    let lock_path = temp_dir.path().join(".config.toml.lock");
+    fs::write(&victim_path, "original").unwrap();
+    symlink(&victim_path, &lock_path).unwrap();
+
+    let error = with_file_lock(&file_path, || Ok::<(), secretenv::Error>(())).unwrap_err();
+
+    let message = error.to_string();
+    assert!(message.contains("symlink"), "unexpected error: {message}");
+    assert_eq!(fs::read_to_string(&victim_path).unwrap(), "original");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_with_file_lock_rejects_symlinked_lock_parent() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real_parent = temp_dir.path().join("outside");
+    let fake_parent = temp_dir.path().join("linked");
+    fs::create_dir(&real_parent).unwrap();
+    symlink(&real_parent, &fake_parent).unwrap();
+    let file_path = fake_parent.join("config.toml");
+
+    let error = with_file_lock(&file_path, || Ok::<(), secretenv::Error>(())).unwrap_err();
+
+    let message = error.to_string();
+    assert!(message.contains("symlink"), "unexpected error: {message}");
+    assert!(
+        !real_parent.join(".config.toml.lock").exists(),
+        "lock file must not be created outside the intended directory"
+    );
+}
+
 #[test]
 fn test_with_file_lock_accepts_relative_filename_in_current_directory() {
     let temp_dir = TempDir::new().unwrap();

@@ -4,7 +4,7 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::review::{
-    ensure_text_file_matches_snapshot, ensure_workspace_members_match_snapshot,
+    ensure_text_file_matches_snapshot_with_limit, ensure_workspace_members_match_snapshot,
 };
 use crate::app::context::ssh::ResolvedSshSigningContext;
 use crate::app::errors::handle_kv_key_not_found_error;
@@ -23,6 +23,7 @@ use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
 use crate::support::fs::{atomic, lock};
+use crate::support::limits::encrypted_file_read_limit;
 use crate::{Error, Result};
 
 use super::session::{load_existing_content, KvCommandSession, KvFileTarget};
@@ -98,10 +99,11 @@ impl MutationReviewSnapshot {
     }
 
     fn ensure_file_matches(&self) -> Result<()> {
-        ensure_text_file_matches_snapshot(
+        ensure_text_file_matches_snapshot_with_limit(
             &self.target.file_path,
             self.existing_content().map(KvEncContent::as_str),
             "KV file",
+            encrypted_file_read_limit(&self.target.file_path),
         )
     }
 

@@ -155,6 +155,39 @@ fn test_load_ssh_public_key_file_not_found() {
     assert!(result.unwrap_err().to_string().contains("Failed to read"));
 }
 
+#[cfg(unix)]
+#[test]
+fn test_load_ssh_public_key_file_rejects_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real_path = temp_dir.path().join("real.pub");
+    let link_path = temp_dir.path().join("test.pub");
+    std::fs::write(&real_path, VALID_ED25519_KEY).unwrap();
+    symlink(&real_path, &link_path).unwrap();
+
+    let result = load_ssh_public_key_file(&link_path);
+    assert!(result.is_err());
+    let message = result.unwrap_err().to_string();
+    assert!(message.contains("symlink"), "unexpected error: {message}");
+}
+
+#[test]
+fn test_load_ssh_public_key_file_rejects_oversized_input() {
+    let temp_dir = TempDir::new().unwrap();
+    let pub_path = temp_dir.path().join("test.pub");
+    let oversized = format!("{}{}\n", VALID_ED25519_KEY, "A".repeat(70 * 1024));
+    std::fs::write(&pub_path, oversized).unwrap();
+
+    let result = load_ssh_public_key_file(&pub_path);
+    assert!(result.is_err());
+    let message = result.unwrap_err().to_string();
+    assert!(
+        message.contains("maximum size limit"),
+        "unexpected error: {message}"
+    );
+}
+
 #[test]
 fn test_load_ssh_public_key_with_descriptor_trait_public_key() {
     let temp_dir = TempDir::new().unwrap();

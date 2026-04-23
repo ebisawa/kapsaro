@@ -4,6 +4,7 @@
 //! Unit tests for PublicKeySource trait implementations
 
 use secretenv::io::keystore::public_key_source::{PublicKeySource, WorkspacePublicKeySource};
+use std::fs;
 use tempfile::TempDir;
 
 fn build_test_public_key_json(member_id: &str, kid: &str) -> String {
@@ -155,4 +156,35 @@ fn test_workspace_public_key_source_load_multiple() {
     assert_eq!(keys[0].protected.member_id, "alice@example.com");
     assert_eq!(keys[1].protected.member_id, "bob@example.com");
     assert_eq!(keys[2].protected.member_id, "charlie@example.com");
+}
+
+#[test]
+fn test_workspace_public_key_source_rejects_mismatched_active_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let workspace_path = temp_dir.path();
+
+    setup_workspace_member(
+        workspace_path,
+        "alice@example.com",
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+    );
+
+    let tampered =
+        build_test_public_key_json("bob@example.com", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE");
+    fs::write(
+        workspace_path
+            .join("members/active")
+            .join("alice@example.com.json"),
+        tampered,
+    )
+    .unwrap();
+
+    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let result = source.load_public_key("alice@example.com");
+    assert!(result.is_err(), "mismatched member file should be rejected");
+    let message = result.unwrap_err().to_string();
+    assert!(
+        message.contains("Member handle mismatch"),
+        "unexpected error: {message}"
+    );
 }

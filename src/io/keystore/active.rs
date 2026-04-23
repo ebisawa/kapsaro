@@ -3,11 +3,14 @@
 
 //! Active key management
 
-use crate::support::fs::{atomic, check_permission_chain, load_text};
+use crate::support::fs::{atomic, check_permission_chain, load_text_with_limit};
 use crate::support::kid::normalize_kid;
+use crate::support::limits::MAX_ACTIVE_KID_FILE_SIZE;
 use crate::Error;
 use std::fs;
 use std::path::Path;
+
+const ACTIVE_FILE_SUBJECT: &str = "active key file";
 
 /// Load the active kid for a member.
 ///
@@ -23,7 +26,8 @@ pub fn load_active_kid(member_id: &str, keystore_root: &Path) -> Result<Option<S
         tracing::warn!("{}", warning);
     }
 
-    let content = load_text(&active_path)?;
+    let content =
+        load_text_with_limit(&active_path, MAX_ACTIVE_KID_FILE_SIZE, ACTIVE_FILE_SUBJECT)?;
 
     // Trim whitespace and newlines
     let kid = content.trim();

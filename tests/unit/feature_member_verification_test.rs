@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::io::verify_online::VerifiedGithubIdentity;
+use crate::Error;
 
 fn dummy_github() -> VerifiedGithubIdentity {
     VerifiedGithubIdentity::new(1, "alice-gh".to_string(), "SHA256:abc".to_string(), 42)
@@ -44,4 +45,42 @@ fn test_classify_empty() {
     assert!(verified.is_empty());
     assert!(failed.is_empty());
     assert!(not_configured.is_empty());
+}
+
+#[test]
+fn test_append_verification_warnings_keeps_original_message_without_warnings() {
+    let result = VerificationResult::failed("alice", "offline failed".to_string(), None, true);
+
+    let updated = append_verification_warnings(result, &[]);
+
+    assert_eq!(updated.message, "offline failed");
+}
+
+#[test]
+fn test_append_verification_warnings_appends_joined_warning_suffix() {
+    let result = VerificationResult::verified("alice", "verified".to_string(), dummy_github());
+    let warnings = vec!["warning one".to_string(), "warning two".to_string()];
+
+    let updated = append_verification_warnings(result, &warnings);
+
+    assert_eq!(updated.message, "verified [warning one; warning two]");
+}
+
+#[test]
+fn test_build_offline_verification_failure_preserves_claim_flag_and_prefix() {
+    let result = build_offline_verification_failure(
+        "alice",
+        Error::InvalidArgument {
+            message: "broken attestation".to_string(),
+        },
+        true,
+    );
+
+    assert_eq!(result.member_id, "alice");
+    assert_eq!(result.status, VerificationStatus::Failed);
+    assert_eq!(
+        result.message,
+        "Offline verification failed: broken attestation"
+    );
+    assert!(result.github_claim_present);
 }

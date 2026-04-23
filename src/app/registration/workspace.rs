@@ -9,7 +9,7 @@ use crate::io::keystore::storage::load_public_key;
 use crate::io::workspace::detection::resolve_workspace_creation_path;
 use crate::io::workspace::members::{
     active_member_file_path, ensure_member_document_kid_is_unique, incoming_member_file_path,
-    load_member_file_from_path, MemberStatus,
+    load_verified_member_file_from_path, MemberStatus,
 };
 use crate::io::workspace::setup;
 use crate::Result;
@@ -130,7 +130,7 @@ pub(crate) fn resolve_active_membership_state(
         return Ok(ActiveMembershipState::None);
     }
 
-    let active_member = load_member_file_from_path(&active_path)?;
+    let active_member = load_verified_member_file_from_path(&active_path)?;
     if active_member.protected.kid == kid {
         Ok(ActiveMembershipState::SameKey)
     } else {

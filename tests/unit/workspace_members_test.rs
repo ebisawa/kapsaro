@@ -5,7 +5,8 @@
 
 use crate::test_utils::{keygen_test, setup_test_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::io::workspace::members::{
-    list_active_member_ids, load_active_member_files, load_verified_member_file_from_path,
+    list_active_member_ids, load_active_member_files, load_member_file,
+    load_verified_member_file_from_path,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -108,6 +109,34 @@ fn test_load_active_member_files_rejects_mismatched_stem_in_bulk() {
     .unwrap();
 
     let err = load_active_member_files(&workspace_dir).unwrap_err();
+    let message = err.to_string();
+    assert!(
+        message.contains("Member handle mismatch"),
+        "unexpected error: {message}"
+    );
+}
+
+#[test]
+fn test_load_member_file_rejects_mismatched_stem() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let members_dir = workspace_dir.join("members/active");
+
+    let ssh_pub_content = fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
+        .unwrap()
+        .trim()
+        .to_string();
+    let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
+    let (_bob_private, bob_public) =
+        keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+
+    let tampered = members_dir.join(format!("{}.json", ALICE_MEMBER_ID));
+    fs::write(
+        &tampered,
+        serde_json::to_string_pretty(&bob_public).unwrap(),
+    )
+    .unwrap();
+
+    let err = load_member_file(&workspace_dir, ALICE_MEMBER_ID).unwrap_err();
     let message = err.to_string();
     assert!(
         message.contains("Member handle mismatch"),

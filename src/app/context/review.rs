@@ -26,13 +26,19 @@ pub(crate) fn ensure_workspace_members_match_snapshot(
     })
 }
 
-pub(crate) fn ensure_text_file_matches_snapshot(
+pub(crate) fn ensure_text_file_matches_snapshot_with_limit(
     path: &Path,
     reviewed_content: Option<&str>,
     subject_label: &str,
+    max_bytes: usize,
 ) -> Result<()> {
     let subject_display = format!("{} '{}'", subject_label, path.display());
-    fs::ensure_text_file_matches_snapshot(path, reviewed_content, &subject_display)
+    fs::ensure_text_file_matches_snapshot_with_limit(
+        path,
+        reviewed_content,
+        &subject_display,
+        max_bytes,
+    )
 }
 
 pub(crate) fn ensure_public_key_snapshot_matches(

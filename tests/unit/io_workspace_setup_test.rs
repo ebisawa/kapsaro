@@ -9,6 +9,7 @@ use secretenv::io::workspace::setup::{
     ensure_workspace_structure, save_member_document, validate_workspace_exists,
     workspace_has_active_members,
 };
+use std::fs;
 use tempfile::TempDir;
 
 #[test]
@@ -98,4 +99,65 @@ fn test_save_member_document_writes_public_key_json() {
         ALICE_MEMBER_ID
     );
     assert_eq!(saved["protected"]["kid"].as_str().unwrap(), kid);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ensure_workspace_structure_rejects_symlinked_workspace_root() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let outside_dir = temp_dir.path().join("outside");
+    let workspace_path = temp_dir.path().join(".secretenv");
+    fs::create_dir(&outside_dir).unwrap();
+    symlink(&outside_dir, &workspace_path).unwrap();
+
+    let error = ensure_workspace_structure(&workspace_path).unwrap_err();
+
+    assert!(error.to_string().contains("symlink"));
+    assert!(
+        !outside_dir.join("members/active/.gitkeep").exists(),
+        "workspace setup must not write through a symlinked workspace root"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ensure_workspace_structure_rejects_symlinked_members_directory() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let workspace_path = temp_dir.path().join(".secretenv");
+    let outside_dir = temp_dir.path().join("outside");
+    fs::create_dir(&workspace_path).unwrap();
+    fs::create_dir(&outside_dir).unwrap();
+    symlink(&outside_dir, workspace_path.join("members")).unwrap();
+
+    let error = ensure_workspace_structure(&workspace_path).unwrap_err();
+
+    assert!(error.to_string().contains("symlink"));
+    assert!(
+        !outside_dir.join("active/.gitkeep").exists(),
+        "workspace setup must not create directories through a symlinked ancestor"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_validate_workspace_exists_rejects_symlinked_secrets_directory() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let workspace_path = temp_dir.path().join(".secretenv");
+    let outside_dir = temp_dir.path().join("outside");
+    fs::create_dir_all(workspace_path.join("members/active")).unwrap();
+    fs::create_dir_all(workspace_path.join("members/incoming")).unwrap();
+    fs::create_dir(&outside_dir).unwrap();
+    symlink(&outside_dir, workspace_path.join("secrets")).unwrap();
+
+    let error = validate_workspace_exists(&workspace_path).unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("Workspace not found or incomplete"));
 }

@@ -186,3 +186,26 @@ fn test_import_rejects_strict_key_checking_no() {
         .failure()
         .stderr(predicate::str::contains("not allowed").and(predicate::str::contains("import")));
 }
+
+#[cfg(unix)]
+#[test]
+fn test_import_rejects_symlink_input_file() {
+    use std::os::unix::fs::symlink;
+
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let real_env = workspace_dir.path().join("real.env");
+    let symlink_env = workspace_dir.path().join("symlink.env");
+    fs::write(&real_env, "KEY1=value1\n").unwrap();
+    symlink(&real_env, &symlink_env).unwrap();
+
+    cmd()
+        .arg("import")
+        .arg(symlink_env.to_str().unwrap())
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("symlink"));
+}

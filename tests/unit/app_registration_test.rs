@@ -267,3 +267,34 @@ fn test_build_registration_decision_allows_join_rotation_when_active_kid_differs
 
     assert_eq!(decision, RegistrationDecision::Apply { overwrite: false });
 }
+
+#[test]
+fn test_build_registration_rejects_mismatched_active_member_file_for_join() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com", "bob@example.com"]);
+    let common = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
+    let alice_path = workspace_dir
+        .join("members/active")
+        .join("alice@example.com.json");
+    let bob_path = workspace_dir
+        .join("members/active")
+        .join("bob@example.com.json");
+    let bob_content = std::fs::read_to_string(&bob_path).unwrap();
+    std::fs::write(&alice_path, bob_content).unwrap();
+
+    let key_plan =
+        resolve_registration_key_plan("alice@example.com", &temp_dir.path().join("keys")).unwrap();
+    let error = build_registration(
+        &common,
+        "alice@example.com".to_string(),
+        None,
+        key_plan,
+        RegistrationMode::Join,
+        None,
+    )
+    .unwrap_err();
+
+    assert!(
+        error.to_string().contains("Member handle mismatch"),
+        "unexpected error: {error}"
+    );
+}

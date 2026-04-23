@@ -73,9 +73,36 @@ pub fn ensure_text_file_matches_snapshot(
     reviewed_content: Option<&str>,
     subject_display: &str,
 ) -> Result<()> {
+    ensure_text_file_matches_snapshot_impl(path, reviewed_content, subject_display, |path| {
+        load_text(path)
+    })
+}
+
+/// Validate that a text file still matches its reviewed snapshot using a
+/// bounded, symlink-safe read.
+pub fn ensure_text_file_matches_snapshot_with_limit(
+    path: &Path,
+    reviewed_content: Option<&str>,
+    subject_display: &str,
+    max_bytes: usize,
+) -> Result<()> {
+    ensure_text_file_matches_snapshot_impl(path, reviewed_content, subject_display, |path| {
+        load_text_with_limit(path, max_bytes, subject_display)
+    })
+}
+
+fn ensure_text_file_matches_snapshot_impl<F>(
+    path: &Path,
+    reviewed_content: Option<&str>,
+    subject_display: &str,
+    read_current: F,
+) -> Result<()>
+where
+    F: Fn(&Path) -> Result<String>,
+{
     match reviewed_content {
         Some(reviewed_content) => {
-            let current = fs::read_to_string(path).map_err(|e| Error::InvalidOperation {
+            let current = read_current(path).map_err(|e| Error::InvalidOperation {
                 message: format!(
                     "{} changed since review: failed to read current file ({})",
                     subject_display, e

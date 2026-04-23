@@ -14,7 +14,8 @@ use crate::cli::common::command::{
 use crate::cli::common::output::kv::print_kv_import_result;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::CommonOptions;
-use crate::support::fs::load_text;
+use crate::support::fs::load_text_with_limit;
+use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
 use crate::Result;
 
 #[derive(Args)]
@@ -36,7 +37,11 @@ pub struct ImportArgs {
 }
 
 pub fn run(args: ImportArgs) -> Result<()> {
-    let content = load_text(std::path::Path::new(&args.filename))?;
+    let content = load_text_with_limit(
+        std::path::Path::new(&args.filename),
+        MAX_KV_ENC_FILE_SIZE,
+        "dotenv file",
+    )?;
     let options = resolve_options(&args.common);
     let (outcome, entry_count) = run_with_trust_store_reset_recovery(
         &options,

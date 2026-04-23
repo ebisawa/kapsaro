@@ -166,3 +166,29 @@ fn test_add_member_invalid_attestation_error() {
     let result = add_member_from_file(&workspace_dir2, &export_file, false);
     assert!(result.is_err());
 }
+
+#[cfg(unix)]
+#[test]
+fn test_add_member_rejects_symlink_input_file() {
+    use std::os::unix::fs::symlink;
+
+    let (_temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
+
+    let alice_key_path = workspace_dir.join("members/active/alice@example.com.json");
+    let export_dir = TempDir::new().unwrap();
+    let export_file = export_dir.path().join("alice.json");
+    symlink(&alice_key_path, &export_file).unwrap();
+
+    let temp_dir2 = TempDir::new().unwrap();
+    let workspace_dir2 = temp_dir2.path().join("workspace");
+    fs::create_dir_all(workspace_dir2.join("members/active")).unwrap();
+    fs::create_dir_all(workspace_dir2.join("members/incoming")).unwrap();
+
+    let result = add_member_from_file(&workspace_dir2, &export_file, false);
+    assert!(result.is_err());
+    let message = result.unwrap_err().to_string();
+    assert!(
+        message.contains("symlink"),
+        "unexpected error for symlink input: {message}"
+    );
+}

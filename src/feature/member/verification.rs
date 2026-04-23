@@ -19,17 +19,17 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
+struct VerifiedMemberSubject {
+    member_id: String,
+    public_key: PublicKey,
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct VerifiedMemberFile {
     pub member_id: String,
     pub public_key: PublicKey,
     pub warnings: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-struct VerifiedMemberCandidate {
-    member_id: String,
-    public_key: PublicKey,
-    warnings: Vec<String>,
 }
 
 pub fn load_and_verify_member_file(
@@ -37,36 +37,73 @@ pub fn load_and_verify_member_file(
     expected_member_id: Option<&str>,
     debug: bool,
 ) -> Result<VerifiedMemberFile> {
+    load_verified_member_subject_from_file(member_file, expected_member_id, debug).map(Into::into)
+}
+
+impl From<VerifiedMemberSubject> for VerifiedMemberFile {
+    fn from(subject: VerifiedMemberSubject) -> Self {
+        Self {
+            member_id: subject.member_id,
+            public_key: subject.public_key,
+            warnings: subject.warnings,
+        }
+    }
+}
+
+impl VerifiedMemberSubject {
+    fn new(member_id: String, public_key: PublicKey, warnings: Vec<String>) -> Self {
+        Self {
+            member_id,
+            public_key,
+            warnings,
+        }
+    }
+}
+
+fn load_verified_member_subject_from_file(
+    member_file: &Path,
+    expected_member_id: Option<&str>,
+    debug: bool,
+) -> Result<VerifiedMemberSubject> {
     let fallback_member_id = expected_member_id
         .map(str::to_string)
         .unwrap_or_else(|| member_id_from_path(member_file));
     let public_key = load_member_file_from_path(member_file)?;
 
-    if public_key.protected.member_id != fallback_member_id {
-        return Err(Error::InvalidArgument {
-            message: format!(
-                "Member handle mismatch in {}: expected '{}', found '{}'",
-                display_path_relative_to_cwd(member_file),
-                fallback_member_id,
-                public_key.protected.member_id
-            ),
-        });
-    }
-
+    validate_member_file_member_id(member_file, &fallback_member_id, &public_key)?;
     let verified = verify_public_key_for_verification_context(
         &public_key,
         debug,
         WORKSPACE_MEMBER_FILE_CONTEXT,
     )?;
-    Ok(VerifiedMemberFile {
-        member_id: verified
+    Ok(VerifiedMemberSubject::new(
+        verified
             .verified_public_key
             .document
             .protected
             .member_id
             .clone(),
         public_key,
-        warnings: verified.warnings,
+        verified.warnings,
+    ))
+}
+
+fn validate_member_file_member_id(
+    member_file: &Path,
+    expected_member_id: &str,
+    public_key: &PublicKey,
+) -> Result<()> {
+    if public_key.protected.member_id == expected_member_id {
+        return Ok(());
+    }
+
+    Err(Error::InvalidArgument {
+        message: format!(
+            "Member handle mismatch in {}: expected '{}', found '{}'",
+            display_path_relative_to_cwd(member_file),
+            expected_member_id,
+            public_key.protected.member_id
+        ),
     })
 }
 
@@ -124,92 +161,97 @@ pub async fn verify_member_files(
     member_files: &[std::path::PathBuf],
     verbose: bool,
 ) -> Vec<VerificationResult> {
-    let mut results = Vec::new();
-    for member_file in member_files {
-        let result = verify_member_file_path(member_file, verbose).await;
-        results.push(result);
-    }
-    results
-}
-
-async fn verify_member_file_path(member_file: &Path, verbose: bool) -> VerificationResult {
-    let fallback_member_id = member_id_from_path(member_file);
-    let candidate = match build_verified_candidate_from_file(member_file, verbose) {
-        Ok(candidate) => candidate,
-        Err(e) => return build_offline_verification_failure(&fallback_member_id, e, false),
-    };
-    verify_verified_candidate_online(&candidate, verbose).await
+    verify_verified_member_subjects(
+        member_files,
+        verbose,
+        |member_file, verbose| {
+            load_verified_member_subject_from_file(
+                member_file,
+                Some(&member_id_from_path(member_file)),
+                verbose,
+            )
+        },
+        |member_file, error| {
+            build_offline_verification_failure(&member_id_from_path(member_file), error, false)
+        },
+    )
+    .await
 }
 
 async fn verify_public_key_candidates(
     public_keys: &[PublicKey],
     verbose: bool,
 ) -> Result<Vec<VerificationResult>> {
-    let mut results = Vec::new();
-    for public_key in public_keys {
-        let candidate = match build_verified_candidate_from_public_key(public_key, verbose) {
-            Ok(candidate) => candidate,
-            Err(e) => {
-                results.push(build_offline_verification_failure(
-                    &public_key.protected.member_id,
-                    e,
-                    has_github_claim(public_key),
-                ));
-                continue;
-            }
-        };
-        results.push(verify_verified_candidate_online(&candidate, verbose).await);
-    }
-    Ok(results)
-}
-
-fn build_verified_candidate_from_file(
-    member_file: &Path,
-    verbose: bool,
-) -> Result<VerifiedMemberCandidate> {
-    let verified = load_and_verify_member_file(
-        member_file,
-        Some(&member_id_from_path(member_file)),
+    Ok(verify_verified_member_subjects(
+        public_keys,
         verbose,
-    )?;
-    Ok(VerifiedMemberCandidate {
-        member_id: verified.member_id,
-        public_key: verified.public_key,
-        warnings: verified.warnings,
-    })
+        build_verified_member_subject_from_public_key,
+        |public_key, error| {
+            build_offline_verification_failure(
+                &public_key.protected.member_id,
+                error,
+                has_github_claim(public_key),
+            )
+        },
+    )
+    .await)
 }
 
-fn build_verified_candidate_from_public_key(
+fn build_verified_member_subject_from_public_key(
     public_key: &PublicKey,
     verbose: bool,
-) -> Result<VerifiedMemberCandidate> {
+) -> Result<VerifiedMemberSubject> {
     let verified = verify_public_key_for_verification_context(
         public_key,
         verbose,
         MEMBER_VERIFICATION_INPUT_CONTEXT,
     )?;
-    Ok(VerifiedMemberCandidate {
-        member_id: public_key.protected.member_id.clone(),
-        public_key: public_key.clone(),
-        warnings: verified.warnings,
-    })
+    Ok(VerifiedMemberSubject::new(
+        public_key.protected.member_id.clone(),
+        public_key.clone(),
+        verified.warnings,
+    ))
 }
 
-async fn verify_verified_candidate_online(
-    candidate: &VerifiedMemberCandidate,
+async fn verify_verified_member_subjects<T, Build, Failure>(
+    items: &[T],
+    verbose: bool,
+    mut build_subject: Build,
+    mut build_failure: Failure,
+) -> Vec<VerificationResult>
+where
+    Build: FnMut(&T, bool) -> Result<VerifiedMemberSubject>,
+    Failure: FnMut(&T, Error) -> VerificationResult,
+{
+    let mut results = Vec::new();
+    for item in items {
+        let subject = match build_subject(item, verbose) {
+            Ok(subject) => subject,
+            Err(error) => {
+                results.push(build_failure(item, error));
+                continue;
+            }
+        };
+        results.push(verify_member_subject_online(&subject, verbose).await);
+    }
+    results
+}
+
+async fn verify_member_subject_online(
+    subject: &VerifiedMemberSubject,
     verbose: bool,
 ) -> VerificationResult {
-    let result = match verify_github_account(&candidate.public_key, verbose, None).await {
+    let result = match verify_github_account(&subject.public_key, verbose, None).await {
         Ok(result) => result,
         Err(e) => VerificationResult::failed(
-            &candidate.member_id,
+            &subject.member_id,
             format!("Online verification error: {}", e.user_message()),
             None,
-            has_github_claim(&candidate.public_key),
+            has_github_claim(&subject.public_key),
         ),
     };
 
-    append_verification_warnings(result, &candidate.warnings)
+    append_verification_warnings(result, &subject.warnings)
 }
 
 fn list_verifiable_member_files(

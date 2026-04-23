@@ -6,25 +6,36 @@
 use crate::io::ssh::SshError;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::Result;
-use ssh_key::PublicKey;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentIdentity {
+    key_blob: Vec<u8>,
+    comment: String,
+}
+
+impl AgentIdentity {
+    pub fn new(key_blob: Vec<u8>, comment: String) -> Self {
+        Self { key_blob, comment }
+    }
+
+    pub fn key_blob(&self) -> &[u8] {
+        &self.key_blob
+    }
+
+    #[allow(dead_code)]
+    pub fn comment(&self) -> &str {
+        &self.comment
+    }
+}
 
 /// Validate that the agent has at least one key loaded
 pub fn validate_agent_has_keys(
-    client: &mut ssh_agent_client_rs::Client,
+    identities: &[AgentIdentity],
     socket_path: &std::path::Path,
 ) -> Result<()> {
-    let identities = client.list_all_identities().map_err(|e| {
-        crate::Error::from(SshError::operation_failed_with_source(
-            format!("ssh-agent list identities failed: {}", e),
-            e,
-        ))
-    })?;
-
-    let total = identities.len();
-
     // If the agent is reachable but has no identities, signing will always fail.
     // Fail fast with a more actionable error than the agent's generic "Failure".
-    if total == 0 {
+    if identities.is_empty() {
         let socket_display = display_path_relative_to_cwd(socket_path);
         return Err(SshError::operation_failed(format!(
             "ssh-agent is reachable but has no keys loaded.\n\
@@ -44,21 +55,10 @@ Note: This agent socket was resolved from ~/.ssh/config IdentityAgent or SSH_AUT
 ///
 /// Compares key data only, ignoring comments which may differ between
 /// the local .pub file and the agent's stored identity.
-pub fn find_key_in_agent(
-    identities: &[ssh_agent_client_rs::Identity],
-    public_key: &PublicKey,
-) -> Result<bool> {
-    for ident in identities {
-        match ident {
-            ssh_agent_client_rs::Identity::PublicKey(pk) => {
-                if pk.as_ref().as_ref().key_data() == public_key.key_data() {
-                    return Ok(true);
-                }
-            }
-            ssh_agent_client_rs::Identity::Certificate(_cert) => {}
-        }
-    }
-    Ok(false)
+pub fn find_key_in_agent(identities: &[AgentIdentity], public_key_blob: &[u8]) -> Result<bool> {
+    Ok(identities
+        .iter()
+        .any(|identity| identity.key_blob() == public_key_blob))
 }
 
 /// Validate that the agent has the requested key and provide helpful error message

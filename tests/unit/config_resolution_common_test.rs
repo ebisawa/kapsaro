@@ -82,3 +82,43 @@ fn test_resolve_ssh_add_path_ignores_old_config_key() {
 
     assert_eq!(result, "ssh-add");
 }
+
+#[test]
+#[serial]
+fn test_resolve_string_required_uses_default_when_unset() {
+    let _guard = EnvGuard::new(&["SECRETENV_TEST_STRING"]);
+    env::remove_var("SECRETENV_TEST_STRING");
+    let temp = TempDir::new().unwrap();
+
+    let result = super::resolve_string_required(
+        None,
+        Some("SECRETENV_TEST_STRING"),
+        "test_value",
+        Some(temp.path()),
+        "fallback".to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(result, "fallback");
+}
+
+#[test]
+#[serial]
+fn test_resolve_string_with_priority_prefers_env_over_config() {
+    let _guard = EnvGuard::new(&["SECRETENV_TEST_STRING"]);
+    let temp = TempDir::new().unwrap();
+    let config_path = temp.path().join("config.toml");
+    fs::write(&config_path, "test_value = \"from-config\"\n").unwrap();
+    env::set_var("SECRETENV_TEST_STRING", "from-env");
+
+    let result = super::resolve_string_with_priority(
+        None,
+        Some("SECRETENV_TEST_STRING"),
+        "test_value",
+        Some(temp.path()),
+        Some("fallback".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(result, Some("from-env".to_string()));
+}

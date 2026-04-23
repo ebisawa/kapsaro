@@ -4,6 +4,7 @@
 //! Unit tests for keystore active key management
 
 use secretenv::io::keystore::active::{clear_active_kid, load_active_kid, set_active_kid};
+use secretenv::support::limits::MAX_ACTIVE_KID_FILE_SIZE;
 use tempfile::TempDir;
 
 #[test]
@@ -57,6 +58,39 @@ fn test_load_active_kid_invalid_format() {
 
     let err = load_active_kid(member_id, keystore_root).unwrap_err();
     assert!(err.to_string().contains("Crockford Base32"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_load_active_kid_rejects_symlinked_active_file() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().unwrap();
+    let keystore_root = temp.path();
+    let member_id = "alice@example.com";
+    let active_path = keystore_root.join(member_id).join("active");
+    let target = keystore_root.join("target-active");
+    std::fs::create_dir_all(active_path.parent().unwrap()).unwrap();
+    std::fs::write(&target, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD\n").unwrap();
+    symlink(&target, &active_path).unwrap();
+
+    let err = load_active_kid(member_id, keystore_root).unwrap_err();
+
+    assert!(err.to_string().contains("symlink"));
+}
+
+#[test]
+fn test_load_active_kid_rejects_oversized_file() {
+    let temp = TempDir::new().unwrap();
+    let keystore_root = temp.path();
+    let member_id = "alice@example.com";
+    let active_path = keystore_root.join(member_id).join("active");
+    std::fs::create_dir_all(active_path.parent().unwrap()).unwrap();
+    std::fs::write(&active_path, "A".repeat(MAX_ACTIVE_KID_FILE_SIZE + 1)).unwrap();
+
+    let err = load_active_kid(member_id, keystore_root).unwrap_err();
+
+    assert!(err.to_string().contains("maximum size limit"));
 }
 
 #[test]

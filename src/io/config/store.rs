@@ -6,11 +6,14 @@
 //! Provides functions to read and write configuration files as flat TOML key-value pairs.
 //! This follows PRD v3 specification for config.toml format.
 
-use crate::support::fs::{atomic, check_permission_chain, load_text, lock};
+use crate::support::fs::{atomic, check_permission_chain, load_text_with_limit, lock};
+use crate::support::limits::MAX_CONFIG_FILE_SIZE;
 use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::Path;
+
+const CONFIG_FILE_SUBJECT: &str = "config file";
 
 /// Load configuration from a TOML file as flat key-value pairs
 ///
@@ -34,16 +37,7 @@ pub fn load_config_file(path: &Path, base_dir: &Path) -> Result<BTreeMap<String,
         tracing::warn!("{}", warning);
     }
 
-    let content = load_text(path)?;
-
-    let table: toml::Table = toml::from_str(&content).map_err(|e| Error::Parse {
-        message: format!(
-            "Invalid TOML in config file '{}': {}",
-            display_path_relative_to_cwd(path),
-            e
-        ),
-        source: Some(Box::new(e)),
-    })?;
+    let table = load_toml_table(path)?;
 
     let mut config = BTreeMap::new();
     for (key, value) in table {
@@ -108,7 +102,8 @@ fn load_toml_table(path: &Path) -> Result<toml::Table> {
     if !path.exists() {
         return Ok(toml::Table::new());
     }
-    let content = load_text(path)?;
+
+    let content = load_text_with_limit(path, MAX_CONFIG_FILE_SIZE, CONFIG_FILE_SUBJECT)?;
     toml::from_str(&content).map_err(|e| Error::Parse {
         message: format!(
             "Invalid TOML in config file '{}': {}",

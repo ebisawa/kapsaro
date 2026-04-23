@@ -5,7 +5,7 @@
 
 use secretenv::support::fs::{
     check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted, list_dir,
-    load_text, load_text_with_limit,
+    load_bytes_with_limit, load_text, load_text_with_limit,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -211,4 +211,61 @@ fn test_check_permission_chain_rejects_path_outside_logical_root() {
 
     assert_eq!(warnings.len(), 1);
     assert!(warnings[0].contains("outside logical root"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_load_text_with_limit_rejects_symlink() {
+    use std::os::unix::fs::symlink;
+    let temp_dir = TempDir::new().unwrap();
+    let real_path = temp_dir.path().join("real.txt");
+    fs::write(&real_path, "hello").unwrap();
+    let link_path = temp_dir.path().join("link.txt");
+    symlink(&real_path, &link_path).unwrap();
+
+    let error = load_text_with_limit(&link_path, 64, "test file").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("refusing to read symlink"),
+        "unexpected error: {message}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_load_bytes_with_limit_rejects_fifo() {
+    use std::ffi::CString;
+    let temp_dir = TempDir::new().unwrap();
+    let fifo_path = temp_dir.path().join("pipe");
+    let c_path = CString::new(fifo_path.to_str().unwrap()).unwrap();
+    let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+    assert_eq!(rc, 0, "mkfifo failed");
+
+    let error = load_bytes_with_limit(&fifo_path, 64, "test file").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("refusing to read non-regular file"),
+        "unexpected error: {message}"
+    );
+}
+
+#[test]
+fn test_load_bytes_with_limit_caps_streaming_read() {
+    // A file whose metadata reports a small size but whose content is larger
+    // than the cap must still be rejected (streaming cap via Read::take).
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("big.bin");
+    let body: Vec<u8> = (0..256u16).flat_map(|i| [i as u8; 64]).collect();
+    fs::write(&file_path, &body).unwrap();
+
+    let error = load_bytes_with_limit(&file_path, 128, "capped read").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("exceeds maximum size limit"),
+        "unexpected error: {message}"
+    );
+    assert!(message.contains("capped read"));
 }

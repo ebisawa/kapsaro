@@ -16,6 +16,7 @@ use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
+use crate::support::validation::validate_kv_file_basename;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone)]
@@ -27,7 +28,13 @@ pub(crate) struct KvFileTarget {
 impl KvFileTarget {
     pub(crate) fn resolve(options: &CommonCommandOptions, file_name: Option<&str>) -> Result<Self> {
         let workspace_root = require_workspace(options, "kv access")?;
-        let name = file_name.unwrap_or(DEFAULT_KV_ENC_BASENAME);
+        let name = match file_name {
+            Some(supplied) => {
+                validate_kv_file_basename(supplied)?;
+                supplied
+            }
+            None => DEFAULT_KV_ENC_BASENAME,
+        };
         let file_path = workspace_root
             .secrets_dir()
             .join(format!("{name}{KV_ENC_EXTENSION}"));

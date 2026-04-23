@@ -176,7 +176,7 @@ fn check_explicit_workspace_dir(path: &Path) -> Option<WorkspaceRoot> {
 
 fn check_workspace(path: &Path) -> Option<WorkspaceRoot> {
     let secretenv_dir = path.join(".secretenv");
-    if secretenv_dir.is_dir() {
+    if is_real_dir(&secretenv_dir) {
         validate_workspace_structure(&secretenv_dir)
     } else {
         None
@@ -187,7 +187,7 @@ fn validate_workspace_structure(path: &Path) -> Option<WorkspaceRoot> {
     let members_dir = path.join("members");
     let members_active = members_dir.join("active");
     let secrets_dir = path.join("secrets");
-    if members_dir.is_dir() && members_active.is_dir() && secrets_dir.is_dir() {
+    if is_real_dir(&members_dir) && is_real_dir(&members_active) && is_real_dir(&secrets_dir) {
         Some(WorkspaceRoot {
             root_path: path.to_path_buf(),
             has_marker_file: path.join(".secretenv-root").exists(),
@@ -196,4 +196,18 @@ fn validate_workspace_structure(path: &Path) -> Option<WorkspaceRoot> {
     } else {
         None
     }
+}
+
+/// Return true only when `path` is a real directory (not a directory symlink).
+///
+/// The workspace layout `members/active` / `secrets` is treated as non-trusted
+/// repository input. A directory symlink there could redirect later reads and
+/// writes outside the workspace, so we insist on `symlink_metadata`.
+fn is_real_dir(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|m| {
+            let t = m.file_type();
+            t.is_dir() && !t.is_symlink()
+        })
+        .unwrap_or(false)
 }

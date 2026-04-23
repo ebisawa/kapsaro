@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::paths::{members_dir, MemberStatus};
-use super::load::{load_json_files_in_dir, load_member_file_from_path};
+use super::load::{load_json_files_in_dir, load_verified_member_file_from_path};
 use super::save::member_status_dir_name;
 use crate::support::kid::kid_display_lossy;
 use crate::{Error, Result};
@@ -98,7 +98,7 @@ fn load_member_kid_candidates(
             {
                 continue;
             }
-            let member = load_member_file_from_path(&path)?;
+            let member = load_verified_member_file_from_path(&path)?;
             candidates.push(MemberKidCandidate {
                 member_id,
                 kid: member.protected.kid.clone(),

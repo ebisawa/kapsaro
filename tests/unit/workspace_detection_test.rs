@@ -410,3 +410,48 @@ fn test_check_workspace_secretenv_subdir_requires_active() {
     let expected = tmp.path().join(".secretenv").canonicalize().unwrap();
     assert_eq!(result.unwrap().root_path, expected);
 }
+
+#[cfg(unix)]
+#[test]
+fn test_check_workspace_rejects_symlinked_members_active() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".git")).unwrap();
+
+    // Build a valid workspace shape, then redirect members/active to an
+    // outside directory via a symlink.
+    let secretenv_dir = tmp.path().join(".secretenv");
+    fs::create_dir_all(secretenv_dir.join("members")).unwrap();
+    fs::create_dir_all(secretenv_dir.join("secrets")).unwrap();
+
+    let outside = tmp.path().join("external_active");
+    fs::create_dir(&outside).unwrap();
+    symlink(&outside, secretenv_dir.join("members").join("active")).unwrap();
+
+    let result = detect_workspace_root(tmp.path());
+    assert!(
+        result.is_err(),
+        "workspace with symlinked members/active must be rejected"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_check_workspace_rejects_symlinked_secrets() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".git")).unwrap();
+
+    let secretenv_dir = tmp.path().join(".secretenv");
+    fs::create_dir_all(secretenv_dir.join("members/active")).unwrap();
+
+    let outside = tmp.path().join("external_secrets");
+    fs::create_dir(&outside).unwrap();
+    symlink(&outside, secretenv_dir.join("secrets")).unwrap();
+
+    let result = detect_workspace_root(tmp.path());
+    assert!(
+        result.is_err(),
+        "workspace with symlinked secrets must be rejected"
+    );
+}

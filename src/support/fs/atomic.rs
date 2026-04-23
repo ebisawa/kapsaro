@@ -12,6 +12,42 @@ use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
 
+/// Reject a write whose parent directory is a symlink.
+///
+/// The write itself uses `NamedTempFile::new_in(parent).persist(target)`,
+/// which resolves `parent` as the OS sees it. If `parent` is a symlink to
+/// somewhere else, the atomic rename lands outside the caller's intended
+/// directory. Callers pass a workspace-derived parent, so a symlink here
+/// indicates the workspace has been tampered with.
+fn reject_symlinked_parent(parent: &Path) -> Result<()> {
+    match fs::symlink_metadata(parent) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(Error::InvalidOperation {
+            message: format!(
+                "refusing to write: parent directory is a symlink: {}",
+                display_path_relative_to_cwd(parent)
+            ),
+        }),
+        _ => Ok(()),
+    }
+}
+
+/// Reject a write whose target path is already a symlink.
+///
+/// `persist` would follow the symlink and overwrite its target. For paths
+/// that live inside a non-trusted workspace this is the same escape vector
+/// as a symlinked parent.
+fn reject_symlinked_target(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(Error::InvalidOperation {
+            message: format!(
+                "refusing to write: target is a symlink: {}",
+                display_path_relative_to_cwd(path)
+            ),
+        }),
+        _ => Ok(()),
+    }
+}
+
 /// Ensure parent directory exists
 fn ensure_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -71,9 +107,15 @@ pub fn save_text_restricted(path: &Path, content: &str) -> Result<()> {
     set_file_permission_0600(path)
 }
 
-/// Save bytes atomically
+/// Save bytes atomically.
+///
+/// Refuses to write when either `path` itself or its parent directory is a
+/// symlink, so that an adversary cannot redirect writes out of a verified
+/// workspace by planting a symlink at `members/active/` or `secrets/`.
 pub fn save_bytes(path: &Path, data: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    reject_symlinked_parent(parent)?;
+    reject_symlinked_target(path)?;
     let mut temp = NamedTempFile::new_in(parent)
         .map_err(|e| Error::io_with_source(format!("Failed to create temp file: {}", e), e))?;
 

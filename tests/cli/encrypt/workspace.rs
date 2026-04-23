@@ -23,13 +23,17 @@ use std::fs;
 use secretenv::io::trust::paths::trust_store_file_path;
 
 #[test]
-fn test_encrypt_uses_member_file_contents_not_filename() {
-    // Setup test workspace with alice
+fn test_encrypt_rejects_filename_content_mismatch() {
+    // When a member file's stem does not match protected.member_id, the
+    // encrypt path must refuse to run. Otherwise a PR that only edits the
+    // existing alice.json could smuggle bob into the current member set.
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
     let members_dir = workspace_dir.join("members/active");
     let secrets_dir = workspace_dir.join("secrets");
 
-    // Generate another key and tamper with member_id in the public key
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+
     let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
         .unwrap()
         .trim()
@@ -37,26 +41,21 @@ fn test_encrypt_uses_member_file_contents_not_filename() {
     let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
     let (_bob_private, mut bob_public) =
         keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
-    // Tamper: filename is alice but content has bob's member_id
     bob_public.protected.member_id = BOB_MEMBER_ID.to_string();
+    // After the trust store is built, an attacker-controlled commit plants
+    // bob's public key under alice's filename. The encrypt path must refuse
+    // the mismatched document rather than silently recipient-swap.
     let alice_member_file = members_dir.join(format!("{}.json", ALICE_MEMBER_ID));
     fs::write(
         &alice_member_file,
         serde_json::to_string_pretty(&bob_public).unwrap(),
     )
     .unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
-    // Create test binary file
     let input_path = workspace_dir.join("test.bin");
-    let input_content = b"binary test content";
-    fs::write(&input_path, input_content).unwrap();
-
-    // Create output path
+    fs::write(&input_path, b"binary test content").unwrap();
     let encrypted_path = secrets_dir.join("test.encrypted");
 
-    // Encrypt should use the document content as the source of truth.
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
     common_opts.workspace = Some(workspace_dir.clone());
@@ -71,18 +70,16 @@ fn test_encrypt_uses_member_file_contents_not_filename() {
         input: Some(input_path.clone()),
     };
 
-    encrypt::run(encrypt_args).unwrap();
-
-    let encrypted = fs::read_to_string(&encrypted_path).unwrap();
-    let document: serde_json::Value = serde_json::from_str(&encrypted).unwrap();
-    let recipients = document["protected"]["wrap"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item["rid"].as_str().unwrap().to_string())
-        .collect::<Vec<_>>();
-
-    assert_eq!(recipients, vec![BOB_MEMBER_ID.to_string()]);
+    let err = encrypt::run(encrypt_args).expect_err("encrypt must reject stem/content mismatch");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Member handle mismatch"),
+        "unexpected error: {msg}"
+    );
+    assert!(
+        !encrypted_path.exists(),
+        "rejected encrypt must not produce an output file"
+    );
 }
 
 #[test]

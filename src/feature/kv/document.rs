@@ -56,7 +56,7 @@ impl WrapSource {
     }
 }
 
-pub struct UnsignedKvDocument {
+pub struct KvDocumentDraft {
     pub(crate) head: KvHeader,
     pub(crate) wrap: WrapSource,
     pub(crate) entries: Vec<KvDocumentEntry>,
@@ -64,7 +64,7 @@ pub struct UnsignedKvDocument {
     pub(crate) debug: bool,
 }
 
-impl UnsignedKvDocument {
+impl KvDocumentDraft {
     pub fn head(&self) -> &KvHeader {
         &self.head
     }
@@ -117,7 +117,7 @@ impl UnsignedKvDocument {
     }
 
     pub fn update_timestamp(&mut self) -> Result<()> {
-        self.head.updated_at = crate::support::time::current_timestamp()?;
+        self.head.updated_at = crate::support::time::generate_current_timestamp()?;
         Ok(())
     }
 

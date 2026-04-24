@@ -45,7 +45,7 @@ impl MockSshAdd {
     fn err(message: &str) -> Self {
         Self {
             output: Err(secretenv::Error::from(
-                secretenv::io::ssh::SshError::operation_failed(message),
+                secretenv::io::ssh::SshError::build_operation_failed_error(message),
             )),
         }
     }
@@ -56,7 +56,7 @@ impl SshAdd for MockSshAdd {
         match &self.output {
             Ok(s) => Ok(s.clone()),
             Err(e) => Err(secretenv::Error::from(
-                secretenv::io::ssh::SshError::operation_failed(e.to_string()),
+                secretenv::io::ssh::SshError::build_operation_failed_error(e.to_string()),
             )),
         }
     }
@@ -79,7 +79,7 @@ impl SshKeygen for MockSshKeygen {
         match &self.derived_public_key {
             Ok(value) => Ok(value.clone()),
             Err(error) => Err(secretenv::Error::from(
-                secretenv::io::ssh::SshError::operation_failed(error.to_string()),
+                secretenv::io::ssh::SshError::build_operation_failed_error(error.to_string()),
             )),
         }
     }

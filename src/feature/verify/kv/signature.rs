@@ -24,14 +24,14 @@ pub fn verify_kv_document_report(content: &str, debug: bool) -> SignatureVerific
         Ok(doc) => {
             let signature = match parse_kv_signature_token(&doc.signature_token) {
                 Ok(sig) => sig,
-                Err(e) => return build_error_report(e.user_message().to_string()),
+                Err(e) => return build_error_report(e.format_user_message().to_string()),
             };
             build_signature_verification_report(
                 load_verifying_key_from_signature(&signature, debug),
                 |loaded| verify_kv_signature(&doc, &loaded.verifying_key, &signature, debug),
             )
         }
-        Err(e) => build_error_report(e.user_message().to_string()),
+        Err(e) => build_error_report(e.format_user_message().to_string()),
     }
 }
 

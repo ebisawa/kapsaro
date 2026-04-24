@@ -6,7 +6,7 @@
 //! This module provides shared helper functions and constants used across
 //! CLI integration tests to reduce code duplication and improve maintainability.
 
-use crate::test_utils::create_temp_ssh_keypair_in_dir;
+use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 pub use crate::test_utils::{
     ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID, EVE_MEMBER_ID,
     FRANK_MEMBER_ID, TEST_MEMBER_ID,
@@ -137,7 +137,7 @@ pub fn set_ssh_key_from_temp_dir(common_opts: &mut CommonOptions, temp_dir: &Tem
 pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     std::fs::create_dir_all(workspace_dir.path().join("members")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
@@ -164,10 +164,10 @@ pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
 /// Helper to create a temporary SSH Ed25519 keypair for testing
 ///
 /// Returns: (temp_dir, private_key_path, public_key_path, public_key_content)
-pub fn create_temp_ssh_keypair() -> (TempDir, PathBuf, PathBuf, String) {
+pub fn generate_temp_ssh_keypair() -> (TempDir, PathBuf, PathBuf, String) {
     let temp_dir = TempDir::new().unwrap();
     let (private_key_path, public_key_path, public_key_content) =
-        create_temp_ssh_keypair_in_dir(&temp_dir);
+        generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     (
         temp_dir,
@@ -224,7 +224,7 @@ fn wait_for_prompt(
 ) {
     let deadline = Instant::now() + timeout;
     loop {
-        read_available(master, transcript);
+        load_available(master, transcript);
         if String::from_utf8_lossy(transcript).contains(prompt) {
             return;
         }
@@ -256,9 +256,9 @@ fn wait_for_exit(
 ) -> ExitStatus {
     let deadline = Instant::now() + timeout;
     loop {
-        read_available(master, transcript);
+        load_available(master, transcript);
         if let Some(status) = child.try_wait().expect("child status check must succeed") {
-            read_available(master, transcript);
+            load_available(master, transcript);
             return status;
         }
 
@@ -274,7 +274,7 @@ fn wait_for_exit(
 }
 
 #[cfg(unix)]
-fn read_available(master: &mut File, transcript: &mut Vec<u8>) {
+fn load_available(master: &mut File, transcript: &mut Vec<u8>) {
     let mut buffer = [0_u8; 1024];
     loop {
         match master.read(&mut buffer) {

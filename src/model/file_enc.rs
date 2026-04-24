@@ -100,7 +100,7 @@ pub struct FilePayloadCiphertext {
 
 impl FileEncDocument {
     /// Returns a reference to the protected object for signature generation
-    pub fn protected_for_signing(&self) -> &FileEncDocumentProtected {
+    pub fn extract_protected_for_signing(&self) -> &FileEncDocumentProtected {
         &self.protected
     }
 

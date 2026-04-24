@@ -10,7 +10,7 @@ use clap::Args;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use crate::app::file::encrypt::{build_encrypt_file_command, execute_encrypt_file_command};
+use crate::app::file::encrypt::{execute_encrypt_file_command, resolve_encrypt_file_command};
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_write_command_with_trust, WriteCommandLabels,
@@ -32,7 +32,7 @@ pub struct EncryptArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Output file path
     #[arg(long, short = 'o', conflicts_with = "stdout")]
@@ -62,12 +62,12 @@ pub fn run(args: EncryptArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let encrypted = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_id.clone())?;
-            let command = build_encrypt_file_command(
+            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let command = resolve_encrypt_file_command(
                 &options,
-                args.member_id.clone(),
+                args.member_handle.clone(),
                 input_bytes.clone(),
                 ssh_ctx,
             )?;
@@ -97,5 +97,7 @@ fn resolve_encrypt_input_bytes(input_path: Option<&PathBuf>, from_stdin: bool) -
     input_path
         .map(|path| load_bytes(path))
         .transpose()?
-        .ok_or_else(|| Error::invalid_argument("INPUT is required unless --stdin is used"))
+        .ok_or_else(|| {
+            Error::build_invalid_argument_error("INPUT is required unless --stdin is used")
+        })
 }

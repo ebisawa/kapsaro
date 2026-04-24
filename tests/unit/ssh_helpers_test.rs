@@ -3,4 +3,4 @@
 
 //! SSH helper function tests.
 //!
-//! `build_fingerprint_display` の削除に伴い、このテストは現在不要です。
+//! Fingerprint display helper tests are no longer needed.

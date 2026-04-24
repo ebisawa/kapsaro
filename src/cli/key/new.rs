@@ -4,7 +4,7 @@
 //! Key generation (key new) implementation
 
 use crate::app::key::generate::generate_key_command;
-use crate::cli::common::command::{resolve_options, resolve_required_member_id};
+use crate::cli::common::command::{resolve_options, resolve_required_member_handle};
 use crate::cli::common::output::text::key::print_generated_key_summary;
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt::resolve_key_generation_github_user;
@@ -16,7 +16,7 @@ use super::NewArgs;
 /// Main entry point for key generation
 pub fn run(args: NewArgs) -> Result<()> {
     let options = resolve_options(&args.common);
-    let member_id = resolve_required_member_id(&options, args.member_id.clone(), false)?;
+    let member_id = resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
     let github_user = resolve_key_generation_github_user(
         true,
         args.github_user.clone(),

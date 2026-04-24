@@ -21,13 +21,15 @@ macro_rules! impl_fixed_size_type {
             /// Returns an error if the slice is not exactly $size bytes
             pub fn from_slice(bytes: &[u8]) -> $crate::Result<Self> {
                 if bytes.len() != $size {
-                    return Err($crate::crypto::CryptoError::invalid_key(format!(
-                        "Invalid {} length: expected {} bytes, got {}",
-                        $type_name,
-                        $size,
-                        bytes.len()
-                    ))
-                    .into());
+                    return Err(
+                        $crate::crypto::CryptoError::build_invalid_key_error(format!(
+                            "Invalid {} length: expected {} bytes, got {}",
+                            $type_name,
+                            $size,
+                            bytes.len()
+                        ))
+                        .into(),
+                    );
                 }
                 let mut out = [0u8; $size];
                 out.copy_from_slice(bytes);
@@ -44,13 +46,15 @@ macro_rules! impl_fixed_size_type {
             /// Returns an error if the slice is not exactly $size bytes
             pub fn from_slice(bytes: &[u8]) -> $crate::Result<Self> {
                 if bytes.len() != $size {
-                    return Err($crate::crypto::CryptoError::invalid_key(format!(
-                        "Invalid {} length: expected {} bytes, got {}",
-                        $type_name,
-                        $size,
-                        bytes.len()
-                    ))
-                    .into());
+                    return Err(
+                        $crate::crypto::CryptoError::build_invalid_key_error(format!(
+                            "Invalid {} length: expected {} bytes, got {}",
+                            $type_name,
+                            $size,
+                            bytes.len()
+                        ))
+                        .into(),
+                    );
                 }
                 let mut out = ::zeroize::Zeroizing::new([0u8; $size]);
                 out.as_mut().copy_from_slice(bytes);

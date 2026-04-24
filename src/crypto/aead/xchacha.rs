@@ -8,7 +8,7 @@
 //! - Extended nonce space prevents nonce reuse
 //! - ChaCha20 stream cipher + Poly1305 MAC
 
-use crate::crypto::crypto_operation_failed;
+use crate::crypto::build_crypto_operation_error;
 use crate::crypto::rng::fill_random_bytes;
 use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 use crate::crypto::types::keys::XChaChaKey;
@@ -52,7 +52,7 @@ pub fn encrypt(
     cipher
         .encrypt(nonce.as_bytes().into(), payload)
         .map(Ciphertext::from)
-        .map_err(|_| crypto_operation_failed("XChaCha20-Poly1305 encryption failed"))
+        .map_err(|_| build_crypto_operation_error("XChaCha20-Poly1305 encryption failed"))
 }
 
 /// Decrypt ciphertext with XChaCha20-Poly1305 (low-level API with explicit nonce)
@@ -88,7 +88,7 @@ pub fn decrypt(
     cipher
         .decrypt(nonce.as_bytes().into(), payload)
         .map(|v| Zeroizing::new(Plaintext::from(v)))
-        .map_err(|_| crypto_operation_failed("XChaCha20-Poly1305 decryption failed"))
+        .map_err(|_| build_crypto_operation_error("XChaCha20-Poly1305 decryption failed"))
 }
 
 /// Encrypt plaintext with XChaCha20-Poly1305 (high-level API with auto-generated nonce)

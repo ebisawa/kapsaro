@@ -102,7 +102,7 @@ fn test_existing_private_key_document_roundtrip() {
             created_at: "2024-01-15T00:00:00Z".to_string(),
             expires_at: "2025-01-15T00:00:00Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "bm9uY2U".to_string(),
             ct: "Y3QNCg".to_string(),
         },

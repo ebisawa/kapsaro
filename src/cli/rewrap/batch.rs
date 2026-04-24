@@ -14,8 +14,8 @@ use crate::cli::common::trust::{
 };
 use crate::Result;
 
-pub(crate) fn execute_batch_rewrap(args: &RewrapArgs) -> Result<()> {
-    let (options, execution) = resolve_execution_input(&args.common, args.member_id.clone())?;
+pub(crate) fn run_batch_rewrap(args: &RewrapArgs) -> Result<()> {
+    let (options, execution) = resolve_execution_input(&args.common, args.member_handle.clone())?;
     let outcome = execute_rewrap_batch_command(
         RewrapBatchCommandInput {
             options,

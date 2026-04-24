@@ -6,7 +6,7 @@ use clap::Parser;
 use secretenv::cli::{Cli, Commands};
 
 #[test]
-fn test_cli_set_parses_member_id_option() {
+fn test_cli_set_parses_member_handle_option() {
     let cli = Cli::try_parse_from([
         "secretenv",
         "set",
@@ -19,14 +19,14 @@ fn test_cli_set_parses_member_id_option() {
 
     match cli.command {
         Commands::Set(args) => {
-            assert_eq!(args.member_id.as_deref(), Some("ebisawa"));
+            assert_eq!(args.member_handle.as_deref(), Some("ebisawa"));
         }
         _ => panic!("expected set command"),
     }
 }
 
 #[test]
-fn test_cli_member_verify_parses_member_id_option() {
+fn test_cli_member_verify_parses_member_handle_option() {
     let cli = Cli::try_parse_from([
         "secretenv",
         "member",
@@ -43,7 +43,7 @@ fn test_cli_member_verify_parses_member_id_option() {
 }
 
 #[test]
-fn test_cli_trust_remove_parses_member_id_option() {
+fn test_cli_trust_remove_parses_member_handle_option() {
     let cli = Cli::try_parse_from([
         "secretenv",
         "trust",
@@ -58,7 +58,7 @@ fn test_cli_trust_remove_parses_member_id_option() {
 }
 
 #[test]
-fn test_cli_trust_purge_parses_member_id_option() {
+fn test_cli_trust_purge_parses_member_handle_option() {
     let cli = Cli::try_parse_from([
         "secretenv",
         "trust",

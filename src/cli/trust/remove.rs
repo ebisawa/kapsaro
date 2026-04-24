@@ -16,7 +16,7 @@ use super::RemoveArgs;
 
 pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_id = args.member_id.clone();
+    let member_id = args.member_handle.clone();
     let result = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, member_id.clone()),

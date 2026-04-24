@@ -9,7 +9,7 @@ pub(crate) mod kv;
 mod formatter;
 pub mod verification;
 
-use crate::format::content::EncryptedContent;
+use crate::format::content::EncContent;
 use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -31,13 +31,13 @@ pub(crate) fn build_section(title: impl Into<String>, lines: Vec<String>) -> Ins
     }
 }
 
-pub fn build_inspect_view(content: &EncryptedContent) -> Result<InspectOutput> {
+pub fn build_inspect_view(content: &EncContent) -> Result<InspectOutput> {
     match content {
-        EncryptedContent::FileEnc(file_content) => {
+        EncContent::FileEnc(file_content) => {
             let doc = file_content.parse()?;
             Ok(file::build_file_inspect_output(&doc))
         }
-        EncryptedContent::KvEnc(kv_content) => {
+        EncContent::KvEnc(kv_content) => {
             let doc = kv_content.parse()?;
             kv::build_kv_inspect_output(&doc)
         }

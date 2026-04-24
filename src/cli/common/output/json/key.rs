@@ -26,12 +26,12 @@ pub(crate) fn print_key_list(result: &KeyListView<'_>) -> Result<()> {
     let flattened = result
         .entries
         .iter()
-        .flat_map(|entry| entry.keys.iter().map(map_key_info))
+        .flat_map(|entry| entry.keys.iter().map(build_key_info_json_view))
         .collect::<Vec<_>>();
     print_json_output(&flattened)
 }
 
-fn map_key_info(key: &KeyInfoView<'_>) -> KeyInfoJsonView {
+fn build_key_info_json_view(key: &KeyInfoView<'_>) -> KeyInfoJsonView {
     KeyInfoJsonView {
         kid: key.kid.to_string(),
         member_id: key.member_id.to_string(),

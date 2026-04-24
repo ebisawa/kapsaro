@@ -3,7 +3,7 @@
 
 //! Unit tests for FileEncDocument model
 
-use crate::keygen_helpers::make_dummy_public_key;
+use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::model::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
@@ -12,7 +12,7 @@ use secretenv::model::identifiers::hpke;
 use secretenv::model::signature::ArtifactSignature;
 use uuid::Uuid;
 
-fn create_test_payload_envelope() -> FilePayload {
+fn build_test_payload_envelope() -> FilePayload {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FilePayload {
         protected: FilePayloadHeader {
@@ -44,14 +44,14 @@ fn test_file_enc_document_basic() {
                 ct: "ct_base64url".to_string(),
             }],
             removed_recipients: None,
-            payload: create_test_payload_envelope(),
+            payload: build_test_payload_envelope(),
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
             alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "signature_base64url".to_string(),
         },
     };
@@ -85,14 +85,14 @@ fn test_recipients_derived_from_wrap() {
                 },
             ],
             removed_recipients: None,
-            payload: create_test_payload_envelope(),
+            payload: build_test_payload_envelope(),
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
             alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "sig".to_string(),
         },
     };
@@ -113,14 +113,14 @@ fn test_payload_serialization() {
             sid,
             wrap: vec![],
             removed_recipients: None,
-            payload: create_test_payload_envelope(),
+            payload: build_test_payload_envelope(),
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
             alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "sig".to_string(),
         },
     };

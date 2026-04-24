@@ -7,9 +7,8 @@
 
 use super::ed25519_backend::Ed25519DirectBackend;
 use ed25519_dalek::SigningKey;
-use secretenv::feature::context::crypto::{
-    build_local_key_access, validate_ed25519_consistency, validate_okp_key, CryptoContext,
-};
+use secretenv::feature::context::crypto::{build_local_key_access, CryptoContext};
+use secretenv::feature::key::material::{validate_ed25519_consistency, validate_okp_key};
 use secretenv::feature::key::protection::encryption::decrypt_private_key;
 use secretenv::feature::verify::private_key::verify_private_key_matches_public_key;
 use secretenv::feature::verify::public_key::verify_public_key_with_attestation;

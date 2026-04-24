@@ -6,7 +6,7 @@
 use crate::io::keystore::active::load_active_kid;
 use crate::io::keystore::member::select_most_recent_kid;
 use crate::io::keystore::storage::list_kids;
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 use crate::support::kid::resolve_unique_kid;
 use crate::{Error, Result};
 use std::path::Path;
@@ -21,7 +21,7 @@ pub fn resolve_member_kid_query(
         Error::NotFound { .. } => Error::NotFound {
             message: format!(
                 "Specified kid '{}' not found for member '{}'",
-                kid_display_lossy(kid_query),
+                format_kid_display_lossy(kid_query),
                 member_id
             ),
         },

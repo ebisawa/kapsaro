@@ -3,7 +3,7 @@
 
 //! Schema-aware parsers for SecretEnv JSON documents and JSON tokens.
 
-use crate::format::schema::validator::{embedded_validator, Validator};
+use crate::format::schema::validator::{load_embedded_validator, Validator};
 use crate::format::token::decode_token_bytes;
 use crate::model::common::validate_wrap_items;
 use crate::model::file_enc::FileEncDocument;
@@ -12,14 +12,10 @@ use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
-use crate::support::fs::load_text_with_limit;
 use crate::support::json_limits::validate_json_limits;
-use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::support::path::display_path_relative_to_cwd;
 use crate::{Error, Result};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::path::Path;
 
 type ValidateJsonFn = fn(&Validator, &Value) -> Result<()>;
 
@@ -41,10 +37,6 @@ pub fn parse_public_key_bytes(bytes: &[u8], source_name: &str) -> Result<PublicK
     )
 }
 
-pub fn parse_public_key_file(path: &Path) -> Result<PublicKey> {
-    parse_json_document_file(path, "PublicKey", Validator::validate_public_key)
-}
-
 pub fn parse_private_key_str(content: &str, source_name: &str) -> Result<PrivateKey> {
     parse_json_document_str(
         content,
@@ -61,10 +53,6 @@ pub fn parse_private_key_bytes(bytes: &[u8], source_name: &str) -> Result<Privat
         "PrivateKey",
         Validator::validate_private_key,
     )
-}
-
-pub fn parse_private_key_file(path: &Path) -> Result<PrivateKey> {
-    parse_json_document_file(path, "PrivateKey", Validator::validate_private_key)
 }
 
 pub fn parse_file_enc_str(content: &str, source_name: &str) -> Result<FileEncDocument> {
@@ -87,15 +75,6 @@ pub fn parse_file_enc_bytes(bytes: &[u8], source_name: &str) -> Result<FileEncDo
     validate_file_enc_limits(doc)
 }
 
-pub fn parse_file_enc_file(path: &Path) -> Result<FileEncDocument> {
-    let doc = parse_json_document_file(
-        path,
-        "FileEncDocument",
-        Validator::validate_file_enc_document,
-    )?;
-    validate_file_enc_limits(doc)
-}
-
 pub fn parse_kv_head_token(token: &str) -> Result<KvHeader> {
     parse_json_token(token, "HEAD token", Validator::validate_kv_head)
 }
@@ -111,16 +90,6 @@ pub fn parse_kv_entry_token(token: &str) -> Result<KvEntryValue> {
 
 pub fn parse_kv_signature_token(token: &str) -> Result<ArtifactSignature> {
     parse_json_token(token, "SIG token", Validator::validate_artifact_signature)
-}
-
-fn parse_json_document_file<T>(path: &Path, kind: &str, validate: ValidateJsonFn) -> Result<T>
-where
-    T: DeserializeOwned,
-{
-    let source_name = display_path_relative_to_cwd(path);
-    let subject = format!("{} file", kind);
-    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, &subject)?;
-    parse_json_document_str(&content, &source_name, kind, validate)
 }
 
 fn parse_json_document_str<T>(
@@ -146,7 +115,7 @@ where
 {
     validate_json_limits(bytes)?;
     let value = parse_json_value(bytes, source_name, kind)?;
-    validate(embedded_validator()?, &value)?;
+    validate(load_embedded_validator()?, &value)?;
     deserialize_json_value(value, source_name, kind)
 }
 
@@ -157,7 +126,7 @@ where
     let (bytes, _) = decode_token_bytes(token, false, Some(token_name))?;
     validate_json_limits(&bytes)?;
     let value = parse_json_value(&bytes, token_name, token_name)?;
-    validate(embedded_validator()?, &value)?;
+    validate(load_embedded_validator()?, &value)?;
     deserialize_json_value(value, token_name, token_name)
 }
 

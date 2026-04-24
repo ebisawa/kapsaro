@@ -14,19 +14,21 @@ use crate::Result;
 pub fn decode_ssh_public_key_blob(ssh_pubkey: &str) -> Result<Vec<u8>> {
     let line = ssh_pubkey.trim();
     if line.is_empty() {
-        return Err(SshError::operation_failed("Public key line is empty").into());
+        return Err(SshError::build_operation_failed_error("Public key line is empty").into());
     }
 
     let fields: Vec<&str> = line.split_whitespace().collect();
     if fields.len() < 2 {
-        return Err(
-            SshError::operation_failed(format!("Invalid public key format: {}", line)).into(),
-        );
+        return Err(SshError::build_operation_failed_error(format!(
+            "Invalid public key format: {}",
+            line
+        ))
+        .into());
     }
 
     let key_type = fields[0];
     if key_type != KEY_TYPE_ED25519 {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Unsupported key type '{}': v1 only supports {}",
             key_type, KEY_TYPE_ED25519
         ))
@@ -34,7 +36,7 @@ pub fn decode_ssh_public_key_blob(ssh_pubkey: &str) -> Result<Vec<u8>> {
     }
 
     decode_base64_standard(fields[1], "base64").map_err(|e| {
-        crate::Error::from(SshError::operation_failed_with_source(
+        crate::Error::from(SshError::build_operation_failed_error_with_source(
             format!("Failed to decode base64: {}", e),
             e,
         ))

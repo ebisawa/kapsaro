@@ -7,7 +7,7 @@ use crate::model::signature::ArtifactSignature;
 use crate::model::verification::SignatureVerificationProof;
 use crate::Result;
 
-use super::key_loader::{load_verifying_key_from_signature, LoadedVerifyingKey};
+use super::key_loader::{load_verifying_key_from_signature, SignatureVerificationKey};
 
 pub(crate) fn verify_signature_with_loaded_key<Verify>(
     signature: &ArtifactSignature,
@@ -15,7 +15,7 @@ pub(crate) fn verify_signature_with_loaded_key<Verify>(
     verify: Verify,
 ) -> Result<SignatureVerificationProof>
 where
-    Verify: FnOnce(&LoadedVerifyingKey) -> Result<()>,
+    Verify: FnOnce(&SignatureVerificationKey) -> Result<()>,
 {
     let loaded = load_verifying_key_from_signature(signature, debug)?;
     verify(&loaded)?;
@@ -24,7 +24,7 @@ where
 
 fn build_signature_verification_proof(
     signature: &ArtifactSignature,
-    loaded: LoadedVerifyingKey,
+    loaded: SignatureVerificationKey,
 ) -> SignatureVerificationProof {
     SignatureVerificationProof::new_with_signer_public_key(
         loaded.member_id,

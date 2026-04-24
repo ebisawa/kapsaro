@@ -13,7 +13,7 @@ use crate::app::trust::evaluation::enforce_policy_strict_key_checking;
 use crate::app::trust::policy::{TrustPolicy, WriteTrustPolicy};
 use crate::app::trust::store::load_optional_trust_store_for_member;
 use crate::config::resolution::strict_key_checking::resolve_strict_key_checking;
-use crate::config::types::ResolvedStrictKeyChecking;
+use crate::config::types::StrictKeyCheckingResolution;
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
 use crate::feature::trust::judgment::{ActiveMemberSnapshot, SelfTrustSet};
 use crate::feature::verify::public_key::{
@@ -31,7 +31,7 @@ pub(crate) struct TrustContext {
     pub(crate) known_keys: Vec<KnownKey>,
     pub(crate) active_members_by_kid: BTreeMap<String, PublicKey>,
     pub(crate) self_trust: SelfTrustSet,
-    pub(crate) strict_key_checking: ResolvedStrictKeyChecking,
+    pub(crate) strict_key_checking: StrictKeyCheckingResolution,
     pub(crate) is_interactive: bool,
     pub(crate) permission_warnings: Vec<String>,
 }
@@ -132,7 +132,7 @@ pub(crate) struct CommandTrustSnapshot<P> {
     _policy: PhantomData<P>,
 }
 
-pub(crate) struct ReadTrustContextLoad {
+pub(crate) struct ReadTrustContextLoadResult {
     pub(crate) trust_ctx: TrustContext,
     pub(crate) warnings: Vec<String>,
 }
@@ -187,7 +187,7 @@ pub(crate) fn load_read_trust_context(
     self_member_id: &str,
     self_sig_x: Option<[u8; 32]>,
     debug: bool,
-) -> Result<ReadTrustContextLoad> {
+) -> Result<ReadTrustContextLoadResult> {
     let verified_active_members = load_active_member_index_for_read_trust(workspace_path, debug)?;
     let trust_ctx = load_trust_context(
         options,
@@ -197,7 +197,7 @@ pub(crate) fn load_read_trust_context(
     )?;
     let mut warnings = trust_ctx.permission_warnings.clone();
     warnings.extend(verified_active_members.warnings);
-    Ok(ReadTrustContextLoad {
+    Ok(ReadTrustContextLoadResult {
         trust_ctx,
         warnings,
     })
@@ -267,7 +267,7 @@ fn load_trust_context(
     options: &CommonCommandOptions,
     active_members_by_kid: BTreeMap<String, PublicKey>,
     self_member_id: &str,
-    current_self_sig_x: Option<[u8; 32]>,
+    derive_self_sig_x: Option<[u8; 32]>,
 ) -> Result<TrustContext> {
     let strict_key_checking = resolve_strict_key_checking();
     let is_interactive = tty::is_interactive();
@@ -276,7 +276,7 @@ fn load_trust_context(
         Some(loaded) => (loaded.protected.known_keys, loaded.warnings),
         None => (Vec::new(), Vec::new()),
     };
-    let self_trust = load_self_trust(options, self_member_id, current_self_sig_x)?;
+    let self_trust = load_self_trust(options, self_member_id, derive_self_sig_x)?;
 
     Ok(TrustContext {
         known_keys,
@@ -334,8 +334,8 @@ fn load_active_member_index_for_read_trust(
 fn load_self_trust(
     options: &CommonCommandOptions,
     self_member_id: &str,
-    current_self_sig_x: Option<[u8; 32]>,
+    derive_self_sig_x: Option<[u8; 32]>,
 ) -> Result<SelfTrustSet> {
     let keystore_root = options.resolve_keystore_root()?;
-    SelfTrustSet::try_new_with_keystore(self_member_id, current_self_sig_x, keystore_root)
+    SelfTrustSet::try_new_with_keystore(self_member_id, derive_self_sig_x, keystore_root)
 }

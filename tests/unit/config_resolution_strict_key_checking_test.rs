@@ -3,7 +3,9 @@
 
 //! Unit tests for SECRETENV_STRICT_KEY_CHECKING resolution
 
-use crate::config::types::{ResolvedStrictKeyChecking, StrictKeyChecking, StrictKeyCheckingSource};
+use crate::config::types::{
+    StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
+};
 use crate::test_utils::EnvGuard;
 
 use super::resolve_strict_key_checking;
@@ -14,7 +16,7 @@ fn test_strict_key_checking_default_is_yes() {
     std::env::remove_var("SECRETENV_STRICT_KEY_CHECKING");
     assert_eq!(
         resolve_strict_key_checking(),
-        ResolvedStrictKeyChecking::strict()
+        StrictKeyCheckingResolution::strict()
     );
 }
 
@@ -24,7 +26,7 @@ fn test_strict_key_checking_yes() {
     std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "yes");
     assert_eq!(
         resolve_strict_key_checking(),
-        ResolvedStrictKeyChecking {
+        StrictKeyCheckingResolution {
             mode: StrictKeyChecking::Yes,
             source: StrictKeyCheckingSource::ExplicitEnv,
         }
@@ -37,7 +39,7 @@ fn test_strict_key_checking_no() {
     std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "no");
     assert_eq!(
         resolve_strict_key_checking(),
-        ResolvedStrictKeyChecking::explicit(StrictKeyChecking::No)
+        StrictKeyCheckingResolution::explicit(StrictKeyChecking::No)
     );
 }
 
@@ -47,7 +49,7 @@ fn test_strict_key_checking_case_insensitive() {
     std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "NO");
     assert_eq!(
         resolve_strict_key_checking(),
-        ResolvedStrictKeyChecking::explicit(StrictKeyChecking::No)
+        StrictKeyCheckingResolution::explicit(StrictKeyChecking::No)
     );
 }
 
@@ -57,6 +59,6 @@ fn test_strict_key_checking_invalid_value_defaults_to_yes() {
     std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "maybe");
     assert_eq!(
         resolve_strict_key_checking(),
-        ResolvedStrictKeyChecking::strict()
+        StrictKeyCheckingResolution::strict()
     );
 }

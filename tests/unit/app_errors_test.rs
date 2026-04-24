@@ -4,17 +4,17 @@
 //! Unit tests for app/errors.rs helpers.
 
 use crate::app::errors::{
-    build_invalid_trust_store_error, default_kv_file_not_found_error,
-    handle_kv_key_not_found_error, serialize_to_json_value,
+    build_default_kv_file_not_found_error, build_invalid_trust_store_error,
+    build_kv_key_not_found_error, serialize_to_json_value,
 };
 use crate::Error;
 use serde::{Serialize, Serializer};
 use std::path::Path;
 
 #[test]
-fn test_handle_kv_key_not_found_rewrites_quoted_pattern() {
-    let err = Error::invalid_operation("Key 'foo' not found");
-    let wrapped = handle_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
+fn test_build_kv_key_not_found_error_rewrites_quoted_pattern() {
+    let err = Error::build_invalid_operation_error("Key 'foo' not found");
+    let wrapped = build_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
     match wrapped {
         Error::NotFound { message } => {
             assert!(message.contains("Key 'foo' not found"));
@@ -25,9 +25,9 @@ fn test_handle_kv_key_not_found_rewrites_quoted_pattern() {
 }
 
 #[test]
-fn test_handle_kv_key_not_found_rewrites_unquoted_pattern() {
-    let err = Error::invalid_operation("Key not found: foo");
-    let wrapped = handle_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
+fn test_build_kv_key_not_found_error_rewrites_unquoted_pattern() {
+    let err = Error::build_invalid_operation_error("Key not found: foo");
+    let wrapped = build_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
     match wrapped {
         Error::NotFound { message } => {
             assert!(message.contains("Key not found: foo"));
@@ -38,9 +38,9 @@ fn test_handle_kv_key_not_found_rewrites_unquoted_pattern() {
 }
 
 #[test]
-fn test_handle_kv_key_not_found_passthrough_for_unrelated_operation() {
-    let err = Error::invalid_operation("something else entirely");
-    let wrapped = handle_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
+fn test_build_kv_key_not_found_error_passthrough_for_unrelated_operation() {
+    let err = Error::build_invalid_operation_error("something else entirely");
+    let wrapped = build_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
     match wrapped {
         Error::InvalidOperation { message } => {
             assert_eq!(message, "something else entirely");
@@ -50,9 +50,9 @@ fn test_handle_kv_key_not_found_passthrough_for_unrelated_operation() {
 }
 
 #[test]
-fn test_handle_kv_key_not_found_augments_existing_not_found() {
-    let err = Error::not_found("entry foo not found in document");
-    let wrapped = handle_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
+fn test_build_kv_key_not_found_error_augments_existing_not_found() {
+    let err = Error::build_not_found_error("entry foo not found in document");
+    let wrapped = build_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
     match wrapped {
         Error::NotFound { message } => {
             assert!(message.contains("entry foo not found"));
@@ -63,9 +63,9 @@ fn test_handle_kv_key_not_found_augments_existing_not_found() {
 }
 
 #[test]
-fn test_handle_kv_key_not_found_passthrough_for_unrelated_not_found() {
-    let err = Error::not_found("member alice missing");
-    let wrapped = handle_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
+fn test_build_kv_key_not_found_error_passthrough_for_unrelated_not_found() {
+    let err = Error::build_not_found_error("member alice missing");
+    let wrapped = build_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
     match wrapped {
         Error::NotFound { message } => {
             assert_eq!(message, "member alice missing");
@@ -75,7 +75,7 @@ fn test_handle_kv_key_not_found_passthrough_for_unrelated_not_found() {
 }
 
 #[test]
-fn test_serialize_to_json_value_success() {
+fn test_serialize_to_json_value_serializes_value() {
     let value = serde_json::json!({"name": "alice", "n": 42});
     let converted = serialize_to_json_value(&value).unwrap();
     assert_eq!(converted, value);
@@ -102,8 +102,8 @@ fn test_serialize_to_json_value_failure_maps_to_parse_error() {
 }
 
 #[test]
-fn test_default_kv_file_not_found_error_includes_path_and_hint() {
-    let err = default_kv_file_not_found_error(Path::new("/tmp/.secretenv/kv/default.kvenc"));
+fn test_build_default_kv_file_not_found_error_includes_path_and_hint() {
+    let err = build_default_kv_file_not_found_error(Path::new("/tmp/.secretenv/kv/default.kvenc"));
     match err {
         Error::NotFound { message } => {
             assert!(message.contains("Default kv file not found"));
@@ -116,7 +116,7 @@ fn test_default_kv_file_not_found_error_includes_path_and_hint() {
 
 #[test]
 fn test_build_invalid_trust_store_error_uses_reset_rule() {
-    let inner = Error::parse("bad JSON");
+    let inner = Error::build_parse_error("bad JSON");
     let err = build_invalid_trust_store_error(Path::new("/tmp/.secretenv/trust_store.json"), inner);
     match err {
         Error::Verify { rule, message } => {

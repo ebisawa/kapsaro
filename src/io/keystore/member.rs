@@ -8,7 +8,7 @@ use crate::io::keystore::paths;
 use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::public_key::PublicKey;
 use crate::support::fs::list_dir;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::Path;
 
@@ -109,10 +109,10 @@ pub fn select_latest_valid_kid(keystore_root: &Path, member_id: &str) -> Result<
 pub fn remove_key_directory(keystore_root: &Path, member_id: &str, kid: &str) -> Result<()> {
     let key_dir = keystore_root.join(member_id).join(kid);
     std::fs::remove_dir_all(&key_dir).map_err(|e| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Failed to remove key directory {}: {}",
-                display_path_relative_to_cwd(&key_dir),
+                format_path_relative_to_cwd(&key_dir),
                 e
             ),
             e,

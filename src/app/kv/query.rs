@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigningContext;
-use crate::app::errors::handle_kv_key_not_found_error;
-use crate::app::trust::{build_read_signer_trust, ReadTrustPolicy, SignerTrustOutcome};
+use crate::app::context::ssh::SshSigningContextResolution;
+use crate::app::errors::build_kv_key_not_found_error;
+use crate::app::trust::{evaluate_read_signer_trust, ReadTrustPolicy, SignerTrustOutcome};
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
@@ -36,21 +36,21 @@ pub(crate) fn list_kv_command(
     list_kv_keys_with_disclosed(&session.kv_content())
 }
 
-pub(crate) fn build_kv_read_command<P>(
+pub(crate) fn resolve_kv_read_command<P>(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     file_name: Option<&str>,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<KvReadCommand>
 where
     P: ReadTrustPolicy,
 {
-    let command = KvCommandSession::resolve_read(options, member_id, file_name, ssh_ctx)?;
+    let command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
     let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?;
     let verified_doc = verify_kv_content(&file.kv_content(), options.verbose)?;
     let trust_plan =
-        build_read_signer_trust::<P>(options, &command.execution, verified_doc.proof())?;
+        evaluate_read_signer_trust::<P>(options, &command.execution, verified_doc.proof())?;
     let mut warnings = command.warnings;
     warnings.extend(trust_plan.warnings);
 
@@ -88,7 +88,7 @@ pub(crate) fn execute_kv_read_command(
                 debug,
             )
             .map(|result| result.value)
-            .map_err(|e| handle_kv_key_not_found_error(e, &command.target_path, key))?;
+            .map_err(|e| build_kv_key_not_found_error(e, &command.target_path, key))?;
             let value = decode_decrypted_kv_value(key, value)?;
             std::collections::BTreeMap::from([(key.to_string(), value)])
         }

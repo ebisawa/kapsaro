@@ -3,7 +3,7 @@
 
 //! Tests for Verified document types
 
-use crate::keygen_helpers::make_dummy_public_key;
+use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::model::file_enc::FileEncDocument;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
@@ -35,7 +35,7 @@ fn test_verified_new() {
         signature: secretenv::model::signature::ArtifactSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "test".to_string(),
         },
     };
@@ -80,7 +80,7 @@ fn test_verified_map() {
         signature: secretenv::model::signature::ArtifactSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "test".to_string(),
         },
     };
@@ -127,7 +127,7 @@ fn test_verified_into_inner() {
         signature: secretenv::model::signature::ArtifactSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "test".to_string(),
         },
     };

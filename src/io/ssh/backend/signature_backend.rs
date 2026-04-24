@@ -50,7 +50,7 @@ pub trait SignatureBackend {
         let sig2 = self.sign_sshsig(namespace, ssh_pubkey, message)?;
 
         if sig1 != sig2 {
-            return Err(SshError::operation_failed(
+            return Err(SshError::build_operation_failed_error(
                 "Non-deterministic signature detected: same input produced different signatures",
             )
             .into());

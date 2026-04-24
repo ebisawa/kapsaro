@@ -15,7 +15,7 @@ use serde_json::Value;
 /// This is used for signature computation.
 pub fn normalize_to_bytes(value: &Value) -> Result<Vec<u8>> {
     serde_jcs::to_vec(value).map_err(|e| {
-        crate::Error::from(FormatError::parse_failed_with_source(
+        crate::Error::from(FormatError::build_parse_error_with_source(
             format!("JCS normalization failed: {}", e),
             e,
         ))
@@ -25,7 +25,7 @@ pub fn normalize_to_bytes(value: &Value) -> Result<Vec<u8>> {
 /// Normalize a JSON value to a JCS string (RFC 8785).
 pub fn normalize_to_string(value: &Value) -> Result<String> {
     serde_jcs::to_string(value).map_err(|e| {
-        crate::Error::from(FormatError::parse_failed_with_source(
+        crate::Error::from(FormatError::build_parse_error_with_source(
             format!("JCS normalization failed: {}", e),
             e,
         ))
@@ -35,7 +35,7 @@ pub fn normalize_to_string(value: &Value) -> Result<String> {
 /// Normalize any serializable value to JCS bytes.
 pub fn normalize<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     serde_jcs::to_vec(value).map_err(|e| {
-        crate::Error::from(FormatError::parse_failed_with_source(
+        crate::Error::from(FormatError::build_parse_error_with_source(
             format!("JCS normalization failed: {}", e),
             e,
         ))

@@ -8,7 +8,7 @@ use crate::model::ssh::SshDeterminismStatus;
 use crate::support::secret::SecretString;
 
 #[derive(Debug, Clone)]
-pub struct KeyNewResult {
+pub struct KeyGenerationResult {
     pub member_id: String,
     pub kid: String,
     pub expires_at: String,
@@ -18,8 +18,8 @@ pub struct KeyNewResult {
     pub github_verification: OnlineVerificationStatus,
 }
 
-impl From<feature_key_types::KeyNewResult> for KeyNewResult {
-    fn from(r: feature_key_types::KeyNewResult) -> Self {
+impl From<feature_key_types::KeyGenerationResult> for KeyGenerationResult {
+    fn from(r: feature_key_types::KeyGenerationResult) -> Self {
         Self {
             member_id: r.member_id,
             kid: r.kid,

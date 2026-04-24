@@ -11,7 +11,7 @@
 
 pub(crate) mod common;
 pub(crate) mod github_user;
-pub(crate) mod member_id;
+pub(crate) mod member_handle;
 pub(crate) mod ssh_key;
 pub(crate) mod ssh_signing_method;
 pub(crate) mod strict_key_checking;

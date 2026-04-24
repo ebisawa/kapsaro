@@ -5,7 +5,7 @@
 //!
 //! Tests for file-enc decryption.
 
-use crate::keygen_helpers::make_verified_members;
+use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures,
@@ -40,7 +40,7 @@ fn test_file_enc_content_detect_accepts_file_enc() {
 
     let content = b"Hello, World!";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -97,7 +97,7 @@ fn test_verify_content_then_decrypt_file() {
     // Create file-enc content using signing key from CryptoContext
     let content = b"Hello, World!";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -143,7 +143,7 @@ fn test_parse_verify_decrypt_file() {
 
     let content = b"Hello, Verified World!";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -188,7 +188,7 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
 
     let content = b"Hello from the old key";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&old_public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&old_public_key));
     let file_enc_doc = encrypt_file_document(
         content,
         &recipient_ids,
@@ -234,7 +234,7 @@ fn test_verify_file_document_returns_verified() {
 
     let content = b"Test content";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -264,7 +264,7 @@ fn test_verify_file_document_returns_verified() {
 /// Helper: create an encrypted FileEncDocument + CryptoContext for error-path tests
 /// The returned TempDir must be kept alive for the duration of the test
 /// to prevent premature cleanup of keystore and workspace files.
-fn create_encrypted_file_for_error_tests() -> (
+fn build_encrypted_file_for_error_tests() -> (
     secretenv::model::file_enc::FileEncDocument,
     CryptoContext,
     String, // kid
@@ -280,7 +280,7 @@ fn create_encrypted_file_for_error_tests() -> (
 
     let content = b"test content";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -314,7 +314,7 @@ fn wrap_as_verified(
 
 #[test]
 fn test_decrypt_file_wrong_format() {
-    let (mut doc, key_ctx, kid, _temp_dir) = create_encrypted_file_for_error_tests();
+    let (mut doc, key_ctx, kid, _temp_dir) = build_encrypted_file_for_error_tests();
 
     // Tamper: set wrong format marker
     doc.protected.format = "secretenv.file@999".to_string();
@@ -338,7 +338,7 @@ fn test_decrypt_file_wrong_format() {
 
 #[test]
 fn test_decrypt_file_wrong_payload_format() {
-    let (mut doc, key_ctx, kid, _temp_dir) = create_encrypted_file_for_error_tests();
+    let (mut doc, key_ctx, kid, _temp_dir) = build_encrypted_file_for_error_tests();
 
     // Tamper: set wrong payload format
     doc.protected.payload.protected.format = "secretenv.file.payload@999".to_string();
@@ -362,7 +362,7 @@ fn test_decrypt_file_wrong_payload_format() {
 
 #[test]
 fn test_decrypt_file_unsupported_aead() {
-    let (mut doc, key_ctx, kid, _temp_dir) = create_encrypted_file_for_error_tests();
+    let (mut doc, key_ctx, kid, _temp_dir) = build_encrypted_file_for_error_tests();
 
     // Tamper: set unsupported AEAD algorithm
     doc.protected.payload.protected.alg.aead = "aes-256-gcm".to_string();
@@ -386,7 +386,7 @@ fn test_decrypt_file_unsupported_aead() {
 
 #[test]
 fn test_decrypt_file_sid_mismatch() {
-    let (mut doc, key_ctx, kid, _temp_dir) = create_encrypted_file_for_error_tests();
+    let (mut doc, key_ctx, kid, _temp_dir) = build_encrypted_file_for_error_tests();
 
     // Tamper: change payload SID so it mismatches the outer SID
     doc.protected.payload.protected.sid = uuid::Uuid::new_v4();

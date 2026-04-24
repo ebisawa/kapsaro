@@ -5,7 +5,7 @@
 //!
 //! HPKE Base mode: X25519-HKDF-SHA256 + ChaCha20-Poly1305
 
-use crate::crypto::crypto_operation_failed;
+use crate::crypto::build_crypto_operation_error;
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 use crate::model::verified::VerifiedPrivateKey;
 use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
@@ -77,9 +77,9 @@ pub fn generate_keypair() -> Result<(X25519SecretKey, X25519PublicKey)> {
 }
 
 /// Derive the public key for a secret key.
-pub fn public_key_from_secret(secret_key: &X25519SecretKey) -> Result<X25519PublicKey> {
+pub fn derive_public_key_from_secret(secret_key: &X25519SecretKey) -> Result<X25519PublicKey> {
     let secret_key_hpke = <Kem as KemTrait>::PrivateKey::from_bytes(secret_key.as_bytes())
-        .map_err(|_| crypto_operation_failed("Invalid recipient secret key"))?;
+        .map_err(|_| build_crypto_operation_error("Invalid recipient secret key"))?;
     let public_key_hpke = Kem::sk_to_pk(&secret_key_hpke);
     Ok(X25519PublicKey::from_bytes(serialize_public_key(
         &public_key_hpke,
@@ -95,7 +95,7 @@ pub fn seal_base(
     plaintext: &Plaintext,
 ) -> Result<(Enc, Ciphertext)> {
     let pk_recip_hpke = <Kem as KemTrait>::PublicKey::from_bytes(pk_recip.as_bytes())
-        .map_err(|_| crypto_operation_failed("Invalid recipient public key"))?;
+        .map_err(|_| build_crypto_operation_error("Invalid recipient public key"))?;
 
     let mut os_rng = OsRng;
     let mut csprng = os_rng.unwrap_mut();
@@ -105,11 +105,11 @@ pub fn seal_base(
         info.as_bytes(),
         &mut csprng,
     )
-    .map_err(|_| crypto_operation_failed("HPKE setup sender failed"))?;
+    .map_err(|_| build_crypto_operation_error("HPKE setup sender failed"))?;
 
     let ciphertext = sender_ctx
         .seal(plaintext.as_bytes(), aad.as_bytes())
-        .map_err(|_| crypto_operation_failed("HPKE seal failed"))?;
+        .map_err(|_| build_crypto_operation_error("HPKE seal failed"))?;
 
     Ok((
         Enc::from(enc.to_bytes().to_vec()),
@@ -127,10 +127,10 @@ pub fn open_base(
     ciphertext: &Ciphertext,
 ) -> Result<Zeroizing<Plaintext>> {
     let sk_recip_hpke = <Kem as KemTrait>::PrivateKey::from_bytes(sk_recip.as_bytes())
-        .map_err(|_| crypto_operation_failed("Invalid recipient secret key"))?;
+        .map_err(|_| build_crypto_operation_error("Invalid recipient secret key"))?;
 
     let enc_parsed = <Kem as KemTrait>::EncappedKey::from_bytes(enc.as_bytes())
-        .map_err(|_| crypto_operation_failed("Invalid encapsulated key"))?;
+        .map_err(|_| build_crypto_operation_error("Invalid encapsulated key"))?;
 
     let mut receiver_ctx = hpke::setup_receiver::<Aead, Kdf, Kem>(
         &OpModeR::Base,
@@ -138,12 +138,12 @@ pub fn open_base(
         &enc_parsed,
         info.as_bytes(),
     )
-    .map_err(|_| crypto_operation_failed("HPKE setup receiver failed"))?;
+    .map_err(|_| build_crypto_operation_error("HPKE setup receiver failed"))?;
 
     let plaintext = receiver_ctx
         .open(ciphertext.as_bytes(), aad.as_bytes())
         .map_err(|_| {
-            crypto_operation_failed("HPKE open failed (wrong key/info/AAD or tampered data)")
+            build_crypto_operation_error("HPKE open failed (wrong key/info/AAD or tampered data)")
         })?;
 
     Ok(Zeroizing::new(Plaintext::from(plaintext)))

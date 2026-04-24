@@ -22,7 +22,9 @@ pub fn decode_base64_armored(armored: &str) -> Result<Zeroizing<Vec<u8>>> {
         .collect();
 
     if lines.is_empty() {
-        return Err(SshError::operation_failed("No base64 content in armored format").into());
+        return Err(
+            SshError::build_operation_failed_error("No base64 content in armored format").into(),
+        );
     }
 
     // Join lines (ssh-keygen wraps base64 at 70 chars)
@@ -32,6 +34,10 @@ pub fn decode_base64_armored(armored: &str) -> Result<Zeroizing<Vec<u8>>> {
     decode_base64_standard(b64.as_str(), "armored base64")
         .map(Zeroizing::new)
         .map_err(|e| {
-            SshError::operation_failed_with_source(format!("Base64 decode failed: {}", e), e).into()
+            SshError::build_operation_failed_error_with_source(
+                format!("Base64 decode failed: {}", e),
+                e,
+            )
+            .into()
         })
 }

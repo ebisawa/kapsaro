@@ -16,7 +16,7 @@ pub struct PrivateKey {
     pub protected: PrivateKeyProtected,
 
     /// Encrypted key material
-    pub encrypted: EncryptedData,
+    pub encrypted: PrivateKeyEncData,
 }
 
 /// Protected header (AAD source)
@@ -90,7 +90,7 @@ impl PrivateKeyAlgorithm {
 /// Encrypted key material
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct EncryptedData {
+pub struct PrivateKeyEncData {
     /// Nonce (base64url, 24 bytes)
     pub nonce: String,
 
@@ -165,7 +165,7 @@ impl std::fmt::Debug for IdentityKeysPrivate {
 
 impl PrivateKey {
     /// Create a new PrivateKey with the given parameters
-    pub fn new(protected: PrivateKeyProtected, encrypted: EncryptedData) -> Self {
+    pub fn new(protected: PrivateKeyProtected, encrypted: PrivateKeyEncData) -> Self {
         Self {
             protected,
             encrypted,

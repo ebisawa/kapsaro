@@ -16,14 +16,14 @@ use secretenv::model::kv_enc::header::KvHeader;
 use secretenv::model::public_key::VerifiedRecipientKey;
 use std::collections::HashMap;
 
-fn make_signing_ctx_for_test() -> (SigningKey, String) {
+fn generate_signing_ctx_for_test() -> (SigningKey, String) {
     (
         SigningKey::from_bytes(&[7u8; 32]),
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
     )
 }
 
-fn make_dummy_signer_pub(
+fn build_dummy_signer_pub(
     signing_key: &SigningKey,
     kid: &str,
 ) -> secretenv::model::public_key::PublicKey {
@@ -69,7 +69,10 @@ fn make_dummy_signer_pub(
     }
 }
 
-fn make_verified_member_for_test(signing_key: &SigningKey, kid: &str) -> VerifiedRecipientKey {
+fn build_verified_recipient_key_for_test(
+    signing_key: &SigningKey,
+    kid: &str,
+) -> VerifiedRecipientKey {
     use ed25519_dalek::Signer;
     use secretenv::model::public_key::{
         Attestation, AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey,
@@ -125,8 +128,12 @@ fn make_verified_member_for_test(signing_key: &SigningKey, kid: &str) -> Verifie
     VerifiedRecipientKey::new(attested_key, ExpiryProof::new())
 }
 
-fn make_kv_document(entries: &[(&str, &str)], signing_key: &SigningKey, kid: &str) -> String {
-    let verified_member = make_verified_member_for_test(signing_key, kid);
+fn encrypt_kv_document_for_test(
+    entries: &[(&str, &str)],
+    signing_key: &SigningKey,
+    kid: &str,
+) -> String {
+    let verified_member = build_verified_recipient_key_for_test(signing_key, kid);
 
     let mut kv_map = HashMap::new();
     for (k, v) in entries {
@@ -136,7 +143,7 @@ fn make_kv_document(entries: &[(&str, &str)], signing_key: &SigningKey, kid: &st
     let signing = SigningContext {
         signing_key,
         signer_kid: kid,
-        signer_pub: make_dummy_signer_pub(signing_key, kid),
+        signer_pub: build_dummy_signer_pub(signing_key, kid),
         debug: false,
     };
 
@@ -144,9 +151,9 @@ fn make_kv_document(entries: &[(&str, &str)], signing_key: &SigningKey, kid: &st
 }
 
 /// Build a test context for set/unset tests: (initial_content, doc, signing_key, kid)
-fn make_test_ctx(entries: &[(&str, &str)]) -> (String, KvEncDocument, SigningKey, String) {
-    let (signing_key, kid) = make_signing_ctx_for_test();
-    let initial = make_kv_document(entries, &signing_key, &kid);
+fn setup_test_ctx(entries: &[(&str, &str)]) -> (String, KvEncDocument, SigningKey, String) {
+    let (signing_key, kid) = generate_signing_ctx_for_test();
+    let initial = encrypt_kv_document_for_test(entries, &signing_key, &kid);
     let doc = parse_kv_document(&initial).unwrap();
     (initial, doc, signing_key, kid)
 }
@@ -234,11 +241,11 @@ fn builder_unset_entry(
 
 #[test]
 fn test_build_kv_set_entry_adds_new_key() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -257,11 +264,11 @@ fn test_build_kv_set_entry_adds_new_key() {
 
 #[test]
 fn test_build_kv_set_entry_replaces_existing_key() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let new_token = "newtoken456";
@@ -282,11 +289,11 @@ fn test_build_kv_set_entry_replaces_existing_key() {
 
 #[test]
 fn test_build_kv_set_entry_preserves_wrap_token() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -304,11 +311,11 @@ fn test_build_kv_set_entry_preserves_wrap_token() {
 
 #[test]
 fn test_build_kv_set_entry_preserves_sid_and_created_at() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -335,11 +342,11 @@ fn test_build_kv_set_entry_preserves_sid_and_created_at() {
 
 #[test]
 fn test_build_kv_unset_entry_removes_target_key() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -358,11 +365,11 @@ fn test_build_kv_unset_entry_removes_target_key() {
 
 #[test]
 fn test_build_kv_unset_entry_preserves_wrap_token() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -380,11 +387,11 @@ fn test_build_kv_unset_entry_preserves_wrap_token() {
 
 #[test]
 fn test_build_kv_unset_entry_last_entry() {
-    let (_initial, doc, signing_key, kid) = make_test_ctx(&[("ONLY_KEY", "val")]);
+    let (_initial, doc, signing_key, kid) = setup_test_ctx(&[("ONLY_KEY", "val")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -405,11 +412,11 @@ fn test_build_kv_unset_entry_last_entry() {
 
 #[test]
 fn test_build_kv_unset_entry_preserves_sid_and_created_at() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -430,11 +437,11 @@ fn test_build_kv_unset_entry_preserves_sid_and_created_at() {
 
 #[test]
 fn test_build_kv_set_entries_updates_and_adds_multiple_keys() {
-    let (initial, doc, signing_key, kid) = make_test_ctx(&[("KEY1", "val1")]);
+    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -471,11 +478,11 @@ fn test_build_kv_set_entries_updates_and_adds_multiple_keys() {
 #[test]
 fn test_build_kv_set_entries_preserves_existing_keys_not_in_map() {
     let (initial, doc, signing_key, kid) =
-        make_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2"), ("KEY3", "val3")]);
+        setup_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2"), ("KEY3", "val3")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {
@@ -502,11 +509,11 @@ fn test_build_kv_set_entries_preserves_existing_keys_not_in_map() {
 
 #[test]
 fn test_build_kv_set_entries_new_keys_sorted_deterministically() {
-    let (_initial, doc, signing_key, kid) = make_test_ctx(&[("EXISTING", "val")]);
+    let (_initial, doc, signing_key, kid) = setup_test_ctx(&[("EXISTING", "val")]);
     let signing = SigningContext {
         signing_key: &signing_key,
         signer_kid: &kid,
-        signer_pub: make_dummy_signer_pub(&signing_key, &kid),
+        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
         debug: false,
     };
     let updated_head = KvHeader {

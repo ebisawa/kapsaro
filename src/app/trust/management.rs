@@ -6,8 +6,8 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::{
-    load_optional_trust_store_for_member, mutate_trust_store_with_execution, TrustStoreMutation,
-    TrustStoreMutationMode,
+    execute_trust_store_mutation_with_execution, load_optional_trust_store_for_member,
+    TrustStoreMutation, TrustStoreMutationMode,
 };
 use crate::app::trust::types::{RemovedKnownKey, TrustMutationResult};
 use crate::feature::trust::known_keys::{purge_known_keys, remove_known_key};
@@ -27,7 +27,7 @@ pub(crate) fn remove_known_key_command(
     kid: &str,
     debug: bool,
 ) -> Result<RemoveKnownKeyResult> {
-    mutate_trust_store_with_execution(
+    execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::ExistingRequired,
@@ -82,7 +82,7 @@ pub(crate) fn execute_purge(
     older_than_timestamp: OffsetDateTime,
     debug: bool,
 ) -> Result<PurgeKnownKeysResult> {
-    mutate_trust_store_with_execution(
+    execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::ExistingRequired,

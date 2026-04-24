@@ -1,12 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-layer orchestration for rewrap flows.
+//! Application-layer orchestration for rewrap commands.
 
 use crate::app::context::execution::build_write_execution_warnings;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::flow::review_recipient_trust_with_handler;
+use crate::app::trust::review::review_recipient_trust_with_confirmation;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::Result;
 use std::path::PathBuf;
@@ -66,7 +66,7 @@ where
     };
     let trust_plan = trust::build_rewrap_trust(&plan, &request.accepted_promotions)?;
     emit_warnings(&trust_plan.warnings);
-    let approvals = confirm_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
+    let approvals = review_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
     let mut outcome = execution::execute_confirmed_rewrap_batch(
         &request,
         &plan,
@@ -112,7 +112,7 @@ where
     Ok(session.into_accepted_candidates(&accepted_member_ids))
 }
 
-fn confirm_rewrap_recipient_trust<ConfirmRecipients>(
+fn review_rewrap_recipient_trust<ConfirmRecipients>(
     trust_plan: &RewrapTrustPlan,
     confirm_recipients: ConfirmRecipients,
 ) -> Result<Vec<ApprovedKnownKey>>
@@ -120,7 +120,7 @@ where
     ConfirmRecipients:
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
 {
-    let mut approvals = review_recipient_trust_with_handler(
+    let mut approvals = review_recipient_trust_with_confirmation(
         &trust_plan.recipient_trust,
         "rewrap recipients",
         confirm_recipients,

@@ -22,7 +22,7 @@ pub(crate) fn print_optional_status(message: Option<&str>, quiet: bool) {
     }
 }
 
-pub(crate) fn build_warning_line(message: &str) -> String {
+pub(crate) fn format_warning_line(message: &str) -> String {
     Style::new()
         .yellow()
         .for_stderr()
@@ -31,7 +31,7 @@ pub(crate) fn build_warning_line(message: &str) -> String {
 }
 
 pub(crate) fn print_warning_line(message: &str) {
-    eprintln!("{}", build_warning_line(message));
+    eprintln!("{}", format_warning_line(message));
 }
 
 pub(crate) fn print_warning(message: &str) {

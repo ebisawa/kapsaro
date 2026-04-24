@@ -134,10 +134,10 @@ pub(crate) fn encrypt_kv_document_with_disclosed<V>(
 where
     V: KvValueRef,
 {
-    encrypt_and_sign_kv_map(kv_map, members, signing, token_codec, disclosed, |_| Ok(()))
+    encrypt_kv_map_with_wrap_mutation(kv_map, members, signing, token_codec, disclosed, |_| Ok(()))
 }
 
-pub fn encrypt_and_sign_kv_map<V, F>(
+pub fn encrypt_kv_map_with_wrap_mutation<V, F>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
@@ -149,7 +149,7 @@ where
     V: KvValueRef,
     F: FnOnce(&mut KvWrap) -> Result<()>,
 {
-    let timestamp = crate::support::time::current_timestamp()?;
+    let timestamp = crate::support::time::generate_current_timestamp()?;
     let sid = Uuid::new_v4();
     let (master_key, head_data, mut wrap_data) = build_kv_encryption(members, &sid, &timestamp)?;
     mutate_wrap(&mut wrap_data)?;
@@ -159,7 +159,7 @@ where
         &entries,
         token_codec,
         signing.debug,
-        "encrypt_and_sign_kv_map",
+        "encrypt_kv_map_with_wrap_mutation",
     )?;
 
     let unsigned = KvDocumentBuilder::new(head_data, wrap_data, token_codec, signing.debug)

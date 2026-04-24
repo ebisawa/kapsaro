@@ -73,24 +73,24 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Error {
-    /// Create a verification error.
-    pub fn verify(rule: impl Into<String>, message: impl Into<String>) -> Self {
+    /// Build a verification error.
+    pub fn build_verification_error(rule: impl Into<String>, message: impl Into<String>) -> Self {
         Error::Verify {
             rule: rule.into(),
             message: message.into(),
         }
     }
 
-    /// Create a parse error.
-    pub fn parse(message: impl Into<String>) -> Self {
+    /// Build a parse error.
+    pub fn build_parse_error(message: impl Into<String>) -> Self {
         Error::Parse {
             message: message.into(),
             source: None,
         }
     }
 
-    /// Create a parse error with a source error.
-    pub fn parse_with_source(
+    /// Build a parse error with a source error.
+    pub fn build_parse_error_with_source(
         message: impl Into<String>,
         source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {
@@ -100,44 +100,44 @@ impl Error {
         }
     }
 
-    /// Create a configuration error.
-    pub fn config(message: impl Into<String>) -> Self {
+    /// Build a configuration error.
+    pub fn build_config_error(message: impl Into<String>) -> Self {
         Error::Config {
             message: message.into(),
         }
     }
 
-    /// Create a not found error.
-    pub fn not_found(message: impl Into<String>) -> Self {
+    /// Build a not found error.
+    pub fn build_not_found_error(message: impl Into<String>) -> Self {
         Error::NotFound {
             message: message.into(),
         }
     }
 
-    /// Create an invalid argument error.
-    pub fn invalid_argument(message: impl Into<String>) -> Self {
+    /// Build an invalid argument error.
+    pub fn build_invalid_argument_error(message: impl Into<String>) -> Self {
         Error::InvalidArgument {
             message: message.into(),
         }
     }
 
-    /// Create an invalid operation error.
-    pub fn invalid_operation(message: impl Into<String>) -> Self {
+    /// Build an invalid operation error.
+    pub fn build_invalid_operation_error(message: impl Into<String>) -> Self {
         Error::InvalidOperation {
             message: message.into(),
         }
     }
 
-    /// Create a cryptographic error.
-    pub fn crypto(message: impl Into<String>) -> Self {
+    /// Build a cryptographic error.
+    pub fn build_crypto_error(message: impl Into<String>) -> Self {
         Error::Crypto {
             message: message.into(),
             source: None,
         }
     }
 
-    /// Create a cryptographic error with a source error.
-    pub fn crypto_with_source(
+    /// Build a cryptographic error with a source error.
+    pub fn build_crypto_error_with_source(
         message: impl Into<String>,
         source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {
@@ -147,24 +147,24 @@ impl Error {
         }
     }
 
-    /// Create an I/O error.
-    pub fn io(message: impl Into<String>) -> Self {
+    /// Build an I/O error.
+    pub fn build_io_error(message: impl Into<String>) -> Self {
         Error::Io {
             message: message.into(),
             source: None,
         }
     }
 
-    /// Create an I/O error with a source error.
-    pub fn io_with_source(message: impl Into<String>, source: std::io::Error) -> Self {
+    /// Build an I/O error with a source error.
+    pub fn build_io_error_with_source(message: impl Into<String>, source: std::io::Error) -> Self {
         Error::Io {
             message: message.into(),
             source: Some(source),
         }
     }
 
-    /// Create an SSH error with a source error.
-    pub fn ssh_with_source(
+    /// Build an SSH error with a source error.
+    pub fn build_ssh_error_with_source(
         message: impl Into<String>,
         source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {
@@ -179,7 +179,7 @@ impl Error {
     /// Unlike `Display` (e.g. "Cryptographic error: message"), this returns
     /// only the message body. For `Schema`, the potentially large instance
     /// data is replaced with a fixed description.
-    pub fn user_message(&self) -> &str {
+    pub fn format_user_message(&self) -> &str {
         match self {
             Error::Schema { .. } => "Schema validation failed",
             Error::Crypto { message, .. }
@@ -198,7 +198,7 @@ impl Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         let message = err.to_string();
-        Error::io_with_source(message, err)
+        Error::build_io_error_with_source(message, err)
     }
 }
 
@@ -247,6 +247,6 @@ impl From<crate::format::FormatError> for Error {
 
 impl From<hkdf::InvalidLength> for Error {
     fn from(_err: hkdf::InvalidLength) -> Self {
-        Error::crypto("HKDF key derivation failed")
+        Error::build_crypto_error("HKDF key derivation failed")
     }
 }

@@ -3,23 +3,25 @@
 
 //! SECRETENV_STRICT_KEY_CHECKING environment variable resolution.
 
-use crate::config::types::{ResolvedStrictKeyChecking, StrictKeyChecking, StrictKeyCheckingSource};
+use crate::config::types::{
+    StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
+};
 
 const ENV_VAR: &str = "SECRETENV_STRICT_KEY_CHECKING";
 
 /// Resolve strict key checking from the environment variable.
 ///
 /// Values: "yes" (default), "no" (case-insensitive).
-pub(crate) fn resolve_strict_key_checking() -> ResolvedStrictKeyChecking {
+pub(crate) fn resolve_strict_key_checking() -> StrictKeyCheckingResolution {
     match std::env::var(ENV_VAR) {
         Ok(val) if val.eq_ignore_ascii_case("no") => {
-            ResolvedStrictKeyChecking::explicit(StrictKeyChecking::No)
+            StrictKeyCheckingResolution::explicit(StrictKeyChecking::No)
         }
-        Ok(val) if val.eq_ignore_ascii_case("yes") => ResolvedStrictKeyChecking {
+        Ok(val) if val.eq_ignore_ascii_case("yes") => StrictKeyCheckingResolution {
             mode: StrictKeyChecking::Yes,
             source: StrictKeyCheckingSource::ExplicitEnv,
         },
-        _ => ResolvedStrictKeyChecking::strict(),
+        _ => StrictKeyCheckingResolution::strict(),
     }
 }
 

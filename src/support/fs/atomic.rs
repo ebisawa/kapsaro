@@ -4,7 +4,7 @@
 //! Atomic file write operations.
 
 use crate::support::fs::{ensure_dir_restricted, set_file_permission_0600};
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use serde::Serialize;
 use std::fs;
@@ -19,12 +19,12 @@ use tempfile::NamedTempFile;
 /// somewhere else, the atomic rename lands outside the caller's intended
 /// directory. Callers pass a workspace-derived parent, so a symlink here
 /// indicates the workspace has been tampered with.
-fn reject_symlinked_parent(parent: &Path) -> Result<()> {
+fn enforce_parent_not_symlink(parent: &Path) -> Result<()> {
     match fs::symlink_metadata(parent) {
         Ok(meta) if meta.file_type().is_symlink() => Err(Error::InvalidOperation {
             message: format!(
                 "refusing to write: parent directory is a symlink: {}",
-                display_path_relative_to_cwd(parent)
+                format_path_relative_to_cwd(parent)
             ),
         }),
         _ => Ok(()),
@@ -36,12 +36,12 @@ fn reject_symlinked_parent(parent: &Path) -> Result<()> {
 /// `persist` would follow the symlink and overwrite its target. For paths
 /// that live inside a non-trusted workspace this is the same escape vector
 /// as a symlinked parent.
-fn reject_symlinked_target(path: &Path) -> Result<()> {
+fn enforce_target_not_symlink(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(meta) if meta.file_type().is_symlink() => Err(Error::InvalidOperation {
             message: format!(
                 "refusing to write: target is a symlink: {}",
-                display_path_relative_to_cwd(path)
+                format_path_relative_to_cwd(path)
             ),
         }),
         _ => Ok(()),
@@ -52,10 +52,10 @@ fn reject_symlinked_target(path: &Path) -> Result<()> {
 fn ensure_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to create directory {}: {}",
-                    display_path_relative_to_cwd(parent),
+                    format_path_relative_to_cwd(parent),
                     e
                 ),
                 e,
@@ -114,22 +114,23 @@ pub fn save_text_restricted(path: &Path, content: &str) -> Result<()> {
 /// workspace by planting a symlink at `members/active/` or `secrets/`.
 pub fn save_bytes(path: &Path, data: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    reject_symlinked_parent(parent)?;
-    reject_symlinked_target(path)?;
-    let mut temp = NamedTempFile::new_in(parent)
-        .map_err(|e| Error::io_with_source(format!("Failed to create temp file: {}", e), e))?;
+    enforce_parent_not_symlink(parent)?;
+    enforce_target_not_symlink(path)?;
+    let mut temp = NamedTempFile::new_in(parent).map_err(|e| {
+        Error::build_io_error_with_source(format!("Failed to create temp file: {}", e), e)
+    })?;
 
     temp.write_all(data)
-        .map_err(|e| Error::io_with_source(format!("Write failed: {}", e), e))?;
+        .map_err(|e| Error::build_io_error_with_source(format!("Write failed: {}", e), e))?;
 
     temp.flush()
-        .map_err(|e| Error::io_with_source(format!("Flush failed: {}", e), e))?;
+        .map_err(|e| Error::build_io_error_with_source(format!("Flush failed: {}", e), e))?;
 
     temp.persist(path).map_err(|e| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Persist to {} failed: {}",
-                display_path_relative_to_cwd(path),
+                format_path_relative_to_cwd(path),
                 e.error
             ),
             e.error,

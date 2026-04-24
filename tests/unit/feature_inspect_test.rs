@@ -11,7 +11,7 @@ use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_ME
 use secretenv::feature::inspect::{build_inspect_view, InspectOutput};
 use secretenv::feature::verify::file::verify_file_document_report;
 use secretenv::feature::verify::kv::signature::verify_kv_document_report;
-use secretenv::format::content::EncryptedContent;
+use secretenv::format::content::EncContent;
 use secretenv::format::schema::document::parse_kv_signature_token;
 use secretenv::format::token::TokenCodec;
 use secretenv::model::verification::VerifyingKeySource;
@@ -71,7 +71,7 @@ fn build_common_opts(
 }
 
 /// Helper: create a kv-enc encrypted file and return its content as String.
-fn create_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
+fn build_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
     let _guard = EnvGuard::new(&["SECRETENV_PRIVATE_KEY", "SECRETENV_KEY_PASSWORD"]);
     let temp_dir = setup_test_keystore(member_id);
     let test_dir = temp_dir.path().to_path_buf();
@@ -86,7 +86,7 @@ fn create_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_id: Some(member_id.to_string()),
+        member_handle: Some(member_id.to_string()),
         name: None,
         key: "DATABASE_URL".to_string(),
         value: Some("postgres://localhost".to_string()),
@@ -99,7 +99,7 @@ fn create_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 }
 
 /// Helper: create a file-enc encrypted file and return its content as String.
-fn create_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
+fn build_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
     let _guard = EnvGuard::new(&["SECRETENV_PRIVATE_KEY", "SECRETENV_KEY_PASSWORD"]);
     let temp_dir = setup_test_keystore(member_id);
     let test_dir = temp_dir.path().to_path_buf();
@@ -117,7 +117,7 @@ fn create_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(member_id.to_string()),
+        member_handle: Some(member_id.to_string()),
         out: Some(encrypted_path.clone()),
         stdout: false,
         stdin: false,
@@ -135,9 +135,9 @@ fn create_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 
 #[test]
 fn test_inspect_file_enc_header_contains_sid_and_timestamps() {
-    let (_temp_dir, content) = create_file_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let header = output
@@ -169,9 +169,9 @@ fn test_inspect_file_enc_header_contains_sid_and_timestamps() {
 
 #[test]
 fn test_inspect_file_enc_wrap_data_contains_recipients() {
-    let (_temp_dir, content) = create_file_enc_content(BOB_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(BOB_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let wrap_section = output
@@ -192,9 +192,9 @@ fn test_inspect_file_enc_wrap_data_contains_recipients() {
 
 #[test]
 fn test_inspect_file_enc_payload_contains_sid() {
-    let (_temp_dir, content) = create_file_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let payload = output
@@ -211,9 +211,9 @@ fn test_inspect_file_enc_payload_contains_sid() {
 
 #[test]
 fn test_inspect_file_enc_shows_signature() {
-    let (_temp_dir, content) = create_file_enc_content(CAROL_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(CAROL_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -245,9 +245,9 @@ fn test_inspect_file_enc_shows_signature() {
 
 #[test]
 fn test_inspect_kv_enc_shows_header() {
-    let (_temp_dir, content) = create_kv_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -267,9 +267,9 @@ fn test_inspect_kv_enc_shows_header() {
 
 #[test]
 fn test_inspect_kv_enc_shows_entries() {
-    let (_temp_dir, content) = create_kv_enc_content(BOB_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(BOB_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -284,9 +284,9 @@ fn test_inspect_kv_enc_shows_entries() {
 
 #[test]
 fn test_inspect_kv_enc_shows_wrap_data() {
-    let (_temp_dir, content) = create_kv_enc_content(CAROL_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(CAROL_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -300,9 +300,9 @@ fn test_inspect_kv_enc_shows_wrap_data() {
 
 #[test]
 fn test_inspect_kv_enc_entries_contain_k_field() {
-    let (_temp_dir, content) = create_kv_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_ID);
 
-    let encrypted = EncryptedContent::detect(content).unwrap();
+    let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let entries = output
@@ -323,7 +323,7 @@ fn test_inspect_kv_enc_entries_contain_k_field() {
 
 #[test]
 fn test_build_error_report() {
-    let (_temp_dir, content) = create_kv_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_ID);
 
     // Corrupt the signature kid to trigger a "Cannot find public key" error
     let lines: Vec<&str> = content.lines().collect();
@@ -356,7 +356,7 @@ fn test_build_error_report() {
 
 #[test]
 fn test_build_success_report() {
-    let (_temp_dir, content) = create_file_enc_content(DAVE_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(DAVE_MEMBER_ID);
 
     let file_enc_doc: secretenv::model::file_enc::FileEncDocument =
         serde_json::from_str(&content).unwrap();
@@ -400,7 +400,7 @@ fn test_inspect_kv_enc_with_verification() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         name: None,
         key: "DATABASE_URL".to_string(),
         value: Some("postgres://localhost".to_string()),
@@ -412,7 +412,7 @@ fn test_inspect_kv_enc_with_verification() {
     let encrypted_content = fs::read_to_string(&encrypted_path).unwrap();
 
     // Inspect with verification
-    let encrypted = EncryptedContent::detect(encrypted_content.clone()).unwrap();
+    let encrypted = EncContent::detect(encrypted_content.clone()).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
     let signature_report = verify_kv_document_report(&encrypted_content, false);
 
@@ -452,7 +452,7 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -491,7 +491,7 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
 
     // Inspect with verification (keystore doesn't have the key).
     // With graceful degradation, inspect succeeds and shows FAILED verification status.
-    let encrypted = EncryptedContent::detect(kv_content.clone()).unwrap();
+    let encrypted = EncContent::detect(kv_content.clone()).unwrap();
     let result = build_inspect_view(&encrypted);
 
     assert!(
@@ -523,7 +523,7 @@ fn test_verify_kv_document_report() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_id: Some(BOB_MEMBER_ID.to_string()),
+        member_handle: Some(BOB_MEMBER_ID.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -565,7 +565,7 @@ fn test_verify_file_document_report() {
     let encrypted_path = test_dir.join("test.json");
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(CAROL_MEMBER_ID.to_string()),
+        member_handle: Some(CAROL_MEMBER_ID.to_string()),
         out: Some(encrypted_path.clone()),
         stdout: false,
         stdin: false,
@@ -606,7 +606,7 @@ fn test_verify_kv_document_report_failure_wrong_key() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -666,7 +666,7 @@ fn test_verify_kv_document_report_with_embedded_signer_pub() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_id: Some(DAVE_MEMBER_ID.to_string()),
+        member_handle: Some(DAVE_MEMBER_ID.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),

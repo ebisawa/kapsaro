@@ -17,8 +17,8 @@ pub use test_utils::keygen_helpers;
 
 #[path = "unit/cli_rewrap_args_test.rs"]
 pub mod cli_rewrap_args_test;
-#[path = "unit/cli_set_member_id_test.rs"]
-pub mod cli_set_member_id_test;
+#[path = "unit/cli_set_member_handle_test.rs"]
+pub mod cli_set_member_handle_test;
 #[path = "unit/config_types_test.rs"]
 pub mod config_types_test;
 #[path = "unit/crypto_kdf_test.rs"]

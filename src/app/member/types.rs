@@ -86,7 +86,7 @@ pub struct MemberRemoveResult {
 }
 
 #[derive(Debug)]
-pub struct MemberRemovePreview {
+pub struct MemberRemovalReport {
     pub member_id: String,
     pub affected_artifacts: Vec<std::path::PathBuf>,
     pub warnings: Vec<String>,

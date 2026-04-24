@@ -8,8 +8,8 @@ use crate::feature::disclosure::add_to_removed_history;
 use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
 use crate::feature::envelope::wrap::build_wrap_item_for_file;
 use crate::feature::recipient::{
-    build_new_wrap_items, check_recipient_exists, resolve_verified_recipients,
-    validate_not_empty_recipients, warn_recipient_not_found,
+    build_new_wrap_items, check_recipient_exists, print_recipient_not_found_warning,
+    resolve_verified_recipients, validate_not_empty_recipients,
 };
 use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::file_enc::VerifiedFileEncDocument;
@@ -29,7 +29,7 @@ pub fn remove_file_recipients(
     let mut to_remove: Vec<(String, String)> = Vec::new();
     for rid in recipients_to_remove {
         if !check_recipient_exists(&current_recipients, rid) {
-            warn_recipient_not_found(rid);
+            print_recipient_not_found_warning(rid);
             continue;
         }
 
@@ -86,7 +86,7 @@ pub fn add_file_recipients(
     Ok(())
 }
 
-pub fn refresh_file_recipients(
+pub fn rewrite_file_recipient_wraps(
     protected: &mut FileEncDocumentProtected,
     verified: &VerifiedFileEncDocument,
     recipients_to_refresh: &[String],

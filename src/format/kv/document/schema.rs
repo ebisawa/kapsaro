@@ -1,12 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::format::schema::validator::embedded_validator;
+use crate::format::schema::validator::load_embedded_validator;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::{Error, Result};
 
 pub(super) fn validate_kv_document_schema(head: &KvHeader, wrap: &KvWrap) -> Result<()> {
-    let validator = embedded_validator()?;
+    let validator = load_embedded_validator()?;
     let head_value = serialize_schema_value("HEAD", head)?;
     validator.validate_kv_value(&head_value)?;
 

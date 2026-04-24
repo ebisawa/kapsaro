@@ -20,7 +20,7 @@ pub fn to_token_with_codec_impl<T: serde::Serialize>(
     // v3 Rev9: token encoding is JSON/JCS only
     let _ = codec;
     let json_value = serde_json::to_value(value).map_err(|e| {
-        crate::Error::from(FormatError::parse_failed_with_source(
+        crate::Error::from(FormatError::build_parse_error_with_source(
             format!("JSON serialization failed: {}", e),
             e,
         ))

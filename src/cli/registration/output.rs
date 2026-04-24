@@ -12,7 +12,7 @@ use crate::cli::common::output::text::registration::{
     print_created_workspace_summary, print_init_noop_summary, print_registration_next_steps,
 };
 use crate::cli::key::common::print_key_generation_binding_info;
-use crate::support::kid::build_kid_display;
+use crate::support::kid::format_kid_display;
 use crate::Error;
 use std::path::Path;
 
@@ -50,12 +50,12 @@ pub(super) fn print_init_noop_message(workspace_path: &Path) {
 
 fn print_existing_member_message(outcome: &RegistrationOutcome) {
     eprintln!("Already a member of this workspace.");
-    let kid_display = build_kid_display(&outcome.key_result.kid)
+    let kid_display = format_kid_display(&outcome.key_result.kid)
         .unwrap_or_else(|_| outcome.key_result.kid.clone());
     eprintln!(
         "Current key: {} (active, expires {})",
         kid_display,
-        build_expiry_date_display(&outcome.key_result.expires_at)
+        format_expiry_date(&outcome.key_result.expires_at)
     );
 }
 
@@ -72,7 +72,7 @@ fn print_key_info(member_id: &str, key_result: &MemberKeySetupResult) -> Result<
         print_generated_key_summary(
             member_id,
             &key_result.kid,
-            build_expiry_date_display(&key_result.expires_at),
+            format_expiry_date(&key_result.expires_at),
             false,
         );
         return Ok(());
@@ -111,6 +111,6 @@ fn target_directory_name(target: RegistrationTarget) -> &'static str {
     target.directory_name()
 }
 
-fn build_expiry_date_display(expires_at: &str) -> &str {
+fn format_expiry_date(expires_at: &str) -> &str {
     expires_at.split('T').next().unwrap_or(expires_at)
 }

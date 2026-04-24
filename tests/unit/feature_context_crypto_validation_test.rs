@@ -3,10 +3,10 @@
 
 //! Validation tests for feature::context::crypto module
 //!
-//! Tests for `validate_okp_key` and `validate_ed25519_consistency` functions.
+//! Tests for private key material validation helpers.
 
 use ed25519_dalek::SigningKey;
-use secretenv::feature::context::crypto::{validate_ed25519_consistency, validate_okp_key};
+use secretenv::feature::key::material::{validate_ed25519_consistency, validate_okp_key};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::secret::SecretArray;
 

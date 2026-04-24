@@ -8,7 +8,7 @@
 //! error paths such as wrong kid, empty entries, and rid mismatch scenarios.
 
 use crate::keygen_helpers::{
-    make_decrypted_private_key_plaintext, make_recipient_key, make_verified_members,
+    build_verified_private_key, build_verified_recipient_key, build_verified_recipient_keys,
 };
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
@@ -68,7 +68,7 @@ fn encrypt_file_for_test(
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
 
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -112,7 +112,7 @@ fn encrypt_kv_for_test(
     let kv_map = parse_dotenv(dotenv_content).unwrap();
     let signer_pub = public_key.clone();
     let members = vec![public_key];
-    let verified_members = make_verified_members(&members);
+    let verified_members = build_verified_recipient_keys(&members);
 
     let encrypted = encrypt_kv_document(
         &kv_map,
@@ -315,7 +315,7 @@ fn test_decrypt_kv_entries_empty() {
     let kv_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let signer_pub = public_key.clone();
     let members = vec![public_key];
-    let verified_members = make_verified_members(&members);
+    let verified_members = build_verified_recipient_keys(&members);
 
     let encrypted = encrypt_kv_document(
         &kv_map,
@@ -428,7 +428,7 @@ fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
     SigningKey::from_bytes(&seed)
 }
 
-fn create_test_master_key() -> MasterKey {
+fn build_test_master_key() -> MasterKey {
     let key_bytes = [1u8; 32];
     MasterKey::new(key_bytes)
 }
@@ -456,7 +456,7 @@ fn test_unwrap_master_key_for_file() {
     let signing_key = generate_ed25519_keypair([2u8; 32]);
     let content = b"Hello, World!";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -473,7 +473,7 @@ fn test_unwrap_master_key_for_file() {
 
     // Wrap private key in Decrypted for unwrap API
     let decrypted_key =
-        make_decrypted_private_key_plaintext(&private_key, ALICE_MEMBER_ID, kid, "SHA256:test");
+        build_verified_private_key(&private_key, ALICE_MEMBER_ID, kid, "SHA256:test");
 
     // Wrap in VerifiedFileEncDocument (tests use freshly encrypted content, treated as verified)
     let proof = SignatureVerificationProof::new(
@@ -504,7 +504,7 @@ fn test_unwrap_master_key_for_file_wrong_member() {
     let signing_key = generate_ed25519_keypair([2u8; 32]);
     let content = b"Hello, World!";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -528,7 +528,7 @@ fn test_unwrap_master_key_for_file_wrong_member() {
     let verified = VerifiedFileEncDocument::new(file_enc_doc, proof);
 
     // Try to unwrap with wrong member (should fail - bob doesn't have a wrap)
-    let dummy_private_key = make_decrypted_private_key_plaintext(
+    let dummy_private_key = build_verified_private_key(
         &PrivateKeyPlaintext {
             keys: IdentityKeysPrivate {
                 kem: JwkOkpPrivateKey {
@@ -581,17 +581,17 @@ fn test_unwrap_master_key_from_wrap_item() {
         decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
 
     let sid = Uuid::new_v4();
-    let master_key = create_test_master_key();
+    let master_key = build_test_master_key();
 
     // Extract kid from public key for kids list
     // Create wrap item (wrap in Attested for API)
-    let attested_pubkey = make_recipient_key(public_key.clone());
+    let attested_pubkey = build_verified_recipient_key(public_key.clone());
     let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
 
     // Unwrap master key using the same private key that matches the public key used to create wrap
     // Note: build_wrap_item_for_file uses hpke_info::file, so we need to use unwrap_master_key_base
     // with hpke_info::file instead of unwrap_master_key_from_wrap_item (which uses hpke_info::kv_file)
-    let decrypted_key = make_decrypted_private_key_plaintext(
+    let decrypted_key = build_verified_private_key(
         &private_key_plaintext,
         ALICE_MEMBER_ID,
         &public_key.protected.kid,
@@ -634,15 +634,15 @@ fn test_hpke_aad_binding_defence_in_depth() {
         decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
 
     let sid = Uuid::new_v4();
-    let master_key = create_test_master_key();
+    let master_key = build_test_master_key();
 
     // Create wrap item (uses aad=info) - wrap in Attested for API
-    let attested_pubkey = make_recipient_key(public_key.clone());
+    let attested_pubkey = build_verified_recipient_key(public_key.clone());
     let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
 
     // Try to unwrap with empty AAD (old behavior) - should fail
     // This demonstrates that aad=info binding is enforced
-    let decrypted_key = make_decrypted_private_key_plaintext(
+    let decrypted_key = build_verified_private_key(
         &private_key_plaintext,
         ALICE_MEMBER_ID,
         &public_key.protected.kid,

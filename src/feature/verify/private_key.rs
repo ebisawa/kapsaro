@@ -10,7 +10,7 @@
 
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 
 /// Verify that a PrivateKey document matches its corresponding PublicKey document.
@@ -21,7 +21,7 @@ pub fn verify_private_key_matches_public_key(
     public_key: &PublicKey,
 ) -> Result<()> {
     if private_key.protected.member_id != public_key.protected.member_id {
-        return Err(Error::verify(
+        return Err(Error::build_verification_error(
             "V-PRIVATEKEY-PUBKEY-MISMATCH",
             format!(
                 "member_id mismatch: private.protected.member_id '{}' != public.protected.member_id '{}'",
@@ -31,12 +31,12 @@ pub fn verify_private_key_matches_public_key(
     }
 
     if private_key.protected.kid != public_key.protected.kid {
-        return Err(Error::verify(
+        return Err(Error::build_verification_error(
             "V-PRIVATEKEY-PUBKEY-MISMATCH",
             format!(
                 "kid mismatch: private.protected.kid '{}' != public.protected.kid '{}'",
-                kid_display_lossy(&private_key.protected.kid),
-                kid_display_lossy(&public_key.protected.kid)
+                format_kid_display_lossy(&private_key.protected.kid),
+                format_kid_display_lossy(&public_key.protected.kid)
             ),
         ));
     }

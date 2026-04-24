@@ -3,12 +3,12 @@
 
 use super::*;
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_trust_store_for_workspace,
-    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 
 #[cfg(unix)]
-use secretenv::io::trust::paths::trust_store_file_path;
+use secretenv::io::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_rewrap_requires_workspace() {
@@ -56,7 +56,7 @@ fn test_rewrap_with_no_files_fails_gracefully() {
 
 #[test]
 fn test_rewrap_nonexistent_workspace_fails() {
-    let (_ssh_temp, ssh_priv, _ssh_pub, _pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _pub_content) = generate_temp_ssh_keypair();
     let home_dir = tempfile::TempDir::new().unwrap();
 
     cmd()
@@ -90,7 +90,7 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let mut common_opts = default_common_options();
@@ -99,7 +99,7 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    create_kv_file(
+    save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -133,7 +133,7 @@ fn test_rewrap_cli_rejects_strict_key_checking_no() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    create_kv_file(
+    save_kv_file(
         &workspace_dir,
         common_opts,
         ALICE_MEMBER_ID,
@@ -163,7 +163,7 @@ fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
-    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
@@ -173,7 +173,7 @@ fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    create_kv_file(
+    save_kv_file(
         &workspace_dir,
         common_opts,
         ALICE_MEMBER_ID,

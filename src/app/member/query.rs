@@ -3,12 +3,12 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::feature::member::verification::load_and_verify_member_file;
+use crate::feature::member::verification::verify_member_file;
 use crate::io::workspace::members::{
-    active_member_file_path, incoming_member_file_path, list_active_member_paths,
+    get_active_member_file_path, get_incoming_member_file_path, list_active_member_paths,
     list_incoming_member_paths, MemberStatus,
 };
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::Error;
 use crate::Result;
 
@@ -33,10 +33,13 @@ pub fn list_members(options: &CommonCommandOptions) -> Result<MemberListResult> 
     })
 }
 
-pub fn show_member(options: &CommonCommandOptions, member_id: &str) -> Result<MemberShowResult> {
+pub fn load_member_show_result(
+    options: &CommonCommandOptions,
+    member_id: &str,
+) -> Result<MemberShowResult> {
     let workspace = require_workspace(options, "member show")?;
-    let active_path = active_member_file_path(&workspace.root_path, member_id);
-    let incoming_path = incoming_member_file_path(&workspace.root_path, member_id);
+    let active_path = get_active_member_file_path(&workspace.root_path, member_id);
+    let incoming_path = get_incoming_member_file_path(&workspace.root_path, member_id);
     let (member_path, status) = if active_path.exists() {
         (active_path, MemberStatus::Active)
     } else if incoming_path.exists() {
@@ -46,7 +49,7 @@ pub fn show_member(options: &CommonCommandOptions, member_id: &str) -> Result<Me
             message: format!("Member '{}' not found in workspace", member_id),
         });
     };
-    let verified = load_and_verify_member_file(&member_path, Some(member_id), options.verbose)?;
+    let verified = verify_member_file(&member_path, Some(member_id), options.verbose)?;
     Ok(MemberShowResult {
         member: build_member_document_view(verified.public_key, verified.warnings)?,
         status: MembershipStatus::from(status),
@@ -60,11 +63,11 @@ fn collect_member_entries(
 ) -> Result<Vec<super::types::MemberListEntry>> {
     let mut entries = Vec::new();
     for member_path in member_paths {
-        match load_and_verify_member_file(member_path, None, debug) {
+        match verify_member_file(member_path, None, debug) {
             Ok(verified) => entries.push(build_member_list_entry(verified.public_key)?),
             Err(error) => warnings.push(format!(
                 "Skipping invalid member file {}: {}",
-                display_path_relative_to_cwd(member_path),
+                format_path_relative_to_cwd(member_path),
                 error
             )),
         }

@@ -27,7 +27,7 @@ fn test_confirm_member_remove_with_reader_rejects_non_interactive_without_force(
     .unwrap_err();
 
     assert!(error
-        .user_message()
+        .format_user_message()
         .contains("without --force in non-interactive mode"));
 }
 
@@ -53,5 +53,7 @@ fn test_confirm_member_remove_with_reader_rejects_interactive_default_no() {
     )
     .unwrap_err();
 
-    assert!(error.user_message().contains("Member removal cancelled"));
+    assert!(error
+        .format_user_message()
+        .contains("Member removal cancelled"));
 }

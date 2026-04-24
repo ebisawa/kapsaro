@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use super::build_member_show_lines;
+use super::format_member_show_lines;
 use crate::cli::common::output::member::{view::MemberGithubClaimView, MemberShowView};
 use console::{colors_enabled, set_colors_enabled};
 use serde_json::json;
@@ -27,11 +27,11 @@ impl Drop for StdoutColorGuard {
 
 #[test]
 #[serial]
-fn test_build_member_show_lines_renders_header_and_status_section() {
+fn test_format_member_show_lines_renders_header_and_status_section() {
     let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
-    let rendered = build_member_show_lines(&view).join("\n");
+    let rendered = format_member_show_lines(&view).join("\n");
 
     assert!(
         rendered.contains("\u{25CF} alice@example.com"),
@@ -44,11 +44,11 @@ fn test_build_member_show_lines_renders_header_and_status_section() {
 
 #[test]
 #[serial]
-fn test_build_member_show_lines_renders_key_section_with_kid_in_title() {
+fn test_format_member_show_lines_renders_key_section_with_kid_in_title() {
     let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
-    let rendered = build_member_show_lines(&view).join("\n");
+    let rendered = format_member_show_lines(&view).join("\n");
 
     assert!(
         rendered.contains("Key  KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"),
@@ -61,11 +61,11 @@ fn test_build_member_show_lines_renders_key_section_with_kid_in_title() {
 
 #[test]
 #[serial]
-fn test_build_member_show_lines_renders_ssh_attestation_fingerprint_only() {
+fn test_format_member_show_lines_renders_ssh_attestation_fingerprint_only() {
     let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
-    let rendered = build_member_show_lines(&view).join("\n");
+    let rendered = format_member_show_lines(&view).join("\n");
 
     assert!(rendered.contains("SSH Attestation\n"));
     assert!(rendered.contains("  Fingerprint : SHA256:TESTFINGERPRINT"));
@@ -76,25 +76,25 @@ fn test_build_member_show_lines_renders_ssh_attestation_fingerprint_only() {
 
 #[test]
 #[serial]
-fn test_build_member_show_lines_omits_github_binding_when_absent() {
+fn test_format_member_show_lines_omits_github_binding_when_absent() {
     let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(None);
 
-    let rendered = build_member_show_lines(&view).join("\n");
+    let rendered = format_member_show_lines(&view).join("\n");
 
     assert!(!rendered.contains("GitHub Binding"));
 }
 
 #[test]
 #[serial]
-fn test_build_member_show_lines_includes_github_binding_section() {
+fn test_format_member_show_lines_includes_github_binding_section() {
     let _guard = StdoutColorGuard::new(false);
     let view = build_member_show_view(Some(MemberGithubClaimView {
         id: 42,
         login: "octocat",
     }));
 
-    let rendered = build_member_show_lines(&view).join("\n");
+    let rendered = format_member_show_lines(&view).join("\n");
 
     assert!(rendered.contains("GitHub Binding\n"));
     assert!(rendered.contains("  octocat (id: 42)"));

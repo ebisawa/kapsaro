@@ -11,7 +11,7 @@ use crate::app::context::execution::{
     resolve_read_execution, resolve_write_execution, ExecutionContext,
 };
 use crate::app::context::member::{resolve_key_owner, resolve_required_member};
-use crate::app::context::paths::ResolvedCommandPaths;
+use crate::app::context::paths::CommandPathResolution;
 use crate::app_test_utils::build_test_command_options;
 use crate::test_utils::{setup_test_keystore, EnvGuard};
 use tempfile::TempDir;
@@ -21,7 +21,7 @@ const ENV_KEY_PASSWORD: &str = "SECRETENV_KEY_PASSWORD";
 const ENV_WORKSPACE: &str = "SECRETENV_WORKSPACE";
 const ENV_HOME: &str = "SECRETENV_HOME";
 
-fn create_workspace_dirs(path: &std::path::Path) {
+fn ensure_workspace_dirs(path: &std::path::Path) {
     std::fs::create_dir_all(path.join("members/active")).unwrap();
     std::fs::create_dir_all(path.join("members/incoming")).unwrap();
     std::fs::create_dir_all(path.join("secrets")).unwrap();
@@ -80,7 +80,7 @@ fn test_resolve_read_execution_without_env_var_fails() {
 }
 
 #[test]
-fn test_resolve_read_execution_rejects_member_id_in_env_mode() {
+fn test_resolve_read_execution_rejects_member_handle_in_env_mode() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD, ENV_WORKSPACE, ENV_HOME]);
     std::env::remove_var(ENV_WORKSPACE);
 
@@ -88,7 +88,7 @@ fn test_resolve_read_execution_rejects_member_id_in_env_mode() {
 
     let options = build_test_command_options(home.path(), None);
 
-    // Provide member_id with ssh_ctx=None to trigger the error path.
+    // Provide member handle with ssh_ctx=None to trigger the error path.
     std::env::set_var(ENV_PRIVATE_KEY, "dummy");
     std::env::set_var(ENV_KEY_PASSWORD, "dummy");
 
@@ -135,10 +135,10 @@ fn test_resolve_read_execution_rejects_kid_in_env_mode() {
 fn test_resolved_command_paths_loads_base_dir_and_keystore_root() {
     let home = TempDir::new().unwrap();
     let workspace = TempDir::new().unwrap();
-    create_workspace_dirs(workspace.path());
+    ensure_workspace_dirs(workspace.path());
     let options = build_test_command_options(home.path(), Some(workspace.path()));
 
-    let resolved = ResolvedCommandPaths::load(&options).unwrap();
+    let resolved = CommandPathResolution::load(&options).unwrap();
 
     assert_eq!(resolved.base_dir, home.path());
     assert_eq!(resolved.keystore_root, home.path().join("keys"));
@@ -152,7 +152,7 @@ fn test_resolved_command_paths_loads_base_dir_and_keystore_root() {
 }
 
 #[test]
-fn test_resolve_write_execution_rejects_member_id_in_env_mode() {
+fn test_resolve_write_execution_rejects_member_handle_in_env_mode() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD, ENV_WORKSPACE, ENV_HOME]);
     std::env::remove_var(ENV_WORKSPACE);
 
@@ -176,10 +176,10 @@ fn test_resolve_write_execution_rejects_member_id_in_env_mode() {
 }
 
 #[test]
-fn test_resolve_required_member_uses_config_resolution_member_id() {
+fn test_resolve_required_member_uses_config_resolution_member_handle() {
     let home = TempDir::new().unwrap();
     let workspace = TempDir::new().unwrap();
-    create_workspace_dirs(workspace.path());
+    ensure_workspace_dirs(workspace.path());
     std::fs::create_dir_all(home.path()).unwrap();
     std::fs::write(
         home.path().join("config.toml"),
@@ -194,7 +194,7 @@ fn test_resolve_required_member_uses_config_resolution_member_id() {
 }
 
 #[test]
-fn test_resolve_key_owner_uses_kid_lookup_when_member_id_missing() {
+fn test_resolve_key_owner_uses_kid_lookup_when_member_handle_missing() {
     let home = setup_test_keystore("alice@example.com");
     let options = build_test_command_options(home.path(), None);
     let key_ctx = secretenv::io::keystore::active::load_active_kid(
@@ -210,7 +210,7 @@ fn test_resolve_key_owner_uses_kid_lookup_when_member_id_missing() {
 }
 
 #[test]
-fn test_resolve_key_owner_uses_kid_prefix_lookup_when_member_id_missing() {
+fn test_resolve_key_owner_uses_kid_prefix_lookup_when_member_handle_missing() {
     let home = setup_test_keystore("alice@example.com");
     let options = build_test_command_options(home.path(), None);
     let key_ctx = secretenv::io::keystore::active::load_active_kid(

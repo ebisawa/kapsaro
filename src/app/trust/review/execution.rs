@@ -6,12 +6,12 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::Result;
 
-use super::persist::persist_approved_known_keys;
-use super::review::{
-    reject_non_member_read_trust, review_recipient_trust_with_handler_and_verifier,
-    review_signer_trust_with_handlers_and_verifier, ReadSignerTrustReviewPlan,
-    WriteRecipientTrustReviewPlan,
+use super::persistence::save_approved_known_keys;
+use super::recipient::review_recipient_trust_with_confirmation_verifier;
+use super::signer::{
+    enforce_read_trust_member_eligibility, review_signer_trust_with_confirmation_verifier,
 };
+use super::types::{ReadSignerTrustReviewPlan, WriteRecipientTrustReviewPlan};
 
 #[derive(Clone, Copy)]
 pub(crate) struct TrustExecutionContext<'a> {
@@ -42,20 +42,23 @@ where
 {
     emit_warnings(execution.warnings);
     if !trust_plan.allow_non_member {
-        reject_non_member_read_trust(trust_plan.trust_outcome, trust_plan.labels.subject)?;
+        enforce_read_trust_member_eligibility(trust_plan.trust_outcome, trust_plan.labels.subject)?;
     }
-    let approvals = review_signer_trust_with_handlers_and_verifier(
+    let approvals = review_signer_trust_with_confirmation_verifier(
         trust_plan.trust_outcome,
         trust_plan.labels.context,
         trust_plan.labels.subject,
         |candidate| {
-            super::online::verify_trust_candidate_online(candidate, execution.options.verbose)
+            super::online_verification::verify_trust_candidate_online(
+                candidate,
+                execution.options.verbose,
+            )
         },
         confirm_known,
         confirm_non_member,
     )?;
     let result = execute()?;
-    persist_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
+    save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
     Ok(result)
 }
 
@@ -85,27 +88,33 @@ where
 {
     emit_warnings(execution.warnings);
     let mut approvals = match trust_plan.signer_trust {
-        Some((trust_outcome, labels)) => review_signer_trust_with_handlers_and_verifier(
+        Some((trust_outcome, labels)) => review_signer_trust_with_confirmation_verifier(
             trust_outcome,
             labels.context,
             labels.subject,
             |candidate| {
-                super::online::verify_trust_candidate_online(candidate, execution.options.verbose)
+                super::online_verification::verify_trust_candidate_online(
+                    candidate,
+                    execution.options.verbose,
+                )
             },
             confirm_known,
             confirm_non_member,
         )?,
         None => Vec::new(),
     };
-    approvals.extend(review_recipient_trust_with_handler_and_verifier(
+    approvals.extend(review_recipient_trust_with_confirmation_verifier(
         trust_plan.recipient_trust,
         trust_plan.recipient_context_label,
         |candidate| {
-            super::online::verify_trust_candidate_online(candidate, execution.options.verbose)
+            super::online_verification::verify_trust_candidate_online(
+                candidate,
+                execution.options.verbose,
+            )
         },
         confirm_recipients,
     )?);
     let result = execute()?;
-    persist_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
+    save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
     Ok(result)
 }

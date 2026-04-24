@@ -5,7 +5,7 @@ use super::setup_init_env;
 use crate::cli::common::{cmd, ALICE_MEMBER_ID, BOB_MEMBER_ID};
 
 #[test]
-fn test_init_with_member_id() {
+fn test_init_with_member_handle() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
     cmd()
@@ -26,7 +26,7 @@ fn test_init_with_member_id() {
 }
 
 #[test]
-fn test_init_with_env_member_id() {
+fn test_init_with_env_member_handle() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
     cmd()

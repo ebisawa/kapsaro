@@ -5,7 +5,7 @@ use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::build_signing_context;
 use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
-use crate::feature::kv::document::UnsignedKvDocument;
+use crate::feature::kv::document::KvDocumentDraft;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvHeader;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
@@ -19,7 +19,7 @@ pub(crate) fn build_unsigned_from_verified(
     head: KvHeader,
     override_codec: Option<TokenCodec>,
     debug: bool,
-) -> Result<UnsignedKvDocument> {
+) -> Result<KvDocumentDraft> {
     let doc = verified.document();
     let token_codec = detect_token_codec(doc.lines(), override_codec);
     KvDocumentBuilder::from_lines(head, None, doc.lines(), token_codec, debug)
@@ -27,7 +27,7 @@ pub(crate) fn build_unsigned_from_verified(
 }
 
 pub(crate) fn sign_unsigned_with_key_context(
-    unsigned: UnsignedKvDocument,
+    unsigned: KvDocumentDraft,
     key_ctx: &CryptoContext,
     debug: bool,
 ) -> Result<String> {

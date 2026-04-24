@@ -17,7 +17,7 @@ use crate::io::keystore::public_key_source::{
 };
 use crate::io::ssh::backend::SignatureBackend;
 use crate::model::identity::{Kid, MemberId};
-use crate::support::kid::build_kid_display;
+use crate::support::kid::format_kid_display;
 use crate::Result;
 
 pub fn load_crypto_context(
@@ -101,7 +101,7 @@ fn resolve_keystore_kid(
 ) -> Result<String> {
     let kid = resolve_kid(keystore_root, member_id, explicit_kid)?;
     if debug_enabled {
-        let kid_display = build_kid_display(&kid).unwrap_or_else(|_| kid.clone());
+        let kid_display = format_kid_display(&kid).unwrap_or_else(|_| kid.clone());
         debug!("[CRYPTO] load_crypto_context: resolved kid={}", kid_display);
     }
     Ok(kid)

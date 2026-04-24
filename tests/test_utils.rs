@@ -27,11 +27,12 @@ pub use constants::{
 pub use crypto_context::setup_member_key_context;
 #[allow(unused_imports)]
 pub use fixture::{
-    create_temp_ssh_keypair_in_dir, load_fixture_ssh_pubkey, save_public_key, setup_test_keystore,
-    setup_test_keystore_from_fixtures, setup_test_workspace, setup_test_workspace_from_fixtures,
+    generate_temp_ssh_keypair_in_dir, load_fixture_ssh_pubkey, save_public_key,
+    setup_test_keystore, setup_test_keystore_from_fixtures, setup_test_workspace,
+    setup_test_workspace_from_fixtures,
 };
 #[allow(unused_imports)]
-pub use keygen_helpers::{create_test_private_key, keygen_test};
+pub use keygen_helpers::{build_test_private_key, keygen_test};
 use secretenv::model::identity::{Kid, MemberId};
 use secretenv::{io::keystore::member::find_active_key_document, Error};
 #[allow(unused_imports)]
@@ -58,7 +59,7 @@ pub fn setup_trust_store_for_workspace(
     key_ctx: &secretenv::feature::context::crypto::CryptoContext,
 ) {
     use secretenv::feature::trust::signature::sign_trust_store;
-    use secretenv::io::trust::paths::trust_store_file_path;
+    use secretenv::io::trust::paths::get_trust_store_file_path;
     use secretenv::io::trust::store::save_trust_store;
     use secretenv::io::workspace::members::load_active_member_files;
     use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
@@ -88,7 +89,7 @@ pub fn setup_trust_store_for_workspace(
     };
 
     let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let path = trust_store_file_path(home, owner_member_id);
+    let path = get_trust_store_file_path(home, owner_member_id);
     save_trust_store(&path, &doc).unwrap();
 }
 
@@ -108,7 +109,8 @@ pub fn update_active_private_key_expires_at(home: &Path, member_id: &str, expire
         .trim()
         .to_string();
     let created_at =
-        secretenv::support::time::build_timestamp_display(time::OffsetDateTime::now_utc()).unwrap();
+        secretenv::support::time::format_timestamp_rfc3339(time::OffsetDateTime::now_utc())
+            .unwrap();
     let ssh_binding = SshBindingContext {
         public_key: ssh_pubkey.clone(),
         fingerprint: build_sha256_fingerprint(&ssh_pubkey).unwrap(),
@@ -135,10 +137,10 @@ pub fn update_active_private_key_expires_at(home: &Path, member_id: &str, expire
 
 pub fn build_expiring_soon_timestamp(days_from_now: i64) -> String {
     let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(days_from_now);
-    secretenv::support::time::build_timestamp_display(expires_at).unwrap()
+    secretenv::support::time::format_timestamp_rfc3339(expires_at).unwrap()
 }
 
-pub fn sync_active_public_key_to_workspace(
+pub fn save_active_public_key_to_workspace(
     home: &Path,
     workspace: &Path,
     member_id: &str,
@@ -157,7 +159,7 @@ pub fn sync_active_public_key_to_workspace(
         serde_json::to_string_pretty(&active_key.public_key).unwrap(),
     )
     .map_err(|error| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Failed to write workspace member file: {}",
                 member_path.display()
@@ -169,7 +171,7 @@ pub fn sync_active_public_key_to_workspace(
 
 // Used by library tests (via crate::test_utils) — not referenced in the integration test binary.
 #[allow(dead_code)]
-pub fn stage_active_public_key_to_workspace_incoming(
+pub fn save_active_public_key_to_workspace_incoming(
     home: &Path,
     workspace: &Path,
     member_id: &str,
@@ -188,7 +190,7 @@ pub fn stage_active_public_key_to_workspace_incoming(
         serde_json::to_string_pretty(&active_key.public_key).unwrap(),
     )
     .map_err(|error| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Failed to write workspace incoming member file: {}",
                 member_path.display()

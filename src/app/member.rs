@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-layer member workflows.
+//! Application-layer member commands.
 
 pub(crate) mod approval;
 pub(crate) mod mutation;

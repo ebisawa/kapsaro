@@ -12,7 +12,7 @@ use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::model::identifiers::context;
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 use crate::Result;
 use tracing::debug;
 
@@ -72,7 +72,7 @@ pub(super) fn derive_key_for_private_key_use(
     Ok(PrivateKeyUseKey { enc_key, raw_sig })
 }
 
-pub(super) fn diagnose_private_key_use_signature(
+pub(super) fn enforce_private_key_use_signature_determinism(
     kid: &str,
     ikm_salt_b64: &str,
     backend: &dyn SignatureBackend,
@@ -84,7 +84,7 @@ pub(super) fn diagnose_private_key_use_signature(
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_sshsig retry diagnosis (kid: {})",
-            kid_display_lossy(kid)
+            format_kid_display_lossy(kid)
         );
     }
     let retry_sig = backend.sign_sshsig(
@@ -108,12 +108,12 @@ fn sign_for_private_key_encryption(
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_sshsig x2 determinism check (kid: {})",
-            kid_display_lossy(kid)
+            format_kid_display_lossy(kid)
         );
     }
     backend
         .sign_sshsig_deterministic(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
-        .map_err(map_determinism_error)
+        .map_err(build_determinism_error)
 }
 
 fn sign_for_private_key_use(
@@ -126,7 +126,7 @@ fn sign_for_private_key_use(
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_sshsig (kid: {})",
-            kid_display_lossy(kid)
+            format_kid_display_lossy(kid)
         );
     }
     backend.sign_sshsig(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
@@ -141,7 +141,7 @@ fn derive_key_from_raw_signature(
     if debug {
         debug!(
             "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {})",
-            kid_display_lossy(kid)
+            format_kid_display_lossy(kid)
         );
     }
     let ikm = Ikm::from(&raw_sig.as_bytes()[..]);
@@ -161,7 +161,7 @@ fn non_deterministic_signature_error() -> crate::Error {
     }
 }
 
-fn map_determinism_error(error: crate::Error) -> crate::Error {
+fn build_determinism_error(error: crate::Error) -> crate::Error {
     if error
         .to_string()
         .contains(NON_DETERMINISTIC_SIGNATURE_MESSAGE)

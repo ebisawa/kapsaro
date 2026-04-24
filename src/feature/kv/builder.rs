@@ -9,7 +9,7 @@ use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::KvEncLine;
 use crate::{Error, Result};
 
-use super::document::{KvDocumentEntry, UnsignedKvDocument, WrapSource};
+use super::document::{KvDocumentDraft, KvDocumentEntry, WrapSource};
 use super::types::KvEncodedEntry;
 
 /// Builder for assembling a KV-enc document prior to signing.
@@ -108,8 +108,8 @@ impl KvDocumentBuilder {
     }
 
     /// Consume the builder and produce an unsigned document.
-    pub fn build(self) -> UnsignedKvDocument {
-        UnsignedKvDocument {
+    pub fn build(self) -> KvDocumentDraft {
+        KvDocumentDraft {
             head: self.head,
             wrap: self.wrap,
             entries: self.entries,

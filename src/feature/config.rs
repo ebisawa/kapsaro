@@ -8,7 +8,7 @@ use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-// NOTE: Keep in sync with PRD config.toml documentation (global config.toml keys).
+// Keep this list aligned with the supported global config.toml keys.
 pub(crate) const VALID_KEYS: &[&str] = &[
     "member_handle",
     "workspace",
@@ -31,7 +31,7 @@ pub struct ConfigValueResolution {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigPathResolution {
+pub struct ConfigLocation {
     pub path: PathBuf,
     pub scope: ConfigScope,
 }
@@ -75,12 +75,12 @@ pub fn resolve_config_value(key: &str, base_dir: Option<&Path>) -> Result<Config
     })
 }
 
-pub fn get_config_path_and_scope(base_dir: Option<&Path>) -> Result<ConfigPathResolution> {
+pub fn resolve_config_location(base_dir: Option<&Path>) -> Result<ConfigLocation> {
     let config_path = match base_dir {
         Some(dir) => config::paths::get_global_config_path_from_base(dir),
         None => config::paths::get_global_config_path()?,
     };
-    Ok(ConfigPathResolution {
+    Ok(ConfigLocation {
         path: config_path,
         scope: ConfigScope::Global,
     })

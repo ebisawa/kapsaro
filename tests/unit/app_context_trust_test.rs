@@ -14,11 +14,11 @@ use crate::app::trust::{
     TrustContext, UnsetPolicy,
 };
 use crate::app_test_utils::build_test_command_options;
-use crate::config::types::{ResolvedStrictKeyChecking, StrictKeyChecking};
+use crate::config::types::{StrictKeyChecking, StrictKeyCheckingResolution};
 use crate::feature::trust::judgment::{SelfTrustSet, TrustJudgment};
 use crate::feature::trust::signature::sign_trust_store;
 use crate::io::keystore::member::find_active_key_document;
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
 use crate::model::identifiers::format::TRUST_LOCAL_V2;
 use crate::model::public_key::{
@@ -29,8 +29,8 @@ use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtect
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{
-    kid, member_id, save_public_key, setup_test_keystore_from_fixtures,
-    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+    kid, member_id, save_active_public_key_to_workspace, save_public_key,
+    setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 
 const VALID_TEST_KID: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
@@ -40,7 +40,7 @@ fn build_test_trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustCo
         known_keys: Vec::new(),
         active_members_by_kid: BTreeMap::new(),
         self_trust: SelfTrustSet::default(),
-        strict_key_checking: ResolvedStrictKeyChecking::explicit(strict),
+        strict_key_checking: StrictKeyCheckingResolution::explicit(strict),
         is_interactive: interactive,
         permission_warnings: Vec::new(),
     }
@@ -98,7 +98,7 @@ fn build_public_key(member_id: &str, kid: &str, sig_x: &str) -> PublicKey {
     }
 }
 
-fn make_known_key(kid: &str, member_id: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_id: &str) -> KnownKey {
     let kid = match kid {
         "KID1AAAA1111BBBB2222CCCC3333DDDD" => VALID_TEST_KID,
         _ => kid,
@@ -325,7 +325,7 @@ fn test_load_read_trust_context_allows_expired_active_member_with_warning() {
     let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let workspace = dir.path().join("workspace");
     update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_ID, "2020-01-01T00:00:00Z");
-    sync_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
 
     let loaded =
@@ -343,7 +343,7 @@ fn test_write_trust_snapshot_rejects_expired_active_member() {
     let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let workspace = dir.path().join("workspace");
     update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_ID, "2020-01-01T00:00:00Z");
-    sync_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
 
     let error = CommandTrustSnapshot::<EncryptPolicy>::load(
@@ -588,7 +588,7 @@ fn test_evaluate_signer_trust_with_proof_missing_signer_pub_fails() {
     let error = evaluate_signer_trust_with_proof(&ctx, &proof, CommandCapability::Decrypt, &[])
         .unwrap_err();
 
-    assert!(error.user_message().contains("signer_pub"));
+    assert!(error.format_user_message().contains("signer_pub"));
 }
 
 #[test]
@@ -599,7 +599,7 @@ fn test_enforce_signer_trust_kid_integrity_anomaly() {
         "KID1AAAA1111BBBB2222CCCC3333DDDD",
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
-    ctx.known_keys.push(make_known_key(
+    ctx.known_keys.push(build_known_key(
         &public_key.protected.kid,
         "alice@example.com",
     ));
@@ -622,7 +622,7 @@ fn test_enforce_signer_trust_kid_integrity_anomaly() {
 }
 
 #[test]
-fn test_enforce_recipients_trust_empty_ok() {
+fn test_enforce_recipients_trust_accepts_empty_recipients() {
     let ctx = build_test_trust_ctx(StrictKeyChecking::Yes, true);
 
     let result = enforce_recipients_trust(&ctx, &[]).unwrap();
@@ -671,7 +671,7 @@ fn test_enforce_recipients_trust_non_interactive_hard_fail() {
 #[test]
 fn test_enforce_recipients_trust_detects_kid_integrity_mismatch() {
     let mut ctx = build_test_trust_ctx(StrictKeyChecking::Yes, true);
-    ctx.known_keys = vec![make_known_key(
+    ctx.known_keys = vec![build_known_key(
         "KID1AAAA1111BBBB2222CCCC3333DDDD",
         "alice@example.com",
     )];
@@ -710,7 +710,7 @@ fn test_policy_strict_key_checking_no_allowed_for_read_paths() {
     assert!(CommandCapability::Decrypt.allows_strict_key_checking_no());
     assert!(CommandCapability::Get.allows_strict_key_checking_no());
     assert!(CommandCapability::Run.allows_strict_key_checking_no());
-    let strict_no = ResolvedStrictKeyChecking::explicit(StrictKeyChecking::No);
+    let strict_no = StrictKeyCheckingResolution::explicit(StrictKeyChecking::No);
 
     enforce_policy_strict_key_checking::<DecryptPolicy>(strict_no).unwrap();
     enforce_policy_strict_key_checking::<GetPolicy>(strict_no).unwrap();
@@ -724,7 +724,7 @@ fn test_policy_strict_key_checking_no_rejected_for_write_paths_and_rewrap() {
     assert!(!CommandCapability::Unset.allows_strict_key_checking_no());
     assert!(!CommandCapability::Import.allows_strict_key_checking_no());
     assert!(!CommandCapability::Rewrap.allows_strict_key_checking_no());
-    let strict_no = ResolvedStrictKeyChecking::explicit(StrictKeyChecking::No);
+    let strict_no = StrictKeyCheckingResolution::explicit(StrictKeyChecking::No);
 
     assert!(enforce_policy_strict_key_checking::<EncryptPolicy>(strict_no).is_err());
     assert!(enforce_policy_strict_key_checking::<SetPolicy>(strict_no).is_err());
@@ -770,10 +770,10 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
         owner_member_id: owner_member_id.to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-01-01T00:00:00Z".to_string(),
-        known_keys: vec![make_known_key(&key_ctx.kid, owner_member_id)],
+        known_keys: vec![build_known_key(&key_ctx.kid, owner_member_id)],
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let trust_path = trust_store_file_path(dir.path(), owner_member_id);
+    let trust_path = get_trust_store_file_path(dir.path(), owner_member_id);
     save_trust_store(&trust_path, &document).unwrap();
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 

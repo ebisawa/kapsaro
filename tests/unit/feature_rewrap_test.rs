@@ -5,13 +5,13 @@
 //!
 //! Tests for file-enc rewrap, including signature verification at entry.
 
-use crate::keygen_helpers::make_verified_members;
+use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncryptedContent, FileEncContent};
+use secretenv::format::content::{EncContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::fs;
@@ -19,7 +19,7 @@ use tempfile::TempDir;
 
 /// Create workspace members directory with the member's public key file.
 ///
-/// The rewrap flow calls `list_active_member_ids(workspace_root)` to determine target recipients,
+/// The rewrap operation calls `list_active_member_ids(workspace_root)` to determine target recipients,
 /// so the workspace must have a `members/active/<member_id>.json` file.
 fn setup_workspace_members(temp_dir: &TempDir, member_id: &str, kid: &str) {
     let keystore_root = temp_dir.path().join("keys");
@@ -56,11 +56,11 @@ fn rewrap_file_content(
     content: &FileEncContent,
     request: &RewrapRequest<'_>,
 ) -> secretenv::Result<String> {
-    rewrap_content(&EncryptedContent::FileEnc(content.clone()), request)
+    rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 
 #[test]
-fn test_rewrap_file_flow_rejects_invalid_signature() {
+fn test_rewrap_file_operation_rejects_invalid_signature() {
     // Create valid file-enc content, then tamper the signature so verification fails.
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
@@ -72,7 +72,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
 
     let content = b"secret";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -101,7 +101,7 @@ fn test_rewrap_file_flow_rejects_invalid_signature() {
 }
 
 #[test]
-fn test_rewrap_file_flow_succeeds_with_valid_signature() {
+fn test_rewrap_file_operation_succeeds_with_valid_signature() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -113,7 +113,7 @@ fn test_rewrap_file_flow_succeeds_with_valid_signature() {
 
     let content = b"secret";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,

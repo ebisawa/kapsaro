@@ -6,8 +6,8 @@ use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::io::workspace::setup::{
-    ensure_workspace_structure, save_member_document, validate_workspace_exists,
-    workspace_has_active_members,
+    check_workspace_has_active_members, ensure_workspace_structure, save_member_document,
+    validate_workspace_exists,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -48,18 +48,18 @@ fn test_ensure_workspace_structure_completes_missing_incoming_directory() {
 }
 
 #[test]
-fn test_workspace_has_active_members_ignores_gitkeep_only_directory() {
+fn test_check_workspace_has_active_members_ignores_gitkeep_only_directory() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_path = temp_dir.path().join(".secretenv");
     ensure_workspace_structure(&workspace_path).unwrap();
 
-    let has_active_members = workspace_has_active_members(&workspace_path).unwrap();
+    let has_active_members = check_workspace_has_active_members(&workspace_path).unwrap();
 
     assert!(!has_active_members);
 }
 
 #[test]
-fn test_workspace_has_active_members_detects_json_member_file() {
+fn test_check_workspace_has_active_members_detects_json_member_file() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_path = temp_dir.path().join(".secretenv");
     ensure_workspace_structure(&workspace_path).unwrap();
@@ -69,7 +69,7 @@ fn test_workspace_has_active_members_detects_json_member_file() {
     )
     .unwrap();
 
-    let has_active_members = workspace_has_active_members(&workspace_path).unwrap();
+    let has_active_members = check_workspace_has_active_members(&workspace_path).unwrap();
 
     assert!(has_active_members);
 }

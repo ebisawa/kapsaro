@@ -13,6 +13,6 @@ use super::ListArgs;
 /// Main entry point for key listing
 pub fn run(args: ListArgs) -> Result<()> {
     let options = resolve_options(&args.common);
-    let result = list_keys_command(&options, args.member_id.clone())?;
+    let result = list_keys_command(&options, args.member_handle.clone())?;
     print_key_list(args.common.json, &result, args.common.verbose)
 }

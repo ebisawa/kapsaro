@@ -6,16 +6,16 @@
 //! Tests for untested functions:
 //! - build_private_key_plaintext (tested indirectly via keygen_test)
 //! - save_and_activate (tested via public save_key_pair_atomic + set_active_kid)
-//! - ensure_keystore_dir (tested via KeystoreResolver::resolve_and_ensure)
+//! - ensure_keystore_dir (tested via KeystoreResolver::ensure_keystore_root)
 //! - build_public_key with github_account
 
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use secretenv::crypto::kem::{public_key_from_secret, X25519SecretKey};
+use secretenv::crypto::kem::{derive_public_key_from_secret, X25519SecretKey};
 use secretenv::feature::key::generate::KeyGenerationOptions;
 use secretenv::feature::key::material::{build_identity_keys, generate_keypairs};
-use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyBuildParams};
+use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
 use secretenv::feature::key::ssh_binding::SshBindingContext;
 use secretenv::format::kid::derive_public_key_kid;
 use secretenv::io::keystore::active::load_active_kid;
@@ -39,7 +39,7 @@ use tempfile::TempDir;
 fn test_build_private_key_plaintext_fields() {
     let ssh_temp = tempfile::TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
-        crate::test_utils::create_temp_ssh_keypair_in_dir(&ssh_temp);
+        crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (plaintext, _public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
 
@@ -60,7 +60,7 @@ fn test_build_private_key_plaintext_fields() {
 fn test_build_private_key_plaintext_base64url_encoded() {
     let ssh_temp = tempfile::TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
-        crate::test_utils::create_temp_ssh_keypair_in_dir(&ssh_temp);
+        crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (plaintext, _public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
 
@@ -86,7 +86,7 @@ fn test_build_private_key_plaintext_base64url_encoded() {
 fn test_build_private_key_plaintext_key_consistency() {
     let ssh_temp = tempfile::TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
-        crate::test_utils::create_temp_ssh_keypair_in_dir(&ssh_temp);
+        crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (plaintext, public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
 
@@ -118,7 +118,7 @@ fn build_protected_without_kid_value(
     value
 }
 
-fn make_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
+fn generate_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
     let keypairs = generate_keypairs().unwrap();
     let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
     let identity = Identity {
@@ -134,14 +134,14 @@ fn make_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
 
 #[test]
 fn test_build_public_key_with_github_account() {
-    let (identity, sig_sk) = make_test_identity();
+    let (identity, sig_sk) = generate_test_identity();
 
     let github_account = GithubAccount {
         id: 12345,
         login: "testuser".to_string(),
     };
 
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id: ALICE_MEMBER_ID,
         identity,
         created_at: "2024-01-01T00:00:00Z",
@@ -167,9 +167,9 @@ fn test_build_public_key_with_github_account() {
 
 #[test]
 fn test_build_public_key_without_github_account() {
-    let (identity, sig_sk) = make_test_identity();
+    let (identity, sig_sk) = generate_test_identity();
 
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id: ALICE_MEMBER_ID,
         identity,
         created_at: "2024-01-01T00:00:00Z",
@@ -192,9 +192,9 @@ fn test_build_public_key_without_github_account() {
 
 #[test]
 fn test_build_public_key_self_signature_valid_base64url() {
-    let (identity, sig_sk) = make_test_identity();
+    let (identity, sig_sk) = generate_test_identity();
 
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id: ALICE_MEMBER_ID,
         identity,
         created_at: "2024-01-01T00:00:00Z",
@@ -220,8 +220,8 @@ fn test_build_public_key_self_signature_valid_base64url() {
 
 #[test]
 fn test_build_public_key_changes_kid_when_github_account_changes() {
-    let (identity_with_claim, sig_sk_with_claim) = make_test_identity();
-    let with_claim = build_public_key(&PublicKeyBuildParams {
+    let (identity_with_claim, sig_sk_with_claim) = generate_test_identity();
+    let with_claim = build_public_key(&PublicKeyDocumentParams {
         member_id: ALICE_MEMBER_ID,
         identity: identity_with_claim,
         created_at: "2024-01-01T00:00:00Z",
@@ -234,8 +234,8 @@ fn test_build_public_key_changes_kid_when_github_account_changes() {
         }),
     })
     .unwrap();
-    let (identity_without_claim, sig_sk_without_claim) = make_test_identity();
-    let without_claim = build_public_key(&PublicKeyBuildParams {
+    let (identity_without_claim, sig_sk_without_claim) = generate_test_identity();
+    let without_claim = build_public_key(&PublicKeyDocumentParams {
         member_id: ALICE_MEMBER_ID,
         identity: identity_without_claim,
         created_at: "2024-01-01T00:00:00Z",
@@ -355,7 +355,7 @@ fn test_save_and_activate_activates() {
     let (plaintext, public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let new_kid = &public_key.protected.kid;
-    let private_key = crate::test_utils::create_test_private_key(
+    let private_key = crate::test_utils::build_test_private_key(
         &plaintext,
         ALICE_MEMBER_ID,
         new_kid,
@@ -392,13 +392,13 @@ fn test_save_and_activate_no_activate() {
     std::fs::create_dir_all(&keystore_root).unwrap();
 
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
-        crate::test_utils::create_temp_ssh_keypair_in_dir(&temp_dir);
+        crate::test_utils::generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     // Generate a new key pair
     let (plaintext, public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let new_kid = &public_key.protected.kid;
-    let private_key = crate::test_utils::create_test_private_key(
+    let private_key = crate::test_utils::build_test_private_key(
         &plaintext,
         ALICE_MEMBER_ID,
         new_kid,
@@ -431,7 +431,7 @@ fn test_save_and_activate_no_activate() {
 }
 
 // ============================================================================
-// ensure_keystore_dir tests (via KeystoreResolver::resolve_and_ensure)
+// ensure_keystore_dir tests (via KeystoreResolver::ensure_keystore_root)
 // ============================================================================
 
 #[test]
@@ -443,7 +443,7 @@ fn test_ensure_keystore_dir_creates_directory() {
     // Directory should not exist yet
     assert!(!expected_keystore.exists());
 
-    let result = KeystoreResolver::resolve_and_ensure(Some(&home)).unwrap();
+    let result = KeystoreResolver::ensure_keystore_root(Some(&home)).unwrap();
 
     assert_eq!(result, expected_keystore);
     assert!(
@@ -462,8 +462,8 @@ fn test_ensure_keystore_dir_idempotent() {
     let home = temp_dir.path().to_path_buf();
 
     // Call twice - second call should succeed without error
-    let result1 = KeystoreResolver::resolve_and_ensure(Some(&home)).unwrap();
-    let result2 = KeystoreResolver::resolve_and_ensure(Some(&home)).unwrap();
+    let result1 = KeystoreResolver::ensure_keystore_root(Some(&home)).unwrap();
+    let result2 = KeystoreResolver::ensure_keystore_root(Some(&home)).unwrap();
 
     assert_eq!(result1, result2, "Both calls should return the same path");
 }
@@ -482,7 +482,7 @@ fn test_generate_keypairs() {
 #[test]
 fn test_build_identity_keys() {
     let kem_sk = X25519SecretKey::from_bytes([1u8; 32]);
-    let kem_pk = public_key_from_secret(&kem_sk).unwrap();
+    let kem_pk = derive_public_key_from_secret(&kem_sk).unwrap();
     let sig_sk = SigningKey::from_bytes(&[2u8; 32]);
     let sig_pk: VerifyingKey = sig_sk.verifying_key();
 
@@ -510,7 +510,7 @@ fn test_build_public_key() {
         },
     };
 
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id: ALICE_MEMBER_ID,
         identity,
         created_at: "2024-01-01T00:00:00Z",
@@ -546,7 +546,7 @@ fn test_generate_key_rejects_skipped_determinism() {
     let temp_dir = TempDir::new().unwrap();
     let ssh_temp = TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
-        crate::test_utils::create_temp_ssh_keypair_in_dir(&ssh_temp);
+        crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
 
     let ssh_keygen =
         secretenv::io::ssh::external::keygen::DefaultSshKeygen::new("ssh-keygen".to_string());
@@ -569,9 +569,10 @@ fn test_generate_key_rejects_skipped_determinism() {
     };
 
     let now = time::OffsetDateTime::now_utc();
-    let created_at = secretenv::support::time::build_timestamp_display(now).unwrap();
+    let created_at = secretenv::support::time::format_timestamp_rfc3339(now).unwrap();
     let expires_at =
-        secretenv::support::time::build_timestamp_display(now + time::Duration::days(365)).unwrap();
+        secretenv::support::time::format_timestamp_rfc3339(now + time::Duration::days(365))
+            .unwrap();
 
     let result = secretenv::feature::key::generate::generate_key(KeyGenerationOptions {
         member_id: ALICE_MEMBER_ID.to_string(),

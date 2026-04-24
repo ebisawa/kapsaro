@@ -6,19 +6,19 @@ use std::fs;
 use crate::app::rewrap::plan::build_rewrap_batch_plan;
 use crate::app::rewrap::promotion::build_promotion_review_plan;
 use crate::app::rewrap::trust::build_rewrap_trust;
-use crate::app::trust::approval::commit_known_key_approvals;
+use crate::app::trust::approval::save_known_key_approvals;
 use crate::app::trust::RecipientTrustOutcome;
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::io::workspace::members::load_member_file_from_path;
 use crate::model::public_key::{BindingClaims, GithubAccount};
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace,
-    setup_trust_store_for_workspace, stage_active_public_key_to_workspace_incoming,
-    sync_active_public_key_to_workspace, update_active_private_key_expires_at, EnvGuard,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace,
+    save_active_public_key_to_workspace_incoming, setup_member_key_context, setup_test_workspace,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at, EnvGuard,
 };
 
 const ALICE_MEMBER_ID: &str = "alice@example.com";
@@ -136,7 +136,7 @@ fn test_build_rewrap_trust_includes_recipient_key_expiry_warning() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
-    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
     fs::write(
         workspace_dir.join("secrets").join("default.kvenc"),
         "VERSION secretenv.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
@@ -208,13 +208,13 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
     ));
 
     let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
-    commit_known_key_approvals(
+    save_known_key_approvals(
         &options,
         &execution,
         &trust_plan.accepted_promotion_candidates,
     )
     .unwrap();
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -302,7 +302,7 @@ fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_
         ALICE_MEMBER_ID,
         &build_expiring_soon_timestamp(365),
     );
-    stage_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
+    save_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
         .unwrap();
     fs::write(
         workspace_dir.join("secrets").join("default.kvenc"),

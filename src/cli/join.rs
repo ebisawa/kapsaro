@@ -13,7 +13,7 @@ use clap::Args;
 
 use crate::app::registration::types::RegistrationMode;
 use crate::cli::options::CommonOptions;
-use crate::cli::registration::execute_registration_command;
+use crate::cli::registration::run_registration_command;
 use crate::Error;
 
 #[derive(Args)]
@@ -32,16 +32,16 @@ pub struct JoinArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 }
 
 /// Join an existing workspace
 pub fn run(args: JoinArgs) -> Result<(), Error> {
-    execute_registration_command(
+    run_registration_command(
         args.common,
         args.force,
         args.github_user,
-        args.member_id,
+        args.member_handle,
         RegistrationMode::Join,
     )
 }

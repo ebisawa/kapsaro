@@ -19,7 +19,7 @@ fn test_confirm_unset_operation_with_reader_rejects_non_interactive_without_forc
             .unwrap_err();
 
     assert!(error
-        .user_message()
+        .format_user_message()
         .contains("without --force in non-interactive mode"));
 }
 
@@ -37,5 +37,7 @@ fn test_confirm_unset_operation_with_reader_rejects_interactive_default_no() {
         confirm_unset_operation_with_reader(false, "API_KEY", true, Cursor::new(b"\n".to_vec()))
             .unwrap_err();
 
-    assert!(error.user_message().contains("Unset operation cancelled"));
+    assert!(error
+        .format_user_message()
+        .contains("Unset operation cancelled"));
 }

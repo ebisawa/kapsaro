@@ -11,7 +11,7 @@ use secretenv::feature::context::env_key::load_private_key_from_env;
 use secretenv::feature::key::portable_export::export_private_key_portable;
 use tempfile::TempDir;
 
-use crate::test_utils::{create_temp_ssh_keypair_in_dir, keygen_test, EnvGuard};
+use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test, EnvGuard};
 
 const ENV_PRIVATE_KEY: &str = "SECRETENV_PRIVATE_KEY";
 const ENV_KEY_PASSWORD: &str = "SECRETENV_KEY_PASSWORD";
@@ -28,7 +28,7 @@ fn generate_and_export(
     secretenv::model::public_key::PublicKey,
 ) {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let (plaintext, public_key) =
         keygen_test(member_id, &ssh_priv, &ssh_pub_content).expect("keygen should succeed");

@@ -4,11 +4,11 @@
 //! Text renderers for trust commands.
 
 use crate::cli::common::output::trust::TrustListItemView;
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 
 pub(crate) fn print_known_key_list(items: &[TrustListItemView<'_>]) {
     for item in items {
-        let kid_display = kid_display_lossy(item.kid);
+        let kid_display = format_kid_display_lossy(item.kid);
         eprintln!(
             "  {} {} (approved: {}, via: {})",
             item.member_id, kid_display, item.approved_at, item.approved_via
@@ -22,7 +22,7 @@ pub(crate) fn print_empty_known_key_list() {
 }
 
 pub(crate) fn print_trust_remove_summary(kid: &str, member_id: &str) {
-    let kid_display = kid_display_lossy(kid);
+    let kid_display = format_kid_display_lossy(kid);
     eprintln!(
         "Removed kid '{}' (member: {}) from trust store",
         kid_display, member_id
@@ -36,7 +36,7 @@ pub(crate) fn print_no_entries_to_purge() {
 pub(crate) fn print_trust_purge_candidates(items: &[TrustListItemView<'_>]) {
     eprintln!("Entries to purge:");
     for item in items {
-        let kid_display = kid_display_lossy(item.kid);
+        let kid_display = format_kid_display_lossy(item.kid);
         eprintln!(
             "  {} {} (approved: {})",
             item.member_id, kid_display, item.approved_at

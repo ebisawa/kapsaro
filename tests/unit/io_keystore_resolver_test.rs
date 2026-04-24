@@ -19,11 +19,11 @@ fn test_keystore_resolver_resolve() {
 }
 
 #[test]
-fn test_keystore_resolver_resolve_and_ensure() {
+fn test_keystore_resolver_ensure_keystore_root() {
     let temp_dir = TempDir::new().unwrap();
     let home = Some(temp_dir.path().to_path_buf());
 
-    let keystore_root = KeystoreResolver::resolve_and_ensure(home.as_ref()).unwrap();
+    let keystore_root = KeystoreResolver::ensure_keystore_root(home.as_ref()).unwrap();
 
     assert!(keystore_root.exists());
     assert!(keystore_root.is_dir());

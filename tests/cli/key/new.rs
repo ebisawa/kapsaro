@@ -3,7 +3,7 @@
 
 //! Integration tests for `key new` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
 use secretenv::io::ssh::protocol::constants as ssh_constants;
@@ -35,7 +35,7 @@ fn test_key_new_requires_member_id_before_ssh_resolution() {
 #[test]
 fn test_key_new_generates_private_key() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -108,7 +108,7 @@ fn test_key_new_generates_private_key() {
 #[test]
 fn test_key_new_ssh_protection() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -199,7 +199,7 @@ fn test_key_new_ssh_protection() {
 #[test]
 fn test_key_new_generates_attestation() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -271,7 +271,7 @@ fn test_key_new_generates_attestation() {
 #[test]
 fn test_key_new_generates_self_sig() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -317,7 +317,7 @@ fn test_key_new_generates_self_sig() {
 #[test]
 fn test_key_new_expires_at_option() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
     let expires_at = "2027-12-31T23:59:59Z";
@@ -365,7 +365,7 @@ fn test_key_new_expires_at_option() {
 #[test]
 fn test_key_new_valid_for_1y() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -416,7 +416,7 @@ fn test_key_new_valid_for_1y() {
 #[test]
 fn test_key_new_valid_for_6m() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -467,7 +467,7 @@ fn test_key_new_valid_for_6m() {
 #[test]
 fn test_key_new_valid_for_30d() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -518,7 +518,7 @@ fn test_key_new_valid_for_30d() {
 #[test]
 fn test_key_new_no_activate_option() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -557,7 +557,7 @@ fn test_key_new_no_activate_option() {
 #[test]
 fn test_key_new_default_activate() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 

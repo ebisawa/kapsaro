@@ -30,7 +30,7 @@ pub fn verify_file_document_report(
     debug: bool,
 ) -> SignatureVerificationReport {
     let signature = &doc.signature;
-    let protected = doc.protected_for_signing();
+    let protected = doc.extract_protected_for_signing();
     build_signature_verification_report(
         load_verifying_key_from_signature(signature, debug),
         |loaded| verify_file_signature(protected, &loaded.verifying_key, signature, debug),
@@ -43,7 +43,7 @@ pub fn verify_file_document_report(
 pub fn verify_file_document(doc: &FileEncDocument, debug: bool) -> Result<VerifiedFileEncDocument> {
     validate_wrap_items(&doc.protected.wrap, "Document")?;
     let signature = &doc.signature;
-    let protected = doc.protected_for_signing();
+    let protected = doc.extract_protected_for_signing();
     let proof = verify_signature_with_loaded_key(signature, debug, |loaded| {
         verify_file_signature(protected, &loaded.verifying_key, signature, debug)
     })?;

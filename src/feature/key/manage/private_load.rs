@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::feature::context::crypto::validate_private_key_material;
+use crate::feature::key::material::validate_private_key_material;
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
 use crate::feature::verify::public_key::{
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use super::common::{resolve_active_kid, resolve_keystore_root};
 
 /// Decrypted private key with metadata for portable export.
-pub struct LoadedPrivateKey {
+pub struct PrivateKeyExportMaterial {
     pub plaintext: PrivateKeyPlaintext,
     pub member_id: String,
     pub kid: String,
@@ -25,14 +25,14 @@ pub struct LoadedPrivateKey {
     pub expires_at: String,
 }
 
-pub fn load_and_decrypt_private_key(
+pub fn load_private_key_export_material(
     home: Option<PathBuf>,
     member_id: String,
     kid: Option<String>,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     debug: bool,
-) -> Result<LoadedPrivateKey> {
+) -> Result<PrivateKeyExportMaterial> {
     let keystore_root = resolve_keystore_root(home)?;
     let kid = resolve_active_kid(&keystore_root, &member_id, kid)?;
     let encrypted = load_private_key(&keystore_root, &member_id, &kid)?;
@@ -49,7 +49,7 @@ pub fn load_and_decrypt_private_key(
     let plaintext = decrypt_private_key(&encrypted, backend, ssh_pubkey, debug)?;
     validate_private_key_material(&plaintext)?;
 
-    Ok(LoadedPrivateKey {
+    Ok(PrivateKeyExportMaterial {
         plaintext,
         member_id,
         kid,

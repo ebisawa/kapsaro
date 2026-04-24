@@ -11,7 +11,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KnownKeyAssessment {
+pub enum KnownKeyJudgment {
     New,
     Existing,
 }
@@ -167,22 +167,22 @@ pub fn find_known_key<'a>(keys: &'a [KnownKey], kid: &str) -> Option<&'a KnownKe
     keys.iter().find(|k| k.kid == kid)
 }
 
-pub fn assess_known_key(
+pub fn judge_known_key(
     keys: &[KnownKey],
     candidate_kid: &str,
     candidate_member_id: &str,
-) -> Result<KnownKeyAssessment> {
+) -> Result<KnownKeyJudgment> {
     validate_kid_integrity(keys, candidate_kid, candidate_member_id)?;
     if find_known_key(keys, candidate_kid).is_some() {
-        Ok(KnownKeyAssessment::Existing)
+        Ok(KnownKeyJudgment::Existing)
     } else {
-        Ok(KnownKeyAssessment::New)
+        Ok(KnownKeyJudgment::New)
     }
 }
 
 /// Validate that a candidate kid does not conflict with existing known_keys.
 ///
-/// Fails if the same kid exists with a different member_id (integrity anomaly, spec §9.4).
+/// Fails if the same kid exists with a different member_id.
 pub fn validate_kid_integrity(
     keys: &[KnownKey],
     candidate_kid: &str,

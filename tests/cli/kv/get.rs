@@ -3,7 +3,7 @@
 
 //! Integration tests for `get` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ use tempfile::TempDir;
 fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
     fs::create_dir_all(workspace_dir.path().join("members")).unwrap();
@@ -120,7 +120,7 @@ fn test_get_with_json_output() {
 fn test_get_error_when_file_not_exists() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
     fs::create_dir_all(workspace_dir.path().join("members")).unwrap();

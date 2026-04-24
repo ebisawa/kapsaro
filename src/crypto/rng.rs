@@ -3,7 +3,7 @@
 
 //! Secure random byte helpers.
 
-use crate::crypto::crypto_operation_failed;
+use crate::crypto::build_crypto_operation_error;
 use crate::Result;
 use rand::{rngs::OsRng, TryRngCore};
 use zeroize::Zeroizing;
@@ -14,7 +14,7 @@ const OS_RNG_ERROR_MESSAGE: &str = "OS random number generation failed";
 pub(crate) fn fill_random_bytes(bytes: &mut [u8]) -> Result<()> {
     let mut rng = OsRng;
     rng.try_fill_bytes(bytes)
-        .map_err(|_| crypto_operation_failed(OS_RNG_ERROR_MESSAGE))
+        .map_err(|_| build_crypto_operation_error(OS_RNG_ERROR_MESSAGE))
 }
 
 /// Generate a fixed-size random byte array.

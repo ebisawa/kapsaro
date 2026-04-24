@@ -5,15 +5,15 @@
 
 use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
 use crate::test_utils::{
-    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
-    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+    save_active_public_key_to_workspace, setup_member_key_context, setup_test_workspace,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
 
-fn write_tampered_member_file(member_file: &std::path::Path, tamper: impl FnOnce(&mut Value)) {
+fn save_tampered_member_file(member_file: &std::path::Path, tamper: impl FnOnce(&mut Value)) {
     let mut value: Value = serde_json::from_str(&fs::read_to_string(member_file).unwrap()).unwrap();
     tamper(&mut value);
     fs::write(member_file, serde_json::to_string_pretty(&value).unwrap()).unwrap();
@@ -119,7 +119,7 @@ fn test_member_list_json_skips_invalid_member_file() {
         .join("active")
         .join(format!("{}.json", TEST_MEMBER_ID));
     fs::copy(&active_key_path, &incoming_file).unwrap();
-    write_tampered_member_file(&incoming_file, |value| {
+    save_tampered_member_file(&incoming_file, |value| {
         value["protected"]["expires_at"] = Value::String("2030-01-01T00:00:00Z".to_string());
     });
 
@@ -180,7 +180,7 @@ fn test_member_show_displays_public_key() {
 fn test_member_show_reports_verification_warning() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[TEST_MEMBER_ID]);
     update_active_private_key_expires_at(temp_dir.path(), TEST_MEMBER_ID, "2020-01-01T00:00:00Z");
-    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, TEST_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, TEST_MEMBER_ID).unwrap();
 
     cmd()
         .arg("member")
@@ -220,7 +220,7 @@ fn test_member_show_invalid_member_fails() {
         .join("members")
         .join("active")
         .join(format!("{}.json", TEST_MEMBER_ID));
-    write_tampered_member_file(&member_file, |value| {
+    save_tampered_member_file(&member_file, |value| {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
     });
 
@@ -593,7 +593,7 @@ fn test_member_verify_reports_offline_invalid_member() {
         .join("active")
         .join(format!("{}.json", TEST_MEMBER_ID));
     fs::copy(&active_key_path, &incoming_file).unwrap();
-    write_tampered_member_file(&incoming_file, |value| {
+    save_tampered_member_file(&incoming_file, |value| {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
     });
 
@@ -622,7 +622,7 @@ fn test_member_verify_ignores_invalid_incoming_member_when_verifying_all() {
         .join("active")
         .join(format!("{}.json", TEST_MEMBER_ID));
     fs::copy(&active_key_path, &incoming_file).unwrap();
-    write_tampered_member_file(&incoming_file, |value| {
+    save_tampered_member_file(&incoming_file, |value| {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
     });
 

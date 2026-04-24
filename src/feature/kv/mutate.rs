@@ -140,7 +140,7 @@ fn rewrite_existing_kv_content<F>(
 ) -> Result<String>
 where
     F: FnOnce(
-        &mut crate::feature::kv::document::UnsignedKvDocument,
+        &mut crate::feature::kv::document::KvDocumentDraft,
         &super::rewrite_session::VerifiedKvRewriteSession<'_>,
         &crate::crypto::types::keys::MasterKey,
     ) -> Result<()>,

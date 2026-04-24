@@ -80,7 +80,7 @@ KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トー
 
 ### テスト構成
 
-- `tests/unit/` — `<module_path>_test.rs` 命名規則のユニットテスト（80+ ファイル）
+- `tests/unit/` — 独立したユニットテスト（80+ ファイル）
 - `tests/cli_integration.rs` — CLI の E2E テスト
 - `src/` 内 `#[cfg(test)]` — モジュール内インラインテスト
 
@@ -94,12 +94,7 @@ KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トー
 ## Conventions
 
 - Copyright ヘッダー: `// Copyright 2026 Satoshi Ebisawa` + `// SPDX-License-Identifier: Apache-2.0`
-- モジュール構成: Rust 2018 edition スタイル（`mod.rs` 非推奨、`name.rs` + `name/` ペア）
-- 検証済み型は `Verified*` プレフィックス、証明型は `*Proof` サフィックス
-- テスト関数名: `test_<対象>_<シナリオ>[_fails|_error|_roundtrip]`
-- テストファイル名: `<module_path>_test.rs`（例: `feature/encrypt/wrap.rs` → `feature_encrypt_wrap_test.rs`）
-- 動詞規則: `build_*`（組み立て）、`load_*`（読み込み）、`save_*`（書き込み）、`resolve_*`（動的解決）、`encrypt_*`/`decrypt_*`、`sign_*`/`verify_*`、`wrap_*`/`unwrap_*`。`create_*`, `prepare_*`, `read_*`, `write_*` は使用禁止
-- CLI 専用動詞: `setup_*`（実行前準備）、`run_*`（エントリポイント）、`print_*`（表示）— `cli/` 以外での使用禁止
+- 命名規則・モジュール構成・テスト命名は、別途定められた関連ドキュメントの規定に従う
 
 ## Subagent Review Rules
 

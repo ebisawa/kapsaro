@@ -3,13 +3,13 @@
 
 //! Unit tests for feature/key/manage module
 
-use crate::test_utils::{create_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
+use crate::test_utils::{build_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::key::manage::export::export_key;
 use secretenv::feature::key::manage::mutation::{activate_key, remove_key};
 use secretenv::feature::key::manage::query::list_keys;
 use secretenv::io::keystore::storage::save_key_pair_atomic;
-use secretenv::support::kid::build_kid_display;
+use secretenv::support::kid::format_kid_display;
 
 /// Helper: generate a second key pair, save it to the keystore, and return its kid.
 fn add_second_key(temp_dir: &tempfile::TempDir, member_id: &str) -> String {
@@ -22,7 +22,7 @@ fn add_second_key(temp_dir: &tempfile::TempDir, member_id: &str) -> String {
     let (priv_plain, pub_key) = keygen_test(member_id, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = pub_key.protected.kid.clone();
     let priv_key =
-        create_test_private_key(&priv_plain, member_id, &kid, &ssh_priv, &ssh_pub_content).unwrap();
+        build_test_private_key(&priv_plain, member_id, &kid, &ssh_priv, &ssh_pub_content).unwrap();
 
     save_key_pair_atomic(&keystore_root, member_id, &kid, &priv_key, &pub_key).unwrap();
 
@@ -61,7 +61,7 @@ fn test_list_keys_filtered_by_member_id() {
     let (bob_priv_plain, bob_pub) =
         keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let bob_kid = bob_pub.protected.kid.clone();
-    let bob_priv = create_test_private_key(
+    let bob_priv = build_test_private_key(
         &bob_priv_plain,
         BOB_MEMBER_ID,
         &bob_kid,
@@ -116,7 +116,7 @@ fn test_activate_key_explicit_kid() {
     let result = activate_key(
         home,
         ALICE_MEMBER_ID.to_string(),
-        Some(build_kid_display(&second_kid).unwrap().to_lowercase()),
+        Some(format_kid_display(&second_kid).unwrap().to_lowercase()),
     )
     .unwrap();
 
@@ -176,7 +176,7 @@ fn test_remove_key_non_active() {
     let result = remove_key(
         home,
         ALICE_MEMBER_ID.to_string(),
-        build_kid_display(&second_kid).unwrap().to_lowercase(),
+        format_kid_display(&second_kid).unwrap().to_lowercase(),
         false,
     )
     .unwrap();
@@ -261,7 +261,7 @@ fn test_export_key_explicit_display_kid() {
     let result = export_key(
         home,
         ALICE_MEMBER_ID.to_string(),
-        Some(build_kid_display(&active_kid).unwrap().to_lowercase()),
+        Some(format_kid_display(&active_kid).unwrap().to_lowercase()),
     )
     .unwrap();
 

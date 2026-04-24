@@ -24,11 +24,14 @@ impl<'a> KvEncParser<'a> {
         // Header line: ":SECRETENV_KV 3" (v3 only)
         if let Some(version_str) = line.strip_prefix(HEADER_LINE_PREFIX) {
             let version_num: u32 = version_str.parse().map_err(|_| {
-                FormatError::parse_failed(format!("Invalid version in header: {}", version_str))
+                FormatError::build_parse_error(format!(
+                    "Invalid version in header: {}",
+                    version_str
+                ))
             })?;
             let version = KvEncVersion::from_u32(version_num)
                 .ok_or_else(|| {
-                    FormatError::parse_failed(format!(
+                    FormatError::build_parse_error(format!(
                         "Unsupported kv-enc version: {} (only v3 is supported)",
                         version_num
                     ))
@@ -40,7 +43,7 @@ impl<'a> KvEncParser<'a> {
         // HEAD line: ":HEAD {token}"
         if let Some(token) = line.strip_prefix(":HEAD ") {
             if token.is_empty() {
-                return Err(FormatError::parse_failed(format!(
+                return Err(FormatError::build_parse_error(format!(
                     "kv-enc v3: HEAD line must have a token: {}",
                     line
                 ))
@@ -54,7 +57,7 @@ impl<'a> KvEncParser<'a> {
         // WRAP line: ":WRAP {token}"
         if let Some(token) = line.strip_prefix(":WRAP ") {
             if token.is_empty() {
-                return Err(FormatError::parse_failed(format!(
+                return Err(FormatError::build_parse_error(format!(
                     "kv-enc v3: WRAP line must have a token: {}",
                     line
                 ))
@@ -68,7 +71,7 @@ impl<'a> KvEncParser<'a> {
         // SIG line: ":SIG {token}"
         if let Some(token) = line.strip_prefix(":SIG ") {
             if token.is_empty() {
-                return Err(FormatError::parse_failed(format!(
+                return Err(FormatError::build_parse_error(format!(
                     "kv-enc v3: SIG line must have a token: {}",
                     line
                 ))
@@ -81,7 +84,7 @@ impl<'a> KvEncParser<'a> {
 
         // Unknown control tag
         Err(
-            FormatError::parse_failed(format!("Unknown control tag in kv-enc line: {}", line))
+            FormatError::build_parse_error(format!("Unknown control tag in kv-enc line: {}", line))
                 .into(),
         )
     }
@@ -95,7 +98,7 @@ impl<'a> KvEncParser<'a> {
 
         // Comment lines are not allowed
         if line.starts_with('#') {
-            return Err(FormatError::parse_failed(format!(
+            return Err(FormatError::build_parse_error(format!(
                 "kv-enc v3: comment lines are not allowed: {}",
                 line
             ))
@@ -115,7 +118,7 @@ impl<'a> KvEncParser<'a> {
         }
 
         // Invalid line format
-        Err(FormatError::parse_failed(format!("Invalid kv-enc line format: {}", line)).into())
+        Err(FormatError::build_parse_error(format!("Invalid kv-enc line format: {}", line)).into())
     }
 
     /// Parse all lines in the content

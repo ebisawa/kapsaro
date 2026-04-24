@@ -9,7 +9,7 @@ use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
 
 /// Load and verify recipient public keys in one step.
-pub fn load_and_verify_recipient_public_keys(
+pub fn verify_recipient_public_keys_from_source(
     pub_key_source: &dyn PublicKeySource,
     member_ids: &[String],
     debug: bool,

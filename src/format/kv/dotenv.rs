@@ -23,7 +23,7 @@ pub fn is_valid_key_name(key: &str) -> bool {
 }
 
 /// Unquote a value from dotenv format
-pub fn unquote_value(value: &str) -> String {
+pub fn parse_dotenv_value(value: &str) -> String {
     if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
         // Double-quoted: unescape \n \r \t \\ \"
         // Note: Must handle \\ first, before other escape sequences
@@ -64,7 +64,7 @@ pub fn parse_dotenv(content: &str) -> Result<HashMap<String, String>> {
             let value = line[eq_pos + 1..].trim();
 
             if is_valid_key_name(key) {
-                map.insert(key.to_string(), unquote_value(value));
+                map.insert(key.to_string(), parse_dotenv_value(value));
             }
         }
     }

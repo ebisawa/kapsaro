@@ -9,7 +9,7 @@ use crate::test_utils::setup_test_workspace;
 use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::member::verification::verify_member;
 use secretenv::io::workspace::members::{
-    delete_member, load_active_member_files, load_member_file,
+    load_active_member_files, load_member_file, remove_member,
 };
 use tempfile::TempDir;
 
@@ -62,7 +62,7 @@ fn test_member_show_not_found() {
 fn test_member_remove() {
     let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, "bob@example.com"]);
 
-    delete_member(&workspace_dir, ALICE_MEMBER_ID).unwrap();
+    remove_member(&workspace_dir, ALICE_MEMBER_ID).unwrap();
 
     // alice should no longer be in active/
     let members = load_active_member_files(&workspace_dir).unwrap();

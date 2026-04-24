@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,21 +42,21 @@ pub(super) fn validate_workspace_path(path: &Path) -> Result<WorkspaceRoot> {
         Err(Error::NotFound {
             message: format!(
                 "Path '{}' is not a valid workspace (missing members/ or secrets/ directories)",
-                display_path_relative_to_cwd(path)
+                format_path_relative_to_cwd(path)
             ),
         })
     }
 }
 
 pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
-    let mut current = start_path
-        .canonicalize()
-        .map_err(|e| Error::io_with_source(format!("Failed to canonicalize path: {}", e), e))?;
+    let mut current = start_path.canonicalize().map_err(|e| {
+        Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)
+    })?;
     let git_root = find_git_root(&current).ok_or_else(|| Error::NotFound {
         message: format!(
             "No git repository found from '{}'. \
                  Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE.",
-            display_path_relative_to_cwd(start_path)
+            format_path_relative_to_cwd(start_path)
         ),
     })?;
 
@@ -69,7 +69,7 @@ pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
             return Err(Error::NotFound {
                 message: format!(
                     "Found .secretenv-root marker at '{}' but missing members/ or secrets/ directories",
-                    display_path_relative_to_cwd(&current)
+                    format_path_relative_to_cwd(&current)
                 ),
             });
         }
@@ -85,7 +85,7 @@ pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
             return Err(Error::NotFound {
                 message: format!(
                     "No workspace found within git repository (searched from '{}')",
-                    display_path_relative_to_cwd(start_path)
+                    format_path_relative_to_cwd(start_path)
                 ),
             });
         }
@@ -96,7 +96,7 @@ pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
                 return Err(Error::NotFound {
                     message: format!(
                         "No workspace found: searched from '{}' to filesystem root",
-                        display_path_relative_to_cwd(start_path)
+                        format_path_relative_to_cwd(start_path)
                     ),
                 })
             }

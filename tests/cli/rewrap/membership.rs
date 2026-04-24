@@ -4,14 +4,14 @@
 use super::*;
 use crate::cli::common::{run_command_with_pty, secretenv_bin};
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace_from_fixtures,
-    setup_trust_store_for_workspace, stage_active_public_key_to_workspace_incoming,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
+    setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyBuildParams};
+use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
 use secretenv::io::keystore::active::set_active_kid;
 use secretenv::io::keystore::storage::list_kids;
-use secretenv::io::trust::paths::trust_store_file_path;
+use secretenv::io::trust::paths::get_trust_store_file_path;
 use secretenv::io::workspace::members::load_member_file_from_path;
 use secretenv::model::public_key::GithubAccount;
 use secretenv::support::tty;
@@ -29,7 +29,7 @@ fn rewrite_member_with_github_binding(
     let existing = load_member_file_from_path(member_file).unwrap();
     let created_at = existing.protected.created_at.clone().unwrap();
     let expires_at = existing.protected.expires_at.clone();
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id,
         identity: existing.protected.identity,
         created_at: &created_at,
@@ -60,7 +60,7 @@ fn rewrite_member_with_foreign_identity(
     let source = load_member_file_from_path(source_member_file).unwrap();
     let created_at = source.protected.created_at.clone().unwrap();
     let expires_at = source.protected.expires_at.clone();
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id: target_member_id,
         identity: source.protected.identity,
         created_at: &created_at,
@@ -95,7 +95,7 @@ fn test_rewrap_adds_new_member() {
     let bob_member_content = fs::read_to_string(&bob_member_file).unwrap();
     fs::remove_file(&bob_member_file).unwrap();
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -105,7 +105,7 @@ fn test_rewrap_adds_new_member() {
 
     fs::write(&bob_member_file, bob_member_content).unwrap();
 
-    let rids_before = get_kv_rids(&kv_path);
+    let rids_before = load_kv_rids(&kv_path);
     assert!(
         !rids_before.contains(&BOB_MEMBER_ID.to_string()),
         "BOB should not be in wrap before rewrap"
@@ -115,7 +115,7 @@ fn test_rewrap_adds_new_member() {
     let result = rewrap::run(rewrap_args);
     assert!(result.is_ok(), "Rewrap should succeed: {:?}", result.err());
 
-    let rids_after = get_kv_rids(&kv_path);
+    let rids_after = load_kv_rids(&kv_path);
     assert!(
         rids_after.contains(&ALICE_MEMBER_ID.to_string()),
         "ALICE should still be in wrap after rewrap"
@@ -148,7 +148,7 @@ fn test_rewrap_non_interactive_skips_prompt_for_known_incoming_kid() {
         .join(format!("{}.json", BOB_MEMBER_ID));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -163,7 +163,7 @@ fn test_rewrap_non_interactive_skips_prompt_for_known_incoming_kid() {
         "Rewrap should succeed without TOFU prompt for known incoming kid: {:?}",
         result.err()
     );
-    let rids_after = get_kv_rids(&kv_path);
+    let rids_after = load_kv_rids(&kv_path);
     assert!(rids_after.contains(&BOB_MEMBER_ID.to_string()));
 }
 
@@ -197,7 +197,7 @@ fn test_rewrap_non_interactive_skips_online_verify_for_known_incoming_github_bin
         .join(format!("{}.json", BOB_MEMBER_ID));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -212,7 +212,7 @@ fn test_rewrap_non_interactive_skips_online_verify_for_known_incoming_github_bin
         "Rewrap should succeed without online verify for known incoming kid: {:?}",
         result.err()
     );
-    let rids_after = get_kv_rids(&kv_path);
+    let rids_after = load_kv_rids(&kv_path);
     assert!(rids_after.contains(&BOB_MEMBER_ID.to_string()));
 }
 
@@ -233,14 +233,14 @@ fn test_rewrap_non_interactive_auto_accepts_self_rotation() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
         "self_rotation",
         &[("KEY", "value")],
     );
-    let before = get_kv_rids(&kv_path);
+    let before = load_kv_rids(&kv_path);
     assert_eq!(before, vec![ALICE_MEMBER_ID.to_string()]);
 
     update_active_private_key_expires_at(
@@ -248,7 +248,7 @@ fn test_rewrap_non_interactive_auto_accepts_self_rotation() {
         ALICE_MEMBER_ID,
         &build_expiring_soon_timestamp(365),
     );
-    stage_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
+    save_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
         .unwrap();
 
     tty::set_interactive_override(Some(false));
@@ -260,7 +260,7 @@ fn test_rewrap_non_interactive_auto_accepts_self_rotation() {
         "Rewrap should auto-accept self rotation in non-interactive mode: {:?}",
         result.err()
     );
-    let after = get_kv_rids(&kv_path);
+    let after = load_kv_rids(&kv_path);
     assert_eq!(after, vec![ALICE_MEMBER_ID.to_string()]);
 }
 
@@ -293,7 +293,7 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
     fs::rename(&bob_active, &bob_incoming).unwrap();
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -334,7 +334,7 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
         result.output
     );
 
-    let rids_after = get_kv_rids(&kv_path);
+    let rids_after = load_kv_rids(&kv_path);
     assert!(
         rids_after.contains(&BOB_MEMBER_ID.to_string()),
         "BOB should be added after interactive PTY acceptance"
@@ -353,7 +353,7 @@ fn test_rewrap_rejects_self_incoming_when_local_identity_mismatches() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let _kv_path = create_kv_file(
+    let _kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -400,7 +400,7 @@ fn test_rewrap_removes_member_kv_enc() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -408,7 +408,7 @@ fn test_rewrap_removes_member_kv_enc() {
         &[("KEY", "value")],
     );
 
-    let rids_before = get_kv_rids(&kv_path);
+    let rids_before = load_kv_rids(&kv_path);
     assert!(rids_before.contains(&ALICE_MEMBER_ID.to_string()));
     assert!(rids_before.contains(&BOB_MEMBER_ID.to_string()));
 
@@ -423,7 +423,7 @@ fn test_rewrap_removes_member_kv_enc() {
     let result = rewrap::run(rewrap_args);
     assert!(result.is_ok(), "Rewrap should succeed: {:?}", result.err());
 
-    let rids_after = get_kv_rids(&kv_path);
+    let rids_after = load_kv_rids(&kv_path);
     assert!(
         rids_after.contains(&ALICE_MEMBER_ID.to_string()),
         "ALICE should still be in wrap"
@@ -433,7 +433,7 @@ fn test_rewrap_removes_member_kv_enc() {
         "BOB should be removed from wrap"
     );
 
-    let removed = get_kv_removed_rids(&kv_path);
+    let removed = load_kv_removed_rids(&kv_path);
     assert!(
         removed.contains(&BOB_MEMBER_ID.to_string()),
         "BOB should be in removed_recipients: {:?}",
@@ -460,7 +460,7 @@ fn test_rewrap_removes_member_file_enc() {
     let encrypted_path = workspace_dir.join("secrets").join("test_file_remove.json");
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts.clone(),
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         out: Some(encrypted_path.clone()),
         stdout: false,
         stdin: false,
@@ -517,14 +517,14 @@ fn test_rewrap_multiple_files() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let kv_path1 = create_kv_file(
+    let kv_path1 = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
         "multi1",
         &[("KEY1", "value1")],
     );
-    let kv_path2 = create_kv_file(
+    let kv_path2 = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -552,8 +552,8 @@ fn test_rewrap_multiple_files() {
         "Second kv file should still exist after rewrap"
     );
 
-    let rids1 = get_kv_rids(&kv_path1);
-    let rids2 = get_kv_rids(&kv_path2);
+    let rids1 = load_kv_rids(&kv_path1);
+    let rids2 = load_kv_rids(&kv_path2);
     assert!(
         rids1.contains(&ALICE_MEMBER_ID.to_string()),
         "ALICE should be in first file's wrap"
@@ -576,7 +576,7 @@ fn test_rewrap_requires_recipient_trust_approval() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let _kv_path = create_kv_file(
+    let _kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -584,7 +584,7 @@ fn test_rewrap_requires_recipient_trust_approval() {
         &[("KEY", "value")],
     );
 
-    fs::remove_file(trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID)).unwrap();
+    fs::remove_file(get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID)).unwrap();
 
     tty::set_interactive_override(Some(false));
     let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_ID));
@@ -609,7 +609,7 @@ fn test_rewrap_rejects_duplicate_kid_workspace_before_processing() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let _kv_path = create_kv_file(
+    let _kv_path = save_kv_file(
         &workspace_dir,
         common_opts,
         ALICE_MEMBER_ID,

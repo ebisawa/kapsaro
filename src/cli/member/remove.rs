@@ -4,14 +4,14 @@
 #[cfg(test)]
 use std::io::BufRead;
 
-use crate::app::member::mutation::{preview_member_removal, remove_member};
+use crate::app::member::mutation::{evaluate_member_removal, remove_member};
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::member::print_member_remove_summary;
 use crate::cli::common::output::text::{print_warning, print_warning_line};
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::support::tty;
 use crate::Error;
 
@@ -19,16 +19,16 @@ use super::RemoveArgs;
 
 pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let preview = preview_member_removal(&options, &args.member_id)?;
+    let preview = evaluate_member_removal(&options, &args.member_handle)?;
     print_member_remove_preview(&preview);
-    confirm_member_remove(args.force, &args.member_id)?;
-    let result = remove_member(&options, &args.member_id)?;
+    confirm_member_remove(args.force, &args.member_handle)?;
+    let result = remove_member(&options, &args.member_handle)?;
     print_member_remove_summary(&result.member_id);
 
     Ok(())
 }
 
-fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemovePreview) {
+fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemovalReport) {
     for warning in &preview.warnings {
         print_warning(warning);
     }
@@ -43,7 +43,7 @@ fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemove
         preview.affected_artifacts.len()
     ));
     for artifact in &preview.affected_artifacts {
-        eprintln!("  {}", display_path_relative_to_cwd(artifact));
+        eprintln!("  {}", format_path_relative_to_cwd(artifact));
     }
     print_warning_line(
         "Run `secretenv rewrap` after removal to update recipients in encrypted artifacts.",
@@ -55,7 +55,7 @@ fn confirm_member_remove(force: bool, member_id: &str) -> Result<(), Error> {
         return Ok(());
     }
     if !tty::is_interactive() {
-        return Err(Error::invalid_operation(format!(
+        return Err(Error::build_invalid_operation_error(format!(
             "Refusing to remove member '{}' without --force in non-interactive mode",
             member_id
         )));
@@ -68,7 +68,7 @@ fn confirm_member_remove(force: bool, member_id: &str) -> Result<(), Error> {
         return Ok(());
     }
 
-    Err(Error::invalid_operation(format!(
+    Err(Error::build_invalid_operation_error(format!(
         "Member removal cancelled for '{}'",
         member_id
     )))
@@ -88,7 +88,7 @@ where
         return Ok(());
     }
     if !is_interactive {
-        return Err(Error::invalid_operation(format!(
+        return Err(Error::build_invalid_operation_error(format!(
             "Refusing to remove member '{}' without --force in non-interactive mode",
             member_id
         )));
@@ -102,7 +102,7 @@ where
         return Ok(());
     }
 
-    Err(Error::invalid_operation(format!(
+    Err(Error::build_invalid_operation_error(format!(
         "Member removal cancelled for '{}'",
         member_id
     )))

@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
-use crate::feature::trust::known_keys::{assess_known_key, KnownKeyAssessment};
+use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::VerificationStatus;
 use crate::model::identity::{Kid, MemberId};
 use crate::model::trust_store::KnownKey;
@@ -74,7 +74,7 @@ pub(crate) fn build_promotion_review_plan(
         .iter()
         .chain(report.not_configured.iter())
     {
-        let known_key_state = assess_known_key(
+        let known_key_state = judge_known_key(
             known_keys,
             &candidate.review.kid,
             &candidate.review.member_id,
@@ -84,8 +84,8 @@ pub(crate) fn build_promotion_review_plan(
             continue;
         }
         match known_key_state {
-            KnownKeyAssessment::Existing => auto_accepted_candidates.push(candidate.clone()),
-            KnownKeyAssessment::New => prompt_candidates.push(candidate.clone()),
+            KnownKeyJudgment::Existing => auto_accepted_candidates.push(candidate.clone()),
+            KnownKeyJudgment::New => prompt_candidates.push(candidate.clone()),
         }
     }
 

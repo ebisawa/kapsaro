@@ -4,7 +4,7 @@
 use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
-use crate::test_utils::create_temp_ssh_keypair_in_dir;
+use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 use secretenv::config::types::SshSigningMethod;
 use secretenv::crypto::sign::sign_detached_bytes;
 use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
@@ -19,7 +19,7 @@ use tempfile::TempDir;
 fn generate_real_ssh_attested_public_key(
     temp_dir: &TempDir,
 ) -> secretenv::model::public_key::PublicKey {
-    let (ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair_in_dir(temp_dir);
+    let (ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair_in_dir(temp_dir);
     let home_dir = temp_dir.path().join("home");
     std::fs::create_dir_all(&home_dir).unwrap();
 
@@ -75,7 +75,7 @@ fn generated_public_key_verifies_with_attestation_repeatedly() {
 #[test]
 fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
     let (private_key_plaintext, mut public_key) =
         crate::test_utils::keygen_test("attestation-test@example.com", &ssh_priv, &ssh_pub_content)
             .unwrap();

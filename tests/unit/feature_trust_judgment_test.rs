@@ -23,7 +23,7 @@ fn kid_value(value: &str) -> Kid {
     Kid::try_from(value).unwrap()
 }
 
-fn make_known_key(kid: &str, member_id: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_id: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
         member_id: member_id.to_string(),
@@ -34,7 +34,7 @@ fn make_known_key(kid: &str, member_id: &str) -> KnownKey {
     }
 }
 
-fn make_active_members(entries: &[(&str, &str)]) -> BTreeMap<String, PublicKey> {
+fn build_active_members(entries: &[(&str, &str)]) -> BTreeMap<String, PublicKey> {
     let mut map = BTreeMap::new();
     for (kid, member_id) in entries {
         let pk: PublicKey = serde_json::from_str(&minimal_public_key_json(kid, member_id)).unwrap();
@@ -72,8 +72,8 @@ fn minimal_public_key_json(kid: &str, member_id: &str) -> String {
 #[test]
 fn test_judge_signer_trust_trusted() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "bob")]);
-    let known = vec![make_known_key(kid, "bob")];
+    let active = build_active_members(&[(kid, "bob")]);
+    let known = vec![build_known_key(kid, "bob")];
     let signer = TrustIdentity::new("bob", kid, [0u8; 32]);
 
     let result = judge_signer_trust(
@@ -89,7 +89,7 @@ fn test_judge_signer_trust_trusted() {
 #[test]
 fn test_judge_signer_trust_needs_approval() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "bob")]);
+    let active = build_active_members(&[(kid, "bob")]);
     let known: Vec<KnownKey> = vec![];
     let signer = TrustIdentity::new("bob", kid, [0u8; 32]);
 
@@ -113,7 +113,7 @@ fn test_judge_signer_trust_needs_approval() {
 fn test_judge_signer_trust_non_member() {
     let kid = KID1;
     let active: BTreeMap<String, PublicKey> = BTreeMap::new();
-    let known = vec![make_known_key(kid, "bob")];
+    let known = vec![build_known_key(kid, "bob")];
     let signer = TrustIdentity::new("bob", kid, [0u8; 32]);
 
     let result = judge_signer_trust(
@@ -135,7 +135,7 @@ fn test_judge_signer_trust_non_member() {
 #[test]
 fn test_judge_signer_trust_self_exception_skips_known_keys() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "self")]);
+    let active = build_active_members(&[(kid, "self")]);
     let known: Vec<KnownKey> = vec![];
     let self_keys = SelfTrustSet::new("self", [[42u8; 32]]);
     let signer = TrustIdentity::new("self", kid, [42u8; 32]);
@@ -153,7 +153,7 @@ fn test_judge_signer_trust_self_exception_skips_known_keys() {
 #[test]
 fn test_judge_signer_trust_self_trust_set_skips_known_keys() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "self")]);
+    let active = build_active_members(&[(kid, "self")]);
     let known: Vec<KnownKey> = vec![];
     let self_keys = SelfTrustSet::new("self", [[42u8; 32], [99u8; 32]]);
     let signer = TrustIdentity::new("self", kid, [99u8; 32]);
@@ -171,7 +171,7 @@ fn test_judge_signer_trust_self_trust_set_skips_known_keys() {
 #[test]
 fn test_judge_signer_trust_self_trust_set_not_matched() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "other")]);
+    let active = build_active_members(&[(kid, "other")]);
     let known: Vec<KnownKey> = vec![];
     let self_keys = SelfTrustSet::new("self", [[42u8; 32]]);
     let signer = TrustIdentity::new("other", kid, [99u8; 32]);
@@ -216,8 +216,8 @@ fn test_judge_signer_trust_self_trust_set_accepts_historical_self_key() {
 fn test_judge_signer_trust_cached_kid_different_member_integrity_anomaly() {
     // known_keys has K1 -> alice, but workspace presents K1 for bob
     let kid = KID1;
-    let active = make_active_members(&[(kid, "bob")]);
-    let known = vec![make_known_key(kid, "alice")];
+    let active = build_active_members(&[(kid, "bob")]);
+    let known = vec![build_known_key(kid, "alice")];
     let signer = TrustIdentity::new("bob", kid, [0u8; 32]);
 
     let result = judge_signer_trust(
@@ -240,8 +240,8 @@ fn test_judge_signer_trust_cached_kid_different_member_integrity_anomaly() {
 #[test]
 fn test_judge_signer_trust_cached_kid_same_member_trusted() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "alice")]);
-    let known = vec![make_known_key(kid, "alice")];
+    let active = build_active_members(&[(kid, "alice")]);
+    let known = vec![build_known_key(kid, "alice")];
     let signer = TrustIdentity::new("alice", kid, [0u8; 32]);
 
     let result = judge_signer_trust(
@@ -257,8 +257,8 @@ fn test_judge_signer_trust_cached_kid_same_member_trusted() {
 #[test]
 fn test_judge_signer_trust_member_id_mismatch_is_not_current_member() {
     let kid = KID1;
-    let active = make_active_members(&[(kid, "alice@example.com")]);
-    let known = vec![make_known_key(kid, "bob@example.com")];
+    let active = build_active_members(&[(kid, "alice@example.com")]);
+    let known = vec![build_known_key(kid, "bob@example.com")];
     let signer = TrustIdentity::new("bob@example.com", kid, [0u8; 32]);
 
     let result = judge_signer_trust(
@@ -282,7 +282,7 @@ fn test_judge_signer_trust_member_id_mismatch_is_not_current_member() {
 
 #[test]
 fn test_judge_recipients_trust_all_known() {
-    let known = vec![make_known_key(KID1, "alice"), make_known_key(KID2, "bob")];
+    let known = vec![build_known_key(KID1, "alice"), build_known_key(KID2, "bob")];
     let recipients = vec![
         TrustIdentity::new("alice", KID1, [0u8; 32]),
         TrustIdentity::new("bob", KID2, [1u8; 32]),
@@ -314,7 +314,7 @@ fn test_judge_recipients_trust_unknown_kid() {
 
 #[test]
 fn test_judge_recipients_trust_cached_kid_different_member() {
-    let known = vec![make_known_key(KID1, "alice")];
+    let known = vec![build_known_key(KID1, "alice")];
     let recipients = vec![TrustIdentity::new("bob", KID1, [0u8; 32])];
 
     let needs = judge_recipients_trust(

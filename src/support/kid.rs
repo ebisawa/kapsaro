@@ -13,7 +13,7 @@ const HALF_DISPLAY_LENGTH: usize = 16;
 pub fn normalize_kid(input: &str) -> Result<String> {
     let canonical = normalize_kid_query(input)?;
     if canonical.len() != KID_LENGTH {
-        return Err(Error::invalid_argument(format!(
+        return Err(Error::build_invalid_argument_error(format!(
             "kid must be {KID_LENGTH} Crockford Base32 characters after normalization"
         )));
     }
@@ -31,16 +31,16 @@ pub fn normalize_kid_query(input: &str) -> Result<String> {
         .collect::<Vec<u8>>();
 
     if normalized.is_empty() || normalized.len() > KID_LENGTH {
-        return Err(Error::invalid_argument(format!(
+        return Err(Error::build_invalid_argument_error(format!(
             "kid must be 1 to {KID_LENGTH} Crockford Base32 characters after normalization"
         )));
     }
 
     let query = String::from_utf8(normalized)
-        .map_err(|_| Error::invalid_argument("kid must be valid ASCII"))?;
+        .map_err(|_| Error::build_invalid_argument_error("kid must be valid ASCII"))?;
 
     if !query.bytes().all(is_crockford_base32_byte) {
-        return Err(Error::invalid_argument(
+        return Err(Error::build_invalid_argument_error(
             "kid must use Crockford Base32 characters only",
         ));
     }
@@ -71,7 +71,7 @@ where
         _ => {
             let displays = matches
                 .iter()
-                .map(|kid| build_kid_display(kid).unwrap_or_else(|_| kid.clone()))
+                .map(|kid| format_kid_display(kid).unwrap_or_else(|_| kid.clone()))
                 .collect::<Vec<_>>()
                 .join(", ");
             Err(Error::InvalidArgument {
@@ -82,7 +82,7 @@ where
 }
 
 /// Build the human-friendly dashed display form of a canonical `kid`.
-pub fn build_kid_display(canonical_kid: &str) -> Result<String> {
+pub fn format_kid_display(canonical_kid: &str) -> Result<String> {
     let canonical = normalize_kid(canonical_kid)?;
     let mut output = String::with_capacity(KID_LENGTH + (KID_LENGTH / DISPLAY_GROUP_SIZE - 1));
 
@@ -97,7 +97,7 @@ pub fn build_kid_display(canonical_kid: &str) -> Result<String> {
 }
 
 /// Build the first half of the human-friendly dashed display form of a canonical `kid`.
-pub fn build_kid_half_display(canonical_kid: &str) -> Result<String> {
+pub fn format_kid_half_display(canonical_kid: &str) -> Result<String> {
     let canonical = normalize_kid(canonical_kid)?;
     let half = &canonical[..HALF_DISPLAY_LENGTH];
     let mut output =
@@ -116,15 +116,15 @@ pub fn build_kid_half_display(canonical_kid: &str) -> Result<String> {
 /// Build dashed display form for human-facing output.
 ///
 /// This function is **lossy**: if `kid` is not a valid canonical `kid`, it returns the input as-is.
-pub fn kid_display_lossy(kid: &str) -> String {
-    build_kid_display(kid).unwrap_or_else(|_| kid.to_string())
+pub fn format_kid_display_lossy(kid: &str) -> String {
+    format_kid_display(kid).unwrap_or_else(|_| kid.to_string())
 }
 
 /// Build dashed half-display form for human-facing output.
 ///
 /// This function is **lossy**: if `kid` is not a valid canonical `kid`, it returns the input as-is.
-pub fn kid_half_display_lossy(kid: &str) -> String {
-    build_kid_half_display(kid).unwrap_or_else(|_| kid.to_string())
+pub fn format_kid_half_display_lossy(kid: &str) -> String {
+    format_kid_half_display(kid).unwrap_or_else(|_| kid.to_string())
 }
 
 fn is_crockford_base32_byte(byte: u8) -> bool {

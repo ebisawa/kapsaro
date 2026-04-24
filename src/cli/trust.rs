@@ -39,7 +39,7 @@ pub struct ListArgs {
 
     /// Member handle (owner of the trust store to list)
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 }
 
 #[derive(Args)]
@@ -50,7 +50,7 @@ pub struct RemoveArgs {
 
     /// Member handle (owner of the trust store to update)
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Key ID to remove
     pub kid: String,
@@ -64,7 +64,7 @@ pub struct PurgeArgs {
 
     /// Member handle (owner of the trust store to update)
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Remove entries older than this duration (e.g. "180d")
     #[arg(long)]

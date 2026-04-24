@@ -5,7 +5,7 @@
 
 use crate::model::public_key::PublicKey;
 use crate::support::fs::atomic;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -44,27 +44,27 @@ pub fn ensure_workspace_structure(workspace_path: &Path) -> Result<bool> {
 }
 
 /// Return true when the workspace already has at least one active member file.
-pub fn workspace_has_active_members(workspace_path: &Path) -> Result<bool> {
+pub fn check_workspace_has_active_members(workspace_path: &Path) -> Result<bool> {
     let active_dir = workspace_path.join("members").join("active");
     if !active_dir.is_dir() {
         return Ok(false);
     }
 
     for entry in std::fs::read_dir(&active_dir).map_err(|e| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Failed to read active members directory {}: {}",
-                display_path_relative_to_cwd(&active_dir),
+                format_path_relative_to_cwd(&active_dir),
                 e
             ),
             e,
         )
     })? {
         let entry = entry.map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to read active member entry in {}: {}",
-                    display_path_relative_to_cwd(&active_dir),
+                    format_path_relative_to_cwd(&active_dir),
                     e
                 ),
                 e,
@@ -93,7 +93,7 @@ pub fn validate_workspace_exists(workspace_path: &Path) -> Result<()> {
         return Err(Error::Config {
             message: format!(
                 "Workspace not found or incomplete: {}. Run 'secretenv init' to create a new workspace.",
-                display_path_relative_to_cwd(workspace_path)
+                format_path_relative_to_cwd(workspace_path)
             ),
         });
     }
@@ -118,10 +118,10 @@ fn is_real_dir(path: &Path) -> bool {
 fn ensure_workspace_dir(path: &Path) -> Result<()> {
     for missing_dir in collect_missing_directories(path)?.into_iter().rev() {
         fs::create_dir(&missing_dir).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to create directory {}: {}",
-                    display_path_relative_to_cwd(&missing_dir),
+                    format_path_relative_to_cwd(&missing_dir),
                     e
                 ),
                 e,
@@ -149,10 +149,10 @@ fn collect_missing_directories(path: &Path) -> Result<Vec<PathBuf>> {
                 missing.push(candidate.to_path_buf());
             }
             Err(e) => {
-                return Err(Error::io_with_source(
+                return Err(Error::build_io_error_with_source(
                     format!(
                         "Failed to inspect directory {}: {}",
-                        display_path_relative_to_cwd(candidate),
+                        format_path_relative_to_cwd(candidate),
                         e
                     ),
                     e,
@@ -161,9 +161,9 @@ fn collect_missing_directories(path: &Path) -> Result<Vec<PathBuf>> {
         }
     }
 
-    Err(Error::io(format!(
+    Err(Error::build_io_error(format!(
         "Failed to resolve workspace directory ancestry for {}",
-        display_path_relative_to_cwd(path)
+        format_path_relative_to_cwd(path)
     )))
 }
 
@@ -173,14 +173,14 @@ fn validate_workspace_directory(path: &Path, metadata: &fs::Metadata) -> Result<
         return Err(Error::InvalidOperation {
             message: format!(
                 "refusing to create workspace path through symlink: {}",
-                display_path_relative_to_cwd(path)
+                format_path_relative_to_cwd(path)
             ),
         });
     }
     if !file_type.is_dir() {
-        return Err(Error::io(format!(
+        return Err(Error::build_io_error(format!(
             "Failed to create directory {}: existing path is not a directory",
-            display_path_relative_to_cwd(path)
+            format_path_relative_to_cwd(path)
         )));
     }
     Ok(())

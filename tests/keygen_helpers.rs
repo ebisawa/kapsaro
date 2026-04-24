@@ -12,7 +12,7 @@ use secretenv::feature::key::protection::encryption::{
     encrypt_private_key, PrivateKeyEncryptionParams,
 };
 use secretenv::feature::key::public_key_document::{
-    build_attestation, build_public_key, PublicKeyBuildParams,
+    build_attestation, build_public_key, PublicKeyDocumentParams,
 };
 use secretenv::feature::key::ssh_binding::SshBindingContext;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
@@ -121,9 +121,9 @@ pub fn keygen_test(
     let (sig_keypair, sig_pub) = generate_sig_keypair();
 
     let now = OffsetDateTime::now_utc();
-    let created_at = secretenv::support::time::build_timestamp_display(now)?;
+    let created_at = secretenv::support::time::format_timestamp_rfc3339(now)?;
     let expires_at =
-        secretenv::support::time::build_timestamp_display(now + time::Duration::days(365))?;
+        secretenv::support::time::format_timestamp_rfc3339(now + time::Duration::days(365))?;
 
     // Extract signing key from keypair before moving it
     let sig_key_bytes =
@@ -161,7 +161,7 @@ pub fn keygen_test(
         keys: identity_keys,
         attestation,
     };
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id,
         identity,
         created_at: &created_at,
@@ -178,7 +178,7 @@ pub fn keygen_test(
 ///
 /// Uses `encrypt_private_key()` with the provided SSH key to produce
 /// a properly encrypted PrivateKey document.
-pub fn create_test_private_key(
+pub fn build_test_private_key(
     plaintext: &PrivateKeyPlaintext,
     member_id: &str,
     kid: &str,
@@ -192,9 +192,9 @@ pub fn create_test_private_key(
     ));
 
     let now = OffsetDateTime::now_utc();
-    let created_at = secretenv::support::time::build_timestamp_display(now)?;
+    let created_at = secretenv::support::time::format_timestamp_rfc3339(now)?;
     let expires_at =
-        secretenv::support::time::build_timestamp_display(now + time::Duration::days(365))?;
+        secretenv::support::time::format_timestamp_rfc3339(now + time::Duration::days(365))?;
 
     encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext,
@@ -213,7 +213,7 @@ pub fn create_test_private_key(
 ///
 /// This function wraps a PrivateKeyPlaintext in a VerifiedPrivateKey type without
 /// performing full validation. It's intended for test code only.
-pub fn make_decrypted_private_key_plaintext(
+pub fn build_verified_private_key(
     plaintext: &PrivateKeyPlaintext,
     member_id: &str,
     kid: &str,
@@ -249,10 +249,10 @@ fn clone_private_key_plaintext_for_test(plaintext: &PrivateKeyPlaintext) -> Priv
 /// Convert a slice of PublicKeys to VerifiedRecipientKey (for testing only).
 ///
 /// Used by tests that call encrypt_kv_document or similar with a list of keys.
-pub fn make_verified_members(members: &[PublicKey]) -> Vec<VerifiedRecipientKey> {
+pub fn build_verified_recipient_keys(members: &[PublicKey]) -> Vec<VerifiedRecipientKey> {
     members
         .iter()
-        .map(|pk| make_recipient_key(pk.clone()))
+        .map(|pk| build_verified_recipient_key(pk.clone()))
         .collect()
 }
 
@@ -260,13 +260,13 @@ pub fn make_verified_members(members: &[PublicKey]) -> Vec<VerifiedRecipientKey>
 ///
 /// This function wraps a PublicKey in a VerifiedRecipientKey type without
 /// performing full verification. It's intended for test code only.
-pub fn make_recipient_key(public_key: PublicKey) -> VerifiedRecipientKey {
-    let attested = make_attested_public_key(public_key);
+pub fn build_verified_recipient_key(public_key: PublicKey) -> VerifiedRecipientKey {
+    let attested = build_verified_public_key_attested(public_key);
     VerifiedRecipientKey::new(attested, ExpiryProof::new())
 }
 
 /// Build a VerifiedPublicKeyAttested wrapper for PublicKey (for testing only).
-pub fn make_attested_public_key(public_key: PublicKey) -> VerifiedPublicKeyAttested {
+pub fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
     let proof = AttestationProof {
         method: public_key.protected.identity.attestation.method.clone(),
         ssh_pub: public_key.protected.identity.attestation.pub_.clone(),
@@ -281,7 +281,7 @@ pub fn make_attested_public_key(public_key: PublicKey) -> VerifiedPublicKeyAttes
 ///
 /// Uses placeholder values for all fields. Not suitable for cryptographic
 /// verification — use `keygen_test()` when real key material is needed.
-pub fn make_dummy_public_key(kid: &str) -> PublicKey {
+pub fn build_dummy_public_key(kid: &str) -> PublicKey {
     use secretenv::model::public_key::{Attestation, PublicKeyProtected};
 
     PublicKey {

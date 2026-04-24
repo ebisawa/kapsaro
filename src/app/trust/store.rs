@@ -3,16 +3,16 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::paths::ResolvedCommandPaths;
+use crate::app::context::paths::CommandPathResolution;
 use crate::app::errors::build_invalid_trust_store_error;
 use crate::app::trust::types::TrustMutationResult;
 use crate::feature::envelope::signature::build_signing_context;
 use crate::feature::envelope::signature::VerifiedSigningContext;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::feature::trust::verification::verify_trust_store;
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::{
-    load_trust_store, save_trust_store, LoadedTrustStore as IoLoadedTrustStore,
+    load_trust_store, save_trust_store, TrustStoreLoadResult as IoTrustStoreLoadResult,
 };
 use crate::model::identifiers::format::TRUST_LOCAL_V2;
 use crate::model::trust_store::TrustStoreProtected;
@@ -20,7 +20,7 @@ use crate::support::fs::lock;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
-pub(crate) struct LoadedTrustStore {
+pub(crate) struct TrustStoreState {
     pub(crate) protected: TrustStoreProtected,
     pub(crate) warnings: Vec<String>,
 }
@@ -40,7 +40,7 @@ pub(crate) fn load_existing_trust_store(
     base_dir: &Path,
     keystore_root: &Path,
     owner_member_id: &str,
-) -> Result<LoadedTrustStore> {
+) -> Result<TrustStoreState> {
     let loaded = load_trust_store(path, base_dir)
         .map_err(|e| build_invalid_trust_store_error(path, e))?
         .ok_or_else(|| Error::NotFound {
@@ -54,12 +54,12 @@ pub(crate) fn load_or_build_trust_store(
     base_dir: &Path,
     keystore_root: &Path,
     owner_member_id: &str,
-) -> Result<LoadedTrustStore> {
+) -> Result<TrustStoreState> {
     match load_trust_store(path, base_dir).map_err(|e| build_invalid_trust_store_error(path, e))? {
         Some(loaded) => verify_loaded_trust_store(path, keystore_root, loaded),
         None => {
             let now = build_now_timestamp()?;
-            Ok(LoadedTrustStore {
+            Ok(TrustStoreState {
                 protected: TrustStoreProtected {
                     format: TRUST_LOCAL_V2.to_string(),
                     owner_member_id: owner_member_id.to_string(),
@@ -77,16 +77,16 @@ pub(crate) fn resolve_trust_store_path(
     options: &CommonCommandOptions,
     owner_member_id: &str,
 ) -> Result<PathBuf> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    Ok(trust_store_file_path(&paths.base_dir, owner_member_id))
+    let paths = CommandPathResolution::load(options)?;
+    Ok(get_trust_store_file_path(&paths.base_dir, owner_member_id))
 }
 
 pub(crate) fn load_optional_trust_store_for_member(
     options: &CommonCommandOptions,
     owner_member_id: &str,
-) -> Result<(PathBuf, Option<LoadedTrustStore>)> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    let path = trust_store_file_path(&paths.base_dir, owner_member_id);
+) -> Result<(PathBuf, Option<TrustStoreState>)> {
+    let paths = CommandPathResolution::load(options)?;
+    let path = get_trust_store_file_path(&paths.base_dir, owner_member_id);
     let loaded = load_trust_store(&path, &paths.base_dir)
         .map_err(|e| build_invalid_trust_store_error(&path, e))?
         .map(|loaded| verify_loaded_trust_store(&path, &paths.keystore_root, loaded))
@@ -97,9 +97,9 @@ pub(crate) fn load_optional_trust_store_for_member(
 pub(crate) fn load_or_build_trust_store_for_member(
     options: &CommonCommandOptions,
     owner_member_id: &str,
-) -> Result<(PathBuf, LoadedTrustStore)> {
-    let paths = ResolvedCommandPaths::load(options)?;
-    let path = trust_store_file_path(&paths.base_dir, owner_member_id);
+) -> Result<(PathBuf, TrustStoreState)> {
+    let paths = CommandPathResolution::load(options)?;
+    let path = get_trust_store_file_path(&paths.base_dir, owner_member_id);
     let loaded = load_or_build_trust_store(
         &path,
         &paths.base_dir,
@@ -109,7 +109,7 @@ pub(crate) fn load_or_build_trust_store_for_member(
     Ok((path, loaded))
 }
 
-pub(crate) fn sign_and_save_trust_store(
+pub(crate) fn save_signed_trust_store(
     path: &Path,
     protected: &TrustStoreProtected,
     signing: &VerifiedSigningContext<'_>,
@@ -118,7 +118,7 @@ pub(crate) fn sign_and_save_trust_store(
     save_trust_store(path, &document)
 }
 
-pub(crate) fn mutate_trust_store<T, F>(
+pub(crate) fn execute_trust_store_mutation<T, F>(
     path: &Path,
     keystore_root: &Path,
     owner_member_id: &str,
@@ -130,38 +130,17 @@ where
     F: FnOnce(&mut TrustStoreProtected) -> Result<TrustStoreMutation<T>>,
 {
     lock::with_file_lock(path, || {
-        let loaded =
-            match mode {
-                TrustStoreMutationMode::ExistingRequired => {
-                    let base_dir = path.parent().and_then(|dir| dir.parent()).ok_or_else(|| {
-                        Error::Config {
-                            message: format!("Invalid trust store path '{}'", path.display()),
-                        }
-                    })?;
-                    load_existing_trust_store(path, base_dir, keystore_root, owner_member_id)?
-                }
-                TrustStoreMutationMode::CreateIfMissing => {
-                    let base_dir = path.parent().and_then(|dir| dir.parent()).ok_or_else(|| {
-                        Error::Config {
-                            message: format!("Invalid trust store path '{}'", path.display()),
-                        }
-                    })?;
-                    load_or_build_trust_store(path, base_dir, keystore_root, owner_member_id)?
-                }
-            };
+        let loaded = load_trust_store_for_mutation(path, keystore_root, owner_member_id, mode)?;
         let mut protected = loaded.protected;
         let mutation = mutate(&mut protected)?;
 
-        if mutation.changed {
-            protected.updated_at = build_now_timestamp()?;
-            sign_and_save_trust_store(path, &protected, signing)?;
-        }
+        save_changed_trust_store(path, &mut protected, signing, mutation.changed)?;
 
         Ok(TrustMutationResult::new(mutation.value, loaded.warnings))
     })
 }
 
-pub(crate) fn mutate_trust_store_with_execution<T, F>(
+pub(crate) fn execute_trust_store_mutation_with_execution<T, F>(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     mode: TrustStoreMutationMode,
@@ -174,7 +153,7 @@ where
     let path = resolve_trust_store_path(options, &execution.member_id)?;
     let keystore_root = options.resolve_keystore_root()?;
     let signing = build_signing_context(&execution.key_ctx, debug)?;
-    mutate_trust_store(
+    execute_trust_store_mutation(
         &path,
         &keystore_root,
         &execution.member_id,
@@ -185,19 +164,55 @@ where
 }
 
 pub(crate) fn build_now_timestamp() -> Result<String> {
-    crate::support::time::build_timestamp_display(time::OffsetDateTime::now_utc())
+    crate::support::time::format_timestamp_rfc3339(time::OffsetDateTime::now_utc())
+}
+
+fn load_trust_store_for_mutation(
+    path: &Path,
+    keystore_root: &Path,
+    owner_member_id: &str,
+    mode: TrustStoreMutationMode,
+) -> Result<TrustStoreState> {
+    let base_dir = resolve_trust_store_base_dir(path)?;
+    match mode {
+        TrustStoreMutationMode::ExistingRequired => {
+            load_existing_trust_store(path, base_dir, keystore_root, owner_member_id)
+        }
+        TrustStoreMutationMode::CreateIfMissing => {
+            load_or_build_trust_store(path, base_dir, keystore_root, owner_member_id)
+        }
+    }
+}
+
+fn resolve_trust_store_base_dir(path: &Path) -> Result<&Path> {
+    path.parent().and_then(|dir| dir.parent()).ok_or_else(|| {
+        Error::build_config_error(format!("Invalid trust store path '{}'", path.display()))
+    })
+}
+
+fn save_changed_trust_store(
+    path: &Path,
+    protected: &mut TrustStoreProtected,
+    signing: &VerifiedSigningContext<'_>,
+    changed: bool,
+) -> Result<()> {
+    if !changed {
+        return Ok(());
+    }
+    protected.updated_at = build_now_timestamp()?;
+    save_signed_trust_store(path, protected, signing)
 }
 
 fn verify_loaded_trust_store(
     path: &Path,
     keystore_root: &Path,
-    loaded: IoLoadedTrustStore,
-) -> Result<LoadedTrustStore> {
+    loaded: IoTrustStoreLoadResult,
+) -> Result<TrustStoreState> {
     let warnings = loaded.permission_warnings;
     let verified = verify_trust_store(&loaded.document, keystore_root)
         .map_err(|e| build_invalid_trust_store_error(path, e))?;
     let (doc, _) = verified.into_inner();
-    Ok(LoadedTrustStore {
+    Ok(TrustStoreState {
         protected: doc.protected,
         warnings,
     })

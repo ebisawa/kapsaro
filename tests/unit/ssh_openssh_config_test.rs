@@ -3,34 +3,39 @@
 
 //! Unit tests for SSH OpenSSH config parsing
 //!
-//! Tests for parsing logic (parse_identity_agent, unquote, trim_comment)
+//! Tests for parsing logic (parse_identity_agent, parse_quoted_value, extract_config_line_before_comment)
 
-use secretenv::io::ssh::openssh_config::{parse_identity_agent, trim_comment, unquote};
+use secretenv::io::ssh::openssh_config::{
+    extract_config_line_before_comment, parse_identity_agent, parse_quoted_value,
+};
 
 #[test]
-fn test_unquote_double() {
-    assert_eq!(unquote(r#""hello world""#), "hello world");
-    assert_eq!(unquote(r#""~/path/to/sock""#), "~/path/to/sock");
+fn test_parse_quoted_value_double() {
+    assert_eq!(parse_quoted_value(r#""hello world""#), "hello world");
+    assert_eq!(parse_quoted_value(r#""~/path/to/sock""#), "~/path/to/sock");
 }
 
 #[test]
-fn test_unquote_single() {
-    assert_eq!(unquote("'hello world'"), "hello world");
-    assert_eq!(unquote("'~/path/to/sock'"), "~/path/to/sock");
+fn test_parse_quoted_value_single() {
+    assert_eq!(parse_quoted_value("'hello world'"), "hello world");
+    assert_eq!(parse_quoted_value("'~/path/to/sock'"), "~/path/to/sock");
 }
 
 #[test]
-fn test_unquote_no_quotes() {
-    assert_eq!(unquote("hello world"), "hello world");
-    assert_eq!(unquote("~/path/to/sock"), "~/path/to/sock");
+fn test_parse_quoted_value_no_quotes() {
+    assert_eq!(parse_quoted_value("hello world"), "hello world");
+    assert_eq!(parse_quoted_value("~/path/to/sock"), "~/path/to/sock");
 }
 
 #[test]
-fn test_trim_comment() {
-    assert_eq!(trim_comment("key value # comment"), "key value ");
-    assert_eq!(trim_comment("key value"), "key value");
+fn test_extract_config_line_before_comment() {
     assert_eq!(
-        trim_comment(r#"key "value # not comment""#),
+        extract_config_line_before_comment("key value # comment"),
+        "key value "
+    );
+    assert_eq!(extract_config_line_before_comment("key value"), "key value");
+    assert_eq!(
+        extract_config_line_before_comment(r#"key "value # not comment""#),
         r#"key "value # not comment""#
     );
 }

@@ -3,10 +3,10 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::review::ensure_public_key_snapshot_matches;
-use crate::app::trust::approval::{commit_known_key_approvals, ApprovedKnownKey};
-use crate::app::trust::flow::review_rewrap_signer_requirements_with_handlers;
+use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
+use crate::app::trust::review::review_rewrap_signer_requirements_with_confirmation;
 use crate::app::trust::{
-    current_self_sig_x, evaluate_signer_trust_with_proof, load_read_trust_context,
+    derive_self_sig_x, evaluate_signer_trust_with_proof, load_read_trust_context,
     CommandCapability, TrustApprovalCandidate, TrustContext,
 };
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
@@ -14,13 +14,13 @@ use crate::feature::rewrap::{rewrap_content as rewrap_feature_content, RewrapReq
 use crate::feature::verify::file::verify_file_content;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
-use crate::format::content::EncryptedContent;
+use crate::format::content::EncContent;
 use crate::io::workspace::members::{
     load_active_member_files, promote_snapshotted_incoming_members, IncomingMemberPromotionSnapshot,
 };
 use crate::model::verification::SignatureVerificationProof;
 use crate::support::fs::{atomic, load_text_with_limit};
-use crate::support::limits::encrypted_file_read_limit;
+use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::Result;
 use std::path::{Path, PathBuf};
 
@@ -30,7 +30,7 @@ use super::types::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CapturedArtifact {
+struct ArtifactSnapshot {
     file_path: PathBuf,
     content: String,
 }
@@ -43,7 +43,7 @@ struct RewrapBatchExecutionContext<'a> {
     current_recipients: &'a [String],
 }
 
-pub(crate) fn apply_rewrap_promotions(
+pub(crate) fn promote_accepted_incoming_members(
     workspace_root: &Path,
     accepted_promotions: &[crate::app::rewrap::types::IncomingPromotionCandidate],
 ) -> Result<Vec<String>> {
@@ -76,13 +76,14 @@ where
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
 {
     let promoted_member_ids =
-        apply_rewrap_promotions(&plan.workspace_root, &request.accepted_promotions)?;
+        promote_accepted_incoming_members(&plan.workspace_root, &request.accepted_promotions)?;
     let actual_post_promotion_members = load_verified_post_promotion_members(
         &plan.workspace_root,
         expected_post_promotion_members,
     )?;
     enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
-    let mut approval_warnings = save_known_key_approvals(&request.options, &execution, approvals)?;
+    let mut approval_warnings =
+        save_known_key_approval_warnings(&request.options, &execution, approvals)?;
     let mut outcome = execute_rewrap_batch(
         request,
         plan,
@@ -124,7 +125,7 @@ where
     };
 
     for file_path in &plan.artifact_paths {
-        match process_rewrap_file(
+        match execute_rewrap_file(
             file_path,
             &ctx,
             &mut warnings,
@@ -136,7 +137,7 @@ where
             }),
             Err(error) => failed_files.push(RewrapFileFailure {
                 output_path: file_path.clone(),
-                error_message: error.user_message().to_string(),
+                error_message: error.format_user_message().to_string(),
             }),
         }
     }
@@ -170,7 +171,7 @@ fn ensure_post_promotion_members_match(
     )
 }
 
-fn save_known_key_approvals(
+fn save_known_key_approval_warnings(
     options: &crate::app::context::options::CommonCommandOptions,
     execution: &ExecutionContext,
     approvals: &[ApprovedKnownKey],
@@ -178,7 +179,7 @@ fn save_known_key_approvals(
     if approvals.is_empty() {
         return Ok(Vec::new());
     }
-    Ok(commit_known_key_approvals(options, execution, approvals)?.warnings)
+    Ok(save_known_key_approvals(options, execution, approvals)?.warnings)
 }
 
 fn collect_current_recipient_ids(
@@ -193,7 +194,7 @@ fn collect_current_recipient_ids(
     recipients
 }
 
-fn process_rewrap_file<ConfirmKnown, ConfirmNonMember>(
+fn execute_rewrap_file<ConfirmKnown, ConfirmNonMember>(
     file_path: &Path,
     ctx: &RewrapBatchExecutionContext<'_>,
     warnings: &mut Vec<String>,
@@ -205,7 +206,7 @@ where
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
 {
     let captured = load_captured_artifact(file_path)?;
-    let content = EncryptedContent::detect(captured.content.clone())?;
+    let content = EncContent::detect(captured.content.clone())?;
     review_captured_artifact_signer(
         &captured,
         &content,
@@ -214,34 +215,50 @@ where
         confirm_known,
         confirm_non_member,
     )?;
-    let rewrap_request = RewrapRequest {
-        member_id: &ctx.execution.member_id,
+    rewrite_captured_artifact(&captured, &content, ctx)
+}
+
+fn load_captured_artifact(file_path: &Path) -> Result<ArtifactSnapshot> {
+    let content = load_text_with_limit(
+        file_path,
+        resolve_encrypted_artifact_read_limit(file_path),
+        "encrypted artifact",
+    )?;
+    Ok(ArtifactSnapshot {
+        file_path: file_path.to_path_buf(),
+        content,
+    })
+}
+
+fn rewrite_captured_artifact(
+    captured: &ArtifactSnapshot,
+    content: &EncContent,
+    ctx: &RewrapBatchExecutionContext<'_>,
+) -> Result<()> {
+    let rewrap_request = build_rewrap_request(ctx);
+    let rewritten = rewrap_feature_content(content, &rewrap_request)?;
+    save_rewritten_artifact(&captured.file_path, &rewritten)
+}
+
+fn build_rewrap_request<'a>(ctx: &'a RewrapBatchExecutionContext<'a>) -> RewrapRequest<'a> {
+    RewrapRequest {
+        member_id: ctx.execution.member_id.as_str(),
         key_ctx: &ctx.execution.key_ctx,
         workspace_root: Some(ctx.plan.workspace_root.as_path()),
         target_members: Some(ctx.post_promotion_members.verified_members()),
         rotate_key: ctx.request.rotate_key,
         clear_disclosure_history: ctx.request.clear_disclosure_history,
         debug: ctx.request.options.verbose,
-    };
-    let rewritten = rewrap_feature_content(&content, &rewrap_request)?;
-    atomic::save_text(&captured.file_path, &rewritten)
+    }
 }
 
-fn load_captured_artifact(file_path: &Path) -> Result<CapturedArtifact> {
-    let content = load_text_with_limit(
-        file_path,
-        encrypted_file_read_limit(file_path),
-        "encrypted artifact",
-    )?;
-    Ok(CapturedArtifact {
-        file_path: file_path.to_path_buf(),
-        content,
-    })
+fn save_rewritten_artifact(file_path: &Path, rewritten: &str) -> Result<()> {
+    atomic::save_text(file_path, rewritten)
 }
 
 fn review_captured_artifact_signer<ConfirmKnown, ConfirmNonMember>(
-    captured: &CapturedArtifact,
-    content: &EncryptedContent,
+    captured: &ArtifactSnapshot,
+    content: &EncContent,
     ctx: &RewrapBatchExecutionContext<'_>,
     warnings: &mut Vec<String>,
     confirm_known: &mut ConfirmKnown,
@@ -257,14 +274,14 @@ where
     else {
         return Ok(());
     };
-    let approvals = review_rewrap_signer_requirements_with_handlers(
+    let approvals = review_rewrap_signer_requirements_with_confirmation(
         std::slice::from_ref(&requirement),
         "rewrap input signer",
         "signer trust",
         confirm_known,
         confirm_non_member,
     )?;
-    warnings.extend(save_known_key_approvals(
+    warnings.extend(save_known_key_approval_warnings(
         &ctx.request.options,
         ctx.execution,
         &approvals,
@@ -281,7 +298,7 @@ fn load_rewrap_signer_trust_context(
         &request.options,
         &plan.workspace_root,
         &execution.member_id,
-        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         request.options.verbose,
     )?
     .trust_ctx;
@@ -291,8 +308,8 @@ fn load_rewrap_signer_trust_context(
 }
 
 fn build_rewrap_signer_requirement(
-    captured: &CapturedArtifact,
-    content: &EncryptedContent,
+    captured: &ArtifactSnapshot,
+    content: &EncContent,
     trust_ctx: &TrustContext,
     current_recipients: &[String],
 ) -> Result<Option<RewrapSignerRequirement>> {
@@ -312,12 +329,12 @@ fn build_rewrap_signer_requirement(
     }))
 }
 
-fn extract_signature_proof(content: &EncryptedContent) -> Result<SignatureVerificationProof> {
+fn extract_signature_proof(content: &EncContent) -> Result<SignatureVerificationProof> {
     match content {
-        EncryptedContent::FileEnc(file_content) => {
+        EncContent::FileEnc(file_content) => {
             Ok(verify_file_content(file_content, false)?.proof.clone())
         }
-        EncryptedContent::KvEnc(kv_content) => Ok(verify_kv_content(kv_content, false)?.proof),
+        EncContent::KvEnc(kv_content) => Ok(verify_kv_content(kv_content, false)?.proof),
     }
 }
 

@@ -3,7 +3,7 @@
 
 //! File locking utilities.
 
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use fd_lock::RwLock;
 use std::fs;
@@ -19,9 +19,9 @@ where
     F: FnOnce() -> Result<T>,
 {
     let file_name = path.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
-        Error::io(format!(
+        Error::build_io_error(format!(
             "Invalid file path: {}",
-            display_path_relative_to_cwd(path)
+            format_path_relative_to_cwd(path)
         ))
     })?;
     let lock_file_name = format!(".{}.lock", file_name);
@@ -35,7 +35,7 @@ where
     if let Some(lock_parent) = lock_parent_dir(&lock_path) {
         ensure_lock_parent_dir(lock_parent)?;
     }
-    reject_symlinked_lock_path(&lock_path)?;
+    enforce_lock_path_not_symlink(&lock_path)?;
 
     let lock_file = {
         let mut opts = OpenOptions::new();
@@ -45,14 +45,15 @@ where
             use std::os::unix::fs::OpenOptionsExt;
             opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
         }
-        opts.open(&lock_path)
-            .map_err(|e| Error::io_with_source(format!("Failed to open lock file: {}", e), e))?
+        opts.open(&lock_path).map_err(|e| {
+            Error::build_io_error_with_source(format!("Failed to open lock file: {}", e), e)
+        })?
     };
 
     let mut lock = RwLock::new(lock_file);
     let _guard = lock
         .write()
-        .map_err(|e| Error::io(format!("Failed to acquire lock: {}", e)))?;
+        .map_err(|e| Error::build_io_error(format!("Failed to acquire lock: {}", e)))?;
 
     f()
 }
@@ -64,25 +65,25 @@ fn lock_parent_dir(path: &Path) -> Option<&Path> {
 
 fn ensure_lock_parent_dir(path: &Path) -> Result<()> {
     for missing_dir in collect_missing_directories(path)?.into_iter().rev() {
-        create_lock_directory(&missing_dir)?;
+        ensure_lock_directory(&missing_dir)?;
     }
     Ok(())
 }
 
-fn reject_symlinked_lock_path(path: &Path) -> Result<()> {
+fn enforce_lock_path_not_symlink(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => Err(Error::InvalidOperation {
             message: format!(
                 "refusing to create lock file through symlink: {}",
-                display_path_relative_to_cwd(path)
+                format_path_relative_to_cwd(path)
             ),
         }),
         Ok(_) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(Error::io_with_source(
+        Err(e) => Err(Error::build_io_error_with_source(
             format!(
                 "Failed to inspect lock file {}: {}",
-                display_path_relative_to_cwd(path),
+                format_path_relative_to_cwd(path),
                 e
             ),
             e,
@@ -108,10 +109,10 @@ fn collect_missing_directories(path: &Path) -> Result<Vec<PathBuf>> {
                 missing.push(candidate.to_path_buf());
             }
             Err(e) => {
-                return Err(Error::io_with_source(
+                return Err(Error::build_io_error_with_source(
                     format!(
                         "Failed to inspect lock file directory {}: {}",
-                        display_path_relative_to_cwd(candidate),
+                        format_path_relative_to_cwd(candidate),
                         e
                     ),
                     e,
@@ -120,9 +121,9 @@ fn collect_missing_directories(path: &Path) -> Result<Vec<PathBuf>> {
         }
     }
 
-    Err(Error::io(format!(
+    Err(Error::build_io_error(format!(
         "Failed to resolve parent directory for lock file: {}",
-        display_path_relative_to_cwd(path)
+        format_path_relative_to_cwd(path)
     )))
 }
 
@@ -132,40 +133,40 @@ fn validate_real_directory(path: &Path, metadata: &fs::Metadata) -> Result<()> {
         return Err(Error::InvalidOperation {
             message: format!(
                 "refusing to create lock file in symlinked directory: {}",
-                display_path_relative_to_cwd(path)
+                format_path_relative_to_cwd(path)
             ),
         });
     }
     if !file_type.is_dir() {
-        return Err(Error::io(format!(
+        return Err(Error::build_io_error(format!(
             "Failed to create directory for lock file '{}': existing path is not a directory",
-            display_path_relative_to_cwd(path)
+            format_path_relative_to_cwd(path)
         )));
     }
     Ok(())
 }
 
-fn create_lock_directory(path: &Path) -> Result<()> {
+fn ensure_lock_directory(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::fs::{DirBuilder, Permissions};
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 
         DirBuilder::new().mode(0o700).create(path).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to create directory for lock file '{}': {}",
-                    display_path_relative_to_cwd(path),
+                    format_path_relative_to_cwd(path),
                     e
                 ),
                 e,
             )
         })?;
         fs::set_permissions(path, Permissions::from_mode(0o700)).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to set permissions on {}: {}",
-                    display_path_relative_to_cwd(path),
+                    format_path_relative_to_cwd(path),
                     e
                 ),
                 e,
@@ -177,10 +178,10 @@ fn create_lock_directory(path: &Path) -> Result<()> {
     #[cfg(not(unix))]
     {
         fs::create_dir(path).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to create directory for lock file '{}': {}",
-                    display_path_relative_to_cwd(path),
+                    format_path_relative_to_cwd(path),
                     e
                 ),
                 e,

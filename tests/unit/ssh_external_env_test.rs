@@ -6,15 +6,15 @@ use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
 use secretenv::io::ssh::external::traits::SshAdd;
 use secretenv::io::ssh::external::traits::SshKeygen;
 use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use secretenv::io::ssh::protocol::wire::ssh_string_encode;
+use secretenv::io::ssh::protocol::wire::encode_ssh_string;
 use secretenv::support::codec::base64_public::encode_base64_standard;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
-use crate::test_utils::{create_temp_ssh_keypair_in_dir, EnvGuard};
+use crate::test_utils::{generate_temp_ssh_keypair_in_dir, EnvGuard};
 
-fn make_env_dump_script() -> (TempDir, String) {
+fn setup_env_dump_script() -> (TempDir, String) {
     let temp_dir = TempDir::new().unwrap();
     let script_path = temp_dir.path().join("dump-env.sh");
     fs::write(&script_path, "#!/bin/sh\nenv\n").unwrap();
@@ -28,15 +28,15 @@ fn build_test_sshsig_armored(raw_sig: [u8; 64]) -> String {
     let mut sshsig_blob = Vec::new();
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
-    sshsig_blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519 AAAA..."));
-    sshsig_blob.extend_from_slice(&ssh_string_encode(KEY_PROTECTION_NAMESPACE.as_bytes()));
-    sshsig_blob.extend_from_slice(&ssh_string_encode(b""));
-    sshsig_blob.extend_from_slice(&ssh_string_encode(b"sha256"));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519 AAAA..."));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b""));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256"));
 
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&ssh_string_encode(b"ssh-ed25519"));
-    signature_blob.extend_from_slice(&ssh_string_encode(&raw_sig));
-    sshsig_blob.extend_from_slice(&ssh_string_encode(&signature_blob));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
+    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(&signature_blob));
 
     format!(
         "-----BEGIN SSH SIGNATURE-----\n{}\n-----END SSH SIGNATURE-----\n",
@@ -53,7 +53,7 @@ fn test_load_ssh_public_key_from_keygen_uses_sanitized_env_with_optional_socket(
     std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
     std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
 
-    let (_script_dir, script_path) = make_env_dump_script();
+    let (_script_dir, script_path) = setup_env_dump_script();
     let output = DefaultSshKeygen::new(&script_path)
         .derive_public_key(std::path::Path::new("/tmp/test-key"))
         .unwrap();
@@ -72,7 +72,7 @@ fn test_default_ssh_add_sets_resolved_socket_without_inheriting_secret_env() {
     std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
     std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
 
-    let (_script_dir, script_path) = make_env_dump_script();
+    let (_script_dir, script_path) = setup_env_dump_script();
     let ssh_add = DefaultSshAdd::new(script_path);
     let output = ssh_add.list_keys().unwrap();
 
@@ -85,7 +85,7 @@ fn test_default_ssh_add_sets_resolved_socket_without_inheriting_secret_env() {
 fn test_default_ssh_keygen_sign_uses_stdin_stdout_without_sig_file() {
     let temp_dir = TempDir::new().unwrap();
     let ssh_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair_in_dir(&ssh_dir);
+    let (ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_dir);
 
     let script_path = temp_dir.path().join("ssh-keygen-wrapper.sh");
     fs::write(
@@ -129,7 +129,7 @@ fn test_default_ssh_keygen_sign_with_public_key_uses_agent_stdin_stdout() {
 
     let temp_dir = TempDir::new().unwrap();
     let ssh_dir = TempDir::new().unwrap();
-    let (_ssh_priv, ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair_in_dir(&ssh_dir);
+    let (_ssh_priv, ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_dir);
 
     let mut expected_raw_sig = [0u8; 64];
     for (index, byte) in expected_raw_sig.iter_mut().enumerate() {

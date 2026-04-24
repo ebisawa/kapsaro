@@ -18,7 +18,7 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Create a test keystore with a private key
-fn create_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::path::PathBuf {
+fn build_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::path::PathBuf {
     let keystore_root = temp_dir.path().join("keys");
     let member_dir = keystore_root.join(member_id);
     let kid_dir = member_dir.join(kid);
@@ -59,7 +59,7 @@ fn create_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::
 }
 
 /// Create a minimal test file-enc v3 file
-fn create_test_encrypted_file(path: &std::path::Path) {
+fn save_test_encrypted_file(path: &std::path::Path) {
     let content = r#"{
   "protected": {
     "format": "secretenv.file@3",
@@ -126,13 +126,13 @@ fn test_decrypt_missing_input() {
 #[test]
 fn test_decrypt_with_explicit_member_id() {
     let temp_dir = TempDir::new().unwrap();
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
 
     cmd()
@@ -151,9 +151,9 @@ fn test_decrypt_with_explicit_member_id() {
 fn test_decrypt_with_member_id_from_env() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root =
-        create_test_keystore(&temp_dir, BOB_MEMBER_ID, "XXCXP9PZWD1FXT336XSBT9W1BR5EADN8");
+        build_test_keystore(&temp_dir, BOB_MEMBER_ID, "XXCXP9PZWD1FXT336XSBT9W1BR5EADN8");
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
 
     cmd()
@@ -174,13 +174,13 @@ fn test_decrypt_with_workspace_option() {
     fs::create_dir_all(workspace.join("members")).unwrap();
     fs::create_dir_all(workspace.join("secrets")).unwrap();
 
-    let _keystore_root = create_test_keystore(
+    let _keystore_root = build_test_keystore(
         &temp_dir,
         CAROL_MEMBER_ID,
         "9N4R1H8VW6PKT3XNC5JY2F9AR8GD7M2Q",
     );
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
 
     cmd()
@@ -200,14 +200,14 @@ fn test_decrypt_with_workspace_option() {
 #[test]
 fn test_decrypt_accepts_out_option_parsing() {
     let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = create_test_keystore(
+    let _keystore_root = build_test_keystore(
         &temp_dir,
         DAVE_MEMBER_ID,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
     );
     let input_file = temp_dir.path().join("test.enc");
     let output_file = temp_dir.path().join("output.env");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
 
     cmd()
         .arg("decrypt")
@@ -225,9 +225,9 @@ fn test_decrypt_accepts_out_option_parsing() {
 fn test_decrypt_with_kid_option() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root =
-        create_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+        build_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
 
     cmd()
@@ -248,9 +248,9 @@ fn test_decrypt_with_kid_option() {
 fn test_decrypt_with_display_kid_option() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root =
-        create_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+        build_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output-display.dat");
 
     cmd()
@@ -271,9 +271,9 @@ fn test_decrypt_with_display_kid_option() {
 fn test_decrypt_with_prefix_kid_option() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root =
-        create_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+        build_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output-prefix.dat");
 
     cmd()
@@ -293,7 +293,7 @@ fn test_decrypt_with_prefix_kid_option() {
 #[test]
 fn test_decrypt_with_ssh_key_option() {
     let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = create_test_keystore(
+    let _keystore_root = build_test_keystore(
         &temp_dir,
         FRANK_MEMBER_ID,
         "KANJ8XHG10HW16VD7ADNCXM1WN44J04Q",
@@ -301,7 +301,7 @@ fn test_decrypt_with_ssh_key_option() {
     let input_file = temp_dir.path().join("test.enc");
     let ssh_key_file = temp_dir.path().join("test_key");
     fs::write(&ssh_key_file, "dummy ssh key").unwrap();
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
 
     cmd()
@@ -353,7 +353,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 "#;
     fs::write(&encrypted_path, content).unwrap();
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
@@ -380,9 +380,9 @@ fn test_decrypt_detects_file_enc_format_version3() {
 
     // Create a minimal file-enc v3 file
     let encrypted_path = test_dir.join("test.json");
-    create_test_encrypted_file(&encrypted_path);
+    save_test_encrypted_file(&encrypted_path);
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
@@ -413,7 +413,7 @@ fn test_decrypt_rejects_plain_kv_format() {
     let content = "DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n";
     fs::write(&plain_path, content).unwrap();
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
@@ -442,7 +442,7 @@ fn test_decrypt_rejects_unknown_format() {
     let content = "This is just some random text that doesn't match any format\n";
     fs::write(&unknown_path, content).unwrap();
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
@@ -759,7 +759,7 @@ fn test_decrypt_rejects_stdout_and_out_together() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("test.enc");
     let output_file = temp_dir.path().join("output.dat");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
 
     cmd()
         .arg("decrypt")
@@ -776,7 +776,7 @@ fn test_decrypt_rejects_stdout_and_out_together() {
 fn test_decrypt_rejects_input_and_stdin_together() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("test.enc");
-    create_test_encrypted_file(&input_file);
+    save_test_encrypted_file(&input_file);
 
     cmd()
         .arg("decrypt")
@@ -798,7 +798,7 @@ fn test_decrypt_stdin_rejects_kv_enc_format() {
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 "#;
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
@@ -820,7 +820,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 fn test_decrypt_stdin_rejects_plain_kv_format() {
     let temp_dir = TempDir::new().unwrap();
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
@@ -842,7 +842,7 @@ fn test_decrypt_stdin_rejects_plain_kv_format() {
 fn test_decrypt_stdin_rejects_unknown_format() {
     let temp_dir = TempDir::new().unwrap();
 
-    create_test_keystore(
+    build_test_keystore(
         &temp_dir,
         ALICE_MEMBER_ID,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",

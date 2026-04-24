@@ -11,7 +11,7 @@ use crate::test_utils::{kid as test_kid, member_id as test_member_id};
 
 use super::{confirm_incoming_promotions_with_reader, promotion_prompt_label};
 
-fn make_prompt(member_id: &str) -> PromotionReviewPrompt {
+fn build_prompt(member_id: &str) -> PromotionReviewPrompt {
     let kid = match member_id {
         "alice" => "KAD1AAAA1111BBBB2222CCCC3333DDDD",
         "bob" => "KBD1AAAA1111BBBB2222CCCC3333DDDD",
@@ -35,7 +35,7 @@ fn make_prompt(member_id: &str) -> PromotionReviewPrompt {
     }
 }
 
-fn make_review_view(
+fn build_review_view(
     failed_candidates: Vec<PromotionReviewFailure>,
     prompt_candidates: Vec<PromotionReviewPrompt>,
 ) -> PromotionReviewView {
@@ -47,7 +47,7 @@ fn make_review_view(
 
 #[test]
 fn test_confirm_incoming_promotions_accepts_single_prompt() {
-    let review_view = make_review_view(vec![], vec![make_prompt("alice")]);
+    let review_view = build_review_view(vec![], vec![build_prompt("alice")]);
     let mut input = Cursor::new(b"y\n" as &[u8]);
 
     let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
@@ -57,7 +57,7 @@ fn test_confirm_incoming_promotions_accepts_single_prompt() {
 
 #[test]
 fn test_confirm_incoming_promotions_rejects_single_prompt() {
-    let review_view = make_review_view(vec![], vec![make_prompt("alice")]);
+    let review_view = build_review_view(vec![], vec![build_prompt("alice")]);
     let mut input = Cursor::new(b"n\n" as &[u8]);
 
     let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
@@ -67,7 +67,7 @@ fn test_confirm_incoming_promotions_rejects_single_prompt() {
 
 #[test]
 fn test_confirm_incoming_promotions_accepts_mixed_prompt_responses() {
-    let review_view = make_review_view(vec![], vec![make_prompt("alice"), make_prompt("bob")]);
+    let review_view = build_review_view(vec![], vec![build_prompt("alice"), build_prompt("bob")]);
     let mut input = Cursor::new(b"y\nn\n" as &[u8]);
 
     let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();
@@ -77,12 +77,12 @@ fn test_confirm_incoming_promotions_accepts_mixed_prompt_responses() {
 
 #[test]
 fn test_confirm_incoming_promotions_ignores_failed_candidates() {
-    let review_view = make_review_view(
+    let review_view = build_review_view(
         vec![PromotionReviewFailure {
             member_id: "carol".to_string(),
             message: "verification failed".to_string(),
         }],
-        vec![make_prompt("alice")],
+        vec![build_prompt("alice")],
     );
     let mut input = Cursor::new(b"y\n" as &[u8]);
 
@@ -93,7 +93,7 @@ fn test_confirm_incoming_promotions_ignores_failed_candidates() {
 
 #[test]
 fn test_confirm_incoming_promotions_empty_view_returns_empty() {
-    let review_view = make_review_view(vec![], vec![]);
+    let review_view = build_review_view(vec![], vec![]);
     let mut input = Cursor::new(b"" as &[u8]);
 
     let result = confirm_incoming_promotions_with_reader(&review_view, &mut input).unwrap();

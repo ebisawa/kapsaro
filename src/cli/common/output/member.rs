@@ -86,5 +86,5 @@ pub(crate) fn print_member_show(json_output: bool, result: &MemberShowResult) ->
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/cli_common_trust_flow_test.rs"]
+#[path = "../../../../tests/unit/cli_common_output_member_test.rs"]
 mod tests;

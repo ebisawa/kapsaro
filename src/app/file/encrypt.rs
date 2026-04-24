@@ -5,9 +5,9 @@ use crate::app::context::execution::{
     build_write_execution_warnings, resolve_write_execution, ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigningContext;
+use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::{
-    current_self_sig_x, EncryptPolicy, RecipientTrustOutcome, WriteRecipientTrustPlan,
+    derive_self_sig_x, EncryptPolicy, RecipientTrustOutcome, WriteRecipientTrustPlan,
 };
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
 use crate::feature::encrypt::encrypt_file_content;
@@ -25,19 +25,19 @@ pub(crate) struct EncryptFileCommand {
     pub recipient_trust: RecipientTrustOutcome,
 }
 
-pub(crate) fn build_encrypt_file_command(
+pub(crate) fn resolve_encrypt_file_command(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     input_bytes: Vec<u8>,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<EncryptFileCommand> {
-    let execution = resolve_encrypt_execution(options, member_id, ssh_ctx)?;
+    let execution = resolve_encrypt_execution(options, member_handle, ssh_ctx)?;
     let workspace_root = require_encrypt_workspace(&execution)?;
     let trust_plan = WriteRecipientTrustPlan::<EncryptPolicy>::load(
         options,
         &workspace_root.root_path,
         &execution.member_id,
-        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?;
     let workspace_members = trust_plan.workspace_members();
@@ -69,10 +69,10 @@ pub(crate) fn execute_encrypt_file_command(
 
 fn resolve_encrypt_execution(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    member_handle: Option<String>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<ExecutionContext> {
-    let execution = resolve_write_execution(options, member_id, ssh_ctx)?;
+    let execution = resolve_write_execution(options, member_handle, ssh_ctx)?;
     enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
     Ok(execution)
 }

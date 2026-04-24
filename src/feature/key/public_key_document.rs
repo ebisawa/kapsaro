@@ -14,14 +14,14 @@ use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, PublicKey,
 };
 use crate::support::codec::base64_public::encode_base64url_nopad;
-use crate::support::kid::build_kid_display;
+use crate::support::kid::format_kid_display;
 use crate::Result;
 use ed25519_dalek::SigningKey;
 use serde::Serialize;
 use tracing::debug;
 
 /// Parameters for building a public key.
-pub struct PublicKeyBuildParams<'a> {
+pub struct PublicKeyDocumentParams<'a> {
     pub member_id: &'a str,
     pub identity: Identity,
     pub created_at: &'a str,
@@ -45,7 +45,7 @@ struct PublicKeyProtectedWithoutKid {
 }
 
 /// Build public key with self-signature.
-pub fn build_public_key(params: &PublicKeyBuildParams<'_>) -> Result<PublicKey> {
+pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKey> {
     let binding_claims = params
         .github_account
         .clone()
@@ -76,7 +76,7 @@ pub fn build_public_key(params: &PublicKeyBuildParams<'_>) -> Result<PublicKey> 
 
     let protected_jcs = jcs::normalize(&protected)?;
     if params.debug {
-        let kid_display = build_kid_display(&derived_kid).unwrap_or_else(|_| derived_kid.clone());
+        let kid_display = format_kid_display(&derived_kid).unwrap_or_else(|_| derived_kid.clone());
         debug!(
             "[CRYPTO] Ed25519: sign_detached_bytes (kid: {})",
             kid_display
@@ -105,7 +105,7 @@ pub fn build_attestation(
             &identity_keys_jcs,
         )
         .map_err(|e| {
-            crate::Error::from(SshError::operation_failed_with_source(
+            crate::Error::from(SshError::build_operation_failed_error_with_source(
                 format!("Failed to sign attestation: {}", e),
                 e,
             ))

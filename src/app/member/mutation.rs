@@ -8,26 +8,26 @@ use crate::app::context::paths::require_workspace;
 use crate::feature::member::add::add_member_from_file;
 use crate::feature::verify::file::verify_file_content;
 use crate::feature::verify::kv::signature::verify_kv_content;
-use crate::format::content::EncryptedContent;
+use crate::format::content::EncContent;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::kv::KV_ENC_EXTENSION;
-use crate::io::workspace::members::delete_member;
+use crate::io::workspace::members::remove_member as remove_member_file;
 use crate::support::fs::{list_dir, load_text_with_limit};
-use crate::support::limits::encrypted_file_read_limit;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::limits::resolve_encrypted_artifact_read_limit;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
-use super::types::{MemberRemovePreview, MemberRemoveResult};
+use super::types::{MemberRemovalReport, MemberRemoveResult};
 
 pub fn add_member(options: &CommonCommandOptions, filename: &Path, force: bool) -> Result<String> {
     let workspace = require_workspace(options, "member add")?;
     add_member_from_file(&workspace.root_path, filename, force)
 }
 
-pub fn preview_member_removal(
+pub fn evaluate_member_removal(
     options: &CommonCommandOptions,
     member_id: &str,
-) -> Result<MemberRemovePreview> {
+) -> Result<MemberRemovalReport> {
     let workspace = require_workspace(options, "member remove")?;
     let active_member = workspace
         .root_path
@@ -35,7 +35,7 @@ pub fn preview_member_removal(
         .join("active")
         .join(format!("{member_id}.json"));
     if !active_member.exists() {
-        return Err(Error::not_found(format!(
+        return Err(Error::build_not_found_error(format!(
             "Member '{}' not found in active/",
             member_id
         )));
@@ -51,7 +51,7 @@ pub fn preview_member_removal(
         }
     }
 
-    Ok(MemberRemovePreview {
+    Ok(MemberRemovalReport {
         member_id: member_id.to_string(),
         affected_artifacts,
         warnings,
@@ -63,7 +63,7 @@ pub fn remove_member(
     member_id: &str,
 ) -> Result<MemberRemoveResult> {
     let workspace = require_workspace(options, "member remove")?;
-    delete_member(&workspace.root_path, member_id)?;
+    remove_member_file(&workspace.root_path, member_id)?;
     Ok(MemberRemoveResult {
         member_id: member_id.to_string(),
     })
@@ -93,18 +93,21 @@ fn is_encrypted_artifact(path: &Path) -> bool {
 }
 
 fn artifact_contains_member(path: &Path, member_id: &str) -> Result<bool> {
-    let content =
-        load_text_with_limit(path, encrypted_file_read_limit(path), "encrypted artifact")?;
+    let content = load_text_with_limit(
+        path,
+        resolve_encrypted_artifact_read_limit(path),
+        "encrypted artifact",
+    )?;
     let recipients = verified_artifact_recipients(content)?;
     Ok(recipients.iter().any(|recipient| recipient == member_id))
 }
 
 fn verified_artifact_recipients(content: String) -> Result<Vec<String>> {
-    match EncryptedContent::detect(content)? {
-        EncryptedContent::FileEnc(file_content) => Ok(verify_file_content(&file_content, false)?
+    match EncContent::detect(content)? {
+        EncContent::FileEnc(file_content) => Ok(verify_file_content(&file_content, false)?
             .document()
             .recipients()),
-        EncryptedContent::KvEnc(kv_content) => Ok(extract_recipients_from_wrap(
+        EncContent::KvEnc(kv_content) => Ok(extract_recipients_from_wrap(
             verify_kv_content(&kv_content, false)?.document().wrap(),
         )),
     }
@@ -113,8 +116,8 @@ fn verified_artifact_recipients(content: String) -> Result<Vec<String>> {
 fn format_artifact_warning(path: &Path, error: &Error) -> String {
     format!(
         "Skipping encrypted artifact '{}': {}",
-        display_path_relative_to_cwd(path),
-        error.user_message()
+        format_path_relative_to_cwd(path),
+        error.format_user_message()
     )
 }
 

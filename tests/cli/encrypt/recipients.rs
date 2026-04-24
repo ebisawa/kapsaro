@@ -36,7 +36,7 @@ fn test_encrypt_recipients_are_all_active_members() {
 
     let args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         out: Some(output_path.clone()),
         stdout: false,
         stdin: false,
@@ -70,7 +70,7 @@ fn test_encrypt_workspace_required() {
 
         let args = encrypt::EncryptArgs {
             common: common_opts,
-            member_id: Some(ALICE_MEMBER_ID.to_string()),
+            member_handle: Some(ALICE_MEMBER_ID.to_string()),
             out: Some(test_dir.join("out.encrypted")),
             stdout: false,
             stdin: false,

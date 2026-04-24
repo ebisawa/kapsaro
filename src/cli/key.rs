@@ -59,7 +59,7 @@ pub struct NewArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Do not activate the generated key
     #[arg(long)]
@@ -78,7 +78,7 @@ pub struct ListArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 }
 
 #[derive(Args)]
@@ -89,7 +89,7 @@ pub struct ActivateArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Key ID to activate [default: newest valid key]
     pub kid: Option<String>,
@@ -107,7 +107,7 @@ pub struct RemoveArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Key ID to remove
     pub kid: String,
@@ -124,7 +124,7 @@ pub struct ExportArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Key ID to export [default: active key]
     pub kid: Option<String>,

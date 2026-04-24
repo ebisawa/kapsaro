@@ -10,13 +10,15 @@ use crate::crypto::rng::fill_secret_array;
 use crate::model::identifiers::jwk::{self, CRV_ED25519, CRV_X25519};
 use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use crate::model::public_key::{IdentityKeys, JwkOkpPublicKey};
-use crate::support::codec::base64_public::encode_base64url_nopad;
-use crate::support::codec::base64_secret::encode_base64url_nopad_secret_32;
+use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
+use crate::support::codec::base64_secret::{
+    decode_base64url_nopad_secret_32, encode_base64url_nopad_secret_32,
+};
 use crate::support::secret::SecretArray;
-use crate::Result;
+use crate::{Error, Result};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 
-pub struct GeneratedKeypairs {
+pub struct KeypairMaterial {
     pub kem_sk: X25519SecretKey,
     pub kem_pk: X25519PublicKey,
     pub sig_sk: SigningKey,
@@ -24,14 +26,14 @@ pub struct GeneratedKeypairs {
 }
 
 /// Generate a new key pair (KEM and signing keys).
-pub fn generate_keypairs() -> Result<GeneratedKeypairs> {
+pub fn generate_keypairs() -> Result<KeypairMaterial> {
     let (kem_sk, kem_pk) = generate_kem_keypair()?;
 
     let sig_seed = fill_secret_array::<32>()?;
     let sig_sk = SigningKey::from_bytes(&sig_seed);
     let sig_pk: VerifyingKey = sig_sk.verifying_key();
 
-    Ok(GeneratedKeypairs {
+    Ok(KeypairMaterial {
         kem_sk,
         kem_pk,
         sig_sk,
@@ -83,4 +85,64 @@ pub fn build_private_key_plaintext(
             },
         },
     }
+}
+
+/// Validate an OKP private/public key pair shape.
+pub fn validate_okp_key(
+    kty: &str,
+    crv: &str,
+    expected_crv: &str,
+    d: &str,
+    x: &str,
+    label: &str,
+) -> Result<(SecretArray<32>, [u8; 32])> {
+    if kty != "OKP" {
+        return Err(Error::Crypto {
+            message: format!("Invalid {} key type: expected 'OKP', got '{}'", label, kty),
+            source: None,
+        });
+    }
+    if crv != expected_crv {
+        return Err(Error::Crypto {
+            message: format!(
+                "Invalid {} curve: expected '{}', got '{}'",
+                label, expected_crv, crv
+            ),
+            source: None,
+        });
+    }
+    let d_bytes = decode_base64url_nopad_secret_32(d, &format!("{} private key", label))?;
+    let x_bytes = decode_base64url_nopad_array(x, &format!("{} public key", label))?;
+    Ok((d_bytes, x_bytes))
+}
+
+/// Validate that an Ed25519 private key derives to the provided public key.
+pub fn validate_ed25519_consistency(
+    sig_d_bytes: &SecretArray<32>,
+    sig_x_bytes: &[u8; 32],
+) -> Result<()> {
+    let signing_key = SigningKey::from_bytes(sig_d_bytes.as_array());
+    let derived_vk = signing_key.verifying_key();
+    let derived_x_bytes = derived_vk.as_bytes();
+    if derived_x_bytes != sig_x_bytes {
+        return Err(Error::Crypto {
+            message: "Ed25519 key pair inconsistency: private key does not derive to public key"
+                .to_string(),
+            source: None,
+        });
+    }
+    Ok(())
+}
+
+/// Validate private key plaintext key material.
+pub(crate) fn validate_private_key_material(plaintext: &PrivateKeyPlaintext) -> Result<()> {
+    let kem = &plaintext.keys.kem;
+    validate_okp_key(&kem.kty, &kem.crv, jwk::CRV_X25519, &kem.d, &kem.x, "KEM")?;
+
+    let sig = &plaintext.keys.sig;
+    let (sig_d_bytes, sig_x_bytes) =
+        validate_okp_key(&sig.kty, &sig.crv, jwk::CRV_ED25519, &sig.d, &sig.x, "Sig")?;
+    validate_ed25519_consistency(&sig_d_bytes, &sig_x_bytes)?;
+
+    Ok(())
 }

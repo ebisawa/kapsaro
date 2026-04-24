@@ -3,16 +3,16 @@
 
 //! Integration tests for `key activate` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use secretenv::io::keystore::active::load_active_kid;
-use secretenv::support::kid::build_kid_display;
+use secretenv::support::kid::format_kid_display;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
 fn test_key_activate_explicit_kid() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -74,7 +74,7 @@ fn test_key_activate_explicit_kid() {
 #[test]
 fn test_key_activate_latest() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -127,7 +127,7 @@ fn test_key_activate_latest() {
 #[test]
 fn test_key_activate_accepts_display_kid() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -166,7 +166,7 @@ fn test_key_activate_accepts_display_kid() {
     cmd()
         .arg("key")
         .arg("activate")
-        .arg(build_kid_display(&target).unwrap())
+        .arg(format_kid_display(&target).unwrap())
         .arg("--member-handle")
         .arg(member_id)
         .env("SECRETENV_HOME", temp_dir.path())

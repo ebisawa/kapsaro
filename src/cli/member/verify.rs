@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::member::approval::{commit_approvals, evaluate_members_for_approval};
+use crate::app::member::approval::{evaluate_members_for_approval, save_member_approvals};
 use crate::app::member::verification::verify_members;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::command::{
@@ -26,7 +26,7 @@ pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
 
 fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let results = verify_members(&options, &args.member_ids, args.common.verbose)?;
+    let results = verify_members(&options, &args.member_handles, args.common.verbose)?;
     print_member_verification_results(args.common.json, &results)
 }
 
@@ -34,12 +34,15 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
     run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
-            let (_, execution) = resolve_execution_input(&args.common, args.member_id.clone())?;
+            let (_, execution) = resolve_execution_input(&args.common, args.member_handle.clone())?;
 
-            let evaluation =
-                evaluate_members_for_approval(&options, &args.member_ids, &execution.member_id)?;
+            let evaluation = evaluate_members_for_approval(
+                &options,
+                &args.member_handles,
+                &execution.member_id,
+            )?;
             text::print_warnings(&evaluation.warnings);
             let mut results = evaluation.results;
 
@@ -51,7 +54,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
 
             let has_new_approvals = results.iter().any(|r| r.approved);
             if has_new_approvals {
-                let commit_result = commit_approvals(&options, &results, &execution)?;
+                let commit_result = save_member_approvals(&options, &results, &execution)?;
                 text::print_warnings(&commit_result.warnings);
             }
 

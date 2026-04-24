@@ -18,16 +18,16 @@ pub enum SshError {
 }
 
 impl SshError {
-    /// Create an SSH error.
-    pub fn operation_failed(message: impl Into<String>) -> Self {
+    /// Build an SSH error.
+    pub fn build_operation_failed_error(message: impl Into<String>) -> Self {
         SshError::OperationFailed {
             message: message.into(),
             source: None,
         }
     }
 
-    /// Create an SSH error with a source error.
-    pub fn operation_failed_with_source(
+    /// Build an SSH error with a source error.
+    pub fn build_operation_failed_error_with_source(
         message: impl Into<String>,
         source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {

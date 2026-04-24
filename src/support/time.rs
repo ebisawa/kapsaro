@@ -7,7 +7,7 @@ use crate::{Error, Result};
 use time::OffsetDateTime;
 
 /// Build display string for OffsetDateTime as RFC 3339 (seconds precision, no subseconds)
-pub fn build_timestamp_display(dt: OffsetDateTime) -> Result<String> {
+pub fn format_timestamp_rfc3339(dt: OffsetDateTime) -> Result<String> {
     // replace_nanosecond(0) should never fail for valid OffsetDateTime,
     // but we handle it explicitly for robustness
     let dt_zeroed = dt.replace_nanosecond(0).map_err(|e| Error::Config {
@@ -21,6 +21,6 @@ pub fn build_timestamp_display(dt: OffsetDateTime) -> Result<String> {
 }
 
 /// Get current UTC timestamp in RFC 3339 format (seconds precision)
-pub fn current_timestamp() -> Result<String> {
-    build_timestamp_display(OffsetDateTime::now_utc())
+pub fn generate_current_timestamp() -> Result<String> {
+    format_timestamp_rfc3339(OffsetDateTime::now_utc())
 }

@@ -4,11 +4,11 @@
 //! Configuration file storage operations
 //!
 //! Provides functions to read and write configuration files as flat TOML key-value pairs.
-//! This follows PRD v3 specification for config.toml format.
+//! Global config.toml load and save operations.
 
 use crate::support::fs::{atomic, check_permission_chain, load_text_with_limit, lock};
 use crate::support::limits::MAX_CONFIG_FILE_SIZE;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -107,7 +107,7 @@ fn load_toml_table(path: &Path) -> Result<toml::Table> {
     toml::from_str(&content).map_err(|e| Error::Parse {
         message: format!(
             "Invalid TOML in config file '{}': {}",
-            display_path_relative_to_cwd(path),
+            format_path_relative_to_cwd(path),
             e
         ),
         source: Some(Box::new(e)),

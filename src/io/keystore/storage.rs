@@ -5,13 +5,16 @@
 //!
 //! Save and load PrivateKey and PublicKey.
 
-use crate::format::schema::document::{parse_private_key_file, parse_public_key_file};
+use crate::format::schema::document::{parse_private_key_str, parse_public_key_str};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::support::fs::{atomic, check_permission_chain, ensure_dir_restricted, list_dir};
-use crate::support::kid::kid_display_lossy;
+use crate::support::fs::{
+    atomic, check_permission_chain, ensure_dir_restricted, list_dir, load_text_with_limit,
+};
+use crate::support::kid::format_kid_display_lossy;
 use crate::support::kid::resolve_unique_kid;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -69,11 +72,11 @@ pub fn save_key_pair_atomic(
 
     let final_dir = member_dir.join(kid);
     fs::rename(&tmp_dir, &final_dir).map_err(|e| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Failed to rename {} to {}: {}",
-                display_path_relative_to_cwd(&tmp_dir),
-                display_path_relative_to_cwd(&final_dir),
+                format_path_relative_to_cwd(&tmp_dir),
+                format_path_relative_to_cwd(&final_dir),
                 e
             ),
             e,
@@ -90,9 +93,9 @@ pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Res
         .into_iter()
         .next()
     {
-        return Err(Error::io(msg));
+        return Err(Error::build_io_error(msg));
     }
-    parse_private_key_file(&path)
+    load_private_key_document(&path)
 }
 
 /// Load PublicKey from keystore
@@ -101,7 +104,19 @@ pub fn load_public_key(keystore_root: &Path, member_id: &str, kid: &str) -> Resu
     for warning in check_permission_chain(&path, keystore_root) {
         tracing::warn!("{}", warning);
     }
-    parse_public_key_file(&path)
+    load_public_key_document(&path)
+}
+
+fn load_private_key_document(path: &Path) -> Result<PrivateKey> {
+    let source_name = format_path_relative_to_cwd(path);
+    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "PrivateKey file")?;
+    parse_private_key_str(&content, &source_name)
+}
+
+fn load_public_key_document(path: &Path) -> Result<PublicKey> {
+    let source_name = format_path_relative_to_cwd(path);
+    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
+    parse_public_key_str(&content, &source_name)
 }
 
 /// List directory names in a path, filtering by predicate
@@ -174,6 +189,9 @@ pub fn find_member_by_kid(keystore_root: &Path, kid: &str) -> Result<String> {
     }
 
     Err(Error::NotFound {
-        message: format!("kid '{}' not found in keystore", kid_display_lossy(kid)),
+        message: format!(
+            "kid '{}' not found in keystore",
+            format_kid_display_lossy(kid)
+        ),
     })
 }

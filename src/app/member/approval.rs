@@ -6,13 +6,11 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::app::trust::approval::{
-    commit_known_key_approvals, ApprovalSaveResult, ApprovedKnownKey,
-};
+use crate::app::trust::approval::{save_known_key_approvals, ApprovalSaveResult, ApprovedKnownKey};
 use crate::app::trust::store::load_or_build_trust_store_for_member;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::feature::member::verification::verify_member_public_keys;
-use crate::feature::trust::known_keys::{assess_known_key, KnownKeyAssessment};
+use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
 use crate::io::workspace::members::load_active_member_files;
 use crate::model::identity::{Kid, MemberId};
@@ -54,7 +52,7 @@ pub fn evaluate_members_for_approval(
 ) -> Result<MemberApprovalEvaluation> {
     let workspace = require_workspace(options, "member verify --approve")?;
 
-    // Load active members ONCE as the authoritative snapshot (spec §6.2).
+    // Load active members once as the authoritative approval snapshot.
     // This same snapshot is used for both verification and kid resolution,
     // preventing TOCTOU where a file changes between verify and evaluate.
     let active_members = load_active_member_files(&workspace.root_path)?;
@@ -81,7 +79,7 @@ pub fn evaluate_members_for_approval(
 /// Persist approved members to the trust store.
 ///
 /// Called after the user has reviewed `evaluate_members_for_approval` results.
-pub fn commit_approvals(
+pub fn save_member_approvals(
     options: &CommonCommandOptions,
     results: &[MemberApprovalResult],
     execution: &ExecutionContext,
@@ -94,7 +92,7 @@ pub fn commit_approvals(
         ));
     }
 
-    commit_known_key_approvals(options, execution, &approvals)
+    save_known_key_approvals(options, execution, &approvals)
 }
 
 fn select_approval_targets(
@@ -170,14 +168,14 @@ fn evaluate_candidate_with_snapshot(
         .and_then(|claims| claims.github_account.as_ref())
         .is_some();
 
-    // Spec §14.1: manual review is only allowed when GitHub binding is absent.
+    // Manual review is only allowed when GitHub binding is absent.
     if vr.status == VerificationStatus::Failed
         || (github_binding_configured && vr.status != VerificationStatus::Verified)
     {
         return build_not_verified_result(vr, &kid, github_binding_configured);
     }
 
-    let known_key_state = match assess_known_key(known_keys, &kid, &vr.member_id) {
+    let known_key_state = match judge_known_key(known_keys, &kid, &vr.member_id) {
         Ok(state) => state,
         Err(e) => {
             return MemberApprovalResult {
@@ -203,8 +201,8 @@ fn evaluate_candidate_with_snapshot(
         kid,
         verified: vr.status == VerificationStatus::Verified,
         approved: false,
-        review_required: matches!(known_key_state, KnownKeyAssessment::New),
-        already_known: matches!(known_key_state, KnownKeyAssessment::Existing),
+        review_required: matches!(known_key_state, KnownKeyJudgment::New),
+        already_known: matches!(known_key_state, KnownKeyJudgment::Existing),
         message: vr.message.clone(),
         fingerprint,
         github_id,

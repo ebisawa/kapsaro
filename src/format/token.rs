@@ -32,9 +32,4 @@ impl TokenCodec {
     }
 }
 
-// Codec implementation methods are in impl TokenCodec block in codec.rs
-// They are accessible through TokenCodec::encode, TokenCodec::decode, etc.
-// The codec module is imported to make the impl block available
-#[allow(unused_imports)]
-pub(crate) use codec::*;
 pub(crate) use decode::decode_token_bytes;

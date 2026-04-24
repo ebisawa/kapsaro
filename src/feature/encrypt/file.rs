@@ -16,7 +16,7 @@ use crate::model::file_enc::{
 };
 use crate::model::identifiers::{alg, format};
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::support::time::current_timestamp;
+use crate::support::time::generate_current_timestamp;
 use crate::Result;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -139,7 +139,7 @@ pub fn encrypt_file_document(
 ) -> Result<FileEncDocument> {
     validate_recipient_members(recipient_ids, members)?;
     let sid = Uuid::new_v4();
-    let timestamp = current_timestamp()?;
+    let timestamp = generate_current_timestamp()?;
     let (content_key, payload) =
         encrypt_content_into_payload(content, &sid, signing.debug, "encrypt_file_document")?;
     let protected = assemble_file_enc_protected(
@@ -150,7 +150,7 @@ pub fn encrypt_file_document(
         timestamp,
         signing.debug,
     )?;
-    sign_and_finalize_file_document(protected, signing)
+    finalize_file_document_signature(protected, signing)
 }
 
 /// Build encryption context and produce a ready `FilePayload`.
@@ -191,7 +191,7 @@ fn assemble_file_enc_protected(
 }
 
 /// Sign the protected header and produce the final `FileEncDocument`.
-fn sign_and_finalize_file_document(
+fn finalize_file_document_signature(
     protected: FileEncDocumentProtected,
     signing: &SigningContext<'_>,
 ) -> Result<FileEncDocument> {

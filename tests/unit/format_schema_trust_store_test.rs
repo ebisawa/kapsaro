@@ -7,7 +7,7 @@ use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::feature::trust::verification::verify_trust_store;
-use secretenv::format::schema::validator::embedded_trust_validator;
+use secretenv::format::schema::validator::load_embedded_trust_validator;
 use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use std::collections::BTreeMap;
@@ -46,7 +46,7 @@ fn test_trust_store_schema_valid_document() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
@@ -71,7 +71,7 @@ fn test_trust_store_schema_rejects_signer_pub() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     assert!(validator.validate_trust_store(&doc).is_err());
 }
 
@@ -107,7 +107,7 @@ fn test_trust_store_schema_accepts_github_account_without_login() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
@@ -131,7 +131,7 @@ fn test_trust_store_schema_empty_known_keys() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
@@ -154,7 +154,7 @@ fn test_trust_store_schema_missing_required_field_fails() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     assert!(validator.validate_trust_store(&doc).is_err());
 }
 
@@ -178,7 +178,7 @@ fn test_trust_store_schema_invalid_timestamp_fails() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     assert!(validator.validate_trust_store(&doc).is_err());
 }
 
@@ -202,7 +202,7 @@ fn test_trust_store_schema_non_utc_timestamp_fails() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     assert!(validator.validate_trust_store(&doc).is_err());
 }
 
@@ -234,7 +234,7 @@ fn test_trust_store_schema_known_key_allows_extra_fields() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
@@ -259,7 +259,7 @@ fn test_trust_store_schema_rejects_extra_top_level_fields() {
     )
     .unwrap();
 
-    let validator = embedded_trust_validator().unwrap();
+    let validator = load_embedded_trust_validator().unwrap();
     assert!(validator.validate_trust_store(&doc).is_err());
 }
 

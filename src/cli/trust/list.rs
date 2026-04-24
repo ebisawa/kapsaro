@@ -14,7 +14,7 @@ use super::ListArgs;
 
 pub(crate) fn run(args: ListArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_id = resolve_required_member(&options, args.member_id.clone())?;
+    let member_id = resolve_required_member(&options, args.member_handle.clone())?;
     let result = run_with_trust_store_reset_recovery(
         &options,
         || Ok(member_id.clone()),

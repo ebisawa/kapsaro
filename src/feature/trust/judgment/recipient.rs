@@ -14,7 +14,7 @@ pub fn judge_recipients_trust(
     self_trust: &SelfTrustSet,
 ) -> Result<Vec<KnownKeyIdentity>> {
     judge_recipients_trust_with_match(recipients, self_trust, |identity| {
-        known_keys.match_identity(identity)
+        known_keys.judge_identity_match(identity)
     })
 }
 
@@ -24,7 +24,7 @@ pub(crate) fn judge_recipients_trust_with_additional(
     self_trust: &SelfTrustSet,
 ) -> Result<Vec<KnownKeyIdentity>> {
     judge_recipients_trust_with_match(recipients, self_trust, |identity| {
-        known_keys.match_identity(identity)
+        known_keys.judge_identity_match(identity)
     })
 }
 

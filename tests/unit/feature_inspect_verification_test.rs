@@ -8,7 +8,7 @@ use secretenv::feature::inspect::verification::{
 };
 use secretenv::io::verify_online::{VerificationResult, VerificationStatus};
 
-fn make_verified_result() -> VerificationResult {
+fn build_verified_result() -> VerificationResult {
     VerificationResult {
         member_id: "alice@example.com".to_string(),
         status: VerificationStatus::Verified,
@@ -20,7 +20,7 @@ fn make_verified_result() -> VerificationResult {
     }
 }
 
-fn make_failed_result() -> VerificationResult {
+fn build_failed_result() -> VerificationResult {
     VerificationResult {
         member_id: "bob@example.com".to_string(),
         status: VerificationStatus::Failed,
@@ -34,7 +34,7 @@ fn make_failed_result() -> VerificationResult {
 
 #[test]
 fn test_online_verification_display_github_verified() {
-    let result = make_verified_result();
+    let result = build_verified_result();
     let display = OnlineVerificationDisplay::GithubResult(result);
     let section = build_online_verification_section(&display, Some("alice"), Some(12345));
 
@@ -56,7 +56,7 @@ fn test_online_verification_display_github_verified() {
 
 #[test]
 fn test_online_verification_display_github_failed() {
-    let result = make_failed_result();
+    let result = build_failed_result();
     let display = OnlineVerificationDisplay::GithubResult(result);
     let section = build_online_verification_section(&display, Some("bob"), Some(54321));
 

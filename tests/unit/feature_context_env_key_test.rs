@@ -6,7 +6,7 @@ use secretenv::feature::key::material::{build_private_key_plaintext, generate_ke
 use secretenv::feature::key::portable_export::export_private_key_portable;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::{
-    EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
+    PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
@@ -154,7 +154,7 @@ fn test_env_key_rejects_invalid_format() {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             expires_at: "2027-01-01T00:00:00Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             ct: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         },
@@ -196,7 +196,7 @@ fn test_env_key_rejects_sshsig_algorithm() {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             expires_at: "2027-01-01T00:00:00Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             ct: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         },

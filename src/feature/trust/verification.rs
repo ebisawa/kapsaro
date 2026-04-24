@@ -1,13 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Trust Store document verification (spec §9.6 + §10).
+//! Trust Store document verification.
 
 use crate::crypto::sign::verify_trust_store_bytes;
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
 };
-use crate::format::schema::validator::embedded_trust_validator;
+use crate::format::schema::validator::load_embedded_trust_validator;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
 use crate::model::identifiers::alg::SIGNATURE_ED25519;
@@ -25,7 +25,7 @@ use time::OffsetDateTime;
 
 /// Verify a Trust Store document and return a verified wrapper.
 ///
-/// Checks (in order per spec §9.6 + §10):
+/// Checks the trust store signature, signer key, owner, and known key integrity.
 /// 1. JSON Schema validity
 /// 2. signer public key is loaded from local keystore by owner_member_id + kid
 /// 3. format == TRUST_LOCAL_V2
@@ -54,7 +54,7 @@ pub fn verify_trust_store(
 }
 
 fn validate_schema(doc: &TrustStoreDocument) -> Result<()> {
-    let validator = embedded_trust_validator()?;
+    let validator = load_embedded_trust_validator()?;
     let value = serde_json::to_value(doc).map_err(|e| Error::Parse {
         message: format!(
             "Failed to serialize trust store for schema validation: {}",
@@ -93,7 +93,10 @@ fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<Verifying
         TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
     )
     .map_err(|e| {
-        Error::crypto_with_source("Trust store keystore public key verification failed", e)
+        Error::build_crypto_error_with_source(
+            "Trust store keystore public key verification failed",
+            e,
+        )
     })?;
 
     let bytes: [u8; 32] = decode_base64url_nopad_array(
@@ -101,13 +104,14 @@ fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<Verifying
         "signer Ed25519 public key",
     )?;
     VerifyingKey::from_bytes(&bytes)
-        .map_err(|e| Error::crypto_with_source("Invalid signer Ed25519 key", e))
+        .map_err(|e| Error::build_crypto_error_with_source("Invalid signer Ed25519 key", e))
 }
 
 fn validate_signature(doc: &TrustStoreDocument, verifying_key: &VerifyingKey) -> Result<()> {
     let canonical = build_trust_store_signature_bytes(&doc.protected)?;
-    verify_trust_store_bytes(&canonical, verifying_key, &doc.signature, SIGNATURE_ED25519)
-        .map_err(|e| Error::crypto_with_source("Trust store signature verification failed", e))
+    verify_trust_store_bytes(&canonical, verifying_key, &doc.signature, SIGNATURE_ED25519).map_err(
+        |e| Error::build_crypto_error_with_source("Trust store signature verification failed", e),
+    )
 }
 
 fn validate_kid_match(doc: &TrustStoreDocument, signer_public_key: &PublicKey) -> Result<()> {

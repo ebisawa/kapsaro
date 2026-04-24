@@ -4,7 +4,7 @@
 use console::{colors_enabled_stderr, set_colors_enabled_stderr};
 use serial_test::serial;
 
-use crate::cli::common::output::text::build_warning_line;
+use crate::cli::common::output::text::format_warning_line;
 
 struct StderrColorGuard {
     enabled: bool,
@@ -26,20 +26,20 @@ impl Drop for StderrColorGuard {
 
 #[test]
 #[serial]
-fn test_build_warning_line_keeps_plain_text_when_stderr_colors_disabled() {
+fn test_format_warning_line_keeps_plain_text_when_stderr_colors_disabled() {
     let _guard = StderrColorGuard::new(false);
 
-    let rendered = build_warning_line("Warning: test message");
+    let rendered = format_warning_line("Warning: test message");
 
     assert_eq!(rendered, "Warning: test message");
 }
 
 #[test]
 #[serial]
-fn test_build_warning_line_adds_ansi_color_when_stderr_colors_enabled() {
+fn test_format_warning_line_adds_ansi_color_when_stderr_colors_enabled() {
     let _guard = StderrColorGuard::new(true);
 
-    let rendered = build_warning_line("Warning: test message");
+    let rendered = format_warning_line("Warning: test message");
 
     assert!(rendered.starts_with("\u{1b}[33mWarning: test message"));
     assert!(rendered.ends_with("\u{1b}[0m"));

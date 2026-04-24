@@ -134,14 +134,14 @@ pub enum StrictKeyCheckingSource {
     ExplicitEnv,
 }
 
-/// Resolved strict key checking policy with provenance.
+/// Strict key checking policy resolution with provenance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct ResolvedStrictKeyChecking {
+pub struct StrictKeyCheckingResolution {
     pub mode: StrictKeyChecking,
     pub source: StrictKeyCheckingSource,
 }
 
-impl ResolvedStrictKeyChecking {
+impl StrictKeyCheckingResolution {
     pub const fn strict() -> Self {
         Self {
             mode: StrictKeyChecking::Yes,

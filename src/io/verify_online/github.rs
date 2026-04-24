@@ -17,7 +17,7 @@ use std::pin::Pin;
 use tracing::debug;
 
 use self::matcher::compute_attestation_fingerprint;
-use self::policy::{fetch_and_match_github_keys, resolve_github_identity};
+use self::policy::{resolve_github_identity, verify_github_keys};
 use super::VerificationResult;
 
 mod matcher;
@@ -27,7 +27,7 @@ pub mod preflight;
 /// Boxed future used by GitHub API abstractions.
 pub type GitHubApiFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
 
-/// Injectable GitHub API interface used by verification flows.
+/// Injectable GitHub API interface used by verification checks.
 pub trait GitHubVerificationApi {
     fn fetch_user_by_id<'a>(&'a self, account_id: u64) -> GitHubApiFuture<'a, (u64, String)>;
     fn fetch_keys<'a>(&'a self, login: &'a str) -> GitHubApiFuture<'a, Vec<GitHubKeyRecord>>;
@@ -115,7 +115,7 @@ pub async fn verify_github_account_with_api(
     let (id_used, login_for_keys) =
         resolve_github_identity(api, github.id, &known_github_account, member_id, verbose).await?;
 
-    fetch_and_match_github_keys(
+    verify_github_keys(
         api,
         public_key,
         &our_fingerprint,

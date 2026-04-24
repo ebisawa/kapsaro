@@ -152,24 +152,24 @@ fn test_promote_specified_rejects_kid_conflict_with_incoming_member_during_rotat
 }
 
 #[test]
-fn test_delete_member_removes_file() {
+fn test_remove_member_removes_file() {
     let tmp = TempDir::new().unwrap();
     let active_dir = tmp.path().join("members/active");
     fs::create_dir_all(&active_dir).unwrap();
     fs::write(active_dir.join("alice.json"), "{}").unwrap();
 
-    delete_member(tmp.path(), "alice").unwrap();
+    remove_member(tmp.path(), "alice").unwrap();
 
     assert!(!active_dir.join("alice.json").exists());
 }
 
 #[test]
-fn test_delete_member_not_found() {
+fn test_remove_member_not_found() {
     let tmp = TempDir::new().unwrap();
     let active_dir = tmp.path().join("members/active");
     fs::create_dir_all(&active_dir).unwrap();
 
-    let result = delete_member(tmp.path(), "nonexistent");
+    let result = remove_member(tmp.path(), "nonexistent");
     assert!(result.is_err());
 }
 

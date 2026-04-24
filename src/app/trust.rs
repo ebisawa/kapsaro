@@ -6,11 +6,11 @@
 pub(crate) mod approval;
 pub(crate) mod enforcement;
 pub(crate) mod evaluation;
-pub(crate) mod flow;
 pub(crate) mod list;
 pub(crate) mod management;
 pub(crate) mod paths;
 pub(crate) mod policy;
+pub(crate) mod review;
 pub(crate) mod snapshot;
 pub(crate) mod store;
 pub(crate) mod types;
@@ -23,7 +23,7 @@ pub(crate) use enforcement::{
 };
 #[allow(unused_imports)]
 pub(crate) use evaluation::{
-    build_read_signer_trust, current_self_sig_x, enforce_policy_strict_key_checking,
+    derive_self_sig_x, enforce_policy_strict_key_checking, evaluate_read_signer_trust,
     evaluate_signer_trust_with_proof, ReadSignerTrustPlan,
 };
 #[allow(unused_imports)]

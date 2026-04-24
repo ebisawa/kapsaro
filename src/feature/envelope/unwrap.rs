@@ -15,7 +15,7 @@ use crate::model::verified::VerifiedPrivateKey;
 use crate::support::codec::base64_public::{
     decode_base64url_nopad, decode_base64url_nopad_ciphertext,
 };
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
 use uuid::Uuid;
@@ -29,7 +29,7 @@ use zeroize::Zeroizing;
 /// # Arguments
 /// * `wrap_items` - Slice of WrapItems to search
 /// * `kid` - Key ID to find
-/// * `member_id` - Member handle for error messages and rid-mismatch validation
+/// * `member_id` - Resolved member ID for error messages and rid-mismatch validation
 ///
 /// # Returns
 /// Reference to the matching WrapItem, or an error if not found
@@ -44,7 +44,7 @@ pub(crate) fn find_wrap_item_by_kid<'a>(
         .ok_or_else(|| Error::Crypto {
             message: format!(
                 "No wrap found for kid '{}' (member: {})",
-                kid_display_lossy(kid),
+                format_kid_display_lossy(kid),
                 member_id
             ),
             source: None,
@@ -58,7 +58,7 @@ pub(crate) fn find_wrap_item_by_kid<'a>(
                 "wrap_item.rid '{}' does not match member_id '{}' for kid '{}'",
                 wrap_item.rid,
                 member_id,
-                kid_display_lossy(kid)
+                format_kid_display_lossy(kid)
             ),
             source: None,
         });
@@ -85,7 +85,7 @@ pub fn decode_wrap_item_fields(wrap_item: &WrapItem) -> Result<(Enc, Ciphertext)
 }
 
 /// Convert HPKE plaintext output to a 32-byte MasterKey.
-pub fn plaintext_to_master_key(mk_plaintext: Zeroizing<Plaintext>) -> Result<MasterKey> {
+pub fn parse_master_key_from_plaintext(mk_plaintext: Zeroizing<Plaintext>) -> Result<MasterKey> {
     if mk_plaintext.as_bytes().len() != 32 {
         return Err(Error::Crypto {
             message: format!(
@@ -134,12 +134,12 @@ pub fn unwrap_master_key(
         debug!(
             "[CRYPTO] HPKE: {}: open_base (kid: {})",
             caller,
-            kid_display_lossy(&wrap_item.kid)
+            format_kid_display_lossy(&wrap_item.kid)
         );
     }
 
     let mk_plaintext = open_base(kem_secret_key, &enc, &info, &aad, &ct)?;
-    plaintext_to_master_key(mk_plaintext)
+    parse_master_key_from_plaintext(mk_plaintext)
 }
 
 /// Unwrap master key from file-enc v3 format for a specific member
@@ -230,7 +230,7 @@ pub fn unwrap_master_key_from_item(
 /// # Arguments
 /// * `sid` - Session ID (UUID)
 /// * `wrap_items` - Slice of WrapItems to search
-/// * `member_id` - Member handle for error messages
+/// * `member_id` - Resolved member ID for error messages
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - VerifiedPrivateKey containing the KEM private key
 /// * `debug` - Enable debug logging

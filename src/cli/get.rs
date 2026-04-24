@@ -5,7 +5,7 @@
 
 use clap::Args;
 
-use crate::app::kv::query::{build_kv_read_command, execute_kv_read_command};
+use crate::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
 use crate::app::trust::GetPolicy;
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
@@ -28,7 +28,7 @@ pub struct GetArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Secret store name; defaults to "default"
     #[arg(long, short = 'n')]
@@ -57,21 +57,19 @@ pub fn run(args: GetArgs) -> Result<()> {
     let read_mode = if args.all {
         crate::app::kv::types::KvReadMode::All
     } else {
-        crate::app::kv::types::KvReadMode::Single(
-            args.key
-                .as_deref()
-                .ok_or_else(|| crate::Error::invalid_operation("KEY argument is required"))?,
-        )
+        crate::app::kv::types::KvReadMode::Single(args.key.as_deref().ok_or_else(|| {
+            crate::Error::build_invalid_operation_error("KEY argument is required")
+        })?)
     };
     let options = resolve_options(&args.common);
     let kv_map = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_id.clone())?;
-            let command = build_kv_read_command::<GetPolicy>(
+            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let command = resolve_kv_read_command::<GetPolicy>(
                 &options,
-                args.member_id.clone(),
+                args.member_handle.clone(),
                 args.name.as_deref(),
                 ssh_ctx,
             )?;

@@ -14,7 +14,7 @@ fn test_rewrap_rotate_key() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -39,7 +39,7 @@ fn test_rewrap_rotate_key() {
         "File content should change after rotate_key"
     );
 
-    let rids_after = get_kv_rids(&kv_path);
+    let rids_after = load_kv_rids(&kv_path);
     assert!(
         rids_after.contains(&ALICE_MEMBER_ID.to_string()),
         "ALICE should still be in wrap after rotate_key"
@@ -56,7 +56,7 @@ fn test_rewrap_noop_rewrites_file() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -76,7 +76,7 @@ fn test_rewrap_noop_rewrites_file() {
         kv_path.exists(),
         "File should still exist after noop rewrap"
     );
-    let rids = get_kv_rids(&kv_path);
+    let rids = load_kv_rids(&kv_path);
     assert!(
         rids.contains(&ALICE_MEMBER_ID.to_string()),
         "ALICE should still be in wrap after noop rewrap"
@@ -95,7 +95,7 @@ fn test_rewrap_clear_disclosure_history() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let kv_path = create_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_ID,
@@ -113,7 +113,7 @@ fn test_rewrap_clear_disclosure_history() {
     let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_ID);
     rewrap::run(rewrap_args).unwrap();
 
-    let removed = get_kv_removed_rids(&kv_path);
+    let removed = load_kv_removed_rids(&kv_path);
     assert!(
         removed.contains(&BOB_MEMBER_ID.to_string()),
         "BOB should be in removed_recipients after first rewrap: {:?}",
@@ -129,7 +129,7 @@ fn test_rewrap_clear_disclosure_history() {
         result.err()
     );
 
-    let removed_after = get_kv_removed_rids(&kv_path);
+    let removed_after = load_kv_removed_rids(&kv_path);
     assert!(
         removed_after.is_empty(),
         "removed_recipients should be empty after clear_disclosure_history: {:?}",

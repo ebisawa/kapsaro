@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keygen_helpers::make_dummy_public_key;
+use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::format::schema::document::{
     parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token, parse_kv_signature_token,
     parse_kv_wrap_token, parse_private_key_bytes, parse_public_key_str,
@@ -112,7 +112,7 @@ fn test_parse_file_enc_str_with_schema() {
         "signature": {
             "alg": alg::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });
@@ -150,7 +150,7 @@ fn test_parse_kv_tokens_with_schema() {
     let signature = ArtifactSignature {
         alg: alg::SIGNATURE_ED25519.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-        signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         sig:
             "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
                 .to_string(),
@@ -236,7 +236,7 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
         "signature": {
             "alg": alg::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });
@@ -308,7 +308,7 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
         "signature": {
             "alg": alg::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });

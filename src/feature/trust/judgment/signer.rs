@@ -39,7 +39,7 @@ pub fn judge_signer_trust(
     self_trust: &SelfTrustSet,
 ) -> Result<TrustJudgment> {
     judge_signer_trust_with_match(signer, active_members, self_trust, |identity| {
-        known_keys.match_identity(identity)
+        known_keys.judge_identity_match(identity)
     })
 }
 
@@ -50,7 +50,7 @@ pub(crate) fn judge_signer_trust_with_additional(
     self_trust: &SelfTrustSet,
 ) -> Result<TrustJudgment> {
     judge_signer_trust_with_match(signer, active_members, self_trust, |identity| {
-        known_keys.match_identity(identity)
+        known_keys.judge_identity_match(identity)
     })
 }
 
@@ -63,9 +63,9 @@ fn judge_signer_trust_with_match<MatchKnown>(
 where
     MatchKnown: Fn(&TrustIdentity) -> KnownKeyMatch,
 {
-    match active_members.match_identity(signer) {
+    match active_members.judge_identity_match(signer) {
         CurrentMemberMatch::Missing => {
-            return evaluate_missing_active_member(signer, self_trust);
+            return judge_missing_active_member(signer, self_trust);
         }
         CurrentMemberMatch::MemberIdMismatch { active_member_id } => {
             return Ok(TrustJudgment::ActiveMemberMismatch {
@@ -88,7 +88,7 @@ where
 ///
 /// Historical self signers remain trusted from the local keystore without
 /// falling back to one-shot non-member acceptance.
-fn evaluate_missing_active_member(
+fn judge_missing_active_member(
     signer: &TrustIdentity,
     self_trust: &SelfTrustSet,
 ) -> Result<TrustJudgment> {

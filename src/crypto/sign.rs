@@ -14,7 +14,7 @@
 //! canonicalization (e.g., JCS normalization). Format-specific signing
 //! should be implemented in higher layers (e.g., `core/services/signature`).
 
-use crate::crypto::{crypto_error, crypto_operation_failed};
+use crate::crypto::{build_crypto_error, build_crypto_operation_error};
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
 use crate::model::trust_store::TrustStoreSignature;
@@ -87,26 +87,26 @@ fn verify_signature_components(
     expected_signature_alg: &str,
 ) -> Result<()> {
     if signature_alg != expected_signature_alg {
-        return Err(crypto_error(
+        return Err(build_crypto_error(
             "Unsupported signature algorithm",
             signature_alg,
         ));
     }
 
     let sig_bytes = decode_base64url_nopad(signature_b64, "signature")
-        .map_err(|_| crypto_operation_failed("Invalid signature Base64"))?;
+        .map_err(|_| build_crypto_operation_error("Invalid signature Base64"))?;
     if sig_bytes.len() != 64 {
-        return Err(crypto_error(
+        return Err(build_crypto_error(
             "Invalid signature length",
             format!("Expected 64 bytes (Ed25519), got {}", sig_bytes.len()),
         ));
     }
     let sig = ed25519_dalek::Signature::from_slice(&sig_bytes)
-        .map_err(|_| crypto_operation_failed("Invalid signature format"))?;
+        .map_err(|_| build_crypto_operation_error("Invalid signature format"))?;
 
     verifying_key
         .verify(canonical_bytes, &sig)
-        .map_err(|_| crypto_operation_failed("Signature verification failed"))?;
+        .map_err(|_| build_crypto_operation_error("Signature verification failed"))?;
 
     Ok(())
 }

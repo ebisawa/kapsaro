@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::helpers::{
-    b64url, create_test_private_key, create_test_public_key, generate_ed25519_keypair,
+    b64url, build_test_private_key, build_test_public_key, generate_ed25519_keypair,
     generate_x25519_keypair, recipients_and_members,
 };
-use crate::keygen_helpers::make_decrypted_private_key_plaintext;
+use crate::keygen_helpers::build_verified_private_key;
 use crate::test_utils::ALICE_MEMBER_ID;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file as file_enc;
@@ -19,7 +19,7 @@ fn test_encrypt_file() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let (recipient_ids, members) = recipients_and_members(&recipients_with_keys);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -32,7 +32,7 @@ fn test_encrypt_file() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
+            signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -51,8 +51,8 @@ fn test_encrypt_file() {
             Vec::new(),
         ),
     );
-    let decrypted_key = make_decrypted_private_key_plaintext(
-        &create_test_private_key(&sk, &pk),
+    let decrypted_key = build_verified_private_key(
+        &build_test_private_key(&sk, &pk),
         ALICE_MEMBER_ID,
         signer_kid,
         "SHA256:test",
@@ -75,7 +75,7 @@ fn test_defence_in_depth_sid_mismatch() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let (recipient_ids, members) = recipients_and_members(&recipients_with_keys);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -87,7 +87,7 @@ fn test_defence_in_depth_sid_mismatch() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
+            signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -103,8 +103,8 @@ fn test_defence_in_depth_sid_mismatch() {
             Vec::new(),
         ),
     );
-    let decrypted_key = make_decrypted_private_key_plaintext(
-        &create_test_private_key(&sk, &pk),
+    let decrypted_key = build_verified_private_key(
+        &build_test_private_key(&sk, &pk),
         ALICE_MEMBER_ID,
         signer_kid,
         "SHA256:test",

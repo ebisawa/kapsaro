@@ -13,7 +13,7 @@
 
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_SSH_CONFIG_FILE_SIZE;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::PathBuf;
 
@@ -48,9 +48,9 @@ pub fn find_identity_agent() -> Result<Option<PathBuf>> {
 
     let content = load_text_with_limit(&config_path, MAX_SSH_CONFIG_FILE_SIZE, "SSH config file")
         .map_err(|e| {
-        Error::io(format!(
+        Error::build_io_error(format!(
             "Failed to read SSH config file {}: {}",
-            display_path_relative_to_cwd(&config_path),
+            format_path_relative_to_cwd(&config_path),
             e
         ))
     })?;
@@ -65,7 +65,7 @@ fn extract_identity_agent_values(content: &str) -> (Option<String>, Option<Strin
     let mut host_star_identity_agent: Option<String> = None;
 
     for line in content.lines() {
-        let line = trim_comment(line);
+        let line = extract_config_line_before_comment(line);
         let line = line.trim();
 
         if line.is_empty() {
@@ -83,7 +83,7 @@ fn extract_identity_agent_values(content: &str) -> (Option<String>, Option<Strin
             .strip_prefix("identityagent")
             .map(|suffix| &line[line.len() - suffix.len()..])
         {
-            let unquoted = unquote(value.trim());
+            let unquoted = parse_quoted_value(value.trim());
             if in_host_star {
                 host_star_identity_agent = Some(unquoted);
             } else if global_identity_agent.is_none() {
@@ -118,7 +118,7 @@ pub fn parse_identity_agent(content: &str) -> Result<Option<PathBuf>> {
 }
 
 /// Remove comment from line (everything after #, but not inside quotes)
-pub fn trim_comment(line: &str) -> &str {
+pub fn extract_config_line_before_comment(line: &str) -> &str {
     let mut in_single = false;
     let mut in_double = false;
 
@@ -140,7 +140,7 @@ pub fn trim_comment(line: &str) -> &str {
 }
 
 /// Remove surrounding quotes from value
-pub fn unquote(value: &str) -> String {
+pub fn parse_quoted_value(value: &str) -> String {
     let trimmed = value.trim();
     if (trimmed.starts_with('"') && trimmed.ends_with('"'))
         || (trimmed.starts_with('\'') && trimmed.ends_with('\''))

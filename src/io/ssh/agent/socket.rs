@@ -19,7 +19,7 @@ use std::path::PathBuf;
 ///
 /// # Returns
 ///
-/// Resolved socket path, or error if not found
+/// Socket path, or error if not found
 pub fn resolve_agent_socket_path() -> Result<PathBuf> {
     // Priority 1: Check ~/.ssh/config for IdentityAgent
     if let Some(config_path) = find_identity_agent()? {
@@ -28,7 +28,7 @@ pub fn resolve_agent_socket_path() -> Result<PathBuf> {
 
     // Priority 2: Fall back to SSH_AUTH_SOCK
     let socket_path = env::var("SSH_AUTH_SOCK").map_err(|_| {
-        crate::Error::from(SshError::operation_failed(
+        crate::Error::from(SshError::build_operation_failed_error(
             "SSH_AUTH_SOCK not set and no IdentityAgent found in ~/.ssh/config",
         ))
     })?;

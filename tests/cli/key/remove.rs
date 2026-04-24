@@ -3,17 +3,17 @@
 
 //! Integration tests for `key remove` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
 use secretenv::io::keystore::active::load_active_kid;
-use secretenv::support::kid::build_kid_display;
+use secretenv::support::kid::format_kid_display;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
 fn test_key_remove_non_active() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -87,7 +87,7 @@ fn test_key_remove_non_active() {
 #[test]
 fn test_key_remove_active_without_force() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -133,7 +133,7 @@ fn test_key_remove_active_without_force() {
 #[test]
 fn test_key_remove_active_with_force() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -184,7 +184,7 @@ fn test_key_remove_active_with_force() {
 #[test]
 fn test_key_remove_accepts_unique_prefix_without_member_id() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -237,7 +237,7 @@ fn test_key_remove_accepts_unique_prefix_without_member_id() {
 #[test]
 fn test_key_remove_accepts_display_kid() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -277,7 +277,7 @@ fn test_key_remove_accepts_display_kid() {
     cmd()
         .arg("key")
         .arg("remove")
-        .arg(build_kid_display(&non_active_kid).unwrap())
+        .arg(format_kid_display(&non_active_kid).unwrap())
         .arg("--member-handle")
         .arg(member_id)
         .env("SECRETENV_HOME", temp_dir.path())

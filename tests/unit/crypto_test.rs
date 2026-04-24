@@ -3,7 +3,7 @@
 
 //! Unit tests for crypto module
 
-use secretenv::crypto::kem::{public_key_from_secret, X25519PublicKey, X25519SecretKey};
+use secretenv::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
 use secretenv::crypto::sign::{sign_trust_store_bytes, verify_trust_store_bytes};
 use secretenv::model::identifiers::alg::SIGNATURE_ED25519;
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ fn generate_x25519_keypair(seed: [u8; 32]) -> (X25519SecretKey, X25519PublicKey)
     clamped[31] |= 64;
 
     let secret = X25519SecretKey::from_bytes(clamped);
-    let public = public_key_from_secret(&secret).unwrap();
+    let public = derive_public_key_from_secret(&secret).unwrap();
 
     (secret, public)
 }

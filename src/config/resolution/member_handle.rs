@@ -19,27 +19,27 @@ use std::path::Path;
 use super::common::resolve_string_with_priority;
 
 /// Resolve the member handle from non-interactive sources and return `None` when unresolved.
-pub(crate) fn resolve_member_id_with_fallback(
-    member_id_opt: Option<String>,
+pub(crate) fn resolve_member_handle_with_fallback(
+    member_handle_opt: Option<String>,
     base_dir: Option<&Path>,
 ) -> Result<Option<String>> {
     // Priority 1-3: Use common resolution logic
-    if let Some(member_id) = resolve_string_with_priority(
-        member_id_opt,
+    if let Some(member_handle) = resolve_string_with_priority(
+        member_handle_opt,
         Some("SECRETENV_MEMBER_HANDLE"),
         "member_handle",
         base_dir,
         None,
     )? {
-        validation::validate_member_id(&member_id)?;
-        return Ok(Some(member_id));
+        validation::validate_member_id(&member_handle)?;
+        return Ok(Some(member_handle));
     }
 
-    // Priority 4: Single member_id in keystore
-    resolve_optional_member_id_from_keystore(base_dir)
+    // Priority 4: Single member handle in keystore
+    resolve_optional_member_handle_from_keystore(base_dir)
 }
 
-fn resolve_optional_member_id_from_keystore(base_dir: Option<&Path>) -> Result<Option<String>> {
+fn resolve_optional_member_handle_from_keystore(base_dir: Option<&Path>) -> Result<Option<String>> {
     let keystore_root = match base_dir {
         Some(dir) => paths::get_keystore_root_from_base(dir),
         None => {
@@ -52,5 +52,5 @@ fn resolve_optional_member_id_from_keystore(base_dir: Option<&Path>) -> Result<O
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_member_id_test.rs"]
+#[path = "../../../tests/unit/config_resolution_member_handle_test.rs"]
 mod tests;

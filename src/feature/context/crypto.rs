@@ -6,6 +6,7 @@
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 
+use crate::feature::key::material::validate_private_key_material;
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
 use crate::feature::verify::public_key::{
@@ -15,14 +16,11 @@ use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::io::keystore::storage::{load_private_key, load_public_key};
 use crate::io::ssh::backend::SignatureBackend;
 use crate::model::common::WrapItem;
-use crate::model::identifiers::jwk;
 use crate::model::identity::{Kid, MemberId};
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
-use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
-use crate::support::kid::kid_display_lossy;
-use crate::support::secret::SecretArray;
+use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 
 pub struct LocalKeyAccess {
@@ -57,12 +55,12 @@ pub struct DecryptionResult<T> {
     pub key_info: DecryptionKeyInfo,
 }
 
-pub(crate) struct LoadedPrivateKey {
+pub(crate) struct PrivateKeyLoadResult {
     pub(crate) private_key: VerifiedPrivateKey,
     pub(crate) expires_at: String,
 }
 
-pub(crate) enum ResolvedDecryptionKey<'a> {
+pub(crate) enum DecryptionKeyResolution<'a> {
     Active {
         private_key: &'a VerifiedPrivateKey,
         info: DecryptionKeyInfo,
@@ -87,7 +85,7 @@ impl LocalKeyAccess {
     }
 }
 
-impl<'a> ResolvedDecryptionKey<'a> {
+impl<'a> DecryptionKeyResolution<'a> {
     pub(crate) fn private_key(&self) -> &VerifiedPrivateKey {
         match self {
             Self::Active { private_key, .. } => private_key,
@@ -109,55 +107,8 @@ pub(crate) fn build_signing_key(plaintext: &PrivateKeyPlaintext) -> Result<Signi
     Ok(SigningKey::from_bytes(sig_key_bytes.as_array()))
 }
 
-/// Validate an OKP key (kty, crv, d/x length).
-pub fn validate_okp_key(
-    kty: &str,
-    crv: &str,
-    expected_crv: &str,
-    d: &str,
-    x: &str,
-    label: &str,
-) -> Result<(SecretArray<32>, [u8; 32])> {
-    if kty != "OKP" {
-        return Err(Error::Crypto {
-            message: format!("Invalid {} key type: expected 'OKP', got '{}'", label, kty),
-            source: None,
-        });
-    }
-    if crv != expected_crv {
-        return Err(Error::Crypto {
-            message: format!(
-                "Invalid {} curve: expected '{}', got '{}'",
-                label, expected_crv, crv
-            ),
-            source: None,
-        });
-    }
-    let d_bytes = decode_base64url_nopad_secret_32(d, &format!("{} private key", label))?;
-    let x_bytes = decode_base64url_nopad_array(x, &format!("{} public key", label))?;
-    Ok((d_bytes, x_bytes))
-}
-
-/// Verify Ed25519 key pair consistency: private key must derive to the given public key.
-pub fn validate_ed25519_consistency(
-    sig_d_bytes: &SecretArray<32>,
-    sig_x_bytes: &[u8; 32],
-) -> Result<()> {
-    let signing_key = SigningKey::from_bytes(sig_d_bytes.as_array());
-    let derived_vk = signing_key.verifying_key();
-    let derived_x_bytes = derived_vk.as_bytes();
-    if derived_x_bytes != sig_x_bytes {
-        return Err(Error::Crypto {
-            message: "Ed25519 key pair inconsistency: private key does not derive to public key"
-                .to_string(),
-            source: None,
-        });
-    }
-    Ok(())
-}
-
-/// Validate private key plaintext and wrap in Decrypted type (SSH-based decryption)
-pub(crate) fn validate_and_wrap_private_key_ssh(
+/// Validate private key plaintext and wrap it as SSH-decrypted key material.
+pub(crate) fn build_verified_private_key_from_ssh(
     plaintext: PrivateKeyPlaintext,
     member_id: &str,
     kid: &str,
@@ -173,8 +124,8 @@ pub(crate) fn validate_and_wrap_private_key_ssh(
     Ok(VerifiedPrivateKey::new(plaintext, proof))
 }
 
-/// Validate private key plaintext and wrap in Decrypted type (password-based decryption)
-pub fn validate_and_wrap_private_key_password(
+/// Validate private key plaintext and wrap it as password-decrypted key material.
+pub fn build_verified_private_key_from_password(
     plaintext: PrivateKeyPlaintext,
     member_id: &str,
     kid: &str,
@@ -187,19 +138,6 @@ pub fn validate_and_wrap_private_key_password(
         ssh_fpr: None,
     };
     Ok(VerifiedPrivateKey::new(plaintext, proof))
-}
-
-/// Validate private key material (OKP structure and Ed25519 consistency)
-pub(crate) fn validate_private_key_material(plaintext: &PrivateKeyPlaintext) -> Result<()> {
-    let kem = &plaintext.keys.kem;
-    validate_okp_key(&kem.kty, &kem.crv, jwk::CRV_X25519, &kem.d, &kem.x, "KEM")?;
-
-    let sig = &plaintext.keys.sig;
-    let (sig_d_bytes, sig_x_bytes) =
-        validate_okp_key(&sig.kty, &sig.crv, jwk::CRV_ED25519, &sig.d, &sig.x, "Sig")?;
-    validate_ed25519_consistency(&sig_d_bytes, &sig_x_bytes)?;
-
-    Ok(())
 }
 
 pub fn build_local_key_access(
@@ -217,7 +155,7 @@ pub(crate) fn load_verified_private_key_from_keystore(
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     debug_enabled: bool,
-) -> Result<LoadedPrivateKey> {
+) -> Result<PrivateKeyLoadResult> {
     let encrypted_private_key = load_private_key(keystore_root, member_id, kid)?;
     let public_key = load_public_key(keystore_root, member_id, kid)?;
     let verified_public_key = verify_public_key_with_attestation_context(
@@ -229,14 +167,14 @@ pub(crate) fn load_verified_private_key_from_keystore(
 
     let plaintext =
         decrypt_private_key(&encrypted_private_key, backend, ssh_pubkey, debug_enabled)?;
-    let private_key = validate_and_wrap_private_key_ssh(
+    let private_key = build_verified_private_key_from_ssh(
         plaintext,
         &encrypted_private_key.protected.member_id,
         &encrypted_private_key.protected.kid,
         extract_ssh_fingerprint(&encrypted_private_key)?,
     )?;
 
-    Ok(LoadedPrivateKey {
+    Ok(PrivateKeyLoadResult {
         private_key,
         expires_at: encrypted_private_key.protected.expires_at.clone(),
     })
@@ -290,14 +228,14 @@ impl CryptoContext {
         wrap_items: &[WrapItem],
         member_id: &str,
         debug_enabled: bool,
-    ) -> Result<ResolvedDecryptionKey<'a>> {
+    ) -> Result<DecryptionKeyResolution<'a>> {
         let wrap_kids = collect_self_wrap_kids(wrap_items, member_id);
         let candidates =
             build_candidate_kids(&wrap_kids, self.selected_kid_override.as_deref(), &self.kid);
 
         for kid in &candidates {
             if kid == self.kid.as_ref() {
-                return Ok(ResolvedDecryptionKey::Active {
+                return Ok(DecryptionKeyResolution::Active {
                     private_key: &self.private_key,
                     info: DecryptionKeyInfo {
                         kid: kid.clone(),
@@ -320,7 +258,7 @@ impl CryptoContext {
                 debug_enabled,
             ) {
                 Ok(loaded) => {
-                    return Ok(ResolvedDecryptionKey::Fallback {
+                    return Ok(DecryptionKeyResolution::Fallback {
                         private_key: Box::new(loaded.private_key),
                         info: DecryptionKeyInfo {
                             kid: kid.clone(),
@@ -384,7 +322,7 @@ fn build_missing_wrap_error(
         Some(kid) => Error::Crypto {
             message: format!(
                 "No wrap found for kid '{}' (member: {})",
-                kid_display_lossy(kid),
+                format_kid_display_lossy(kid),
                 member_id
             ),
             source: None,
@@ -392,7 +330,7 @@ fn build_missing_wrap_error(
         None => {
             let searched = searched_kids
                 .iter()
-                .map(|kid| kid_display_lossy(kid))
+                .map(|kid| format_kid_display_lossy(kid))
                 .collect::<Vec<_>>()
                 .join(", ");
             Error::Crypto {

@@ -4,8 +4,8 @@
 use crate::app::context::crypto::{load_crypto_context, load_crypto_context_from_env};
 use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::paths::ResolvedCommandPaths;
-use crate::app::context::ssh::ResolvedSshSigningContext;
+use crate::app::context::paths::CommandPathResolution;
+use crate::app::context::ssh::SshSigningContextResolution;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::expiry::{build_key_expiry_warning, build_signing_key_expiry_warning};
 use crate::model::identity::MemberId;
@@ -22,11 +22,11 @@ impl ExecutionContext {
     /// Resolve workspace, SSH signing context, member ID, and key material for a command.
     fn load_with_signing_context(
         options: &CommonCommandOptions,
-        member_id: Option<String>,
+        member_handle: Option<String>,
         explicit_kid: Option<&str>,
-        ssh_ctx: ResolvedSshSigningContext,
+        ssh_ctx: SshSigningContextResolution,
     ) -> Result<Self> {
-        let resolved = resolve_command_member(options, member_id)?;
+        let resolved = resolve_command_member(options, member_handle)?;
         let workspace_root = resolved.paths.workspace_root.clone();
         let key_ctx = load_crypto_context(
             resolved.member_id.as_str(),
@@ -47,7 +47,7 @@ impl ExecutionContext {
 
     /// Load execution context from environment variables (CI mode).
     pub(crate) fn load_from_env(options: &CommonCommandOptions) -> Result<Self> {
-        let resolved = ResolvedCommandPaths::require_workspace(
+        let resolved = CommandPathResolution::require_workspace(
             options,
             "environment variable key loading (CI mode)",
         )?;
@@ -69,26 +69,26 @@ impl ExecutionContext {
 
 pub(crate) fn resolve_read_execution(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     explicit_kid: Option<&str>,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<ExecutionContext> {
     match ssh_ctx {
         Some(ctx) => {
-            ExecutionContext::load_with_signing_context(options, member_id, explicit_kid, ctx)
+            ExecutionContext::load_with_signing_context(options, member_handle, explicit_kid, ctx)
         }
-        None => resolve_env_execution(options, member_id, explicit_kid),
+        None => resolve_env_execution(options, member_handle, explicit_kid),
     }
 }
 
 pub(crate) fn resolve_write_execution(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    member_handle: Option<String>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<ExecutionContext> {
     match ssh_ctx {
-        Some(ctx) => ExecutionContext::load_with_signing_context(options, member_id, None, ctx),
-        None => resolve_env_execution(options, member_id, None),
+        Some(ctx) => ExecutionContext::load_with_signing_context(options, member_handle, None, ctx),
+        None => resolve_env_execution(options, member_handle, None),
     }
 }
 
@@ -104,16 +104,16 @@ pub(crate) fn build_write_execution_warnings(execution: &ExecutionContext) -> Re
 
 fn resolve_env_execution(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     explicit_kid: Option<&str>,
 ) -> Result<ExecutionContext> {
-    reject_env_member_override(&member_id)?;
-    reject_env_kid_override(explicit_kid)?;
+    enforce_env_member_handle_absent(&member_handle)?;
+    enforce_env_kid_absent(explicit_kid)?;
     ExecutionContext::load_from_env(options)
 }
 
-fn reject_env_member_override(member_id: &Option<String>) -> Result<()> {
-    if member_id.is_some() {
+fn enforce_env_member_handle_absent(member_handle: &Option<String>) -> Result<()> {
+    if member_handle.is_some() {
         return Err(Error::InvalidArgument {
             message: "--member-handle cannot be used in environment variable key mode \
                      (member handle is derived from SECRETENV_PRIVATE_KEY)"
@@ -123,7 +123,7 @@ fn reject_env_member_override(member_id: &Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn reject_env_kid_override(explicit_kid: Option<&str>) -> Result<()> {
+fn enforce_env_kid_absent(explicit_kid: Option<&str>) -> Result<()> {
     if explicit_kid.is_some() {
         return Err(Error::InvalidArgument {
             message: "--kid cannot be used in environment variable key mode \

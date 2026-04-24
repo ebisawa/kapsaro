@@ -5,7 +5,7 @@
 
 use secretenv::format::kid::derive_public_key_kid;
 use secretenv::support::kid::{
-    build_kid_display, build_kid_half_display, normalize_kid, normalize_kid_query,
+    format_kid_display, format_kid_half_display, normalize_kid, normalize_kid_query,
     resolve_unique_kid,
 };
 use serde_json::json;
@@ -67,21 +67,21 @@ fn test_resolve_unique_kid_rejects_ambiguous_prefix() {
 }
 
 #[test]
-fn test_build_kid_display_groups_canonical_form_by_four() {
-    assert_eq!(build_kid_display(CANONICAL_KID).unwrap(), DISPLAY_KID);
+fn test_format_kid_display_groups_canonical_form_by_four() {
+    assert_eq!(format_kid_display(CANONICAL_KID).unwrap(), DISPLAY_KID);
 }
 
 #[test]
-fn test_build_kid_half_display_uses_first_four_groups() {
+fn test_format_kid_half_display_uses_first_four_groups() {
     assert_eq!(
-        build_kid_half_display(CANONICAL_KID).unwrap(),
+        format_kid_half_display(CANONICAL_KID).unwrap(),
         HALF_DISPLAY_KID
     );
 }
 
 #[test]
-fn test_build_kid_display_rejects_invalid_canonical_value() {
-    let error = build_kid_display("INVALID").unwrap_err();
+fn test_format_kid_display_rejects_invalid_canonical_value() {
+    let error = format_kid_display("INVALID").unwrap_err();
     assert!(
         error.to_string().contains("kid"),
         "error should mention kid: {error}"

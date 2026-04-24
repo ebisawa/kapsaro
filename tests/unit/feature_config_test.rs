@@ -7,7 +7,7 @@
 
 use crate::test_utils::EnvGuard;
 use secretenv::feature::config::{
-    get_config_path_and_scope, load_global_config, resolve_config_value, validate_key, ConfigScope,
+    load_global_config, resolve_config_location, resolve_config_value, validate_key, ConfigScope,
 };
 use secretenv::io::config::paths::get_global_config_path;
 use secretenv::io::config::store::set_config_value;
@@ -74,11 +74,11 @@ fn test_resolve_workspace_config_value_global() {
 }
 
 #[test]
-fn test_get_config_path_and_scope_global() {
+fn test_resolve_config_location_global() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
     let _temp_dir = TempDir::new().unwrap();
     std::env::set_var("SECRETENV_HOME", _temp_dir.path().to_str().unwrap());
-    let resolution = get_config_path_and_scope(Some(_temp_dir.path())).unwrap();
+    let resolution = resolve_config_location(Some(_temp_dir.path())).unwrap();
 
     match resolution.scope {
         ConfigScope::Global => {}

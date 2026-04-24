@@ -3,21 +3,21 @@
 
 //! Integration tests for `key export` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::PrivateKey;
 use secretenv::model::public_key::PublicKey;
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
-use secretenv::support::kid::build_kid_display;
+use secretenv::support::kid::format_kid_display;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
 fn test_key_export_explicit_kid() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -79,7 +79,7 @@ fn test_key_export_explicit_kid() {
 #[test]
 fn test_key_export_active() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -129,7 +129,7 @@ fn test_key_export_active() {
 #[test]
 fn test_key_export_accepts_display_kid() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -151,7 +151,7 @@ fn test_key_export_accepts_display_kid() {
     cmd()
         .arg("key")
         .arg("export")
-        .arg(build_kid_display(&kid).unwrap())
+        .arg(format_kid_display(&kid).unwrap())
         .arg("--member-handle")
         .arg(member_id)
         .arg("--out")
@@ -170,7 +170,7 @@ fn test_key_export_accepts_display_kid() {
 #[test]
 fn test_key_export_private_writes_password_protected_key_file() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -215,7 +215,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
 #[test]
 fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -282,7 +282,7 @@ fn test_key_export_private_requires_member_id_before_password_input() {
 #[test]
 fn test_key_export_private_requires_explicit_output_destination() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()
@@ -317,7 +317,7 @@ fn test_key_export_private_requires_explicit_output_destination() {
 #[test]
 fn test_key_export_private_rejects_stdout_and_out_together() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_id = TEST_MEMBER_ID;
 
     cmd()

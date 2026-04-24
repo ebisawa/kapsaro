@@ -8,7 +8,7 @@ use crate::app_test_utils::build_test_command_options;
 use tempfile::TempDir;
 
 #[test]
-fn test_resolve_ssh_context_by_active_key_honors_member_id_option() {
+fn test_resolve_ssh_context_by_active_key_honors_member_handle_option() {
     let base_dir = TempDir::new().unwrap();
 
     // Create a keystore with multiple member directories.
@@ -19,7 +19,7 @@ fn test_resolve_ssh_context_by_active_key_honors_member_id_option() {
 
     let options = build_test_command_options(base_dir.path(), None);
 
-    // With explicit member_id, we should not get the "multiple member_ids found" config error.
+    // With explicit member handle, we should not get the "multiple member handles found" config error.
     // It will still fail later because no active key exists for that member, which is expected.
     let err =
         match resolve_ssh_context_by_active_key(&options, Some("alice@example.com".to_string())) {

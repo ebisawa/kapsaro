@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-use super::keygen_helpers::{create_test_private_key, keygen_test};
+use super::keygen_helpers::{build_test_private_key, keygen_test};
 use secretenv::io::keystore::active::set_active_kid;
 use secretenv::io::keystore::storage::save_key_pair_atomic;
 use secretenv::model::private_key::PrivateKey;
@@ -31,7 +31,7 @@ struct SharedFixture {
 
 static SHARED_FIXTURE: LazyLock<SharedFixture> = LazyLock::new(build_shared_fixture);
 
-fn create_dir_all_restricted(path: &Path) {
+fn ensure_restricted_dir(path: &Path) {
     fs::create_dir_all(path).unwrap();
     #[cfg(unix)]
     {
@@ -42,7 +42,7 @@ fn create_dir_all_restricted(path: &Path) {
 
 fn build_shared_fixture() -> SharedFixture {
     let temp_dir = TempDir::new().expect("Failed to create temp dir for fixture generation");
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let ssh_private_key_bytes =
         fs::read(&ssh_priv).expect("Failed to read generated SSH private key");
@@ -51,7 +51,7 @@ fn build_shared_fixture() -> SharedFixture {
     for member_id in ["alice@example.com", "bob@example.com"] {
         let (plaintext, public_key) = keygen_test(member_id, &ssh_priv, &ssh_pub_content)
             .expect("Failed to generate test key pair");
-        let private_key = create_test_private_key(
+        let private_key = build_test_private_key(
             &plaintext,
             &public_key.protected.member_id,
             &public_key.protected.kid,
@@ -90,10 +90,10 @@ pub fn load_fixture_ssh_pubkey() -> String {
 }
 
 /// Write SSH keypair from shared fixture into per-test TempDir
-fn write_ssh_keys(temp_dir: &TempDir) -> (PathBuf, String) {
+fn save_ssh_keys(temp_dir: &TempDir) -> (PathBuf, String) {
     let fixture = &*SHARED_FIXTURE;
     let ssh_dir = temp_dir.path().join(".ssh");
-    create_dir_all_restricted(&ssh_dir);
+    ensure_restricted_dir(&ssh_dir);
 
     let dst_priv = ssh_dir.join("test_ed25519");
     let dst_pub = ssh_dir.join("test_ed25519.pub");
@@ -152,10 +152,10 @@ fn install_fixture_member(
 /// Setup test keystore from shared fixture (no ssh-keygen calls)
 pub fn setup_test_keystore_from_fixtures(member_id: &str) -> TempDir {
     let temp_dir = TempDir::new().unwrap();
-    write_ssh_keys(&temp_dir);
+    save_ssh_keys(&temp_dir);
 
     let keystore_root = temp_dir.path().join("keys");
-    create_dir_all_restricted(&keystore_root);
+    ensure_restricted_dir(&keystore_root);
 
     let member = SHARED_FIXTURE
         .members
@@ -164,9 +164,9 @@ pub fn setup_test_keystore_from_fixtures(member_id: &str) -> TempDir {
 
     let workspace_dir = temp_dir.path().join("workspace");
     let members_dir = workspace_dir.join("members/active");
-    create_dir_all_restricted(&members_dir);
-    create_dir_all_restricted(&workspace_dir.join("members/incoming"));
-    create_dir_all_restricted(&workspace_dir.join("secrets"));
+    ensure_restricted_dir(&members_dir);
+    ensure_restricted_dir(&workspace_dir.join("members/incoming"));
+    ensure_restricted_dir(&workspace_dir.join("secrets"));
 
     install_fixture_member(member_id, &keystore_root, None, &members_dir);
     set_active_kid(member_id, &member.kid, &keystore_root).unwrap();
@@ -177,18 +177,18 @@ pub fn setup_test_keystore_from_fixtures(member_id: &str) -> TempDir {
 /// Setup test workspace from shared fixture (no ssh-keygen calls)
 pub fn setup_test_workspace_from_fixtures(member_ids: &[&str]) -> (TempDir, PathBuf) {
     let temp_dir = TempDir::new().unwrap();
-    write_ssh_keys(&temp_dir);
+    save_ssh_keys(&temp_dir);
 
     let workspace_dir = temp_dir.path().join("workspace");
     let workspace_keystore = workspace_dir.join("keystore");
     let members_dir = workspace_dir.join("members/active");
-    create_dir_all_restricted(&workspace_keystore);
-    create_dir_all_restricted(&members_dir);
-    create_dir_all_restricted(&workspace_dir.join("members/incoming"));
-    create_dir_all_restricted(&workspace_dir.join("secrets"));
+    ensure_restricted_dir(&workspace_keystore);
+    ensure_restricted_dir(&members_dir);
+    ensure_restricted_dir(&workspace_dir.join("members/incoming"));
+    ensure_restricted_dir(&workspace_dir.join("secrets"));
 
     let base_keystore = temp_dir.path().join("keys");
-    create_dir_all_restricted(&base_keystore);
+    ensure_restricted_dir(&base_keystore);
 
     for member_id in member_ids {
         install_fixture_member(
@@ -212,16 +212,16 @@ pub fn save_public_key(
     public_key: &secretenv::model::public_key::PublicKey,
 ) -> secretenv::Result<()> {
     let dir = keystore_root.join(member_id).join(kid);
-    create_dir_all_restricted(&dir);
+    ensure_restricted_dir(&dir);
     secretenv::support::fs::atomic::save_json(&dir.join("public.json"), public_key)
 }
 
 /// Helper to create a temporary SSH Ed25519 keypair for testing
 ///
 /// Returns: (private_key_path, public_key_path, public_key_content)
-pub fn create_temp_ssh_keypair_in_dir(temp_dir: &TempDir) -> (PathBuf, PathBuf, String) {
+pub fn generate_temp_ssh_keypair_in_dir(temp_dir: &TempDir) -> (PathBuf, PathBuf, String) {
     let ssh_dir = temp_dir.path().join(".ssh");
-    create_dir_all_restricted(&ssh_dir);
+    ensure_restricted_dir(&ssh_dir);
 
     let private_key_path = ssh_dir.join("test_ed25519");
     let public_key_path = ssh_dir.join("test_ed25519.pub");
@@ -255,24 +255,24 @@ pub fn create_temp_ssh_keypair_in_dir(temp_dir: &TempDir) -> (PathBuf, PathBuf, 
 /// Setup test workspace with members directory and public keys
 pub fn setup_test_workspace(member_ids: &[&str]) -> (TempDir, PathBuf) {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let workspace_dir = temp_dir.path().join("workspace");
     let workspace_keystore = workspace_dir.join("keystore");
     let members_dir = workspace_dir.join("members/active");
     let secrets_dir = workspace_dir.join("secrets");
-    create_dir_all_restricted(&workspace_keystore);
-    create_dir_all_restricted(&members_dir);
-    create_dir_all_restricted(&workspace_dir.join("members/incoming"));
-    create_dir_all_restricted(&secrets_dir);
+    ensure_restricted_dir(&workspace_keystore);
+    ensure_restricted_dir(&members_dir);
+    ensure_restricted_dir(&workspace_dir.join("members/incoming"));
+    ensure_restricted_dir(&secrets_dir);
 
     let base_keystore = temp_dir.path().join("keys");
-    create_dir_all_restricted(&base_keystore);
+    ensure_restricted_dir(&base_keystore);
 
     for member_id in member_ids {
         let (private_key, public_key) =
             keygen_test(member_id, &ssh_priv, &ssh_pub_content).unwrap();
-        let private_key_doc = create_test_private_key(
+        let private_key_doc = build_test_private_key(
             &private_key,
             &public_key.protected.member_id,
             &public_key.protected.kid,
@@ -329,13 +329,13 @@ pub fn setup_test_workspace(member_ids: &[&str]) -> (TempDir, PathBuf) {
 /// Setup test environment with keystore and test keys
 pub fn setup_test_keystore(member_id: &str) -> TempDir {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let keystore_root = temp_dir.path().join("keys");
-    create_dir_all_restricted(&keystore_root);
+    ensure_restricted_dir(&keystore_root);
 
     let (private_key, public_key) = keygen_test(member_id, &ssh_priv, &ssh_pub_content).unwrap();
-    let private_key_doc = create_test_private_key(
+    let private_key_doc = build_test_private_key(
         &private_key,
         &public_key.protected.member_id,
         &public_key.protected.kid,
@@ -362,9 +362,9 @@ pub fn setup_test_keystore(member_id: &str) -> TempDir {
 
     let workspace_dir = temp_dir.path().join("workspace");
     let members_dir = workspace_dir.join("members/active");
-    create_dir_all_restricted(&members_dir);
-    create_dir_all_restricted(&workspace_dir.join("members/incoming"));
-    create_dir_all_restricted(&workspace_dir.join("secrets"));
+    ensure_restricted_dir(&members_dir);
+    ensure_restricted_dir(&workspace_dir.join("members/incoming"));
+    ensure_restricted_dir(&workspace_dir.join("secrets"));
     let member_file = members_dir.join(format!("{}.json", member_id));
     fs::write(
         &member_file,

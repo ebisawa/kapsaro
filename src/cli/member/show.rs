@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::member::query::show_member;
+use crate::app::member::query::load_member_show_result;
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::member::print_member_show;
 use crate::Error;
@@ -10,6 +10,6 @@ use super::ShowArgs;
 
 pub(crate) fn run(args: ShowArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let result = show_member(&options, &args.member_id)?;
+    let result = load_member_show_result(&options, &args.member_handle)?;
     print_member_show(args.common.json, &result)
 }

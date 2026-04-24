@@ -6,5 +6,5 @@
 use crate::Error;
 
 pub fn print_error(error: &Error) {
-    eprintln!("Error: {}", error.user_message());
+    eprintln!("Error: {}", error.format_user_message());
 }

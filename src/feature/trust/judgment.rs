@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Typed trust judgment logic (spec §6.2).
+//! Typed trust judgment logic.
 
 mod active_member;
 mod identity;

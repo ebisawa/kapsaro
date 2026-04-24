@@ -10,7 +10,7 @@ use crate::cli::common::output::member::{
     MemberVerificationResultsView,
 };
 use crate::cli::common::output::trust::review::print_candidate_review;
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 
 const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
 const MEMBER_SHOW_BULLET: &str = "\u{25CF}";
@@ -64,7 +64,7 @@ pub(crate) fn print_member_verification_results(view: &MemberVerificationResults
 }
 
 pub(crate) fn print_member_show(member: &MemberShowView<'_>) {
-    for line in build_member_show_lines(member) {
+    for line in format_member_show_lines(member) {
         println!("{line}");
     }
 }
@@ -103,18 +103,18 @@ pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>
     );
 }
 
-fn build_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
+fn format_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
     let mut lines = vec![format_member_show_header(member.member_id)];
 
     push_member_show_section(
         &mut lines,
         "Status".to_string(),
-        build_member_show_status_lines(member),
+        format_member_show_status_lines(member),
     );
     push_member_show_section(
         &mut lines,
         format_key_section_title(member.kid),
-        build_member_show_key_lines(member),
+        format_member_show_key_lines(member),
     );
     push_member_show_section(
         &mut lines,
@@ -128,7 +128,7 @@ fn build_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
         push_member_show_section(
             &mut lines,
             "GitHub Binding".to_string(),
-            build_member_show_binding_lines(github),
+            format_member_show_binding_lines(github),
         );
     }
     lines
@@ -143,11 +143,11 @@ fn format_member_show_header(member_id: &str) -> String {
 }
 
 fn format_key_section_title(kid: &str) -> String {
-    let title = format!("Key  {}", kid_display_lossy(kid));
+    let title = format!("Key  {}", format_kid_display_lossy(kid));
     Style::new().bold().apply_to(title).to_string()
 }
 
-fn build_member_show_status_lines(member: &MemberShowView<'_>) -> Vec<String> {
+fn format_member_show_status_lines(member: &MemberShowView<'_>) -> Vec<String> {
     vec![
         format_member_show_row(
             "Membership",
@@ -160,7 +160,7 @@ fn build_member_show_status_lines(member: &MemberShowView<'_>) -> Vec<String> {
     ]
 }
 
-fn build_member_show_key_lines(member: &MemberShowView<'_>) -> Vec<String> {
+fn format_member_show_key_lines(member: &MemberShowView<'_>) -> Vec<String> {
     let mut lines = vec![
         format_member_show_row("Algorithm", &member.algorithm),
         format_member_show_row("Expires At", member.expires_at),
@@ -171,7 +171,7 @@ fn build_member_show_key_lines(member: &MemberShowView<'_>) -> Vec<String> {
     lines
 }
 
-fn build_member_show_binding_lines(github: &MemberGithubClaimView<'_>) -> Vec<String> {
+fn format_member_show_binding_lines(github: &MemberGithubClaimView<'_>) -> Vec<String> {
     vec![format!("  {} (id: {})", github.login, github.id)]
 }
 

@@ -4,7 +4,7 @@
 use super::super::paths::{members_dir, MemberStatus};
 use super::load::{load_json_files_in_dir, load_verified_member_file_from_path};
 use super::save::member_status_dir_name;
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -113,7 +113,7 @@ fn duplicate_kid_error(existing: &MemberKidCandidate, candidate: &MemberKidCandi
     Error::Config {
         message: format!(
             "Duplicate kid '{}' in workspace members: {}/'{}' conflicts with {}/'{}'",
-            kid_display_lossy(&candidate.kid),
+            format_kid_display_lossy(&candidate.kid),
             member_status_dir_name(existing.status),
             existing.member_id,
             member_status_dir_name(candidate.status),

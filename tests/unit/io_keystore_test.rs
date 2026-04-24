@@ -6,7 +6,7 @@
 //! Tests for key operation helper functions.
 
 use crate::test_utils::ALICE_MEMBER_ID;
-use crate::test_utils::{create_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
+use crate::test_utils::{build_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
 use secretenv::io::keystore::active::set_active_kid;
 use secretenv::io::keystore::helpers::resolve_kid;
 use secretenv::io::keystore::resolver::KeystoreResolver;
@@ -18,7 +18,7 @@ fn test_ensure_keystore_dir() {
     let temp_dir = TempDir::new().unwrap();
     let home = Some(temp_dir.path().to_path_buf());
 
-    let keystore_root = KeystoreResolver::resolve_and_ensure(home.as_ref()).unwrap();
+    let keystore_root = KeystoreResolver::ensure_keystore_root(home.as_ref()).unwrap();
 
     assert!(keystore_root.exists());
     assert!(keystore_root.is_dir());
@@ -36,7 +36,7 @@ fn test_save_and_activate() {
     let (private_key_plaintext, public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = &public_key.protected.kid;
-    let private_key = create_test_private_key(
+    let private_key = build_test_private_key(
         &private_key_plaintext,
         ALICE_MEMBER_ID,
         kid,
@@ -82,7 +82,7 @@ fn test_save_without_activate() {
     let (private_key_plaintext, public_key) =
         keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = &public_key.protected.kid;
-    let private_key = create_test_private_key(
+    let private_key = build_test_private_key(
         &private_key_plaintext,
         ALICE_MEMBER_ID,
         kid,

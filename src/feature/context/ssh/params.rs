@@ -15,7 +15,7 @@ pub(crate) struct SshSigningParams {
     pub check_determinism: bool,
 }
 
-/// Resolved SSH signing context.
+/// SSH signing context.
 pub(crate) struct SshSigningContext {
     pub public_key: String,
     pub fingerprint: String,
@@ -23,7 +23,7 @@ pub(crate) struct SshSigningContext {
     pub determinism: SshDeterminismStatus,
 }
 
-pub(crate) struct ResolvedSshCommands {
+pub(crate) struct SshCommandResolution {
     pub ssh_keygen_path: String,
     pub ssh_add_path: String,
 }

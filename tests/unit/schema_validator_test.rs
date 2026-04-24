@@ -3,7 +3,7 @@
 
 //! Unit tests for JSON Schema validator
 
-use crate::keygen_helpers::make_dummy_public_key;
+use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::format::schema::validator::Validator;
 use secretenv::model::identifiers::hpke;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
@@ -211,7 +211,7 @@ fn test_validate_file_enc_document_basic() {
         "signature": {
             "alg": secretenv::model::identifiers::alg::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": serde_json::to_value(make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
+            "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });
@@ -262,7 +262,7 @@ fn test_validator_allows_member_id_without_at_in_wrap_rid() {
         "signature": {
             "alg": secretenv::model::identifiers::alg::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": serde_json::to_value(make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
+            "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });

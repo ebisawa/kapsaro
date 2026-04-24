@@ -6,7 +6,7 @@
 //! This module provides type-safe wrappers for SSH key paths, distinguishing
 //! between private keys and public keys at the type level.
 
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
@@ -83,7 +83,7 @@ impl SshKeyDescriptor {
                 message: format!(
                     "Signing requires a private key, but a public key was provided: {}\n\
                     Hint: Use the private key file (without .pub extension) for signing operations.",
-                    display_path_relative_to_cwd(&pubk.path)
+                    format_path_relative_to_cwd(&pubk.path)
                 ),
             }),
         }
@@ -123,7 +123,7 @@ impl SshKeyDescriptor {
                 message: format!(
                     "Operation requires a public key, but a private key was provided: {}\n\
                     Hint: Use the public key file (with .pub extension) for this operation.",
-                    display_path_relative_to_cwd(&privk.path)
+                    format_path_relative_to_cwd(&privk.path)
                 ),
             }),
         }

@@ -4,7 +4,7 @@
 //! Unit tests for SSH protocol types
 
 use secretenv::io::ssh::protocol::types::{Ed25519RawSignature, SshSignatureBlob};
-use secretenv::io::ssh::protocol::wire::ssh_string_encode;
+use secretenv::io::ssh::protocol::wire::encode_ssh_string;
 
 #[test]
 fn test_ed25519_raw_signature_from_slice() {
@@ -55,10 +55,10 @@ fn test_ssh_signature_blob_extract_from_wire_format() {
     }
 
     let mut blob_bytes = Vec::new();
-    blob_bytes.extend_from_slice(&ssh_string_encode(
+    blob_bytes.extend_from_slice(&encode_ssh_string(
         secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519.as_bytes(),
     ));
-    blob_bytes.extend_from_slice(&ssh_string_encode(&sig64));
+    blob_bytes.extend_from_slice(&encode_ssh_string(&sig64));
 
     let blob = SshSignatureBlob::new(blob_bytes);
     let extracted = blob.extract_ed25519_raw().unwrap();
@@ -71,8 +71,8 @@ fn test_ssh_signature_blob_rejects_algo_mismatch() {
     sig64.fill(7);
 
     let mut blob_bytes = Vec::new();
-    blob_bytes.extend_from_slice(&ssh_string_encode(b"ssh-rsa"));
-    blob_bytes.extend_from_slice(&ssh_string_encode(&sig64));
+    blob_bytes.extend_from_slice(&encode_ssh_string(b"ssh-rsa"));
+    blob_bytes.extend_from_slice(&encode_ssh_string(&sig64));
 
     let blob = SshSignatureBlob::new(blob_bytes);
     let err = blob.extract_ed25519_raw().unwrap_err().to_string();
@@ -83,10 +83,10 @@ fn test_ssh_signature_blob_rejects_algo_mismatch() {
 fn test_ssh_signature_blob_rejects_wrong_sig_length() {
     let sig = vec![1u8; 63];
     let mut blob_bytes = Vec::new();
-    blob_bytes.extend_from_slice(&ssh_string_encode(
+    blob_bytes.extend_from_slice(&encode_ssh_string(
         secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519.as_bytes(),
     ));
-    blob_bytes.extend_from_slice(&ssh_string_encode(&sig));
+    blob_bytes.extend_from_slice(&encode_ssh_string(&sig));
 
     let blob = SshSignatureBlob::new(blob_bytes);
     let err = blob.extract_ed25519_raw().unwrap_err().to_string();

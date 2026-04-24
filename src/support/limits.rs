@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! DoS protection limits (per PRD)
+//! DoS protection limits.
 
 use crate::{Error, Result};
 use std::path::Path;
@@ -58,7 +58,7 @@ pub fn validate_wrap_count(count: usize, context: &str) -> Result<()> {
 }
 
 /// Resolve a pre-read size limit for encrypted artifact paths.
-pub fn encrypted_file_read_limit(path: &Path) -> usize {
+pub fn resolve_encrypted_artifact_read_limit(path: &Path) -> usize {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("kvenc") => MAX_KV_ENC_FILE_SIZE,
         _ => MAX_JSON_DOCUMENT_READ_SIZE,

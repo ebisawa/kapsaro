@@ -7,7 +7,7 @@ use crate::app::rewrap::types::RewrapBatchOutcome;
 use crate::cli::common::output::json::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_json;
 use crate::cli::common::output::print_json_or_text;
 use crate::cli::common::output::text::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_text;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
 pub(crate) struct RewrapFailureView {
@@ -29,13 +29,13 @@ pub(crate) fn print_rewrap_batch_outcome(
         processed_files: outcome
             .processed_files
             .iter()
-            .map(|file| display_path_relative_to_cwd(&file.output_path))
+            .map(|file| format_path_relative_to_cwd(&file.output_path))
             .collect(),
         failed_files: outcome
             .failed_files
             .iter()
             .map(|file| RewrapFailureView {
-                path: display_path_relative_to_cwd(&file.output_path),
+                path: format_path_relative_to_cwd(&file.output_path),
                 error: file.error_message.clone(),
             })
             .collect(),

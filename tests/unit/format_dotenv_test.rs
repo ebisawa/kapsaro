@@ -4,7 +4,8 @@
 //! Unit tests for dotenv format parsing and serialization
 
 use secretenv::format::kv::dotenv::{
-    build_dotenv_string, is_valid_key_name, parse_dotenv, unquote_value, validate_dotenv_strict,
+    build_dotenv_string, is_valid_key_name, parse_dotenv, parse_dotenv_value,
+    validate_dotenv_strict,
 };
 use std::collections::HashMap;
 
@@ -20,19 +21,19 @@ fn test_is_valid_key_name() {
 }
 
 #[test]
-fn test_unquote_value() {
+fn test_parse_dotenv_value() {
     // Unquoted
-    assert_eq!(unquote_value("value"), "value");
+    assert_eq!(parse_dotenv_value("value"), "value");
 
     // Single-quoted (no escaping)
-    assert_eq!(unquote_value("'value'"), "value");
-    assert_eq!(unquote_value("'val\\nue'"), "val\\nue");
+    assert_eq!(parse_dotenv_value("'value'"), "value");
+    assert_eq!(parse_dotenv_value("'val\\nue'"), "val\\nue");
 
     // Double-quoted (with escaping)
-    assert_eq!(unquote_value("\"value\""), "value");
-    assert_eq!(unquote_value("\"val\\nue\""), "val\nue");
-    assert_eq!(unquote_value("\"val\\\"ue\""), "val\"ue");
-    assert_eq!(unquote_value("\"val\\\\nue\""), "val\\nue"); // \\ -> \
+    assert_eq!(parse_dotenv_value("\"value\""), "value");
+    assert_eq!(parse_dotenv_value("\"val\\nue\""), "val\nue");
+    assert_eq!(parse_dotenv_value("\"val\\\"ue\""), "val\"ue");
+    assert_eq!(parse_dotenv_value("\"val\\\\nue\""), "val\\nue"); // \\ -> \
 }
 
 #[test]

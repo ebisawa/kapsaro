@@ -7,7 +7,7 @@ use secretenv::feature::key::protection::password_encryption::{
 };
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::{
-    EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
+    PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
@@ -130,7 +130,7 @@ fn test_password_decrypt_rejects_sshsig_key() {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             expires_at: "2027-01-01T00:00:00Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "AAAA".to_string(),
             ct: "AAAA".to_string(),
         },

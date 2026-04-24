@@ -18,14 +18,14 @@ use crate::model::private_key::PrivateKeyAlgorithm;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::{Error, Result};
 
-pub(crate) struct ResolvedSshSigningContext {
+pub(crate) struct SshSigningContextResolution {
     pub(crate) public_key: String,
     pub(crate) fingerprint: String,
     pub(crate) backend: Box<dyn SignatureBackend>,
     pub(crate) determinism: SshDeterminismStatus,
 }
 
-impl ResolvedSshSigningContext {
+impl SshSigningContextResolution {
     pub(crate) fn into_ssh_binding(self) -> SshBindingContext {
         SshBindingContext {
             public_key: self.public_key,
@@ -87,7 +87,7 @@ pub(crate) fn build_ssh_signing_context(
     options: &CommonCommandOptions,
     selected_pubkey: &str,
     check_determinism: bool,
-) -> Result<ResolvedSshSigningContext> {
+) -> Result<SshSigningContextResolution> {
     let mut params = build_ssh_signing_params(options);
     params.check_determinism = check_determinism;
     build_ssh_signing_context_with_params(&params, selected_pubkey)
@@ -96,7 +96,7 @@ pub(crate) fn build_ssh_signing_context(
 pub(crate) fn build_ssh_signing_context_with_params(
     params: &SshSigningParams,
     selected_pubkey: &str,
-) -> Result<ResolvedSshSigningContext> {
+) -> Result<SshSigningContextResolution> {
     let params = FeatureSshSigningParams {
         ssh_key: params.ssh_key.clone(),
         signing_method: params.signing_method,
@@ -105,7 +105,7 @@ pub(crate) fn build_ssh_signing_context_with_params(
         check_determinism: params.check_determinism,
     };
     let ssh_signing_context = feature_build_ssh_signing_context(&params, selected_pubkey)?;
-    Ok(ResolvedSshSigningContext {
+    Ok(SshSigningContextResolution {
         public_key: ssh_signing_context.public_key,
         fingerprint: ssh_signing_context.fingerprint,
         backend: ssh_signing_context.backend,
@@ -115,9 +115,9 @@ pub(crate) fn build_ssh_signing_context_with_params(
 
 pub(crate) fn resolve_ssh_context_by_active_key(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
-) -> Result<ResolvedSshSigningContext> {
-    let resolved = resolve_command_member(options, member_id)?;
+    member_handle: Option<String>,
+) -> Result<SshSigningContextResolution> {
+    let resolved = resolve_command_member(options, member_handle)?;
     let fingerprint =
         resolve_active_key_ssh_fingerprint(&resolved.member_id, &resolved.paths.keystore_root)?;
     resolve_ssh_context_for_fingerprint(options, &fingerprint)
@@ -152,7 +152,7 @@ fn build_ssh_candidate_views(candidates: Vec<SshKeyCandidate>) -> Vec<SshKeyCand
 fn resolve_ssh_context_for_fingerprint(
     options: &CommonCommandOptions,
     fingerprint: &str,
-) -> Result<ResolvedSshSigningContext> {
+) -> Result<SshSigningContextResolution> {
     let candidates = resolve_ssh_key_candidates(options)?;
     let matched = find_ssh_candidate_by_fingerprint(&candidates, fingerprint)?;
     build_ssh_signing_context(options, &matched.public_key, false)
@@ -187,8 +187,8 @@ fn resolve_ssh_fingerprint_from_private_key(private_key: &PrivateKey) -> Result<
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_context_ssh_member_id_test.rs"]
-mod app_context_ssh_member_id_test;
+#[path = "../../../tests/unit/app_context_ssh_member_handle_test.rs"]
+mod app_context_ssh_member_handle_test;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/feature_context_ssh_match_test.rs"]

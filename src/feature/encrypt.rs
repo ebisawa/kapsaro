@@ -12,7 +12,7 @@ use crate::model::public_key::VerifiedRecipientKey;
 use crate::{Error, Result};
 
 /// Validate that recipients count matches public keys count.
-fn validate_recipients_and_keys(
+fn validate_recipient_key_count(
     recipients: &[String],
     members: &[VerifiedRecipientKey],
 ) -> Result<()> {
@@ -35,7 +35,7 @@ pub fn encrypt_file_content(
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
 ) -> Result<String> {
-    validate_recipients_and_keys(recipients, members)?;
+    validate_recipient_key_count(recipients, members)?;
 
     let normalized_ids = normalize_recipients(recipients);
     let members_ordered: Vec<VerifiedRecipientKey> = normalized_ids

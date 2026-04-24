@@ -22,7 +22,7 @@ use super::PurgeArgs;
 pub(crate) fn run(args: PurgeArgs) -> Result<(), Error> {
     let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
     let options = resolve_options(&args.common);
-    let member_id = args.member_id.clone();
+    let member_id = args.member_handle.clone();
     let (_, execution) = resolve_execution_input(&args.common, member_id.clone())?;
     let candidates = run_with_trust_store_reset_recovery(
         &options,

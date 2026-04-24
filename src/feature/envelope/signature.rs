@@ -15,7 +15,7 @@ use crate::model::identifiers::alg;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
-use crate::support::kid::build_kid_display;
+use crate::support::kid::format_kid_display;
 use crate::Result;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use std::ops::Deref;
@@ -78,7 +78,7 @@ pub fn sign_file_document(
     debug: bool,
 ) -> Result<ArtifactSignature> {
     if debug {
-        let kid_display = build_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
+        let kid_display = format_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
         debug!(
             "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
             kid_display
@@ -102,7 +102,7 @@ pub fn verify_file_signature(
 ) -> Result<()> {
     if debug {
         let kid_display =
-            build_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
+            format_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
         debug!(
             "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
             kid_display
@@ -123,7 +123,7 @@ pub(crate) fn sign_kv_document(
     token_codec: TokenCodec,
     caller: &str,
 ) -> Result<String> {
-    sign_and_append_kv_sig(
+    append_kv_signature(
         unsigned,
         signing.signing_key,
         signing.signer_kid,
@@ -134,7 +134,7 @@ pub(crate) fn sign_kv_document(
     )
 }
 
-pub(crate) fn sign_and_append_kv_sig(
+pub(crate) fn append_kv_signature(
     unsigned: &str,
     signing_key: &SigningKey,
     signer_kid: &str,
@@ -144,7 +144,7 @@ pub(crate) fn sign_and_append_kv_sig(
     caller: &str,
 ) -> Result<String> {
     if debug {
-        let kid_display = build_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
+        let kid_display = format_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
         debug!(
             "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
             kid_display
@@ -170,7 +170,7 @@ pub fn verify_kv_signature(
 ) -> Result<()> {
     if debug {
         let kid_display =
-            build_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
+            format_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
         debug!(
             "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
             kid_display

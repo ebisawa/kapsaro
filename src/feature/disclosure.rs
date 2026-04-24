@@ -4,7 +4,7 @@
 //! Disclosure history helpers shared across encrypted document features.
 
 use crate::model::common::RemovedRecipient;
-use crate::support::time::current_timestamp;
+use crate::support::time::generate_current_timestamp;
 use crate::Result;
 
 /// Add a recipient to the removed recipient history list.
@@ -13,7 +13,7 @@ pub fn add_to_removed_history(
     rid: &str,
     kid: &str,
 ) -> Result<()> {
-    let timestamp = current_timestamp()?;
+    let timestamp = generate_current_timestamp()?;
     let removed = RemovedRecipient {
         rid: rid.to_string(),
         kid: kid.to_string(),

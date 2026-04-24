@@ -3,7 +3,7 @@
 
 //! Verification policy helpers for GitHub binding checks.
 
-use super::{matcher::match_key_by_fingerprint, GitHubVerificationApi};
+use super::{matcher::find_key_by_fingerprint, GitHubVerificationApi};
 use crate::io::verify_online::VerificationResult;
 use crate::model::public_key::PublicKey;
 use crate::{Error, Result};
@@ -73,7 +73,7 @@ async fn resolve_github_identity_from_api(
     Ok((id_from_api, login_from_api))
 }
 
-pub(super) async fn fetch_and_match_github_keys(
+pub(super) async fn verify_github_keys(
     api: &impl GitHubVerificationApi,
     public_key: &PublicKey,
     our_fingerprint: &str,
@@ -104,7 +104,7 @@ pub(super) async fn fetch_and_match_github_keys(
         ));
     }
 
-    if let Some(result) = match_key_by_fingerprint(
+    if let Some(result) = find_key_by_fingerprint(
         public_key,
         our_fingerprint,
         &github_keys,

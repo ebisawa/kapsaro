@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::app::trust::list::list_known_keys;
 use crate::app_test_utils::build_test_command_options;
 use crate::feature::trust::signature::sign_trust_store;
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
 use crate::model::identifiers::format::TRUST_LOCAL_V2;
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
@@ -17,7 +17,7 @@ const KID_BOB: &str = "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0";
 const KID_CHARLIE: &str = "C4AR1E00C4AR1E00C4AR1E00C4AR1E00";
 const ALICE_MEMBER_ID: &str = "alice@example.com";
 
-fn make_known_key(kid: &str, member_id: &str, approved_at: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_id: &str, approved_at: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
         member_id: member_id.to_string(),
@@ -36,12 +36,12 @@ fn save_signed_trust_store(home: &TempDir) {
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
         known_keys: vec![
-            make_known_key(KID_BOB, "bob@example.com", "2026-03-29T12:40:00Z"),
-            make_known_key(KID_CHARLIE, "charlie@example.com", "2026-03-29T12:41:00Z"),
+            build_known_key(KID_BOB, "bob@example.com", "2026-03-29T12:40:00Z"),
+            build_known_key(KID_CHARLIE, "charlie@example.com", "2026-03-29T12:41:00Z"),
         ],
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     save_trust_store(&path, &document).unwrap();
 }
 

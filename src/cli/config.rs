@@ -86,7 +86,7 @@ pub fn run(args: ConfigArgs) -> Result<(), Error> {
 
 fn run_get(args: GetArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    print_config_value(&config::get_config_command(&options, &args.key)?);
+    print_config_value(&config::resolve_config_value_command(&options, &args.key)?);
     Ok(())
 }
 

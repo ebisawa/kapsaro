@@ -8,13 +8,13 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-fn create_ssh_key_file(dir: &TempDir, name: &str) -> PathBuf {
+fn save_ssh_key_file(dir: &TempDir, name: &str) -> PathBuf {
     let key_path = dir.path().join(name);
     fs::write(&key_path, "dummy ssh key content").unwrap();
     key_path
 }
 
-fn create_global_config_with_ssh_identity(temp_home: &TempDir, ssh_key_path: &str) {
+fn save_global_config_with_ssh_identity(temp_home: &TempDir, ssh_key_path: &str) {
     let config_path = temp_home.path().join("config.toml");
     fs::write(
         &config_path,
@@ -30,9 +30,9 @@ fn test_resolve_ssh_key_from_cli_option() {
     let temp_home = tempfile::tempdir().unwrap();
     let temp_keys = tempfile::tempdir().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    let cli_key = create_ssh_key_file(&temp_keys, "cli_key");
-    let global_key = create_ssh_key_file(&temp_keys, "global_key");
-    create_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
+    let cli_key = save_ssh_key_file(&temp_keys, "cli_key");
+    let global_key = save_ssh_key_file(&temp_keys, "global_key");
+    save_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
 
     let result = super::resolve_ssh_key_descriptor(Some(cli_key.clone()), None)
         .map(|descriptor| descriptor.to_path_buf())
@@ -47,8 +47,8 @@ fn test_resolve_ssh_key_from_global_config() {
     let temp_home = tempfile::tempdir().unwrap();
     let temp_keys = tempfile::tempdir().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    let global_key = create_ssh_key_file(&temp_keys, "global_key");
-    create_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
+    let global_key = save_ssh_key_file(&temp_keys, "global_key");
+    save_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
 
     let result = super::resolve_ssh_key_descriptor(None, None)
         .map(|descriptor| descriptor.to_path_buf())
@@ -83,7 +83,7 @@ fn test_resolve_ssh_key_file_not_found_error() {
     let temp_keys = tempfile::tempdir().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
     let nonexistent_key = temp_keys.path().join("nonexistent_key");
-    create_global_config_with_ssh_identity(&temp_home, nonexistent_key.to_str().unwrap());
+    save_global_config_with_ssh_identity(&temp_home, nonexistent_key.to_str().unwrap());
 
     let result = super::resolve_ssh_key_descriptor(None, None);
     assert!(result.is_err());
@@ -113,9 +113,9 @@ fn test_resolve_ssh_key_priority_order() {
     let temp_home = tempfile::tempdir().unwrap();
     let temp_keys = tempfile::tempdir().unwrap();
     env::set_var("SECRETENV_HOME", temp_home.path());
-    let cli_key = create_ssh_key_file(&temp_keys, "cli_key");
-    let global_key = create_ssh_key_file(&temp_keys, "global_key");
-    create_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
+    let cli_key = save_ssh_key_file(&temp_keys, "cli_key");
+    let global_key = save_ssh_key_file(&temp_keys, "global_key");
+    save_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
 
     let cli_result = super::resolve_ssh_key_descriptor(Some(cli_key.clone()), None)
         .map(|descriptor| descriptor.to_path_buf())

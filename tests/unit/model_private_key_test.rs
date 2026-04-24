@@ -65,7 +65,7 @@ fn test_private_key_serialization() {
             created_at: "2024-01-15T00:00:00Z".to_string(),
             expires_at: "2025-01-15T00:00:00Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "bm9uY2U".to_string(),
             ct: "Y3Q".to_string(),
         },
@@ -133,7 +133,7 @@ fn test_private_key_roundtrip() {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             expires_at: "2025-12-31T23:59:59Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "bm9uY2Vub25jZQ".to_string(),
             ct: "Y3RjdGN0".to_string(),
         },

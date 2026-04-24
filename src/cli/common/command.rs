@@ -5,15 +5,17 @@
 
 use crate::app::context::env_key::is_env_key_mode;
 use crate::app::context::execution::{resolve_write_execution, ExecutionContext};
-use crate::app::context::identity::{build_missing_member_id_error, resolve_member_id_input};
+use crate::app::context::identity::{
+    build_missing_member_handle_error, resolve_member_handle_input,
+};
 use crate::app::context::member::resolve_required_member;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigningContext;
+use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::file::decrypt::DecryptFileCommand;
 use crate::app::file::encrypt::EncryptFileCommand;
-use crate::app::kv::mutation::{build_mutation_write_plan, MutationWriteTrustPlan};
+use crate::app::kv::mutation::{resolve_mutation_write_plan, MutationWriteTrustPlan};
 use crate::app::kv::query::KvReadCommand;
-use crate::app::trust::flow::{
+use crate::app::trust::review::{
     execute_read_with_signer_trust, execute_write_with_recipient_trust, ReadSignerTrustReviewPlan,
     SignerTrustLabels, TrustExecutionContext, WriteRecipientTrustReviewPlan,
 };
@@ -53,10 +55,10 @@ pub(crate) trait WriteCommandPlan {
 
 pub(crate) fn resolve_command_input(
     common: &CommonOptions,
-    member_id: Option<String>,
-) -> Result<(CommonCommandOptions, Option<ResolvedSshSigningContext>)> {
+    member_handle: Option<String>,
+) -> Result<(CommonCommandOptions, Option<SshSigningContextResolution>)> {
     let options = resolve_options(common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, member_id)?;
+    let ssh_ctx = resolve_ssh_context_optional(&options, member_handle)?;
     Ok((options, ssh_ctx))
 }
 
@@ -64,23 +66,23 @@ pub(crate) fn resolve_options(common: &CommonOptions) -> CommonCommandOptions {
     CommonCommandOptions::from(common)
 }
 
-pub(crate) fn resolve_required_member_id(
+pub(crate) fn resolve_required_member_handle(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     allow_prompt: bool,
 ) -> Result<String> {
-    resolve_required_member_id_with_prompt(
+    resolve_required_member_handle_with_prompt(
         options,
-        member_id,
+        member_handle,
         allow_prompt,
         identity_prompt::is_prompt_available(),
-        identity_prompt::prompt_member_id,
+        identity_prompt::prompt_member_handle,
     )
 }
 
-pub(crate) fn resolve_required_member_id_with_prompt<F>(
+pub(crate) fn resolve_required_member_handle_with_prompt<F>(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     allow_prompt: bool,
     prompt_available: bool,
     prompt: F,
@@ -88,29 +90,29 @@ pub(crate) fn resolve_required_member_id_with_prompt<F>(
 where
     F: FnOnce() -> Result<String>,
 {
-    match resolve_member_id_input(member_id, options.home.as_deref())? {
+    match resolve_member_handle_input(member_handle, options.home.as_deref())? {
         Some(member_id) => Ok(member_id),
         None if allow_prompt && prompt_available => prompt(),
-        None => Err(build_missing_member_id_error(allow_prompt)),
+        None => Err(build_missing_member_handle_error(allow_prompt)),
     }
 }
 
 pub(crate) fn resolve_execution_input(
     common: &CommonOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
 ) -> Result<(CommonCommandOptions, ExecutionContext)> {
-    let (options, ssh_ctx) = resolve_command_input(common, member_id.clone())?;
-    let execution = resolve_write_execution(&options, member_id, ssh_ctx)?;
+    let (options, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
+    let execution = resolve_write_execution(&options, member_handle, ssh_ctx)?;
     Ok((options, execution))
 }
 
 pub(crate) fn resolve_trust_store_owner_member(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
 ) -> Result<String> {
-    match resolve_required_member(options, member_id.clone()) {
+    match resolve_required_member(options, member_handle.clone()) {
         Ok(member_id) => Ok(member_id),
-        Err(_) if is_env_key_mode() => Ok(resolve_write_execution(options, member_id, None)?
+        Err(_) if is_env_key_mode() => Ok(resolve_write_execution(options, member_handle, None)?
             .member_id
             .to_string()),
         Err(error) => Err(error),
@@ -182,7 +184,7 @@ where
 
 pub(crate) fn run_kv_write_command_with_trust<P, T, Execute>(
     common: &CommonOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     file_name: Option<&str>,
     allow_missing: bool,
     labels: WriteCommandLabels<'_>,
@@ -192,9 +194,14 @@ where
     P: WriteTrustPolicy,
     Execute: FnOnce(&CommonCommandOptions, &MutationWriteTrustPlan<P>) -> Result<T>,
 {
-    let (options, ssh_ctx) = resolve_command_input(common, member_id.clone())?;
-    let trust_plan =
-        build_mutation_write_plan::<P>(&options, member_id, file_name, allow_missing, ssh_ctx)?;
+    let (options, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
+    let trust_plan = resolve_mutation_write_plan::<P>(
+        &options,
+        member_handle,
+        file_name,
+        allow_missing,
+        ssh_ctx,
+    )?;
     run_write_command_with_trust(&options, &trust_plan, labels, || {
         execute(&options, &trust_plan)
     })

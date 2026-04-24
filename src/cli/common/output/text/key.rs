@@ -6,8 +6,8 @@
 use std::path::Path;
 
 use crate::cli::common::output::key::{KeyInfoView, KeyListView};
-use crate::support::kid::build_kid_display;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::kid::format_kid_display;
+use crate::support::path::format_path_relative_to_cwd;
 
 pub(crate) fn print_empty_key_list() {
     println!("No members found in keystore");
@@ -37,13 +37,13 @@ pub(crate) fn print_key_list(result: &KeyListView<'_>, verbose: bool) {
 }
 
 pub(crate) fn print_key_activate_summary(member_id: &str, kid: &str) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!("Activated key for '{}':", member_id);
     eprintln!("  Kid: {}", kid_display);
 }
 
 pub(crate) fn print_key_remove_summary(member_id: &str, kid: &str, was_active: bool) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!("Removed key for '{}':", member_id);
     eprintln!("  Kid: {}", kid_display);
     if was_active {
@@ -57,7 +57,7 @@ pub(crate) fn print_generated_key_summary(
     expires_at: &str,
     activated: bool,
 ) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!();
     if activated {
         eprintln!("Generated and activated key for '{}':", member_id);
@@ -69,26 +69,26 @@ pub(crate) fn print_generated_key_summary(
 }
 
 pub(crate) fn print_existing_key_summary(member_id: &str, kid: &str) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!("Using existing key for '{}' ({})", member_id, kid_display);
 }
 
 pub(crate) fn print_key_export_summary(member_id: &str, kid: &str, out: &Path) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!("Exported public key for '{}':", member_id);
     eprintln!("  Kid:    {}", kid_display);
-    eprintln!("  Output: {}", display_path_relative_to_cwd(out));
+    eprintln!("  Output: {}", format_path_relative_to_cwd(out));
 }
 
 pub(crate) fn print_private_key_export_file_summary(member_id: &str, kid: &str, out: &Path) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!("Exported private key for '{}':", member_id);
     eprintln!("  Kid:    {}", kid_display);
-    eprintln!("  Output: {}", display_path_relative_to_cwd(out));
+    eprintln!("  Output: {}", format_path_relative_to_cwd(out));
 }
 
 pub(crate) fn print_private_key_export_stdout_summary(member_id: &str, kid: &str) {
-    let kid_display = build_kid_display(kid).unwrap_or_else(|_| kid.to_string());
+    let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!();
     eprintln!("Exported private key for '{}':", member_id);
     eprintln!("  Kid: {}", kid_display);
@@ -96,7 +96,7 @@ pub(crate) fn print_private_key_export_stdout_summary(member_id: &str, kid: &str
 
 fn print_key_info(key_info: &KeyInfoView<'_>, verbose: bool) {
     let active_marker = if key_info.active { " (ACTIVE)" } else { "" };
-    let kid_display = build_kid_display(key_info.kid).unwrap_or_else(|_| key_info.kid.to_string());
+    let kid_display = format_kid_display(key_info.kid).unwrap_or_else(|_| key_info.kid.to_string());
     println!("  Kid:        {}{}", kid_display, active_marker);
     if verbose {
         println!("  Format:     {}", key_info.format);

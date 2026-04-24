@@ -18,7 +18,7 @@ fn build_self_signed_public_key(
     member_id: &str,
     signing_key: &SigningKey,
 ) -> (secretenv::model::public_key::PublicKey, String) {
-    use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyBuildParams};
+    use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
     use secretenv::model::identifiers::jwk;
     use secretenv::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey};
 
@@ -57,11 +57,12 @@ fn build_self_signed_public_key(
     };
 
     let now = time::OffsetDateTime::now_utc();
-    let created_at = secretenv::support::time::build_timestamp_display(now).unwrap();
+    let created_at = secretenv::support::time::format_timestamp_rfc3339(now).unwrap();
     let expires_at =
-        secretenv::support::time::build_timestamp_display(now + time::Duration::days(365)).unwrap();
+        secretenv::support::time::format_timestamp_rfc3339(now + time::Duration::days(365))
+            .unwrap();
 
-    let public_key = build_public_key(&PublicKeyBuildParams {
+    let public_key = build_public_key(&PublicKeyDocumentParams {
         member_id,
         identity,
         created_at: &created_at,

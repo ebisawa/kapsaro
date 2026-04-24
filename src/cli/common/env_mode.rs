@@ -16,7 +16,7 @@ pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> 
         return Ok(());
     }
 
-    Err(crate::Error::invalid_operation(format!(
+    Err(crate::Error::build_invalid_operation_error(format!(
         "'{}' is unavailable in environment-variable key mode; env mode only supports \
          these commands: run, decrypt, get, list.",
         capability.label()

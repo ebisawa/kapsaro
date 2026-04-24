@@ -26,23 +26,23 @@ pub enum CryptoError {
 }
 
 impl CryptoError {
-    /// Create an invalid key error.
-    pub fn invalid_key(message: impl Into<String>) -> Self {
+    /// Build an invalid key error.
+    pub fn build_invalid_key_error(message: impl Into<String>) -> Self {
         CryptoError::InvalidKey {
             message: message.into(),
         }
     }
 
-    /// Create an operation failed error.
-    pub fn operation_failed(message: impl Into<String>) -> Self {
+    /// Build an operation failed error.
+    pub fn build_operation_failed_error(message: impl Into<String>) -> Self {
         CryptoError::OperationFailed {
             message: message.into(),
             source: None,
         }
     }
 
-    /// Create an operation failed error with a source error.
-    pub fn operation_failed_with_source(
+    /// Build an operation failed error with a source error.
+    pub fn build_operation_failed_error_with_source(
         message: impl Into<String>,
         source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {
@@ -52,8 +52,8 @@ impl CryptoError {
         }
     }
 
-    /// Create a key derivation failed error.
-    pub fn key_derivation_failed(message: impl Into<String>) -> Self {
+    /// Build a key derivation failed error.
+    pub fn build_key_derivation_error(message: impl Into<String>) -> Self {
         CryptoError::KeyDerivationFailed {
             message: message.into(),
         }

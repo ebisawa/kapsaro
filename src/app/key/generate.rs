@@ -3,10 +3,10 @@
 
 use crate::app::context::identity::resolve_github_user_input;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigningContext;
+use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
-use crate::app::key::types::KeyNewResult;
+use crate::app::key::types::KeyGenerationResult;
 use crate::app::verification::OnlineVerificationStatus;
 use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
 use crate::Result;
@@ -15,7 +15,7 @@ use crate::Result;
 fn generate_key_with_github_user(
     mut options: KeyGenerationOptions,
     github_user: Option<String>,
-) -> Result<KeyNewResult> {
+) -> Result<KeyGenerationResult> {
     let github_account = resolve_github_account(github_user, options.verbose)?;
     options.github_account = github_account.clone();
 
@@ -27,7 +27,7 @@ fn generate_key_with_github_user(
     };
 
     let result = generate_key(options)?;
-    let mut key_result: KeyNewResult = result.into();
+    let mut key_result: KeyGenerationResult = result.into();
     key_result.github_verification = github_verification;
     Ok(key_result)
 }
@@ -39,8 +39,8 @@ pub fn generate_key_command(
     expires_at_arg: &Option<String>,
     valid_for_arg: &Option<String>,
     no_activate: bool,
-    ssh_ctx: ResolvedSshSigningContext,
-) -> Result<KeyNewResult> {
+    ssh_ctx: SshSigningContextResolution,
+) -> Result<KeyGenerationResult> {
     let github_user = resolve_github_user_input(github_user_arg, options.home.as_deref())?;
     let (created_at, expires_at) = resolve_key_timestamps(expires_at_arg, valid_for_arg)?;
 

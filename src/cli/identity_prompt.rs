@@ -75,7 +75,7 @@ pub(crate) fn is_prompt_available() -> bool {
     std::io::stdin().is_terminal() && std::env::var("CI").is_err()
 }
 
-pub(crate) fn prompt_member_id() -> Result<String> {
+pub(crate) fn prompt_member_handle() -> Result<String> {
     Input::new()
         .with_prompt("Enter your member handle (alphanumeric and .@_+-)")
         .validate_with(|input: &String| {

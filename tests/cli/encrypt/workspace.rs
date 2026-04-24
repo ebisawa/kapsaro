@@ -7,8 +7,8 @@ use crate::cli::common::{
     cmd, default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_ID, BOB_MEMBER_ID,
 };
 use crate::test_utils::{
-    build_expiring_soon_timestamp, keygen_test, setup_member_key_context, setup_test_workspace,
-    setup_trust_store_for_workspace, sync_active_public_key_to_workspace,
+    build_expiring_soon_timestamp, keygen_test, save_active_public_key_to_workspace,
+    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
 use predicates::prelude::*;
@@ -20,7 +20,7 @@ use secretenv::model::kv_enc::header::KvWrap;
 use std::fs;
 
 #[cfg(unix)]
-use secretenv::io::trust::paths::trust_store_file_path;
+use secretenv::io::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_encrypt_rejects_filename_content_mismatch() {
@@ -63,7 +63,7 @@ fn test_encrypt_rejects_filename_content_mismatch() {
 
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         out: Some(encrypted_path.clone()),
         stdout: false,
         stdin: false,
@@ -104,7 +104,7 @@ fn test_set_creates_default_file() {
     let set_args = set::SetArgs {
         common: common_opts,
 
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         name: None,
         stdin: false,
         key: "DATABASE_URL".to_string(),
@@ -165,7 +165,7 @@ fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let input_path = workspace_dir.join("warn.txt");
@@ -249,7 +249,7 @@ fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
-    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 

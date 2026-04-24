@@ -23,7 +23,7 @@ where
     F: FnOnce(&mut crate::model::kv_enc::header::KvWrap) -> Result<()>,
 {
     let signing = build_signing_context(key_ctx, debug)?;
-    super::super::encrypt::encrypt_and_sign_kv_map(
+    super::super::encrypt::encrypt_kv_map_with_wrap_mutation(
         kv_map,
         members,
         &signing,

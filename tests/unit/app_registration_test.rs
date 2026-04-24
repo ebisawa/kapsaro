@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::registration::command::{
-    apply_registration, build_registration, build_registration_decision, RegistrationDecision,
+    evaluate_registration_decision, execute_registration_command, resolve_registration_command,
+    RegistrationDecision,
 };
 use crate::app::registration::key_plan::resolve_registration_key_plan;
 use crate::app::registration::types::{RegistrationKeyPlan, RegistrationMode, RegistrationResult};
@@ -38,7 +39,7 @@ fn test_resolve_registration_key_plan_missing_active_key() {
 }
 
 #[test]
-fn test_build_registration_reuses_existing_key_without_github_user() {
+fn test_resolve_registration_command_reuses_existing_key_without_github_user() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = TempDir::new().unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -48,7 +49,7 @@ fn test_build_registration_reuses_existing_key_without_github_user() {
     let keystore_root = home_dir.path().join("keys");
     let key_plan = resolve_registration_key_plan("alice@example.com", &keystore_root).unwrap();
 
-    let prepared = build_registration(
+    let prepared = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -64,7 +65,7 @@ fn test_build_registration_reuses_existing_key_without_github_user() {
 }
 
 #[test]
-fn test_build_registration_requires_ssh_context_for_generated_key() {
+fn test_resolve_registration_command_requires_ssh_context_for_generated_key() {
     let home_dir = TempDir::new().unwrap();
     std::fs::create_dir_all(home_dir.path().join("keys")).unwrap();
     let workspace_dir = TempDir::new().unwrap();
@@ -73,7 +74,7 @@ fn test_build_registration_requires_ssh_context_for_generated_key() {
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
     let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
 
-    let error = build_registration(
+    let error = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -116,7 +117,7 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
     )
     .unwrap();
 
-    let prepared = build_registration(
+    let prepared = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -126,7 +127,7 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
     )
     .unwrap();
 
-    let error = apply_registration(&prepared, false).unwrap_err();
+    let error = execute_registration_command(&prepared, false).unwrap_err();
     let message = error.to_string();
     // The file's stem ("duplicate-owner") does not match its content's
     // member_id, so the stem-binding check rejects it before the kid
@@ -138,7 +139,7 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
 }
 
 #[test]
-fn test_build_registration_decision_prompts_for_overwrite_when_interactive() {
+fn test_evaluate_registration_decision_prompts_for_overwrite_when_interactive() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = TempDir::new().unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -155,7 +156,7 @@ fn test_build_registration_decision_prompts_for_overwrite_when_interactive() {
     let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
     let key_plan =
         resolve_registration_key_plan("alice@example.com", &home_dir.path().join("keys")).unwrap();
-    let prepared = build_registration(
+    let prepared = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -165,13 +166,13 @@ fn test_build_registration_decision_prompts_for_overwrite_when_interactive() {
     )
     .unwrap();
 
-    let decision = build_registration_decision(&prepared, false, true).unwrap();
+    let decision = evaluate_registration_decision(&prepared, false, true).unwrap();
 
     assert_eq!(decision, RegistrationDecision::ConfirmOverwrite);
 }
 
 #[test]
-fn test_build_registration_decision_skips_init_conflict_non_interactive() {
+fn test_evaluate_registration_decision_skips_init_conflict_non_interactive() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = TempDir::new().unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -188,7 +189,7 @@ fn test_build_registration_decision_skips_init_conflict_non_interactive() {
     let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
     let key_plan =
         resolve_registration_key_plan("alice@example.com", &home_dir.path().join("keys")).unwrap();
-    let prepared = build_registration(
+    let prepared = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -198,7 +199,7 @@ fn test_build_registration_decision_skips_init_conflict_non_interactive() {
     )
     .unwrap();
 
-    let decision = build_registration_decision(&prepared, false, false).unwrap();
+    let decision = evaluate_registration_decision(&prepared, false, false).unwrap();
 
     assert_eq!(
         decision,
@@ -207,7 +208,7 @@ fn test_build_registration_decision_skips_init_conflict_non_interactive() {
 }
 
 #[test]
-fn test_build_registration_decision_rejects_join_conflict_non_interactive() {
+fn test_evaluate_registration_decision_rejects_join_conflict_non_interactive() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = TempDir::new().unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -224,7 +225,7 @@ fn test_build_registration_decision_rejects_join_conflict_non_interactive() {
     let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
     let key_plan =
         resolve_registration_key_plan("alice@example.com", &home_dir.path().join("keys")).unwrap();
-    let prepared = build_registration(
+    let prepared = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -234,7 +235,7 @@ fn test_build_registration_decision_rejects_join_conflict_non_interactive() {
     )
     .unwrap();
 
-    let error = build_registration_decision(&prepared, false, false).unwrap_err();
+    let error = evaluate_registration_decision(&prepared, false, false).unwrap_err();
 
     assert!(
         error
@@ -245,7 +246,7 @@ fn test_build_registration_decision_rejects_join_conflict_non_interactive() {
 }
 
 #[test]
-fn test_build_registration_decision_allows_join_rotation_when_active_kid_differs() {
+fn test_evaluate_registration_decision_allows_join_rotation_when_active_kid_differs() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
     let common = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let expires_at = build_expiring_soon_timestamp(365);
@@ -253,7 +254,7 @@ fn test_build_registration_decision_allows_join_rotation_when_active_kid_differs
 
     let key_plan =
         resolve_registration_key_plan("alice@example.com", &temp_dir.path().join("keys")).unwrap();
-    let prepared = build_registration(
+    let prepared = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
@@ -263,13 +264,13 @@ fn test_build_registration_decision_allows_join_rotation_when_active_kid_differs
     )
     .unwrap();
 
-    let decision = build_registration_decision(&prepared, false, false).unwrap();
+    let decision = evaluate_registration_decision(&prepared, false, false).unwrap();
 
     assert_eq!(decision, RegistrationDecision::Apply { overwrite: false });
 }
 
 #[test]
-fn test_build_registration_rejects_mismatched_active_member_file_for_join() {
+fn test_resolve_registration_command_rejects_mismatched_active_member_file_for_join() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com", "bob@example.com"]);
     let common = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let alice_path = workspace_dir
@@ -283,7 +284,7 @@ fn test_build_registration_rejects_mismatched_active_member_file_for_join() {
 
     let key_plan =
         resolve_registration_key_plan("alice@example.com", &temp_dir.path().join("keys")).unwrap();
-    let error = build_registration(
+    let error = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,

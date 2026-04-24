@@ -10,12 +10,12 @@
 //! 4. Default (~/.ssh/id_ed25519)
 
 use crate::io::ssh::protocol::SshKeyDescriptor;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
 use super::common::{
-    expand_tilde, get_default_ssh_key_path, resolve_string_with_source, ResolvedStringSource,
+    expand_tilde, get_default_ssh_key_path, resolve_string_with_source, StringSourceResolution,
 };
 
 /// Source of SSH key configuration
@@ -31,10 +31,10 @@ pub(crate) enum SshKeySource {
     Default,
 }
 
-/// Resolved SSH key information
+/// SSH key resolution
 #[derive(Debug, Clone)]
-pub(crate) struct ResolvedSshKey {
-    /// Resolved path
+pub(crate) struct SshKeyResolution {
+    /// Path
     pub(crate) path: PathBuf,
     /// Source of the configuration
     pub(crate) source: SshKeySource,
@@ -56,22 +56,22 @@ pub(crate) struct ResolvedSshKey {
 pub(crate) fn resolve_ssh_key_candidate(
     ssh_key_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
-) -> Result<ResolvedSshKey> {
+) -> Result<SshKeyResolution> {
     if let Some(ssh_key) = ssh_key_opt {
-        return Ok(build_resolved_ssh_key(ssh_key, SshKeySource::Cli));
+        return Ok(build_ssh_key_resolution(ssh_key, SshKeySource::Cli));
     }
 
     if let Some(candidate) = resolve_configured_ssh_key_candidate(base_dir)? {
         return Ok(candidate);
     }
 
-    Ok(build_resolved_ssh_key(
+    Ok(build_ssh_key_resolution(
         get_default_ssh_key_path()?,
         SshKeySource::Default,
     ))
 }
 
-pub(crate) fn build_ssh_key_not_found_error(candidate: &ResolvedSshKey) -> Error {
+pub(crate) fn build_ssh_key_not_found_error(candidate: &SshKeyResolution) -> Error {
     if !candidate.exists {
         let source_str = match candidate.source {
             SshKeySource::Cli => "CLI option",
@@ -89,7 +89,7 @@ pub(crate) fn build_ssh_key_not_found_error(candidate: &ResolvedSshKey) -> Error
             message: format!(
                 "SSH key file from {} does not exist: {}",
                 source_str,
-                display_path_relative_to_cwd(&candidate.path)
+                format_path_relative_to_cwd(&candidate.path)
             ),
         };
     }
@@ -124,7 +124,9 @@ pub(crate) fn resolve_ssh_key_descriptor(
     Ok(SshKeyDescriptor::from_path(candidate.path))
 }
 
-fn resolve_configured_ssh_key_candidate(base_dir: Option<&Path>) -> Result<Option<ResolvedSshKey>> {
+fn resolve_configured_ssh_key_candidate(
+    base_dir: Option<&Path>,
+) -> Result<Option<SshKeyResolution>> {
     resolve_string_with_source(
         None,
         Some("SECRETENV_SSH_IDENTITY"),
@@ -137,14 +139,14 @@ fn resolve_configured_ssh_key_candidate(base_dir: Option<&Path>) -> Result<Optio
 }
 
 fn build_candidate_from_source(
-    (path, source): (String, ResolvedStringSource),
-) -> Result<ResolvedSshKey> {
+    (path, source): (String, StringSourceResolution),
+) -> Result<SshKeyResolution> {
     match source {
-        ResolvedStringSource::Env => Ok(build_resolved_ssh_key(
+        StringSourceResolution::Env => Ok(build_ssh_key_resolution(
             PathBuf::from(path),
             SshKeySource::Env,
         )),
-        ResolvedStringSource::GlobalConfig => Ok(build_resolved_ssh_key(
+        StringSourceResolution::GlobalConfig => Ok(build_ssh_key_resolution(
             expand_tilde(&path)?,
             SshKeySource::GlobalConfig,
         )),
@@ -152,8 +154,8 @@ fn build_candidate_from_source(
     }
 }
 
-fn build_resolved_ssh_key(path: PathBuf, source: SshKeySource) -> ResolvedSshKey {
-    ResolvedSshKey {
+fn build_ssh_key_resolution(path: PathBuf, source: SshKeySource) -> SshKeyResolution {
+    SshKeyResolution {
         exists: path.exists(),
         path,
         source,

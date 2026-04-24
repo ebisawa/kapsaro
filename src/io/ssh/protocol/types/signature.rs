@@ -53,7 +53,7 @@ impl Ed25519RawSignature {
     /// Try to create from a slice
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         if bytes.len() != 64 {
-            return Err(SshError::operation_failed(format!(
+            return Err(SshError::build_operation_failed_error(format!(
                 "Invalid Ed25519 signature length: expected 64 bytes, got {}",
                 bytes.len()
             ))

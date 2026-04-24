@@ -16,7 +16,7 @@ use crate::model::public_key::{
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
 use crate::support::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
-use crate::support::kid::{kid_display_lossy, kid_half_display_lossy};
+use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
 use crate::{Error, Result};
 use ed25519_dalek::{Verifier, VerifyingKey};
 use time::OffsetDateTime;
@@ -59,22 +59,24 @@ pub fn verify_public_key_with_context(
     validate_derived_kid(public_key)?;
     log_public_key_verification(debug, public_key, context, "self-signature");
 
-    let protected_jcs = jcs::normalize(&public_key.protected)
-        .map_err(|e| Error::crypto_with_source("Failed to normalize PublicKey protected", e))?;
+    let protected_jcs = jcs::normalize(&public_key.protected).map_err(|e| {
+        Error::build_crypto_error_with_source("Failed to normalize PublicKey protected", e)
+    })?;
     let verifying_key_bytes: [u8; 32] = decode_base64url_nopad_array(
         &public_key.protected.identity.keys.sig.x,
         "Ed25519 public key",
     )?;
     let verifying_key = VerifyingKey::from_bytes(&verifying_key_bytes)
-        .map_err(|e| Error::crypto_with_source("Invalid Ed25519 public key", e))?;
+        .map_err(|e| Error::build_crypto_error_with_source("Invalid Ed25519 public key", e))?;
 
-    let sig_bytes = decode_base64url_nopad(&public_key.signature, "signature")
-        .map_err(|e| Error::crypto_with_source("Failed to decode PublicKey signature", e))?;
+    let sig_bytes = decode_base64url_nopad(&public_key.signature, "signature").map_err(|e| {
+        Error::build_crypto_error_with_source("Failed to decode PublicKey signature", e)
+    })?;
     let sig = ed25519_dalek::Signature::from_slice(&sig_bytes)
-        .map_err(|e| Error::crypto_with_source("Invalid signature format", e))?;
+        .map_err(|e| Error::build_crypto_error_with_source("Invalid signature format", e))?;
 
     verifying_key.verify(&protected_jcs, &sig).map_err(|e| {
-        Error::crypto_with_source("PublicKey self-signature verification failed", e)
+        Error::build_crypto_error_with_source("PublicKey self-signature verification failed", e)
     })?;
 
     let proof = SelfSignatureProof::new();
@@ -140,7 +142,7 @@ pub fn verify_public_key_for_verification_context(
     let verified_public_key =
         verify_public_key_with_attestation_context(public_key, debug, context)?;
     let mut warnings = Vec::new();
-    if let Some(warning) = public_key_expiry_warning(verified_public_key.document())? {
+    if let Some(warning) = build_public_key_expiry_warning(verified_public_key.document())? {
         warnings.push(warning);
     }
     Ok(VerifiedPublicKeyForVerification {
@@ -182,7 +184,7 @@ fn log_public_key_verification(
             "[VERIFY] PublicKey: verify {} ({}, {})",
             verification_target,
             context,
-            kid_half_display_lossy(&public_key.protected.kid)
+            format_kid_half_display_lossy(&public_key.protected.kid)
         );
     }
 }
@@ -190,18 +192,21 @@ fn log_public_key_verification(
 fn validate_derived_kid(public_key: &PublicKey) -> Result<()> {
     let mut protected_without_kid = serde_json::to_value(&public_key.protected)?;
     let object = protected_without_kid.as_object_mut().ok_or_else(|| {
-        Error::verify("V-KID-DERIVED", "PublicKey protected must be a JSON object")
+        Error::build_verification_error(
+            "V-KID-DERIVED",
+            "PublicKey protected must be a JSON object",
+        )
     })?;
     object.remove("kid");
 
     let derived_kid = derive_public_key_kid(&protected_without_kid)?;
     if public_key.protected.kid != derived_kid {
-        return Err(Error::verify(
+        return Err(Error::build_verification_error(
             "V-KID-DERIVED",
             format!(
                 "PublicKey protected.kid '{}' does not match derived kid '{}'",
-                kid_display_lossy(&public_key.protected.kid),
-                kid_display_lossy(&derived_kid)
+                format_kid_display_lossy(&public_key.protected.kid),
+                format_kid_display_lossy(&derived_kid)
             ),
         ));
     }
@@ -209,7 +214,7 @@ fn validate_derived_kid(public_key: &PublicKey) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn public_key_expiry_warning(doc: &PublicKey) -> Result<Option<String>> {
+pub(crate) fn build_public_key_expiry_warning(doc: &PublicKey) -> Result<Option<String>> {
     if doc.protected.expires_at.is_empty() {
         return Ok(None);
     }

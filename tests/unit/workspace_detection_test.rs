@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Helper to create a workspace structure
-fn create_workspace(root: &TempDir) -> (PathBuf, PathBuf) {
+fn build_workspace(root: &TempDir) -> (PathBuf, PathBuf) {
     let repo_root = root.path().canonicalize().unwrap();
     fs::create_dir_all(repo_root.join(".git")).unwrap();
 
@@ -25,7 +25,7 @@ fn create_workspace(root: &TempDir) -> (PathBuf, PathBuf) {
 #[test]
 fn test_detect_workspace_in_current_directory() {
     let temp = TempDir::new().unwrap();
-    let (repo_root, workspace_root) = create_workspace(&temp);
+    let (repo_root, workspace_root) = build_workspace(&temp);
 
     let result = detect_workspace_root(&repo_root);
     assert!(result.is_ok());
@@ -36,7 +36,7 @@ fn test_detect_workspace_in_current_directory() {
 #[test]
 fn test_detect_workspace_in_parent_directory() {
     let temp = TempDir::new().unwrap();
-    let (repo_root, workspace_root) = create_workspace(&temp);
+    let (repo_root, workspace_root) = build_workspace(&temp);
 
     // Create a subdirectory
     let sub_dir = repo_root.join("subdir");
@@ -51,7 +51,7 @@ fn test_detect_workspace_in_parent_directory() {
 #[test]
 fn test_detect_workspace_with_marker_file() {
     let temp = TempDir::new().unwrap();
-    let (repo_root, workspace_root) = create_workspace(&temp);
+    let (repo_root, workspace_root) = build_workspace(&temp);
 
     // Create .secretenv-root marker
     fs::write(workspace_root.join(".secretenv-root"), "").unwrap();
@@ -66,7 +66,7 @@ fn test_detect_workspace_with_marker_file() {
 #[test]
 fn test_detect_workspace_with_toml_config() {
     let temp = TempDir::new().unwrap();
-    let (repo_root, workspace_root) = create_workspace(&temp);
+    let (repo_root, workspace_root) = build_workspace(&temp);
 
     // Create config.toml
     fs::write(
@@ -114,7 +114,7 @@ fn test_detect_workspace_fails_without_secrets_directory() {
 #[test]
 fn test_detect_workspace_stops_at_marker() {
     let temp = TempDir::new().unwrap();
-    let (outer_repo_root, _outer_workspace_root) = create_workspace(&temp);
+    let (outer_repo_root, _outer_workspace_root) = build_workspace(&temp);
 
     // Create marker at outer root
     fs::write(outer_repo_root.join(".secretenv-root"), "").unwrap();
@@ -138,7 +138,7 @@ fn test_detect_workspace_stops_at_marker() {
 #[test]
 fn test_workspace_root_fields() {
     let temp = TempDir::new().unwrap();
-    let (repo_root, workspace_root) = create_workspace(&temp);
+    let (repo_root, workspace_root) = build_workspace(&temp);
     fs::write(workspace_root.join(".secretenv-root"), "").unwrap();
     fs::write(
         workspace_root.join("config.toml"),
@@ -164,11 +164,11 @@ fn test_resolve_workspace_with_explicit_option() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
 
     let temp = TempDir::new().unwrap();
-    let (_repo_root, root_path) = create_workspace(&temp);
+    let (_repo_root, root_path) = build_workspace(&temp);
 
     // Set environment variable to different path
     let temp2 = TempDir::new().unwrap();
-    let (_repo_root2, env_path) = create_workspace(&temp2);
+    let (_repo_root2, env_path) = build_workspace(&temp2);
     env::set_var("SECRETENV_WORKSPACE", &env_path);
 
     // Explicit option should take priority over environment variable
@@ -183,7 +183,7 @@ fn test_resolve_workspace_from_environment_variable() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
 
     let temp = TempDir::new().unwrap();
-    let (_repo_root, root_path) = create_workspace(&temp);
+    let (_repo_root, root_path) = build_workspace(&temp);
 
     // Set environment variable
     env::set_var("SECRETENV_WORKSPACE", &root_path);
@@ -225,7 +225,7 @@ fn test_resolve_workspace_fallback_to_search() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
 
     let temp = TempDir::new().unwrap();
-    let (repo_root, workspace_root) = create_workspace(&temp);
+    let (repo_root, workspace_root) = build_workspace(&temp);
 
     // Create subdirectory
     let sub_dir = repo_root.join("subdir");
@@ -253,13 +253,13 @@ fn test_resolve_workspace_priority_order() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
 
     let temp1 = TempDir::new().unwrap();
-    let (_repo_root1, opt_path) = create_workspace(&temp1);
+    let (_repo_root1, opt_path) = build_workspace(&temp1);
 
     let temp2 = TempDir::new().unwrap();
-    let (_repo_root2, env_path) = create_workspace(&temp2);
+    let (_repo_root2, env_path) = build_workspace(&temp2);
 
     let temp3 = TempDir::new().unwrap();
-    let (search_repo_root, search_workspace_root) = create_workspace(&temp3);
+    let (search_repo_root, search_workspace_root) = build_workspace(&temp3);
     let sub_dir = search_repo_root.join("subdir");
     fs::create_dir(&sub_dir).unwrap();
 

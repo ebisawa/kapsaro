@@ -20,7 +20,7 @@ pub(crate) struct ReadSignerTrustPlan {
     pub(crate) warnings: Vec<String>,
 }
 
-pub(crate) fn build_read_signer_trust<P>(
+pub(crate) fn evaluate_read_signer_trust<P>(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     proof: &SignatureVerificationProof,
@@ -42,7 +42,7 @@ where
         options,
         &workspace.root_path,
         &execution.member_id,
-        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?;
     let trust_ctx = &loaded.trust_ctx;
@@ -84,7 +84,7 @@ pub(crate) fn evaluate_signer_trust_with_proof(
 }
 
 pub(crate) fn enforce_policy_strict_key_checking<P>(
-    strict_key_checking: crate::config::types::ResolvedStrictKeyChecking,
+    strict_key_checking: crate::config::types::StrictKeyCheckingResolution,
 ) -> Result<()>
 where
     P: TrustPolicy,
@@ -100,7 +100,7 @@ where
     Ok(())
 }
 
-pub(crate) fn current_self_sig_x(signing_key: &ed25519_dalek::SigningKey) -> [u8; 32] {
+pub(crate) fn derive_self_sig_x(signing_key: &ed25519_dalek::SigningKey) -> [u8; 32] {
     let verifying_key: ed25519_dalek::VerifyingKey = signing_key.into();
     verifying_key.to_bytes()
 }

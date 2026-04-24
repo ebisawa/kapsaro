@@ -3,7 +3,7 @@
 
 //! Unit tests for ArtifactSignature model
 
-use crate::keygen_helpers::make_dummy_public_key;
+use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::model::signature::ArtifactSignature;
 
 #[test]
@@ -11,7 +11,7 @@ fn test_signature_serialization() {
     let sig = ArtifactSignature {
         alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-        signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         sig: "SGVsbG8gV29ybGQ".to_string(),
     };
 
@@ -69,7 +69,7 @@ fn test_signature_roundtrip() {
     let original = ArtifactSignature {
         alg: secretenv::model::identifiers::alg::SIGNATURE_ED25519.to_string(),
         kid: "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N".to_string(),
-        signer_pub: make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         sig: "dGVzdHNpZ25hdHVyZQ".to_string(),
     };
 

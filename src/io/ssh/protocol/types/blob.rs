@@ -4,7 +4,7 @@
 use super::signature::Ed25519RawSignature;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::sshsig::parse_sshsig_blob;
-use crate::io::ssh::protocol::wire::ssh_string_decode;
+use crate::io::ssh::protocol::wire::decode_ssh_string;
 use crate::io::ssh::SshError;
 use crate::Result;
 use zeroize::Zeroizing;
@@ -36,9 +36,9 @@ impl SshSignatureBlob {
             return Ok(Ed25519RawSignature::from_zeroizing(out));
         }
 
-        let (algo, rest) = ssh_string_decode(&self.0)?;
+        let (algo, rest) = decode_ssh_string(&self.0)?;
         if algo != ssh::KEY_TYPE_ED25519.as_bytes() {
-            return Err(SshError::operation_failed(format!(
+            return Err(SshError::build_operation_failed_error(format!(
                 "Unsupported SSH signature algorithm '{}': expected '{}'",
                 String::from_utf8_lossy(algo),
                 ssh::KEY_TYPE_ED25519
@@ -46,14 +46,15 @@ impl SshSignatureBlob {
             .into());
         }
 
-        let (sig, rest) = ssh_string_decode(rest)?;
+        let (sig, rest) = decode_ssh_string(rest)?;
         if !rest.is_empty() {
-            return Err(
-                SshError::operation_failed("Invalid SSH signature blob: trailing bytes").into(),
-            );
+            return Err(SshError::build_operation_failed_error(
+                "Invalid SSH signature blob: trailing bytes",
+            )
+            .into());
         }
         if sig.len() != 64 {
-            return Err(SshError::operation_failed(format!(
+            return Err(SshError::build_operation_failed_error(format!(
                 "Invalid Ed25519 signature length: expected 64 bytes, got {}",
                 sig.len()
             ))

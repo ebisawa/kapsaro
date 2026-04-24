@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::trust::approval::{commit_known_key_approvals, ApprovedKnownKey};
+use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
 use crate::app::trust::TrustApprovalCandidate;
 use crate::app_test_utils::{build_test_command_options, build_test_execution_context};
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::test_utils::{kid, member_id, setup_test_keystore_from_fixtures};
@@ -14,36 +14,36 @@ const BOB_MEMBER_ID: &str = "bob@example.com";
 const BOB_KID: &str = "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0";
 
 #[test]
-fn test_commit_known_key_approvals_rejects_self_candidate() {
+fn test_save_known_key_approvals_rejects_self_candidate() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
     let candidate =
         ApprovedKnownKey::from_review(ALICE_MEMBER_ID, &execution.key_ctx.kid, None, None);
 
-    let result = commit_known_key_approvals(&options, &execution, &[candidate]);
+    let result = save_known_key_approvals(&options, &execution, &[candidate]);
 
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
         .to_string()
         .contains("must not be stored in known_keys"));
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     assert!(load_trust_store(&trust_path, home.path())
         .unwrap()
         .is_none());
 }
 
 #[test]
-fn test_commit_known_key_approvals_uses_execution_context_for_signing() {
+fn test_save_known_key_approvals_uses_execution_context_for_signing() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
     let candidate = ApprovedKnownKey::from_review(BOB_MEMBER_ID, BOB_KID, None, None);
 
-    commit_known_key_approvals(&options, &execution, &[candidate]).unwrap();
+    save_known_key_approvals(&options, &execution, &[candidate]).unwrap();
 
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, home.path()).unwrap().unwrap();
     let stored = serde_json::to_value(&loaded.document).unwrap();
     assert_eq!(
@@ -57,7 +57,7 @@ fn test_commit_known_key_approvals_uses_execution_context_for_signing() {
 }
 
 #[test]
-fn test_commit_known_key_approvals_persists_verified_github_evidence() {
+fn test_save_known_key_approvals_persists_verified_github_evidence() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
@@ -66,9 +66,9 @@ fn test_commit_known_key_approvals_persists_verified_github_evidence() {
     let candidate =
         ApprovedKnownKey::from_review(BOB_MEMBER_ID, BOB_KID, None, Some(&verified_github));
 
-    commit_known_key_approvals(&options, &execution, &[candidate]).unwrap();
+    save_known_key_approvals(&options, &execution, &[candidate]).unwrap();
 
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, home.path()).unwrap().unwrap();
     let stored = serde_json::to_value(&loaded.document).unwrap();
     let github_account = &stored["protected"]["known_keys"][0]["evidence"]["github_account"];
@@ -77,7 +77,7 @@ fn test_commit_known_key_approvals_persists_verified_github_evidence() {
 }
 
 #[test]
-fn test_commit_known_key_approvals_does_not_persist_raw_github_claim_from_manual_review() {
+fn test_save_known_key_approvals_does_not_persist_raw_github_claim_from_manual_review() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
@@ -102,9 +102,9 @@ fn test_commit_known_key_approvals_does_not_persist_raw_github_claim_from_manual
         None,
     );
 
-    commit_known_key_approvals(&options, &execution, &[approval]).unwrap();
+    save_known_key_approvals(&options, &execution, &[approval]).unwrap();
 
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, home.path()).unwrap().unwrap();
     let stored = serde_json::to_value(&loaded.document).unwrap();
     let evidence = &stored["protected"]["known_keys"][0]["evidence"];
@@ -116,7 +116,7 @@ fn test_commit_known_key_approvals_does_not_persist_raw_github_claim_from_manual
 }
 
 #[test]
-fn test_commit_known_key_approvals_persists_verified_github_from_trust_review_candidate() {
+fn test_save_known_key_approvals_persists_verified_github_from_trust_review_candidate() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
@@ -138,9 +138,9 @@ fn test_commit_known_key_approvals_persists_verified_github_from_trust_review_ca
     };
     let approval = ApprovedKnownKey::from(&candidate);
 
-    commit_known_key_approvals(&options, &execution, &[approval]).unwrap();
+    save_known_key_approvals(&options, &execution, &[approval]).unwrap();
 
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, home.path()).unwrap().unwrap();
     let stored = serde_json::to_value(&loaded.document).unwrap();
     let github_account = &stored["protected"]["known_keys"][0]["evidence"]["github_account"];

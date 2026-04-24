@@ -7,14 +7,14 @@
 use std::io::BufRead;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::paths::trust_store_file_path;
+use crate::app::trust::paths::get_trust_store_file_path;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::trust::review::print_candidate_review;
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::support::tty;
 use crate::{Error, Result};
 
@@ -98,14 +98,14 @@ fn recover_invalid_trust_store(
         return Err(Error::InvalidOperation {
             message: format!(
                 "{} (non-interactive mode cannot confirm trust store reset)",
-                error.user_message()
+                error.format_user_message()
             ),
         });
     }
 
     let base_dir = options.resolve_base_dir()?;
-    let path = trust_store_file_path(&base_dir, owner_member_id);
-    print_warning(error.user_message());
+    let path = get_trust_store_file_path(&base_dir, owner_member_id);
+    print_warning(error.format_user_message());
     if !confirm_trust_store_reset(&path)? {
         return Err(Error::InvalidOperation {
             message: "Local trust store reset was declined".to_string(),
@@ -114,10 +114,10 @@ fn recover_invalid_trust_store(
 
     if path.exists() {
         std::fs::remove_file(&path).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to remove invalid local trust store {}: {}",
-                    display_path_relative_to_cwd(&path),
+                    format_path_relative_to_cwd(&path),
                     e
                 ),
                 e,
@@ -126,7 +126,7 @@ fn recover_invalid_trust_store(
     }
     eprintln!(
         "Deleted local trust store '{}'. Continuing with an empty trust cache.",
-        display_path_relative_to_cwd(&path)
+        format_path_relative_to_cwd(&path)
     );
     Ok(())
 }
@@ -146,14 +146,14 @@ where
         return Err(Error::InvalidOperation {
             message: format!(
                 "{} (non-interactive mode cannot confirm trust store reset)",
-                error.user_message()
+                error.format_user_message()
             ),
         });
     }
 
     let base_dir = options.resolve_base_dir()?;
-    let path = trust_store_file_path(&base_dir, owner_member_id);
-    print_warning(error.user_message());
+    let path = get_trust_store_file_path(&base_dir, owner_member_id);
+    print_warning(error.format_user_message());
     if !confirm_trust_store_reset_with_reader(&path, reader)? {
         return Err(Error::InvalidOperation {
             message: "Local trust store reset was declined".to_string(),
@@ -162,10 +162,10 @@ where
 
     if path.exists() {
         std::fs::remove_file(&path).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to remove invalid local trust store {}: {}",
-                    display_path_relative_to_cwd(&path),
+                    format_path_relative_to_cwd(&path),
                     e
                 ),
                 e,
@@ -174,7 +174,7 @@ where
     }
     eprintln!(
         "Deleted local trust store '{}'. Continuing with an empty trust cache.",
-        display_path_relative_to_cwd(&path)
+        format_path_relative_to_cwd(&path)
     );
     Ok(())
 }
@@ -194,7 +194,7 @@ fn confirm_trust_store_reset(path: &std::path::Path) -> Result<bool> {
 fn trust_store_reset_prompt(path: &std::path::Path) -> String {
     format!(
         "Delete invalid local trust store '{}' and continue with an empty trust cache?",
-        display_path_relative_to_cwd(path)
+        format_path_relative_to_cwd(path)
     )
 }
 

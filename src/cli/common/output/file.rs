@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::support::fs::atomic;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
 pub(crate) fn resolve_encrypted_output_path(
@@ -23,13 +23,14 @@ pub(crate) fn resolve_encrypted_output_path(
     }
 
     if from_stdin {
-        return Err(Error::invalid_argument(
+        return Err(Error::build_invalid_argument_error(
             "--stdin requires either --out or --stdout",
         ));
     }
 
-    let input_path = input_path
-        .ok_or_else(|| Error::invalid_argument("INPUT is required unless --stdin is used"))?;
+    let input_path = input_path.ok_or_else(|| {
+        Error::build_invalid_argument_error("INPUT is required unless --stdin is used")
+    })?;
 
     let input_filename = input_path
         .file_name()
@@ -37,7 +38,7 @@ pub(crate) fn resolve_encrypted_output_path(
         .ok_or_else(|| Error::InvalidArgument {
             message: format!(
                 "Cannot derive filename from input path: {}",
-                display_path_relative_to_cwd(input_path)
+                format_path_relative_to_cwd(input_path)
             ),
         })?;
 
@@ -47,8 +48,9 @@ pub(crate) fn resolve_encrypted_output_path(
         });
     }
 
-    let current_dir = std::env::current_dir()
-        .map_err(|e| Error::io_with_source(format!("Failed to get current directory: {}", e), e))?;
+    let current_dir = std::env::current_dir().map_err(|e| {
+        Error::build_io_error_with_source(format!("Failed to get current directory: {}", e), e)
+    })?;
     Ok(Some(
         current_dir.join(format!("{}.encrypted", input_filename)),
     ))
@@ -100,12 +102,12 @@ pub(crate) fn resolve_decrypted_output_path(
     explicit_out
         .cloned()
         .map(Some)
-        .ok_or_else(|| Error::invalid_argument("requires either --out or --stdout"))
+        .ok_or_else(|| Error::build_invalid_argument_error("requires either --out or --stdout"))
 }
 
 fn print_output_notice(label: &str, output_path: &Path, quiet: bool) {
     if quiet {
         return;
     }
-    eprintln!("{}: {}", label, display_path_relative_to_cwd(output_path));
+    eprintln!("{}: {}", label, format_path_relative_to_cwd(output_path));
 }

@@ -4,12 +4,12 @@
 use std::fs;
 
 use crate::app::member::approval::{
-    commit_approvals, evaluate_members_for_approval, MemberApprovalResult,
+    evaluate_members_for_approval, save_member_approvals, MemberApprovalResult,
 };
 use crate::app_test_utils::{build_test_command_options, build_test_execution_context};
 use crate::test_utils::setup_test_workspace_from_fixtures;
 use crate::{
-    feature::trust::verification::verify_trust_store, io::trust::paths::trust_store_file_path,
+    feature::trust::verification::verify_trust_store, io::trust::paths::get_trust_store_file_path,
     io::trust::store::load_trust_store, io::verify_online::VerifiedGithubIdentity,
     io::workspace::members::load_active_member_files, model::public_key::PublicKey,
 };
@@ -34,7 +34,7 @@ fn find_member(active_members: &[PublicKey], member_id: &str) -> PublicKey {
 }
 
 #[test]
-fn test_commit_approvals_persists_only_manually_approved_candidates() {
+fn test_save_member_approvals_persists_only_manually_approved_candidates() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
@@ -42,7 +42,7 @@ fn test_commit_approvals_persists_only_manually_approved_candidates() {
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
 
-    commit_approvals(
+    save_member_approvals(
         &options,
         &[MemberApprovalResult {
             member_id: BOB_MEMBER_ID.to_string(),
@@ -69,7 +69,7 @@ fn test_commit_approvals_persists_only_manually_approved_candidates() {
     )
     .unwrap();
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -83,7 +83,7 @@ fn test_commit_approvals_persists_only_manually_approved_candidates() {
 }
 
 #[test]
-fn test_commit_approvals_rejects_expired_signing_key() {
+fn test_save_member_approvals_rejects_expired_signing_key() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
@@ -93,7 +93,7 @@ fn test_commit_approvals_rejects_expired_signing_key() {
         build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
     execution.key_ctx.expires_at = "2020-01-01T00:00:00Z".to_string();
 
-    let result = commit_approvals(
+    let result = save_member_approvals(
         &options,
         &[MemberApprovalResult {
             member_id: BOB_MEMBER_ID.to_string(),
@@ -121,14 +121,14 @@ fn test_commit_approvals_rejects_expired_signing_key() {
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     assert!(load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .is_none());
 }
 
 #[test]
-fn test_commit_approvals_rejects_self_member() {
+fn test_save_member_approvals_rejects_self_member() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
@@ -136,7 +136,7 @@ fn test_commit_approvals_rejects_self_member() {
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
 
-    let result = commit_approvals(
+    let result = save_member_approvals(
         &options,
         &[MemberApprovalResult {
             member_id: ALICE_MEMBER_ID.to_string(),
@@ -164,7 +164,7 @@ fn test_commit_approvals_rejects_self_member() {
 }
 
 #[test]
-fn test_commit_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
+fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
@@ -182,7 +182,7 @@ fn test_commit_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
         serde_json::Value::String("ssh-ed25519 AAAA changed".to_string());
     fs::write(&bob_file, serde_json::to_string_pretty(&tampered).unwrap()).unwrap();
 
-    commit_approvals(
+    save_member_approvals(
         &options,
         &[MemberApprovalResult {
             member_id: BOB_MEMBER_ID.to_string(),
@@ -203,7 +203,7 @@ fn test_commit_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
     )
     .unwrap();
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -222,7 +222,7 @@ fn test_commit_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
 }
 
 #[test]
-fn test_commit_approvals_persists_verified_github_login_from_review() {
+fn test_save_member_approvals_persists_verified_github_login_from_review() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
@@ -230,7 +230,7 @@ fn test_commit_approvals_persists_verified_github_login_from_review() {
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
 
-    commit_approvals(
+    save_member_approvals(
         &options,
         &[MemberApprovalResult {
             member_id: BOB_MEMBER_ID.to_string(),
@@ -256,7 +256,7 @@ fn test_commit_approvals_persists_verified_github_login_from_review() {
     )
     .unwrap();
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -289,7 +289,7 @@ fn test_evaluate_members_for_approval_surfaces_insecure_trust_store_warning() {
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
 
-    commit_approvals(
+    save_member_approvals(
         &options,
         &[MemberApprovalResult {
             member_id: BOB_MEMBER_ID.to_string(),
@@ -310,7 +310,7 @@ fn test_evaluate_members_for_approval_surfaces_insecure_trust_store_warning() {
     )
     .unwrap();
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let evaluation =

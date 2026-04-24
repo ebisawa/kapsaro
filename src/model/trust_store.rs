@@ -57,7 +57,7 @@ pub struct TrustStoreProtected {
 /// A single approved key record in the TOFU cache.
 ///
 /// Does NOT use `deny_unknown_fields` to allow forward-compatible
-/// extension with future metadata fields (spec §9.4).
+/// extension with future metadata fields.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KnownKey {
     /// Key ID (canonical Crockford Base32)

@@ -3,7 +3,7 @@
 
 //! Unit tests for disclosed-flag behavior in feature/kv.
 
-use crate::keygen_helpers::make_verified_members;
+use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
@@ -14,7 +14,7 @@ use secretenv::feature::kv::mutate::{
 };
 use secretenv::feature::kv::types::KvInputEntry;
 use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncryptedContent, KvEncContent};
+use secretenv::format::content::{EncContent, KvEncContent};
 use secretenv::format::kv::document::parse_kv_document;
 use secretenv::format::schema::document::parse_kv_entry_token;
 use secretenv::format::token::TokenCodec;
@@ -42,7 +42,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
     let (bob_private, bob_public) =
         crate::keygen_helpers::keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let bob_kid = bob_public.protected.kid.clone();
-    let bob_private_doc = crate::keygen_helpers::create_test_private_key(
+    let bob_private_doc = crate::keygen_helpers::build_test_private_key(
         &bob_private,
         &bob_public.protected.member_id,
         &bob_public.protected.kid,
@@ -95,7 +95,7 @@ fn rewrap_kv_content(
     content: &KvEncContent,
     request: &RewrapRequest<'_>,
 ) -> secretenv::Result<String> {
-    rewrap_content(&EncryptedContent::KvEnc(content.clone()), request)
+    rewrap_content(&EncContent::KvEnc(content.clone()), request)
 }
 
 fn encrypt_two_member_document(
@@ -107,7 +107,7 @@ fn encrypt_two_member_document(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
+    let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let kv_map = std::collections::HashMap::from([
         ("KEY1".to_string(), "value1".to_string()),
         ("KEY2".to_string(), "value2".to_string()),

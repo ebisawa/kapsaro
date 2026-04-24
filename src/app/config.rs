@@ -25,9 +25,12 @@ pub(crate) struct ConfigUnsetResult {
     pub scope: ConfigScope,
 }
 
-pub(crate) fn get_config_command(options: &CommonCommandOptions, key: &str) -> Result<String> {
+pub(crate) fn resolve_config_value_command(
+    options: &CommonCommandOptions,
+    key: &str,
+) -> Result<String> {
     let base_dir = options.resolve_base_dir()?;
-    get_config(key, &base_dir)
+    resolve_config_value(key, &base_dir)
 }
 
 pub(crate) fn list_config_command(
@@ -54,7 +57,7 @@ pub(crate) fn unset_config_command(
     unset_config(key, &base_dir)
 }
 
-fn get_config(key: &str, base_dir: &std::path::Path) -> Result<String> {
+fn resolve_config_value(key: &str, base_dir: &std::path::Path) -> Result<String> {
     let normalized = config::normalize_key(key)?;
     let value = config::resolve_config_value(&normalized, Some(base_dir))?.value;
     value.ok_or_else(|| Error::NotFound {
@@ -68,7 +71,7 @@ fn list_config(base_dir: &std::path::Path) -> Result<BTreeMap<String, String>> {
 
 fn set_config(key: &str, value: &str, base_dir: &std::path::Path) -> Result<ConfigSetResult> {
     let normalized = config::normalize_key(key)?;
-    let resolution = config::get_config_path_and_scope(Some(base_dir))?;
+    let resolution = config::resolve_config_location(Some(base_dir))?;
     set_config_value(&resolution.path, &normalized, value)?;
     Ok(ConfigSetResult {
         key: key.to_string(),
@@ -79,7 +82,7 @@ fn set_config(key: &str, value: &str, base_dir: &std::path::Path) -> Result<Conf
 
 fn unset_config(key: &str, base_dir: &std::path::Path) -> Result<ConfigUnsetResult> {
     let normalized = config::normalize_key(key)?;
-    let resolution = config::get_config_path_and_scope(Some(base_dir))?;
+    let resolution = config::resolve_config_location(Some(base_dir))?;
     unset_config_value(&resolution.path, &normalized)?;
     Ok(ConfigUnsetResult {
         key: key.to_string(),

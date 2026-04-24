@@ -21,12 +21,12 @@ use ed25519_dalek::{Verifier, VerifyingKey};
 /// Returns an error if validation fails, otherwise returns Ok(()).
 pub fn validate_sshsig_inputs(ssh_pubkey: &str, signature: &str) -> Result<()> {
     if ssh_pubkey.is_empty() {
-        return Err(SshError::operation_failed("SSH public key is empty").into());
+        return Err(SshError::build_operation_failed_error("SSH public key is empty").into());
     }
 
     let key_type = ssh_pubkey.split_whitespace().next().unwrap_or("");
     if key_type != ssh::KEY_TYPE_ED25519 {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Only ssh-ed25519 supported, got: {}",
             key_type
         ))
@@ -34,11 +34,11 @@ pub fn validate_sshsig_inputs(ssh_pubkey: &str, signature: &str) -> Result<()> {
     }
 
     if signature.is_empty() {
-        return Err(SshError::operation_failed("Signature is empty").into());
+        return Err(SshError::build_operation_failed_error("Signature is empty").into());
     }
 
     if !signature.contains(ssh::SSHSIG_ARMOR_BEGIN) {
-        return Err(SshError::operation_failed("Not in SSHSIG armored format").into());
+        return Err(SshError::build_operation_failed_error("Not in SSHSIG armored format").into());
     }
 
     Ok(())
@@ -59,7 +59,7 @@ pub fn verify_sshsig(
 pub fn build_attestation_signed_data(identity_keys: &IdentityKeys) -> Result<Vec<u8>> {
     // JCS normalize identity.keys
     let identity_keys_jcs = jcs::normalize(identity_keys).map_err(|e| {
-        crate::Error::from(SshError::operation_failed_with_source(
+        crate::Error::from(SshError::build_operation_failed_error_with_source(
             format!("Failed to normalize identity.keys: {}", e),
             e,
         ))
@@ -76,15 +76,18 @@ pub fn build_attestation_signed_data(identity_keys: &IdentityKeys) -> Result<Vec
 fn decode_attestation_signature(sig_b64url: &str) -> Result<ed25519_dalek::Signature> {
     let sig_bytes: [u8; 64] = decode_base64url_nopad_array(sig_b64url, "attestation signature")
         .map_err(|e| {
-            crate::Error::from(SshError::operation_failed_with_source(
+            crate::Error::from(SshError::build_operation_failed_error_with_source(
                 format!("Failed to decode attestation signature: {}", e),
                 e,
             ))
         })?;
 
     ed25519_dalek::Signature::from_slice(&sig_bytes).map_err(|e| {
-        SshError::operation_failed_with_source(format!("Invalid Ed25519 signature: {}", e), e)
-            .into()
+        SshError::build_operation_failed_error_with_source(
+            format!("Invalid Ed25519 signature: {}", e),
+            e,
+        )
+        .into()
     })
 }
 
@@ -94,31 +97,31 @@ fn extract_ed25519_pubkey_from_ssh(ssh_pubkey: &str) -> Result<VerifyingKey> {
     let pubkey_blob = decode_ssh_public_key_blob(ssh_pubkey)?;
     // SSH public key blob format: [key_type_len(4)][key_type][public_key_len(4)][public_key]
     // Parse using SSH_STRING format
-    let (key_type, rest) = wire::ssh_string_decode(&pubkey_blob)?;
+    let (key_type, rest) = wire::decode_ssh_string(&pubkey_blob)?;
     if key_type != ssh::KEY_TYPE_ED25519.as_bytes() {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Unsupported key type: expected '{}', got '{}'",
             ssh::KEY_TYPE_ED25519,
             String::from_utf8_lossy(key_type)
         ))
         .into());
     }
-    let (ed25519_pubkey_bytes, _rest) = wire::ssh_string_decode(rest)?;
+    let (ed25519_pubkey_bytes, _rest) = wire::decode_ssh_string(rest)?;
     if ed25519_pubkey_bytes.len() != 32 {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Invalid Ed25519 public key length: expected 32 bytes, got {}",
             ed25519_pubkey_bytes.len()
         ))
         .into());
     }
     let ed25519_pubkey_bytes: [u8; 32] = ed25519_pubkey_bytes.try_into().map_err(|_| {
-        crate::Error::from(SshError::operation_failed(
+        crate::Error::from(SshError::build_operation_failed_error(
             "Failed to convert Ed25519 public key to array",
         ))
     })?;
 
     VerifyingKey::from_bytes(&ed25519_pubkey_bytes).map_err(|e| {
-        crate::Error::from(SshError::operation_failed_with_source(
+        crate::Error::from(SshError::build_operation_failed_error_with_source(
             format!("Invalid Ed25519 public key: {}", e),
             e,
         ))
@@ -157,7 +160,7 @@ pub fn verify_attestation(
 
     // Step 4: Verify signature
     verifying_key.verify(&signed_data, &sig).map_err(|e| {
-        crate::Error::from(SshError::operation_failed_with_source(
+        crate::Error::from(SshError::build_operation_failed_error_with_source(
             format!("Attestation signature verification failed: {}", e),
             e,
         ))

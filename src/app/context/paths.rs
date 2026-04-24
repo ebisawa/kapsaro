@@ -25,13 +25,13 @@ pub(crate) fn require_workspace(
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ResolvedCommandPaths {
+pub(crate) struct CommandPathResolution {
     pub base_dir: PathBuf,
     pub keystore_root: PathBuf,
     pub workspace_root: Option<WorkspaceRoot>,
 }
 
-impl ResolvedCommandPaths {
+impl CommandPathResolution {
     pub(crate) fn load(options: &CommonCommandOptions) -> Result<Self> {
         Ok(Self {
             base_dir: options.resolve_base_dir()?,

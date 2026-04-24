@@ -1,7 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::feature::context::ssh::determinism::{probe_determinism, validate_ssh_key_type};
+use crate::feature::context::ssh::determinism::{
+    check_ssh_signature_determinism, validate_ssh_key_type,
+};
 use crate::feature::context::ssh::params::{SshSigningContext, SshSigningParams};
 use crate::feature::context::ssh::resolution::{
     resolve_backend_key_descriptor, resolve_signing_method, resolve_ssh_commands,
@@ -25,7 +27,7 @@ pub(crate) fn build_ssh_signing_context(
 
     let ssh_keygen = Box::new(DefaultSshKeygen::new(commands.ssh_keygen_path));
     let backend = build_backend(signing_method, ssh_keygen, key_descriptor)?;
-    let determinism = probe_determinism(params, backend.as_ref(), selected_pubkey)?;
+    let determinism = check_ssh_signature_determinism(params, backend.as_ref(), selected_pubkey)?;
 
     Ok(SshSigningContext {
         public_key: selected_pubkey.to_string(),

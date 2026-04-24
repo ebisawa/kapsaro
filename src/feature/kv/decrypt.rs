@@ -9,7 +9,7 @@ use crate::feature::envelope::entry::decrypt_entry;
 use crate::feature::envelope::unwrap::{
     unwrap_master_key_for_kv, unwrap_master_key_for_kv_with_context,
 };
-use crate::format::kv::enc::canonical::extract_head_and_wrap_tokens;
+use crate::format::kv::enc::canonical::extract_kv_header_tokens;
 use crate::format::kv::enc::parser::KvEncParser;
 use crate::format::schema::document::{
     parse_kv_entry_token, parse_kv_head_token, parse_kv_wrap_token,
@@ -39,7 +39,7 @@ pub(crate) fn parse_kv_enc_content(
     let lines = parser.parse_all()?;
 
     // Extract and parse HEAD and WRAP
-    let (head_token, wrap_token) = extract_head_and_wrap_tokens(&lines)?;
+    let (head_token, wrap_token) = extract_kv_header_tokens(&lines)?;
 
     let _ = debug;
     let head_data: KvHeader = parse_kv_head_token(&head_token)?;
@@ -154,7 +154,7 @@ pub fn decrypt_kv_single_entry_with_context(
 ///
 /// # Arguments
 /// * `verified_doc` - Verified KvEncDocument (signature must be verified)
-/// * `member_id` - Member handle used to find the wrap
+/// * `member_id` - Resolved member ID used to find the wrap
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - PrivateKeyPlaintext containing the KEM private key
 /// * `debug` - Enable debug logging

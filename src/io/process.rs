@@ -34,16 +34,16 @@ pub fn execute_command_with_env(
 ) -> Result<i32> {
     let mut command = Command::new(cmd);
     command.args(cmd_args);
-    configure_child_env_secret(&mut command, env_vars);
+    set_child_env_secret(&mut command, env_vars);
 
     let status = command.status().map_err(|e| {
-        Error::io_with_source(format!("Failed to execute command '{}': {}", cmd, e), e)
+        Error::build_io_error_with_source(format!("Failed to execute command '{}': {}", cmd, e), e)
     })?;
 
     Ok(status.code().unwrap_or(1))
 }
 
-pub(crate) fn configure_child_env_secret(command: &mut Command, env_vars: &SecretEnvMap) {
+pub(crate) fn set_child_env_secret(command: &mut Command, env_vars: &SecretEnvMap) {
     command.env_clear();
     command.envs(load_standard_env_vars());
     for (key, value) in env_vars {
@@ -51,7 +51,7 @@ pub(crate) fn configure_child_env_secret(command: &mut Command, env_vars: &Secre
     }
 }
 
-pub(crate) fn configure_child_env_os(command: &mut Command, env_vars: &BTreeMap<String, OsString>) {
+pub(crate) fn set_child_env_os(command: &mut Command, env_vars: &BTreeMap<String, OsString>) {
     command.env_clear();
     command.envs(build_child_env_map(env_vars));
 }

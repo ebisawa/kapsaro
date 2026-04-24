@@ -43,7 +43,7 @@ pub(super) fn compute_attestation_fingerprint(
     }
 }
 
-pub(super) fn match_key_by_fingerprint(
+pub(super) fn find_key_by_fingerprint(
     public_key: &PublicKey,
     our_fingerprint: &str,
     github_keys: &[GitHubKeyRecord],

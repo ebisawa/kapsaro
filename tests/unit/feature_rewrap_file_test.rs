@@ -3,17 +3,17 @@
 
 //! Unit tests for feature/rewrap/file module (file-enc document rewrap operations).
 
-use crate::keygen_helpers::make_verified_members;
+use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
-    setup_member_key_context, setup_test_keystore_from_fixtures,
-    sync_active_public_key_to_workspace, update_active_private_key_expires_at,
+    save_active_public_key_to_workspace, setup_member_key_context,
+    setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncryptedContent, FileEncContent};
+use secretenv::format::content::{EncContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use std::fs;
 use std::thread::sleep;
@@ -58,14 +58,14 @@ fn rewrap_file_content(
     content: &FileEncContent,
     request: &RewrapRequest<'_>,
 ) -> secretenv::Result<String> {
-    rewrap_content(&EncryptedContent::FileEnc(content.clone()), request)
+    rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 
 /// Encrypt file content for alice (single recipient), returning the JSON string.
 fn encrypt_file_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) -> String {
     let keystore_root = temp_dir.path().join("keys");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let members = make_verified_members(std::slice::from_ref(&public_key));
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
     let content = b"test secret data";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
 
@@ -95,7 +95,7 @@ fn encrypt_file_for_alice_and_bob(
     let keystore_root = temp_dir.path().join("keys");
     let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
-    let members = make_verified_members(&[alice_pub.clone(), bob_pub]);
+    let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let content = b"test secret data";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
 
@@ -133,7 +133,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
     let (bob_private, bob_public) =
         crate::keygen_helpers::keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
     let bob_kid = bob_public.protected.kid.clone();
-    let bob_private_doc = crate::keygen_helpers::create_test_private_key(
+    let bob_private_doc = crate::keygen_helpers::build_test_private_key(
         &bob_private,
         &bob_public.protected.member_id,
         &bob_public.protected.kid,
@@ -276,7 +276,7 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
     let json = encrypt_file_for_alice(&temp_dir, &old_kid, &old_key_ctx);
 
     update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
-    sync_active_public_key_to_workspace(temp_dir.path(), temp_dir.path(), ALICE_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(temp_dir.path(), temp_dir.path(), ALICE_MEMBER_ID).unwrap();
 
     let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     let new_kid = new_key_ctx.kid.to_string();

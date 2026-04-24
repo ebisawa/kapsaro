@@ -103,7 +103,7 @@ pub(crate) fn decrypt_file_payload(
 ///
 /// # Arguments
 /// * `verified_doc` - Verified FileEncDocument structure (signature must be verified)
-/// * `member_id` - Member handle used to find the wrap
+/// * `member_id` - Resolved member ID used to find the wrap
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - PrivateKeyPlaintext containing the KEM private key
 /// * `debug` - Enable debug logging

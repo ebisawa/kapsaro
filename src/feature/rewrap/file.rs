@@ -7,7 +7,7 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::sign_file_document;
 use crate::feature::recipient::{collect_target_recipient_ids, resolve_verified_recipients};
 use crate::feature::rewrap::file_op::recipients::{
-    add_file_recipients, refresh_file_recipients, remove_file_recipients,
+    add_file_recipients, remove_file_recipients, rewrite_file_recipient_wraps,
 };
 use crate::feature::rewrap::file_op::rotate::rotate_file_key;
 use crate::feature::verify::file::verify_file_content;
@@ -20,8 +20,8 @@ use crate::{Error, Result};
 use std::path::Path;
 
 use super::{
-    collect_stale_recipient_ids, execute_rewrap_operations, RewrapContext, RewrapExecutor,
-    RewrapOptions,
+    build_rewrap_operation_plan, collect_stale_recipient_ids, rewrite_with_rewrap_operation_plan,
+    RewrapContext, RewrapExecutor, RewrapOptions,
 };
 
 /// Executor for file-enc rewrap operations.
@@ -47,8 +47,8 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
         )
     }
 
-    fn refresh_recipients(&mut self, recipients: &[String]) -> Result<()> {
-        refresh_file_recipients(
+    fn rewrite_recipient_wraps(&mut self, recipients: &[String]) -> Result<()> {
+        rewrite_file_recipient_wraps(
             &mut self.protected,
             &self.verified,
             recipients,
@@ -79,7 +79,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
 
     fn finalize(self) -> Result<String> {
         let mut protected = self.protected;
-        protected.updated_at = time::current_timestamp()?;
+        protected.updated_at = time::generate_current_timestamp()?;
         let signer_pub = self.ctx.load_signer_pub()?;
         let signature = sign_file_document(
             &protected,
@@ -132,5 +132,11 @@ pub fn rewrap_file_document(
 
     let ctx = RewrapContext::new(options, member_id, key_ctx, Some(&verified_target_members));
     let executor = FileRewrapExecutor::new(verified, &ctx);
-    execute_rewrap_operations(executor, options, &all_members, &stale_recipients)
+    let plan = build_rewrap_operation_plan(
+        &executor.current_recipients(),
+        &all_members,
+        &stale_recipients,
+        options,
+    );
+    rewrite_with_rewrap_operation_plan(executor, plan)
 }

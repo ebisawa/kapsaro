@@ -8,8 +8,8 @@ use crate::io::keystore::resolver::KeystoreResolver;
 use crate::io::keystore::storage::load_public_key;
 use crate::io::workspace::detection::resolve_workspace_creation_path;
 use crate::io::workspace::members::{
-    active_member_file_path, ensure_member_document_kid_is_unique, incoming_member_file_path,
-    load_verified_member_file_from_path, MemberStatus,
+    ensure_member_document_kid_is_unique, get_active_member_file_path,
+    get_incoming_member_file_path, load_verified_member_file_from_path, MemberStatus,
 };
 use crate::io::workspace::setup;
 use crate::Result;
@@ -24,7 +24,7 @@ pub(crate) enum InitWorkspaceState {
     NoOp,
 }
 
-pub(crate) struct InitWorkspacePreparation {
+pub(crate) struct InitWorkspaceStatus {
     pub workspace_path: PathBuf,
     pub state: InitWorkspaceState,
 }
@@ -37,26 +37,30 @@ pub(crate) struct RegistrationPaths {
     pub conflict_exists: bool,
 }
 
-pub(crate) fn prepare_init_workspace(
+pub(crate) fn evaluate_init_workspace_status(
     common: &CommonCommandOptions,
-) -> Result<InitWorkspacePreparation> {
+) -> Result<InitWorkspaceStatus> {
     let workspace_path = resolve_workspace_creation_path(common.workspace.clone())?;
-    let has_active_members = setup::workspace_has_active_members(&workspace_path)?;
+    let has_active_members = setup::check_workspace_has_active_members(&workspace_path)?;
     if has_active_members {
-        setup::ensure_workspace_structure(&workspace_path)?;
-        return Ok(InitWorkspacePreparation {
+        return Ok(InitWorkspaceStatus {
             workspace_path,
             state: InitWorkspaceState::NoOp,
         });
     }
 
-    Ok(InitWorkspacePreparation {
+    Ok(InitWorkspaceStatus {
         workspace_path,
         state: InitWorkspaceState::Bootstrap,
     })
 }
 
-pub(crate) fn register_member(
+pub(crate) fn ensure_init_workspace_structure(workspace_path: &Path) -> Result<()> {
+    setup::ensure_workspace_structure(workspace_path)?;
+    Ok(())
+}
+
+pub(crate) fn save_registration_member(
     workspace_path: &Path,
     member_id: &str,
     kid: &str,
@@ -125,7 +129,7 @@ pub(crate) fn resolve_active_membership_state(
         return Ok(ActiveMembershipState::None);
     }
 
-    let active_path = active_member_file_path(workspace_path, member_id);
+    let active_path = get_active_member_file_path(workspace_path, member_id);
     if !active_path.exists() {
         return Ok(ActiveMembershipState::None);
     }
@@ -140,8 +144,8 @@ pub(crate) fn resolve_active_membership_state(
 
 fn member_file_path(workspace_path: &Path, member_id: &str, target: RegistrationTarget) -> PathBuf {
     match target {
-        RegistrationTarget::Active => active_member_file_path(workspace_path, member_id),
-        RegistrationTarget::Incoming => incoming_member_file_path(workspace_path, member_id),
+        RegistrationTarget::Active => get_active_member_file_path(workspace_path, member_id),
+        RegistrationTarget::Incoming => get_incoming_member_file_path(workspace_path, member_id),
     }
 }
 

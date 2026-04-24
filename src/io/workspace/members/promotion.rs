@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::paths::{
-    ensure_members_dir, incoming_member_file_path, member_file_path, members_dir, MemberStatus,
+    ensure_members_dir, get_incoming_member_file_path, member_file_path, members_dir, MemberStatus,
 };
 use super::store::{
     check_workspace_member_kid_uniqueness, load_json_files_in_dir,
@@ -12,7 +12,7 @@ use crate::support::fs::{
     atomic, ensure_text_file_matches_snapshot_with_limit, load_text_with_limit, lock,
 };
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -55,7 +55,7 @@ fn build_plans_from_ids(
 }
 
 fn build_plan_for_id(workspace_path: &Path, member_id: &str) -> Result<PromotionPlan> {
-    let source = incoming_member_file_path(workspace_path, member_id);
+    let source = get_incoming_member_file_path(workspace_path, member_id);
     if !source.exists() {
         return Err(Error::NotFound {
             message: format!("Member '{}' not found in incoming/", member_id),
@@ -87,9 +87,9 @@ fn build_plan_from_incoming_file(active_dir: &Path, source: PathBuf) -> Result<P
         .and_then(|s| s.to_str())
         .map(String::from)
         .ok_or_else(|| {
-            Error::io(format!(
+            Error::build_io_error(format!(
                 "Invalid file name: {}",
-                display_path_relative_to_cwd(&source)
+                format_path_relative_to_cwd(&source)
             ))
         })?;
 
@@ -121,7 +121,7 @@ fn execute_promotion_plan(workspace_path: &Path, plans: &[PromotionPlan]) -> Res
         )?;
         atomic::save_text(&plan.destination, &source_content)?;
         fs::remove_file(&plan.source).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to clean incoming member '{}': {}",
                     plan.member_id, e
@@ -183,7 +183,7 @@ fn promote_snapshotted_member(
         )?;
         atomic::save_text(&destination, &snapshot.source_content)?;
         fs::remove_file(&snapshot.source_path).map_err(|e| {
-            Error::io_with_source(
+            Error::build_io_error_with_source(
                 format!(
                     "Failed to clean incoming member '{}': {}",
                     snapshot.member_id, e

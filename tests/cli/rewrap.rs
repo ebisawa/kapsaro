@@ -6,7 +6,7 @@
 //! Tests the rewrap command with the simplified RewrapArgs (auto-sync with @all).
 
 use crate::cli::common::{
-    cmd, create_temp_ssh_keypair, default_common_options, set_ssh_key_from_temp_dir,
+    cmd, default_common_options, generate_temp_ssh_keypair, set_ssh_key_from_temp_dir,
     setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID,
 };
 use crate::test_utils::setup_test_workspace;
@@ -33,7 +33,7 @@ mod roundtrip;
 fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArgs {
     RewrapArgs {
         common: common_opts,
-        member_id: Some(member_id.to_string()),
+        member_handle: Some(member_id.to_string()),
         rotate_key: false,
         clear_disclosure_history: false,
         targets: Vec::new(),
@@ -43,7 +43,7 @@ fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArg
 /// Create a kv-enc file in the workspace using the set command.
 ///
 /// `entries` は `&[("KEY", "VALUE")]` 形式。
-fn create_kv_file(
+fn save_kv_file(
     workspace_dir: &Path,
     common_opts: CommonOptions,
     member_id: &str,
@@ -54,7 +54,7 @@ fn create_kv_file(
         let set_args = set::SetArgs {
             common: common_opts.clone(),
 
-            member_id: Some(member_id.to_string()),
+            member_handle: Some(member_id.to_string()),
             name: Some(name.to_string()),
             stdin: false,
             key: key.to_string(),
@@ -68,14 +68,14 @@ fn create_kv_file(
 }
 
 /// Parse the rids from a kv-enc .kv file's WRAP line.
-fn get_kv_rids(kv_path: &Path) -> Vec<String> {
+fn load_kv_rids(kv_path: &Path) -> Vec<String> {
     let content = fs::read_to_string(kv_path).unwrap();
     let (_, _, wrap_data) = parse_kv_wrap(&content).unwrap();
     wrap_data.wrap.iter().map(|w| w.rid.clone()).collect()
 }
 
 /// Get the removed_recipients rids from a kv-enc file.
-fn get_kv_removed_rids(kv_path: &Path) -> Vec<String> {
+fn load_kv_removed_rids(kv_path: &Path) -> Vec<String> {
     let content = fs::read_to_string(kv_path).unwrap();
     let (_, _, wrap_data) = parse_kv_wrap(&content).unwrap();
     wrap_data

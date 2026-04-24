@@ -15,7 +15,7 @@ use assert_cmd::cargo;
 use console::strip_ansi_codes;
 use predicates::prelude::*;
 use secretenv::feature::trust::signature::sign_trust_store;
-use secretenv::io::trust::paths::trust_store_file_path;
+use secretenv::io::trust::paths::get_trust_store_file_path;
 use secretenv::io::trust::store::save_trust_store;
 use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
@@ -28,7 +28,7 @@ const DISPLAY_KID_BOB: &str = "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0";
 const BOB_MEMBER_ID: &str = "bob@example.com";
 const CHARLIE_MEMBER_ID: &str = "charlie@example.com";
 
-fn make_known_key(kid: &str, member_id: &str, approved_at: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_id: &str, approved_at: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
         member_id: member_id.to_string(),
@@ -47,12 +47,12 @@ fn save_signed_trust_store(home: &TempDir) {
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
         known_keys: vec![
-            make_known_key(KID_BOB, BOB_MEMBER_ID, "2026-03-29T12:40:00Z"),
-            make_known_key(KID_CHARLIE, CHARLIE_MEMBER_ID, "2026-03-29T12:41:00Z"),
+            build_known_key(KID_BOB, BOB_MEMBER_ID, "2026-03-29T12:40:00Z"),
+            build_known_key(KID_CHARLIE, CHARLIE_MEMBER_ID, "2026-03-29T12:41:00Z"),
         ],
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     save_trust_store(&path, &document).unwrap();
 }
 
@@ -147,7 +147,7 @@ fn test_trust_list_json_keeps_canonical_kid() {
 fn test_trust_remove_prints_insecure_permission_warning() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()
@@ -185,7 +185,7 @@ fn test_trust_remove_prints_insecure_permission_warning() {
 fn test_trust_remove_colors_warning_when_forced() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()
@@ -313,7 +313,7 @@ fn test_trust_remove_old_identity_option_fails() {
 fn test_trust_list_prints_warning_after_known_key_output() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
-    let trust_path = trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()

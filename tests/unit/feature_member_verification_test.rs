@@ -10,26 +10,26 @@ fn dummy_github() -> VerifiedGithubIdentity {
 }
 
 #[test]
-fn test_classify_all_verified() {
+fn test_build_verification_result_groups_all_verified() {
     let results = vec![VerificationResult::verified(
         "alice",
         "SSH key verified on GitHub (id=1, login=alice-gh)".to_string(),
         dummy_github(),
     )];
-    let (verified, failed, not_configured) = classify_verification_results(&results);
+    let (verified, failed, not_configured) = build_verification_result_groups(&results);
     assert_eq!(verified.len(), 1);
     assert!(failed.is_empty());
     assert!(not_configured.is_empty());
 }
 
 #[test]
-fn test_classify_mixed() {
+fn test_build_verification_result_groups_mixed() {
     let results = vec![
         VerificationResult::verified("alice", "OK".to_string(), dummy_github()),
         VerificationResult::failed("bob", "SSH key not found".to_string(), None, true),
         VerificationResult::not_configured("carol", "No binding_claims", None, false),
     ];
-    let (verified, failed, not_configured) = classify_verification_results(&results);
+    let (verified, failed, not_configured) = build_verification_result_groups(&results);
     assert_eq!(verified.len(), 1);
     assert_eq!(verified[0].member_id, "alice");
     assert_eq!(failed.len(), 1);
@@ -39,9 +39,9 @@ fn test_classify_mixed() {
 }
 
 #[test]
-fn test_classify_empty() {
+fn test_build_verification_result_groups_empty() {
     let results: Vec<VerificationResult> = vec![];
-    let (verified, failed, not_configured) = classify_verification_results(&results);
+    let (verified, failed, not_configured) = build_verification_result_groups(&results);
     assert!(verified.is_empty());
     assert!(failed.is_empty());
     assert!(not_configured.is_empty());

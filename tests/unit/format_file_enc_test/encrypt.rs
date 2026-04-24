@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::helpers::{
-    b64url, create_test_public_key, generate_ed25519_keypair, generate_x25519_keypair,
+    b64url, build_test_public_key, generate_ed25519_keypair, generate_x25519_keypair,
     recipients_and_members,
 };
-use crate::keygen_helpers::make_recipient_key;
+use crate::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
 use secretenv::feature::encrypt::file as file_enc;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -15,8 +15,7 @@ use uuid::Uuid;
 fn test_encrypt_file_basic() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
     let pk_b64 = b64url(pk.as_bytes());
-    let alice =
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
+    let alice = build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
     let recipients_with_keys = [(ALICE_MEMBER_ID.to_string(), alice)];
     let recipient_ids: Vec<String> = recipients_with_keys
         .iter()
@@ -24,7 +23,7 @@ fn test_encrypt_file_basic() {
         .collect();
     let members: Vec<_> = recipients_with_keys
         .iter()
-        .map(|(_, pk)| make_recipient_key(pk.clone()))
+        .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
 
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
@@ -35,7 +34,7 @@ fn test_encrypt_file_basic() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
-            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
+            signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -78,7 +77,7 @@ fn test_encrypt_file_multiple_recipients() {
     let recipients_with_keys = [
         (
             ALICE_MEMBER_ID.to_string(),
-            create_test_public_key(
+            build_test_public_key(
                 ALICE_MEMBER_ID,
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 &pk1_b64,
@@ -86,7 +85,7 @@ fn test_encrypt_file_multiple_recipients() {
         ),
         (
             BOB_MEMBER_ID.to_string(),
-            create_test_public_key(BOB_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GH", &pk2_b64),
+            build_test_public_key(BOB_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GH", &pk2_b64),
         ),
     ];
     let recipient_ids: Vec<String> = recipients_with_keys
@@ -95,7 +94,7 @@ fn test_encrypt_file_multiple_recipients() {
         .collect();
     let members: Vec<_> = recipients_with_keys
         .iter()
-        .map(|(_, pk)| make_recipient_key(pk.clone()))
+        .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
 
     let file_enc_doc = file_enc::encrypt_file_document(
@@ -105,7 +104,7 @@ fn test_encrypt_file_multiple_recipients() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
@@ -144,7 +143,7 @@ fn test_encrypt_file_empty_content() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = [(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let recipient_ids: Vec<String> = recipients_with_keys
         .iter()
@@ -152,7 +151,7 @@ fn test_encrypt_file_empty_content() {
         .collect();
     let members: Vec<_> = recipients_with_keys
         .iter()
-        .map(|(_, pk)| make_recipient_key(pk.clone()))
+        .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
 
     let result = file_enc::encrypt_file_document(
@@ -162,7 +161,7 @@ fn test_encrypt_file_empty_content() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
@@ -179,7 +178,7 @@ fn test_encrypt_file_large_content() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = [(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let recipient_ids: Vec<String> = recipients_with_keys
         .iter()
@@ -187,7 +186,7 @@ fn test_encrypt_file_large_content() {
         .collect();
     let members: Vec<_> = recipients_with_keys
         .iter()
-        .map(|(_, pk)| make_recipient_key(pk.clone()))
+        .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
 
     let result = file_enc::encrypt_file_document(
@@ -197,7 +196,7 @@ fn test_encrypt_file_large_content() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
@@ -214,7 +213,7 @@ fn test_encrypt_file_name_is_set() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = [(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let recipient_ids: Vec<String> = recipients_with_keys
         .iter()
@@ -222,7 +221,7 @@ fn test_encrypt_file_name_is_set() {
         .collect();
     let members: Vec<_> = recipients_with_keys
         .iter()
-        .map(|(_, pk)| make_recipient_key(pk.clone()))
+        .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
 
     let result = file_enc::encrypt_file_document(
@@ -232,7 +231,7 @@ fn test_encrypt_file_name_is_set() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
@@ -249,7 +248,7 @@ fn test_encrypt_file_sid_is_uuid() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let (recipient_ids, members) = recipients_and_members(&recipients_with_keys);
 
@@ -260,7 +259,7 @@ fn test_encrypt_file_sid_is_uuid() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
@@ -279,8 +278,7 @@ fn test_encrypt_file_sid_is_uuid() {
 fn test_encrypt_file_deterministic_structure() {
     let (_sk, pk) = generate_x25519_keypair([1u8; 32]);
     let pk_b64 = b64url(pk.as_bytes());
-    let alice =
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
+    let alice = build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64);
     let (recipient_ids1, members1) =
         recipients_and_members(&[(ALICE_MEMBER_ID.to_string(), alice.clone())]);
     let (recipient_ids2, members2) =
@@ -295,7 +293,7 @@ fn test_encrypt_file_deterministic_structure() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
+            signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -307,7 +305,7 @@ fn test_encrypt_file_deterministic_structure() {
         &SigningContext {
             signing_key: &signing_key,
             signer_kid,
-            signer_pub: create_test_public_key("signer@test", signer_kid, "dummy"),
+            signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
             debug: false,
         },
     )
@@ -338,7 +336,7 @@ fn test_encrypt_file_no_recipient_found() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
@@ -359,7 +357,7 @@ fn test_encrypt_file_signature_included() {
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
         ALICE_MEMBER_ID.to_string(),
-        create_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
     )];
     let (recipient_ids, members) = recipients_and_members(&recipients_with_keys);
 
@@ -370,7 +368,7 @@ fn test_encrypt_file_signature_included() {
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            signer_pub: create_test_public_key(
+            signer_pub: build_test_public_key(
                 "signer@test",
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",

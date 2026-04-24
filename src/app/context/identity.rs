@@ -4,23 +4,23 @@
 use std::path::Path;
 
 use crate::config::resolution::github_user::resolve_github_user;
-use crate::config::resolution::member_id::resolve_member_id_with_fallback;
+use crate::config::resolution::member_handle::resolve_member_handle_with_fallback;
 use crate::{Error, Result};
 
-pub(crate) fn resolve_member_id_input(
-    member_id: Option<String>,
+pub(crate) fn resolve_member_handle_input(
+    member_handle: Option<String>,
     base_dir: Option<&Path>,
 ) -> Result<Option<String>> {
-    resolve_member_id_with_fallback(member_id, base_dir)
+    resolve_member_handle_with_fallback(member_handle, base_dir)
 }
 
-pub(crate) fn require_member_id_input(
-    member_id: Option<String>,
+pub(crate) fn require_member_handle_input(
+    member_handle: Option<String>,
     base_dir: Option<&Path>,
     include_prompt_hint: bool,
 ) -> Result<String> {
-    resolve_member_id_input(member_id, base_dir)?
-        .ok_or_else(|| build_missing_member_id_error(include_prompt_hint))
+    resolve_member_handle_input(member_handle, base_dir)?
+        .ok_or_else(|| build_missing_member_handle_error(include_prompt_hint))
 }
 
 pub(crate) fn resolve_github_user_input(
@@ -30,7 +30,7 @@ pub(crate) fn resolve_github_user_input(
     resolve_github_user(github_user, base_dir)
 }
 
-pub(crate) fn build_missing_member_id_error(include_prompt_hint: bool) -> Error {
+pub(crate) fn build_missing_member_handle_error(include_prompt_hint: bool) -> Error {
     let prompt_hint = if include_prompt_hint {
         "\n                  4. Run in an interactive terminal for prompt"
     } else {

@@ -6,7 +6,7 @@
 //! Tests for common decryption helpers and member key context.
 
 use crate::app::context::crypto::load_crypto_context;
-use crate::test_utils::keygen_helpers::make_verified_members;
+use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     load_fixture_ssh_pubkey, setup_member_key_context, setup_test_keystore_from_fixtures,
 };
@@ -43,7 +43,7 @@ fn test_parse_verify_decrypt_kv() {
     // Create kv-enc content using signing key from CryptoContext
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
     let members = vec![public_key.clone()];
-    let verified_members = make_verified_members(&members);
+    let verified_members = build_verified_recipient_keys(&members);
 
     let encrypted = encrypt_kv_document(
         &kv_map,
@@ -99,7 +99,7 @@ fn test_parse_verify_decrypt_file() {
     let content = b"Hello, World!";
     let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
     let members = vec![public_key.clone()];
-    let verified_members = make_verified_members(&members);
+    let verified_members = build_verified_recipient_keys(&members);
 
     let file_enc_doc = encrypt_file_document(
         content,
@@ -182,7 +182,7 @@ fn test_crypto_context_load_fails_when_public_key_mismatches_private_key() {
     let (plaintext2, public_key2) =
         crate::test_utils::keygen_helpers::keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub)
             .unwrap();
-    let private_key2 = crate::test_utils::keygen_helpers::create_test_private_key(
+    let private_key2 = crate::test_utils::keygen_helpers::build_test_private_key(
         &plaintext2,
         &public_key2.protected.member_id,
         &public_key2.protected.kid,

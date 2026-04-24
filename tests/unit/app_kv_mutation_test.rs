@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::kv::mutation::{build_mutation_write_plan, set_kv_command, MutationWriteTrustPlan};
+use crate::app::kv::mutation::{
+    resolve_mutation_write_plan, set_kv_command, MutationWriteTrustPlan,
+};
 use crate::app::trust::SetPolicy;
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
 use crate::feature::kv::types::KvInputEntry;
 use crate::io::keystore::active::set_active_kid;
 use crate::io::keystore::storage::list_kids;
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace_from_fixtures,
-    setup_trust_store_for_workspace, sync_active_public_key_to_workspace,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
+    setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at, with_temp_cwd, EnvGuard,
 };
 use std::fs;
@@ -24,7 +26,7 @@ fn evaluate_set_plan(
     name: Option<&str>,
 ) -> MutationWriteTrustPlan<SetPolicy> {
     let ssh_ctx = Some(resolve_test_ssh_context(options, ALICE_MEMBER_ID));
-    build_mutation_write_plan::<SetPolicy>(
+    resolve_mutation_write_plan::<SetPolicy>(
         options,
         Some(ALICE_MEMBER_ID.to_string()),
         name,
@@ -177,7 +179,7 @@ fn test_evaluate_set_rejects_strict_key_checking_no_for_existing_file() {
         std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "no");
 
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_ID));
-        let result = build_mutation_write_plan::<SetPolicy>(
+        let result = resolve_mutation_write_plan::<SetPolicy>(
             &options,
             Some(ALICE_MEMBER_ID.to_string()),
             None,
@@ -203,7 +205,7 @@ fn test_evaluate_kv_write_trust_surfaces_insecure_trust_store_warning() {
     activate_fixture_key(temp_dir.path());
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     with_temp_cwd(temp_dir.path(), || {
@@ -217,7 +219,7 @@ fn test_evaluate_kv_write_trust_surfaces_insecure_trust_store_warning() {
 }
 
 #[test]
-fn test_build_mutation_write_plan_includes_private_key_expiry_warning() {
+fn test_resolve_mutation_write_plan_includes_private_key_expiry_warning() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
     let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -235,7 +237,7 @@ fn test_build_mutation_write_plan_includes_private_key_expiry_warning() {
 }
 
 #[test]
-fn test_build_mutation_write_plan_includes_recipient_key_expiry_warning() {
+fn test_resolve_mutation_write_plan_includes_recipient_key_expiry_warning() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
@@ -243,7 +245,7 @@ fn test_build_mutation_write_plan_includes_recipient_key_expiry_warning() {
     activate_fixture_key(temp_dir.path());
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
-    sync_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 

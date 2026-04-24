@@ -10,10 +10,10 @@ use crate::feature::verify::public_key::{
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
 use crate::io::workspace::members::{
-    active_member_file_path, list_active_member_paths, load_member_file_from_path,
+    get_active_member_file_path, list_active_member_paths, load_member_file_from_path,
 };
 use crate::model::public_key::PublicKey;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::ffi::OsStr;
 use std::path::Path;
@@ -32,7 +32,7 @@ pub struct VerifiedMemberFile {
     pub warnings: Vec<String>,
 }
 
-pub fn load_and_verify_member_file(
+pub fn verify_member_file(
     member_file: &Path,
     expected_member_id: Option<&str>,
     debug: bool,
@@ -67,7 +67,7 @@ fn load_verified_member_subject_from_file(
 ) -> Result<VerifiedMemberSubject> {
     let fallback_member_id = expected_member_id
         .map(str::to_string)
-        .unwrap_or_else(|| member_id_from_path(member_file));
+        .unwrap_or_else(|| derive_member_id_from_path(member_file));
     let public_key = load_member_file_from_path(member_file)?;
 
     validate_member_file_member_id(member_file, &fallback_member_id, &public_key)?;
@@ -100,19 +100,19 @@ fn validate_member_file_member_id(
     Err(Error::InvalidArgument {
         message: format!(
             "Member handle mismatch in {}: expected '{}', found '{}'",
-            display_path_relative_to_cwd(member_file),
+            format_path_relative_to_cwd(member_file),
             expected_member_id,
             public_key.protected.member_id
         ),
     })
 }
 
-pub fn member_id_from_path(member_file: &Path) -> String {
+pub fn derive_member_id_from_path(member_file: &Path) -> String {
     member_file
         .file_stem()
         .and_then(OsStr::to_str)
         .map(str::to_string)
-        .unwrap_or_else(|| display_path_relative_to_cwd(member_file))
+        .unwrap_or_else(|| format_path_relative_to_cwd(member_file))
 }
 
 /// Verify binding_claims.github_account for members (GitHub).
@@ -133,7 +133,7 @@ pub async fn verify_member_public_keys(
 }
 
 /// Classify verification results into verified, failed, and not_configured.
-pub fn classify_verification_results(
+pub fn build_verification_result_groups(
     results: &[VerificationResult],
 ) -> (
     Vec<&VerificationResult>,
@@ -167,12 +167,16 @@ pub async fn verify_member_files(
         |member_file, verbose| {
             load_verified_member_subject_from_file(
                 member_file,
-                Some(&member_id_from_path(member_file)),
+                Some(&derive_member_id_from_path(member_file)),
                 verbose,
             )
         },
         |member_file, error| {
-            build_offline_verification_failure(&member_id_from_path(member_file), error, false)
+            build_offline_verification_failure(
+                &derive_member_id_from_path(member_file),
+                error,
+                false,
+            )
         },
     )
     .await
@@ -245,7 +249,7 @@ async fn verify_member_subject_online(
         Ok(result) => result,
         Err(e) => VerificationResult::failed(
             &subject.member_id,
-            format!("Online verification error: {}", e.user_message()),
+            format!("Online verification error: {}", e.format_user_message()),
             None,
             has_github_claim(&subject.public_key),
         ),
@@ -265,7 +269,7 @@ fn list_verifiable_member_files(
     member_ids
         .iter()
         .map(|member_id| {
-            let path = active_member_file_path(workspace_path, member_id);
+            let path = get_active_member_file_path(workspace_path, member_id);
             path.exists()
                 .then_some(path)
                 .ok_or_else(|| Error::NotFound {
@@ -294,7 +298,10 @@ fn build_offline_verification_failure(
 ) -> VerificationResult {
     VerificationResult::failed(
         member_id,
-        format!("Offline verification failed: {}", error.user_message()),
+        format!(
+            "Offline verification failed: {}",
+            error.format_user_message()
+        ),
         None,
         github_claim_present,
     )

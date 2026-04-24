@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use super::verification::classify_verification_results;
+use super::verification::build_verification_result_groups;
 use crate::io::verify_online::VerificationResult;
 use crate::io::workspace::members::promote_specified_incoming_members;
 use crate::Result;
@@ -22,7 +22,7 @@ pub struct IncomingVerificationReport {
 
 impl IncomingVerificationReport {
     /// Return member IDs from all categories.
-    pub fn all_member_ids(&self) -> Vec<String> {
+    pub fn collect_member_ids(&self) -> Vec<String> {
         self.verified
             .iter()
             .chain(self.failed.iter())
@@ -32,12 +32,12 @@ impl IncomingVerificationReport {
     }
 
     /// Return member IDs from verified category only.
-    pub fn verified_member_ids(&self) -> Vec<String> {
+    pub fn collect_verified_member_ids(&self) -> Vec<String> {
         self.verified.iter().map(|r| r.member_id.clone()).collect()
     }
 
     /// Return member IDs excluding online-verification-failed members.
-    pub fn non_failed_member_ids(&self) -> Vec<String> {
+    pub fn collect_promotable_member_ids(&self) -> Vec<String> {
         self.verified
             .iter()
             .chain(self.not_configured.iter())
@@ -46,11 +46,11 @@ impl IncomingVerificationReport {
     }
 }
 
-/// Classify incoming verification results for promotion workflows.
+/// Classify incoming verification results for promotion operations.
 pub fn build_incoming_verification_report(
     results: &[VerificationResult],
 ) -> IncomingVerificationReport {
-    let (verified, failed, not_configured) = classify_verification_results(results);
+    let (verified, failed, not_configured) = build_verification_result_groups(results);
 
     IncomingVerificationReport {
         verified: verified.into_iter().cloned().collect(),

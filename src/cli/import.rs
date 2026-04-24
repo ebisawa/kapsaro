@@ -26,7 +26,7 @@ pub struct ImportArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Secret store name; defaults to "default"
     #[arg(long, short = 'n')]
@@ -45,11 +45,11 @@ pub fn run(args: ImportArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let (outcome, entry_count) = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
             run_kv_write_command_with_trust::<ImportPolicy, _, _>(
                 &args.common,
-                args.member_id.clone(),
+                args.member_handle.clone(),
                 args.name.as_deref(),
                 true,
                 WriteCommandLabels {

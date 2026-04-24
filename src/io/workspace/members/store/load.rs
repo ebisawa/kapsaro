@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::paths::{find_member_path, members_dir, MemberStatus};
-use crate::format::schema::document::parse_public_key_file;
+use crate::format::schema::document::parse_public_key_str;
 use crate::model::public_key::PublicKey;
-use crate::support::fs::list_dir;
-use crate::support::kid::kid_display_lossy;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::fs::{list_dir, load_text_with_limit};
+use crate::support::kid::format_kid_display_lossy;
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -20,10 +21,10 @@ pub(crate) fn load_json_files_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut paths: Vec<PathBuf> = entries
         .map(|entry| -> Result<Option<PathBuf>> {
             let entry = entry.map_err(|e| {
-                Error::io_with_source(
+                Error::build_io_error_with_source(
                     format!(
                         "Failed to read directory entry in {}: {}",
-                        display_path_relative_to_cwd(dir),
+                        format_path_relative_to_cwd(dir),
                         e
                     ),
                     e,
@@ -113,7 +114,7 @@ pub fn load_active_member_index_by_kid(
             return Err(Error::Config {
                 message: format!(
                     "Ambiguous key: kid '{}' found in multiple members",
-                    kid_display_lossy(&kid)
+                    format_kid_display_lossy(&kid)
                 ),
             });
         }
@@ -166,7 +167,9 @@ pub fn list_member_file_paths(
 }
 
 pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {
-    parse_public_key_file(path)
+    let source_name = format_path_relative_to_cwd(path);
+    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
+    parse_public_key_str(&content, &source_name)
 }
 
 /// Load a member file and require that its stem matches `protected.member_id`.
@@ -185,7 +188,7 @@ pub fn load_verified_member_file_from_path(path: &Path) -> Result<PublicKey> {
         .ok_or_else(|| Error::InvalidArgument {
             message: format!(
                 "Member file has no readable stem: {}",
-                display_path_relative_to_cwd(path)
+                format_path_relative_to_cwd(path)
             ),
         })?;
     if stem != public_key.protected.member_id {

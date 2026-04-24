@@ -5,13 +5,13 @@
 //!
 //! Tests for time-related helpers.
 
-use secretenv::support::time::{build_timestamp_display, current_timestamp};
+use secretenv::support::time::{format_timestamp_rfc3339, generate_current_timestamp};
 use time::OffsetDateTime;
 
 #[test]
-fn test_build_timestamp_display() {
+fn test_format_timestamp_rfc3339() {
     let dt = OffsetDateTime::from_unix_timestamp(1609459200).unwrap(); // 2021-01-01T00:00:00Z
-    let formatted = build_timestamp_display(dt).unwrap();
+    let formatted = format_timestamp_rfc3339(dt).unwrap();
 
     assert!(formatted.contains("2021-01-01"));
     assert!(formatted.contains("00:00:00"));
@@ -19,7 +19,7 @@ fn test_build_timestamp_display() {
 
 #[test]
 fn test_current_timestamp() {
-    let timestamp = current_timestamp().unwrap();
+    let timestamp = generate_current_timestamp().unwrap();
 
     // Verify it's a valid RFC 3339 timestamp
     assert!(timestamp.contains("T"));
@@ -27,9 +27,9 @@ fn test_current_timestamp() {
 }
 
 #[test]
-fn test_build_timestamp_display_no_subseconds() {
+fn test_format_timestamp_rfc3339_no_subseconds() {
     let dt = OffsetDateTime::from_unix_timestamp(1609459200).unwrap();
-    let formatted = build_timestamp_display(dt).unwrap();
+    let formatted = format_timestamp_rfc3339(dt).unwrap();
 
     // Should not contain subseconds
     assert!(!formatted.contains("."));

@@ -3,7 +3,7 @@
 
 //! Key Derivation Functions
 
-use crate::crypto::crypto_operation_failed;
+use crate::crypto::build_crypto_operation_error;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::Cek;
 use crate::crypto::types::primitives::AsHkdfSalt;
@@ -16,7 +16,7 @@ use zeroize::Zeroizing;
 fn expand_internal(ikm: &Ikm, salt: Option<&[u8]>, info: &Info, output: &mut [u8]) -> Result<()> {
     let hkdf = Hkdf::<Sha256>::new(salt, ikm.as_bytes());
     hkdf.expand(info.as_bytes(), output)
-        .map_err(|_| crypto_operation_failed("HKDF expand failed"))
+        .map_err(|_| build_crypto_operation_error("HKDF expand failed"))
 }
 
 /// Expand HKDF-SHA256

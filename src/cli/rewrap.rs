@@ -25,7 +25,7 @@ pub struct RewrapArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Rotate content key (full re-encryption)
     #[arg(long)]
@@ -40,7 +40,7 @@ pub fn run(args: RewrapArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
-        || batch::execute_batch_rewrap(&args),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || batch::run_batch_rewrap(&args),
     )
 }

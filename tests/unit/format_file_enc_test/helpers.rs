@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keygen_helpers::{make_decrypted_private_key_plaintext, make_recipient_key};
+use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_key};
 use ed25519_dalek::SigningKey;
-use secretenv::crypto::kem::{public_key_from_secret, X25519PublicKey, X25519SecretKey};
+use secretenv::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
@@ -34,8 +34,7 @@ pub(super) fn decrypt_file_document_for_test(
         Vec::new(),
     );
     let verified_doc = VerifiedFileEncDocument::new(file_enc_doc.clone(), proof);
-    let decrypted_key =
-        make_decrypted_private_key_plaintext(private_key, member_id, kid, "SHA256:test");
+    let decrypted_key = build_verified_private_key(private_key, member_id, kid, "SHA256:test");
     decrypt_file_document(&verified_doc, member_id, kid, &decrypted_key, false).unwrap()
 }
 
@@ -46,7 +45,7 @@ pub(super) fn generate_x25519_keypair(seed: [u8; 32]) -> (X25519SecretKey, X2551
     clamped[31] |= 64;
 
     let secret = X25519SecretKey::from_bytes(clamped);
-    let public = public_key_from_secret(&secret).unwrap();
+    let public = derive_public_key_from_secret(&secret).unwrap();
 
     (secret, public)
 }
@@ -64,12 +63,12 @@ pub(super) fn recipients_and_members(
         .collect();
     let members = recipients_with_keys
         .iter()
-        .map(|(_, pk)| make_recipient_key(pk.clone()))
+        .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
     (recipient_ids, members)
 }
 
-pub(super) fn create_test_public_key(member_id: &str, kid: &str, kem_pub: &str) -> PublicKey {
+pub(super) fn build_test_public_key(member_id: &str, kid: &str, kem_pub: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
             format: secretenv::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
@@ -103,7 +102,7 @@ pub(super) fn create_test_public_key(member_id: &str, kid: &str, kem_pub: &str) 
     }
 }
 
-pub(super) fn create_test_private_key(
+pub(super) fn build_test_private_key(
     sk: &X25519SecretKey,
     pk: &X25519PublicKey,
 ) -> PrivateKeyPlaintext {

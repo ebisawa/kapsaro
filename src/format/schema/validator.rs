@@ -5,7 +5,7 @@
 
 use crate::model::identifiers::format::{FILE_ENC_V3, PRIVATE_KEY_V5, PUBLIC_KEY_V4};
 use crate::support::fs::load_text;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ static EMBEDDED_TRUST_VALIDATOR: LazyLock<std::result::Result<Validator, String>
             .map_err(|e| format!("Failed to compile embedded trust schema: {}", e))
     });
 
-pub fn embedded_validator() -> Result<&'static Validator> {
+pub fn load_embedded_validator() -> Result<&'static Validator> {
     EMBEDDED_VALIDATOR.as_ref().map_err(|e| Error::Schema {
         message: e.clone(),
         source: None,
@@ -38,7 +38,7 @@ pub fn embedded_validator() -> Result<&'static Validator> {
 }
 
 /// Get the embedded Trust Store schema validator.
-pub fn embedded_trust_validator() -> Result<&'static Validator> {
+pub fn load_embedded_trust_validator() -> Result<&'static Validator> {
     EMBEDDED_TRUST_VALIDATOR
         .as_ref()
         .map_err(|e| Error::Schema {
@@ -82,7 +82,7 @@ impl Validator {
                 return serde_json::from_str(&content).map_err(|e| Error::Parse {
                     message: format!(
                         "Failed to parse schema file {}: {}",
-                        display_path_relative_to_cwd(path),
+                        format_path_relative_to_cwd(path),
                         e
                     ),
                     source: Some(Box::new(e)),

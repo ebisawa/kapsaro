@@ -24,7 +24,7 @@ fn test_encrypt_file_with_workspace() {
 
     let args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         out: Some(output_path.clone()),
         stdout: false,
         stdin: false,
@@ -58,7 +58,7 @@ fn test_encrypt_no_active_members_error() {
 
     let args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         out: Some(workspace_dir.join("output.encrypted")),
         stdout: false,
         stdin: false,

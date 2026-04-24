@@ -4,13 +4,13 @@
 //! Rewrap operations for kv-enc v3 format.
 
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::kv::document::UnsignedKvDocument;
+use crate::feature::kv::document::KvDocumentDraft;
 use crate::feature::kv::rewrite_session::{KvRecipientRewriteRequest, VerifiedKvRewriteSession};
 use crate::feature::recipient::{
-    check_recipient_exists, collect_target_recipient_ids, resolve_verified_recipients,
-    validate_not_empty_recipients, warn_recipient_not_found,
+    check_recipient_exists, collect_target_recipient_ids, print_recipient_not_found_warning,
+    resolve_verified_recipients, validate_not_empty_recipients,
 };
-use crate::feature::rewrap::kv_op::recipients::{add_kv_recipients, refresh_kv_recipients};
+use crate::feature::rewrap::kv_op::recipients::{add_kv_recipients, rewrite_kv_recipient_wraps};
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
@@ -20,14 +20,14 @@ use crate::Result;
 use std::path::Path;
 
 use super::{
-    collect_stale_recipient_ids, execute_rewrap_operations, RewrapContext, RewrapExecutor,
-    RewrapOptions,
+    build_rewrap_operation_plan, collect_stale_recipient_ids, rewrite_with_rewrap_operation_plan,
+    RewrapContext, RewrapExecutor, RewrapOptions,
 };
 
 /// Executor for kv-enc rewrap operations.
 struct KvRewrapExecutor<'a> {
     session: VerifiedKvRewriteSession<'a>,
-    doc: UnsignedKvDocument,
+    doc: KvDocumentDraft,
     ctx: &'a RewrapContext<'a>,
 }
 
@@ -51,10 +51,10 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
         self.doc.update_timestamp()
     }
 
-    fn refresh_recipients(&mut self, recipients: &[String]) -> Result<()> {
+    fn rewrite_recipient_wraps(&mut self, recipients: &[String]) -> Result<()> {
         let sid = self.doc.head().sid;
         let master_key = self.session.unwrap_master_key()?;
-        refresh_kv_recipients(
+        rewrite_kv_recipient_wraps(
             &sid,
             self.doc.wrap_mut(),
             recipients,
@@ -70,12 +70,12 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
         let mut current_recipients = self.session.current_recipients();
         for recipient in recipients {
             if !check_recipient_exists(&current_recipients, recipient) {
-                warn_recipient_not_found(recipient);
+                print_recipient_not_found_warning(recipient);
             }
         }
         current_recipients.retain(|recipient| !recipients.contains(recipient));
         validate_not_empty_recipients(&current_recipients)?;
-        let new_content = self.session.reencrypt_with_recipients(
+        let new_content = self.session.rewrap_kv_with_recipients(
             self.ctx.target_members(),
             KvRecipientRewriteRequest {
                 new_recipients: &current_recipients,
@@ -91,7 +91,7 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
 
     fn rotate_key(&mut self) -> Result<()> {
         let current_recipients = self.session.current_recipients();
-        let new_content = self.session.reencrypt_with_recipients(
+        let new_content = self.session.rewrap_kv_with_recipients(
             self.ctx.target_members(),
             KvRecipientRewriteRequest {
                 new_recipients: &current_recipients,
@@ -170,5 +170,11 @@ pub fn rewrap_kv_document(
 
     let ctx = RewrapContext::new(options, member_id, key_ctx, Some(&verified_target_members));
     let executor = KvRewrapExecutor::new_from_verified(verified, &ctx)?;
-    execute_rewrap_operations(executor, options, &all_members, &stale_recipients)
+    let plan = build_rewrap_operation_plan(
+        &executor.current_recipients(),
+        &all_members,
+        &stale_recipients,
+        options,
+    );
+    rewrite_with_rewrap_operation_plan(executor, plan)
 }

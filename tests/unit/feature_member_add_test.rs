@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
 
-fn write_tampered_public_key(export_file: &std::path::Path, tamper: impl FnOnce(&mut Value)) {
+fn save_tampered_public_key(export_file: &std::path::Path, tamper: impl FnOnce(&mut Value)) {
     let mut value: Value = serde_json::from_str(&fs::read_to_string(export_file).unwrap()).unwrap();
     tamper(&mut value);
     fs::write(export_file, serde_json::to_string_pretty(&value).unwrap()).unwrap();
@@ -130,7 +130,7 @@ fn test_add_member_invalid_self_signature_error() {
     let export_dir = TempDir::new().unwrap();
     let export_file = export_dir.path().join("alice.json");
     fs::write(&export_file, &key_content).unwrap();
-    write_tampered_public_key(&export_file, |value| {
+    save_tampered_public_key(&export_file, |value| {
         value["protected"]["expires_at"] = Value::String("2030-01-01T00:00:00Z".to_string());
     });
 
@@ -153,7 +153,7 @@ fn test_add_member_invalid_attestation_error() {
     let export_dir = TempDir::new().unwrap();
     let export_file = export_dir.path().join("alice.json");
     fs::write(&export_file, &key_content).unwrap();
-    write_tampered_public_key(&export_file, |value| {
+    save_tampered_public_key(&export_file, |value| {
         value["protected"]["identity"]["attestation"]["pub"] =
             Value::String("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBroken broken@test".to_string());
     });

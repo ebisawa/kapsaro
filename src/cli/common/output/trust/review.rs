@@ -8,11 +8,11 @@ use console::Style;
 use crate::app::rewrap::promotion::PromotionReviewFailure;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning_line;
-use crate::support::kid::build_kid_display;
+use crate::support::kid::format_kid_display;
 
-pub(crate) fn build_candidate_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
+pub(crate) fn format_candidate_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
     let kid_display =
-        build_kid_display(&candidate.kid).unwrap_or_else(|_| candidate.kid.to_string());
+        format_kid_display(&candidate.kid).unwrap_or_else(|_| candidate.kid.to_string());
     let mut lines = vec![format!("  kid: {}", kid_display)];
     if let Some(fingerprint) = &candidate.fingerprint {
         lines.push(format!("  attestation fingerprint: {}", fingerprint));
@@ -37,7 +37,7 @@ pub(crate) fn build_candidate_review_lines(candidate: &TrustApprovalCandidate) -
                     .unwrap_or("online verification failed")
             )
         } else {
-            "  Warning: GitHub binding claim is present, but this flow did not verify it online."
+            "  Warning: GitHub binding claim is present, but this command did not verify it online."
                 .to_string()
         };
         lines.push(warning);
@@ -57,7 +57,7 @@ pub(crate) fn build_candidate_review_lines(candidate: &TrustApprovalCandidate) -
 }
 
 pub(crate) fn print_candidate_review(candidate: &TrustApprovalCandidate) {
-    for line in build_candidate_review_lines(candidate) {
+    for line in format_candidate_review_lines(candidate) {
         if is_warning_line(&line) {
             print_warning_line(&line);
         } else {

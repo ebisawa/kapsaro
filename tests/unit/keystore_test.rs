@@ -5,7 +5,7 @@ use crate::test_utils::save_public_key;
 use crate::test_utils::TEST_MEMBER_ID;
 use secretenv::io::keystore::storage::*;
 use secretenv::model::private_key::{
-    EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyProtected,
+    PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyProtected,
 };
 use secretenv::model::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
@@ -42,7 +42,7 @@ fn test_save_and_load_private_key() {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             expires_at: "2025-01-01T00:00:00Z".to_string(),
         },
-        encrypted: EncryptedData {
+        encrypted: PrivateKeyEncData {
             nonce: "bm9uY2U".to_string(),
             ct: "Y3Q".to_string(),
         },

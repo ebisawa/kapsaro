@@ -23,7 +23,7 @@ fn kid_for(member_id: &str) -> &'static str {
     }
 }
 
-fn make_report(
+fn build_report(
     binding_configured: Vec<IncomingPromotionCandidate>,
     failed: Vec<IncomingPromotionCandidate>,
     not_configured: Vec<IncomingPromotionCandidate>,
@@ -36,7 +36,7 @@ fn make_report(
 }
 
 fn binding_configured_result(member_id: &str) -> IncomingPromotionCandidate {
-    make_candidate(
+    build_candidate(
         member_id,
         IncomingVerificationCategory::BindingConfigured,
         "pending online verification",
@@ -45,7 +45,7 @@ fn binding_configured_result(member_id: &str) -> IncomingPromotionCandidate {
     )
 }
 
-fn make_candidate(
+fn build_candidate(
     member_id: &str,
     category: IncomingVerificationCategory,
     message: &str,
@@ -116,9 +116,9 @@ fn self_trust() -> SelfTrustSet {
 
 #[test]
 fn test_build_promotion_review_plan_keeps_failed_candidates_without_aborting_batch() {
-    let report = make_report(
+    let report = build_report(
         vec![],
-        vec![make_candidate(
+        vec![build_candidate(
             "bob",
             IncomingVerificationCategory::Failed,
             "err",
@@ -138,10 +138,10 @@ fn test_build_promotion_review_plan_keeps_failed_candidates_without_aborting_bat
 
 #[test]
 fn test_build_promotion_review_plan_not_configured_non_interactive_errors() {
-    let report = make_report(
+    let report = build_report(
         vec![],
         vec![],
-        vec![make_candidate(
+        vec![build_candidate(
             "carol",
             IncomingVerificationCategory::NotConfigured,
             "no github",
@@ -161,9 +161,9 @@ fn test_build_promotion_review_plan_not_configured_non_interactive_errors() {
 
 #[test]
 fn test_build_promotion_review_plan_failed_only_non_interactive_still_succeeds() {
-    let report = make_report(
+    let report = build_report(
         vec![],
-        vec![make_candidate(
+        vec![build_candidate(
             "carol",
             IncomingVerificationCategory::Failed,
             "online verification failed",
@@ -183,7 +183,7 @@ fn test_build_promotion_review_plan_failed_only_non_interactive_still_succeeds()
 
 #[test]
 fn test_build_promotion_review_plan_auto_accepts_known_kid() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
 
     let result = build_promotion_review_plan(
         &report,
@@ -200,7 +200,7 @@ fn test_build_promotion_review_plan_auto_accepts_known_kid() {
 
 #[test]
 fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_prompt() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {
         kid: kid_for("alice").to_string(),
         member_id: "bob".to_string(),
@@ -227,10 +227,10 @@ fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_p
 #[test]
 fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_for_not_configured()
 {
-    let report = make_report(
+    let report = build_report(
         vec![],
         vec![],
-        vec![make_candidate(
+        vec![build_candidate(
             "carol",
             IncomingVerificationCategory::NotConfigured,
             "no github",
@@ -256,7 +256,7 @@ fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_
 
 #[test]
 fn test_build_promotion_review_session_moves_failed_online_verification_to_failed_candidates() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let review_plan =
         build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
 
@@ -274,10 +274,10 @@ fn test_build_promotion_review_session_moves_failed_online_verification_to_faile
 
 #[test]
 fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_selection() {
-    let report = make_report(
+    let report = build_report(
         vec![binding_configured_result("alice")],
         vec![],
-        vec![make_candidate(
+        vec![build_candidate(
             "carol",
             IncomingVerificationCategory::NotConfigured,
             "no github",
@@ -327,7 +327,7 @@ fn test_build_promotion_review_session_empty_report_produces_empty_view() {
 
 #[test]
 fn test_build_promotion_review_plan_auto_accepts_self_candidate_without_known_key() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
 
     let result = build_promotion_review_plan(&report, &[], &self_trust(), false).unwrap();
 
@@ -338,7 +338,7 @@ fn test_build_promotion_review_plan_auto_accepts_self_candidate_without_known_ke
 
 #[test]
 fn test_build_promotion_review_plan_rejects_self_candidate_when_identity_mismatches() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let mismatched_self_trust = SelfTrustSet::new("alice", [[7u8; 32]]);
 
     let result = build_promotion_review_plan(&report, &[], &mismatched_self_trust, true);
@@ -352,7 +352,7 @@ fn test_build_promotion_review_plan_rejects_self_candidate_when_identity_mismatc
 
 #[test]
 fn test_build_promotion_review_plan_rejects_self_candidate_when_local_identity_is_missing() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
 
     let result =
         build_promotion_review_plan(&report, &[], &SelfTrustSet::new("alice", [[7u8; 32]]), true);
@@ -366,7 +366,7 @@ fn test_build_promotion_review_plan_rejects_self_candidate_when_local_identity_i
 
 #[test]
 fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candidate() {
-    let report = make_report(vec![binding_configured_result("alice")], vec![], vec![]);
+    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {
         kid: kid_for("alice").to_string(),
         member_id: "bob".to_string(),

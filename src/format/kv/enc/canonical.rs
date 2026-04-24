@@ -67,14 +67,14 @@ pub fn build_canonical_bytes(lines: &[KvEncLine]) -> Vec<u8> {
 ///
 /// # Returns
 /// Tuple of (head_token, wrap_token) as raw strings
-pub fn extract_head_and_wrap_tokens(lines: &[KvEncLine]) -> Result<(String, String)> {
+pub fn extract_kv_header_tokens(lines: &[KvEncLine]) -> Result<(String, String)> {
     let head_token = lines
         .iter()
         .find_map(|line| match line {
             KvEncLine::Head { token } => Some(token.clone()),
             _ => None,
         })
-        .ok_or_else(|| FormatError::parse_failed("HEAD line not found in kv-enc v3"))?;
+        .ok_or_else(|| FormatError::build_parse_error("HEAD line not found in kv-enc v3"))?;
 
     let wrap_token = lines
         .iter()
@@ -82,7 +82,7 @@ pub fn extract_head_and_wrap_tokens(lines: &[KvEncLine]) -> Result<(String, Stri
             KvEncLine::Wrap { token } => Some(token.clone()),
             _ => None,
         })
-        .ok_or_else(|| FormatError::parse_failed("WRAP line not found in kv-enc v3"))?;
+        .ok_or_else(|| FormatError::build_parse_error("WRAP line not found in kv-enc v3"))?;
 
     Ok((head_token, wrap_token))
 }
@@ -98,7 +98,7 @@ pub fn parse_kv_wrap(content: &str) -> Result<(Vec<KvEncLine>, KvHeader, KvWrap)
     let parser = KvEncParser::new(content);
     let lines = parser.parse_all()?;
 
-    let (head_token, wrap_token) = extract_head_and_wrap_tokens(&lines)?;
+    let (head_token, wrap_token) = extract_kv_header_tokens(&lines)?;
 
     // Decode tokens
     let head_data = parse_kv_head_token(&head_token)?;

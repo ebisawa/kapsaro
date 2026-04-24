@@ -31,8 +31,8 @@ impl<'a> KnownKeyCache<'a> {
         Self { known_keys }
     }
 
-    pub fn match_identity(&self, identity: &TrustIdentity) -> KnownKeyMatch {
-        match_known_identity(self.known_keys, &[], identity)
+    pub fn judge_identity_match(&self, identity: &TrustIdentity) -> KnownKeyMatch {
+        judge_known_identity_match(self.known_keys, &[], identity)
     }
 }
 
@@ -44,14 +44,14 @@ impl<'a> AdditionalKnownKeyCache<'a> {
         }
     }
 
-    pub fn match_identity(&self, identity: &TrustIdentity) -> KnownKeyMatch {
-        match_known_identity(self.known_keys, self.additional_known_keys, identity)
+    pub fn judge_identity_match(&self, identity: &TrustIdentity) -> KnownKeyMatch {
+        judge_known_identity_match(self.known_keys, self.additional_known_keys, identity)
     }
 
     pub fn validate_recipient_integrity(&self, recipients: &[TrustIdentity]) -> Result<()> {
         for recipient in recipients {
             if let KnownKeyMatch::MemberIdMismatch { known_member_id } =
-                self.match_identity(recipient)
+                self.judge_identity_match(recipient)
             {
                 return Err(Error::Verify {
                     rule: "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
@@ -68,7 +68,7 @@ impl<'a> AdditionalKnownKeyCache<'a> {
     }
 }
 
-fn match_known_identity(
+fn judge_known_identity_match(
     known_keys: &[KnownKey],
     additional_known_keys: &[KnownKeyIdentity],
     identity: &TrustIdentity,

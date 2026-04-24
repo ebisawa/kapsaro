@@ -14,9 +14,9 @@ use secretenv::model::file_enc::{
 use secretenv::model::identifiers::hpke;
 use uuid::Uuid;
 
-use crate::keygen_helpers::make_dummy_public_key;
+use crate::keygen_helpers::build_dummy_public_key;
 
-fn create_test_file_enc_document_protected() -> FileEncDocumentProtected {
+fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
         format: secretenv::model::identifiers::format::FILE_ENC_V3.to_string(),
@@ -49,7 +49,7 @@ fn create_test_file_enc_document_protected() -> FileEncDocumentProtected {
 
 #[test]
 fn test_build_canonical_bytes_file_deterministic() {
-    let doc = create_test_file_enc_document_protected();
+    let doc = build_test_file_enc_document_protected();
 
     let bytes1 = build_file_signature_bytes(&doc).unwrap();
     let bytes2 = build_file_signature_bytes(&doc).unwrap();
@@ -63,13 +63,13 @@ fn test_sign_file_document_returns_valid_structure() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
 
-    let doc = create_test_file_enc_document_protected();
+    let doc = build_test_file_enc_document_protected();
 
     let sig = sign_file_document(
         &doc,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         false,
     )
     .unwrap();
@@ -89,13 +89,13 @@ fn test_verify_file_enc_signature_accepts_valid_signature() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let doc = create_test_file_enc_document_protected();
+    let doc = build_test_file_enc_document_protected();
 
     let sig = sign_file_document(
         &doc,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         false,
     )
     .unwrap();
@@ -108,13 +108,13 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let doc = create_test_file_enc_document_protected();
+    let doc = build_test_file_enc_document_protected();
 
     let sig = sign_file_document(
         &doc,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         false,
     )
     .unwrap();
@@ -136,13 +136,13 @@ fn test_sign_file_document_deterministic() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
 
-    let doc = create_test_file_enc_document_protected();
+    let doc = build_test_file_enc_document_protected();
 
     let sig1 = sign_file_document(
         &doc,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         false,
     )
     .unwrap();
@@ -150,7 +150,7 @@ fn test_sign_file_document_deterministic() {
         &doc,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        make_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         false,
     )
     .unwrap();

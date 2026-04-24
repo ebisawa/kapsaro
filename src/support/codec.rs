@@ -26,18 +26,18 @@ pub(crate) struct StandardDecodeLayout {
 }
 
 pub(crate) fn encode_public(data: &[u8], alphabet: &[u8; 64], pad: bool) -> String {
-    let mut out = vec![0u8; encoded_len(data.len(), pad)];
+    let mut out = vec![0u8; compute_encoded_len(data.len(), pad)];
     fill_encoded(data, &mut out, alphabet, pad);
     String::from_utf8(out).expect("base64 output must be valid ASCII")
 }
 
 pub(crate) fn encode_secret(data: &[u8], alphabet: &[u8; 64], pad: bool) -> Zeroizing<Vec<u8>> {
-    let mut out = Zeroizing::new(vec![0u8; encoded_len(data.len(), pad)]);
+    let mut out = Zeroizing::new(vec![0u8; compute_encoded_len(data.len(), pad)]);
     fill_encoded(data, &mut out, alphabet, pad);
     out
 }
 
-pub(crate) fn encoded_len(input_len: usize, pad: bool) -> usize {
+pub(crate) fn compute_encoded_len(input_len: usize, pad: bool) -> usize {
     let chunks = input_len / 3;
     let rem = input_len % 3;
     let base = chunks * 4;

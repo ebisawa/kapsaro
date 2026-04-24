@@ -4,7 +4,7 @@
 //! Shared recipient resolution and validation helpers.
 
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::verify::recipients::load_and_verify_recipient_public_keys;
+use crate::feature::verify::recipients::verify_recipient_public_keys_from_source;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::limits::validate_wrap_count;
 use crate::{Error, Result};
@@ -25,7 +25,7 @@ pub(crate) fn validate_not_empty_recipients(recipients: &[String]) -> Result<()>
     Ok(())
 }
 
-pub(crate) fn warn_recipient_not_found(rid: &str) {
+pub(crate) fn print_recipient_not_found_warning(rid: &str) {
     warn!("[CRYPTO] Warning: {} is not a recipient, skipping", rid);
 }
 
@@ -63,7 +63,7 @@ pub(crate) fn resolve_verified_recipients(
 ) -> Result<Vec<VerifiedRecipientKey>> {
     match target_members {
         Some(members) => load_snapshot_verified_recipients(members, recipient_ids),
-        None => load_and_verify_recipient_public_keys(
+        None => verify_recipient_public_keys_from_source(
             key_ctx.pub_key_source.as_ref(),
             recipient_ids,
             debug,
@@ -104,7 +104,7 @@ fn resolve_new_verified_recipients(
     Ok(filter_existing_recipients(recipients, current_recipients))
 }
 
-fn warn_recipient_already_exists(rid: &str) {
+fn print_recipient_already_exists_warning(rid: &str) {
     warn!("[CRYPTO] Warning: {} is already a recipient, skipping", rid);
 }
 
@@ -116,7 +116,7 @@ fn filter_existing_recipients(
     for member in recipients {
         let member_id = &member.document().protected.member_id;
         if check_recipient_exists(current_recipients, member_id) {
-            warn_recipient_already_exists(member_id);
+            print_recipient_already_exists_warning(member_id);
             continue;
         }
         filtered.push(member);

@@ -5,14 +5,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use super::preview_member_removal;
+use super::evaluate_member_removal;
 use crate::app_test_utils::build_test_signing_command_options;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::envelope::signature::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::storage::{list_kids, load_public_key};
-use crate::test_utils::keygen_helpers::make_verified_members;
+use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
 use serde_json::Value;
 use tempfile::TempDir;
@@ -54,12 +54,12 @@ fn build_verified_members(
         key_ctx,
         signer_kid,
         recipients,
-        make_verified_members(&public_keys),
+        build_verified_recipient_keys(&public_keys),
         signer_pub,
     )
 }
 
-fn write_file_artifact(
+fn save_file_artifact(
     workspace_dir: &Path,
     temp_dir: &TempDir,
     artifact_name: &str,
@@ -86,7 +86,7 @@ fn write_file_artifact(
     .unwrap();
 }
 
-fn write_kv_artifact(
+fn save_kv_artifact(
     workspace_dir: &Path,
     temp_dir: &TempDir,
     artifact_name: &str,
@@ -123,11 +123,11 @@ fn tamper_file_artifact_signature(workspace_dir: &Path, artifact_name: &str) {
 }
 
 #[test]
-fn test_preview_member_removal_detects_file_enc_recipient() {
+fn test_evaluate_member_removal_detects_file_enc_recipient() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let artifact_path = workspace_dir.join("secrets").join("shared.json");
-    write_file_artifact(
+    save_file_artifact(
         &workspace_dir,
         &temp_dir,
         "shared.json",
@@ -135,7 +135,7 @@ fn test_preview_member_removal_detects_file_enc_recipient() {
     );
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = preview_member_removal(&options, BOB_MEMBER_ID).unwrap();
+    let result = evaluate_member_removal(&options, BOB_MEMBER_ID).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("shared.json"));
@@ -147,11 +147,11 @@ fn test_preview_member_removal_detects_file_enc_recipient() {
 }
 
 #[test]
-fn test_preview_member_removal_detects_kv_enc_recipient() {
+fn test_evaluate_member_removal_detects_kv_enc_recipient() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let artifact_path = workspace_dir.join("secrets").join("default.kvenc");
-    write_kv_artifact(
+    save_kv_artifact(
         &workspace_dir,
         &temp_dir,
         "default.kvenc",
@@ -159,7 +159,7 @@ fn test_preview_member_removal_detects_kv_enc_recipient() {
     );
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = preview_member_removal(&options, BOB_MEMBER_ID).unwrap();
+    let result = evaluate_member_removal(&options, BOB_MEMBER_ID).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("default.kvenc"));
@@ -171,10 +171,10 @@ fn test_preview_member_removal_detects_kv_enc_recipient() {
 }
 
 #[test]
-fn test_preview_member_removal_ignores_unrelated_artifact() {
+fn test_evaluate_member_removal_ignores_unrelated_artifact() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
-    write_file_artifact(
+    save_file_artifact(
         &workspace_dir,
         &temp_dir,
         "alice-only.json",
@@ -182,20 +182,20 @@ fn test_preview_member_removal_ignores_unrelated_artifact() {
     );
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = preview_member_removal(&options, BOB_MEMBER_ID).unwrap();
+    let result = evaluate_member_removal(&options, BOB_MEMBER_ID).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert!(result.warnings.is_empty());
 }
 
 #[test]
-fn test_preview_member_removal_collects_warning_for_invalid_artifact() {
+fn test_evaluate_member_removal_collects_warning_for_invalid_artifact() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     fs::write(workspace_dir.join("secrets").join("broken.json"), "{broken").unwrap();
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = preview_member_removal(&options, BOB_MEMBER_ID).unwrap();
+    let result = evaluate_member_removal(&options, BOB_MEMBER_ID).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert_eq!(result.warnings.len(), 1);
@@ -203,10 +203,10 @@ fn test_preview_member_removal_collects_warning_for_invalid_artifact() {
 }
 
 #[test]
-fn test_preview_member_removal_collects_warning_for_invalid_signature() {
+fn test_evaluate_member_removal_collects_warning_for_invalid_signature() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
-    write_file_artifact(
+    save_file_artifact(
         &workspace_dir,
         &temp_dir,
         "tampered.json",
@@ -215,7 +215,7 @@ fn test_preview_member_removal_collects_warning_for_invalid_signature() {
     tamper_file_artifact_signature(&workspace_dir, "tampered.json");
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = preview_member_removal(&options, BOB_MEMBER_ID).unwrap();
+    let result = evaluate_member_removal(&options, BOB_MEMBER_ID).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert_eq!(result.warnings.len(), 1);

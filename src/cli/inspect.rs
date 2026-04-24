@@ -9,7 +9,7 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use crate::app::file::inspect::build_inspect_file_command;
+use crate::app::file::inspect::execute_inspect_file_command;
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::inspect::print_inspect_banner;
 use crate::cli::options::CommonOptions;
@@ -27,7 +27,7 @@ pub struct InspectArgs {
 
 pub fn run(args: InspectArgs) -> Result<()> {
     let options = resolve_options(&args.common);
-    let prepared = build_inspect_file_command(&options, &args.input)?;
+    let prepared = execute_inspect_file_command(&options, &args.input)?;
 
     print_inspect_banner(&prepared.input_display);
     print!("{}", prepared.rendered);

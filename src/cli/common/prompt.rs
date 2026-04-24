@@ -47,7 +47,7 @@ where
     let suffix = if default { "[Y/n]" } else { "[y/N]" };
     eprint!("{} {} ", prompt, suffix);
 
-    let line = read_prompt_line(&mut reader)?;
+    let line = load_prompt_line(&mut reader)?;
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return Ok(default);
@@ -61,10 +61,10 @@ fn confirm_yes_no_interactive(prompt: &str, default: bool) -> Result<bool> {
         .with_prompt(prompt)
         .default(default)
         .interact()
-        .map_err(|e| Error::io_with_source("Failed to read user input", e.into()))
+        .map_err(|e| Error::build_io_error_with_source("Failed to read user input", e.into()))
 }
 
-fn read_prompt_line<R>(reader: &mut R) -> Result<String>
+fn load_prompt_line<R>(reader: &mut R) -> Result<String>
 where
     R: BufRead,
 {
@@ -73,7 +73,7 @@ where
     loop {
         let buffer = reader
             .fill_buf()
-            .map_err(|e| Error::io_with_source("Failed to read user input", e))?;
+            .map_err(|e| Error::build_io_error_with_source("Failed to read user input", e))?;
         if buffer.is_empty() {
             break;
         }
@@ -92,7 +92,7 @@ where
     }
 
     String::from_utf8(bytes)
-        .map_err(|e| Error::parse_with_source("Failed to parse user input as UTF-8", e))
+        .map_err(|e| Error::build_parse_error_with_source("Failed to parse user input as UTF-8", e))
 }
 
 #[cfg(test)]

@@ -64,7 +64,7 @@ pub(crate) fn build_entry_tokens<'a>(
     entries
         .iter()
         .map(|entry| {
-            let token = encrypt_and_encode_entry(
+            let token = encode_encrypted_entry(
                 &entry.key,
                 &entry.value,
                 master_key,
@@ -78,7 +78,7 @@ pub(crate) fn build_entry_tokens<'a>(
         .collect()
 }
 
-fn encrypt_and_encode_entry(
+fn encode_encrypted_entry(
     key: &str,
     value: &str,
     master_key: &MasterKey,

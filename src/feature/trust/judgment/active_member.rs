@@ -25,7 +25,7 @@ impl<'a> ActiveMemberSnapshot<'a> {
         Self { members_by_kid }
     }
 
-    pub fn match_identity(&self, identity: &TrustIdentity) -> CurrentMemberMatch {
+    pub fn judge_identity_match(&self, identity: &TrustIdentity) -> CurrentMemberMatch {
         let Some(member) = self.members_by_kid.get(identity.kid()) else {
             return CurrentMemberMatch::Missing;
         };

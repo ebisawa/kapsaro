@@ -3,20 +3,20 @@
 
 //! Unit tests for trust store path resolution
 
-use secretenv::io::trust::paths::{trust_store_dir, trust_store_file_path};
+use secretenv::io::trust::paths::{get_trust_store_dir, get_trust_store_file_path};
 use std::path::Path;
 
 #[test]
-fn test_trust_store_dir() {
+fn test_get_trust_store_dir() {
     let base = Path::new("/home/alice/.config/secretenv");
-    let dir = trust_store_dir(base);
+    let dir = get_trust_store_dir(base);
     assert_eq!(dir, Path::new("/home/alice/.config/secretenv/trust"));
 }
 
 #[test]
 fn test_trust_store_file_path() {
     let base = Path::new("/home/alice/.config/secretenv");
-    let path = trust_store_file_path(base, "alice@example.com");
+    let path = get_trust_store_file_path(base, "alice@example.com");
     assert_eq!(
         path,
         Path::new("/home/alice/.config/secretenv/trust/alice@example.com.json")
@@ -26,6 +26,6 @@ fn test_trust_store_file_path() {
 #[test]
 fn test_trust_store_file_path_simple_member_id() {
     let base = Path::new("/tmp/test");
-    let path = trust_store_file_path(base, "bob");
+    let path = get_trust_store_file_path(base, "bob");
     assert_eq!(path, Path::new("/tmp/test/trust/bob.json"));
 }

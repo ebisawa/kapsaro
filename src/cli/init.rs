@@ -14,7 +14,7 @@ use clap::Args;
 
 use crate::app::registration::types::RegistrationMode;
 use crate::cli::options::CommonOptions;
-use crate::cli::registration::execute_registration_command;
+use crate::cli::registration::run_registration_command;
 use crate::Error;
 
 #[derive(Args)]
@@ -29,16 +29,16 @@ pub struct InitArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 }
 
 /// Initialize workspace structure and register member
 pub fn run(args: InitArgs) -> Result<(), Error> {
-    execute_registration_command(
+    run_registration_command(
         args.common,
         false,
         args.github_user,
-        args.member_id,
+        args.member_handle,
         RegistrationMode::Init,
     )
 }

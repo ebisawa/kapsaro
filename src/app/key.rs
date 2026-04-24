@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-layer orchestration for key workflows.
+//! Application-layer orchestration for key commands.
 
 pub(crate) mod export;
 pub(crate) mod generate;

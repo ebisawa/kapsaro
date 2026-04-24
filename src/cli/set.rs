@@ -27,7 +27,7 @@ pub struct SetArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Secret store name; defaults to "default"
     #[arg(long, short = 'n')]
@@ -55,7 +55,7 @@ fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<String> {
     } else if let Some(v) = value {
         Ok(v)
     } else {
-        Err(Error::invalid_argument(
+        Err(Error::build_invalid_argument_error(
             "VALUE is required; pass it as an argument or use --stdin",
         ))
     }
@@ -66,11 +66,11 @@ pub fn run(args: SetArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let outcome = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
             run_kv_write_command_with_trust::<SetPolicy, _, _>(
                 &args.common,
-                args.member_id.clone(),
+                args.member_handle.clone(),
                 args.name.as_deref(),
                 true,
                 WriteCommandLabels {

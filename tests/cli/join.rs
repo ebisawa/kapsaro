@@ -5,7 +5,7 @@
 //!
 //! Tests the join command that joins an existing workspace without creating it.
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
@@ -40,7 +40,7 @@ fn load_member_kid(path: &std::path::Path) -> String {
 fn test_join_existing_workspace() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let missing_key_message = format!(
         "No local key found for '{}'. Generating a new key...",
         TEST_MEMBER_ID
@@ -105,7 +105,7 @@ fn test_join_existing_workspace() {
 fn test_join_force_overwrites_existing_member() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -144,7 +144,7 @@ fn test_join_force_overwrites_existing_member() {
 fn test_join_existing_key_ignores_github_user_input() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
@@ -185,7 +185,7 @@ fn test_join_existing_key_ignores_github_user_input() {
 #[test]
 fn test_join_nonexistent_workspace_fails() {
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     cmd()
         .arg("join")
@@ -204,7 +204,7 @@ fn test_join_nonexistent_workspace_fails() {
 fn test_join_incomplete_workspace_fails() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // workspace_dir exists but has no members/ or secrets/ subdirectories
     cmd()
@@ -235,8 +235,8 @@ fn test_init_then_join_different_member() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir_alice = TempDir::new().unwrap();
     let home_dir_bob = TempDir::new().unwrap();
-    let (_ssh_temp_alice, ssh_priv_alice, _pub_alice, _) = create_temp_ssh_keypair();
-    let (_ssh_temp_bob, ssh_priv_bob, _pub_bob, _) = create_temp_ssh_keypair();
+    let (_ssh_temp_alice, ssh_priv_alice, _pub_alice, _) = generate_temp_ssh_keypair();
+    let (_ssh_temp_bob, ssh_priv_bob, _pub_bob, _) = generate_temp_ssh_keypair();
 
     // Alice creates workspace with init
     cmd()
@@ -285,7 +285,7 @@ fn test_init_then_join_different_member() {
 fn test_join_reports_existing_active_member_without_leading_blank_line() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     cmd()
         .arg("init")
@@ -323,7 +323,7 @@ fn test_join_reports_existing_active_member_without_leading_blank_line() {
 fn test_join_stages_new_generation_for_existing_active_member() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     cmd()
         .arg("init")

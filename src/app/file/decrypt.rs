@@ -7,8 +7,8 @@ use crate::app::context::execution::{
     build_read_execution_warnings, resolve_read_execution, ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigningContext;
-use crate::app::trust::{build_read_signer_trust, DecryptPolicy, SignerTrustOutcome};
+use crate::app::context::ssh::SshSigningContextResolution;
+use crate::app::trust::{evaluate_read_signer_trust, DecryptPolicy, SignerTrustOutcome};
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::verify::file::verify_file_content;
 use crate::format::content::FileEncContent;
@@ -22,20 +22,20 @@ pub(crate) struct DecryptFileCommand {
     verbose: bool,
 }
 
-pub(crate) fn build_decrypt_file_command(
+pub(crate) fn resolve_decrypt_file_command(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     kid: Option<&str>,
     content: FileEncContent,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<DecryptFileCommand> {
-    let execution = resolve_read_execution(options, member_id, kid, ssh_ctx)?;
+    let execution = resolve_read_execution(options, member_handle, kid, ssh_ctx)?;
     let mut warnings = build_read_execution_warnings(&execution)?;
 
     let verified_doc = verify_file_content(&content, options.verbose)?;
 
     let trust_plan =
-        build_read_signer_trust::<DecryptPolicy>(options, &execution, &verified_doc.proof)?;
+        evaluate_read_signer_trust::<DecryptPolicy>(options, &execution, &verified_doc.proof)?;
     warnings.extend(trust_plan.warnings);
 
     Ok(DecryptFileCommand {

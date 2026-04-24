@@ -42,7 +42,7 @@ pub fn add_kv_recipients(
     Ok(())
 }
 
-pub fn refresh_kv_recipients(
+pub fn rewrite_kv_recipient_wraps(
     sid: &Uuid,
     wrap_data: &mut KvWrap,
     refreshed_recipients: &[String],

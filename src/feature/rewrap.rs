@@ -9,7 +9,7 @@ pub(crate) mod kv;
 pub(crate) mod kv_op;
 
 use crate::feature::context::crypto::CryptoContext;
-use crate::format::content::EncryptedContent;
+use crate::format::content::EncContent;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::signer::load_signer_public_key;
 use crate::model::common::WrapItem;
@@ -92,8 +92,8 @@ pub(crate) trait RewrapExecutor {
     /// `recipients` are plain member ID strings.
     fn add_recipients(&mut self, recipients: &[String]) -> Result<()>;
 
-    /// Refresh wrap items for recipients whose target kid changed.
-    fn refresh_recipients(&mut self, recipients: &[String]) -> Result<()>;
+    /// Rewrite wrap items for recipients whose target kid changed.
+    fn rewrite_recipient_wraps(&mut self, recipients: &[String]) -> Result<()>;
 
     /// Remove recipients from the encrypted file.
     ///
@@ -113,43 +113,60 @@ pub(crate) trait RewrapExecutor {
     fn finalize(self) -> Result<String>;
 }
 
-/// Execute rewrap operations based on options.
-///
-/// Computes the diff between the file's current recipients and target_recipients (@all),
-/// applies remove first then add, then optional rotate-key and clear-disclosure-history.
-pub(crate) fn execute_rewrap_operations<E: RewrapExecutor>(
-    mut executor: E,
-    options: &RewrapOptions,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RewrapOperationPlan {
+    remove_recipients: Vec<String>,
+    stale_recipient_ids: Vec<String>,
+    add_recipients: Vec<String>,
+    rotate_key: bool,
+    clear_disclosure_history: bool,
+}
+
+/// Build the rewrap operation plan from current and target recipients.
+pub(crate) fn build_rewrap_operation_plan(
+    current_recipients: &[String],
     target_recipients: &[String],
     stale_recipients: &[String],
+    options: &RewrapOptions,
+) -> RewrapOperationPlan {
+    let remove_recipients = current_recipients
+        .iter()
+        .filter(|recipient| !target_recipients.contains(recipient))
+        .cloned()
+        .collect();
+    let add_recipients = target_recipients
+        .iter()
+        .filter(|recipient| !current_recipients.contains(*recipient))
+        .cloned()
+        .collect();
+
+    RewrapOperationPlan {
+        remove_recipients,
+        stale_recipient_ids: stale_recipients.to_vec(),
+        add_recipients,
+        rotate_key: options.rotate_key,
+        clear_disclosure_history: options.clear_disclosure_history,
+    }
+}
+
+/// Apply a rewrap operation plan and return the signed rewritten content.
+pub(crate) fn rewrite_with_rewrap_operation_plan<E: RewrapExecutor>(
+    mut executor: E,
+    plan: RewrapOperationPlan,
 ) -> Result<String> {
-    let current = executor.current_recipients();
-
-    // Remove first, then add (spec requires this order)
-    let removed: Vec<String> = current
-        .iter()
-        .filter(|r| !target_recipients.contains(r))
-        .cloned()
-        .collect();
-    let added: Vec<String> = target_recipients
-        .iter()
-        .filter(|r| !current.contains(*r))
-        .cloned()
-        .collect();
-
-    if !removed.is_empty() {
-        executor.remove_recipients(&removed)?;
+    if !plan.remove_recipients.is_empty() {
+        executor.remove_recipients(&plan.remove_recipients)?;
     }
-    if !stale_recipients.is_empty() {
-        executor.refresh_recipients(stale_recipients)?;
+    if !plan.stale_recipient_ids.is_empty() {
+        executor.rewrite_recipient_wraps(&plan.stale_recipient_ids)?;
     }
-    if !added.is_empty() {
-        executor.add_recipients(&added)?;
+    if !plan.add_recipients.is_empty() {
+        executor.add_recipients(&plan.add_recipients)?;
     }
-    if options.rotate_key {
+    if plan.rotate_key {
         executor.rotate_key()?;
     }
-    if options.clear_disclosure_history {
+    if plan.clear_disclosure_history {
         executor.clear_disclosure_history()?;
     }
 
@@ -173,19 +190,19 @@ pub(crate) fn collect_stale_recipient_ids(
         .collect()
 }
 
-pub fn rewrap_content(content: &EncryptedContent, request: &RewrapRequest<'_>) -> Result<String> {
+pub fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Result<String> {
     let options = RewrapOptions {
         rotate_key: request.rotate_key,
         clear_disclosure_history: request.clear_disclosure_history,
         token_codec: match content {
-            EncryptedContent::FileEnc(_) => None,
-            EncryptedContent::KvEnc(_) => Some(TokenCodec::JsonJcs),
+            EncContent::FileEnc(_) => None,
+            EncContent::KvEnc(_) => Some(TokenCodec::JsonJcs),
         },
         debug: request.debug,
     };
 
     match content {
-        EncryptedContent::FileEnc(file_content) => file::rewrap_file_document(
+        EncContent::FileEnc(file_content) => file::rewrap_file_document(
             &options,
             file_content,
             request.member_id,
@@ -193,7 +210,7 @@ pub fn rewrap_content(content: &EncryptedContent, request: &RewrapRequest<'_>) -
             request.workspace_root,
             request.target_members,
         ),
-        EncryptedContent::KvEnc(kv_content) => kv::rewrap_kv_document(
+        EncContent::KvEnc(kv_content) => kv::rewrap_kv_document(
             &options,
             kv_content,
             request.member_id,

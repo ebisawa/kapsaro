@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::trust::TrustApprovalCandidate;
-use crate::cli::common::output::trust::review::build_candidate_review_lines;
+use crate::cli::common::output::trust::review::format_candidate_review_lines;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::test_utils::{kid, member_id};
 
 #[test]
-fn test_build_candidate_review_lines_includes_required_fields() {
+fn test_format_candidate_review_lines_includes_required_fields() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -23,7 +23,7 @@ fn test_build_candidate_review_lines_includes_required_fields() {
         requires_out_of_band_verification: true,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(
@@ -37,7 +37,7 @@ fn test_build_candidate_review_lines_includes_required_fields() {
 }
 
 #[test]
-fn test_build_candidate_review_lines_warns_when_github_binding_is_missing() {
+fn test_format_candidate_review_lines_warns_when_github_binding_is_missing() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -53,7 +53,7 @@ fn test_build_candidate_review_lines_warns_when_github_binding_is_missing() {
         requires_out_of_band_verification: true,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(rendered.contains("kid: KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
@@ -61,7 +61,7 @@ fn test_build_candidate_review_lines_warns_when_github_binding_is_missing() {
 }
 
 #[test]
-fn test_build_candidate_review_lines_shows_github_id_without_login() {
+fn test_format_candidate_review_lines_shows_github_id_without_login() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -77,7 +77,7 @@ fn test_build_candidate_review_lines_shows_github_id_without_login() {
         requires_out_of_band_verification: true,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(rendered.contains("GitHub account id: 42"));
@@ -85,7 +85,7 @@ fn test_build_candidate_review_lines_shows_github_id_without_login() {
 }
 
 #[test]
-fn test_build_candidate_review_lines_warns_when_github_claim_is_unverified() {
+fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -101,14 +101,14 @@ fn test_build_candidate_review_lines_warns_when_github_claim_is_unverified() {
         requires_out_of_band_verification: true,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(rendered.contains("did not verify it online"));
 }
 
 #[test]
-fn test_build_candidate_review_lines_shows_online_verification_failure_message() {
+fn test_format_candidate_review_lines_shows_online_verification_failure_message() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -124,14 +124,14 @@ fn test_build_candidate_review_lines_shows_online_verification_failure_message()
         requires_out_of_band_verification: true,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(rendered.contains("online verification failed"));
 }
 
 #[test]
-fn test_build_candidate_review_lines_shows_verified_github_mark() {
+fn test_format_candidate_review_lines_shows_verified_github_mark() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -152,7 +152,7 @@ fn test_build_candidate_review_lines_shows_verified_github_mark() {
         requires_out_of_band_verification: false,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(
@@ -168,7 +168,7 @@ fn test_build_candidate_review_lines_shows_verified_github_mark() {
 }
 
 #[test]
-fn test_build_candidate_review_lines_no_verified_mark_without_online_verification() {
+fn test_format_candidate_review_lines_no_verified_mark_without_online_verification() {
     let candidate = TrustApprovalCandidate {
         member_id: member_id("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -184,7 +184,7 @@ fn test_build_candidate_review_lines_no_verified_mark_without_online_verificatio
         requires_out_of_band_verification: true,
     };
 
-    let lines = build_candidate_review_lines(&candidate);
+    let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
     assert!(

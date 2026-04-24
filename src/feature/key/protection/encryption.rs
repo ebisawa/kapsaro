@@ -16,12 +16,12 @@ use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use crate::model::identifiers::{alg, format};
 use crate::model::private_key::{
-    EncryptedData, PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
+    PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
 };
-use crate::support::kid::kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
 
@@ -51,13 +51,13 @@ fn build_protected_header(
 }
 
 /// Serialize plaintext and encrypt with XChaCha20-Poly1305
-pub(super) fn serialize_and_encrypt(
+pub(super) fn encrypt_serialized_private_key(
     plaintext: &PrivateKeyPlaintext,
     enc_key: &XChaChaKey,
     protected: &PrivateKeyProtected,
     debug: bool,
     caller: &str,
-) -> Result<EncryptedData> {
+) -> Result<PrivateKeyEncData> {
     // Serialize plaintext
     let plaintext_json = serde_json::to_vec(plaintext).map_err(|e| Error::Crypto {
         message: format!("Failed to serialize plaintext: {}", e),
@@ -71,12 +71,12 @@ pub(super) fn serialize_and_encrypt(
         debug!(
             "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (kid: {})",
             caller,
-            kid_display_lossy(&protected.kid)
+            format_kid_display_lossy(&protected.kid)
         );
     }
     let (ct, nonce) = xchacha::encrypt_with_nonce(enc_key, &plaintext, &aad)?;
 
-    Ok(EncryptedData {
+    Ok(PrivateKeyEncData {
         nonce: encode_base64url_nopad(nonce.as_bytes()),
         ct: encode_base64url_nopad(ct.as_bytes()),
     })
@@ -134,7 +134,7 @@ fn verify_ssh_fingerprint_matches(private_key: &PrivateKey, ssh_pubkey: &str) ->
 }
 
 /// Decrypt and deserialize plaintext
-pub(super) fn decrypt_and_deserialize(
+pub(super) fn decrypt_private_key_plaintext(
     enc_key: &XChaChaKey,
     nonce: &XChaChaNonce,
     aad: &Aad,
@@ -147,7 +147,7 @@ pub(super) fn decrypt_and_deserialize(
         debug!(
             "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (kid: {})",
             caller,
-            kid_display_lossy(kid)
+            format_kid_display_lossy(kid)
         );
     }
     let plaintext_json = xchacha::decrypt(enc_key, nonce, aad, ct)?;
@@ -200,7 +200,7 @@ pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<Pr
     )?;
 
     // Serialize and encrypt
-    let encrypted = serialize_and_encrypt(
+    let encrypted = encrypt_serialized_private_key(
         params.plaintext,
         &enc_key,
         &protected,
@@ -238,7 +238,7 @@ pub fn decrypt_private_key(
         debug,
     )?;
 
-    match decrypt_and_deserialize(
+    match decrypt_private_key_plaintext(
         &derived.enc_key,
         &nonce,
         &aad,
@@ -248,37 +248,37 @@ pub fn decrypt_private_key(
         "decrypt_private_key",
     ) {
         Ok(plaintext) => Ok(plaintext),
-        Err(error) => handle_private_key_use_failure(
-            private_key,
-            backend,
-            ssh_pubkey,
-            &derived.raw_sig,
-            error,
-            debug,
-        ),
+        Err(error) => {
+            enforce_private_key_use_determinism(
+                private_key,
+                backend,
+                ssh_pubkey,
+                &derived.raw_sig,
+                debug,
+            )?;
+            Err(build_private_key_decrypt_error(error))
+        }
     }
 }
 
-fn handle_private_key_use_failure(
+fn enforce_private_key_use_determinism(
     private_key: &PrivateKey,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     raw_sig: &crate::io::ssh::protocol::types::Ed25519RawSignature,
-    error: Error,
     debug: bool,
-) -> Result<PrivateKeyPlaintext> {
-    key_derivation::diagnose_private_key_use_signature(
+) -> Result<()> {
+    key_derivation::enforce_private_key_use_signature_determinism(
         &private_key.protected.kid,
         private_key.protected.alg.ikm_salt(),
         backend,
         ssh_pubkey,
         raw_sig,
         debug,
-    )?;
-    Err(map_private_key_decrypt_error(error))
+    )
 }
 
-fn map_private_key_decrypt_error(error: Error) -> Error {
+fn build_private_key_decrypt_error(error: Error) -> Error {
     Error::Crypto {
         message: "E_PRIVATE_KEY_DECRYPT_FAILED: private key decryption failed".to_string(),
         source: Some(Box::new(error)),

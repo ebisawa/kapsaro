@@ -6,7 +6,7 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::{
-    build_now_timestamp, mutate_trust_store_with_execution, TrustStoreMutation,
+    build_now_timestamp, execute_trust_store_mutation_with_execution, TrustStoreMutation,
     TrustStoreMutationMode,
 };
 use crate::app::trust::types::TrustMutationResult;
@@ -109,7 +109,7 @@ impl From<&ApprovedKnownKey> for KnownKeyIdentity {
     }
 }
 
-pub(crate) fn commit_known_key_approvals(
+pub(crate) fn save_known_key_approvals(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     approvals: &[ApprovedKnownKey],
@@ -118,7 +118,7 @@ pub(crate) fn commit_known_key_approvals(
         return Ok(TrustMutationResult::new(0, Vec::new()));
     }
 
-    mutate_trust_store_with_execution(
+    execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::CreateIfMissing,
@@ -128,7 +128,7 @@ pub(crate) fn commit_known_key_approvals(
 
             for approval in approvals {
                 let identity = KnownKeyIdentity::from(approval);
-                reject_self_approval(&execution.member_id, identity.member_id())?;
+                enforce_non_self_approval(&execution.member_id, identity.member_id())?;
                 let known_key = approval.clone().into_known_key()?;
                 if add_known_key(&mut protected.known_keys, known_key)? {
                     added += 1;
@@ -143,7 +143,7 @@ pub(crate) fn commit_known_key_approvals(
     )
 }
 
-fn reject_self_approval(owner_member_id: &str, member_id: &str) -> Result<()> {
+fn enforce_non_self_approval(owner_member_id: &str, member_id: &str) -> Result<()> {
     if member_id == owner_member_id {
         return Err(Error::InvalidOperation {
             message: format!(

@@ -3,7 +3,7 @@
 
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::kv::document::UnsignedKvDocument;
+use crate::feature::kv::document::KvDocumentDraft;
 use crate::feature::kv::query::decrypt_all_kv_values;
 use crate::feature::recipient::resolve_verified_recipients;
 use crate::feature::verify::kv::signature::verify_kv_content;
@@ -90,11 +90,11 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         detect_disclosed_entries(self.document().lines())
     }
 
-    pub(crate) fn build_unsigned(&self, head: KvHeader) -> Result<UnsignedKvDocument> {
+    pub(crate) fn build_unsigned(&self, head: KvHeader) -> Result<KvDocumentDraft> {
         build_unsigned_from_verified(&self.verified, head, self.token_codec, self.debug)
     }
 
-    pub(crate) fn sign(&self, unsigned: UnsignedKvDocument) -> Result<String> {
+    pub(crate) fn sign(&self, unsigned: KvDocumentDraft) -> Result<String> {
         sign_unsigned_with_key_context(unsigned, self.key_ctx, self.debug)
     }
 
@@ -107,7 +107,7 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         decrypt_all_kv_values(&content, self.member_id, self.key_ctx, self.debug)
     }
 
-    pub(crate) fn reencrypt_with_recipients(
+    pub(crate) fn rewrap_kv_with_recipients(
         &self,
         target_members: Option<&[VerifiedRecipientKey]>,
         request: KvRecipientRewriteRequest<'_>,

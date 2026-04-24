@@ -3,7 +3,7 @@
 
 //! Integration tests for `run` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, setup_workspace, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, setup_workspace, TEST_MEMBER_ID};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -65,7 +65,7 @@ fn test_run_with_default_file() {
 #[test]
 fn test_run_error_when_workspace_not_found() {
     let home_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Try to run without workspace (should fail)
     cmd()
@@ -92,7 +92,7 @@ fn test_run_error_when_workspace_not_found() {
 fn test_run_error_when_default_file_not_exists() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
     fs::create_dir_all(workspace_dir.path().join("members")).unwrap();

@@ -14,12 +14,12 @@ use crate::feature::inspect::verification::{
 use crate::feature::verify::file::verify_file_document_report;
 use crate::feature::verify::kv::signature::verify_kv_document_report;
 use crate::feature::verify::SignatureVerificationReport;
-use crate::format::content::EncryptedContent;
+use crate::format::content::EncContent;
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::VerificationResult as OnlineVerificationResult;
 use crate::support::fs::load_text_with_limit;
-use crate::support::limits::encrypted_file_read_limit;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::limits::resolve_encrypted_artifact_read_limit;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 
@@ -28,7 +28,7 @@ pub(crate) struct InspectCommand {
     pub rendered: String,
 }
 
-pub(crate) fn build_inspect_file_command(
+pub(crate) fn execute_inspect_file_command(
     options: &CommonCommandOptions,
     input_path: &Path,
 ) -> Result<InspectCommand> {
@@ -43,31 +43,29 @@ pub(crate) fn build_inspect_file_command(
     }
 
     Ok(InspectCommand {
-        input_display: display_path_relative_to_cwd(input_path),
-        rendered: render_inspect_output(&inspect_output.title, &sections),
+        input_display: format_path_relative_to_cwd(input_path),
+        rendered: format_inspect_output(&inspect_output.title, &sections),
     })
 }
 
-fn load_inspect_content(input_path: &Path) -> Result<EncryptedContent> {
-    EncryptedContent::detect(load_text_with_limit(
+fn load_inspect_content(input_path: &Path) -> Result<EncContent> {
+    EncContent::detect(load_text_with_limit(
         input_path,
-        encrypted_file_read_limit(input_path),
+        resolve_encrypted_artifact_read_limit(input_path),
         "encrypted artifact",
     )?)
 }
 
 fn build_signature_report(
-    content: &EncryptedContent,
+    content: &EncContent,
     debug: bool,
 ) -> Result<SignatureVerificationReport> {
     Ok(match content {
-        EncryptedContent::FileEnc(file_content) => {
+        EncContent::FileEnc(file_content) => {
             let doc = file_content.parse()?;
             verify_file_document_report(&doc, debug)
         }
-        EncryptedContent::KvEnc(kv_content) => {
-            verify_kv_document_report(kv_content.as_str(), debug)
-        }
+        EncContent::KvEnc(kv_content) => verify_kv_document_report(kv_content.as_str(), debug),
     })
 }
 
@@ -96,7 +94,7 @@ fn build_online_section(
         Ok(result) => result,
         Err(err) => OnlineVerificationResult::failed(
             &public_key.protected.member_id,
-            err.user_message().to_string(),
+            err.format_user_message().to_string(),
             None,
             true,
         ),
@@ -117,7 +115,7 @@ fn build_online_section(
     ))
 }
 
-fn render_inspect_output(
+fn format_inspect_output(
     title: &str,
     sections: &[crate::feature::inspect::InspectSection],
 ) -> String {

@@ -11,7 +11,7 @@ use crate::io::config::paths::get_global_config_path_from_base;
 use crate::io::config::store::load_config_file;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ResolvedStringSource {
+pub(super) enum StringSourceResolution {
     Cli,
     Env,
     GlobalConfig,
@@ -72,26 +72,26 @@ pub(super) fn resolve_string_with_source(
     config_key: &str,
     base_dir: Option<&Path>,
     default: Option<String>,
-) -> Result<Option<(String, ResolvedStringSource)>> {
+) -> Result<Option<(String, StringSourceResolution)>> {
     // Priority 1: CLI value
     if let Some(value) = cli_value {
-        return Ok(Some((value, ResolvedStringSource::Cli)));
+        return Ok(Some((value, StringSourceResolution::Cli)));
     }
 
     // Priority 2: Environment variable
     if let Some(env_var) = env_var_name {
         if let Ok(value) = env::var(env_var) {
-            return Ok(Some((value, ResolvedStringSource::Env)));
+            return Ok(Some((value, StringSourceResolution::Env)));
         }
     }
 
     // Priority 3: Global config
     if let Some(value) = load_field_from_global_config(config_key, base_dir)? {
-        return Ok(Some((value, ResolvedStringSource::GlobalConfig)));
+        return Ok(Some((value, StringSourceResolution::GlobalConfig)));
     }
 
     // Priority 4: Default value
-    Ok(default.map(|value| (value, ResolvedStringSource::Default)))
+    Ok(default.map(|value| (value, StringSourceResolution::Default)))
 }
 
 pub(super) fn resolve_string_with_priority(

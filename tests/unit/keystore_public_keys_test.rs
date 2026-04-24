@@ -11,7 +11,7 @@ use secretenv::model::public_key::{
 };
 use tempfile::TempDir;
 
-fn create_test_public_key(member_id: &str, kid: &str) -> PublicKey {
+fn build_test_public_key(member_id: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
             format: secretenv::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
@@ -53,8 +53,8 @@ fn test_load_public_keys_for_member_ids() {
     let alice_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
     let bob_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
 
-    let alice_pk = create_test_public_key("alice@example.com", alice_kid);
-    let bob_pk = create_test_public_key("bob@example.com", bob_kid);
+    let alice_pk = build_test_public_key("alice@example.com", alice_kid);
+    let bob_pk = build_test_public_key("bob@example.com", bob_kid);
 
     save_public_key(keystore_root, "alice@example.com", alice_kid, &alice_pk).unwrap();
     save_public_key(keystore_root, "bob@example.com", bob_kid, &bob_pk).unwrap();

@@ -6,11 +6,11 @@
 use crate::feature::envelope::signature::{sign_kv_document, SigningContext};
 use crate::Result;
 
-use super::document::UnsignedKvDocument;
+use super::document::KvDocumentDraft;
 
 /// Serialize and sign an unsigned KV document.
 pub(crate) fn sign_unsigned_kv_document(
-    unsigned: UnsignedKvDocument,
+    unsigned: KvDocumentDraft,
     signing: &SigningContext<'_>,
 ) -> Result<String> {
     let token_codec = unsigned.token_codec();
@@ -18,7 +18,7 @@ pub(crate) fn sign_unsigned_kv_document(
     sign_kv_document(&content, signing, token_codec, "sign_unsigned_kv_document")
 }
 
-impl UnsignedKvDocument {
+impl KvDocumentDraft {
     /// Serialize and sign the document.
     pub fn sign(self, signing: &SigningContext<'_>) -> Result<String> {
         sign_unsigned_kv_document(self, signing)

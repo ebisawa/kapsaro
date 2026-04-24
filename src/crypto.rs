@@ -10,8 +10,8 @@ pub mod error;
 pub use error::CryptoError;
 
 /// Creates a cryptographic operation error without exposing inner details
-pub fn crypto_operation_failed(message: impl Into<String>) -> crate::Error {
-    CryptoError::operation_failed(message).into()
+pub fn build_crypto_operation_error(message: impl Into<String>) -> crate::Error {
+    CryptoError::build_operation_failed_error(message).into()
 }
 
 /// Creates a cryptographic error with a formatted message
@@ -19,8 +19,8 @@ pub fn crypto_operation_failed(message: impl Into<String>) -> crate::Error {
 /// # Arguments
 /// * `operation` - The operation that failed (e.g., "XChaCha20-Poly1305 encryption")
 /// * `details` - Additional error details
-pub fn crypto_error(operation: &str, details: impl std::fmt::Display) -> crate::Error {
-    CryptoError::operation_failed(format!("{}: {}", operation, details)).into()
+pub fn build_crypto_error(operation: &str, details: impl std::fmt::Display) -> crate::Error {
+    CryptoError::build_operation_failed_error(format!("{}: {}", operation, details)).into()
 }
 
 /// Creates a cryptographic error with a formatted message and source error
@@ -29,12 +29,16 @@ pub fn crypto_error(operation: &str, details: impl std::fmt::Display) -> crate::
 /// * `operation` - The operation that failed (e.g., "XChaCha20-Poly1305 encryption")
 /// * `details` - Additional error details
 /// * `source` - The underlying error that caused this failure
-pub fn crypto_error_with_source(
+pub fn build_crypto_error_with_source(
     operation: &str,
     details: impl std::fmt::Display,
     source: impl std::error::Error + Send + Sync + 'static,
 ) -> crate::Error {
-    CryptoError::operation_failed_with_source(format!("{}: {}", operation, details), source).into()
+    CryptoError::build_operation_failed_error_with_source(
+        format!("{}: {}", operation, details),
+        source,
+    )
+    .into()
 }
 
 pub mod aead;

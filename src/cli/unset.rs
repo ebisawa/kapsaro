@@ -10,7 +10,7 @@ use std::io::BufRead;
 use crate::app::kv::mutation::unset_kv_command;
 use crate::app::trust::UnsetPolicy;
 use crate::cli::common::command::{
-    resolve_options, resolve_required_member_id, resolve_trust_store_owner_member,
+    resolve_options, resolve_required_member_handle, resolve_trust_store_owner_member,
     run_kv_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::text::print_optional_status;
@@ -34,7 +34,7 @@ pub struct UnsetArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Secret store name; defaults to "default"
     #[arg(long, short = 'n')]
@@ -46,7 +46,7 @@ pub struct UnsetArgs {
 
 pub fn run(args: UnsetArgs) -> Result<()> {
     let options = resolve_options(&args.common);
-    let member_id = resolve_required_member_id(&options, args.member_id.clone(), false)?;
+    let member_id = resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
     confirm_unset_operation(args.force, &args.key)?;
     let outcome = run_with_trust_store_reset_recovery(
         &options,

@@ -3,7 +3,7 @@
 
 use super::search::{detect_workspace_root, find_git_root, validate_workspace_path, WorkspaceRoot};
 use crate::config::resolution::workspace::resolve_workspace_from_config;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::env;
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot
         let canonical = path.canonicalize().map_err(|e| Error::Config {
             message: format!(
                 "Invalid workspace path '{}': {}",
-                display_path_relative_to_cwd(&path),
+                format_path_relative_to_cwd(&path),
                 e
             ),
         })?;
@@ -25,7 +25,7 @@ pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot
         let canonical = path.canonicalize().map_err(|e| Error::Config {
             message: format!(
                 "Invalid SECRETENV_WORKSPACE path '{}': {}",
-                display_path_relative_to_cwd(&path),
+                format_path_relative_to_cwd(&path),
                 e
             ),
         })?;
@@ -36,7 +36,7 @@ pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot
         let canonical = config_path.canonicalize().map_err(|e| Error::Config {
             message: format!(
                 "Invalid workspace path in config.toml '{}': {}",
-                display_path_relative_to_cwd(&config_path),
+                format_path_relative_to_cwd(&config_path),
                 e
             ),
         })?;
@@ -79,8 +79,9 @@ pub fn resolve_workspace_creation_path(workspace_opt: Option<PathBuf>) -> Result
         return Ok(path);
     }
 
-    let current_dir = env::current_dir()
-        .map_err(|e| Error::io_with_source(format!("Failed to get current directory: {}", e), e))?;
+    let current_dir = env::current_dir().map_err(|e| {
+        Error::build_io_error_with_source(format!("Failed to get current directory: {}", e), e)
+    })?;
 
     find_git_root(&current_dir).map(|root| root.join(".secretenv")).ok_or_else(|| Error::Config {
         message:

@@ -12,7 +12,7 @@ use secretenv::io::ssh::backend::SignatureBackend;
 use secretenv::io::ssh::protocol::base64::decode_base64_armored;
 use secretenv::io::ssh::protocol::sshsig;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::io::ssh::protocol::wire::ssh_string_decode;
+use secretenv::io::ssh::protocol::wire::decode_ssh_string;
 use secretenv::Result;
 use std::fs;
 use std::path::Path;
@@ -63,11 +63,11 @@ fn parse_openssh_ed25519_secret_key(data: &[u8]) -> Result<[u8; 32]> {
         return Err(unsupported_ssh_key("missing openssh-key-v1 header"));
     };
 
-    let (ciphername, next) = ssh_string_decode(rest)?;
+    let (ciphername, next) = decode_ssh_string(rest)?;
     rest = next;
-    let (kdfname, next) = ssh_string_decode(rest)?;
+    let (kdfname, next) = decode_ssh_string(rest)?;
     rest = next;
-    let (kdfoptions, next) = ssh_string_decode(rest)?;
+    let (kdfoptions, next) = decode_ssh_string(rest)?;
     rest = next;
 
     if ciphername != b"none" || kdfname != b"none" || !kdfoptions.is_empty() {
@@ -76,37 +76,37 @@ fn parse_openssh_ed25519_secret_key(data: &[u8]) -> Result<[u8; 32]> {
         ));
     }
 
-    let key_count = read_u32(&mut rest, "public key count")?;
+    let key_count = decode_u32(&mut rest, "public key count")?;
     if key_count != 1 {
         return Err(unsupported_ssh_key(
             "expected exactly one key in OpenSSH private key",
         ));
     }
 
-    let (_public_blob, next) = ssh_string_decode(rest)?;
+    let (_public_blob, next) = decode_ssh_string(rest)?;
     rest = next;
-    let (private_blob, _rest) = ssh_string_decode(rest)?;
+    let (private_blob, _rest) = decode_ssh_string(rest)?;
     parse_private_section(private_blob)
 }
 
 fn parse_private_section(mut data: &[u8]) -> Result<[u8; 32]> {
-    let check1 = read_u32(&mut data, "checkint")?;
-    let check2 = read_u32(&mut data, "checkint")?;
+    let check1 = decode_u32(&mut data, "checkint")?;
+    let check2 = decode_u32(&mut data, "checkint")?;
     if check1 != check2 {
         return Err(unsupported_ssh_key(
             "OpenSSH private key checkints do not match",
         ));
     }
 
-    let (key_type, next) = ssh_string_decode(data)?;
+    let (key_type, next) = decode_ssh_string(data)?;
     data = next;
     if key_type != b"ssh-ed25519" {
         return Err(unsupported_ssh_key("SSH key is not Ed25519"));
     }
 
-    let (_public_key, next) = ssh_string_decode(data)?;
+    let (_public_key, next) = decode_ssh_string(data)?;
     data = next;
-    let (private_key, next) = ssh_string_decode(data)?;
+    let (private_key, next) = decode_ssh_string(data)?;
     data = next;
 
     if private_key.len() != 64 {
@@ -115,14 +115,14 @@ fn parse_private_section(mut data: &[u8]) -> Result<[u8; 32]> {
         ));
     }
 
-    let (_comment, _padding) = ssh_string_decode(data)?;
+    let (_comment, _padding) = decode_ssh_string(data)?;
 
     let mut secret = [0u8; 32];
     secret.copy_from_slice(&private_key[..32]);
     Ok(secret)
 }
 
-fn read_u32(data: &mut &[u8], field_name: &str) -> Result<u32> {
+fn decode_u32(data: &mut &[u8], field_name: &str) -> Result<u32> {
     if data.len() < 4 {
         return Err(unsupported_ssh_key(format!(
             "missing {} in OpenSSH private key",

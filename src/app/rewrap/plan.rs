@@ -4,7 +4,7 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::app::trust::{current_self_sig_x, load_read_trust_context};
+use crate::app::trust::{derive_self_sig_x, load_read_trust_context};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
 };
@@ -18,7 +18,7 @@ use crate::model::public_key::PublicKey;
 use crate::support::fs::list_dir;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ pub(crate) fn build_rewrap_batch_plan(
         options,
         &workspace.root_path,
         &execution.member_id,
-        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?
     .trust_ctx;
@@ -70,7 +70,7 @@ mod tests;
 fn find_encrypted_files_in_workspace(workspace_root: &Path) -> Result<Vec<PathBuf>> {
     let secrets_dir = workspace_root.join("secrets");
     let entries = list_dir(&secrets_dir)
-        .map_err(|e| Error::io(format!("Failed to read secrets directory: {}", e)))?;
+        .map_err(|e| Error::build_io_error(format!("Failed to read secrets directory: {}", e)))?;
 
     let mut files: Vec<PathBuf> = entries
         .filter_map(|entry| entry.ok())
@@ -109,19 +109,19 @@ fn collect_rewrap_target_paths(
 
 fn insert_rewrap_target_path(paths: &mut BTreeMap<PathBuf, PathBuf>, path: PathBuf) -> Result<()> {
     let canonical = path.canonicalize().map_err(|e| {
-        Error::io_with_source(
+        Error::build_io_error_with_source(
             format!(
                 "Failed to resolve rewrap target {}: {}",
-                display_path_relative_to_cwd(&path),
+                format_path_relative_to_cwd(&path),
                 e
             ),
             e,
         )
     })?;
     if !canonical.is_file() {
-        return Err(Error::invalid_argument(format!(
+        return Err(Error::build_invalid_argument_error(format!(
             "Rewrap target must be a file: {}",
-            display_path_relative_to_cwd(&path)
+            format_path_relative_to_cwd(&path)
         )));
     }
     paths.entry(canonical).or_insert(path);
@@ -166,7 +166,10 @@ fn build_incoming_candidate(
             member_id: snapshot.public_key.protected.member_id.clone(),
             kid: snapshot.public_key.protected.kid.clone(),
             category: IncomingVerificationCategory::Failed,
-            message: format!("Offline verification failed: {}", error.user_message()),
+            message: format!(
+                "Offline verification failed: {}",
+                error.format_user_message()
+            ),
             fingerprint: None,
             verified_github: None,
             github_binding_configured: github_binding_configured(&snapshot.public_key),
@@ -184,7 +187,7 @@ fn build_incoming_candidate(
 
 fn build_pending_review(snapshot: &IncomingSnapshot) -> IncomingVerificationItem {
     let binding_configured = github_binding_configured(&snapshot.public_key);
-    let (category, message) = classify_pending_review(binding_configured);
+    let (category, message) = build_pending_review_category(binding_configured);
     let attestor_pub = snapshot
         .public_key
         .protected
@@ -215,7 +218,9 @@ fn github_binding_configured(public_key: &PublicKey) -> bool {
         .is_some()
 }
 
-fn classify_pending_review(binding_configured: bool) -> (IncomingVerificationCategory, String) {
+fn build_pending_review_category(
+    binding_configured: bool,
+) -> (IncomingVerificationCategory, String) {
     if binding_configured {
         (
             IncomingVerificationCategory::BindingConfigured,

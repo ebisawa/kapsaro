@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::ResolvedSshSigningContext;
+use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::verification::OnlineVerificationStatus;
@@ -15,7 +15,7 @@ use super::types::{
     RegistrationKeyPlan, RegistrationMode, RegistrationOutcome, RegistrationResult,
 };
 use super::workspace::{
-    register_member, resolve_active_membership_state, resolve_registration_paths,
+    resolve_active_membership_state, resolve_registration_paths, save_registration_member,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,23 +25,24 @@ pub enum RegistrationDecision {
     ConfirmOverwrite,
 }
 
-pub fn build_registration(
+pub fn resolve_registration_command(
     common: &CommonCommandOptions,
     member_id: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     mode: RegistrationMode,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<RegistrationCommand> {
-    let setup = resolve_member_setup(common, member_id, github_user, key_plan, ssh_ctx)?;
-    build_registration_command(common, mode, setup)
+    let setup =
+        ensure_registration_member_setup(common, member_id, github_user, key_plan, ssh_ctx)?;
+    resolve_registration_context(common, mode, setup)
 }
 
-pub fn apply_registration(
+pub fn execute_registration_command(
     command: &RegistrationCommand,
     overwrite: bool,
 ) -> Result<RegistrationOutcome> {
-    let result = register_member(
+    let result = save_registration_member(
         &command.workspace_path,
         &command.setup.member_id,
         command.setup.kid(),
@@ -53,12 +54,14 @@ pub fn apply_registration(
     Ok(build_registration_outcome(command, result))
 }
 
-pub(crate) fn finalize_registration(
+pub(crate) fn execute_registration_decision(
     command: &RegistrationCommand,
     decision: RegistrationDecision,
 ) -> Result<RegistrationOutcome> {
     match decision {
-        RegistrationDecision::Apply { overwrite } => apply_registration(command, overwrite),
+        RegistrationDecision::Apply { overwrite } => {
+            execute_registration_command(command, overwrite)
+        }
         RegistrationDecision::Return(result) => Ok(build_registration_outcome(command, result)),
         RegistrationDecision::ConfirmOverwrite => Err(crate::Error::InvalidOperation {
             message: "Registration confirmation is required before finalizing".to_string(),
@@ -66,7 +69,7 @@ pub(crate) fn finalize_registration(
     }
 }
 
-pub fn build_registration_decision(
+pub fn evaluate_registration_decision(
     command: &RegistrationCommand,
     force: bool,
     prompt_available: bool,
@@ -118,12 +121,12 @@ fn build_registration_outcome(
     }
 }
 
-fn resolve_member_setup(
+fn ensure_registration_member_setup(
     common: &CommonCommandOptions,
     member_id: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<MemberSetupResult> {
     match key_plan {
         RegistrationKeyPlan::UseExisting { kid, expires_at } => {
@@ -142,7 +145,7 @@ fn resolve_generated_member_setup(
     common: &CommonCommandOptions,
     member_id: &str,
     github_user: Option<String>,
-    ssh_ctx: ResolvedSshSigningContext,
+    ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberSetupResult> {
     let github_account = resolve_github_account(github_user, common.verbose)?;
     let github_verification =
@@ -164,7 +167,7 @@ fn build_existing_member_setup(
     }
 }
 
-fn build_registration_command(
+fn resolve_registration_context(
     common: &CommonCommandOptions,
     mode: RegistrationMode,
     setup: MemberSetupResult,
@@ -205,7 +208,7 @@ fn generate_member_key_result(
     common: &CommonCommandOptions,
     member_id: &str,
     github_account: Option<GithubAccount>,
-    ssh_ctx: ResolvedSshSigningContext,
+    ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberKeySetupResult> {
     let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
     let result = generate_key(KeyGenerationOptions {
@@ -251,8 +254,8 @@ fn build_existing_member_key_result(kid: String, expires_at: String) -> MemberKe
 }
 
 fn require_generation_ssh_context(
-    ssh_ctx: Option<ResolvedSshSigningContext>,
-) -> Result<ResolvedSshSigningContext> {
+    ssh_ctx: Option<SshSigningContextResolution>,
+) -> Result<SshSigningContextResolution> {
     ssh_ctx.ok_or_else(|| crate::Error::InvalidOperation {
         message: "SSH signing context is required for key generation".to_string(),
     })

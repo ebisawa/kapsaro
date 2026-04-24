@@ -6,7 +6,7 @@
 //! Provides configuration loading and management for secretenv.
 //! Config file location: `$SECRETENV_HOME/config.toml` or `~/.config/secretenv/config.toml`
 //!
-//! This module follows PRD v3 specification for flat key-value TOML format.
+//! Global config helpers for the flat key-value TOML format.
 
 pub mod bootstrap;
 pub mod paths;

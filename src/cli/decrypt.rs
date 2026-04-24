@@ -7,7 +7,7 @@ use clap::Args;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use crate::app::file::decrypt::{build_decrypt_file_command, execute_decrypt_file_command};
+use crate::app::file::decrypt::{execute_decrypt_file_command, resolve_decrypt_file_command};
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_read_command_with_trust, ReadCommandLabels,
@@ -35,7 +35,7 @@ pub struct DecryptArgs {
 
     /// Member handle to use
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Output file path
     #[arg(long, short = 'o', conflicts_with = "stdout")]
@@ -67,12 +67,12 @@ pub fn run(args: DecryptArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let plaintext_bytes = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_id.clone()),
+        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_id.clone())?;
-            let command = build_decrypt_file_command(
+            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let command = resolve_decrypt_file_command(
                 &options,
-                args.member_id.clone(),
+                args.member_handle.clone(),
                 args.kid.as_deref(),
                 content.clone(),
                 ssh_ctx,
@@ -106,7 +106,9 @@ fn resolve_decrypt_input_content(input_path: Option<&PathBuf>, from_stdin: bool)
     input_path
         .map(|path| load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "file-enc file"))
         .transpose()?
-        .ok_or_else(|| Error::invalid_argument("INPUT is required unless --stdin is used"))
+        .ok_or_else(|| {
+            Error::build_invalid_argument_error("INPUT is required unless --stdin is used")
+        })
 }
 
 fn load_decrypt_input_from_stdin() -> Result<String> {

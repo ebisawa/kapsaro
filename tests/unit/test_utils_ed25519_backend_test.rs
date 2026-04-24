@@ -3,8 +3,8 @@
 
 //! Tests for Ed25519DirectBackend
 
-use crate::test_utils::create_temp_ssh_keypair_in_dir;
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
+use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv::io::ssh::backend::SignatureBackend;
 use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
@@ -15,7 +15,7 @@ use tempfile::TempDir;
 #[test]
 fn test_ed25519_direct_backend_produces_same_signature_as_ssh_keygen() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let direct = Ed25519DirectBackend::new(&ssh_priv).unwrap();
     let keygen = SshKeygenBackend::new(
@@ -42,7 +42,7 @@ fn test_ed25519_direct_backend_produces_same_signature_as_ssh_keygen() {
 #[test]
 fn test_ed25519_direct_backend_is_deterministic() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let backend = Ed25519DirectBackend::new(&ssh_priv).unwrap();
     let challenge = b"determinism test";
@@ -56,7 +56,7 @@ fn test_ed25519_direct_backend_is_deterministic() {
 #[test]
 fn test_ed25519_direct_backend_different_challenges_produce_different_sigs() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&temp_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let backend = Ed25519DirectBackend::new(&ssh_priv).unwrap();
 

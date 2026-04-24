@@ -3,13 +3,13 @@
 
 //! Integration tests for `key list` command
 
-use crate::cli::common::{cmd, create_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use tempfile::TempDir;
 
 #[test]
 fn test_key_list_basic() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -67,7 +67,7 @@ fn test_key_list_basic() {
 #[test]
 fn test_key_list_json_output() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 
@@ -158,7 +158,7 @@ fn test_key_list_empty() {
 #[test]
 fn test_key_list_auto_resolve_member_id() {
     let temp_dir = TempDir::new().unwrap();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = create_temp_ssh_keypair();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_id = TEST_MEMBER_ID;
 

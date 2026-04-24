@@ -5,7 +5,7 @@
 //!
 //! Tests for encryption use cases.
 
-use crate::keygen_helpers::make_recipient_key;
+use crate::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::ALICE_MEMBER_ID;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
@@ -42,7 +42,7 @@ fn test_encrypt_file_document() {
     // Input content
     let content = b"Hello, World!";
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
-    let attested_members = vec![make_recipient_key(public_key.clone())];
+    let attested_members = vec![build_verified_recipient_key(public_key.clone())];
 
     // Encrypt
     let signing = SigningContext {
@@ -93,7 +93,7 @@ fn test_encrypt_file_document_recipient_count_mismatch() {
     let content = b"Hello, World!";
     let recipients = vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()];
     let signer_pub = public_key.clone();
-    let attested_members = vec![make_recipient_key(public_key)]; // Only one member, but two recipients
+    let attested_members = vec![build_verified_recipient_key(public_key)]; // Only one member, but two recipients
 
     // Encrypt should fail due to mismatch
     let signing = SigningContext {
@@ -131,7 +131,7 @@ fn test_encrypt_kv_document_via_inner_api() {
     );
     kv_map.insert("API_KEY".to_string(), "secret123".to_string());
 
-    let attested_members = vec![make_recipient_key(public_key.clone())];
+    let attested_members = vec![build_verified_recipient_key(public_key.clone())];
 
     let signing = SigningContext {
         signing_key,

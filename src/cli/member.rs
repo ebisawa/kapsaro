@@ -75,7 +75,7 @@ pub struct ShowArgs {
 
     /// Member handle to show
     #[arg(value_name = "MEMBER_HANDLE")]
-    pub member_id: String,
+    pub member_handle: String,
 }
 
 #[derive(Args)]
@@ -86,7 +86,7 @@ pub struct RemoveArgs {
 
     /// Member handle to remove
     #[arg(value_name = "MEMBER_HANDLE")]
-    pub member_id: String,
+    pub member_handle: String,
 
     /// Force removal without confirmation
     #[arg(long, short = 'f')]
@@ -101,7 +101,7 @@ pub struct VerifyArgs {
 
     /// Member handle to use for trust store owner resolution
     #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_id: Option<String>,
+    pub member_handle: Option<String>,
 
     /// Approve verified members and add to local trust store
     #[arg(long)]
@@ -109,7 +109,7 @@ pub struct VerifyArgs {
 
     /// Member handles to verify (verifies all members if not specified)
     #[arg(value_name = "MEMBER_HANDLE")]
-    pub member_ids: Vec<String>,
+    pub member_handles: Vec<String>,
 }
 
 pub fn run(args: MemberArgs) -> Result<(), Error> {

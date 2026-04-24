@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use crate::app::registration::types::RegistrationMode;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 
 pub(crate) fn print_created_workspace_summary(workspace_path: &Path) {
     eprintln!(
@@ -44,5 +44,5 @@ pub(crate) fn print_registration_next_steps(mode: RegistrationMode, is_new_works
 }
 
 fn format_workspace_display(path: &Path) -> String {
-    format!("{}/", display_path_relative_to_cwd(path))
+    format!("{}/", format_path_relative_to_cwd(path))
 }

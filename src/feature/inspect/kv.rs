@@ -8,11 +8,11 @@ use crate::model::kv_enc::document::{KvEncDocument, KvFileSignature};
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::KvEncLine;
-use crate::support::kid::build_kid_display;
+use crate::support::kid::format_kid_display;
 use crate::Result;
 
 use super::formatter::{
-    append_removed_recipients, append_signer_info, append_wrap_item, push_line,
+    append_line, append_removed_recipients, append_signer_info, append_wrap_item,
 };
 use super::{build_section, InspectOutput, InspectSection};
 
@@ -24,7 +24,7 @@ struct KvEncInspectionData {
     signature: Option<(KvFileSignature, String)>,
 }
 
-fn build_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
+fn format_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
     let mut out = String::new();
     build(&mut out);
     out.lines().map(ToOwned::to_owned).collect()
@@ -47,12 +47,12 @@ fn build_kv_enc_wrap_section(data: &KvEncInspectionData) -> Option<InspectSectio
     data.wrap_data.as_ref().map(|(wrap, _token)| {
         build_section(
             "Wrap Data",
-            build_section_lines(|out| {
-                push_line(out, format!("  Recipients ({}):", wrap.wrap.len()));
+            format_section_lines(|out| {
+                append_line(out, format!("  Recipients ({}):", wrap.wrap.len()));
                 for rid in &wrap.wrap {
-                    push_line(out, format!("    \u{2022} {}", rid.rid));
+                    append_line(out, format!("    \u{2022} {}", rid.rid));
                 }
-                push_line(out, "  Wrap Items:");
+                append_line(out, "  Wrap Items:");
                 for (i, wrap_item) in wrap.wrap.iter().enumerate() {
                     append_wrap_item(i, wrap_item, out);
                 }
@@ -65,14 +65,14 @@ fn build_kv_enc_wrap_section(data: &KvEncInspectionData) -> Option<InspectSectio
 fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
     build_section(
         format!("Entries ({})", data.entries.len()),
-        build_section_lines(|out| {
+        format_section_lines(|out| {
             for (i, (key, entry, _token)) in data.entries.iter().enumerate() {
-                push_line(out, format!("  [{}] Key: {}", i, key));
-                push_line(out, format!("      AEAD:    {}", entry.aead));
-                push_line(out, format!("      Salt:    {}", entry.salt));
-                push_line(out, format!("      K:       {}", entry.k));
-                push_line(out, format!("      Nonce:   {}", entry.nonce));
-                push_line(
+                append_line(out, format!("  [{}] Key: {}", i, key));
+                append_line(out, format!("      AEAD:    {}", entry.aead));
+                append_line(out, format!("      Salt:    {}", entry.salt));
+                append_line(out, format!("      K:       {}", entry.k));
+                append_line(out, format!("      Nonce:   {}", entry.nonce));
+                append_line(
                     out,
                     format!(
                         "      CT:      {} bytes ({}...)",
@@ -81,7 +81,7 @@ fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
                     ),
                 );
                 if entry.disclosed {
-                    push_line(
+                    append_line(
                         out,
                         "      \u{26a0} DISCLOSED \u{2014} Secret may need rotation",
                     );
@@ -94,14 +94,14 @@ fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
 fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectSection> {
     data.signature.as_ref().map(|(signature, _token)| {
         let kid_display =
-            build_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
+            format_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
         build_section(
             "Signature",
-            build_section_lines(|out| {
-                push_line(out, format!("  Algorithm:   {}", signature.alg));
-                push_line(out, format!("  Kid:         {}", kid_display));
+            format_section_lines(|out| {
+                append_line(out, format!("  Algorithm:   {}", signature.alg));
+                append_line(out, format!("  Kid:         {}", kid_display));
                 append_signer_info(Some(&signature.signer_pub), out);
-                push_line(
+                append_line(
                     out,
                     format!(
                         "  Sig:         {}...",

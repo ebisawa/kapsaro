@@ -9,7 +9,7 @@ use crate::model::public_key::PublicKey;
 use crate::model::public_key_verified::VerifiedRecipientKey;
 use std::path::PathBuf;
 
-/// Resolved inputs for a batch rewrap command before CLI confirmation.
+/// Command inputs for a batch rewrap command before CLI confirmation.
 #[derive(Debug, Clone)]
 pub(crate) struct RewrapBatchPlan {
     pub(crate) workspace_root: PathBuf,

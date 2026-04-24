@@ -3,10 +3,12 @@
 
 //! Validation tests for feature/decrypt/unwrap functions
 //!
-//! Tests validation logic in `decode_wrap_item_fields` and `plaintext_to_master_key`.
+//! Tests validation logic in `decode_wrap_item_fields` and `parse_master_key_from_plaintext`.
 
 use secretenv::crypto::types::data::Plaintext;
-use secretenv::feature::envelope::unwrap::{decode_wrap_item_fields, plaintext_to_master_key};
+use secretenv::feature::envelope::unwrap::{
+    decode_wrap_item_fields, parse_master_key_from_plaintext,
+};
 use secretenv::model::common::WrapItem;
 use zeroize::Zeroizing;
 
@@ -37,14 +39,14 @@ fn test_decode_wrap_item_fields_unsupported_alg() {
     );
 }
 
-/// Test that `plaintext_to_master_key` returns an error when given wrong-length data.
+/// Test that `parse_master_key_from_plaintext` returns an error when given wrong-length data.
 #[test]
-fn test_plaintext_to_master_key_wrong_length() {
+fn test_parse_master_key_from_plaintext_wrong_length() {
     // 16 bytes instead of expected 32
     let short_data = vec![0xABu8; 16];
     let plaintext = Zeroizing::new(Plaintext::new(short_data));
 
-    let result = plaintext_to_master_key(plaintext);
+    let result = parse_master_key_from_plaintext(plaintext);
     assert!(result.is_err(), "Should fail for wrong-length plaintext");
 
     let err = match result {
@@ -64,13 +66,13 @@ fn test_plaintext_to_master_key_wrong_length() {
     );
 }
 
-/// Test that `plaintext_to_master_key` succeeds with correct 32-byte data.
+/// Test that `parse_master_key_from_plaintext` succeeds with correct 32-byte data.
 #[test]
-fn test_plaintext_to_master_key() {
+fn test_parse_master_key_from_plaintext() {
     let key_bytes = [0x42u8; 32];
     let plaintext = Zeroizing::new(Plaintext::new(key_bytes.to_vec()));
 
-    let result = plaintext_to_master_key(plaintext);
+    let result = parse_master_key_from_plaintext(plaintext);
     assert!(result.is_ok(), "Should succeed for 32-byte plaintext");
 
     let master_key = result.unwrap();

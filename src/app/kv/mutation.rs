@@ -6,10 +6,10 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::review::{
     ensure_text_file_matches_snapshot_with_limit, ensure_workspace_members_match_snapshot,
 };
-use crate::app::context::ssh::ResolvedSshSigningContext;
-use crate::app::errors::handle_kv_key_not_found_error;
+use crate::app::context::ssh::SshSigningContextResolution;
+use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::{
-    current_self_sig_x, evaluate_signer_trust_with_proof, CommandCapability, RecipientTrustOutcome,
+    derive_self_sig_x, evaluate_signer_trust_with_proof, CommandCapability, RecipientTrustOutcome,
     SignerTrustOutcome, TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
     WriteTrustPolicy,
 };
@@ -23,7 +23,7 @@ use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
 use crate::support::fs::{atomic, lock};
-use crate::support::limits::encrypted_file_read_limit;
+use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::{Error, Result};
 
 use super::session::{load_existing_content, KvCommandSession, KvFileTarget};
@@ -103,7 +103,7 @@ impl MutationReviewSnapshot {
             &self.target.file_path,
             self.existing_content().map(KvEncContent::as_str),
             "KV file",
-            encrypted_file_read_limit(&self.target.file_path),
+            resolve_encrypted_artifact_read_limit(&self.target.file_path),
         )
     }
 
@@ -146,7 +146,7 @@ where
                 message: "File content is required".to_string(),
             })?;
             unset_kv_entry_with_recipients(kv_content, key, recipients, ctx)
-                .map_err(|e| handle_kv_key_not_found_error(e, &plan.review.target.file_path, key))
+                .map_err(|e| build_kv_key_not_found_error(e, &plan.review.target.file_path, key))
         },
     )
 }
@@ -185,22 +185,22 @@ where
     })
 }
 
-pub(crate) fn build_mutation_write_plan<P>(
+pub(crate) fn resolve_mutation_write_plan<P>(
     options: &CommonCommandOptions,
-    member_id: Option<String>,
+    member_handle: Option<String>,
     file_name: Option<&str>,
     allow_missing: bool,
-    ssh_ctx: Option<ResolvedSshSigningContext>,
+    ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<MutationWriteTrustPlan<P>>
 where
     P: WriteTrustPolicy,
 {
-    let command = KvCommandSession::resolve_write(options, member_id, file_name, ssh_ctx)?;
+    let command = KvCommandSession::resolve_write(options, member_handle, file_name, ssh_ctx)?;
     let recipient_review = WriteRecipientTrustPlan::<P>::load(
         options,
         &command.target.workspace_root.root_path,
         &command.execution.member_id,
-        Some(current_self_sig_x(&command.execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(&command.execution.key_ctx.signing_key)),
         options.verbose,
     )?;
     let review = MutationReviewSnapshot::build(

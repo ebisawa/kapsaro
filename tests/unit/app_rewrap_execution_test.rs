@@ -6,7 +6,7 @@ use std::fs;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::rewrap::execution::{
-    apply_rewrap_promotions, execute_confirmed_rewrap_batch, execute_rewrap_batch,
+    execute_confirmed_rewrap_batch, execute_rewrap_batch, promote_accepted_incoming_members,
 };
 use crate::app::rewrap::plan::build_rewrap_batch_plan;
 use crate::app::rewrap::types::{
@@ -14,7 +14,7 @@ use crate::app::rewrap::types::{
     VerifiedPostPromotionRecipients,
 };
 use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::{current_self_sig_x, CommandTrustSnapshot, RewrapInputPolicy};
+use crate::app::trust::{derive_self_sig_x, CommandTrustSnapshot, RewrapInputPolicy};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::envelope::signature::SigningContext;
@@ -22,15 +22,15 @@ use crate::feature::trust::verification::verify_trust_store;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::format::content::FileEncContent;
 use crate::io::keystore::storage::{list_kids, load_public_key};
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
 use crate::io::workspace::members::{
-    incoming_member_file_path, load_active_member_files, load_incoming_member_files,
+    get_incoming_member_file_path, load_active_member_files, load_incoming_member_files,
     load_member_file_from_path,
 };
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace,
-    stage_active_public_key_to_workspace_incoming, update_active_private_key_expires_at, EnvGuard,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
+    setup_member_key_context, setup_test_workspace, update_active_private_key_expires_at, EnvGuard,
 };
 
 const ALICE_MEMBER_ID: &str = "alice@example.com";
@@ -59,7 +59,7 @@ fn encrypt_file_for_members(
         })
         .collect::<Vec<_>>();
     let verified_members =
-        crate::test_utils::keygen_helpers::make_verified_members(&recipient_members);
+        crate::test_utils::keygen_helpers::build_verified_recipient_keys(&recipient_members);
     let recipients = recipient_ids
         .iter()
         .map(|member_id| (*member_id).to_string())
@@ -83,7 +83,7 @@ fn find_incoming_candidate(
     workspace: &std::path::Path,
     member_id: &str,
 ) -> IncomingPromotionCandidate {
-    let source_path = incoming_member_file_path(workspace, member_id);
+    let source_path = get_incoming_member_file_path(workspace, member_id);
     let public_key = load_member_file_from_path(&source_path).unwrap();
     let source_content = fs::read_to_string(&source_path).unwrap();
     IncomingPromotionCandidate {
@@ -112,7 +112,7 @@ fn build_empty_plan(
         options,
         workspace_dir,
         &execution.member_id,
-        Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )
     .unwrap()
@@ -177,7 +177,7 @@ fn test_execute_rewrap_batch_does_not_promote_members() {
 }
 
 #[test]
-fn test_apply_rewrap_promotions_moves_accepted_members_to_active() {
+fn test_promote_accepted_incoming_members_moves_accepted_members_to_active() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let bob_active = workspace_dir
@@ -195,7 +195,7 @@ fn test_apply_rewrap_promotions_moves_accepted_members_to_active() {
 
     let bob = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
 
-    apply_rewrap_promotions(&workspace_dir, &[bob]).unwrap();
+    promote_accepted_incoming_members(&workspace_dir, &[bob]).unwrap();
 
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
@@ -206,7 +206,7 @@ fn test_apply_rewrap_promotions_moves_accepted_members_to_active() {
 }
 
 #[test]
-fn test_apply_rewrap_promotions_replaces_existing_active_member_on_rotation() {
+fn test_promote_accepted_incoming_members_replaces_existing_active_member_on_rotation() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
     let active_path = workspace_dir
@@ -219,12 +219,12 @@ fn test_apply_rewrap_promotions_replaces_existing_active_member_on_rotation() {
         ALICE_MEMBER_ID,
         &build_expiring_soon_timestamp(365),
     );
-    stage_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
+    save_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
         .unwrap();
 
     let alice = find_incoming_candidate(&workspace_dir, ALICE_MEMBER_ID);
 
-    apply_rewrap_promotions(&workspace_dir, &[alice]).unwrap();
+    promote_accepted_incoming_members(&workspace_dir, &[alice]).unwrap();
 
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
@@ -264,7 +264,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &options,
             &workspace_dir,
             &execution.member_id,
-            Some(current_self_sig_x(&execution.key_ctx.signing_key)),
+            Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
             options.verbose,
         )
         .unwrap()
@@ -307,7 +307,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         .iter()
         .any(|member| member.protected.member_id == BOB_MEMBER_ID));
 
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -376,14 +376,14 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
         .unwrap()
         .iter()
         .any(|member| member.protected.member_id == BOB_MEMBER_ID));
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     assert!(load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .is_none());
 }
 
 #[test]
-fn test_apply_rewrap_promotions_rejects_incoming_file_mismatch_after_review() {
+fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_review() {
     let _guard = strict_key_checking_guard();
     let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
     let bob_active = workspace_dir
@@ -410,7 +410,7 @@ fn test_apply_rewrap_promotions_rejects_incoming_file_mismatch_after_review() {
     )
     .unwrap();
 
-    let result = apply_rewrap_promotions(&workspace_dir, &[bob_candidate]);
+    let result = promote_accepted_incoming_members(&workspace_dir, &[bob_candidate]);
 
     assert!(result.is_err());
     assert!(result
@@ -643,7 +643,7 @@ fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_revie
 
     assert_eq!(prompt_count, 1);
     assert_eq!(outcome.processed_files.len(), 2);
-    let trust_path = trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();

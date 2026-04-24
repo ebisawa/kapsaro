@@ -6,7 +6,7 @@
 //! Loads private keys from SECRETENV_PRIVATE_KEY environment variable,
 //! decrypts using SECRETENV_KEY_PASSWORD, and validates the key material.
 
-use crate::feature::context::crypto::validate_and_wrap_private_key_password;
+use crate::feature::context::crypto::build_verified_private_key_from_password;
 use crate::feature::key::protection::password_encryption::decrypt_private_key_with_password;
 use crate::format::schema::document::parse_private_key_bytes;
 use crate::model::identity::MemberId;
@@ -124,7 +124,7 @@ fn build_env_key_load_result(
     let kid = private_key.protected.kid.clone();
     let expires_at = private_key.protected.expires_at.clone();
     let plaintext = decrypt_private_key_with_password(private_key, password, debug)?;
-    let verified_key = validate_and_wrap_private_key_password(plaintext, &member_id, &kid)?;
+    let verified_key = build_verified_private_key_from_password(plaintext, &member_id, &kid)?;
 
     Ok(EnvKeyLoadResult {
         verified_key,

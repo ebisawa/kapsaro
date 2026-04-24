@@ -18,16 +18,16 @@ pub enum FormatError {
 }
 
 impl FormatError {
-    /// Create a parse error.
-    pub fn parse_failed(message: impl Into<String>) -> Self {
+    /// Build a parse error.
+    pub fn build_parse_error(message: impl Into<String>) -> Self {
         FormatError::ParseFailed {
             message: message.into(),
             source: None,
         }
     }
 
-    /// Create a parse error with a source error.
-    pub fn parse_failed_with_source(
+    /// Build a parse error with a source error.
+    pub fn build_parse_error_with_source(
         message: impl Into<String>,
         source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {

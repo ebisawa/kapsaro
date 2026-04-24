@@ -41,7 +41,7 @@ impl KeystoreResolver {
     ///
     /// # Returns
     /// Path to keystore root directory (created if it doesn't exist)
-    pub fn resolve_and_ensure(home: Option<&PathBuf>) -> Result<PathBuf> {
+    pub fn ensure_keystore_root(home: Option<&PathBuf>) -> Result<PathBuf> {
         let keystore_root = Self::resolve(home)?;
 
         if !keystore_root.exists() {

@@ -5,7 +5,7 @@ use std::io::Cursor;
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::cli::common::trust::recover_invalid_trust_store_with_reader;
-use crate::io::trust::paths::trust_store_file_path;
+use crate::io::trust::paths::get_trust_store_file_path;
 use tempfile::TempDir;
 
 fn build_options(home: &std::path::Path) -> CommonCommandOptions {
@@ -29,7 +29,7 @@ fn build_reset_required_error() -> crate::Error {
 fn test_recover_invalid_trust_store_with_reader_deletes_file_on_confirmation() {
     let temp_dir = TempDir::new().unwrap();
     let options = build_options(temp_dir.path());
-    let trust_path = trust_store_file_path(temp_dir.path(), "alice@example.com");
+    let trust_path = get_trust_store_file_path(temp_dir.path(), "alice@example.com");
     std::fs::create_dir_all(trust_path.parent().unwrap()).unwrap();
     std::fs::write(&trust_path, "{}").unwrap();
 
@@ -49,7 +49,7 @@ fn test_recover_invalid_trust_store_with_reader_deletes_file_on_confirmation() {
 fn test_recover_invalid_trust_store_with_reader_noninteractive_fails_without_deleting() {
     let temp_dir = TempDir::new().unwrap();
     let options = build_options(temp_dir.path());
-    let trust_path = trust_store_file_path(temp_dir.path(), "alice@example.com");
+    let trust_path = get_trust_store_file_path(temp_dir.path(), "alice@example.com");
     std::fs::create_dir_all(trust_path.parent().unwrap()).unwrap();
     std::fs::write(&trust_path, "{}").unwrap();
 

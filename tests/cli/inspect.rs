@@ -371,7 +371,7 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
 
     let set_args = set::SetArgs {
         common: common_opts.clone(),
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         name: Some("disclosed".to_string()),
         key: "API_KEY".to_string(),
         value: Some("secret123".to_string()),
@@ -389,7 +389,7 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
     let rewrap_args = RewrapArgs {
         common: common_opts,
         clear_disclosure_history: false,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         rotate_key: false,
         targets: Vec::new(),
     };

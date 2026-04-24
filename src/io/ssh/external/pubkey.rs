@@ -10,7 +10,7 @@ use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::SshError;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_SSH_PUBLIC_KEY_FILE_SIZE;
-use crate::support::path::display_path_relative_to_cwd;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::Path;
 
@@ -27,7 +27,7 @@ pub struct SshKeyCandidate {
 
 /// Create an SSH error (convenience for replacing `utils::error::ssh_error`).
 fn ssh_error(message: impl Into<String>) -> Error {
-    SshError::operation_failed(message).into()
+    SshError::build_operation_failed_error(message).into()
 }
 
 /// Read SSH public key directly from a .pub file
@@ -58,7 +58,7 @@ pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
     .map_err(|error| {
         let message = format!(
             "Failed to read public key file {}: {}",
-            display_path_relative_to_cwd(pub_key_path),
+            format_path_relative_to_cwd(pub_key_path),
             error
         );
         ssh_error(message)
@@ -70,7 +70,7 @@ pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
     let key_type = pubkey.split_whitespace().next().ok_or_else(|| {
         ssh_error(format!(
             "Invalid public key format in {}: empty or missing key type",
-            display_path_relative_to_cwd(pub_key_path)
+            format_path_relative_to_cwd(pub_key_path)
         ))
     })?;
 
@@ -78,7 +78,7 @@ pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
         return Err(ssh_error(format!(
             "Unsupported key type in {}: found '{}', expected '{}'\n\
             Only Ed25519 keys are supported.",
-            display_path_relative_to_cwd(pub_key_path),
+            format_path_relative_to_cwd(pub_key_path),
             key_type,
             ssh::KEY_TYPE_ED25519
         )));

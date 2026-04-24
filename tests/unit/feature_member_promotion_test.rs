@@ -30,7 +30,7 @@ fn test_report_all_member_ids_returns_all_categories() {
             false,
         )],
     };
-    let mut ids = report.all_member_ids();
+    let mut ids = report.collect_member_ids();
     ids.sort();
     assert_eq!(ids, vec!["alice", "bob", "carol"]);
 }
@@ -46,7 +46,7 @@ fn test_report_verified_member_ids() {
         failed: vec![],
         not_configured: vec![],
     };
-    let ids = report.verified_member_ids();
+    let ids = report.collect_verified_member_ids();
     assert_eq!(ids, vec!["alice"]);
 }
 
@@ -71,7 +71,7 @@ fn test_report_non_failed_member_ids_excludes_failed() {
             false,
         )],
     };
-    let mut ids = report.non_failed_member_ids();
+    let mut ids = report.collect_promotable_member_ids();
     ids.sort();
     assert_eq!(ids, vec!["alice", "carol"]);
 }

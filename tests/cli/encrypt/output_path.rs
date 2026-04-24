@@ -28,7 +28,7 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
 
         let args = encrypt::EncryptArgs {
             common: common_opts,
-            member_id: Some(ALICE_MEMBER_ID.to_string()),
+            member_handle: Some(ALICE_MEMBER_ID.to_string()),
             out: None,
             stdout: false,
             stdin: false,
@@ -61,7 +61,7 @@ fn test_encrypt_explicit_out_option() {
 
     let args = encrypt::EncryptArgs {
         common: common_opts,
-        member_id: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_ID.to_string()),
         out: Some(explicit_output.clone()),
         stdout: false,
         stdin: false,

@@ -3,9 +3,9 @@
 
 //! Debug test for kv-enc v3 HPKE issue
 
-use crate::keygen_helpers::{make_decrypted_private_key_plaintext, make_verified_members};
+use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_keys};
 use crate::test_utils::ALICE_MEMBER_ID;
-use crate::test_utils::{create_temp_ssh_keypair_in_dir, keygen_test};
+use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use ed25519_dalek::SigningKey;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::kv::decrypt::decrypt_kv_document;
@@ -29,7 +29,7 @@ fn test_debug_hpke_single_recipient() {
 
     // Generate single test key
     let ssh_temp = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = create_temp_ssh_keypair_in_dir(&ssh_temp);
+    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (private, public) = keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
 
     println!("Generated key:");
@@ -44,7 +44,7 @@ fn test_debug_hpke_single_recipient() {
     // Encrypt for single recipient
     let recipients = vec![ALICE_MEMBER_ID.to_string()];
     let members = vec![public.clone()];
-    let verified_members = make_verified_members(&members);
+    let verified_members = build_verified_recipient_keys(&members);
 
     println!("\nEncrypting...");
     println!("  recipients: {:?}", recipients);
@@ -83,7 +83,7 @@ fn test_debug_hpke_single_recipient() {
         Vec::new(),
     );
     let verified_doc = VerifiedKvEncDocument::new(doc, proof);
-    let decrypted_key = make_decrypted_private_key_plaintext(
+    let decrypted_key = build_verified_private_key(
         &private,
         ALICE_MEMBER_ID,
         &public.protected.kid,

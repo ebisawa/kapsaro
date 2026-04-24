@@ -8,7 +8,7 @@
 
 use super::base64::decode_base64_armored;
 use super::types::SshSignatureBlob;
-use super::wire::{ssh_string_decode, ssh_string_encode};
+use super::wire::{decode_ssh_string, encode_ssh_string};
 use crate::io::ssh::SshError;
 use crate::Result;
 use sha2::{Digest, Sha256};
@@ -44,10 +44,10 @@ pub fn build_sshsig_signed_data(message: &[u8], namespace: &str) -> Vec<u8> {
 
     let mut result = Vec::new();
     result.extend_from_slice(SSHSIG_MAGIC);
-    result.extend_from_slice(&ssh_string_encode(namespace.as_bytes()));
-    result.extend_from_slice(&ssh_string_encode(b"")); // reserved (empty)
-    result.extend_from_slice(&ssh_string_encode(SSHSIG_HASHALG.as_bytes()));
-    result.extend_from_slice(&ssh_string_encode(&hash));
+    result.extend_from_slice(&encode_ssh_string(namespace.as_bytes()));
+    result.extend_from_slice(&encode_ssh_string(b"")); // reserved (empty)
+    result.extend_from_slice(&encode_ssh_string(SSHSIG_HASHALG.as_bytes()));
+    result.extend_from_slice(&encode_ssh_string(&hash));
 
     result
 }
@@ -57,7 +57,7 @@ pub fn build_sshsig_signed_data(message: &[u8], namespace: &str) -> Vec<u8> {
 fn validate_sshsig_header(blob: &[u8]) -> Result<&[u8]> {
     // Check minimum length
     if blob.len() < 6 {
-        return Err(SshError::operation_failed(
+        return Err(SshError::build_operation_failed_error(
             "SSHSIG blob too short (minimum 10 bytes required)",
         )
         .into());
@@ -65,7 +65,7 @@ fn validate_sshsig_header(blob: &[u8]) -> Result<&[u8]> {
 
     // Check magic
     if &blob[0..6] != SSHSIG_MAGIC {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Invalid SSHSIG magic bytes (expected {:?}, got {:?})",
             SSHSIG_MAGIC,
             &blob[0..6.min(blob.len())]
@@ -75,15 +75,16 @@ fn validate_sshsig_header(blob: &[u8]) -> Result<&[u8]> {
 
     // Check version field present
     if blob.len() < 10 {
-        return Err(
-            SshError::operation_failed("SSHSIG blob too short (missing version field)").into(),
-        );
+        return Err(SshError::build_operation_failed_error(
+            "SSHSIG blob too short (missing version field)",
+        )
+        .into());
     }
 
     // Parse version (uint32)
     let version = u32::from_be_bytes([blob[6], blob[7], blob[8], blob[9]]);
     if version != 1 {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Unsupported SSHSIG version: {} (only version 1 is supported)",
             version
         ))
@@ -96,7 +97,7 @@ fn validate_sshsig_header(blob: &[u8]) -> Result<&[u8]> {
 /// Validate SSHSIG namespace field
 fn validate_namespace(namespace: &[u8], expected_namespace: &str) -> Result<()> {
     if namespace != expected_namespace.as_bytes() {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "SSHSIG namespace mismatch: expected '{}', got '{}'",
             expected_namespace,
             String::from_utf8_lossy(namespace)
@@ -109,7 +110,7 @@ fn validate_namespace(namespace: &[u8], expected_namespace: &str) -> Result<()> 
 /// Validate SSHSIG reserved field (must be empty)
 fn validate_reserved(reserved: &[u8]) -> Result<()> {
     if !reserved.is_empty() {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "SSHSIG reserved field must be empty, got {} bytes",
             reserved.len()
         ))
@@ -121,7 +122,7 @@ fn validate_reserved(reserved: &[u8]) -> Result<()> {
 /// Validate SSHSIG hash algorithm field
 fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
     if hashalg != b"sha256" {
-        return Err(SshError::operation_failed(format!(
+        return Err(SshError::build_operation_failed_error(format!(
             "Unsupported SSHSIG hash algorithm: '{}' (only 'sha256' is supported)",
             String::from_utf8_lossy(hashalg)
         ))
@@ -173,26 +174,26 @@ pub fn parse_sshsig_blob(blob: &[u8], expected_namespace: &str) -> Result<SshSig
     let mut cursor = validate_sshsig_header(blob)?;
 
     // Parse publickey (skip - we don't need it for IKM extraction)
-    let (_publickey, rest) = ssh_string_decode(cursor)?;
+    let (_publickey, rest) = decode_ssh_string(cursor)?;
     cursor = rest;
 
     // Parse and validate namespace
-    let (namespace, rest) = ssh_string_decode(cursor)?;
+    let (namespace, rest) = decode_ssh_string(cursor)?;
     validate_namespace(namespace, expected_namespace)?;
     cursor = rest;
 
     // Parse and validate reserved field
-    let (reserved, rest) = ssh_string_decode(cursor)?;
+    let (reserved, rest) = decode_ssh_string(cursor)?;
     validate_reserved(reserved)?;
     cursor = rest;
 
     // Parse and validate hash algorithm
-    let (hashalg, rest) = ssh_string_decode(cursor)?;
+    let (hashalg, rest) = decode_ssh_string(cursor)?;
     validate_hashalg(hashalg)?;
     cursor = rest;
 
     // Parse signature - THIS IS THE SSH SIGNATURE BLOB
-    let (signature_blob, _rest) = ssh_string_decode(cursor)?;
+    let (signature_blob, _rest) = decode_ssh_string(cursor)?;
 
     Ok(SshSignatureBlob::new(signature_blob.to_vec()))
 }

@@ -6,7 +6,7 @@ use crate::model::ssh::SshDeterminismStatus;
 use std::path::PathBuf;
 
 /// Result for key generation.
-pub struct KeyNewResult {
+pub struct KeyGenerationResult {
     pub member_id: String,
     pub kid: String,
     pub created_at: String,

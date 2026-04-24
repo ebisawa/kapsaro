@@ -12,8 +12,8 @@ pub(crate) fn resolve_key_timestamps(
     let expires_at = parse_expiration(expires_at_arg, valid_for_arg)?;
 
     Ok((
-        time_util::build_timestamp_display(created_at)?,
-        time_util::build_timestamp_display(expires_at)?,
+        time_util::format_timestamp_rfc3339(created_at)?,
+        time_util::format_timestamp_rfc3339(expires_at)?,
     ))
 }
 

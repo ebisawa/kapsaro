@@ -23,7 +23,7 @@ pub struct FileEncContent(String);
 pub struct KvEncContent(String);
 
 /// Format-detected encrypted content for dispatch.
-pub enum EncryptedContent {
+pub enum EncContent {
     FileEnc(FileEncContent),
     KvEnc(KvEncContent),
 }
@@ -93,7 +93,7 @@ impl KvEncContent {
     }
 }
 
-impl EncryptedContent {
+impl EncContent {
     /// Detect format and wrap in the appropriate variant.
     pub fn detect(content: String) -> Result<Self> {
         match detect_format(&content)? {

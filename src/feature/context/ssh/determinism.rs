@@ -12,7 +12,7 @@ use tracing::debug;
 const NON_DETERMINISTIC_SIGNATURE_MESSAGE: &str =
     "Non-deterministic signature detected: same input produced different signatures";
 
-pub(crate) fn probe_determinism(
+pub(crate) fn check_ssh_signature_determinism(
     params: &SshSigningParams,
     backend: &dyn SignatureBackend,
     ssh_pub: &str,

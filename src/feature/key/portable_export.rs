@@ -19,9 +19,11 @@ pub struct PortableExportOutput {
     pub member_id: String,
     pub kid: String,
     pub encoded_key: SecretString,
+    pub password_warning: Option<String>,
 }
 
 const MIN_PASSWORD_LENGTH: usize = 8;
+const RECOMMENDED_PASSWORD_LENGTH: usize = 20;
 
 /// Export a private key as a portable, password-protected Base64url string.
 ///
@@ -57,4 +59,16 @@ fn validate_password_length(password: &str) -> Result<()> {
         });
     }
     Ok(())
+}
+
+/// Build a non-fatal warning for accepted passwords below the recommended length.
+pub fn build_password_strength_warning(password: &str) -> Option<String> {
+    if password.len() < MIN_PASSWORD_LENGTH || password.len() >= RECOMMENDED_PASSWORD_LENGTH {
+        return None;
+    }
+
+    Some(format!(
+        "Password accepted, but it is shorter than the recommended {} characters for offline brute-force resistance.",
+        RECOMMENDED_PASSWORD_LENGTH
+    ))
 }

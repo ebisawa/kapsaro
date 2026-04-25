@@ -13,7 +13,9 @@ use crate::feature::key::manage::export::export_key;
 use crate::feature::key::manage::mutation::{activate_key, remove_key};
 use crate::feature::key::manage::private_load::load_private_key_export_material;
 use crate::feature::key::manage::query::list_keys;
-use crate::feature::key::portable_export::export_private_key_portable;
+use crate::feature::key::portable_export::{
+    build_password_strength_warning, export_private_key_portable,
+};
 use crate::feature::key::types::{KeyActivateResult, KeyExportResult, KeyRemoveResult};
 use crate::Result;
 
@@ -96,6 +98,7 @@ pub fn export_private_key_command(
         member_id: loaded.member_id,
         kid: loaded.kid,
         encoded_key,
+        password_warning: build_password_strength_warning(password),
     }
     .into())
 }

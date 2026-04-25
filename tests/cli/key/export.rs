@@ -5,6 +5,7 @@
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
 use crate::cli::key::find_kid_in_member_dir;
+use console::strip_ansi_codes;
 use predicates::prelude::*;
 use secretenv::model::identifiers::format;
 use secretenv::model::private_key::PrivateKey;
@@ -13,6 +14,23 @@ use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use secretenv::support::kid::format_kid_display;
 use std::fs;
 use tempfile::TempDir;
+
+fn generate_exportable_private_key(
+    temp_dir: &TempDir,
+    ssh_priv: &std::path::Path,
+    member_id: &str,
+) {
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(member_id)
+        .arg("-i")
+        .arg(ssh_priv.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+}
 
 #[test]
 fn test_key_export_explicit_kid() {
@@ -163,6 +181,142 @@ fn test_key_export_accepts_display_kid() {
     let exported_json = fs::read_to_string(&export_file).unwrap();
     let exported: PublicKey = serde_json::from_str(&exported_json).unwrap();
     assert_eq!(exported.protected.kid, kid);
+
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_warns_for_accepted_short_password_to_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_id = TEST_MEMBER_ID;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let export_file = temp_dir.path().join("portable-private-key.txt");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--member-handle")
+        .arg(member_id)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin("12345678\n12345678\n")
+        .assert()
+        .success()
+        .stderr(
+            predicate::str::contains("Warning:")
+                .and(predicate::str::contains("recommended 20 characters")),
+        );
+
+    assert!(export_file.exists(), "export should still succeed");
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_colors_short_password_warning_when_forced() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_id = TEST_MEMBER_ID;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let export_file = temp_dir.path().join("portable-private-key.txt");
+
+    let assert = cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--member-handle")
+        .arg(member_id)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("CLICOLOR_FORCE", "1")
+        .write_stdin("12345678\n12345678\n")
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("\u{1b}[33mWarning: Password accepted"),
+        "expected ANSI-colored warning in stderr, got: {stderr}"
+    );
+    assert!(
+        strip_ansi_codes(&stderr).contains("Warning: Password accepted"),
+        "expected warning text after stripping ANSI, got: {stderr}"
+    );
+
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_id = TEST_MEMBER_ID;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+
+    let output = cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--stdout")
+        .arg("--member-handle")
+        .arg(member_id)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin("12345678\n12345678\n")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be UTF-8");
+    let exported = stdout.trim();
+    assert!(!exported.is_empty(), "stdout should contain exported key");
+    assert!(
+        exported
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+        "stdout should contain only base64url text: {stdout:?}"
+    );
+    assert!(
+        stderr.contains("Warning:") && stderr.contains("recommended 20 characters"),
+        "stderr should contain password strength warning: {stderr}"
+    );
+    assert!(
+        !stdout.contains("Warning:"),
+        "stdout must not contain warnings: {stdout}"
+    );
+
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_does_not_warn_for_recommended_password() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_id = TEST_MEMBER_ID;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let export_file = temp_dir.path().join("portable-private-key.txt");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--member-handle")
+        .arg(member_id)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("recommended 20 characters").not());
 
     drop(ssh_temp);
 }

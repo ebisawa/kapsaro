@@ -12,6 +12,7 @@ use crate::cli::common::output::text::key::{
     print_key_activate_summary, print_key_export_summary, print_key_remove_summary,
     print_private_key_export_file_summary, print_private_key_export_stdout_summary,
 };
+use crate::cli::common::output::text::print_warning;
 use crate::cli::common::ssh::resolve_ssh_context_for_active_key;
 use crate::support::fs::atomic;
 use crate::Result;
@@ -78,6 +79,10 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
         password.as_str(),
         ssh_ctx,
     )?;
+
+    if let Some(warning) = result.password_warning.as_deref() {
+        print_warning(warning);
+    }
 
     if let Some(out) = args.out.as_ref() {
         atomic::save_text(out, result.encoded_key.as_str())?;

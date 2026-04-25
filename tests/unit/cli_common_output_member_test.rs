@@ -2,8 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::member::approval::MemberApprovalResult;
+use crate::app::member::types::{MemberListEntry, MemberListResult};
 use crate::app::trust::TrustApprovalCandidate;
-use crate::cli::common::output::member::view::build_member_approval_results_view;
+use crate::cli::common::output::member::view::{
+    build_member_approval_results_view, build_member_list_view,
+};
+
+#[test]
+fn test_build_member_list_view_preserves_kid() {
+    let result = MemberListResult {
+        active: vec![MemberListEntry {
+            member_id: "alice@example.com".to_string(),
+            kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+            document: serde_json::json!({}),
+        }],
+        incoming: vec![MemberListEntry {
+            member_id: "bob@example.com".to_string(),
+            kid: "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+            document: serde_json::json!({}),
+        }],
+        warnings: Vec::new(),
+    };
+
+    let view = build_member_list_view(&result);
+
+    assert_eq!(view.active[0].kid, "KAD1AAAA1111BBBB2222CCCC3333DDDD");
+    assert_eq!(view.incoming[0].kid, "KBD2AAAA1111BBBB2222CCCC3333DDDD");
+}
 
 #[test]
 fn test_build_member_approval_candidate_preserves_review_fields() {

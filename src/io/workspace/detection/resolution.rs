@@ -2,13 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::search::{detect_workspace_root, find_git_root, validate_workspace_path, WorkspaceRoot};
-use crate::config::resolution::workspace::resolve_workspace_from_config;
+use crate::config::resolution::workspace::{
+    resolve_workspace_from_config, resolve_workspace_from_config_base,
+};
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::env;
 use std::path::PathBuf;
 
 pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot> {
+    resolve_workspace_with_base(workspace_opt, None)
+}
+
+pub fn resolve_workspace_with_base(
+    workspace_opt: Option<PathBuf>,
+    base_dir: Option<&std::path::Path>,
+) -> Result<WorkspaceRoot> {
     if let Some(path) = workspace_opt {
         let canonical = path.canonicalize().map_err(|e| Error::Config {
             message: format!(
@@ -32,7 +41,7 @@ pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot
         return validate_workspace_path(&canonical);
     }
 
-    if let Some(config_path) = resolve_workspace_from_config()? {
+    if let Some(config_path) = resolve_workspace_path_from_config(base_dir)? {
         let canonical = config_path.canonicalize().map_err(|e| Error::Config {
             message: format!(
                 "Invalid workspace path in config.toml '{}': {}",
@@ -50,16 +59,23 @@ pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot
 }
 
 pub fn resolve_optional_workspace(workspace_opt: Option<PathBuf>) -> Result<Option<WorkspaceRoot>> {
+    resolve_optional_workspace_with_base(workspace_opt, None)
+}
+
+pub fn resolve_optional_workspace_with_base(
+    workspace_opt: Option<PathBuf>,
+    base_dir: Option<&std::path::Path>,
+) -> Result<Option<WorkspaceRoot>> {
     if let Some(path) = workspace_opt {
-        return resolve_workspace(Some(path)).map(Some);
+        return resolve_workspace_with_base(Some(path), base_dir).map(Some);
     }
 
     if env::var("SECRETENV_WORKSPACE").is_ok() {
-        return resolve_workspace(None).map(Some);
+        return resolve_workspace_with_base(None, base_dir).map(Some);
     }
 
-    if resolve_workspace_from_config()?.is_some() {
-        return resolve_workspace(None).map(Some);
+    if resolve_workspace_path_from_config(base_dir)?.is_some() {
+        return resolve_workspace_with_base(None, base_dir).map(Some);
     }
 
     match env::current_dir() {
@@ -71,6 +87,15 @@ pub fn resolve_optional_workspace(workspace_opt: Option<PathBuf>) -> Result<Opti
         Err(e) => Err(Error::Config {
             message: format!("Failed to get current directory: {}", e),
         }),
+    }
+}
+
+fn resolve_workspace_path_from_config(
+    base_dir: Option<&std::path::Path>,
+) -> Result<Option<PathBuf>> {
+    match base_dir {
+        Some(dir) => resolve_workspace_from_config_base(Some(dir)),
+        None => resolve_workspace_from_config(),
     }
 }
 

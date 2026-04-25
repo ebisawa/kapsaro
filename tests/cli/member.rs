@@ -9,6 +9,7 @@ use crate::test_utils::{
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use predicates::prelude::*;
+use secretenv::support::kid::format_kid_display;
 use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
@@ -34,6 +35,15 @@ fn fixture_ssh_key_path(temp_dir: &TempDir) -> std::path::PathBuf {
     temp_dir.path().join(".ssh").join("test_ed25519")
 }
 
+fn active_member_kid(workspace_dir: &std::path::Path, member_id: &str) -> String {
+    let member_file = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", member_id));
+    let value: Value = serde_json::from_str(&fs::read_to_string(member_file).unwrap()).unwrap();
+    value["protected"]["kid"].as_str().unwrap().to_string()
+}
+
 // ============================================================================
 // member list
 // ============================================================================
@@ -41,6 +51,8 @@ fn fixture_ssh_key_path(temp_dir: &TempDir) -> std::path::PathBuf {
 #[test]
 fn test_member_list_shows_initialized_member() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let kid = active_member_kid(workspace_dir.path(), TEST_MEMBER_ID);
+    let kid_display = format_kid_display(&kid).unwrap();
 
     cmd()
         .arg("member")
@@ -51,7 +63,8 @@ fn test_member_list_shows_initialized_member() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains(TEST_MEMBER_ID));
+        .stdout(predicate::str::contains(TEST_MEMBER_ID))
+        .stdout(predicate::str::contains(kid_display));
 }
 
 #[test]
@@ -83,6 +96,10 @@ fn test_member_list_json_output() {
     assert!(
         !active.is_empty(),
         "active array should contain the initialized member"
+    );
+    assert!(
+        active[0]["protected"]["kid"].as_str().is_some(),
+        "active member document should include protected.kid"
     );
 }
 

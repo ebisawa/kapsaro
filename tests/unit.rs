@@ -127,6 +127,8 @@ pub mod format_signature_test;
 pub mod format_token_encode_test;
 #[path = "unit/format_trust_store_test.rs"]
 pub mod format_trust_store_test;
+#[path = "unit/install_script_test.rs"]
+pub mod install_script_test;
 #[path = "unit/io_config_bootstrap_test.rs"]
 pub mod io_config_bootstrap_test;
 #[path = "unit/io_config_store_test.rs"]

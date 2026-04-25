@@ -892,6 +892,7 @@ In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byt
 - Fixed parameters at export time: m=65536 (64 MiB), t=3, p=4 — following the "second recommended" option from RFC 9106, Section 4
 - Parameters are fixed by the implementation and are not serialized in the private key document
 - Minimum password length: 8 characters. This is the implementation-enforced floor, not a recommendation. Users are responsible for choosing a sufficiently strong password. For offline brute-force resistance, 20 or more random characters (or a passphrase with equivalent entropy) is strongly recommended.
+- Passwords from 8 through 19 characters are accepted for compatibility with the implementation floor, but the CLI emits a non-fatal stderr warning so that weak operational choices are visible at export time.
 
 ### 7.3.4 CI Boundary and Environment Variable-Based Key Loading
 

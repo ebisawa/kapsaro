@@ -77,6 +77,7 @@ pub struct KeyExportPrivateResult {
     pub member_id: String,
     pub kid: String,
     pub encoded_key: SecretString,
+    pub password_warning: Option<String>,
 }
 
 impl From<PortableExportOutput> for KeyExportPrivateResult {
@@ -85,6 +86,7 @@ impl From<PortableExportOutput> for KeyExportPrivateResult {
             member_id: output.member_id,
             kid: output.kid,
             encoded_key: output.encoded_key,
+            password_warning: output.password_warning,
         }
     }
 }

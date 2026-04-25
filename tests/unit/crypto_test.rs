@@ -34,6 +34,18 @@ fn generate_ed25519_keypair(
 // HPKE tests
 
 #[test]
+fn test_generate_keypair_public_key_matches_secret_key() {
+    use secretenv::crypto::kem::generate_keypair;
+
+    let (secret_key, public_key) = generate_keypair().unwrap();
+    let derived_public_key = derive_public_key_from_secret(&secret_key).unwrap();
+
+    assert_eq!(secret_key.as_bytes().len(), 32);
+    assert_eq!(public_key.as_bytes().len(), 32);
+    assert_eq!(derived_public_key.as_bytes(), public_key.as_bytes());
+}
+
+#[test]
 fn test_hpke_enc_length() {
     use secretenv::crypto::kem::seal_base;
     use secretenv::crypto::types::data::{Aad, Info, Plaintext};

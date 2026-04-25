@@ -13,6 +13,7 @@ use secretenv::feature::key::portable_export::export_private_key_portable;
 use secretenv::feature::key::protection::encryption::decrypt_private_key;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::storage::load_private_key;
+use secretenv::support::secret::SecretString;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -56,13 +57,14 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
         .expect("should decrypt private key");
 
     // Export as portable key
+    let password = SecretString::new(TEST_PASSWORD.to_string());
     let exported = export_private_key_portable(
         &plaintext,
         &private_key.protected.member_id,
         &private_key.protected.kid,
         &private_key.protected.created_at,
         &private_key.protected.expires_at,
-        TEST_PASSWORD,
+        &password,
         false,
     )
     .expect("should export private key")

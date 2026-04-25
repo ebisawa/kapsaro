@@ -9,6 +9,7 @@
 use crate::app::context::crypto::load_crypto_context_from_env;
 use secretenv::feature::context::env_key::load_private_key_from_env;
 use secretenv::feature::key::portable_export::export_private_key_portable;
+use secretenv::support::secret::SecretString;
 use tempfile::TempDir;
 
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test, EnvGuard};
@@ -33,6 +34,7 @@ fn generate_and_export(
     let (plaintext, public_key) =
         keygen_test(member_id, &ssh_priv, &ssh_pub_content).expect("keygen should succeed");
 
+    let password = SecretString::new(password.to_string());
     let exported = export_private_key_portable(
         &plaintext,
         &public_key.protected.member_id,
@@ -43,7 +45,7 @@ fn generate_and_export(
             .as_deref()
             .unwrap_or("2026-01-01T00:00:00Z"),
         &public_key.protected.expires_at,
-        password,
+        &password,
         false,
     )
     .expect("export should succeed")

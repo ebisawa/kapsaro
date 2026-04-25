@@ -57,8 +57,8 @@ where
         confirm_known,
         confirm_non_member,
     )?;
-    let result = execute()?;
     save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
+    let result = execute()?;
     Ok(result)
 }
 
@@ -114,7 +114,7 @@ where
         },
         confirm_recipients,
     )?);
-    let result = execute()?;
     save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
+    let result = execute()?;
     Ok(result)
 }

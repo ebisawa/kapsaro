@@ -23,17 +23,17 @@ fn test_is_valid_key_name() {
 #[test]
 fn test_parse_dotenv_value() {
     // Unquoted
-    assert_eq!(parse_dotenv_value("value"), "value");
+    assert_eq!(parse_dotenv_value("value").as_str(), "value");
 
     // Single-quoted (no escaping)
-    assert_eq!(parse_dotenv_value("'value'"), "value");
-    assert_eq!(parse_dotenv_value("'val\\nue'"), "val\\nue");
+    assert_eq!(parse_dotenv_value("'value'").as_str(), "value");
+    assert_eq!(parse_dotenv_value("'val\\nue'").as_str(), "val\\nue");
 
     // Double-quoted (with escaping)
-    assert_eq!(parse_dotenv_value("\"value\""), "value");
-    assert_eq!(parse_dotenv_value("\"val\\nue\""), "val\nue");
-    assert_eq!(parse_dotenv_value("\"val\\\"ue\""), "val\"ue");
-    assert_eq!(parse_dotenv_value("\"val\\\\nue\""), "val\\nue"); // \\ -> \
+    assert_eq!(parse_dotenv_value("\"value\"").as_str(), "value");
+    assert_eq!(parse_dotenv_value("\"val\\nue\"").as_str(), "val\nue");
+    assert_eq!(parse_dotenv_value("\"val\\\"ue\"").as_str(), "val\"ue");
+    assert_eq!(parse_dotenv_value("\"val\\\\nue\"").as_str(), "val\\nue"); // \\ -> \
 }
 
 #[test]
@@ -53,11 +53,23 @@ INVALID-KEY=ignored
 
     let map = parse_dotenv(content).unwrap();
 
-    assert_eq!(map.get("KEY1"), Some(&"value1".to_string()));
-    assert_eq!(map.get("KEY2"), Some(&"quoted value".to_string()));
-    assert_eq!(map.get("KEY3"), Some(&"single quoted".to_string()));
-    assert_eq!(map.get("KEY4"), Some(&"exported".to_string()));
-    assert_eq!(map.get("KEY5"), Some(&"line\\nbreak".to_string()));
+    assert_eq!(map.get("KEY1").map(|value| value.as_str()), Some("value1"));
+    assert_eq!(
+        map.get("KEY2").map(|value| value.as_str()),
+        Some("quoted value")
+    );
+    assert_eq!(
+        map.get("KEY3").map(|value| value.as_str()),
+        Some("single quoted")
+    );
+    assert_eq!(
+        map.get("KEY4").map(|value| value.as_str()),
+        Some("exported")
+    );
+    assert_eq!(
+        map.get("KEY5").map(|value| value.as_str()),
+        Some("line\\nbreak")
+    );
     assert_eq!(map.get("INVALID-KEY"), None);
     assert_eq!(map.get("123INVALID"), None);
 }
@@ -98,7 +110,12 @@ fn test_roundtrip() {
     let serialized = build_dotenv_string(&original);
     let parsed = parse_dotenv(&serialized).unwrap();
 
-    assert_eq!(original, parsed);
+    for (key, value) in original {
+        assert_eq!(
+            parsed.get(&key).map(|value| value.as_str()),
+            Some(value.as_str())
+        );
+    }
 }
 
 // ============================================================================

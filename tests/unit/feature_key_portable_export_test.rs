@@ -6,6 +6,7 @@ use secretenv::feature::key::portable_export::export_private_key_portable;
 use secretenv::feature::key::protection::password_encryption::decrypt_private_key_with_password;
 use secretenv::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
+use secretenv::support::secret::SecretString;
 
 fn build_test_plaintext() -> PrivateKeyPlaintext {
     let keypairs = generate_keypairs().unwrap();
@@ -17,6 +18,10 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
     )
 }
 
+fn secret(value: &str) -> SecretString {
+    SecretString::new(value.to_string())
+}
+
 #[test]
 fn test_export_produces_valid_base64url() {
     let plaintext = build_test_plaintext();
@@ -26,7 +31,7 @@ fn test_export_produces_valid_base64url() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "strong-password-42",
+        &secret("strong-password-42"),
         false,
     )
     .expect("export should succeed");
@@ -55,7 +60,7 @@ fn test_export_produces_valid_base64url() {
 #[test]
 fn test_export_roundtrip() {
     let plaintext = build_test_plaintext();
-    let password = "strong-password-42";
+    let password = secret("strong-password-42");
 
     let exported = export_private_key_portable(
         &plaintext,
@@ -63,7 +68,7 @@ fn test_export_roundtrip() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        password,
+        &password,
         false,
     )
     .expect("export should succeed");
@@ -77,7 +82,7 @@ fn test_export_roundtrip() {
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");
 
     // Decrypt with password
-    let decrypted = decrypt_private_key_with_password(&private_key, password, false)
+    let decrypted = decrypt_private_key_with_password(&private_key, &password, false)
         .expect("decryption should succeed");
 
     assert_eq!(plaintext, decrypted);
@@ -97,7 +102,7 @@ fn test_export_preserves_metadata() {
         kid,
         created_at,
         expires_at,
-        "strong-password-42",
+        &secret("strong-password-42"),
         false,
     )
     .expect("export should succeed");
@@ -123,7 +128,7 @@ fn test_export_uses_argon2id_kdf() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "strong-password-42",
+        &secret("strong-password-42"),
         false,
     )
     .expect("export should succeed");
@@ -165,7 +170,7 @@ fn test_export_password_too_short_fails() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "short",
+        &secret("short"),
         false,
     );
 
@@ -188,7 +193,7 @@ fn test_export_password_7_chars_fails() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "1234567",
+        &secret("1234567"),
         false,
     );
 
@@ -205,7 +210,7 @@ fn test_export_password_8_chars_succeeds() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "12345678",
+        &secret("12345678"),
         false,
     );
 

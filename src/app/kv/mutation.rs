@@ -175,7 +175,7 @@ where
     let kv_map = parse_dotenv(dotenv_content)?;
     let entries: Vec<KvInputEntry> = kv_map
         .into_iter()
-        .map(|(key, value)| KvInputEntry::new(key, value))
+        .map(|(key, value)| KvInputEntry::new_secret(key, value))
         .collect();
     let entry_count = entries.len();
     let write_outcome = set_kv_command(plan, entries, success_message)?;

@@ -6,6 +6,7 @@
 //! Provides functions to parse dotenv-style KEY=VALUE pairs with support for
 //! quoted values and escape sequences.
 
+use crate::support::secret::SecretString;
 use crate::Result;
 use std::collections::HashMap;
 
@@ -23,28 +24,30 @@ pub fn is_valid_key_name(key: &str) -> bool {
 }
 
 /// Unquote a value from dotenv format
-pub fn parse_dotenv_value(value: &str) -> String {
+pub fn parse_dotenv_value(value: &str) -> SecretString {
     if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
         // Double-quoted: unescape \n \r \t \\ \"
         // Note: Must handle \\ first, before other escape sequences
-        value[1..value.len() - 1]
-            .replace("\\\\", "\x00") // Temporary placeholder for \\
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
-            .replace("\\\"", "\"")
-            .replace("\x00", "\\") // Restore \\ as single \
+        SecretString::new(
+            value[1..value.len() - 1]
+                .replace("\\\\", "\x00") // Temporary placeholder for \\
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"")
+                .replace("\x00", "\\"),
+        ) // Restore \\ as single \
     } else if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
         // Single-quoted: no escaping
-        value[1..value.len() - 1].to_string()
+        SecretString::new(value[1..value.len() - 1].to_string())
     } else {
         // Unquoted: use as-is
-        value.to_string()
+        SecretString::new(value.to_string())
     }
 }
 
 /// Parse dotenv format and extract KEY=VALUE pairs
-pub fn parse_dotenv(content: &str) -> Result<HashMap<String, String>> {
+pub fn parse_dotenv(content: &str) -> Result<HashMap<String, SecretString>> {
     let mut map = HashMap::new();
 
     for line in content.lines() {
@@ -177,7 +180,10 @@ fn quote_value(value: &str) -> String {
 ///
 /// Keys are sorted for deterministic output.
 /// Values are quoted if they contain special characters.
-pub fn build_dotenv_string(map: &HashMap<String, String>) -> String {
+pub fn build_dotenv_string<V>(map: &HashMap<String, V>) -> String
+where
+    V: AsRef<str>,
+{
     let mut entries: Vec<_> = map.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -185,7 +191,7 @@ pub fn build_dotenv_string(map: &HashMap<String, String>) -> String {
     for (key, value) in entries {
         result.push_str(key);
         result.push('=');
-        result.push_str(&quote_value(value));
+        result.push_str(&quote_value(value.as_ref()));
         result.push('\n');
     }
     result

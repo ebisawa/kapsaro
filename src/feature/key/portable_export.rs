@@ -35,10 +35,10 @@ pub fn export_private_key_portable(
     kid: &str,
     created_at: &str,
     expires_at: &str,
-    password: &str,
+    password: &SecretString,
     debug: bool,
 ) -> Result<SecretString> {
-    validate_password_length(password)?;
+    validate_password_length(password.as_str())?;
 
     let private_key = encrypt_private_key_with_password(
         plaintext, member_id, kid, created_at, expires_at, password, debug,

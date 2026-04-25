@@ -48,10 +48,52 @@ fn test_decode_base64url_nopad_rejects_padding() {
 }
 
 #[test]
+fn test_decode_base64url_nopad_rejects_non_zero_tail_bits_len_two() {
+    let error = decode_base64url_nopad("AB", "test").unwrap_err();
+
+    assert!(error.to_string().contains("tail bits"));
+}
+
+#[test]
+fn test_decode_base64url_nopad_rejects_non_zero_tail_bits_len_three() {
+    let error = decode_base64url_nopad("AAB", "test").unwrap_err();
+
+    assert!(error.to_string().contains("tail bits"));
+}
+
+#[test]
+fn test_decode_base64url_nopad_accepts_canonical_tail_bits() {
+    assert_eq!(decode_base64url_nopad("AA", "test").unwrap(), vec![0]);
+    assert_eq!(decode_base64url_nopad("AAA", "test").unwrap(), vec![0, 0]);
+}
+
+#[test]
+fn test_decode_base64url_nopad_rejects_non_canonical_fixed_length_values() {
+    let mut signature = encode_base64url_nopad(&[0u8; 64]);
+    signature.replace_range(85..86, "B");
+    let signature_error = decode_base64url_nopad(&signature, "signature").unwrap_err();
+
+    let mut salt = encode_base64url_nopad(&[0u8; 32]);
+    salt.replace_range(42..43, "B");
+    let salt_error = decode_base64url_nopad(&salt, "salt").unwrap_err();
+
+    assert!(signature_error.to_string().contains("tail bits"));
+    assert!(salt_error.to_string().contains("tail bits"));
+}
+
+#[test]
 fn test_decode_base64_standard_rejects_invalid_character() {
     let error = decode_base64_standard("aGVsbG8*", "test").unwrap_err();
 
     assert!(error.to_string().contains("invalid"));
+}
+
+#[test]
+fn test_decode_base64_standard_rejects_non_zero_tail_bits() {
+    let error = decode_base64_standard("AB==", "test").unwrap_err();
+
+    assert!(error.to_string().contains("tail bits"));
+    assert_eq!(decode_base64_standard("AA==", "test").unwrap(), vec![0]);
 }
 
 #[test]

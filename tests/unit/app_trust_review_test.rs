@@ -2,21 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    enforce_read_trust_member_eligibility, review_recipient_trust_with_confirmation,
+    enforce_read_trust_member_eligibility, execute_read_with_signer_trust,
+    execute_write_with_recipient_trust, review_recipient_trust_with_confirmation,
     review_recipient_trust_with_confirmation_verifier,
     review_rewrap_signer_requirements_with_confirmation,
     review_rewrap_signer_requirements_with_confirmation_verifier,
     review_signer_trust_with_confirmation, review_signer_trust_with_confirmation_verifier,
+    ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext,
+    WriteRecipientTrustReviewPlan,
 };
 use crate::app::rewrap::types::RewrapSignerRequirement;
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};
+use crate::app_test_utils::{build_test_command_options, build_test_execution_context};
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
 };
-use crate::test_utils::{kid as test_kid, member_id as test_member_id};
+use crate::test_utils::{
+    kid as test_kid, member_id as test_member_id, setup_test_keystore_from_fixtures,
+};
 use std::path::{Path, PathBuf};
 
 fn build_candidate(member_id: &str, kid: &str) -> TrustApprovalCandidate {
@@ -107,6 +113,82 @@ fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_id: &str, k
     let identity = KnownKeyIdentity::from(approval);
     assert_eq!(identity.member_id(), member_id);
     assert_eq!(identity.kid(), kid);
+}
+
+#[test]
+fn test_execute_read_with_signer_trust_saves_approval_before_execute() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let candidate = build_candidate("alice@example.com", &execution_context.key_ctx.kid);
+    let outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate);
+    let mut executed = false;
+
+    let result = execute_read_with_signer_trust(
+        TrustExecutionContext {
+            options: &options,
+            execution: &execution_context,
+            warnings: &[],
+        },
+        ReadSignerTrustReviewPlan {
+            trust_outcome: &outcome,
+            labels: SignerTrustLabels {
+                context: "decrypt signer",
+                subject: "signer",
+            },
+            allow_non_member: true,
+        },
+        |_warnings| {},
+        |_candidate, _context_label| Ok(true),
+        |_candidate, _context_label, _recipients| Ok(false),
+        || {
+            executed = true;
+            Ok(())
+        },
+    );
+
+    let error = result.unwrap_err();
+    assert!(error
+        .format_user_message()
+        .contains("must not be stored in known_keys"));
+    assert!(!executed);
+}
+
+#[test]
+fn test_execute_write_with_recipient_trust_saves_approval_before_execute() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let candidate = build_candidate("alice@example.com", &execution_context.key_ctx.kid);
+    let outcome = RecipientTrustOutcome::NeedsManualApproval(vec![candidate]);
+    let mut executed = false;
+
+    let result = execute_write_with_recipient_trust(
+        TrustExecutionContext {
+            options: &options,
+            execution: &execution_context,
+            warnings: &[],
+        },
+        WriteRecipientTrustReviewPlan {
+            signer_trust: None,
+            recipient_trust: &outcome,
+            recipient_context_label: "encrypt recipients",
+        },
+        |_warnings| {},
+        |_candidate, _context_label| Ok(false),
+        |_candidate, _context_label, _recipients| Ok(false),
+        |candidates, _context_label| Ok(candidates.to_vec()),
+        || {
+            executed = true;
+            Ok(())
+        },
+    );
+
+    let error = result.unwrap_err();
+    assert!(error
+        .format_user_message()
+        .contains("must not be stored in known_keys"));
+    assert!(!executed);
 }
 
 #[test]

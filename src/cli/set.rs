@@ -6,6 +6,7 @@
 use std::io::{self, Read};
 
 use clap::Args;
+use zeroize::Zeroizing;
 
 use crate::app::kv::mutation::set_kv_command;
 use crate::app::kv::types::KvInputEntry;
@@ -17,6 +18,7 @@ use crate::cli::common::command::{
 use crate::cli::common::output::text::print_optional_status;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::CommonOptions;
+use crate::support::secret::SecretString;
 use crate::{Error, Result};
 
 #[derive(Args)]
@@ -45,15 +47,17 @@ pub struct SetArgs {
 }
 
 /// Resolve the value from either the positional argument or stdin.
-fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<String> {
+fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<SecretString> {
     if from_stdin {
-        let mut buf = String::new();
+        let mut buf = Zeroizing::new(String::new());
         io::stdin().read_to_string(&mut buf)?;
         // Trim trailing newline that is typically appended by echo/pipe
-        let trimmed = buf.trim_end_matches('\n').trim_end_matches('\r');
-        Ok(trimmed.to_string())
+        while matches!(buf.chars().last(), Some('\n' | '\r')) {
+            buf.pop();
+        }
+        Ok(SecretString::from_zeroizing(buf))
     } else if let Some(v) = value {
-        Ok(v)
+        Ok(SecretString::new(v))
     } else {
         Err(Error::build_invalid_argument_error(
             "VALUE is required; pass it as an argument or use --stdin",
@@ -62,7 +66,7 @@ fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<String> {
 }
 
 pub fn run(args: SetArgs) -> Result<()> {
-    let value = resolve_value(args.value.clone(), args.stdin)?;
+    let value = resolve_value(args.value, args.stdin)?;
     let options = resolve_options(&args.common);
     let outcome = run_with_trust_store_reset_recovery(
         &options,
@@ -85,7 +89,10 @@ pub fn run(args: SetArgs) -> Result<()> {
                     );
                     set_kv_command(
                         trust_plan,
-                        vec![KvInputEntry::new(args.key.clone(), value.clone())],
+                        vec![KvInputEntry::new_secret(
+                            args.key.clone(),
+                            SecretString::new(value.as_str().to_owned()),
+                        )],
                         Some(&success_message),
                     )
                 },

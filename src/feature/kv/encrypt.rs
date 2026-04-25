@@ -12,7 +12,6 @@ use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::support::secret::SecretString;
 use crate::Result;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -30,12 +29,6 @@ where
 {
     fn as_kv_value(&self) -> &str {
         self.as_ref()
-    }
-}
-
-impl KvValueRef for SecretString {
-    fn as_kv_value(&self) -> &str {
-        self.as_str()
     }
 }
 

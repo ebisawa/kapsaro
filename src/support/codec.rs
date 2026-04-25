@@ -288,6 +288,7 @@ fn decode_tail(
         2 => {
             let a = decode_symbol_checked(chunk[0], variant, field_name)?;
             let b = decode_symbol_checked(chunk[1], variant, field_name)?;
+            validate_unused_tail_bits(b, 0x0f, field_name)?;
             out[0] = (a << 2) | (b >> 4);
             Ok(())
         }
@@ -295,6 +296,7 @@ fn decode_tail(
             let a = decode_symbol_checked(chunk[0], variant, field_name)?;
             let b = decode_symbol_checked(chunk[1], variant, field_name)?;
             let c = decode_symbol_checked(chunk[2], variant, field_name)?;
+            validate_unused_tail_bits(c, 0x03, field_name)?;
             out[0] = (a << 2) | (b >> 4);
             out[1] = ((b & 0x0f) << 4) | (c >> 2);
             Ok(())
@@ -304,6 +306,16 @@ fn decode_tail(
             "Invalid trailing base64 length",
         )),
     }
+}
+
+fn validate_unused_tail_bits(value: u8, mask: u8, field_name: &str) -> Result<()> {
+    if value & mask == 0 {
+        return Ok(());
+    }
+    Err(invalid_character_error(
+        field_name,
+        "contains non-zero unused base64 tail bits",
+    ))
 }
 
 fn decode_symbol_checked(byte: u8, variant: Base64Variant, field_name: &str) -> Result<u8> {

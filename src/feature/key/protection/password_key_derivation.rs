@@ -10,6 +10,7 @@ use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::model::identifiers::context;
 use crate::support::kid::format_kid_display_lossy;
+use crate::support::secret::SecretString;
 use crate::Result;
 use argon2::Argon2;
 use tracing::debug;
@@ -37,7 +38,7 @@ pub fn generate_hkdf_salt() -> Result<HkdfSalt> {
 /// 1. Password + salt -> Argon2id -> 32-byte IKM
 /// 2. IKM + salt -> HKDF-SHA256 (with kid-bound info) -> XChaChaKey
 pub fn derive_key_from_password(
-    password: &str,
+    password: &SecretString,
     ikm_salt: &PrivateKeyIkmSalt,
     hkdf_salt: &HkdfSalt,
     kid: &str,
@@ -70,7 +71,7 @@ pub fn derive_key_from_password(
 }
 
 /// Hash password with Argon2id, returning a 32-byte IKM wrapped in Zeroizing
-fn argon2id_hash(password: &str, salt: &PrivateKeyIkmSalt) -> Result<Zeroizing<[u8; 32]>> {
+fn argon2id_hash(password: &SecretString, salt: &PrivateKeyIkmSalt) -> Result<Zeroizing<[u8; 32]>> {
     let argon2_params = fixed_argon2_params()?;
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,
@@ -80,7 +81,11 @@ fn argon2id_hash(password: &str, salt: &PrivateKeyIkmSalt) -> Result<Zeroizing<[
 
     let mut output = Zeroizing::new([0u8; 32]);
     argon2
-        .hash_password_into(password.as_bytes(), salt.as_bytes(), output.as_mut())
+        .hash_password_into(
+            password.as_str().as_bytes(),
+            salt.as_bytes(),
+            output.as_mut(),
+        )
         .map_err(|e| crate::Error::Crypto {
             message: format!("Argon2id hashing failed: {}", e),
             source: None,

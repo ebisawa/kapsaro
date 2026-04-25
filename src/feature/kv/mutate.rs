@@ -84,9 +84,9 @@ fn set_kv_new_file(
     ctx: &KvWriteContext<'_>,
 ) -> Result<KvSetResult> {
     let codec = ctx.token_codec.unwrap_or(TokenCodec::JsonJcs);
-    let kv_map: HashMap<String, String> = entries
+    let kv_map: HashMap<String, &crate::support::secret::SecretString> = entries
         .iter()
-        .map(|entry| (entry.key.clone(), entry.value.clone()))
+        .map(|entry| (entry.key.clone(), &entry.value))
         .collect();
     let encrypted = super::rewrite_session::encrypt_kv_map_with_key_context(
         &kv_map,

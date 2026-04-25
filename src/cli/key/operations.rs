@@ -15,6 +15,7 @@ use crate::cli::common::output::text::key::{
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::ssh::resolve_ssh_context_for_active_key;
 use crate::support::fs::atomic;
+use crate::support::secret::SecretString;
 use crate::Result;
 use std::io::IsTerminal;
 use std::io::{self, BufRead};
@@ -72,13 +73,8 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
     let ssh_ctx = resolve_ssh_context_for_active_key(&options, Some(member_id.clone()))?;
     let password = prompt_export_password()?;
 
-    let result = export_private_key_command(
-        &options,
-        member_id,
-        args.kid.clone(),
-        password.as_str(),
-        ssh_ctx,
-    )?;
+    let result =
+        export_private_key_command(&options, member_id, args.kid.clone(), &password, ssh_ctx)?;
 
     if let Some(warning) = result.password_warning.as_deref() {
         print_warning(warning);
@@ -96,14 +92,14 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
     Ok(())
 }
 
-fn prompt_export_password() -> Result<Zeroizing<String>> {
+fn prompt_export_password() -> Result<SecretString> {
     if io::stdin().is_terminal() {
         let password = dialoguer::Password::new()
             .with_prompt("Enter password for key export")
             .with_confirmation("Confirm password", "Passwords do not match")
             .interact()
             .map_err(|e| crate::Error::build_io_error(format!("Failed to read password: {}", e)))?;
-        return Ok(Zeroizing::new(password));
+        return Ok(SecretString::new(password));
     }
 
     let stdin = io::stdin();
@@ -127,7 +123,7 @@ fn prompt_export_password() -> Result<Zeroizing<String>> {
         });
     }
 
-    Ok(password)
+    Ok(SecretString::from_zeroizing(password))
 }
 
 fn normalize_line_ending(value: &mut String) {

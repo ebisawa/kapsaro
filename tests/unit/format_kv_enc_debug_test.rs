@@ -106,7 +106,12 @@ fn test_debug_hpke_single_recipient() {
             let decrypted = build_dotenv_string(&decrypted_map);
             println!("Success! Decrypted: {}", decrypted);
             let expected_map = parse_dotenv(input).unwrap();
-            assert_eq!(decrypted_map, expected_map);
+            for (key, value) in expected_map {
+                assert_eq!(
+                    decrypted_map.get(&key).map(String::as_str),
+                    Some(value.as_str())
+                );
+            }
         }
         Err(e) => {
             println!("Error: {:?}", e);

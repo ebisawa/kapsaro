@@ -11,6 +11,7 @@ use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey};
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
+use crate::support::codec::base64_public::encode_base64url_nopad;
 
 use super::{build_promotion_review_plan, build_promotion_review_session_with_verifier};
 
@@ -80,7 +81,7 @@ fn build_candidate(
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: "Ed25519".to_string(),
-                        x: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
+                        x: encode_base64url_nopad(&[1u8; 32]),
                     },
                 },
                 attestation: Attestation {

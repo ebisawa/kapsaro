@@ -9,6 +9,7 @@ use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv::support::secret::SecretString;
 
 use crate::test_utils::EnvGuard;
 
@@ -27,13 +28,14 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
 }
 
 fn build_exported_key(plaintext: &PrivateKeyPlaintext, password: &str) -> String {
+    let password = SecretString::new(password.to_string());
     export_private_key_portable(
         plaintext,
         "alice@example.com",
         TEST_KID,
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        password,
+        &password,
         false,
     )
     .expect("export should succeed")

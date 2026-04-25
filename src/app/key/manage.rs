@@ -17,6 +17,7 @@ use crate::feature::key::portable_export::{
     build_password_strength_warning, export_private_key_portable,
 };
 use crate::feature::key::types::{KeyActivateResult, KeyExportResult, KeyRemoveResult};
+use crate::support::secret::SecretString;
 use crate::Result;
 
 pub fn list_keys_command(
@@ -72,7 +73,7 @@ pub fn export_private_key_command(
     options: &CommonCommandOptions,
     member_id: String,
     kid: Option<String>,
-    password: &str,
+    password: &SecretString,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<KeyExportPrivateResult> {
     let loaded = load_private_key_export_material(
@@ -98,7 +99,7 @@ pub fn export_private_key_command(
         member_id: loaded.member_id,
         kid: loaded.kid,
         encoded_key,
-        password_warning: build_password_strength_warning(password),
+        password_warning: build_password_strength_warning(password.as_str()),
     }
     .into())
 }

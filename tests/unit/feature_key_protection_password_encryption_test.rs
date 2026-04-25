@@ -10,6 +10,7 @@ use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv::support::secret::SecretString;
 
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
@@ -23,10 +24,14 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
     )
 }
 
+fn secret(value: &str) -> SecretString {
+    SecretString::new(value.to_string())
+}
+
 #[test]
 fn test_password_encrypt_decrypt_roundtrip() {
     let plaintext = build_test_plaintext();
-    let password = "test-password-42";
+    let password = secret("test-password-42");
 
     let encrypted = encrypt_private_key_with_password(
         &plaintext,
@@ -34,12 +39,12 @@ fn test_password_encrypt_decrypt_roundtrip() {
         TEST_KID,
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        password,
+        &password,
         false,
     )
     .expect("encryption should succeed");
 
-    let decrypted = decrypt_private_key_with_password(&encrypted, password, false)
+    let decrypted = decrypt_private_key_with_password(&encrypted, &password, false)
         .expect("decryption should succeed");
 
     assert_eq!(plaintext, decrypted);
@@ -49,18 +54,20 @@ fn test_password_encrypt_decrypt_roundtrip() {
 fn test_password_encrypt_wrong_password_fails() {
     let plaintext = build_test_plaintext();
 
+    let correct_password = secret("correct-password");
     let encrypted = encrypt_private_key_with_password(
         &plaintext,
         "alice@example.com",
         TEST_KID,
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "correct-password",
+        &correct_password,
         false,
     )
     .expect("encryption should succeed");
 
-    let result = decrypt_private_key_with_password(&encrypted, "wrong-password", false);
+    let wrong_password = secret("wrong-password");
+    let result = decrypt_private_key_with_password(&encrypted, &wrong_password, false);
     assert!(
         result.is_err(),
         "decryption with wrong password should fail"
@@ -77,7 +84,7 @@ fn test_password_encrypt_alg_kdf_is_argon2id() {
         TEST_KID,
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        "test-password",
+        &secret("test-password"),
         false,
     )
     .expect("encryption should succeed");
@@ -103,7 +110,13 @@ fn test_password_encrypt_preserves_metadata() {
     let expires_at = "2027-03-01T12:00:00Z";
 
     let encrypted = encrypt_private_key_with_password(
-        &plaintext, member_id, kid, created_at, expires_at, "pw", false,
+        &plaintext,
+        member_id,
+        kid,
+        created_at,
+        expires_at,
+        &secret("pw"),
+        false,
     )
     .expect("encryption should succeed");
 
@@ -136,7 +149,7 @@ fn test_password_decrypt_rejects_sshsig_key() {
         },
     };
 
-    let result = decrypt_private_key_with_password(&private_key, "test-password", false);
+    let result = decrypt_private_key_with_password(&private_key, &secret("test-password"), false);
     assert!(result.is_err(), "SshSig key should be rejected");
     let err = result.unwrap_err().to_string();
     assert!(
@@ -149,7 +162,7 @@ fn test_password_decrypt_rejects_sshsig_key() {
 #[test]
 fn test_password_decrypt_rejects_unsupported_aead() {
     let plaintext = build_test_plaintext();
-    let password = "test-password-42";
+    let password = secret("test-password-42");
 
     let mut encrypted = encrypt_private_key_with_password(
         &plaintext,
@@ -157,7 +170,7 @@ fn test_password_decrypt_rejects_unsupported_aead() {
         TEST_KID,
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        password,
+        &password,
         false,
     )
     .expect("encryption should succeed");
@@ -176,7 +189,7 @@ fn test_password_decrypt_rejects_unsupported_aead() {
         other => other,
     };
 
-    let result = decrypt_private_key_with_password(&encrypted, password, false);
+    let result = decrypt_private_key_with_password(&encrypted, &password, false);
     assert!(result.is_err(), "unsupported AEAD should be rejected");
     let err = result.unwrap_err().to_string();
     assert!(

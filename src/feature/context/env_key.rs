@@ -60,7 +60,7 @@ pub fn load_private_key_from_env(debug: bool) -> Result<EnvKeyLoadResult> {
     let password = load_env_key_password()?;
     let json_bytes = decode_private_key_env(encoded.as_str())?;
     let private_key = parse_password_protected_private_key(json_bytes.as_bytes())?;
-    build_env_key_load_result(&private_key, password.as_str(), debug)
+    build_env_key_load_result(&private_key, &password, debug)
 }
 
 fn load_env_private_key() -> Result<SecretString> {
@@ -117,7 +117,7 @@ fn parse_password_protected_private_key(json_bytes: &[u8]) -> Result<PrivateKey>
 
 fn build_env_key_load_result(
     private_key: &PrivateKey,
-    password: &str,
+    password: &SecretString,
     debug: bool,
 ) -> Result<EnvKeyLoadResult> {
     let member_id = private_key.protected.member_id.clone();

@@ -13,6 +13,7 @@ use crate::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
+use crate::support::secret::SecretString;
 use crate::{Error, Result};
 
 /// Build protected header for password-based PrivateKey encryption
@@ -45,7 +46,7 @@ pub fn encrypt_private_key_with_password(
     kid: &str,
     created_at: &str,
     expires_at: &str,
-    password: &str,
+    password: &SecretString,
     debug: bool,
 ) -> Result<PrivateKey> {
     let ikm_salt = password_key_derivation::generate_ikm_salt()?;
@@ -83,7 +84,7 @@ pub fn encrypt_private_key_with_password(
 /// Decrypt a private key that was encrypted with a password
 pub fn decrypt_private_key_with_password(
     private_key: &PrivateKey,
-    password: &str,
+    password: &SecretString,
     debug: bool,
 ) -> Result<PrivateKeyPlaintext> {
     match &private_key.protected.alg {

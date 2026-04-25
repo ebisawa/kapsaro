@@ -66,7 +66,7 @@ pub(crate) fn build_entry_tokens<'a>(
         .map(|entry| {
             let token = encode_encrypted_entry(
                 &entry.key,
-                &entry.value,
+                entry.value.as_str(),
                 master_key,
                 sid,
                 codec,

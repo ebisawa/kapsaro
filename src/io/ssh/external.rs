@@ -3,7 +3,7 @@
 
 //! External SSH tool adapters (ssh-keygen, ssh-add)
 
-use crate::io::process::build_child_env_map;
+use crate::io::process::build_restricted_child_env_map;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
@@ -19,5 +19,5 @@ pub(crate) fn build_ssh_child_env(agent_socket: Option<&Path>) -> BTreeMap<Strin
     if let Some(path) = agent_socket {
         extra_env.insert("SSH_AUTH_SOCK".to_string(), path.as_os_str().to_os_string());
     }
-    build_child_env_map(&extra_env)
+    build_restricted_child_env_map(&extra_env)
 }

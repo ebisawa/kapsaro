@@ -248,7 +248,7 @@ fn test_run_preserves_exit_code() {
 
 #[cfg(unix)]
 #[test]
-fn test_run_does_not_inherit_nonstandard_parent_env() {
+fn test_run_inherits_nonstandard_parent_env() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
 
     cmd()
@@ -258,10 +258,37 @@ fn test_run_does_not_inherit_nonstandard_parent_env() {
         .arg("--")
         .arg("sh")
         .arg("-c")
-        .arg("if [ -z \"${LEAK_ME+x}\" ]; then echo absent; else echo present; fi")
+        .arg("printf %s \"$LEAK_ME\"")
         .env("LEAK_ME", "top-secret")
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("top-secret"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_run_does_not_inherit_secretenv_parent_env() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
+
+    cmd()
+        .arg("run")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg(
+            "test -z \"$SECRETENV_HOME\" && \
+             test -z \"$SECRETENV_SSH_IDENTITY\" && \
+             test -z \"$SECRETENV_SSH_SIGNING_METHOD\" && \
+             test -z \"$SECRETENV_CUSTOM\" && \
+             echo absent",
+        )
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("SECRETENV_CUSTOM", "parent-secret")
         .assert()
         .success()
         .stdout(predicate::str::contains("absent"));

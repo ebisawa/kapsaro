@@ -5,10 +5,18 @@ use std::fs;
 
 use crate::app::context::ssh::resolve_ssh_context_by_active_key;
 use crate::app_test_utils::build_test_command_options;
+use crate::test_utils::EnvGuard;
 use tempfile::TempDir;
 
 #[test]
 fn test_resolve_ssh_context_by_active_key_honors_member_handle_option() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_WORKSPACE"]);
+    let stale_home = TempDir::new().unwrap();
+    let stale_home_path = stale_home.path().to_path_buf();
+    drop(stale_home);
+    std::env::set_var("SECRETENV_HOME", stale_home_path);
+    std::env::remove_var("SECRETENV_WORKSPACE");
+
     let base_dir = TempDir::new().unwrap();
 
     // Create a keystore with multiple member directories.

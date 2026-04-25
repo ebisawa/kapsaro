@@ -1,8 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use super::format_member_show_lines;
-use crate::cli::common::output::member::{view::MemberGithubClaimView, MemberShowView};
+use super::{format_member_list_lines, format_member_show_lines};
+use crate::cli::common::output::member::{
+    view::{MemberGithubClaimView, MemberListEntryView},
+    MemberListView, MemberShowView,
+};
 use console::{colors_enabled, set_colors_enabled};
 use serde_json::json;
 use serial_test::serial;
@@ -23,6 +26,31 @@ impl Drop for StdoutColorGuard {
     fn drop(&mut self) {
         set_colors_enabled(self.enabled);
     }
+}
+
+#[test]
+fn test_format_member_list_lines_renders_dashed_kids() {
+    let document = json!({});
+    let view = MemberListView {
+        active: vec![MemberListEntryView {
+            member_id: "alice@example.com",
+            kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD",
+            document: &document,
+        }],
+        incoming: vec![MemberListEntryView {
+            member_id: "bob@example.com",
+            kid: "KBD2AAAA1111BBBB2222CCCC3333DDDD",
+            document: &document,
+        }],
+        warnings: &[],
+    };
+
+    let rendered = format_member_list_lines(&view).join("\n");
+
+    assert!(rendered.contains("Active:\n"));
+    assert!(rendered.contains("alice@example.com  KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
+    assert!(rendered.contains("Incoming:\n"));
+    assert!(rendered.contains("bob@example.com    KBD2-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
 }
 
 #[test]

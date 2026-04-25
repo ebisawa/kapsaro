@@ -14,6 +14,7 @@ use super::types::{
 pub(crate) fn build_member_list_entry(public_key: PublicKey) -> Result<MemberListEntry> {
     Ok(MemberListEntry {
         member_id: public_key.protected.member_id.clone(),
+        kid: public_key.protected.kid.clone(),
         document: serialize_to_json_value(&public_key)?,
     })
 }

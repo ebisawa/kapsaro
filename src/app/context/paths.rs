@@ -4,14 +4,14 @@
 use std::path::PathBuf;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::io::workspace::detection::{resolve_optional_workspace, WorkspaceRoot};
+use crate::io::workspace::detection::{resolve_optional_workspace_with_base, WorkspaceRoot};
 use crate::{Error, Result};
 
 /// Resolve the workspace if one is explicitly configured or auto-detectable.
 pub(crate) fn load_optional_workspace(
     options: &CommonCommandOptions,
 ) -> Result<Option<WorkspaceRoot>> {
-    resolve_optional_workspace(options.workspace.clone())
+    resolve_optional_workspace_with_base(options.workspace.clone(), options.home.as_deref())
 }
 
 /// Resolve a workspace and fail if none is configured or auto-detectable.

@@ -16,17 +16,47 @@ const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
 const MEMBER_SHOW_BULLET: &str = "\u{25CF}";
 
 pub(crate) fn print_member_sections(view: &MemberListView<'_>) {
-    println!("Active:");
-    for member in &view.active {
-        println!("  {}", member.member_id);
+    for line in format_member_list_lines(view) {
+        println!("{line}");
     }
+}
+
+fn format_member_list_lines(view: &MemberListView<'_>) -> Vec<String> {
+    let mut lines = Vec::new();
+    let member_id_width = member_list_id_width(view);
+    push_member_list_section(&mut lines, "Active:", &view.active, member_id_width);
 
     if !view.incoming.is_empty() {
-        println!();
-        println!("Incoming:");
-        for member in &view.incoming {
-            println!("  {}", member.member_id);
-        }
+        lines.push(String::new());
+        push_member_list_section(&mut lines, "Incoming:", &view.incoming, member_id_width);
+    }
+
+    lines
+}
+
+fn member_list_id_width(view: &MemberListView<'_>) -> usize {
+    view.active
+        .iter()
+        .chain(view.incoming.iter())
+        .map(|member| member.member_id.len())
+        .max()
+        .unwrap_or(0)
+}
+
+fn push_member_list_section(
+    lines: &mut Vec<String>,
+    title: &str,
+    members: &[crate::cli::common::output::member::view::MemberListEntryView<'_>],
+    member_id_width: usize,
+) {
+    lines.push(title.to_string());
+    for member in members {
+        lines.push(format!(
+            "  {:<width$}  {}",
+            member.member_id,
+            format_kid_display_lossy(member.kid),
+            width = member_id_width
+        ));
     }
 }
 

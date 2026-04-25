@@ -9,6 +9,7 @@ use crate::app::trust::TrustApprovalCandidate;
 
 pub(crate) struct MemberListEntryView<'a> {
     pub(crate) member_id: &'a str,
+    pub(crate) kid: &'a str,
     pub(crate) document: &'a serde_json::Value,
 }
 
@@ -75,6 +76,7 @@ pub(crate) fn build_member_list_view(result: &MemberListResult) -> MemberListVie
             .iter()
             .map(|member| MemberListEntryView {
                 member_id: &member.member_id,
+                kid: &member.kid,
                 document: &member.document,
             })
             .collect(),
@@ -83,6 +85,7 @@ pub(crate) fn build_member_list_view(result: &MemberListResult) -> MemberListVie
             .iter()
             .map(|member| MemberListEntryView {
                 member_id: &member.member_id,
+                kid: &member.kid,
                 document: &member.document,
             })
             .collect(),

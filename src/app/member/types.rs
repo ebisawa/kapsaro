@@ -4,6 +4,7 @@
 #[derive(Debug)]
 pub struct MemberListEntry {
     pub member_id: String,
+    pub kid: String,
     pub document: serde_json::Value,
 }
 

@@ -93,6 +93,15 @@ pub(crate) fn prompt_github_user() -> Result<Option<String>> {
     let input: String = Input::new()
         .with_prompt("Enter your GitHub username (optional)")
         .allow_empty(true)
+        .validate_with(|input: &String| {
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                return Ok(());
+            }
+            validation::validate_github_login(trimmed)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        })
         .interact_text()
         .map_err(|e| Error::Config {
             message: format!("Failed to read input: {}", e),
@@ -136,9 +145,16 @@ where
 
     match resolve_github_user_input(github_user, base_dir)? {
         Some(github_user) => Ok(Some(github_user)),
-        None if prompt_available => prompt(),
+        None if prompt_available => validate_prompt_github_user(prompt()?),
         None => Ok(None),
     }
+}
+
+fn validate_prompt_github_user(github_user: Option<String>) -> Result<Option<String>> {
+    if let Some(login) = github_user.as_deref() {
+        validation::validate_github_login(login)?;
+    }
+    Ok(github_user)
 }
 
 #[cfg(test)]

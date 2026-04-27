@@ -5,6 +5,7 @@
 
 use super::http::{build_http_client, fetch_github_user_by_login};
 use crate::model::public_key::GithubAccount;
+use crate::support::validation;
 use crate::Result;
 use std::future::Future;
 use std::pin::Pin;
@@ -50,6 +51,8 @@ pub async fn resolve_github_account_by_login_with_api(
     verbose: bool,
     api: &impl GitHubAccountLookupApi,
 ) -> Result<GithubAccount> {
+    validation::validate_github_login(login)?;
+
     if verbose {
         debug!(
             "[VERIFY] GitHub API: GET https://api.github.com/users/{}",

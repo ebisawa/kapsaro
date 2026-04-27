@@ -133,6 +133,28 @@ fn verify_ssh_fingerprint_matches(private_key: &PrivateKey, ssh_pubkey: &str) ->
     })
 }
 
+fn validate_ssh_protection_algorithm(private_key: &PrivateKey) -> Result<()> {
+    match &private_key.protected.alg {
+        PrivateKeyAlgorithm::SshSig { aead, .. } => {
+            if aead != alg::AEAD_XCHACHA20_POLY1305 {
+                return Err(Error::Crypto {
+                    message: format!(
+                        "Unsupported AEAD algorithm '{}', expected '{}'",
+                        aead,
+                        alg::AEAD_XCHACHA20_POLY1305
+                    ),
+                    source: None,
+                });
+            }
+            Ok(())
+        }
+        _ => Err(Error::Crypto {
+            message: "Expected SshSig algorithm for SSH-based decryption".to_string(),
+            source: None,
+        }),
+    }
+}
+
 /// Decrypt and deserialize plaintext
 pub(super) fn decrypt_private_key_plaintext(
     enc_key: &XChaChaKey,
@@ -152,9 +174,9 @@ pub(super) fn decrypt_private_key_plaintext(
     }
     let plaintext_json = xchacha::decrypt(enc_key, nonce, aad, ct)?;
 
-    serde_json::from_slice(plaintext_json.as_bytes()).map_err(|e| Error::Crypto {
-        message: format!("Failed to deserialize plaintext: {}", e),
-        source: Some(Box::new(e)),
+    serde_json::from_slice(plaintext_json.as_bytes()).map_err(|_| Error::Crypto {
+        message: "Failed to deserialize plaintext".to_string(),
+        source: None,
     })
 }
 
@@ -221,6 +243,7 @@ pub fn decrypt_private_key(
     ssh_pubkey: &str,
     debug: bool,
 ) -> Result<PrivateKeyPlaintext> {
+    validate_ssh_protection_algorithm(private_key)?;
     verify_ssh_fingerprint_matches(private_key, ssh_pubkey)?;
 
     let hkdf_salt_bytes: [u8; 32] =
@@ -278,7 +301,7 @@ fn enforce_private_key_use_determinism(
     )
 }
 
-fn build_private_key_decrypt_error(error: Error) -> Error {
+pub(super) fn build_private_key_decrypt_error(error: Error) -> Error {
     Error::Crypto {
         message: "E_PRIVATE_KEY_DECRYPT_FAILED: private key decryption failed".to_string(),
         source: Some(Box::new(error)),

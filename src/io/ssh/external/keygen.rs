@@ -69,7 +69,13 @@ impl SshKeygen for DefaultSshKeygen {
             })
     }
 
-    fn sign(&self, key_path: &Path, namespace: &str, data: &[u8]) -> Result<Ed25519RawSignature> {
+    fn sign(
+        &self,
+        key_path: &Path,
+        namespace: &str,
+        ssh_pubkey: &str,
+        data: &[u8],
+    ) -> Result<Ed25519RawSignature> {
         let is_public_key = key_path
             .extension()
             .map(|ext| ext == "pub")
@@ -84,7 +90,7 @@ impl SshKeygen for DefaultSshKeygen {
 
         let output = execute_sign_command(&self.ssh_keygen_path, key_path_str, namespace, data)?;
         check_sign_output(&output, is_public_key)?;
-        parse_sign_stdout(output.stdout, namespace)
+        parse_sign_stdout(output.stdout, namespace, ssh_pubkey)
     }
 
     fn verify(
@@ -212,7 +218,11 @@ fn check_sign_output(output: &std::process::Output, is_public_key: bool) -> Resu
     .into())
 }
 
-fn parse_sign_stdout(stdout: Vec<u8>, expected_namespace: &str) -> Result<Ed25519RawSignature> {
+fn parse_sign_stdout(
+    stdout: Vec<u8>,
+    expected_namespace: &str,
+    expected_ssh_pubkey: &str,
+) -> Result<Ed25519RawSignature> {
     let stdout = Zeroizing::new(stdout);
     if stdout.iter().all(|byte| byte.is_ascii_whitespace()) {
         return Err(SshError::build_operation_failed_error(
@@ -227,7 +237,7 @@ fn parse_sign_stdout(stdout: Vec<u8>, expected_namespace: &str) -> Result<Ed2551
             e,
         ))
     })?;
-    let blob = parse_sshsig_armored(armored, expected_namespace)?;
+    let blob = parse_sshsig_armored(armored, expected_namespace, expected_ssh_pubkey)?;
     blob.extract_ed25519_raw()
 }
 

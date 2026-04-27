@@ -17,11 +17,15 @@ use crate::support::codec::base64_secret::{
 use crate::support::secret::SecretArray;
 use crate::{Error, Result};
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use zeroize::ZeroizeOnDrop;
 
+#[derive(ZeroizeOnDrop)]
 pub struct KeypairMaterial {
     pub kem_sk: X25519SecretKey,
+    #[zeroize(skip)]
     pub kem_pk: X25519PublicKey,
     pub sig_sk: SigningKey,
+    #[zeroize(skip)]
     pub sig_pk: VerifyingKey,
 }
 

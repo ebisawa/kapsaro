@@ -26,8 +26,8 @@ fn build_self_signed_public_key(
     let sig_x = encode_base64url_nopad(&verifying_key.to_bytes());
 
     // Generate X25519 KEM key pair
-    let kem_pk = generate_keypairs().unwrap().kem_pk;
-    let kem_x = encode_base64url_nopad(kem_pk.as_bytes());
+    let keypairs = generate_keypairs().unwrap();
+    let kem_x = encode_base64url_nopad(keypairs.kem_pk.as_bytes());
 
     let identity_keys = IdentityKeys {
         kem: JwkOkpPublicKey {

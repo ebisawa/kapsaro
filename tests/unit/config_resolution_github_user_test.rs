@@ -78,3 +78,41 @@ fn test_resolve_github_user_priority_order() {
     let config_result = super::resolve_github_user(None, None).unwrap();
     assert_eq!(config_result, Some("config-user".to_string()));
 }
+
+#[test]
+#[serial]
+fn test_resolve_github_user_rejects_invalid_cli_value() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = tempfile::tempdir().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+
+    let result = super::resolve_github_user(Some("../alice".to_string()), None);
+    assert!(result.is_err());
+}
+
+#[test]
+#[serial]
+fn test_resolve_github_user_rejects_invalid_env_value() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = tempfile::tempdir().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("SECRETENV_GITHUB_USER", "alice?tab=keys");
+
+    let result = super::resolve_github_user(None, None);
+    assert!(result.is_err());
+}
+
+#[test]
+#[serial]
+fn test_resolve_github_user_rejects_invalid_config_value() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = tempfile::tempdir().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::remove_var("SECRETENV_GITHUB_USER");
+
+    let config_path = temp_home.path().join("config.toml");
+    fs::write(&config_path, "github_user = \"alice#keys\"\n").unwrap();
+
+    let result = super::resolve_github_user(None, None);
+    assert!(result.is_err());
+}

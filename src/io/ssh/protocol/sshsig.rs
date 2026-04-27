@@ -7,9 +7,11 @@
 //! per OpenSSH PROTOCOL.sshsig specification.
 
 use super::base64::decode_base64_armored;
+use super::parse::decode_ssh_public_key_blob;
 use super::types::SshSignatureBlob;
 use super::wire::{decode_ssh_string, encode_ssh_string};
 use crate::io::ssh::SshError;
+use crate::support::codec::base64_public::encode_base64_standard_nopad;
 use crate::Result;
 use sha2::{Digest, Sha256};
 
@@ -131,6 +133,25 @@ fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
     Ok(())
 }
 
+fn format_publickey_fingerprint(publickey: &[u8]) -> String {
+    let hash = Sha256::digest(publickey);
+    format!("SHA256:{}", encode_base64_standard_nopad(hash.as_ref()))
+}
+
+fn validate_publickey(publickey: &[u8], expected_ssh_pubkey: &str) -> Result<()> {
+    let expected_publickey = decode_ssh_public_key_blob(expected_ssh_pubkey)?;
+    if publickey == expected_publickey.as_slice() {
+        return Ok(());
+    }
+
+    Err(SshError::build_operation_failed_error(format!(
+        "SSHSIG publickey mismatch: expected {}, got {}",
+        format_publickey_fingerprint(&expected_publickey),
+        format_publickey_fingerprint(publickey)
+    ))
+    .into())
+}
+
 /// Parse SSHSIG blob and extract signature field (SSH signature blob)
 ///
 /// SSHSIG wire format:
@@ -149,6 +170,7 @@ fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
 ///
 /// * `blob` - Raw SSHSIG binary blob
 /// * `expected_namespace` - Namespace that the SSHSIG blob must carry
+/// * `expected_ssh_pubkey` - SSH public key that the SSHSIG publickey field must match
 ///
 /// # Returns
 ///
@@ -165,16 +187,22 @@ fn validate_hashalg(hashalg: &[u8]) -> Result<()> {
 /// ```ignore
 /// use secretenv::io::ssh::protocol::sshsig::parse_sshsig_blob;
 /// let blob = /* SSHSIG binary data */;
-/// let sig_blob = parse_sshsig_blob(&blob, "secretenv-key-protection")?;
+/// let expected_ssh_pubkey = "ssh-ed25519 AAAA...";
+/// let sig_blob = parse_sshsig_blob(&blob, "secretenv-key-protection", expected_ssh_pubkey)?;
 /// let ikm = sig_blob.extract_ed25519_raw()?;
 /// // Use ikm for HKDF key derivation
 /// ```
-pub fn parse_sshsig_blob(blob: &[u8], expected_namespace: &str) -> Result<SshSignatureBlob> {
+pub fn parse_sshsig_blob(
+    blob: &[u8],
+    expected_namespace: &str,
+    expected_ssh_pubkey: &str,
+) -> Result<SshSignatureBlob> {
     // Validate magic and version
     let mut cursor = validate_sshsig_header(blob)?;
 
-    // Parse publickey (skip - we don't need it for IKM extraction)
-    let (_publickey, rest) = decode_ssh_string(cursor)?;
+    // Parse and validate publickey
+    let (publickey, rest) = decode_ssh_string(cursor)?;
+    validate_publickey(publickey, expected_ssh_pubkey)?;
     cursor = rest;
 
     // Parse and validate namespace
@@ -212,6 +240,7 @@ pub fn parse_sshsig_blob(blob: &[u8], expected_namespace: &str) -> Result<SshSig
 ///
 /// * `armored` - Armored SSHSIG string (output from ssh-keygen -Y sign)
 /// * `expected_namespace` - Namespace that the SSHSIG blob must carry
+/// * `expected_ssh_pubkey` - SSH public key that the SSHSIG publickey field must match
 ///
 /// # Returns
 ///
@@ -227,12 +256,17 @@ pub fn parse_sshsig_blob(blob: &[u8], expected_namespace: &str) -> Result<SshSig
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use secretenv::io::ssh::protocol::sshsig::parse_sshsig_armored;
 /// let armored = std::fs::read_to_string("message.sig")?;
-/// let sig_blob = parse_sshsig_armored(&armored, "secretenv-key-protection")?;
+/// let expected_ssh_pubkey = "ssh-ed25519 AAAA...";
+/// let sig_blob = parse_sshsig_armored(&armored, "secretenv-key-protection", expected_ssh_pubkey)?;
 /// let ikm = sig_blob.extract_ed25519_raw()?;
 /// # Ok(())
 /// # }
 /// ```
-pub fn parse_sshsig_armored(armored: &str, expected_namespace: &str) -> Result<SshSignatureBlob> {
+pub fn parse_sshsig_armored(
+    armored: &str,
+    expected_namespace: &str,
+    expected_ssh_pubkey: &str,
+) -> Result<SshSignatureBlob> {
     let blob = decode_base64_armored(armored)?;
-    parse_sshsig_blob(&blob, expected_namespace)
+    parse_sshsig_blob(&blob, expected_namespace, expected_ssh_pubkey)
 }

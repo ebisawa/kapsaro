@@ -72,6 +72,68 @@ fn test_validate_public_key_basic() {
 }
 
 #[test]
+fn test_validate_public_key_accepts_valid_github_login() {
+    let validator = Validator::new().unwrap();
+    let public_key = build_public_key_with_github_login("alice-gh");
+
+    let result = validator.validate_public_key(&public_key);
+
+    assert!(
+        result.is_ok(),
+        "Valid GitHub login should pass schema validation: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_validate_public_key_rejects_invalid_github_login() {
+    let validator = Validator::new().unwrap();
+
+    for login in ["../alice", "alice/keys", "alice?tab=keys", "alice#keys"] {
+        let public_key = build_public_key_with_github_login(login);
+        let result = validator.validate_public_key(&public_key);
+        assert!(result.is_err(), "should reject login: {}", login);
+    }
+}
+
+fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
+    serde_json::json!({
+        "protected": {
+            "format": secretenv::model::identifiers::format::PUBLIC_KEY_V4,
+            "member_id": "alice@example.com",
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "identity": {
+                "keys": {
+                    "kem": {
+                        "kty": "OKP",
+                        "crv": secretenv::model::identifiers::jwk::CRV_X25519,
+                        "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    },
+                    "sig": {
+                        "kty": "OKP",
+                        "crv": secretenv::model::identifiers::jwk::CRV_ED25519,
+                        "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    }
+                },
+                "attestation": {
+                    "method": "ssh-sign",
+                    "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+                }
+            },
+            "binding_claims": {
+                "github_account": {
+                    "id": 12345,
+                    "login": login
+                }
+            },
+            "expires_at": "2027-01-01T00:00:00Z"
+        },
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    })
+}
+
+#[test]
 fn test_validate_private_key_basic() {
     let validator = Validator::new().unwrap();
     let ikm_salt = encode_base64url_nopad(&[0u8; 32]);

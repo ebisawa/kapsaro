@@ -89,8 +89,8 @@ fn generate_kem_keypair() -> (JwkOkpPrivateKey, String) {
 /// Generate Ed25519 signing key pair
 fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
     let generated = generate_keypairs().unwrap();
-    let sk = generated.sig_sk;
-    let pk = generated.sig_pk;
+    let sk = &generated.sig_sk;
+    let pk = &generated.sig_pk;
 
     let pub_key = b64(&pk.to_bytes());
     let keypair = JwkOkpPrivateKey {

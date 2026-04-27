@@ -16,9 +16,10 @@ use hpke::{
     Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 use rand::{rngs::OsRng, TryRngCore};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 /// X25519 secret key with Zeroizing memory protection
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct X25519SecretKey(Zeroizing<[u8; 32]>);
 
 impl X25519SecretKey {

@@ -88,6 +88,7 @@ impl SshKeygen for MockSshKeygen {
         &self,
         _key_path: &std::path::Path,
         _namespace: &str,
+        _ssh_pubkey: &str,
         _data: &[u8],
     ) -> Result<Ed25519RawSignature> {
         unreachable!("sign is not used in this test");

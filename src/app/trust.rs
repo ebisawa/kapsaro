@@ -15,27 +15,31 @@ pub(crate) mod snapshot;
 pub(crate) mod store;
 pub(crate) mod types;
 
-#[allow(unused_imports)]
 pub(crate) use enforcement::{
-    build_signer_identity, build_trust_approval_candidate, enforce_recipients_trust,
-    enforce_recipients_trust_with_additional, enforce_signer_trust, RecipientTrustOutcome,
-    SignerTrustOutcome, TrustApprovalCandidate,
+    enforce_recipients_trust_with_additional, RecipientTrustOutcome, SignerTrustOutcome,
+    TrustApprovalCandidate,
 };
-#[allow(unused_imports)]
 pub(crate) use evaluation::{
-    derive_self_sig_x, enforce_policy_strict_key_checking, evaluate_read_signer_trust,
-    evaluate_signer_trust_with_proof, ReadSignerTrustPlan,
+    derive_self_sig_x, evaluate_read_signer_trust, evaluate_signer_trust_with_proof,
 };
-#[allow(unused_imports)]
 pub(crate) use policy::{
     CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ReadTrustPolicy,
-    RewrapInputPolicy, RunPolicy, SetPolicy, TrustPolicy, UnsetPolicy, WriteTrustPolicy,
+    RunPolicy, SetPolicy, UnsetPolicy, WriteTrustPolicy,
 };
-#[allow(unused_imports)]
 pub(crate) use snapshot::{
-    load_read_trust_context, CommandTrustSnapshot, TrustContext, WorkspaceMemberSnapshot,
-    WriteRecipientTrustPlan,
+    load_read_trust_context, TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
 };
+
+#[cfg(test)]
+pub(crate) use enforcement::{
+    build_signer_identity, enforce_recipients_trust, enforce_signer_trust,
+};
+#[cfg(test)]
+pub(crate) use evaluation::enforce_policy_strict_key_checking;
+#[cfg(test)]
+pub(crate) use policy::RewrapInputPolicy;
+#[cfg(test)]
+pub(crate) use snapshot::CommandTrustSnapshot;
 
 #[cfg(test)]
 #[path = "../../tests/unit/app_context_trust_test.rs"]

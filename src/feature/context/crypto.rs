@@ -1,29 +1,25 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Crypto context data and key validation helpers.
+//! Crypto context data.
 
 use ed25519_dalek::SigningKey;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::feature::context::expiry::VerifiedExpiresAt;
-use crate::feature::key::material::validate_private_key_material;
-use crate::feature::key::protection::encryption::decrypt_private_key;
-use crate::feature::verify::private_key::verify_private_key_matches_public_key;
-use crate::feature::verify::public_key::{
-    verify_public_key_with_attestation_context, KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
-};
-use crate::io::keystore::helpers::resolve_kid;
-use crate::io::keystore::public_key_source::{KeystorePublicKeySource, PublicKeySource};
-use crate::io::keystore::storage::{load_private_key, load_public_key};
+use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::io::ssh::backend::SignatureBackend;
-use crate::model::common::WrapItem;
 use crate::model::identity::{Kid, MemberId};
-use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
-use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
-use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
-use crate::support::kid::format_kid_display_lossy;
-use crate::{Error, Result};
+use crate::model::verified::VerifiedPrivateKey;
+
+mod decryption_key;
+mod loader;
+
+pub use loader::{
+    build_local_key_access, build_verified_private_key_from_password,
+    load_crypto_context_from_keystore,
+};
+pub(crate) use loader::{build_signing_key, load_verified_private_key_from_keystore};
 
 pub struct LocalKeyAccess {
     keystore_root: PathBuf,
@@ -103,136 +99,6 @@ impl<'a> DecryptionKeyResolution<'a> {
     }
 }
 
-pub(crate) fn build_signing_key(plaintext: &PrivateKeyPlaintext) -> Result<SigningKey> {
-    let sig_key_bytes =
-        decode_base64url_nopad_secret_32(&plaintext.keys.sig.d, "Ed25519 private key")?;
-    Ok(SigningKey::from_bytes(sig_key_bytes.as_array()))
-}
-
-/// Validate private key plaintext and wrap it as SSH-decrypted key material.
-pub(crate) fn build_verified_private_key_from_ssh(
-    plaintext: PrivateKeyPlaintext,
-    member_id: &str,
-    kid: &str,
-    ssh_fpr: &str,
-) -> Result<VerifiedPrivateKey> {
-    validate_private_key_material(&plaintext)?;
-
-    let proof = DecryptionProof {
-        member_id: member_id.to_string(),
-        kid: kid.to_string(),
-        ssh_fpr: Some(ssh_fpr.to_string()),
-    };
-    Ok(VerifiedPrivateKey::new(plaintext, proof))
-}
-
-/// Validate private key plaintext and wrap it as password-decrypted key material.
-pub fn build_verified_private_key_from_password(
-    plaintext: PrivateKeyPlaintext,
-    member_id: &str,
-    kid: &str,
-) -> Result<VerifiedPrivateKey> {
-    validate_private_key_material(&plaintext)?;
-
-    let proof = DecryptionProof {
-        member_id: member_id.to_string(),
-        kid: kid.to_string(),
-        ssh_fpr: None,
-    };
-    Ok(VerifiedPrivateKey::new(plaintext, proof))
-}
-
-pub fn build_local_key_access(
-    keystore_root: PathBuf,
-    ssh_pubkey: String,
-    ssh_backend: Box<dyn SignatureBackend>,
-) -> LocalKeyAccess {
-    LocalKeyAccess::new(keystore_root, ssh_pubkey, ssh_backend)
-}
-
-pub fn load_crypto_context_from_keystore(
-    keystore_root: PathBuf,
-    member_id: &str,
-    explicit_kid: Option<&str>,
-    ssh_backend: Box<dyn SignatureBackend>,
-    ssh_pubkey: String,
-    workspace_path: Option<PathBuf>,
-    debug_enabled: bool,
-) -> Result<CryptoContext> {
-    let kid = resolve_kid(&keystore_root, member_id, explicit_kid)?;
-    let loaded = load_verified_private_key_from_keystore(
-        &keystore_root,
-        member_id,
-        &kid,
-        ssh_backend.as_ref(),
-        &ssh_pubkey,
-        debug_enabled,
-    )?;
-    let selected_kid_override = explicit_kid.map(|_| loaded.private_key.proof().kid().to_string());
-    let signing_key = build_signing_key(loaded.private_key.document())?;
-    let context = CryptoContext::new(
-        MemberId::try_from(member_id)?,
-        Kid::try_from(kid)?,
-        Box::new(KeystorePublicKeySource::new(keystore_root.clone())),
-        workspace_path,
-        loaded.private_key,
-        signing_key,
-        loaded.expires_at,
-    );
-    Ok(context.with_local_key_access(
-        selected_kid_override,
-        Some(build_local_key_access(
-            keystore_root,
-            ssh_pubkey,
-            ssh_backend,
-        )),
-    ))
-}
-
-pub(crate) fn load_verified_private_key_from_keystore(
-    keystore_root: &Path,
-    member_id: &str,
-    kid: &str,
-    backend: &dyn SignatureBackend,
-    ssh_pubkey: &str,
-    debug_enabled: bool,
-) -> Result<PrivateKeyLoadResult> {
-    let encrypted_private_key = load_private_key(keystore_root, member_id, kid)?;
-    let public_key = load_public_key(keystore_root, member_id, kid)?;
-    let verified_public_key = verify_public_key_with_attestation_context(
-        &public_key,
-        debug_enabled,
-        KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
-    )?;
-    verify_private_key_matches_public_key(&encrypted_private_key, verified_public_key.document())?;
-
-    let plaintext =
-        decrypt_private_key(&encrypted_private_key, backend, ssh_pubkey, debug_enabled)?;
-    let private_key = build_verified_private_key_from_ssh(
-        plaintext,
-        &encrypted_private_key.protected.member_id,
-        &encrypted_private_key.protected.kid,
-        extract_ssh_fingerprint(&encrypted_private_key)?,
-    )?;
-
-    Ok(PrivateKeyLoadResult {
-        private_key,
-        expires_at: VerifiedExpiresAt::from_verified_private_key_metadata(
-            encrypted_private_key.protected.expires_at.clone(),
-        ),
-    })
-}
-
-pub(crate) fn extract_ssh_fingerprint(private_key: &PrivateKey) -> Result<&str> {
-    match &private_key.protected.alg {
-        PrivateKeyAlgorithm::SshSig { fpr, .. } => Ok(fpr.as_str()),
-        _ => Err(Error::Crypto {
-            message: "Expected SshSig algorithm for SSH-based decryption".to_string(),
-            source: None,
-        }),
-    }
-}
-
 impl CryptoContext {
     pub fn new(
         member_id: MemberId,
@@ -264,125 +130,5 @@ impl CryptoContext {
         self.selected_kid_override = selected_kid_override;
         self.local_key_access = local_key_access;
         self
-    }
-
-    pub(crate) fn select_local_decryption_key<'a>(
-        &'a self,
-        wrap_items: &[WrapItem],
-        member_id: &str,
-        debug_enabled: bool,
-    ) -> Result<DecryptionKeyResolution<'a>> {
-        let wrap_kids = collect_self_wrap_kids(wrap_items, member_id);
-        let candidates =
-            build_candidate_kids(&wrap_kids, self.selected_kid_override.as_deref(), &self.kid);
-
-        for kid in &candidates {
-            if kid == self.kid.as_ref() {
-                return Ok(DecryptionKeyResolution::Active {
-                    private_key: &self.private_key,
-                    info: DecryptionKeyInfo {
-                        kid: kid.clone(),
-                        expires_at: self.expires_at.as_str().to_string(),
-                        used_fallback: false,
-                    },
-                });
-            }
-
-            let Some(local_key_access) = self.local_key_access.as_ref() else {
-                continue;
-            };
-
-            match load_verified_private_key_from_keystore(
-                &local_key_access.keystore_root,
-                member_id,
-                kid,
-                local_key_access.ssh_backend.as_ref(),
-                &local_key_access.ssh_pubkey,
-                debug_enabled,
-            ) {
-                Ok(loaded) => {
-                    return Ok(DecryptionKeyResolution::Fallback {
-                        private_key: Box::new(loaded.private_key),
-                        info: DecryptionKeyInfo {
-                            kid: kid.clone(),
-                            expires_at: loaded.expires_at.as_str().to_string(),
-                            used_fallback: true,
-                        },
-                    });
-                }
-                Err(Error::NotFound { .. }) => continue,
-                Err(error) => return Err(error),
-            }
-        }
-
-        Err(build_missing_wrap_error(
-            member_id,
-            self.selected_kid_override.as_deref(),
-            &candidates,
-        ))
-    }
-}
-
-fn collect_self_wrap_kids(wrap_items: &[WrapItem], member_id: &str) -> Vec<String> {
-    let mut kids = Vec::new();
-    for wrap_item in wrap_items {
-        if wrap_item.rid != member_id || kids.contains(&wrap_item.kid) {
-            continue;
-        }
-        kids.push(wrap_item.kid.clone());
-    }
-    kids
-}
-
-fn build_candidate_kids(
-    wrap_kids: &[String],
-    explicit_kid: Option<&str>,
-    active_kid: &Kid,
-) -> Vec<String> {
-    if let Some(kid) = explicit_kid {
-        return vec![kid.to_string()];
-    }
-
-    let mut candidates = Vec::new();
-    if wrap_kids.iter().any(|kid| kid == active_kid.as_ref()) {
-        candidates.push(active_kid.to_string());
-    }
-    for kid in wrap_kids {
-        if candidates.contains(kid) {
-            continue;
-        }
-        candidates.push(kid.clone());
-    }
-    candidates
-}
-
-fn build_missing_wrap_error(
-    member_id: &str,
-    explicit_kid: Option<&str>,
-    searched_kids: &[String],
-) -> Error {
-    match explicit_kid {
-        Some(kid) => Error::Crypto {
-            message: format!(
-                "No wrap found for kid '{}' (member: {})",
-                format_kid_display_lossy(kid),
-                member_id
-            ),
-            source: None,
-        },
-        None => {
-            let searched = searched_kids
-                .iter()
-                .map(|kid| format_kid_display_lossy(kid))
-                .collect::<Vec<_>>()
-                .join(", ");
-            Error::Crypto {
-                message: format!(
-                    "No wrap found for any local kid [{}] (member: {})",
-                    searched, member_id
-                ),
-                source: None,
-            }
-        }
     }
 }

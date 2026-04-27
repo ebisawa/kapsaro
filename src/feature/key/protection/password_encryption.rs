@@ -4,7 +4,8 @@
 //! Password-based private key encryption/decryption using Argon2id + XChaCha20-Poly1305.
 
 use super::encryption::{
-    decode_ciphertext_params, decrypt_private_key_plaintext, encrypt_serialized_private_key,
+    build_private_key_decrypt_error, decode_ciphertext_params, decrypt_private_key_plaintext,
+    encrypt_serialized_private_key,
 };
 use super::password_key_derivation;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
@@ -124,7 +125,7 @@ pub fn decrypt_private_key_with_password(
         debug,
     )?;
 
-    decrypt_private_key_plaintext(
+    match decrypt_private_key_plaintext(
         &enc_key,
         &nonce,
         &aad,
@@ -132,5 +133,8 @@ pub fn decrypt_private_key_with_password(
         &private_key.protected.kid,
         debug,
         "decrypt_private_key_with_password",
-    )
+    ) {
+        Ok(plaintext) => Ok(plaintext),
+        Err(error) => Err(build_private_key_decrypt_error(error)),
+    }
 }

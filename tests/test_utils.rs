@@ -48,6 +48,18 @@ pub fn kid(value: impl Into<String>) -> Kid {
     Kid::try_from(value.into()).expect("test kid must be valid")
 }
 
+#[allow(dead_code)]
+pub fn error_chain_contains_serde_json(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = error.source();
+    while let Some(source) = current {
+        if source.downcast_ref::<serde_json::Error>().is_some() {
+            return true;
+        }
+        current = source.source();
+    }
+    false
+}
+
 /// Set up a trust store that approves all active members in a workspace.
 ///
 /// Creates `<home>/trust/<owner_member_id>.json` with all active members'

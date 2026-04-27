@@ -35,7 +35,7 @@ fn build_dummy_signer_pub(
     let vk = signing_key.verifying_key();
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
     let keypairs = generate_keypairs().unwrap();
-    let kem_pk = keypairs.kem_pk;
+    let kem_pk = &keypairs.kem_pk;
 
     PublicKey {
         protected: PublicKeyProtected {
@@ -83,7 +83,7 @@ fn build_verified_recipient_key_for_test(
 
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
     let keypairs = generate_keypairs().unwrap();
-    let kem_pk = keypairs.kem_pk;
+    let kem_pk = &keypairs.kem_pk;
     let vk = signing_key.verifying_key();
 
     let test_pk = PublicKey {

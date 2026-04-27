@@ -6,6 +6,7 @@ use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
 use secretenv::io::ssh::external::traits::SshAdd;
 use secretenv::io::ssh::external::traits::SshKeygen;
 use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use secretenv::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 use secretenv::io::ssh::protocol::wire::encode_ssh_string;
 use secretenv::support::codec::base64_public::encode_base64_standard;
 use std::fs;
@@ -24,11 +25,12 @@ fn setup_env_dump_script() -> (TempDir, String) {
     (temp_dir, script_path.to_string_lossy().into_owned())
 }
 
-fn build_test_sshsig_armored(raw_sig: [u8; 64]) -> String {
+fn build_test_sshsig_armored(raw_sig: [u8; 64], ssh_pubkey: &str) -> String {
     let mut sshsig_blob = Vec::new();
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
-    sshsig_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519 AAAA..."));
+    let publickey = decode_ssh_public_key_blob(ssh_pubkey).unwrap();
+    sshsig_blob.extend_from_slice(&encode_ssh_string(&publickey));
     sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
     sshsig_blob.extend_from_slice(&encode_ssh_string(b""));
     sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256"));
@@ -101,7 +103,7 @@ fn test_default_ssh_add_sets_resolved_socket_without_inheriting_secret_env() {
 fn test_default_ssh_keygen_sign_uses_stdin_stdout_without_sig_file() {
     let temp_dir = TempDir::new().unwrap();
     let ssh_dir = TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_dir);
+    let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_dir);
 
     let script_path = temp_dir.path().join("ssh-keygen-wrapper.sh");
     fs::write(
@@ -128,7 +130,12 @@ exec /usr/bin/ssh-keygen \"$@\"\n",
     fs::set_permissions(&script_path, perms).unwrap();
 
     let signature = DefaultSshKeygen::new(script_path.to_string_lossy().into_owned())
-        .sign(&ssh_priv, KEY_PROTECTION_NAMESPACE, b"stdin-signature-test")
+        .sign(
+            &ssh_priv,
+            KEY_PROTECTION_NAMESPACE,
+            &ssh_pub_content,
+            b"stdin-signature-test",
+        )
         .unwrap();
 
     assert_eq!(signature.as_bytes().len(), 64);
@@ -145,13 +152,13 @@ fn test_default_ssh_keygen_sign_with_public_key_uses_agent_stdin_stdout() {
 
     let temp_dir = TempDir::new().unwrap();
     let ssh_dir = TempDir::new().unwrap();
-    let (_ssh_priv, ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_dir);
+    let (_ssh_priv, ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_dir);
 
     let mut expected_raw_sig = [0u8; 64];
     for (index, byte) in expected_raw_sig.iter_mut().enumerate() {
         *byte = index as u8;
     }
-    let armored = build_test_sshsig_armored(expected_raw_sig);
+    let armored = build_test_sshsig_armored(expected_raw_sig, &ssh_pub_content);
 
     let script_path = temp_dir.path().join("ssh-keygen-wrapper.sh");
     let script = format!(
@@ -196,6 +203,7 @@ fi\n\
         .sign(
             &ssh_pub,
             KEY_PROTECTION_NAMESPACE,
+            &ssh_pub_content,
             b"public-key-agent-signature-test",
         )
         .unwrap();

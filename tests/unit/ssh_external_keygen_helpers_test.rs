@@ -10,9 +10,20 @@
 
 use super::{check_sign_output, check_verify_output, parse_sign_stdout};
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
 use crate::support::codec::base64_public::encode_base64_standard;
 use crate::Error;
+
+const TEST_SSH_PUBKEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
+const OTHER_SSH_PUBKEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkB6jid+Y/7wt0S+9jTJGX1UytxIHOO3GXVPZPY1OYT other@example.com";
+
+fn append_publickey(blob: &mut Vec<u8>, ssh_pubkey: &str) {
+    let publickey = decode_ssh_public_key_blob(ssh_pubkey).unwrap();
+    blob.extend_from_slice(&encode_ssh_string(&publickey));
+}
 
 #[cfg(unix)]
 fn build_process_output(code: i32, stderr: &[u8], stdout: &[u8]) -> std::process::Output {
@@ -118,7 +129,7 @@ fn test_parse_sign_stdout_extracts_ed25519_signature() {
     let mut sshsig_blob = Vec::new();
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
-    sshsig_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519 AAAA..."));
+    append_publickey(&mut sshsig_blob, TEST_SSH_PUBKEY);
     sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
     sshsig_blob.extend_from_slice(&encode_ssh_string(b""));
     sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256"));
@@ -133,13 +144,48 @@ fn test_parse_sign_stdout_extracts_ed25519_signature() {
         encode_base64_standard(&sshsig_blob)
     );
 
-    let signature = parse_sign_stdout(armored.into_bytes(), KEY_PROTECTION_NAMESPACE).unwrap();
+    let signature = parse_sign_stdout(
+        armored.into_bytes(),
+        KEY_PROTECTION_NAMESPACE,
+        TEST_SSH_PUBKEY,
+    )
+    .unwrap();
     assert_eq!(signature.as_bytes(), &raw_sig);
 }
 
 #[test]
+fn test_parse_sign_stdout_rejects_publickey_mismatch() {
+    let raw_sig = [0xAAu8; 64];
+    let mut sshsig_blob = Vec::new();
+    sshsig_blob.extend_from_slice(b"SSHSIG");
+    sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
+    append_publickey(&mut sshsig_blob, OTHER_SSH_PUBKEY);
+    sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b""));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256"));
+
+    let mut signature_blob = Vec::new();
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
+    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(&signature_blob));
+
+    let armored = format!(
+        "-----BEGIN SSH SIGNATURE-----\n{}\n-----END SSH SIGNATURE-----\n",
+        encode_base64_standard(&sshsig_blob)
+    );
+
+    let err = parse_sign_stdout(
+        armored.into_bytes(),
+        KEY_PROTECTION_NAMESPACE,
+        TEST_SSH_PUBKEY,
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("publickey"));
+}
+
+#[test]
 fn test_parse_sign_stdout_rejects_empty_output() {
-    let err = parse_sign_stdout(Vec::new(), KEY_PROTECTION_NAMESPACE).unwrap_err();
+    let err = parse_sign_stdout(Vec::new(), KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY).unwrap_err();
     assert!(err
         .to_string()
         .contains("ssh-keygen -Y sign produced empty signature output"));
@@ -147,7 +193,7 @@ fn test_parse_sign_stdout_rejects_empty_output() {
 
 #[test]
 fn test_parse_sign_stdout_rejects_invalid_utf8() {
-    let err = parse_sign_stdout(vec![0xFF], KEY_PROTECTION_NAMESPACE).unwrap_err();
+    let err = parse_sign_stdout(vec![0xFF], KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY).unwrap_err();
     assert!(err
         .to_string()
         .contains("Invalid UTF-8 in ssh-keygen output"));

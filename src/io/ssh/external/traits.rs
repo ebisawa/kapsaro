@@ -19,7 +19,13 @@ pub trait SshKeygen: Send + Sync {
 
     /// `ssh-keygen -Y sign` — produce an Ed25519 raw signature for IKM derivation.
     /// Implementations must avoid persisting secret signature material on disk.
-    fn sign(&self, key_path: &Path, namespace: &str, data: &[u8]) -> Result<Ed25519RawSignature>;
+    fn sign(
+        &self,
+        key_path: &Path,
+        namespace: &str,
+        ssh_pubkey: &str,
+        data: &[u8],
+    ) -> Result<Ed25519RawSignature>;
 
     /// `ssh-keygen -Y verify` — verify an SSHSIG armored signature.
     /// Temp files (allowed_signers, signature) are managed internally.

@@ -1,10 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use secretenv::crypto::aead::xchacha;
 use secretenv::crypto::kdf::expand_to_array;
-use secretenv::crypto::types::data::{Ikm, Info};
+use secretenv::crypto::types::data::{Ikm, Info, Plaintext};
 use secretenv::crypto::types::keys::XChaChaKey;
-use secretenv::crypto::types::primitives::HkdfSalt;
+use secretenv::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
+use secretenv::feature::key::protection::binding::build_private_key_aad;
 use secretenv::feature::key::protection::encryption::{
     decrypt_private_key, encrypt_private_key, PrivateKeyEncryptionParams,
 };
@@ -12,10 +14,15 @@ use secretenv::feature::key::protection::key_derivation::build_sign_message;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::model::identifiers::context::{
-    SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5,
+use secretenv::model::identifiers::{
+    alg,
+    context::{SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5},
+    format,
 };
-use secretenv::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
+use secretenv::model::private_key::{
+    IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData,
+    PrivateKeyPlaintext, PrivateKeyProtected,
+};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::cell::Cell;
 
@@ -56,6 +63,37 @@ fn tamper_base64url(input: &str) -> String {
     let first = chars.first_mut().expect("base64url must be non-empty");
     *first = if *first == 'A' { 'B' } else { 'A' };
     chars.into_iter().collect()
+}
+
+fn build_ssh_private_key_with_plaintext_json(plaintext_json: &[u8]) -> PrivateKey {
+    let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
+    let ikm_salt = PrivateKeyIkmSalt::new([9u8; 32]);
+    let hkdf_salt = HkdfSalt::new([10u8; 32]);
+    let protected = PrivateKeyProtected {
+        format: format::PRIVATE_KEY_V5.to_string(),
+        member_id: "alice".to_string(),
+        kid: kid.to_string(),
+        alg: PrivateKeyAlgorithm::SshSig {
+            fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
+            ikm_salt: encode_base64url_nopad(ikm_salt.as_bytes()),
+            hkdf_salt: encode_base64url_nopad(hkdf_salt.as_bytes()),
+            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+    };
+    let enc_key = derive_enc_key(&[0xAB; 64], &hkdf_salt, kid).unwrap();
+    let aad = build_private_key_aad(&protected).unwrap();
+    let plaintext = Plaintext::from(plaintext_json.to_vec());
+    let (ct, nonce) = xchacha::encrypt_with_nonce(&enc_key, &plaintext, &aad).unwrap();
+
+    PrivateKey {
+        protected,
+        encrypted: PrivateKeyEncData {
+            nonce: encode_base64url_nopad(nonce.as_bytes()),
+            ct: encode_base64url_nopad(ct.as_bytes()),
+        },
+    }
 }
 
 #[test]
@@ -244,6 +282,69 @@ fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
 }
 
 #[test]
+fn test_decrypt_private_key_rejects_unsupported_aead_before_kdf() {
+    struct CountingBackend {
+        calls: Cell<u32>,
+    }
+
+    impl SignatureBackend for CountingBackend {
+        fn sign_sshsig(
+            &self,
+            _namespace: &str,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            self.calls.set(self.calls.get() + 1);
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+    let backend = CountingBackend {
+        calls: Cell::new(0),
+    };
+    let mut encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_id: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &backend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .unwrap();
+    encrypted.protected.alg = match encrypted.protected.alg {
+        PrivateKeyAlgorithm::SshSig {
+            fpr,
+            ikm_salt,
+            hkdf_salt,
+            ..
+        } => PrivateKeyAlgorithm::SshSig {
+            fpr,
+            ikm_salt,
+            hkdf_salt,
+            aead: "aes-256-gcm".to_string(),
+        },
+        other => other,
+    };
+
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+    let err_msg = err.to_string();
+
+    assert!(
+        err_msg.contains("aes-256-gcm") && err_msg.contains("xchacha20-poly1305"),
+        "error should mention both actual and expected AEAD: {err_msg}"
+    );
+    assert_eq!(
+        backend.calls.get(),
+        2,
+        "decrypt path must reject unsupported AEAD before signing"
+    );
+}
+
+#[test]
 fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
     struct DeterministicBackend;
     impl SignatureBackend for DeterministicBackend {
@@ -329,6 +430,37 @@ fn test_decrypt_private_key_retries_signature_only_after_failure() {
         backend.calls.get(),
         4,
         "encrypt uses 2 signatures and decrypt failure retries once for diagnosis"
+    );
+}
+
+#[test]
+fn test_decrypt_private_key_sanitizes_plaintext_deserialize_error() {
+    struct DeterministicBackend;
+
+    impl SignatureBackend for DeterministicBackend {
+        fn sign_sshsig(
+            &self,
+            _namespace: &str,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    let backend = DeterministicBackend;
+    let private_key = build_ssh_private_key_with_plaintext_json(b"{");
+
+    let err = decrypt_private_key(&private_key, &backend, TEST_SSH_PUBKEY, false)
+        .expect_err("invalid plaintext JSON should fail");
+
+    assert_eq!(
+        err.format_user_message(),
+        "E_PRIVATE_KEY_DECRYPT_FAILED: private key decryption failed"
+    );
+    assert!(
+        !crate::test_utils::error_chain_contains_serde_json(&err),
+        "serde_json::Error must not remain in the source chain"
     );
 }
 

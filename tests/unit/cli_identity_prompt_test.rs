@@ -184,3 +184,21 @@ fn test_resolve_key_generation_github_user_with_prompt_allows_empty_prompt_input
 
     assert_eq!(result, None);
 }
+
+#[test]
+#[serial]
+fn test_resolve_key_generation_github_user_with_prompt_rejects_invalid_prompt_input() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let temp_home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", temp_home.path());
+
+    let result = resolve_key_generation_github_user_with_prompt(
+        true,
+        None,
+        Some(temp_home.path()),
+        true,
+        || Ok(Some("alice/keys".to_string())),
+    );
+
+    assert!(result.is_err());
+}

@@ -8,6 +8,7 @@
 //! 2. Environment variable (SECRETENV_GITHUB_USER)
 //! 3. Global config (SECRETENV_HOME/config.toml)
 
+use crate::support::validation;
 use crate::Result;
 use std::path::Path;
 
@@ -26,13 +27,17 @@ pub(crate) fn resolve_github_user(
     cli_value: Option<String>,
     base_dir: Option<&Path>,
 ) -> Result<Option<String>> {
-    resolve_string_with_priority(
+    let github_user = resolve_string_with_priority(
         cli_value,
         Some("SECRETENV_GITHUB_USER"),
         "github_user",
         base_dir,
         None,
-    )
+    )?;
+    if let Some(login) = github_user.as_deref() {
+        validation::validate_github_login(login)?;
+    }
+    Ok(github_user)
 }
 
 #[cfg(test)]

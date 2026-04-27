@@ -5,7 +5,9 @@
 //!
 //! Tests for validation utilities (edge cases).
 
-use secretenv::support::validation::{validate_kv_file_basename, validate_member_id};
+use secretenv::support::validation::{
+    validate_github_login, validate_kv_file_basename, validate_member_id,
+};
 
 #[test]
 fn test_validate_member_id_valid() {
@@ -45,6 +47,38 @@ fn test_validate_member_id_invalid_characters() {
     assert!(validate_member_id("user#example.com").is_err());
     assert!(validate_member_id("user$example.com").is_err());
     assert!(validate_member_id("user example.com").is_err());
+}
+
+#[test]
+fn test_validate_github_login_accepts_valid_values() {
+    assert!(validate_github_login("alice").is_ok());
+    assert!(validate_github_login("alice-gh").is_ok());
+    assert!(validate_github_login("A1-b2").is_ok());
+    assert!(validate_github_login(&"a".repeat(39)).is_ok());
+}
+
+#[test]
+fn test_validate_github_login_rejects_invalid_values() {
+    for login in [
+        "",
+        "-alice",
+        "alice-",
+        "alice--dev",
+        "alice/dev",
+        "../alice",
+        "alice?tab=keys",
+        "alice#keys",
+        "alice dev",
+        "alice_dev",
+        "ユーザー",
+        &"a".repeat(40),
+    ] {
+        assert!(
+            validate_github_login(login).is_err(),
+            "should reject: {}",
+            login
+        );
+    }
 }
 
 #[test]

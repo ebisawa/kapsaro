@@ -112,7 +112,7 @@ pub struct GithubAccount {
     /// GitHub user ID (numeric, stable across login changes)
     pub id: u64,
 
-    /// GitHub login (username). Required. Used for verification (REST GET /users/{login} and /keys).
+    /// GitHub login (username). Required by the document schema; online verification starts from id.
     pub login: String,
 }
 impl PublicKey {

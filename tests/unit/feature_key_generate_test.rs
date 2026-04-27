@@ -14,7 +14,7 @@ use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use secretenv::crypto::kem::{derive_public_key_from_secret, X25519SecretKey};
 use secretenv::feature::key::generate::KeyGenerationOptions;
-use secretenv::feature::key::material::{build_identity_keys, generate_keypairs};
+use secretenv::feature::key::material::{build_identity_keys, generate_keypairs, KeypairMaterial};
 use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
 use secretenv::feature::key::ssh_binding::SshBindingContext;
 use secretenv::format::kid::derive_public_key_kid;
@@ -30,6 +30,7 @@ use secretenv::model::public_key::{Attestation, GithubAccount, Identity};
 use secretenv::model::ssh::SshDeterminismStatus;
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use tempfile::TempDir;
+use zeroize::ZeroizeOnDrop;
 
 // ============================================================================
 // build_private_key_plaintext tests (indirect via keygen_test)
@@ -129,7 +130,7 @@ fn generate_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
             sig: "dummy".to_string(),
         },
     };
-    (identity, keypairs.sig_sk)
+    (identity, keypairs.sig_sk.clone())
 }
 
 #[test]
@@ -477,6 +478,14 @@ fn test_generate_keypairs() {
     let keypairs = generate_keypairs().unwrap();
     assert_eq!(keypairs.kem_pk.as_bytes().len(), 32);
     assert_eq!(keypairs.sig_pk.as_bytes().len(), 32);
+}
+
+#[test]
+fn test_generated_key_material_zeroize_on_drop_contract() {
+    fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
+
+    assert_zeroize_on_drop::<X25519SecretKey>();
+    assert_zeroize_on_drop::<KeypairMaterial>();
 }
 
 #[test]

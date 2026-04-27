@@ -20,6 +20,7 @@ impl SshKeygen for StubSshKeygen {
         &self,
         _key_path: &Path,
         _namespace: &str,
+        _ssh_pubkey: &str,
         _data: &[u8],
     ) -> secretenv::Result<Ed25519RawSignature> {
         Ok(Ed25519RawSignature::new([0u8; 64]))

@@ -1,11 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use secretenv::crypto::aead::xchacha;
+use secretenv::crypto::types::data::Plaintext;
+use secretenv::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
+use secretenv::feature::key::protection::binding::build_private_key_aad;
 use secretenv::feature::key::protection::password_encryption::{
     decrypt_private_key_with_password, encrypt_private_key_with_password,
 };
-use secretenv::model::identifiers::format;
+use secretenv::feature::key::protection::password_key_derivation::derive_key_from_password;
+use secretenv::model::identifiers::{alg, format};
 use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
@@ -26,6 +31,39 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
 
 fn secret(value: &str) -> SecretString {
     SecretString::new(value.to_string())
+}
+
+fn build_password_private_key_with_plaintext_json(
+    plaintext_json: &[u8],
+    password: &SecretString,
+) -> PrivateKey {
+    let ikm_salt = PrivateKeyIkmSalt::new([7u8; 32]);
+    let hkdf_salt = HkdfSalt::new([8u8; 32]);
+    let protected = PrivateKeyProtected {
+        format: format::PRIVATE_KEY_V5.to_string(),
+        member_id: "alice@example.com".to_string(),
+        kid: TEST_KID.to_string(),
+        alg: PrivateKeyAlgorithm::Argon2id {
+            ikm_salt: encode_base64url_nopad(ikm_salt.as_bytes()),
+            hkdf_salt: encode_base64url_nopad(hkdf_salt.as_bytes()),
+            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+    };
+    let enc_key =
+        derive_key_from_password(password, &ikm_salt, &hkdf_salt, TEST_KID, false).unwrap();
+    let aad = build_private_key_aad(&protected).unwrap();
+    let plaintext = Plaintext::from(plaintext_json.to_vec());
+    let (ct, nonce) = xchacha::encrypt_with_nonce(&enc_key, &plaintext, &aad).unwrap();
+
+    PrivateKey {
+        protected,
+        encrypted: PrivateKeyEncData {
+            nonce: encode_base64url_nopad(nonce.as_bytes()),
+            ct: encode_base64url_nopad(ct.as_bytes()),
+        },
+    }
 }
 
 #[test]
@@ -68,9 +106,28 @@ fn test_password_encrypt_wrong_password_fails() {
 
     let wrong_password = secret("wrong-password");
     let result = decrypt_private_key_with_password(&encrypted, &wrong_password, false);
+    let err = result.expect_err("decryption with wrong password should fail");
+    assert_eq!(
+        err.format_user_message(),
+        "E_PRIVATE_KEY_DECRYPT_FAILED: private key decryption failed"
+    );
+}
+
+#[test]
+fn test_password_decrypt_sanitizes_plaintext_deserialize_error() {
+    let password = secret("test-password-42");
+    let private_key = build_password_private_key_with_plaintext_json(b"{", &password);
+
+    let err = decrypt_private_key_with_password(&private_key, &password, false)
+        .expect_err("invalid plaintext JSON should fail");
+
+    assert_eq!(
+        err.format_user_message(),
+        "E_PRIVATE_KEY_DECRYPT_FAILED: private key decryption failed"
+    );
     assert!(
-        result.is_err(),
-        "decryption with wrong password should fail"
+        !crate::test_utils::error_chain_contains_serde_json(&err),
+        "serde_json::Error must not remain in the source chain"
     );
 }
 

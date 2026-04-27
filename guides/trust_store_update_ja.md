@@ -86,13 +86,13 @@ Trust review for signer:
   member_id: bob@example.com
   kid: 7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD
   attestation fingerprint: SHA256:xxxx...
-  GitHub account id: 12345678 (bob-gh)
+  GitHub アカウント id: 12345678 (bob-gh)
   Warning: First-contact trust is TOFU. Verify kid / GitHub id / fingerprint out of band.
 
 Approve this key and add it to local trust store? [y/N]
 ```
 
-`kid`、GitHub account、SSH attestation fingerprint を、Slack やビデオ通話など**別の経路で本人に確認する**ことを推奨します。
+`kid`、GitHub アカウント、SSH attestation fingerprint を、Slack やビデオ通話など**別の経路で本人に確認する**ことを推奨します。
 
 ---
 
@@ -114,7 +114,7 @@ secretenv member verify --approve alice@example.com bob@example.com
 
 1. PublicKey の offline 検証（スキーマ、自己署名、attestation）
 2. GitHub binding がある場合は online 検証（GitHub API で SSH 鍵を照合）
-3. 検証結果と判断材料（`kid`、attestation fingerprint、GitHub account id/login）の表示
+3. 検証結果と判断材料（`kid`、attestation fingerprint、GitHub アカウント id/login）の表示
 4. 対話的な承認確認
 
 承認すると `known_keys` に記録され、以降の読み書きで同じ `kid` への再確認は不要になります。
@@ -320,7 +320,7 @@ ${SECRETENV_HOME:-~/.config/secretenv}/trust/<owner_member_id>.json
 
 local trust store は SSH の known_hosts と同様の TOFU モデルを採用しています。初回の承認時に誤った鍵を承認すると、その誤りがキャッシュされます。暗号学的にこれを防ぐ仕組みはありません。
 
-初回承認時は、**別の経路（Slack、ビデオ通話、対面）で `kid` や GitHub account id を確認する**ことが重要です。
+初回承認時は、**別の経路（Slack、ビデオ通話、対面）で `kid` や GitHub アカウント id を確認する**ことが重要です。
 
 ### `members/active` は repo governance に依存する
 

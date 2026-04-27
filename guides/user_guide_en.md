@@ -381,12 +381,9 @@ secretenv set -n prod DATABASE_URL "postgres://user:pass@prod/db"
 
 If no store is specified, the value is saved to `default` (`.secretenv/secrets/default.kvenc`).
 
-**To avoid leaving secrets in shell history**: use `--stdin` for passwords and tokens.
+To avoid leaving passwords or tokens in shell history, do not write the value as a command-line argument. Use `--stdin` and enter the value through stdin instead.
 
 ```bash
-# Pipe the value
-echo "super-secret-token" | secretenv set SECRET_TOKEN --stdin
-
 # Interactive input (for passwords)
 secretenv set SECRET_TOKEN --stdin
 # → Waits for input. Press Ctrl+D to confirm.
@@ -443,7 +440,7 @@ secretenv run -n staging -- ./my-app
 secretenv run -- python manage.py runserver
 ```
 
-`run` does not inherit the parent process environment wholesale. The child process keeps only standard variables such as `PATH` and `HOME`, then overlays secret values on top.
+`run` inherits the parent process environment. However, parent environment variables whose names start with `SECRETENV_` are not passed to the child process. Decrypted secret values are applied last, so they override any parent environment variable with the same name.
 
 ### Bulk Importing a .env File
 
@@ -489,6 +486,12 @@ Batch `rewrap` automatically covers files under `.secretenv/secrets/` only when 
 ```bash
 # Signature verification is performed before decryption
 secretenv decrypt ca.pem.encrypted --out certs/ca.pem
+
+# Write decrypted output to stdout
+secretenv decrypt ca.pem.encrypted --stdout > certs/ca.pem
+
+# Read file-enc JSON from stdin and decrypt it
+cat ca.pem.encrypted | secretenv decrypt --stdin --stdout > certs/ca.pem
 ```
 
 Do not manage decrypted plaintext files in Git. `.secretenv/` belongs in Git, but decrypted `.env` files, certificates, and other plaintext outputs should be covered by `.gitignore`.
@@ -575,6 +578,8 @@ secretenv member list
 secretenv member show bob@example.com
 ```
 
+The default `member list` output shows each member handle and `kid`. Use this when checking multiple key generations or confirming the state before and after `rewrap`.
+
 ### Verifying Members
 
 ```bash
@@ -632,6 +637,8 @@ git add .secretenv/
 git commit -m "Remove alice from secretenv"
 ```
 
+Before removal, `member remove` previews encrypted files that still include the member as a recipient and warns that `rewrap` is required. If broken artifacts or signature-invalid artifacts are found during the preview, they are shown as warnings and excluded from the list; the removal itself can still proceed. In non-interactive environments, removal requires `--force`.
+
 At this point, what has changed is **future access**. The secret values themselves have not changed yet, so you still need the follow-up work below.
 
 ### Required Steps After Removal
@@ -672,7 +679,7 @@ At minimum, follow these rules:
 
 | State | Description |
 |-------|-------------|
-| active | Key used for encryption and signing. One per member_id. |
+| active | Key used for encryption and signing. One per member handle. |
 | available | Can decrypt but is not used for encryption or signing. |
 | expired | Past expiration date. Can still decrypt (with a warning). |
 
@@ -865,7 +872,7 @@ After registering, securely delete the `ci-key.txt` file. Do not relay the priva
 
 #### Step 5: Use in CI Jobs
 
-CI jobs can use only the secret-operation commands that already support environment variable-based key loading. The `member_id` is automatically determined from the private key.
+CI jobs can use only the secret-operation commands that already support environment variable-based key loading. The member handle is automatically determined from the private key.
 
 ### Example: GitHub Actions
 
@@ -1108,14 +1115,15 @@ This means your SSH key produced different signatures for the same input on two 
 |---------|-------------|
 | `secretenv encrypt <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
 | `secretenv encrypt --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
-| `secretenv decrypt <file> --out <path>` | Decrypt a file |
+| `secretenv decrypt <file> (--out <path> \| --stdout)` | Decrypt a file |
+| `secretenv decrypt --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
 | `secretenv inspect <file>` | Display encrypted file metadata (no decryption needed) |
 
 ### Member Management
 
 | Command | Description |
 |---------|-------------|
-| `secretenv member list` | List all members |
+| `secretenv member list` | List all members and each `kid` |
 | `secretenv member show <member_handle>` | Show details for a specific member |
 | `secretenv member verify [<member_handle>...]` | Verify active member public keys (with online verification) |
 | `secretenv member verify --approve [<member_handle>...]` | Review active member keys and save the approval result in the local trust store |
@@ -1151,7 +1159,7 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv config list` | List all configuration values |
 | `secretenv config unset <key>` | Remove a configuration value |
 
-Configuration keys: `member_handle`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `github_user`
+Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `ssh_keygen_command`, `ssh_add_command`, `github_user`
 
 ---
 
@@ -1167,6 +1175,9 @@ secretenv config set member_handle alice@example.com
 
 # Set GitHub account (for online verification)
 secretenv config set github_user alice-gh
+
+# Set default workspace (useful when running outside the Git repository)
+secretenv config set workspace ~/src/project/.secretenv
 
 # Set SSH signing method (default "auto" works for most cases)
 # auto: tries ssh-agent first, then ssh-keygen
@@ -1189,6 +1200,8 @@ secretenv resolves configuration values from multiple sources in the following p
 
 When a higher-priority source provides a value, lower-priority sources are ignored.
 
+Workspace Root is resolved in this order: `--workspace`, `SECRETENV_WORKSPACE`, `workspace` in the config file, then automatic detection from the current directory.
+
 ### Config File
 
 The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~/.config/secretenv/config.toml`). It uses flat TOML key-value format.
@@ -1196,6 +1209,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 | Key | Description | Default | CLI Option | Environment Variable |
 |-----|-------------|---------|------------|---------------------|
 | `member_handle` | Default member handle (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-handle` | `SECRETENV_MEMBER_HANDLE` |
+| `workspace` | Default Workspace Root path. Supports tilde expansion (`~/...`) | (none; auto-detected when unset) | `-w` / `--workspace` | `SECRETENV_WORKSPACE` |
 | `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `SECRETENV_SSH_IDENTITY` |
 | `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `SECRETENV_SSH_SIGNING_METHOD` |
 | `ssh_keygen_command` | Path to `ssh-keygen` command | `ssh-keygen` | — | — |
@@ -1206,12 +1220,13 @@ Example:
 
 ```toml
 member_handle = "alice@example.com"
+workspace = "~/src/project/.secretenv"
 ssh_identity = "~/.ssh/id_ed25519"
 ssh_signing_method = "auto"
 github_user = "alice-gh"
 ```
 
-If the config file does not exist, secretenv falls back to environment variables and default values without error. If the file exists but contains syntax errors, secretenv reports an error.
+If the config file does not exist, secretenv falls back to environment variables and default values without error. If the file exists but contains syntax errors, secretenv reports an error. `config get`, `config set`, `config unset`, and `config list` operate on the global config file and do not check whether the configured workspace exists.
 
 ### Environment Variables
 

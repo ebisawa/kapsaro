@@ -74,45 +74,45 @@ Even when individual cryptographic primitives are correct, semantic attacks can 
 
 ### 1.3 Summary of Claims and Verification
 
-The four axes in §1.2 correspond, as individual security claims discussed in this document, to the following table. Each row is a more detailed counterpart of the claims listed in the Executive Summary; the concrete design provisions, assumptions, and residual risks are argued in §3 through §13. This table is intended to be used as an index from §1.2 into §3 and beyond.
+The security claims discussed in this document, derived from the four axes in §1.2, are summarized in the table below. Each row is a more detailed counterpart of the claims listed in the Executive Summary; the concrete design provisions, assumptions, and residual risks are argued in §3 through §13. This table is intended to be used as an index into §3 and beyond.
 
-| Axis | Security claim | Main mechanism | Assumption | Residual risk | Detailed in |
-|------|----------------|----------------|------------|---------------|-------------|
-| Axis 1 | **Confidentiality** | HPKE wrap + XChaCha20-Poly1305 | Recipient private keys are not compromised | Legitimate recipients can still exfiltrate plaintext | §3, §7, §8 |
-| Axis 1 | **Tamper detection** | Ed25519 signatures | Verification is never bypassed | A malicious legitimate signer is not prevented | §5 |
-| Axis 2 | **Self-contained verification of signed artifacts** | Embedded signer public key + public-key verification | Every signed artifact embeds the signer's public key | Current membership still depends on separate trust policy checks | §5 |
-| Axis 2 | **Key consistency** | Public-key document self-signature | The original private key is not compromised | Does not prevent creation of a brand new malicious key | §5.5 |
-| Axis 3 | **Current-trust decision** | Active member list + approved-keys cache | Repo governance and user approvals work as intended | Weak against bootstrap TOFU, repo compromise, and misapproval | §10 |
-| Axis 3 | **Stronger key identity evidence** | SSH attestation + manual approval + online verify | Manual approval is executed correctly | Weak against first-contact MITM and GitHub/SSH compromise | §2.5, §5.6, §5.7 |
-| Axis 4 | **Context binding** | Bind each artifact to its context (file, key generation, entry, protocol) | The implementation preserves the intended binding points | Security weakens if a future change removes a binding | §6, §11 |
-| Cross-cutting | **Portable private key use** | Password export or SSH-based protection | Used only in a trusted CI context | Storing both secrets in the same backend is not independent defense | §9 |
+| Security claim | Main mechanism | Assumption | Residual risk | Detailed in |
+|----------------|----------------|------------|---------------|-------------|
+| **Confidentiality** | HPKE wrap + XChaCha20-Poly1305 | Recipient private keys are not compromised | Legitimate recipients can still exfiltrate plaintext | §3, §7, §8 |
+| **Tamper detection** | Ed25519 signatures | Verification is never bypassed | A malicious legitimate signer is not prevented | §5 |
+| **Self-contained verification of signed artifacts** | Embedded signer public key + public-key verification | Every signed artifact embeds the signer's public key | Current membership still depends on separate trust policy checks | §5 |
+| **Key consistency** | Public-key document self-signature | The original private key is not compromised | Does not prevent creation of a brand new malicious key | §5.5 |
+| **Current-trust decision** | Active member list + approved-keys cache | Repo governance and user approvals work as intended | Weak against bootstrap TOFU, repo compromise, and misapproval | §10 |
+| **Stronger key identity evidence** | SSH attestation + manual approval + online verify | Manual approval is executed correctly | Weak against first-contact MITM and GitHub/SSH compromise | §2.5, §5.6, §5.7 |
+| **Context binding** | Bind each artifact to its context (file, key generation, entry, protocol) | The implementation preserves the intended binding points | Security weakens if a future change removes a binding | §6, §11 |
+| **Portable private key use** | Password export or SSH-based protection | Used only in a trusted CI context | Storing both secrets in the same backend is not independent defense | §9 |
 
 ### 1.4 Implementation Invariants That Must Be Preserved
 
-The four axes only hold as security claims when the cryptographic design is preserved exactly as specified. The implementation must preserve the following invariants. Each one names which axis it supports and what claim breaks if it is violated.
+The security claims summarized in §1.3 only hold when the cryptographic design is preserved exactly as specified. The implementation must preserve the following invariants; each one names what claim breaks if it is violated.
 
-- **Do not decrypt before signature verification** (Axes 1 and 2). Reversing the order of signature verification and decryption sends attacker-controlled ciphertext through the decryption path as-is, which defeats the purpose of tamper detection.
-- **Do not strip context binding in implementation changes** (Axis 4). If binding elements are removed from AAD, info, or signed_data construction, cryptographic verification still passes but cross-context reuse can no longer be ruled out, and semantic attacks become possible.
-- **Reject artifacts that do not embed the signer's public key, fail-closed** (Axis 2). Allowing alternative key-lookup paths breaks the premise of self-contained verification and makes the entire verification depend on the trustworthiness of the external lookup.
-- **Limit `SECRETENV_STRICT_KEY_CHECKING=no` to read paths** (Axis 3). If this flag's effect is permitted on write paths, the role of the authorization basis (the active member list) and the role of the approval cache become mixed, and role separation collapses.
+- **Do not decrypt before signature verification.** Reversing the order of signature verification and decryption sends attacker-controlled ciphertext through the decryption path as-is, which defeats the purpose of tamper detection.
+- **Do not strip context binding in implementation changes.** If binding elements are removed from AAD, info, or signed_data construction, cryptographic verification still passes but cross-context reuse can no longer be ruled out, and semantic attacks become possible.
+- **Reject artifacts that do not embed the signer's public key, fail-closed.** Allowing alternative key-lookup paths breaks the premise of self-contained verification and makes the entire verification depend on the trustworthiness of the external lookup.
+- **Limit `SECRETENV_STRICT_KEY_CHECKING=no` to read paths.** If this flag's effect is permitted on write paths, the role of the authorization basis (the active member list) and the role of the approval cache become mixed, and role separation collapses.
 
 ### 1.5 Terminology Used Here
 
-The following terms recur throughout the rest of this document. They are arranged by their corresponding design axis. Where each term is implemented is described in the relevant section (§5, §6, §10, etc.).
+The following terms recur throughout the rest of this document. Where each term is implemented is described in the relevant section (§5, §6, §10, etc.).
 
-| Term | Related axis | Meaning in this document |
-|------|--------------|--------------------------|
-| **Embedded signer public key** | Axis 2 | The signer's public-key document carried inside each signed artifact (implemented as `signature.signer_pub`; see §5). This is the sole source of the signature verification key, and lookup never falls back to external key servers or other files |
-| **Key consistency** | Axis 2 | Evidence that the same private-key holder created the corresponding public-key document; not identity by itself |
-| **Active member list** | Axis 3 | The data treated as the authorization basis for the current member / recipient set in the workspace (implemented as `members/active`; see §10) |
-| **Incoming member candidates** | Axis 3 | Members who applied to join the workspace but have not yet been promoted (implemented as `members/incoming`; see §10) |
-| **Approved-keys cache** | Axis 3 | A local cache that lets a user skip re-review for a key they have already confirmed (implemented as `known_keys`; see §10.4) |
-| **Non-member acceptance** | Axis 3 | An interactive, one-shot, artifact-scoped exception that accepts an artifact signed by a signer not present in the active member list |
-| **Identity assurance** | Axis 3 | Operational evidence that helps a human decide which person or account a key belongs to |
-| **Context binding** | Axis 4 | The mechanism that cryptographically ties each encrypted artifact to the context it belongs to — file, key generation, entry, and protocol — so that components cannot be swapped or reused across contexts (the individual identifiers and the full binding matrix are documented in §6) |
-| **Disclosure history** | Cross-cutting | A record that surfaces secret values which may need to be rotated externally after a member is removed (implemented as `disclosed`; see §8.7) |
-| **Trust boundary** | Cross-cutting | The boundary between inputs trusted as-is and inputs assumed tamperable until validated |
-| **Residual risk** | Cross-cutting | Risk that remains even with a correct implementation, or when an operational assumption is not met |
+| Term | Meaning in this document |
+|------|--------------------------|
+| **Embedded signer public key** | The signer's public-key document carried inside each signed artifact (implemented as `signature.signer_pub`; see §5). This is the sole source of the signature verification key, and lookup never falls back to external key servers or other files |
+| **Key consistency** | Evidence that the same private-key holder created the corresponding public-key document; not identity by itself |
+| **Active member list** | The data treated as the authorization basis for the current member / recipient set in the workspace (implemented as `members/active`; see §10) |
+| **Incoming member candidates** | Members who applied to join the workspace but have not yet been promoted (implemented as `members/incoming`; see §10) |
+| **Approved-keys cache** | A local cache that lets a user skip re-review for a key they have already confirmed (implemented as `known_keys`; see §10.4) |
+| **Non-member acceptance** | An interactive, one-shot, artifact-scoped exception that accepts an artifact signed by a signer not present in the active member list |
+| **Identity assurance** | Operational evidence that helps a human decide which person or account a key belongs to |
+| **Context binding** | The mechanism that cryptographically ties each encrypted artifact to the context it belongs to — file, key generation, entry, and protocol — so that components cannot be swapped or reused across contexts (the individual identifiers and the full binding matrix are documented in §6) |
+| **Disclosure history** | A record that surfaces secret values which may need to be rotated externally after a member is removed (implemented as `disclosed`; see §8.7) |
+| **Trust boundary** | The boundary between inputs trusted as-is and inputs assumed tamperable until validated |
+| **Residual risk** | Risk that remains even with a correct implementation, or when an operational assumption is not met |
 
 ---
 

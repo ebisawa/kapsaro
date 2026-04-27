@@ -18,7 +18,18 @@
 このプロジェクトの狙いは、「秘密を平文で配らない」だけではありません。  
 誰に共有されているか、改ざんされていないか、鍵更新やメンバー変更をどう反映するかまで、Git と相性のよい形で整理することを目指しています。
 
-## Install
+## セキュリティ上の特徴
+
+`secretenv` は、アクセストークン、API キー、証明書など、本来公開してはいけない秘密情報を暗号化します。暗号化された結果を Git に置くことで、多くのメンバーが共有するリポジトリでも、平文の `.env` や鍵ファイルをコミットせずに秘密情報を扱えます。
+
+設計の中心は次の4点です。
+
+- 秘密情報をリポジトリへ置く前に暗号化し、共有リポジトリでも扱える状態にします
+- 公開鍵暗号を使い、各メンバーが自分の公開鍵・秘密鍵を持つことで、チーム共通の暗号鍵を配布・保護する運用を避けます
+- 専用サーバーや SaaS を必要とせず、暗号化、復号、検証、共有先の更新をオフラインで完結できます
+- 秘密情報の追加・変更と共有先メンバーの追加・変更を Git 上のファイル更新として扱い、既存の PR レビューに載せられます
+
+## インストール
 
 ### Homebrew (macOS / Linux)
 
@@ -41,7 +52,7 @@ cd secretenv
 cargo install --path .
 ```
 
-## Getting Started
+## クイックスタート
 
 ### 1. ワークスペースの初期化
 
@@ -83,7 +94,7 @@ secretenv run -- ./my-app
 
 詳しい導入・運用手順は [User Guide](guides/user_guide_ja.md) を参照してください。
 
-## Read More
+## 関連ドキュメント
 
 まず全体像を知りたい場合:
 
@@ -100,15 +111,10 @@ secretenv run -- ./my-app
 - [Security Design (English)](guides/security_design_en.md)
 - [Security Design (Japanese)](guides/security_design_ja.md)
 
-Local Trust Store について知りたい場合:
-
-- [Local Trust Store Update (English)](guides/trust_store_update_en.md)
-- [Local Trust Store Update (Japanese)](guides/trust_store_update_ja.md)
-
-## Status
+## ステータス
 
 現在はアルファ段階です。仕様策定と実装を並行して進めています。
 
-## License
+## ライセンス
 
 Apache-2.0. See [LICENSE](LICENSE).

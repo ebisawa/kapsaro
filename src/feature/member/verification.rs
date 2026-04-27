@@ -13,6 +13,7 @@ use crate::io::workspace::members::{
     get_active_member_file_path, list_active_member_paths, load_member_file_from_path,
 };
 use crate::model::public_key::PublicKey;
+use crate::support::display::sanitize_display_field;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::ffi::OsStr;
@@ -273,7 +274,10 @@ fn list_verifiable_member_files(
             path.exists()
                 .then_some(path)
                 .ok_or_else(|| Error::NotFound {
-                    message: format!("Member '{}' not found in active/", member_id),
+                    message: format!(
+                        "Member '{}' not found in active/",
+                        sanitize_display_field(member_id)
+                    ),
                 })
         })
         .collect()

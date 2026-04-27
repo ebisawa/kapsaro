@@ -85,11 +85,12 @@ impl WorkspaceMemberSnapshot {
             }
         }
 
-        let recipient_expiry_warnings = collect_recipient_key_expiry_warnings(&active_members)?;
         let verified_recipients = crate::feature::verify::public_key::verify_recipient_public_keys(
             &active_members,
             debug,
         )?;
+        let recipient_expiry_warnings =
+            collect_recipient_key_expiry_warnings(&verified_recipients)?;
 
         Ok(Self {
             active_members,

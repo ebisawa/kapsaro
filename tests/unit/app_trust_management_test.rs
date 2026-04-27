@@ -83,8 +83,12 @@ fn test_remove_known_key_command_rejects_expired_signing_key() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
     let options = build_test_command_options(home.path(), None);
-    let mut execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
-    execution.key_ctx.expires_at = "2020-01-01T00:00:00Z".to_string();
+    crate::test_utils::update_active_private_key_expires_at(
+        home.path(),
+        ALICE_MEMBER_ID,
+        "2020-01-01T00:00:00Z",
+    );
+    let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
 
     let result = remove_known_key_command(&options, &execution, KID_OLD, false);
 
@@ -142,8 +146,12 @@ fn test_execute_purge_rejects_expired_signing_key() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
     save_signed_trust_store(&home);
     let options = build_test_command_options(home.path(), None);
-    let mut execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
-    execution.key_ctx.expires_at = "2020-01-01T00:00:00Z".to_string();
+    crate::test_utils::update_active_private_key_expires_at(
+        home.path(),
+        ALICE_MEMBER_ID,
+        "2020-01-01T00:00:00Z",
+    );
+    let execution = build_test_execution_context(&home, ALICE_MEMBER_ID, None);
 
     let result = execute_purge(
         &options,

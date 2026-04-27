@@ -115,16 +115,19 @@ pub fn format_kid_half_display(canonical_kid: &str) -> Result<String> {
 
 /// Build dashed display form for human-facing output.
 ///
-/// This function is **lossy**: if `kid` is not a valid canonical `kid`, it returns the input as-is.
+/// This function is **lossy**: if `kid` is not valid canonical form, it returns a sanitized
+/// display-only form of the input.
 pub fn format_kid_display_lossy(kid: &str) -> String {
-    format_kid_display(kid).unwrap_or_else(|_| kid.to_string())
+    format_kid_display(kid).unwrap_or_else(|_| crate::support::display::sanitize_display_field(kid))
 }
 
 /// Build dashed half-display form for human-facing output.
 ///
-/// This function is **lossy**: if `kid` is not a valid canonical `kid`, it returns the input as-is.
+/// This function is **lossy**: if `kid` is not valid canonical form, it returns a sanitized
+/// display-only form of the input.
 pub fn format_kid_half_display_lossy(kid: &str) -> String {
-    format_kid_half_display(kid).unwrap_or_else(|_| kid.to_string())
+    format_kid_half_display(kid)
+        .unwrap_or_else(|_| crate::support::display::sanitize_display_field(kid))
 }
 
 fn is_crockford_base32_byte(byte: u8) -> bool {

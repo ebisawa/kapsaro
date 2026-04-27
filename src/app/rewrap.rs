@@ -64,7 +64,8 @@ where
         accepted_promotions,
         ..request
     };
-    let trust_plan = trust::build_rewrap_trust(&plan, &request.accepted_promotions)?;
+    let trust_plan =
+        trust::build_rewrap_trust(&plan, &request.accepted_promotions, request.options.verbose)?;
     emit_warnings(&trust_plan.warnings);
     let approvals = review_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
     let mut outcome = execution::execute_confirmed_rewrap_batch(

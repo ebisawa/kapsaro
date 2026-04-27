@@ -9,6 +9,7 @@ use crate::feature::context::crypto::{
     build_local_key_access, build_signing_key, load_verified_private_key_from_keystore,
     CryptoContext,
 };
+use crate::feature::context::expiry::VerifiedExpiresAt;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::helpers::resolve_kid;
 use crate::io::keystore::paths::get_keystore_root_from_base;
@@ -113,7 +114,7 @@ fn build_keystore_crypto_context(
     keystore_root: PathBuf,
     workspace_path: Option<PathBuf>,
     private_key: crate::model::verified::VerifiedPrivateKey,
-    expires_at: String,
+    expires_at: VerifiedExpiresAt,
 ) -> Result<CryptoContext> {
     let signing_key = build_signing_key(private_key.document())?;
     let pub_key_source: Box<dyn PublicKeySource> =

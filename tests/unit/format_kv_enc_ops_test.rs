@@ -3,7 +3,9 @@
 
 //! Unit tests for kv-enc v3 encryption/decryption operations
 
-use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_keys};
+use crate::keygen_helpers::{
+    build_test_private_key, build_verified_private_key, build_verified_recipient_keys,
+};
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
 use ed25519_dalek::SigningKey;
@@ -22,7 +24,6 @@ use secretenv::format::kv::enc::canonical::parse_kv_wrap;
 use secretenv::format::schema::document::{parse_kv_head_token, parse_kv_wrap_token};
 use secretenv::format::token::TokenCodec;
 use secretenv::io::workspace::members::{list_active_member_ids, load_member_files};
-use secretenv::model::identity::{Kid, MemberId};
 use secretenv::model::kv_enc::verified::VerifiedKvEncDocument;
 use secretenv::model::public_key::PublicKey;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
@@ -352,30 +353,36 @@ fn setup_crypto_ctx_for_test(
     kid: &str,
     keystore_root: &std::path::Path,
     private_key: &secretenv::model::private_key::PrivateKeyPlaintext,
+    public_key: &secretenv::model::public_key::PublicKey,
+    ssh_priv: &std::path::Path,
+    ssh_pub_content: &str,
 ) -> secretenv::feature::context::crypto::CryptoContext {
-    let signing_key = signing_key_from_private(private_key);
-
-    let verified_private = build_verified_private_key(private_key, member_id, kid, "SHA256:test");
-
-    // Derive workspace path from keystore_root (sibling directory)
-    let workspace_path = keystore_root.parent().map(|p| p.join("workspace"));
-
-    let pub_key_source: Box<dyn secretenv::io::keystore::public_key_source::PublicKeySource> =
-        Box::new(
-            secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(
-                keystore_root.to_path_buf(),
-            ),
-        );
-
-    secretenv::feature::context::crypto::CryptoContext::new(
-        MemberId::try_from(member_id.to_string()).unwrap(),
-        Kid::try_from(kid.to_string()).unwrap(),
-        pub_key_source,
-        workspace_path,
-        verified_private,
-        signing_key,
-        "2099-12-31T23:59:59Z".to_string(),
+    secretenv::support::fs::ensure_dir_restricted(keystore_root).unwrap();
+    let workspace_path = Some(keystore_root.parent().unwrap().join("workspace"));
+    let encrypted_private =
+        build_test_private_key(private_key, member_id, kid, ssh_priv, ssh_pub_content).unwrap();
+    let member_dir = keystore_root.join(member_id);
+    secretenv::support::fs::ensure_dir_restricted(&member_dir).unwrap();
+    let key_dir = keystore_root.join(member_id).join(kid);
+    secretenv::support::fs::ensure_dir_restricted(&key_dir).unwrap();
+    secretenv::support::fs::atomic::save_json_restricted(
+        &key_dir.join("private.json"),
+        &encrypted_private,
     )
+    .unwrap();
+    crate::test_utils::save_public_key(keystore_root, member_id, kid, public_key).unwrap();
+    let backend = crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(ssh_priv).unwrap();
+
+    secretenv::feature::context::crypto::load_crypto_context_from_keystore(
+        keystore_root.to_path_buf(),
+        member_id,
+        Some(kid),
+        Box::new(backend),
+        ssh_pub_content.to_string(),
+        workspace_path,
+        false,
+    )
+    .unwrap()
 }
 
 fn encrypt_initial_kv_doc(
@@ -513,7 +520,15 @@ fn test_set_existing_file_preserves_sid() {
     let sid_before = kv_head_field(&initial, "sid");
     let created_at_before = kv_head_field(&initial, "created_at");
 
-    let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
+    let key_ctx = setup_crypto_ctx_for_test(
+        member_id,
+        &kid,
+        &keystore_root,
+        &private,
+        &public,
+        &ssh_priv,
+        &ssh_pub_content,
+    );
     let ctx = KvWriteContext::new(member_id, &key_ctx, false);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
@@ -551,7 +566,15 @@ fn test_set_existing_file_uses_current_recipients_in_wrap() {
         &public,
         &[("KEY1", "value1")],
     );
-    let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
+    let key_ctx = setup_crypto_ctx_for_test(
+        member_id,
+        &kid,
+        &keystore_root,
+        &private,
+        &public,
+        &ssh_priv,
+        &ssh_pub_content,
+    );
     let ctx = KvWriteContext::new(member_id, &key_ctx, false);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
@@ -589,7 +612,15 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
     let key1_token_before = kv_entry_token(&initial, "KEY1").unwrap();
     let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
 
-    let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
+    let key_ctx = setup_crypto_ctx_for_test(
+        member_id,
+        &kid,
+        &keystore_root,
+        &private,
+        &public,
+        &ssh_priv,
+        &ssh_pub_content,
+    );
     let ctx = KvWriteContext::new(member_id, &key_ctx, false);
     let entries = vec![("KEY3".to_string(), "value3".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
@@ -632,7 +663,15 @@ fn setup_unset_test_ctx(
     let initial =
         encrypt_initial_kv_doc(member_id, &kid, &keystore_root, &private, &public, entries);
 
-    let key_ctx = setup_crypto_ctx_for_test(member_id, &kid, &keystore_root, &private);
+    let key_ctx = setup_crypto_ctx_for_test(
+        member_id,
+        &kid,
+        &keystore_root,
+        &private,
+        &public,
+        &ssh_priv,
+        &ssh_pub_content,
+    );
     (initial, key_ctx, temp, ssh_temp)
 }
 

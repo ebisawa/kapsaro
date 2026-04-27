@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::context::execution::ExecutionContext;
-use crate::app::context::review::ensure_public_key_snapshot_matches;
+use crate::app::context::review::{ensure_public_key_snapshot_matches, ReviewedTextFile};
 use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
 use crate::app::trust::review::review_rewrap_signer_requirements_with_confirmation;
 use crate::app::trust::{
@@ -19,21 +19,14 @@ use crate::io::workspace::members::{
     load_active_member_files, promote_snapshotted_incoming_members, IncomingMemberPromotionSnapshot,
 };
 use crate::model::verification::SignatureVerificationProof;
-use crate::support::fs::{atomic, load_text_with_limit};
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::types::{
     RewrapBatchOutcome, RewrapBatchPlan, RewrapBatchRequest, RewrapFileFailure, RewrapFileSuccess,
     RewrapSignerRequirement, VerifiedPostPromotionRecipients,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ArtifactSnapshot {
-    file_path: PathBuf,
-    content: String,
-}
 
 struct RewrapBatchExecutionContext<'a> {
     plan: &'a RewrapBatchPlan,
@@ -206,7 +199,7 @@ where
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
 {
     let captured = load_captured_artifact(file_path)?;
-    let content = EncContent::detect(captured.content.clone())?;
+    let content = EncContent::detect(captured.require_content()?.to_string())?;
     review_captured_artifact_signer(
         &captured,
         &content,
@@ -218,26 +211,22 @@ where
     rewrite_captured_artifact(&captured, &content, ctx)
 }
 
-fn load_captured_artifact(file_path: &Path) -> Result<ArtifactSnapshot> {
-    let content = load_text_with_limit(
+fn load_captured_artifact(file_path: &Path) -> Result<ReviewedTextFile> {
+    ReviewedTextFile::load_existing(
         file_path,
-        resolve_encrypted_artifact_read_limit(file_path),
         "encrypted artifact",
-    )?;
-    Ok(ArtifactSnapshot {
-        file_path: file_path.to_path_buf(),
-        content,
-    })
+        resolve_encrypted_artifact_read_limit(file_path),
+    )
 }
 
 fn rewrite_captured_artifact(
-    captured: &ArtifactSnapshot,
+    captured: &ReviewedTextFile,
     content: &EncContent,
     ctx: &RewrapBatchExecutionContext<'_>,
 ) -> Result<()> {
     let rewrap_request = build_rewrap_request(ctx);
     let rewritten = rewrap_feature_content(content, &rewrap_request)?;
-    save_rewritten_artifact(&captured.file_path, &rewritten)
+    save_rewritten_artifact(captured, &rewritten)
 }
 
 fn build_rewrap_request<'a>(ctx: &'a RewrapBatchExecutionContext<'a>) -> RewrapRequest<'a> {
@@ -252,12 +241,12 @@ fn build_rewrap_request<'a>(ctx: &'a RewrapBatchExecutionContext<'a>) -> RewrapR
     }
 }
 
-fn save_rewritten_artifact(file_path: &Path, rewritten: &str) -> Result<()> {
-    atomic::save_text(file_path, rewritten)
+fn save_rewritten_artifact(captured: &ReviewedTextFile, rewritten: &str) -> Result<()> {
+    captured.save_replacement(rewritten)
 }
 
 fn review_captured_artifact_signer<ConfirmKnown, ConfirmNonMember>(
-    captured: &ArtifactSnapshot,
+    captured: &ReviewedTextFile,
     content: &EncContent,
     ctx: &RewrapBatchExecutionContext<'_>,
     warnings: &mut Vec<String>,
@@ -308,7 +297,7 @@ fn load_rewrap_signer_trust_context(
 }
 
 fn build_rewrap_signer_requirement(
-    captured: &ArtifactSnapshot,
+    captured: &ReviewedTextFile,
     content: &EncContent,
     trust_ctx: &TrustContext,
     current_recipients: &[String],
@@ -324,7 +313,7 @@ fn build_rewrap_signer_requirement(
         return Ok(None);
     }
     Ok(Some(RewrapSignerRequirement {
-        file_path: captured.file_path.clone(),
+        file_path: captured.path().to_path_buf(),
         outcome,
     }))
 }

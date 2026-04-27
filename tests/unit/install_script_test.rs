@@ -221,7 +221,7 @@ printf '%s\n' "$dir"
     fn save_executable(&self, name: &str, content: &str) {
         let path = self.bin_dir.join(name);
         fs::write(&path, content).unwrap();
-        make_executable(&path);
+        set_executable_permissions(&path);
     }
 
     fn link_system_command(&self, name: &str) {
@@ -258,7 +258,7 @@ fn find_command(name: &str) -> Option<PathBuf> {
 }
 
 #[cfg(unix)]
-fn make_executable(path: &Path) {
+fn set_executable_permissions(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let mut permissions = fs::metadata(path).unwrap().permissions();
     permissions.set_mode(0o755);

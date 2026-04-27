@@ -7,8 +7,9 @@ use crate::app::trust::WorkspaceMemberSnapshot;
 use crate::model::identity::{Kid, MemberId};
 use crate::model::public_key::PublicKey;
 use crate::support::fs;
+use crate::support::fs::atomic;
 use crate::{Error, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn ensure_workspace_members_match_snapshot(
     workspace_root: &Path,
@@ -39,6 +40,71 @@ pub(crate) fn ensure_text_file_matches_snapshot_with_limit(
         &subject_display,
         max_bytes,
     )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReviewedTextFile {
+    path: PathBuf,
+    reviewed_content: Option<String>,
+    subject_label: String,
+    max_bytes: usize,
+}
+
+impl ReviewedTextFile {
+    pub(crate) fn load_existing(
+        path: &Path,
+        subject_label: &str,
+        max_bytes: usize,
+    ) -> Result<Self> {
+        let content = fs::load_text_with_limit(path, max_bytes, subject_label)?;
+        Ok(Self::from_optional_content(
+            path,
+            Some(content),
+            subject_label,
+            max_bytes,
+        ))
+    }
+
+    pub(crate) fn from_optional_content(
+        path: &Path,
+        reviewed_content: Option<String>,
+        subject_label: &str,
+        max_bytes: usize,
+    ) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            reviewed_content,
+            subject_label: subject_label.to_string(),
+            max_bytes,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) fn content(&self) -> Option<&str> {
+        self.reviewed_content.as_deref()
+    }
+
+    pub(crate) fn require_content(&self) -> Result<&str> {
+        self.content().ok_or_else(|| Error::InvalidOperation {
+            message: format!("{} content is required", self.subject_label),
+        })
+    }
+
+    pub(crate) fn ensure_current(&self) -> Result<()> {
+        ensure_text_file_matches_snapshot_with_limit(
+            &self.path,
+            self.content(),
+            &self.subject_label,
+            self.max_bytes,
+        )
+    }
+
+    pub(crate) fn save_replacement(&self, content: &str) -> Result<()> {
+        atomic::save_text(&self.path, content)
+    }
 }
 
 pub(crate) fn ensure_public_key_snapshot_matches(

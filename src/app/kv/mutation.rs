@@ -3,9 +3,7 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::review::{
-    ensure_text_file_matches_snapshot_with_limit, ensure_workspace_members_match_snapshot,
-};
+use crate::app::context::review::{ensure_workspace_members_match_snapshot, ReviewedTextFile};
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::{
@@ -22,7 +20,7 @@ use crate::feature::kv::types::KvInputEntry;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
-use crate::support::fs::{atomic, lock};
+use crate::support::fs::lock;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::{Error, Result};
 
@@ -43,6 +41,7 @@ pub(crate) struct MutationWriteTrustPlan<P> {
 struct MutationReviewSnapshot {
     target: KvFileTarget,
     file: ReviewedKvFileState,
+    file_snapshot: ReviewedTextFile,
     members: WorkspaceMemberSnapshot,
     recipients: KvRecipientSnapshot,
 }
@@ -76,9 +75,17 @@ impl MutationReviewSnapshot {
     ) -> Result<Self> {
         let recipients = build_recipient_snapshot(&workspace_members);
         let file = ReviewedKvFileState::load(&target, allow_missing)?;
+        let file_snapshot = ReviewedTextFile::from_optional_content(
+            &target.file_path,
+            file.as_content()
+                .map(|content| content.as_str().to_string()),
+            "KV file",
+            resolve_encrypted_artifact_read_limit(&target.file_path),
+        );
         Ok(Self {
             target,
             file,
+            file_snapshot,
             members: workspace_members,
             recipients,
         })
@@ -99,12 +106,7 @@ impl MutationReviewSnapshot {
     }
 
     fn ensure_file_matches(&self) -> Result<()> {
-        ensure_text_file_matches_snapshot_with_limit(
-            &self.target.file_path,
-            self.existing_content().map(KvEncContent::as_str),
-            "KV file",
-            resolve_encrypted_artifact_read_limit(&self.target.file_path),
-        )
+        self.file_snapshot.ensure_current()
     }
 
     fn existing_content(&self) -> Option<&KvEncContent> {
@@ -250,7 +252,7 @@ where
             &plan.review.recipients,
             &write_ctx,
         )?;
-        atomic::save_text(&plan.review.target.file_path, &encrypted)?;
+        plan.review.file_snapshot.save_replacement(&encrypted)?;
         Ok(KvWriteOutcome {
             message: success_message.map(ToOwned::to_owned),
         })

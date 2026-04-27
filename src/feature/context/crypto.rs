@@ -6,13 +6,15 @@
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 
+use crate::feature::context::expiry::VerifiedExpiresAt;
 use crate::feature::key::material::validate_private_key_material;
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
 use crate::feature::verify::public_key::{
     verify_public_key_with_attestation_context, KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
 };
-use crate::io::keystore::public_key_source::PublicKeySource;
+use crate::io::keystore::helpers::resolve_kid;
+use crate::io::keystore::public_key_source::{KeystorePublicKeySource, PublicKeySource};
 use crate::io::keystore::storage::{load_private_key, load_public_key};
 use crate::io::ssh::backend::SignatureBackend;
 use crate::model::common::WrapItem;
@@ -38,7 +40,7 @@ pub struct CryptoContext {
     pub private_key: VerifiedPrivateKey,
     pub signing_key: SigningKey,
     /// Key expiration timestamp (RFC 3339) from PrivateKeyProtected
-    pub expires_at: String,
+    pub expires_at: VerifiedExpiresAt,
     selected_kid_override: Option<String>,
     local_key_access: Option<LocalKeyAccess>,
 }
@@ -57,7 +59,7 @@ pub struct DecryptionResult<T> {
 
 pub(crate) struct PrivateKeyLoadResult {
     pub(crate) private_key: VerifiedPrivateKey,
-    pub(crate) expires_at: String,
+    pub(crate) expires_at: VerifiedExpiresAt,
 }
 
 pub(crate) enum DecryptionKeyResolution<'a> {
@@ -148,6 +150,45 @@ pub fn build_local_key_access(
     LocalKeyAccess::new(keystore_root, ssh_pubkey, ssh_backend)
 }
 
+pub fn load_crypto_context_from_keystore(
+    keystore_root: PathBuf,
+    member_id: &str,
+    explicit_kid: Option<&str>,
+    ssh_backend: Box<dyn SignatureBackend>,
+    ssh_pubkey: String,
+    workspace_path: Option<PathBuf>,
+    debug_enabled: bool,
+) -> Result<CryptoContext> {
+    let kid = resolve_kid(&keystore_root, member_id, explicit_kid)?;
+    let loaded = load_verified_private_key_from_keystore(
+        &keystore_root,
+        member_id,
+        &kid,
+        ssh_backend.as_ref(),
+        &ssh_pubkey,
+        debug_enabled,
+    )?;
+    let selected_kid_override = explicit_kid.map(|_| loaded.private_key.proof().kid().to_string());
+    let signing_key = build_signing_key(loaded.private_key.document())?;
+    let context = CryptoContext::new(
+        MemberId::try_from(member_id)?,
+        Kid::try_from(kid)?,
+        Box::new(KeystorePublicKeySource::new(keystore_root.clone())),
+        workspace_path,
+        loaded.private_key,
+        signing_key,
+        loaded.expires_at,
+    );
+    Ok(context.with_local_key_access(
+        selected_kid_override,
+        Some(build_local_key_access(
+            keystore_root,
+            ssh_pubkey,
+            ssh_backend,
+        )),
+    ))
+}
+
 pub(crate) fn load_verified_private_key_from_keystore(
     keystore_root: &Path,
     member_id: &str,
@@ -176,7 +217,9 @@ pub(crate) fn load_verified_private_key_from_keystore(
 
     Ok(PrivateKeyLoadResult {
         private_key,
-        expires_at: encrypted_private_key.protected.expires_at.clone(),
+        expires_at: VerifiedExpiresAt::from_verified_private_key_metadata(
+            encrypted_private_key.protected.expires_at.clone(),
+        ),
     })
 }
 
@@ -198,7 +241,7 @@ impl CryptoContext {
         workspace_path: Option<PathBuf>,
         private_key: VerifiedPrivateKey,
         signing_key: SigningKey,
-        expires_at: String,
+        expires_at: VerifiedExpiresAt,
     ) -> Self {
         Self {
             member_id,
@@ -239,7 +282,7 @@ impl CryptoContext {
                     private_key: &self.private_key,
                     info: DecryptionKeyInfo {
                         kid: kid.clone(),
-                        expires_at: self.expires_at.clone(),
+                        expires_at: self.expires_at.as_str().to_string(),
                         used_fallback: false,
                     },
                 });
@@ -262,7 +305,7 @@ impl CryptoContext {
                         private_key: Box::new(loaded.private_key),
                         info: DecryptionKeyInfo {
                             kid: kid.clone(),
-                            expires_at: loaded.expires_at,
+                            expires_at: loaded.expires_at.as_str().to_string(),
                             used_fallback: true,
                         },
                     });

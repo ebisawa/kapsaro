@@ -154,4 +154,8 @@ impl VerifiedRecipientKey {
     pub fn identity(&self) -> &AttestedIdentity {
         self.verified.identity()
     }
+
+    pub fn attested(&self) -> &VerifiedPublicKeyAttested {
+        &self.verified
+    }
 }

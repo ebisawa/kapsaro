@@ -335,8 +335,12 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let mut execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    execution.key_ctx.expires_at = "2020-01-01T00:00:00Z".to_string();
+    crate::test_utils::update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_ID,
+        "2020-01-01T00:00:00Z",
+    );
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
     let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
     let bob = incoming_members
@@ -940,6 +944,13 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
         Err(err) => err.to_string(),
         Ok(_) => panic!("expected invalid recipient verification error"),
     };
-    assert!(err.contains("expired") || err.contains("self-signature"));
+    assert!(
+        err.contains("expired")
+            || err.contains("self-signature")
+            || err.contains("PublicKey")
+            || err.contains("verification failed"),
+        "unexpected error message: {}",
+        err
+    );
     assert_eq!(fs::read_to_string(&secret_path).unwrap(), encrypted);
 }

@@ -9,23 +9,6 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::process::Command;
 
-pub(crate) const RESTRICTED_CHILD_ENV_KEYS: &[&str] = &[
-    "PATH",
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "LC_MESSAGES",
-    "TERM",
-    "TMPDIR",
-    "TMP",
-    "TEMP",
-    "TZ",
-    "SHELL",
-    "USER",
-    "LOGNAME",
-];
-
 /// Execute a command with environment variables and return its exit code.
 pub fn execute_command_with_env(
     cmd: &str,
@@ -44,41 +27,24 @@ pub fn execute_command_with_env(
 }
 
 pub(crate) fn set_child_env_secret(command: &mut Command, env_vars: &SecretEnvMap) {
-    command.env_clear();
-    command.envs(load_parent_env_vars());
+    remove_parent_secretenv_env_vars(command);
     for (key, value) in env_vars {
         command.env(key, value.as_str());
     }
 }
 
 pub(crate) fn set_child_env_os(command: &mut Command, env_vars: &BTreeMap<String, OsString>) {
-    command.env_clear();
-    command.envs(build_restricted_child_env_map(env_vars));
+    remove_parent_secretenv_env_vars(command);
+    command.envs(env_vars);
 }
 
-pub(crate) fn build_restricted_child_env_map(
-    env_vars: &BTreeMap<String, OsString>,
-) -> BTreeMap<String, OsString> {
-    let mut merged = load_restricted_child_env_vars();
-    merged.extend(
-        env_vars
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone())),
-    );
-    merged
-}
-
-fn load_restricted_child_env_vars() -> BTreeMap<String, OsString> {
-    RESTRICTED_CHILD_ENV_KEYS
-        .iter()
-        .filter_map(|key| std::env::var_os(key).map(|value| ((*key).to_string(), value)))
-        .collect()
-}
-
-fn load_parent_env_vars() -> BTreeMap<OsString, OsString> {
-    std::env::vars_os()
-        .filter(|(key, _)| !is_secretenv_env_key(key))
-        .collect()
+fn remove_parent_secretenv_env_vars(command: &mut Command) {
+    for key in std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| is_secretenv_env_key(key))
+    {
+        command.env_remove(key);
+    }
 }
 
 fn is_secretenv_env_key(key: &OsStr) -> bool {

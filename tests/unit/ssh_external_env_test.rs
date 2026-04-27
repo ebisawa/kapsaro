@@ -46,12 +46,19 @@ fn build_test_sshsig_armored(raw_sig: [u8; 64]) -> String {
 
 #[test]
 fn test_load_ssh_public_key_from_keygen_uses_sanitized_env_with_optional_socket() {
-    let _guard = EnvGuard::new(&["HOME", "PATH", "SSH_AUTH_SOCK", "SECRETENV_PRIVATE_KEY"]);
+    let _guard = EnvGuard::new(&[
+        "HOME",
+        "PATH",
+        "SSH_AUTH_SOCK",
+        "SECRETENV_PRIVATE_KEY",
+        "CUSTOM_PARENT_ENV",
+    ]);
     let fake_home = TempDir::new().unwrap();
     std::env::set_var("HOME", fake_home.path());
     std::env::set_var("PATH", "/usr/bin");
     std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
     std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
+    std::env::set_var("CUSTOM_PARENT_ENV", "parent-value");
 
     let (_script_dir, script_path) = setup_env_dump_script();
     let output = DefaultSshKeygen::new(&script_path)
@@ -60,17 +67,25 @@ fn test_load_ssh_public_key_from_keygen_uses_sanitized_env_with_optional_socket(
 
     assert!(output.contains("PATH=/usr/bin"));
     assert!(output.contains("SSH_AUTH_SOCK=/tmp/agent.sock"));
+    assert!(output.contains("CUSTOM_PARENT_ENV=parent-value"));
     assert!(!output.contains("SECRETENV_PRIVATE_KEY=sensitive"));
 }
 
 #[test]
 fn test_default_ssh_add_sets_resolved_socket_without_inheriting_secret_env() {
-    let _guard = EnvGuard::new(&["HOME", "PATH", "SSH_AUTH_SOCK", "SECRETENV_PRIVATE_KEY"]);
+    let _guard = EnvGuard::new(&[
+        "HOME",
+        "PATH",
+        "SSH_AUTH_SOCK",
+        "SECRETENV_PRIVATE_KEY",
+        "CUSTOM_PARENT_ENV",
+    ]);
     let fake_home = TempDir::new().unwrap();
     std::env::set_var("HOME", fake_home.path());
     std::env::set_var("PATH", "/usr/bin");
     std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
     std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
+    std::env::set_var("CUSTOM_PARENT_ENV", "parent-value");
 
     let (_script_dir, script_path) = setup_env_dump_script();
     let ssh_add = DefaultSshAdd::new(script_path);
@@ -78,6 +93,7 @@ fn test_default_ssh_add_sets_resolved_socket_without_inheriting_secret_env() {
 
     assert!(output.contains("PATH=/usr/bin"));
     assert!(output.contains("SSH_AUTH_SOCK=/tmp/agent.sock"));
+    assert!(output.contains("CUSTOM_PARENT_ENV=parent-value"));
     assert!(!output.contains("SECRETENV_PRIVATE_KEY=sensitive"));
 }
 

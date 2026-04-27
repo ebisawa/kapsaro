@@ -7,6 +7,7 @@ use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{enforce_recipients_trust_with_additional, TrustContext};
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
+use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::model::public_key::PublicKey;
 use crate::{Error, Result};
 
@@ -15,11 +16,17 @@ use super::types::{IncomingPromotionCandidate, RewrapBatchPlan, RewrapTrustPlan}
 pub(crate) fn build_rewrap_trust(
     plan: &RewrapBatchPlan,
     accepted_promotions: &[IncomingPromotionCandidate],
+    debug: bool,
 ) -> Result<RewrapTrustPlan> {
     let trust_ctx = &plan.pre_promotion_trust;
     let (post_promotion_members, accepted_promotion_candidates) =
         load_post_promotion_members(trust_ctx, accepted_promotions)?;
-    let recipient_expiry_warnings = collect_recipient_key_expiry_warnings(&post_promotion_members)?;
+    let verified_recipients = verify_recipient_public_keys(&post_promotion_members, debug)?;
+    let recipient_expiry_warnings = collect_recipient_key_expiry_warnings(&verified_recipients)?;
+    let post_promotion_members = verified_recipients
+        .iter()
+        .map(|recipient| recipient.document().clone())
+        .collect::<Vec<_>>();
     let mut review_ctx = trust_ctx.clone();
     review_ctx.active_members_by_kid = build_post_promotion_index(&post_promotion_members)?;
     let accepted_known_keys = accepted_promotion_candidates

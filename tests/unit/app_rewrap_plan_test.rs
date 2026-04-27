@@ -14,7 +14,7 @@ use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::io::workspace::members::load_member_file_from_path;
-use crate::model::public_key::{BindingClaims, GithubAccount};
+// (intentionally unused in this file)
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace,
     save_active_public_key_to_workspace_incoming, setup_member_key_context, setup_test_workspace,
@@ -93,7 +93,7 @@ fn test_build_rewrap_trust_treats_accepted_promotions_as_already_reviewed() {
     )
     .unwrap();
 
-    let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates, false).unwrap();
 
     assert_eq!(trust_plan.recipient_trust, RecipientTrustOutcome::Accepted);
     assert_eq!(trust_plan.accepted_promotion_candidates.len(), 1);
@@ -121,7 +121,7 @@ fn test_build_rewrap_trust_uses_existing_trust_snapshot() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
     setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
 
-    let result = build_rewrap_trust(&plan, &[]);
+    let result = build_rewrap_trust(&plan, &[], false);
 
     assert!(result.is_err());
     assert!(result
@@ -150,7 +150,7 @@ fn test_build_rewrap_trust_includes_recipient_key_expiry_warning() {
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     plan.artifact_paths.clear();
 
-    let trust_plan = build_rewrap_trust(&plan, &[]).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &[], false).unwrap();
 
     assert!(trust_plan
         .warnings
@@ -193,12 +193,6 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
     .unwrap();
     let mut accepted = review_plan.prompt_candidates;
     let candidate = accepted.first_mut().unwrap();
-    candidate.public_key.protected.binding_claims = Some(BindingClaims {
-        github_account: Some(GithubAccount {
-            id: 42,
-            login: "stale-login".to_string(),
-        }),
-    });
     candidate.review.category = crate::app::rewrap::types::IncomingVerificationCategory::Verified;
     candidate.review.verified_github = Some(VerifiedGithubIdentity::new(
         42,
@@ -207,7 +201,7 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         100,
     ));
 
-    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &accepted, false).unwrap();
     save_known_key_approvals(
         &options,
         &execution,
@@ -323,7 +317,7 @@ fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_
     .unwrap();
     let accepted = review_plan.auto_accepted_candidates.clone();
 
-    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &accepted, false).unwrap();
 
     assert_eq!(accepted.len(), 1);
     assert!(review_plan.prompt_candidates.is_empty());

@@ -89,9 +89,12 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob_kid = find_kid(&active_members, BOB_MEMBER_ID);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let mut execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
-    execution.key_ctx.expires_at = "2020-01-01T00:00:00Z".to_string();
+    crate::test_utils::update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_ID,
+        "2020-01-01T00:00:00Z",
+    );
+    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
 
     let result = save_member_approvals(
         &options,

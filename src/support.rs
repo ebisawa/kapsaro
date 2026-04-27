@@ -4,6 +4,7 @@
 //! Shared support utilities.
 
 pub mod codec;
+pub mod display;
 pub mod fs;
 pub mod json_limits;
 pub mod kid;

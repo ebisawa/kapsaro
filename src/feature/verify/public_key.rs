@@ -16,6 +16,7 @@ use crate::model::public_key::{
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
 use crate::support::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
+use crate::support::display::sanitize_display_field;
 use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
 use crate::{Error, Result};
 use ed25519_dalek::{Verifier, VerifyingKey};
@@ -142,7 +143,7 @@ pub fn verify_public_key_for_verification_context(
     let verified_public_key =
         verify_public_key_with_attestation_context(public_key, debug, context)?;
     let mut warnings = Vec::new();
-    if let Some(warning) = build_public_key_expiry_warning(verified_public_key.document())? {
+    if let Some(warning) = build_public_key_expiry_warning(&verified_public_key)? {
         warnings.push(warning);
     }
     Ok(VerifiedPublicKeyForVerification {
@@ -162,12 +163,12 @@ pub fn verify_recipient_public_keys(
 ) -> Result<Vec<VerifiedRecipientKey>> {
     keys.iter()
         .map(|key| {
-            enforce_recipient_key_not_expired(key)?;
             let attested = verify_public_key_with_attestation_context(
                 key,
                 debug,
                 WORKSPACE_ACTIVE_MEMBER_RECIPIENT_CONTEXT,
             )?;
+            enforce_recipient_key_not_expired(&attested)?;
             Ok(VerifiedRecipientKey::new(attested, ExpiryProof::new()))
         })
         .collect()
@@ -214,7 +215,10 @@ fn validate_derived_kid(public_key: &PublicKey) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn build_public_key_expiry_warning(doc: &PublicKey) -> Result<Option<String>> {
+pub(crate) fn build_public_key_expiry_warning(
+    doc: &VerifiedPublicKeyAttested,
+) -> Result<Option<String>> {
+    let doc = doc.document();
     if doc.protected.expires_at.is_empty() {
         return Ok(None);
     }
@@ -225,11 +229,14 @@ pub(crate) fn build_public_key_expiry_warning(doc: &PublicKey) -> Result<Option<
             days_remaining,
         } => Ok(Some(format!(
             "PublicKey for '{}' expires in {} days (expires_at: {})",
-            doc.protected.member_id, days_remaining, expires_at
+            sanitize_display_field(&doc.protected.member_id),
+            days_remaining,
+            sanitize_display_field(&expires_at)
         ))),
         KeyExpiryStatus::Expired { expires_at } => Ok(Some(format!(
             "PublicKey for '{}' has expired (expires_at: {})",
-            doc.protected.member_id, expires_at
+            sanitize_display_field(&doc.protected.member_id),
+            sanitize_display_field(&expires_at)
         ))),
     }
 }

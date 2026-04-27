@@ -18,6 +18,17 @@ Good fit for teams that want to:
 The goal of this project is not only to avoid distributing secrets in plaintext.  
 It is also to make it easier to reason about who a secret is shared with, whether it has been tampered with, and how membership changes or key updates should be applied, in a way that fits naturally with Git.
 
+## Security Highlights
+
+`secretenv` encrypts values that should stay private, such as access tokens, API keys, and certificates. By storing the encrypted results in Git, teams can manage those secrets in a shared repository without committing plaintext `.env` files or key files.
+
+The design is built around four ideas:
+
+- encrypt secrets before they are stored in the repository, so a repository shared by many members can still carry sensitive values safely
+- use public-key encryption with a public/private key pair for each member, avoiding the need to distribute and protect one shared team encryption key
+- require no dedicated server or SaaS; encryption, decryption, verification, and recipient updates are designed to work offline, even without network access
+- represent secret updates and recipient changes as Git file changes, so teams can review and merge them through their existing PR workflow
+
 ## Install
 
 ### Homebrew (macOS / Linux)
@@ -99,11 +110,6 @@ If you want the security model and design details:
 
 - [Security Design (English)](guides/security_design_en.md)
 - [Security Design (Japanese)](guides/security_design_ja.md)
-
-If you want to learn about the local trust store:
-
-- [Local Trust Store Update (English)](guides/trust_store_update_en.md)
-- [Local Trust Store Update (Japanese)](guides/trust_store_update_ja.md)
 
 ## Status
 

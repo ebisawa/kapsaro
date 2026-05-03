@@ -20,16 +20,16 @@ use crate::feature::trust::signature::sign_trust_store;
 use crate::io::keystore::member::find_active_key_document;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
-use crate::model::identifiers::format::TRUST_LOCAL_V2;
+use crate::model::identifiers::format::TRUST_LOCAL_V3;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
 };
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
-    kid, member_id, save_active_public_key_to_workspace, save_public_key,
+    kid, member_handle, save_active_public_key_to_workspace, save_public_key,
     setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 
@@ -46,7 +46,7 @@ fn build_test_trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustCo
     }
 }
 
-fn build_public_key(member_id: &str, kid: &str, sig_x: &str) -> PublicKey {
+fn build_public_key(member_handle: &str, kid: &str, sig_x: &str) -> PublicKey {
     let kid = match kid {
         "KID1AAAA1111BBBB2222CCCC3333DDDD" => VALID_TEST_KID,
         _ => kid,
@@ -63,8 +63,8 @@ fn build_public_key(member_id: &str, kid: &str, sig_x: &str) -> PublicKey {
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@4".to_string(),
-            member_id: member_id.to_string(),
+            format: "secretenv.public.key@5".to_string(),
+            subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
@@ -98,14 +98,14 @@ fn build_public_key(member_id: &str, kid: &str, sig_x: &str) -> PublicKey {
     }
 }
 
-fn build_known_key(kid: &str, member_id: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_handle: &str) -> KnownKey {
     let kid = match kid {
         "KID1AAAA1111BBBB2222CCCC3333DDDD" => VALID_TEST_KID,
         _ => kid,
     };
     KnownKey {
         kid: kid.to_string(),
-        member_id: member_id.to_string(),
+        subject_handle: member_handle.to_string(),
         approved_at: "2026-01-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -156,7 +156,7 @@ fn test_enforce_recipients_trust_self_trust_set_skips_local_nonactive_self_key()
     match result {
         RecipientTrustOutcome::NeedsManualApproval(pending) => {
             assert_eq!(pending.len(), 1);
-            assert_eq!(pending[0].member_id, "bob@example.com");
+            assert_eq!(pending[0].member_handle, "bob@example.com");
         }
         other => panic!("unexpected outcome: {:?}", other),
     }
@@ -164,10 +164,10 @@ fn test_enforce_recipients_trust_self_trust_set_skips_local_nonactive_self_key()
 
 #[test]
 fn test_command_trust_snapshot_loads_local_nonactive_self_key() {
-    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let workspace = dir.path().join("workspace");
     let keystore_root = dir.path().join("keys");
-    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_ID, &keystore_root)
+    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("expected active key fixture")
         .public_key;
@@ -176,7 +176,7 @@ fn test_command_trust_snapshot_loads_local_nonactive_self_key() {
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
     save_public_key(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &local_nonactive.protected.kid,
         &local_nonactive,
     )
@@ -186,7 +186,7 @@ fn test_command_trust_snapshot_loads_local_nonactive_self_key() {
     let snapshot = CommandTrustSnapshot::<EncryptPolicy>::load(
         &options,
         &workspace,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         None,
         false,
     )
@@ -202,11 +202,11 @@ fn test_command_trust_snapshot_loads_local_nonactive_self_key() {
 
 #[test]
 fn test_command_trust_snapshot_defers_unreferenced_local_self_key_loading() {
-    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let workspace = dir.path().join("workspace");
     let keystore_root = dir.path().join("keys");
     let broken_kid = "KCD3AAAA1111BBBB2222CCCC3333DDDD";
-    let broken_dir = keystore_root.join(ALICE_MEMBER_ID).join(broken_kid);
+    let broken_dir = keystore_root.join(ALICE_MEMBER_HANDLE).join(broken_kid);
     fs::create_dir_all(&broken_dir).unwrap();
     fs::write(broken_dir.join("public.json"), b"{not-json").unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
@@ -214,12 +214,12 @@ fn test_command_trust_snapshot_defers_unreferenced_local_self_key_loading() {
     let snapshot = CommandTrustSnapshot::<EncryptPolicy>::load(
         &options,
         &workspace,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         None,
         false,
     )
     .unwrap();
-    let active = find_active_key_document(ALICE_MEMBER_ID, &keystore_root)
+    let active = find_active_key_document(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("expected active key fixture");
     let identity = build_signer_identity(&active.public_key).unwrap();
@@ -233,10 +233,10 @@ fn test_command_trust_snapshot_defers_unreferenced_local_self_key_loading() {
 
 #[test]
 fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
-    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let workspace = dir.path().join("workspace");
     let keystore_root = dir.path().join("keys");
-    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_ID, &keystore_root)
+    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("expected active key fixture")
         .public_key;
@@ -245,7 +245,7 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
     save_public_key(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &local_nonactive.protected.kid,
         &local_nonactive,
     )
@@ -254,13 +254,13 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
     let snapshot = CommandTrustSnapshot::<DecryptPolicy>::load(
         &options,
         &workspace,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         None,
         false,
     )
     .unwrap();
     let proof = SignatureVerificationProof::new_with_signer_public_key(
-        local_nonactive.protected.member_id.clone(),
+        local_nonactive.protected.subject_handle.clone(),
         local_nonactive.protected.kid.clone(),
         local_nonactive.clone(),
         VerifyingKeySource::SignerPubEmbedded,
@@ -280,10 +280,10 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
 
 #[test]
 fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
-    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let workspace = dir.path().join("workspace");
     let keystore_root = dir.path().join("keys");
-    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_ID, &keystore_root)
+    let mut local_nonactive = find_active_key_document(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("expected active key fixture")
         .public_key;
@@ -292,17 +292,22 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
     save_public_key(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &local_nonactive.protected.kid,
         &local_nonactive,
     )
     .unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
-    let snapshot =
-        CommandTrustSnapshot::<RunPolicy>::load(&options, &workspace, ALICE_MEMBER_ID, None, false)
-            .unwrap();
+    let snapshot = CommandTrustSnapshot::<RunPolicy>::load(
+        &options,
+        &workspace,
+        ALICE_MEMBER_HANDLE,
+        None,
+        false,
+    )
+    .unwrap();
     let proof = SignatureVerificationProof::new_with_signer_public_key(
-        local_nonactive.protected.member_id.clone(),
+        local_nonactive.protected.subject_handle.clone(),
         local_nonactive.protected.kid.clone(),
         local_nonactive.clone(),
         VerifyingKeySource::SignerPubEmbedded,
@@ -322,14 +327,14 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
 
 #[test]
 fn test_load_read_trust_context_allows_expired_active_member_with_warning() {
-    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let workspace = dir.path().join("workspace");
-    update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_ID, "2020-01-01T00:00:00Z");
-    save_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
+    update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_HANDLE, "2020-01-01T00:00:00Z");
+    save_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_HANDLE).unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
 
     let loaded =
-        load_read_trust_context(&options, &workspace, ALICE_MEMBER_ID, None, false).unwrap();
+        load_read_trust_context(&options, &workspace, ALICE_MEMBER_HANDLE, None, false).unwrap();
 
     assert_eq!(loaded.trust_ctx.active_members_by_kid.len(), 1);
     assert!(loaded
@@ -340,16 +345,16 @@ fn test_load_read_trust_context_allows_expired_active_member_with_warning() {
 
 #[test]
 fn test_write_trust_snapshot_rejects_expired_active_member() {
-    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let workspace = dir.path().join("workspace");
-    update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_ID, "2020-01-01T00:00:00Z");
-    save_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_ID).unwrap();
+    update_active_private_key_expires_at(dir.path(), ALICE_MEMBER_HANDLE, "2020-01-01T00:00:00Z");
+    save_active_public_key_to_workspace(dir.path(), &workspace, ALICE_MEMBER_HANDLE).unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
 
     let error = CommandTrustSnapshot::<EncryptPolicy>::load(
         &options,
         &workspace,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         None,
         false,
     )
@@ -367,7 +372,7 @@ fn test_enforce_signer_trust_needs_known_key_approval_interactive() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let judgment = TrustJudgment::NeedsApproval {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
     };
 
@@ -382,7 +387,7 @@ fn test_enforce_signer_trust_needs_known_key_approval_interactive() {
 
     match result {
         SignerTrustOutcome::NeedsKnownKeyApproval(candidate) => {
-            assert_eq!(candidate.member_id, "bob@example.com");
+            assert_eq!(candidate.member_handle, "bob@example.com");
             assert_eq!(candidate.kid, VALID_TEST_KID);
             assert_eq!(candidate.github_id, None);
             assert_eq!(candidate.github_login.as_deref(), None);
@@ -401,7 +406,7 @@ fn test_enforce_signer_trust_needs_known_key_approval_non_interactive_fails() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let judgment = TrustJudgment::NeedsApproval {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
     };
 
@@ -425,7 +430,7 @@ fn test_enforce_signer_trust_strict_no_non_interactive_accepted() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let judgment = TrustJudgment::NeedsApproval {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
     };
 
@@ -450,7 +455,7 @@ fn test_enforce_signer_trust_strict_no_interactive_accepted() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let judgment = TrustJudgment::NeedsApproval {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
     };
 
@@ -495,7 +500,7 @@ fn test_enforce_signer_trust_non_member_decrypt_interactive() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let judgment = TrustJudgment::NonMember {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
     };
     let recipients = vec![
@@ -517,7 +522,7 @@ fn test_enforce_signer_trust_non_member_decrypt_interactive() {
             candidate,
             current_recipients,
         } => {
-            assert_eq!(candidate.member_id, "ex-member@example.com");
+            assert_eq!(candidate.member_handle, "ex-member@example.com");
             assert_eq!(current_recipients, recipients);
         }
         other => panic!("unexpected outcome: {:?}", other),
@@ -533,7 +538,7 @@ fn test_enforce_signer_trust_non_member_forbidden_command_fails() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let judgment = TrustJudgment::NonMember {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
     };
 
@@ -551,7 +556,7 @@ fn test_evaluate_signer_trust_with_proof_uses_embedded_signer_public_key() {
         "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     );
     let proof = SignatureVerificationProof::new_with_signer_public_key(
-        public_key.protected.member_id.clone(),
+        public_key.protected.subject_handle.clone(),
         public_key.protected.kid.clone(),
         public_key.clone(),
         VerifyingKeySource::SignerPubEmbedded,
@@ -568,7 +573,7 @@ fn test_evaluate_signer_trust_with_proof_uses_embedded_signer_public_key() {
 
     match result {
         SignerTrustOutcome::NeedsNonMemberAcceptance { candidate, .. } => {
-            assert_eq!(candidate.member_id, public_key.protected.member_id);
+            assert_eq!(candidate.member_handle, public_key.protected.subject_handle);
             assert_eq!(candidate.kid, public_key.protected.kid);
         }
         other => panic!("unexpected outcome: {:?}", other),
@@ -604,9 +609,9 @@ fn test_enforce_signer_trust_kid_integrity_anomaly() {
         "alice@example.com",
     ));
     let judgment = TrustJudgment::KnownKeyIntegrityAnomaly {
-        member_id: member_id(public_key.protected.member_id.clone()),
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
         kid: kid(public_key.protected.kid.clone()),
-        known_member_id: member_id("alice@example.com"),
+        known_member_handle: member_handle("alice@example.com"),
     };
 
     let result = enforce_signer_trust(
@@ -618,7 +623,7 @@ fn test_enforce_signer_trust_kid_integrity_anomaly() {
     );
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("member_id"));
+    assert!(result.unwrap_err().to_string().contains("subject_handle"));
 }
 
 #[test]
@@ -644,7 +649,7 @@ fn test_enforce_recipients_trust_interactive_requires_manual_approval() {
     match result {
         RecipientTrustOutcome::NeedsManualApproval(pending) => {
             assert_eq!(pending.len(), 1);
-            assert_eq!(pending[0].member_id, "bob@example.com");
+            assert_eq!(pending[0].member_handle, "bob@example.com");
         }
         other => panic!("unexpected outcome: {:?}", other),
     }
@@ -687,7 +692,7 @@ fn test_enforce_recipients_trust_detects_kid_integrity_mismatch() {
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("candidate has member_id 'bob@example.com'"));
+        .contains("candidate has member_handle 'bob@example.com'"));
 }
 
 #[test]
@@ -763,23 +768,23 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
 
     let (dir, _workspace) =
         crate::test_utils::setup_test_workspace_from_fixtures(&["alice@example.com"]);
-    let owner_member_id = "alice@example.com";
-    let key_ctx = crate::test_utils::setup_member_key_context(&dir, owner_member_id, None);
+    let owner_handle = "alice@example.com";
+    let key_ctx = crate::test_utils::setup_member_key_context(&dir, owner_handle, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V2.to_string(),
-        owner_member_id: owner_member_id.to_string(),
+        format: TRUST_LOCAL_V3.to_string(),
+        owner_handle: owner_handle.to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-01-01T00:00:00Z".to_string(),
-        known_keys: vec![build_known_key(&key_ctx.kid, owner_member_id)],
+        known_keys: vec![build_known_key(&key_ctx.kid, owner_handle)],
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let trust_path = get_trust_store_file_path(dir.path(), owner_member_id);
+    let trust_path = get_trust_store_file_path(dir.path(), owner_handle);
     save_trust_store(&trust_path, &document).unwrap();
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let options = build_test_command_options(dir.path(), None);
 
-    let result = list_known_keys(&options, owner_member_id).unwrap();
+    let result = list_known_keys(&options, owner_handle).unwrap();
 
     assert!(!result.warnings.is_empty());
     assert!(result
@@ -791,7 +796,7 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
 #[test]
 fn test_manual_approval_result_fields() {
     let result = MemberApprovalResult {
-        member_id: "ssh-only@example.com".to_string(),
+        member_handle: "ssh-only@example.com".to_string(),
         kid: "KID1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
         verified: false,
         approved: true,

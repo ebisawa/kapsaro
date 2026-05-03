@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::io::workspace::setup::{
@@ -76,18 +76,18 @@ fn test_check_workspace_has_active_members_detects_json_member_file() {
 
 #[test]
 fn test_save_member_document_writes_public_key_json() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kid = load_active_kid(ALICE_MEMBER_ID, &keystore_root)
+    let kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("Expected active kid");
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
     let member_file = temp_dir
         .path()
         .join("workspace")
         .join("members")
         .join("active")
-        .join(format!("{ALICE_MEMBER_ID}.json"));
+        .join(format!("{ALICE_MEMBER_HANDLE}.json"));
     std::fs::create_dir_all(member_file.parent().unwrap()).unwrap();
 
     save_member_document(&member_file, &public_key).unwrap();
@@ -95,8 +95,8 @@ fn test_save_member_document_writes_public_key_json() {
     let saved: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&member_file).unwrap()).unwrap();
     assert_eq!(
-        saved["protected"]["member_id"].as_str().unwrap(),
-        ALICE_MEMBER_ID
+        saved["protected"]["subject_handle"].as_str().unwrap(),
+        ALICE_MEMBER_HANDLE
     );
     assert_eq!(saved["protected"]["kid"].as_str().unwrap(), kid);
 }

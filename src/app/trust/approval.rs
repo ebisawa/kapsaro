@@ -14,7 +14,7 @@ use crate::app::trust::TrustApprovalCandidate;
 use crate::feature::trust::known_keys::add_known_key;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::io::verify_online::VerifiedGithubIdentity;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount,
 };
@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ApprovedKnownKey {
-    member_id: MemberId,
+    member_handle: MemberHandle,
     kid: Kid,
     github_id: Option<u64>,
     github_login: Option<String>,
@@ -34,22 +34,23 @@ pub(crate) type ApprovalSaveResult = TrustMutationResult<usize>;
 
 impl ApprovedKnownKey {
     pub(crate) fn from_review(
-        member_id: &str,
+        member_handle: &str,
         kid: &str,
         attestor_pub: Option<String>,
         verified_github: Option<&VerifiedGithubIdentity>,
     ) -> Self {
         match verified_github {
             Some(verified_github) => {
-                Self::verified_github(member_id, kid, attestor_pub, verified_github)
+                Self::verified_github(member_handle, kid, attestor_pub, verified_github)
             }
-            None => Self::manual_review(member_id, kid, attestor_pub),
+            None => Self::manual_review(member_handle, kid, attestor_pub),
         }
     }
 
-    fn manual_review(member_id: &str, kid: &str, attestor_pub: Option<String>) -> Self {
+    fn manual_review(member_handle: &str, kid: &str, attestor_pub: Option<String>) -> Self {
         Self {
-            member_id: MemberId::try_from(member_id).expect("approved member_id must be valid"),
+            member_handle: MemberHandle::try_from(member_handle)
+                .expect("approved member_handle must be valid"),
             kid: Kid::try_from(kid).expect("approved kid must be valid"),
             github_id: None,
             github_login: None,
@@ -58,13 +59,14 @@ impl ApprovedKnownKey {
     }
 
     fn verified_github(
-        member_id: &str,
+        member_handle: &str,
         kid: &str,
         attestor_pub: Option<String>,
         verified_github: &VerifiedGithubIdentity,
     ) -> Self {
         Self {
-            member_id: MemberId::try_from(member_id).expect("approved member_id must be valid"),
+            member_handle: MemberHandle::try_from(member_handle)
+                .expect("approved member_handle must be valid"),
             kid: Kid::try_from(kid).expect("approved kid must be valid"),
             github_id: Some(verified_github.id),
             github_login: Some(verified_github.login.clone()),
@@ -75,7 +77,7 @@ impl ApprovedKnownKey {
     fn to_known_key_with_approved_at(&self, approved_at: String) -> KnownKey {
         KnownKey {
             kid: self.kid.to_string(),
-            member_id: self.member_id.to_string(),
+            subject_handle: self.member_handle.to_string(),
             approved_at,
             approved_via: KnownKeyApprovalVia::ManualReview,
             evidence: build_evidence(
@@ -95,7 +97,7 @@ impl ApprovedKnownKey {
 impl From<&TrustApprovalCandidate> for ApprovedKnownKey {
     fn from(candidate: &TrustApprovalCandidate) -> Self {
         Self::from_review(
-            &candidate.member_id,
+            &candidate.member_handle,
             &candidate.kid,
             candidate.attestor_pub.clone(),
             candidate.verified_github.as_ref(),
@@ -105,7 +107,7 @@ impl From<&TrustApprovalCandidate> for ApprovedKnownKey {
 
 impl From<&ApprovedKnownKey> for KnownKeyIdentity {
     fn from(value: &ApprovedKnownKey) -> Self {
-        Self::new(value.member_id.clone(), value.kid.clone())
+        Self::new(value.member_handle.clone(), value.kid.clone())
     }
 }
 
@@ -128,7 +130,7 @@ pub(crate) fn save_known_key_approvals(
 
             for approval in approvals {
                 let identity = KnownKeyIdentity::from(approval);
-                enforce_non_self_approval(&execution.member_id, identity.member_id())?;
+                enforce_non_self_approval(&execution.member_handle, identity.member_handle())?;
                 let known_key = approval.clone().into_known_key()?;
                 if add_known_key(&mut protected.known_keys, known_key)? {
                     added += 1;
@@ -143,12 +145,12 @@ pub(crate) fn save_known_key_approvals(
     )
 }
 
-fn enforce_non_self_approval(owner_member_id: &str, member_id: &str) -> Result<()> {
-    if member_id == owner_member_id {
+fn enforce_non_self_approval(owner_handle: &str, member_handle: &str) -> Result<()> {
+    if member_handle == owner_handle {
         return Err(Error::InvalidOperation {
             message: format!(
                 "Self member '{}' must not be stored in known_keys",
-                member_id
+                member_handle
             ),
         });
     }

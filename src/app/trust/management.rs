@@ -36,7 +36,7 @@ pub(crate) fn remove_known_key_command(
             let removed = remove_known_key(&mut protected.known_keys, kid)?;
             Ok(TrustStoreMutation {
                 value: RemovedKnownKey {
-                    member_id: removed.member_id,
+                    member_handle: removed.subject_handle,
                     kid: removed.kid,
                 },
                 changed: true,
@@ -48,12 +48,12 @@ pub(crate) fn remove_known_key_command(
 /// List purge candidates (entries older than threshold).
 pub(crate) fn list_purge_candidates(
     options: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
     older_than_timestamp: OffsetDateTime,
 ) -> Result<TrustListResult> {
-    let (_, loaded) = load_optional_trust_store_for_member(options, member_id)?;
+    let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
     let loaded = loaded.ok_or_else(|| Error::NotFound {
-        message: format!("Trust store not found for '{}'", member_id),
+        message: format!("Trust store not found for '{}'", member_handle),
     })?;
 
     let items = loaded

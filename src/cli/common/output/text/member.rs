@@ -23,12 +23,12 @@ pub(crate) fn print_member_sections(view: &MemberListView<'_>) {
 
 fn format_member_list_lines(view: &MemberListView<'_>) -> Vec<String> {
     let mut lines = Vec::new();
-    let member_id_width = member_list_id_width(view);
-    push_member_list_section(&mut lines, "Active:", &view.active, member_id_width);
+    let member_handle_width = member_list_id_width(view);
+    push_member_list_section(&mut lines, "Active:", &view.active, member_handle_width);
 
     if !view.incoming.is_empty() {
         lines.push(String::new());
-        push_member_list_section(&mut lines, "Incoming:", &view.incoming, member_id_width);
+        push_member_list_section(&mut lines, "Incoming:", &view.incoming, member_handle_width);
     }
 
     lines
@@ -38,7 +38,7 @@ fn member_list_id_width(view: &MemberListView<'_>) -> usize {
     view.active
         .iter()
         .chain(view.incoming.iter())
-        .map(|member| member.member_id.len())
+        .map(|member| member.member_handle.len())
         .max()
         .unwrap_or(0)
 }
@@ -47,15 +47,15 @@ fn push_member_list_section(
     lines: &mut Vec<String>,
     title: &str,
     members: &[crate::cli::common::output::member::view::MemberListEntryView<'_>],
-    member_id_width: usize,
+    member_handle_width: usize,
 ) {
     lines.push(title.to_string());
     for member in members {
         lines.push(format!(
             "  {:<width$}  {}",
-            member.member_id,
+            member.member_handle,
             format_kid_display_lossy(member.kid),
-            width = member_id_width
+            width = member_handle_width
         ));
     }
 }
@@ -77,9 +77,9 @@ pub(crate) fn print_member_verification_results(view: &MemberVerificationResults
     let ng = Style::new().red().apply_to("\u{2717}");
     for result in &view.results {
         if result.verified {
-            eprintln!("{} {}: {}", ok, result.member_id, result.message);
+            eprintln!("{} {}: {}", ok, result.member_handle, result.message);
         } else {
-            eprintln!("{} {}: {}", ng, result.member_id, result.message);
+            eprintln!("{} {}: {}", ng, result.member_handle, result.message);
         }
         if let Some(fp) = result.fingerprint {
             eprintln!("  SSH key fingerprint: {}", fp);
@@ -99,12 +99,12 @@ pub(crate) fn print_member_show(member: &MemberShowView<'_>) {
     }
 }
 
-pub(crate) fn print_member_add_summary(member_id: &str) {
-    eprintln!("Added member '{}' to incoming/", member_id);
+pub(crate) fn print_member_add_summary(member_handle: &str) {
+    eprintln!("Added member '{}' to incoming/", member_handle);
 }
 
-pub(crate) fn print_member_remove_summary(member_id: &str) {
-    eprintln!("Removed member '{}'", member_id);
+pub(crate) fn print_member_remove_summary(member_handle: &str) {
+    eprintln!("Removed member '{}'", member_handle);
 }
 
 pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>) {
@@ -122,7 +122,7 @@ pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>
         } else {
             format!("{}", ng_style.apply_to("\u{2717} not verified"))
         };
-        eprintln!("{} {}: {}", status, result.member_id, result.message);
+        eprintln!("{} {}: {}", status, result.member_handle, result.message);
         print_candidate_review(&result.review_candidate);
     }
     let approved_count = view.results.iter().filter(|result| result.approved).count();
@@ -134,7 +134,7 @@ pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>
 }
 
 fn format_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
-    let mut lines = vec![format_member_show_header(member.member_id)];
+    let mut lines = vec![format_member_show_header(member.member_handle)];
 
     push_member_show_section(
         &mut lines,
@@ -164,11 +164,11 @@ fn format_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
     lines
 }
 
-fn format_member_show_header(member_id: &str) -> String {
+fn format_member_show_header(member_handle: &str) -> String {
     format!(
         "{} {}",
         MEMBER_SHOW_BULLET,
-        Style::new().bold().apply_to(member_id)
+        Style::new().bold().apply_to(member_handle)
     )
 }
 

@@ -14,10 +14,10 @@ impl CryptoContext {
     pub(crate) fn select_local_decryption_key<'a>(
         &'a self,
         wrap_items: &[WrapItem],
-        member_id: &str,
+        member_handle: &str,
         debug_enabled: bool,
     ) -> Result<DecryptionKeyResolution<'a>> {
-        let wrap_kids = collect_self_wrap_kids(wrap_items, member_id);
+        let wrap_kids = collect_self_wrap_kids(wrap_items, member_handle);
         let candidates =
             build_candidate_kids(&wrap_kids, self.selected_kid_override.as_deref(), &self.kid);
 
@@ -39,7 +39,7 @@ impl CryptoContext {
 
             match load_verified_private_key_from_keystore(
                 &local_key_access.keystore_root,
-                member_id,
+                member_handle,
                 kid,
                 local_key_access.ssh_backend.as_ref(),
                 &local_key_access.ssh_pubkey,
@@ -61,17 +61,17 @@ impl CryptoContext {
         }
 
         Err(build_missing_wrap_error(
-            member_id,
+            member_handle,
             self.selected_kid_override.as_deref(),
             &candidates,
         ))
     }
 }
 
-fn collect_self_wrap_kids(wrap_items: &[WrapItem], member_id: &str) -> Vec<String> {
+fn collect_self_wrap_kids(wrap_items: &[WrapItem], member_handle: &str) -> Vec<String> {
     let mut kids = Vec::new();
     for wrap_item in wrap_items {
-        if wrap_item.rid != member_id || kids.contains(&wrap_item.kid) {
+        if wrap_item.recipient_handle != member_handle || kids.contains(&wrap_item.kid) {
             continue;
         }
         kids.push(wrap_item.kid.clone());
@@ -102,7 +102,7 @@ fn build_candidate_kids(
 }
 
 fn build_missing_wrap_error(
-    member_id: &str,
+    member_handle: &str,
     explicit_kid: Option<&str>,
     searched_kids: &[String],
 ) -> Error {
@@ -111,7 +111,7 @@ fn build_missing_wrap_error(
             message: format!(
                 "No wrap found for kid '{}' (member: {})",
                 format_kid_display_lossy(kid),
-                member_id
+                member_handle
             ),
             source: None,
         },
@@ -124,7 +124,7 @@ fn build_missing_wrap_error(
             Error::Crypto {
                 message: format!(
                     "No wrap found for any local kid [{}] (member: {})",
-                    searched, member_id
+                    searched, member_handle
                 ),
                 source: None,
             }

@@ -8,7 +8,7 @@ use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::VerificationStatus;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::KnownKey;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
@@ -20,7 +20,7 @@ use super::types::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PromotionReviewFailure {
-    pub(crate) member_id: String,
+    pub(crate) member_handle: String,
     pub(crate) message: String,
 }
 
@@ -48,14 +48,17 @@ impl PromotionReviewSession {
 
     pub(crate) fn into_accepted_candidates(
         self,
-        accepted_member_ids: &[String],
+        accepted_member_handles: &[String],
     ) -> Vec<IncomingPromotionCandidate> {
-        let accepted_ids = accepted_member_ids.iter().cloned().collect::<BTreeSet<_>>();
+        let accepted_ids = accepted_member_handles
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
         let mut accepted = self.auto_accepted_candidates;
         accepted.extend(
             self.prompt_candidates
                 .into_iter()
-                .filter(|candidate| accepted_ids.contains(&candidate.review.member_id)),
+                .filter(|candidate| accepted_ids.contains(&candidate.review.member_handle)),
         );
         accepted
     }
@@ -77,7 +80,7 @@ pub(crate) fn build_promotion_review_plan(
         let known_key_state = judge_known_key(
             known_keys,
             &candidate.review.kid,
-            &candidate.review.member_id,
+            &candidate.review.member_handle,
         )?;
         if is_self_promotion_candidate(candidate, self_trust)? {
             auto_accepted_candidates.push(candidate.clone());
@@ -116,10 +119,10 @@ fn is_self_promotion_candidate(
     candidate: &IncomingPromotionCandidate,
     self_trust: &SelfTrustSet,
 ) -> Result<bool> {
-    let Some(self_member_id) = self_trust.member_id() else {
+    let Some(self_member_handle) = self_trust.member_handle() else {
         return Ok(false);
     };
-    if candidate.review.member_id != self_member_id {
+    if candidate.review.member_handle != self_member_handle {
         return Ok(false);
     }
 
@@ -132,7 +135,7 @@ fn is_self_promotion_candidate(
         rule: "E_REWRAP_SELF_PROMOTION_MISMATCH".to_string(),
         message: format!(
             "Incoming self key '{}' ({}) did not match local keystore identity",
-            candidate.review.member_id, candidate.review.kid
+            candidate.review.member_handle, candidate.review.kid
         ),
     })
 }
@@ -162,16 +165,16 @@ pub(crate) fn verify_prompt_candidate_online(
         rule: "E_REWRAP_MISSING_VERIFICATION_RESULT".to_string(),
         message: format!(
             "Online verification produced no result for incoming member '{}'",
-            candidate.review.member_id
+            candidate.review.member_handle
         ),
     })?;
 
-    if result.member_id != candidate.review.member_id {
+    if result.member_handle != candidate.review.member_handle {
         return Err(Error::Verify {
             rule: "E_REWRAP_VERIFICATION_RESULT_MISMATCH".to_string(),
             message: format!(
-                "Online verification result member_id '{}' did not match candidate '{}'",
-                result.member_id, candidate.review.member_id
+                "Online verification result member_handle '{}' did not match candidate '{}'",
+                result.member_handle, candidate.review.member_handle
             ),
         });
     }
@@ -239,7 +242,7 @@ fn should_skip_prompt_candidate(candidate: &IncomingPromotionCandidate) -> bool 
 
 fn build_failed_candidate(candidate: &IncomingPromotionCandidate) -> PromotionReviewFailure {
     PromotionReviewFailure {
-        member_id: candidate.review.member_id.clone(),
+        member_handle: candidate.review.member_handle.clone(),
         message: candidate.review.message.clone(),
     }
 }
@@ -247,8 +250,8 @@ fn build_failed_candidate(candidate: &IncomingPromotionCandidate) -> PromotionRe
 impl From<&IncomingPromotionCandidate> for TrustApprovalCandidate {
     fn from(candidate: &IncomingPromotionCandidate) -> Self {
         TrustApprovalCandidate {
-            member_id: MemberId::try_from(candidate.review.member_id.clone())
-                .expect("incoming member_id must be valid"),
+            member_handle: MemberHandle::try_from(candidate.review.member_handle.clone())
+                .expect("incoming member_handle must be valid"),
             kid: Kid::try_from(candidate.review.kid.clone()).expect("incoming kid must be valid"),
             fingerprint: candidate.review.fingerprint.clone(),
             github_id: candidate

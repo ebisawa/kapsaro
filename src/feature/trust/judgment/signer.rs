@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::Result;
 
 use super::active_member::{ActiveMemberSnapshot, CurrentMemberMatch};
@@ -13,22 +13,22 @@ use super::self_trust::SelfTrustSet;
 pub enum TrustJudgment {
     Trusted,
     NeedsApproval {
-        member_id: MemberId,
+        member_handle: MemberHandle,
         kid: Kid,
     },
     NonMember {
-        member_id: MemberId,
+        member_handle: MemberHandle,
         kid: Kid,
     },
     ActiveMemberMismatch {
-        member_id: MemberId,
+        member_handle: MemberHandle,
         kid: Kid,
-        active_member_id: MemberId,
+        active_member_handle: MemberHandle,
     },
     KnownKeyIntegrityAnomaly {
-        member_id: MemberId,
+        member_handle: MemberHandle,
         kid: Kid,
-        known_member_id: MemberId,
+        known_member_handle: MemberHandle,
     },
 }
 
@@ -67,11 +67,13 @@ where
         CurrentMemberMatch::Missing => {
             return judge_missing_active_member(signer, self_trust);
         }
-        CurrentMemberMatch::MemberIdMismatch { active_member_id } => {
+        CurrentMemberMatch::MemberHandleMismatch {
+            active_member_handle,
+        } => {
             return Ok(TrustJudgment::ActiveMemberMismatch {
-                member_id: signer.member_id_value().clone(),
+                member_handle: signer.member_handle_value().clone(),
                 kid: signer.kid_value().clone(),
-                active_member_id,
+                active_member_handle,
             });
         }
         CurrentMemberMatch::Matched => {}
@@ -96,7 +98,7 @@ fn judge_missing_active_member(
         return Ok(TrustJudgment::Trusted);
     }
     Ok(TrustJudgment::NonMember {
-        member_id: signer.member_id_value().clone(),
+        member_handle: signer.member_handle_value().clone(),
         kid: signer.kid_value().clone(),
     })
 }
@@ -105,16 +107,16 @@ fn build_known_key_judgment(signer: &TrustIdentity, match_result: KnownKeyMatch)
     match match_result {
         KnownKeyMatch::Exact => TrustJudgment::Trusted,
         KnownKeyMatch::Missing => TrustJudgment::NeedsApproval {
-            member_id: signer.member_id_value().clone(),
+            member_handle: signer.member_handle_value().clone(),
             kid: signer.kid_value().clone(),
         },
-        KnownKeyMatch::MemberIdMismatch { known_member_id } => {
-            TrustJudgment::KnownKeyIntegrityAnomaly {
-                member_id: signer.member_id_value().clone(),
-                kid: signer.kid_value().clone(),
-                known_member_id,
-            }
-        }
+        KnownKeyMatch::MemberHandleMismatch {
+            known_member_handle,
+        } => TrustJudgment::KnownKeyIntegrityAnomaly {
+            member_handle: signer.member_handle_value().clone(),
+            kid: signer.kid_value().clone(),
+            known_member_handle,
+        },
     }
 }
 

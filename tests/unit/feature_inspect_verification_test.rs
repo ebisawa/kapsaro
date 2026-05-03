@@ -10,7 +10,7 @@ use secretenv::io::verify_online::{VerificationResult, VerificationStatus};
 
 fn build_verified_result() -> VerificationResult {
     VerificationResult {
-        member_id: "alice@example.com".to_string(),
+        member_handle: "alice@example.com".to_string(),
         status: VerificationStatus::Verified,
         message: "OK".to_string(),
         fingerprint: Some("SHA256:abcdef1234567890".to_string()),
@@ -22,7 +22,7 @@ fn build_verified_result() -> VerificationResult {
 
 fn build_failed_result() -> VerificationResult {
     VerificationResult {
-        member_id: "bob@example.com".to_string(),
+        member_handle: "bob@example.com".to_string(),
         status: VerificationStatus::Failed,
         message: "SSH key not found in GitHub account keys".to_string(),
         fingerprint: None,

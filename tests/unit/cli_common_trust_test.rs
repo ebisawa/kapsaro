@@ -4,12 +4,12 @@
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::trust::review::format_candidate_review_lines;
 use crate::io::verify_online::VerifiedGithubIdentity;
-use crate::test_utils::{kid, member_id};
+use crate::test_utils::{kid, member_handle};
 
 #[test]
 fn test_format_candidate_review_lines_includes_required_fields() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: Some(42),
@@ -27,8 +27,8 @@ fn test_format_candidate_review_lines_includes_required_fields() {
     let rendered = lines.join("\n");
 
     assert!(
-        !rendered.contains("member_id:"),
-        "member_id is shown in the header, not in detail lines"
+        !rendered.contains("member_handle:"),
+        "member_handle is shown in the header, not in detail lines"
     );
     assert!(rendered.contains("kid: KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
     assert!(rendered.contains("attestation fingerprint: SHA256:test"));
@@ -39,7 +39,7 @@ fn test_format_candidate_review_lines_includes_required_fields() {
 #[test]
 fn test_format_candidate_review_lines_warns_when_github_binding_is_missing() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: None,
@@ -63,7 +63,7 @@ fn test_format_candidate_review_lines_warns_when_github_binding_is_missing() {
 #[test]
 fn test_format_candidate_review_lines_shows_github_id_without_login() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: None,
         github_id: Some(42),
@@ -87,7 +87,7 @@ fn test_format_candidate_review_lines_shows_github_id_without_login() {
 #[test]
 fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: None,
@@ -110,7 +110,7 @@ fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
 #[test]
 fn test_format_candidate_review_lines_shows_online_verification_failure_message() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: None,
@@ -133,7 +133,7 @@ fn test_format_candidate_review_lines_shows_online_verification_failure_message(
 #[test]
 fn test_format_candidate_review_lines_shows_verified_github_mark() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: Some(42),
@@ -170,7 +170,7 @@ fn test_format_candidate_review_lines_shows_verified_github_mark() {
 #[test]
 fn test_format_candidate_review_lines_no_verified_mark_without_online_verification() {
     let candidate = TrustApprovalCandidate {
-        member_id: member_id("bob@example.com"),
+        member_handle: member_handle("bob@example.com"),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: Some(42),

@@ -21,30 +21,31 @@ use std::path::Path;
 
 #[derive(Debug, Clone)]
 struct VerifiedMemberSubject {
-    member_id: String,
+    member_handle: String,
     public_key: PublicKey,
     warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VerifiedMemberFile {
-    pub member_id: String,
+    pub member_handle: String,
     pub public_key: PublicKey,
     pub warnings: Vec<String>,
 }
 
 pub fn verify_member_file(
     member_file: &Path,
-    expected_member_id: Option<&str>,
+    expected_member_handle: Option<&str>,
     debug: bool,
 ) -> Result<VerifiedMemberFile> {
-    load_verified_member_subject_from_file(member_file, expected_member_id, debug).map(Into::into)
+    load_verified_member_subject_from_file(member_file, expected_member_handle, debug)
+        .map(Into::into)
 }
 
 impl From<VerifiedMemberSubject> for VerifiedMemberFile {
     fn from(subject: VerifiedMemberSubject) -> Self {
         Self {
-            member_id: subject.member_id,
+            member_handle: subject.member_handle,
             public_key: subject.public_key,
             warnings: subject.warnings,
         }
@@ -52,9 +53,9 @@ impl From<VerifiedMemberSubject> for VerifiedMemberFile {
 }
 
 impl VerifiedMemberSubject {
-    fn new(member_id: String, public_key: PublicKey, warnings: Vec<String>) -> Self {
+    fn new(member_handle: String, public_key: PublicKey, warnings: Vec<String>) -> Self {
         Self {
-            member_id,
+            member_handle,
             public_key,
             warnings,
         }
@@ -63,15 +64,15 @@ impl VerifiedMemberSubject {
 
 fn load_verified_member_subject_from_file(
     member_file: &Path,
-    expected_member_id: Option<&str>,
+    expected_member_handle: Option<&str>,
     debug: bool,
 ) -> Result<VerifiedMemberSubject> {
-    let fallback_member_id = expected_member_id
+    let fallback_member_handle = expected_member_handle
         .map(str::to_string)
-        .unwrap_or_else(|| derive_member_id_from_path(member_file));
+        .unwrap_or_else(|| derive_member_handle_from_path(member_file));
     let public_key = load_member_file_from_path(member_file)?;
 
-    validate_member_file_member_id(member_file, &fallback_member_id, &public_key)?;
+    validate_member_file_member_handle(member_file, &fallback_member_handle, &public_key)?;
     let verified = verify_public_key_for_verification_context(
         &public_key,
         debug,
@@ -82,19 +83,19 @@ fn load_verified_member_subject_from_file(
             .verified_public_key
             .document
             .protected
-            .member_id
+            .subject_handle
             .clone(),
         public_key,
         verified.warnings,
     ))
 }
 
-fn validate_member_file_member_id(
+fn validate_member_file_member_handle(
     member_file: &Path,
-    expected_member_id: &str,
+    expected_member_handle: &str,
     public_key: &PublicKey,
 ) -> Result<()> {
-    if public_key.protected.member_id == expected_member_id {
+    if public_key.protected.subject_handle == expected_member_handle {
         return Ok(());
     }
 
@@ -102,13 +103,13 @@ fn validate_member_file_member_id(
         message: format!(
             "Member handle mismatch in {}: expected '{}', found '{}'",
             format_path_relative_to_cwd(member_file),
-            expected_member_id,
-            public_key.protected.member_id
+            expected_member_handle,
+            public_key.protected.subject_handle
         ),
     })
 }
 
-pub fn derive_member_id_from_path(member_file: &Path) -> String {
+pub fn derive_member_handle_from_path(member_file: &Path) -> String {
     member_file
         .file_stem()
         .and_then(OsStr::to_str)
@@ -119,10 +120,10 @@ pub fn derive_member_id_from_path(member_file: &Path) -> String {
 /// Verify binding_claims.github_account for members (GitHub).
 pub async fn verify_member(
     workspace_path: &Path,
-    member_ids: &[String],
+    member_handles: &[String],
     verbose: bool,
 ) -> Result<Vec<VerificationResult>> {
-    let member_files = list_verifiable_member_files(workspace_path, member_ids)?;
+    let member_files = list_verifiable_member_files(workspace_path, member_handles)?;
     Ok(verify_member_files(&member_files, verbose).await)
 }
 
@@ -168,13 +169,13 @@ pub async fn verify_member_files(
         |member_file, verbose| {
             load_verified_member_subject_from_file(
                 member_file,
-                Some(&derive_member_id_from_path(member_file)),
+                Some(&derive_member_handle_from_path(member_file)),
                 verbose,
             )
         },
         |member_file, error| {
             build_offline_verification_failure(
-                &derive_member_id_from_path(member_file),
+                &derive_member_handle_from_path(member_file),
                 error,
                 false,
             )
@@ -193,7 +194,7 @@ async fn verify_public_key_candidates(
         build_verified_member_subject_from_public_key,
         |public_key, error| {
             build_offline_verification_failure(
-                &public_key.protected.member_id,
+                &public_key.protected.subject_handle,
                 error,
                 has_github_claim(public_key),
             )
@@ -212,7 +213,7 @@ fn build_verified_member_subject_from_public_key(
         MEMBER_VERIFICATION_INPUT_CONTEXT,
     )?;
     Ok(VerifiedMemberSubject::new(
-        public_key.protected.member_id.clone(),
+        public_key.protected.subject_handle.clone(),
         public_key.clone(),
         verified.warnings,
     ))
@@ -249,7 +250,7 @@ async fn verify_member_subject_online(
     let result = match verify_github_account(&subject.public_key, verbose, None).await {
         Ok(result) => result,
         Err(e) => VerificationResult::failed(
-            &subject.member_id,
+            &subject.member_handle,
             format!("Online verification error: {}", e.format_user_message()),
             None,
             has_github_claim(&subject.public_key),
@@ -261,22 +262,22 @@ async fn verify_member_subject_online(
 
 fn list_verifiable_member_files(
     workspace_path: &Path,
-    member_ids: &[String],
+    member_handles: &[String],
 ) -> Result<Vec<std::path::PathBuf>> {
-    if member_ids.is_empty() {
+    if member_handles.is_empty() {
         return list_active_member_paths(workspace_path);
     }
 
-    member_ids
+    member_handles
         .iter()
-        .map(|member_id| {
-            let path = get_active_member_file_path(workspace_path, member_id);
+        .map(|member_handle| {
+            let path = get_active_member_file_path(workspace_path, member_handle);
             path.exists()
                 .then_some(path)
                 .ok_or_else(|| Error::NotFound {
                     message: format!(
                         "Member '{}' not found in active/",
-                        sanitize_display_field(member_id)
+                        sanitize_display_field(member_handle)
                     ),
                 })
         })
@@ -296,12 +297,12 @@ fn append_verification_warnings(
 }
 
 fn build_offline_verification_failure(
-    member_id: &str,
+    member_handle: &str,
     error: Error,
     github_claim_present: bool,
 ) -> VerificationResult {
     VerificationResult::failed(
-        member_id,
+        member_handle,
         format!(
             "Offline verification failed: {}",
             error.format_user_message()

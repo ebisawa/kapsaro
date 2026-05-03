@@ -59,7 +59,8 @@ pub fn build_signing_context<'a>(
     debug: bool,
 ) -> Result<VerifiedSigningContext<'a>> {
     enforce_key_not_expired_for_signing(&key_ctx.expires_at)?;
-    let signer_pub = load_signer_public_key(key_ctx.pub_key_source.as_ref(), &key_ctx.member_id)?;
+    let signer_pub =
+        load_signer_public_key(key_ctx.pub_key_source.as_ref(), &key_ctx.member_handle)?;
     Ok(VerifiedSigningContext {
         signing: SigningContext {
             signing_key: &key_ctx.signing_key,

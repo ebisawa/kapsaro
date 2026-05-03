@@ -48,7 +48,7 @@ where
         }
 
         needs_approval.push(KnownKeyIdentity::new(
-            recipient.member_id_value().clone(),
+            recipient.member_handle_value().clone(),
             recipient.kid_value().clone(),
         ));
     }

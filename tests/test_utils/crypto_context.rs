@@ -15,7 +15,7 @@ use tempfile::TempDir;
 /// spawning ssh-keygen subprocesses.
 pub fn setup_member_key_context(
     temp_dir: &TempDir,
-    member_id: &str,
+    member_handle: &str,
     explicit_kid: Option<&str>,
 ) -> CryptoContext {
     let keystore_root = temp_dir.path().join("keys");
@@ -28,7 +28,7 @@ pub fn setup_member_key_context(
 
     load_crypto_context_from_keystore(
         keystore_root,
-        member_id,
+        member_handle,
         explicit_kid,
         Box::new(backend),
         ssh_pub,

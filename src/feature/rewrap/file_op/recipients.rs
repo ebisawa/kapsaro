@@ -27,30 +27,40 @@ pub fn remove_file_recipients(
 
     // Collect wrap items to remove (with their kids) before removing them
     let mut to_remove: Vec<(String, String)> = Vec::new();
-    for rid in recipients_to_remove {
-        if !check_recipient_exists(&current_recipients, rid) {
-            print_recipient_not_found_warning(rid);
+    for recipient_handle in recipients_to_remove {
+        if !check_recipient_exists(&current_recipients, recipient_handle) {
+            print_recipient_not_found_warning(recipient_handle);
             continue;
         }
 
         // Find the wrap item to get its kid
-        if let Some(wrap_item) = protected.wrap.iter().find(|w| w.rid == *rid) {
-            to_remove.push((rid.clone(), wrap_item.kid.clone()));
+        if let Some(wrap_item) = protected
+            .wrap
+            .iter()
+            .find(|w| w.recipient_handle == *recipient_handle)
+        {
+            to_remove.push((recipient_handle.clone(), wrap_item.kid.clone()));
         }
     }
 
     // Record removals in history
-    for (rid, kid) in &to_remove {
-        add_to_removed_history(&mut protected.removed_recipients, rid, kid)?;
+    for (recipient_handle, kid) in &to_remove {
+        add_to_removed_history(&mut protected.removed_recipients, recipient_handle, kid)?;
     }
 
     // Remove wrap items
-    for (rid, _kid) in &to_remove {
-        protected.wrap.retain(|w| w.rid != *rid);
+    for (recipient_handle, _kid) in &to_remove {
+        protected
+            .wrap
+            .retain(|w| w.recipient_handle != *recipient_handle);
     }
 
     // Validate that at least one recipient remains
-    let remaining_recipients: Vec<String> = protected.wrap.iter().map(|w| w.rid.clone()).collect();
+    let remaining_recipients: Vec<String> = protected
+        .wrap
+        .iter()
+        .map(|w| w.recipient_handle.clone())
+        .collect();
     validate_not_empty_recipients(&remaining_recipients)?;
 
     Ok(())
@@ -69,7 +79,7 @@ pub fn add_file_recipients(
     debug: bool,
 ) -> Result<()> {
     let content_key =
-        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_id, key_ctx, debug)?
+        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_handle, key_ctx, debug)?
             .value;
     let current_recipients = protected.recipients();
     let wrap_items = build_new_wrap_items(
@@ -95,14 +105,14 @@ pub fn rewrite_file_recipient_wraps(
     debug: bool,
 ) -> Result<()> {
     let content_key =
-        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_id, key_ctx, debug)?
+        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_handle, key_ctx, debug)?
             .value;
     let refreshed_members =
         resolve_verified_recipients(target_members, key_ctx, recipients_to_refresh, debug)?;
 
     protected
         .wrap
-        .retain(|wrap| !recipients_to_refresh.contains(&wrap.rid));
+        .retain(|wrap| !recipients_to_refresh.contains(&wrap.recipient_handle));
     for member in &refreshed_members {
         protected.wrap.push(build_wrap_item_for_file(
             member,

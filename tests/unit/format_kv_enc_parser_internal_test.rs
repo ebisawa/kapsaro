@@ -34,7 +34,7 @@ fn test_file_size_at_limit_is_accepted() {
 
 #[test]
 fn test_key_line_count_limit_exceeded() {
-    let mut content = String::from(":SECRETENV_KV 3\n:HEAD token\n:WRAP token\n");
+    let mut content = String::from(":SECRETENV_KV 4\n:HEAD token\n:WRAP token\n");
     for i in 0..=MAX_KV_KEY_LINES {
         content.push_str(&format!("KEY_{} value\n", i));
     }
@@ -53,7 +53,7 @@ fn test_key_line_count_limit_exceeded() {
 
 #[test]
 fn test_key_line_count_at_limit_is_accepted() {
-    let mut content = String::from(":SECRETENV_KV 3\n:HEAD token\n:WRAP token\n");
+    let mut content = String::from(":SECRETENV_KV 4\n:HEAD token\n:WRAP token\n");
     for i in 0..MAX_KV_KEY_LINES {
         content.push_str(&format!("KEY_{} value\n", i));
     }

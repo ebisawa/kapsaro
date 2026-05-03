@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::setup_init_env;
-use crate::cli::common::{cmd, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, TEST_MEMBER_HANDLE};
 use crate::test_utils::EnvGuard;
 use predicates::prelude::*;
 use std::fs;
@@ -16,13 +16,13 @@ fn test_init_generates_key_if_missing() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
-    let keystore_path = home_dir.path().join("keys").join(TEST_MEMBER_ID);
+    let keystore_path = home_dir.path().join("keys").join(TEST_MEMBER_HANDLE);
     assert!(keystore_path.exists());
 
     let key_dirs: Vec<_> = fs::read_dir(&keystore_path)
@@ -61,7 +61,7 @@ fn test_init_uses_existing_key() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", home_dir.path())
@@ -70,8 +70,8 @@ fn test_init_uses_existing_key() {
 
     std::env::set_var("SECRETENV_HOME", home_dir.path().to_str().unwrap());
     let base_dir = secretenv::io::config::paths::get_base_dir().unwrap();
-    let member_dir =
-        secretenv::io::keystore::paths::get_keystore_root_from_base(&base_dir).join(TEST_MEMBER_ID);
+    let member_dir = secretenv::io::keystore::paths::get_keystore_root_from_base(&base_dir)
+        .join(TEST_MEMBER_HANDLE);
     let kids_before: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()
         .filter_map(|entry| entry.ok())
@@ -86,7 +86,7 @@ fn test_init_uses_existing_key() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()

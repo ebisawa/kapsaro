@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
+use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256;
 use secretenv::model::private_key::*;
 
@@ -9,8 +9,8 @@ use secretenv::model::private_key::*;
 fn test_private_key_deserialization() {
     let json_value = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
-            "member_id": "alice@example.com",
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V6,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
@@ -33,9 +33,9 @@ fn test_private_key_deserialization() {
 
     assert_eq!(
         pk.protected.format,
-        secretenv::model::identifiers::format::PRIVATE_KEY_V5
+        secretenv::model::identifiers::format::PRIVATE_KEY_V6
     );
-    assert_eq!(pk.protected.member_id, ALICE_MEMBER_ID);
+    assert_eq!(pk.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(pk.protected.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     match &pk.protected.alg {
         PrivateKeyAlgorithm::SshSig { fpr, aead, .. } => {
@@ -53,8 +53,8 @@ fn test_private_key_deserialization() {
 fn test_private_key_serialization() {
     let pk = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V5.to_string(),
-            member_id: BOB_MEMBER_ID.to_string(),
+            format: secretenv::model::identifiers::format::PRIVATE_KEY_V6.to_string(),
+            subject_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TESTFPR123".to_string(),
@@ -75,9 +75,9 @@ fn test_private_key_serialization() {
 
     assert_eq!(
         json_value["protected"]["format"],
-        secretenv::model::identifiers::format::PRIVATE_KEY_V5
+        secretenv::model::identifiers::format::PRIVATE_KEY_V6
     );
-    assert_eq!(json_value["protected"]["member_id"], BOB_MEMBER_ID);
+    assert_eq!(json_value["protected"]["subject_handle"], BOB_MEMBER_HANDLE);
     assert_eq!(
         json_value["protected"]["alg"]["kdf"],
         PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256
@@ -121,8 +121,8 @@ fn test_private_key_plaintext_serialization() {
 fn test_private_key_roundtrip() {
     let original = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V5.to_string(),
-            member_id: TEST_MEMBER_ID.to_string(),
+            format: secretenv::model::identifiers::format::PRIVATE_KEY_V6.to_string(),
+            subject_handle: TEST_MEMBER_HANDLE.to_string(),
             kid: "2C7R5M9K8D1XV4PH6T3NB2QJ9F7AK5WE".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:FPR123456".to_string(),
@@ -148,8 +148,8 @@ fn test_private_key_roundtrip() {
     // Compare
     assert_eq!(original.protected.format, deserialized.protected.format);
     assert_eq!(
-        original.protected.member_id,
-        deserialized.protected.member_id
+        original.protected.subject_handle,
+        deserialized.protected.subject_handle
     );
     assert_eq!(original.protected.kid, deserialized.protected.kid);
     assert_eq!(original.protected.alg, deserialized.protected.alg);

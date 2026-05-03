@@ -22,7 +22,7 @@ use tracing::debug;
 
 /// Parameters for building a public key.
 pub struct PublicKeyDocumentParams<'a> {
-    pub member_id: &'a str,
+    pub member_handle: &'a str,
     pub identity: Identity,
     pub created_at: &'a str,
     pub expires_at: &'a str,
@@ -35,7 +35,7 @@ pub struct PublicKeyDocumentParams<'a> {
 #[serde(deny_unknown_fields)]
 struct PublicKeyProtectedWithoutKid {
     format: String,
-    member_id: String,
+    subject_handle: String,
     identity: Identity,
     #[serde(skip_serializing_if = "Option::is_none")]
     binding_claims: Option<BindingClaims>,
@@ -53,8 +53,8 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
             github_account: Some(github_account),
         });
     let protected_without_kid = PublicKeyProtectedWithoutKid {
-        format: crate::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
-        member_id: params.member_id.to_string(),
+        format: crate::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+        subject_handle: params.member_handle.to_string(),
         identity: params.identity.clone(),
         binding_claims: binding_claims.clone(),
         expires_at: params.expires_at.to_string(),
@@ -64,7 +64,7 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
         &serde_json::to_value(&protected_without_kid).map_err(crate::Error::from)?,
     )?;
     let protected = PublicKey::new(
-        params.member_id.to_string(),
+        params.member_handle.to_string(),
         derived_kid.clone(),
         params.identity.clone(),
         binding_claims,

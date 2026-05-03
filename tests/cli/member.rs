@@ -3,7 +3,9 @@
 
 //! Integration tests for member list/show/remove/add commands
 
-use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
+use crate::cli::common::{
+    cmd, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+};
 use crate::test_utils::{
     save_active_public_key_to_workspace, setup_member_key_context, setup_test_workspace,
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
@@ -27,7 +29,7 @@ fn copy_fresh_public_key(temp_key_file: &std::path::Path) {
         .path()
         .join("members")
         .join("active")
-        .join(format!("{}.json", TEST_MEMBER_ID));
+        .join(format!("{}.json", TEST_MEMBER_HANDLE));
     fs::copy(other_active_key_path, temp_key_file).unwrap();
 }
 
@@ -35,11 +37,11 @@ fn fixture_ssh_key_path(temp_dir: &TempDir) -> std::path::PathBuf {
     temp_dir.path().join(".ssh").join("test_ed25519")
 }
 
-fn active_member_kid(workspace_dir: &std::path::Path, member_id: &str) -> String {
+fn active_member_kid(workspace_dir: &std::path::Path, member_handle: &str) -> String {
     let member_file = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", member_id));
+        .join(format!("{}.json", member_handle));
     let value: Value = serde_json::from_str(&fs::read_to_string(member_file).unwrap()).unwrap();
     value["protected"]["kid"].as_str().unwrap().to_string()
 }
@@ -51,7 +53,7 @@ fn active_member_kid(workspace_dir: &std::path::Path, member_id: &str) -> String
 #[test]
 fn test_member_list_shows_initialized_member() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-    let kid = active_member_kid(workspace_dir.path(), TEST_MEMBER_ID);
+    let kid = active_member_kid(workspace_dir.path(), TEST_MEMBER_HANDLE);
     let kid_display = format_kid_display(&kid).unwrap();
 
     cmd()
@@ -63,7 +65,7 @@ fn test_member_list_shows_initialized_member() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains(TEST_MEMBER_ID))
+        .stdout(predicate::str::contains(TEST_MEMBER_HANDLE))
         .stdout(predicate::str::contains(kid_display));
 }
 
@@ -134,7 +136,7 @@ fn test_member_list_json_skips_invalid_member_file() {
         .path()
         .join("members")
         .join("active")
-        .join(format!("{}.json", TEST_MEMBER_ID));
+        .join(format!("{}.json", TEST_MEMBER_HANDLE));
     fs::copy(&active_key_path, &incoming_file).unwrap();
     save_tampered_member_file(&incoming_file, |value| {
         value["protected"]["expires_at"] = Value::String("2030-01-01T00:00:00Z".to_string());
@@ -171,7 +173,7 @@ fn test_member_show_displays_public_key() {
     cmd()
         .arg("member")
         .arg("show")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -180,7 +182,7 @@ fn test_member_show_displays_public_key() {
         .success()
         .stdout(predicate::str::contains(format!(
             "\u{25CF} {}",
-            TEST_MEMBER_ID
+            TEST_MEMBER_HANDLE
         )))
         .stdout(predicate::str::contains("\nStatus\n"))
         .stdout(predicate::str::contains("  Membership  :"))
@@ -195,14 +197,19 @@ fn test_member_show_displays_public_key() {
 
 #[test]
 fn test_member_show_reports_verification_warning() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[TEST_MEMBER_ID]);
-    update_active_private_key_expires_at(temp_dir.path(), TEST_MEMBER_ID, "2020-01-01T00:00:00Z");
-    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, TEST_MEMBER_ID).unwrap();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[TEST_MEMBER_HANDLE]);
+    update_active_private_key_expires_at(
+        temp_dir.path(),
+        TEST_MEMBER_HANDLE,
+        "2020-01-01T00:00:00Z",
+    );
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, TEST_MEMBER_HANDLE)
+        .unwrap();
 
     cmd()
         .arg("member")
         .arg("show")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
@@ -236,7 +243,7 @@ fn test_member_show_invalid_member_fails() {
         .path()
         .join("members")
         .join("active")
-        .join(format!("{}.json", TEST_MEMBER_ID));
+        .join(format!("{}.json", TEST_MEMBER_HANDLE));
     save_tampered_member_file(&member_file, |value| {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
     });
@@ -244,7 +251,7 @@ fn test_member_show_invalid_member_fails() {
     cmd()
         .arg("member")
         .arg("show")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -255,17 +262,17 @@ fn test_member_show_invalid_member_fails() {
 
 #[test]
 fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
 
     cmd()
         .arg("member")
         .arg("verify")
         .arg("--approve")
-        .arg(BOB_MEMBER_ID)
+        .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
@@ -273,15 +280,15 @@ fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
 }
 
 #[test]
-fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+fn test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     fs::remove_file(temp_dir.path().join("config.toml")).unwrap();
 
     cmd()
         .arg("member")
         .arg("verify")
         .arg("--approve")
-        .arg(BOB_MEMBER_ID)
+        .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
@@ -296,8 +303,8 @@ fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
         .arg("verify")
         .arg("--approve")
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
-        .arg(BOB_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
@@ -311,44 +318,54 @@ fn test_member_verify_approve_accepts_member_id_option_for_trust_store_owner() {
 
 #[test]
 fn test_member_verify_approve_hides_already_known_results() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     cmd()
         .arg("member")
         .arg("verify")
         .arg("--approve")
-        .arg(BOB_MEMBER_ID)
+        .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success()
         .stderr(predicate::str::contains("No members require approval"))
-        .stderr(predicate::str::contains(BOB_MEMBER_ID).not())
+        .stderr(predicate::str::contains(BOB_MEMBER_HANDLE).not())
         .stderr(predicate::str::contains("already known").not())
         .stderr(predicate::str::contains("Approved ").not());
 }
 
 #[test]
 fn test_member_verify_approve_json_skips_already_known_results() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let assert = cmd()
         .arg("member")
         .arg("verify")
         .arg("--approve")
-        .arg(BOB_MEMBER_ID)
+        .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--json")
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
         .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success();
@@ -364,7 +381,7 @@ fn test_member_verify_approve_json_skips_already_known_results() {
 
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
     assert!(
-        !stderr.contains(BOB_MEMBER_ID),
+        !stderr.contains(BOB_MEMBER_HANDLE),
         "unexpected stderr: {}",
         stderr
     );
@@ -388,13 +405,13 @@ fn test_member_remove_removes_from_workspace() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains(TEST_MEMBER_ID));
+        .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
 
     // Remove the member with --force
     cmd()
         .arg("member")
         .arg("remove")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--force")
@@ -418,7 +435,8 @@ fn test_member_remove_removes_from_workspace() {
     // After removing the only member, the list should show no members or not list
     // the removed member under Active
     assert!(
-        !stdout.contains(&format!("  {}", TEST_MEMBER_ID)) || stdout.contains("No members found"),
+        !stdout.contains(&format!("  {}", TEST_MEMBER_HANDLE))
+            || stdout.contains("No members found"),
         "Removed member should not appear in active member list, got: {}",
         stdout
     );
@@ -431,7 +449,7 @@ fn test_member_remove_without_force_in_non_interactive_mode_fails() {
     cmd()
         .arg("member")
         .arg("remove")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -451,7 +469,7 @@ fn test_member_remove_without_force_in_non_interactive_mode_fails() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains(TEST_MEMBER_ID));
+        .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
 }
 
 #[test]
@@ -488,7 +506,7 @@ fn test_member_remove_warns_on_tampered_artifact_but_continues() {
         .arg("--out")
         .arg(&encrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -508,7 +526,7 @@ fn test_member_remove_warns_on_tampered_artifact_but_continues() {
     cmd()
         .arg("member")
         .arg("remove")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--force")
@@ -608,7 +626,7 @@ fn test_member_verify_reports_offline_invalid_member() {
         .path()
         .join("members")
         .join("active")
-        .join(format!("{}.json", TEST_MEMBER_ID));
+        .join(format!("{}.json", TEST_MEMBER_HANDLE));
     fs::copy(&active_key_path, &incoming_file).unwrap();
     save_tampered_member_file(&incoming_file, |value| {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
@@ -637,7 +655,7 @@ fn test_member_verify_ignores_invalid_incoming_member_when_verifying_all() {
         .path()
         .join("members")
         .join("active")
-        .join(format!("{}.json", TEST_MEMBER_ID));
+        .join(format!("{}.json", TEST_MEMBER_HANDLE));
     fs::copy(&active_key_path, &incoming_file).unwrap();
     save_tampered_member_file(&incoming_file, |value| {
         value["protected"]["identity"]["attestation"]["sig"] = Value::String("broken".to_string());
@@ -658,5 +676,5 @@ fn test_member_verify_ignores_invalid_incoming_member_when_verifying_all() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let results = parsed["results"].as_array().unwrap();
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0]["member_id"], TEST_MEMBER_ID);
+    assert_eq!(results[0]["member_handle"], TEST_MEMBER_HANDLE);
 }

@@ -8,8 +8,8 @@
 
 use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 pub use crate::test_utils::{
-    ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID, EVE_MEMBER_ID,
-    FRANK_MEMBER_ID, TEST_MEMBER_ID,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
+    EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use assert_cmd::{cargo, Command};
 use secretenv::cli::options::CommonOptions;
@@ -147,7 +147,7 @@ pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .output()

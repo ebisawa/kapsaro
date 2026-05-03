@@ -5,12 +5,12 @@
 //!
 //! Tests error cases and edge cases in decrypt/unwrap operations.
 //! The happy path is covered by usecase_decrypt_test.rs; this file focuses on
-//! error paths such as wrong kid, empty entries, and rid mismatch scenarios.
+//! error paths such as wrong kid, empty entries, and recipient_handle mismatch scenarios.
 
 use crate::keygen_helpers::{
     build_verified_private_key, build_verified_recipient_key, build_verified_recipient_keys,
 };
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
 use secretenv::crypto::kem::decode_kem_secret_key;
@@ -58,21 +58,21 @@ fn encrypt_file_for_test(
     String,
     TempDir,
 ) {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap().clone();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
 
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -100,14 +100,14 @@ fn encrypt_kv_for_test(
     String,
     TempDir,
 ) {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap().clone();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
 
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     let kv_map = parse_dotenv(dotenv_content).unwrap();
     let signer_pub = public_key.clone();
@@ -145,7 +145,7 @@ fn test_find_wrap_item_by_kid() {
     // Decryption with correct kid should succeed
     let result = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &kid,
         &key_ctx.private_key,
         false,
@@ -163,7 +163,7 @@ fn test_find_wrap_item_by_kid_not_found() {
     let nonexistent_kid = "00000000000000000000000000";
     let result = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         nonexistent_kid,
         &key_ctx.private_key,
         false,
@@ -178,16 +178,17 @@ fn test_find_wrap_item_by_kid_not_found() {
     );
 }
 
-/// Test that kid matches but rid doesn't match member_id -- decryption fails.
+/// Test that kid matches but recipient_handle doesn't match member_handle -- decryption fails.
 #[test]
 fn test_find_wrap_item_by_kid_rid_mismatch_fails() {
-    let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_file_for_test(b"rid mismatch test");
+    let (verified_doc, key_ctx, kid, _temp_dir) =
+        encrypt_file_for_test(b"recipient_handle mismatch test");
 
-    // Use a different member_id (not matching rid in wrap item) but correct kid and private key.
-    let different_member_id = "different@example.com";
+    // Use a different member_handle (not matching recipient_handle in wrap item) but correct kid and private key.
+    let different_member_handle = "different@example.com";
     let result = decrypt_file_document(
         &verified_doc,
-        different_member_id,
+        different_member_handle,
         &kid,
         &key_ctx.private_key,
         false,
@@ -195,18 +196,18 @@ fn test_find_wrap_item_by_kid_rid_mismatch_fails() {
 
     assert!(
         result.is_err(),
-        "Decryption should fail when member_id doesn't match rid"
+        "Decryption should fail when member_handle doesn't match recipient_handle"
     );
     let err_msg = format!("{}", result.unwrap_err());
     assert!(
-        err_msg.contains("does not match member_id"),
-        "Error should mention rid mismatch, got: {}",
+        err_msg.contains("does not match member_handle"),
+        "Error should mention recipient_handle mismatch, got: {}",
         err_msg
     );
     assert!(
-        err_msg.contains(different_member_id),
-        "Error should mention requested member_id '{}', got: {}",
-        different_member_id,
+        err_msg.contains(different_member_handle),
+        "Error should mention requested member_handle '{}', got: {}",
+        different_member_handle,
         err_msg
     );
 }
@@ -223,7 +224,7 @@ fn test_decrypt_file_document_roundtrip() {
 
     let decrypted = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &kid,
         &key_ctx.private_key,
         false,
@@ -245,7 +246,7 @@ fn test_decrypt_kv_document_roundtrip() {
 
     let decrypted = decrypt_kv_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &kid,
         &key_ctx.private_key,
         false,
@@ -262,16 +263,16 @@ fn test_decrypt_kv_document_roundtrip() {
     );
 }
 
-/// Test that kv decryption fails when the located wrap's rid does not match member_id.
+/// Test that kv decryption fails when the located wrap's recipient_handle does not match member_handle.
 #[test]
 fn test_decrypt_kv_document_rid_mismatch_fails() {
     let dotenv = "SECRET_KEY=my-secret-value\n";
     let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_kv_for_test(dotenv);
 
-    let different_member_id = "different@example.com";
+    let different_member_handle = "different@example.com";
     let result = decrypt_kv_document(
         &verified_doc,
-        different_member_id,
+        different_member_handle,
         &kid,
         &key_ctx.private_key,
         false,
@@ -279,18 +280,18 @@ fn test_decrypt_kv_document_rid_mismatch_fails() {
 
     assert!(
         result.is_err(),
-        "KV decryption should fail when member_id doesn't match rid"
+        "KV decryption should fail when member_handle doesn't match recipient_handle"
     );
     let err_msg = format!("{}", result.unwrap_err());
     assert!(
-        err_msg.contains("does not match member_id"),
-        "Error should mention rid mismatch, got: {}",
+        err_msg.contains("does not match member_handle"),
+        "Error should mention recipient_handle mismatch, got: {}",
         err_msg
     );
     assert!(
-        err_msg.contains(different_member_id),
-        "Error should mention requested member_id '{}', got: {}",
-        different_member_id,
+        err_msg.contains(different_member_handle),
+        "Error should mention requested member_handle '{}', got: {}",
+        different_member_handle,
         err_msg
     );
 }
@@ -302,14 +303,14 @@ fn test_decrypt_kv_document_rid_mismatch_fails() {
 /// Test that encrypting an empty KV map produces an empty decrypted map.
 #[test]
 fn test_decrypt_kv_entries_empty() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap().clone();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
 
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     // Create empty KV map
     let kv_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
@@ -335,7 +336,7 @@ fn test_decrypt_kv_entries_empty() {
 
     let decrypted = decrypt_kv_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &kid,
         &key_ctx.private_key,
         false,
@@ -356,7 +357,7 @@ fn test_decrypt_kv_entries_multiple() {
 
     let decrypted = decrypt_kv_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &kid,
         &key_ctx.private_key,
         false,
@@ -398,7 +399,7 @@ fn test_unwrap_master_key_for_file_wrong_kid() {
     let wrong_kid = "AAAAAAAAAAAAAAAAAAAAAAAAAA";
     let result = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         wrong_kid,
         &key_ctx.private_key,
         false,
@@ -436,12 +437,12 @@ fn build_test_master_key() -> MasterKey {
 #[test]
 fn test_unwrap_master_key_for_file() {
     // Setup test keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Decrypt private key
     let ssh_pub =
@@ -455,12 +456,12 @@ fn test_unwrap_master_key_for_file() {
 
     let signing_key = generate_ed25519_keypair([2u8; 32]);
     let content = b"Hello, World!";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &signing_key,
@@ -473,11 +474,11 @@ fn test_unwrap_master_key_for_file() {
 
     // Wrap private key in Decrypted for unwrap API
     let decrypted_key =
-        build_verified_private_key(&private_key, ALICE_MEMBER_ID, kid, "SHA256:test");
+        build_verified_private_key(&private_key, ALICE_MEMBER_HANDLE, kid, "SHA256:test");
 
     // Wrap in VerifiedFileEncDocument (tests use freshly encrypted content, treated as verified)
     let proof = SignatureVerificationProof::new(
-        ALICE_MEMBER_ID.to_string(),
+        ALICE_MEMBER_HANDLE.to_string(),
         kid.to_string(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
@@ -486,7 +487,8 @@ fn test_unwrap_master_key_for_file() {
 
     // Unwrap master key
     let unwrapped_key =
-        unwrap_master_key_for_file(&verified, ALICE_MEMBER_ID, kid, &decrypted_key, false).unwrap();
+        unwrap_master_key_for_file(&verified, ALICE_MEMBER_HANDLE, kid, &decrypted_key, false)
+            .unwrap();
 
     // Verify unwrapped key is valid
     assert_eq!(unwrapped_key.as_bytes().len(), 32);
@@ -495,20 +497,20 @@ fn test_unwrap_master_key_for_file() {
 #[test]
 fn test_unwrap_master_key_for_file_wrong_member() {
     // Setup test keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     let signing_key = generate_ed25519_keypair([2u8; 32]);
     let content = b"Hello, World!";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &signing_key,
@@ -520,7 +522,7 @@ fn test_unwrap_master_key_for_file_wrong_member() {
     .unwrap();
 
     let proof = SignatureVerificationProof::new(
-        ALICE_MEMBER_ID.to_string(),
+        ALICE_MEMBER_HANDLE.to_string(),
         kid.to_string(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
@@ -563,12 +565,12 @@ fn test_unwrap_master_key_for_file_wrong_member() {
 #[test]
 fn test_unwrap_master_key_from_wrap_item() {
     // Setup test keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Decrypt private key first (we'll need it for unwrap)
     let ssh_pub =
@@ -593,7 +595,7 @@ fn test_unwrap_master_key_from_wrap_item() {
     // with hpke_info::file instead of unwrap_master_key_from_wrap_item (which uses hpke_info::kv_file)
     let decrypted_key = build_verified_private_key(
         &private_key_plaintext,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &public_key.protected.kid,
         "SHA256:test",
     );
@@ -616,12 +618,12 @@ fn test_unwrap_master_key_from_wrap_item() {
 #[test]
 fn test_hpke_aad_binding_defence_in_depth() {
     // Setup test keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Decrypt private key
     let ssh_pub =
@@ -644,7 +646,7 @@ fn test_hpke_aad_binding_defence_in_depth() {
     // This demonstrates that aad=info binding is enforced
     let decrypted_key = build_verified_private_key(
         &private_key_plaintext,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &public_key.protected.kid,
         "SHA256:test",
     );

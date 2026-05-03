@@ -9,7 +9,7 @@
 //! - ensure_keystore_dir (tested via KeystoreResolver::ensure_keystore_root)
 //! - build_public_key with github_account
 
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use secretenv::crypto::kem::{derive_public_key_from_secret, X25519SecretKey};
@@ -42,7 +42,7 @@ fn test_build_private_key_plaintext_fields() {
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (plaintext, _public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
 
     // Verify KEM key fields
     assert_eq!(plaintext.keys.kem.kty, "OKP");
@@ -63,7 +63,7 @@ fn test_build_private_key_plaintext_base64url_encoded() {
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (plaintext, _public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
 
     // All x and d fields must be valid base64url
     let kem_x = decode_base64url_nopad(&plaintext.keys.kem.x, "kem.x");
@@ -89,7 +89,7 @@ fn test_build_private_key_plaintext_key_consistency() {
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (plaintext, public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
 
     // The public key's x field in kem should match the private key's x field in kem
     assert_eq!(
@@ -143,7 +143,7 @@ fn test_build_public_key_with_github_account() {
     };
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         identity,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
@@ -171,7 +171,7 @@ fn test_build_public_key_without_github_account() {
     let (identity, sig_sk) = generate_test_identity();
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         identity,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
@@ -196,7 +196,7 @@ fn test_build_public_key_self_signature_valid_base64url() {
     let (identity, sig_sk) = generate_test_identity();
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         identity,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
@@ -223,7 +223,7 @@ fn test_build_public_key_self_signature_valid_base64url() {
 fn test_build_public_key_changes_kid_when_github_account_changes() {
     let (identity_with_claim, sig_sk_with_claim) = generate_test_identity();
     let with_claim = build_public_key(&PublicKeyDocumentParams {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         identity: identity_with_claim,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
@@ -237,7 +237,7 @@ fn test_build_public_key_changes_kid_when_github_account_changes() {
     .unwrap();
     let (identity_without_claim, sig_sk_without_claim) = generate_test_identity();
     let without_claim = build_public_key(&PublicKeyDocumentParams {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         identity: identity_without_claim,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
@@ -344,7 +344,7 @@ fn test_derive_key_from_ssh_maps_non_deterministic_error() {
 
 #[test]
 fn test_save_and_activate_activates() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
         .unwrap()
@@ -354,11 +354,11 @@ fn test_save_and_activate_activates() {
 
     // Generate a new key pair
     let (plaintext, public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
     let new_kid = &public_key.protected.kid;
     let private_key = crate::test_utils::build_test_private_key(
         &plaintext,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         new_kid,
         &ssh_priv,
         &ssh_pub_content,
@@ -368,17 +368,17 @@ fn test_save_and_activate_activates() {
     // Simulate save_and_activate with no_activate=false
     save_key_pair_atomic(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         new_kid,
         &private_key,
         &public_key,
     )
     .unwrap();
     // no_activate=false means we DO activate
-    secretenv::io::keystore::active::set_active_kid(ALICE_MEMBER_ID, new_kid, &keystore_root)
+    secretenv::io::keystore::active::set_active_kid(ALICE_MEMBER_HANDLE, new_kid, &keystore_root)
         .unwrap();
 
-    let active = load_active_kid(ALICE_MEMBER_ID, &keystore_root).unwrap();
+    let active = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root).unwrap();
     assert_eq!(
         active.as_deref(),
         Some(new_kid.as_str()),
@@ -397,11 +397,11 @@ fn test_save_and_activate_no_activate() {
 
     // Generate a new key pair
     let (plaintext, public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
     let new_kid = &public_key.protected.kid;
     let private_key = crate::test_utils::build_test_private_key(
         &plaintext,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         new_kid,
         &ssh_priv,
         &ssh_pub_content,
@@ -412,7 +412,7 @@ fn test_save_and_activate_no_activate() {
     // Only save, do NOT set active
     save_key_pair_atomic(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         new_kid,
         &private_key,
         &public_key,
@@ -420,11 +420,11 @@ fn test_save_and_activate_no_activate() {
     .unwrap();
 
     // Key files should exist
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     assert!(kids.contains(&new_kid.to_string()), "Key should be saved");
 
     // But no active kid should be set
-    let active = load_active_kid(ALICE_MEMBER_ID, &keystore_root).unwrap();
+    let active = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root).unwrap();
     assert!(
         active.is_none(),
         "No key should be active after save_and_activate with no_activate=true"
@@ -504,7 +504,7 @@ fn test_build_identity_keys() {
 #[test]
 fn test_build_public_key() {
     let (_temp_dir, keypairs) = {
-        let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+        let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
         let keypairs = generate_keypairs().unwrap();
         (temp_dir, keypairs)
     };
@@ -520,7 +520,7 @@ fn test_build_public_key() {
     };
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         identity,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
@@ -530,7 +530,7 @@ fn test_build_public_key() {
     })
     .unwrap();
 
-    assert_eq!(public_key.protected.member_id, ALICE_MEMBER_ID);
+    assert_eq!(public_key.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(
         public_key.protected.kid,
         derive_public_key_kid(&build_protected_without_kid_value(&public_key)).unwrap()
@@ -540,14 +540,14 @@ fn test_build_public_key() {
 
 #[test]
 fn test_load_signer_public_key() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let pub_key_source =
         secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
 
-    let result = load_signer_public_key(&pub_key_source, ALICE_MEMBER_ID).unwrap();
+    let result = load_signer_public_key(&pub_key_source, ALICE_MEMBER_HANDLE).unwrap();
 
-    assert_eq!(result.protected.member_id, ALICE_MEMBER_ID);
+    assert_eq!(result.protected.subject_handle, ALICE_MEMBER_HANDLE);
 }
 
 #[test]
@@ -584,7 +584,7 @@ fn test_generate_key_rejects_skipped_determinism() {
             .unwrap();
 
     let result = secretenv::feature::key::generate::generate_key(KeyGenerationOptions {
-        member_id: ALICE_MEMBER_ID.to_string(),
+        member_handle: ALICE_MEMBER_HANDLE.to_string(),
         home: Some(temp_dir.path().to_path_buf()),
         created_at,
         expires_at,

@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for file-enc v3 format.
+//! Rewrap operations for file-enc v4 format.
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::sign_file_document;
-use crate::feature::recipient::{collect_target_recipient_ids, resolve_verified_recipients};
+use crate::feature::recipient::{collect_target_recipient_handles, resolve_verified_recipients};
 use crate::feature::rewrap::file_op::recipients::{
     add_file_recipients, remove_file_recipients, rewrite_file_recipient_wraps,
 };
@@ -20,8 +20,8 @@ use crate::{Error, Result};
 use std::path::Path;
 
 use super::{
-    build_rewrap_operation_plan, collect_stale_recipient_ids, rewrite_with_rewrap_operation_plan,
-    RewrapContext, RewrapExecutor, RewrapOptions,
+    build_rewrap_operation_plan, collect_stale_recipient_handles,
+    rewrite_with_rewrap_operation_plan, RewrapContext, RewrapExecutor, RewrapOptions,
 };
 
 /// Executor for file-enc rewrap operations.
@@ -33,7 +33,11 @@ struct FileRewrapExecutor<'a> {
 
 impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
     fn current_recipients(&self) -> Vec<String> {
-        self.protected.wrap.iter().map(|w| w.rid.clone()).collect()
+        self.protected
+            .wrap
+            .iter()
+            .map(|w| w.recipient_handle.clone())
+            .collect()
     }
 
     fn add_recipients(&mut self, recipients: &[String]) -> Result<()> {
@@ -94,7 +98,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             signature,
         };
         serde_json::to_string_pretty(&doc).map_err(|e| Error::Parse {
-            message: format!("Failed to serialize file-enc v3: {}", e),
+            message: format!("Failed to serialize file-enc v4: {}", e),
             source: Some(Box::new(e)),
         })
     }
@@ -111,26 +115,31 @@ impl<'a> FileRewrapExecutor<'a> {
     }
 }
 
-/// Rewrap file-enc v3 content.
+/// Rewrap file-enc v4 content.
 pub fn rewrap_file_document(
     options: &RewrapOptions,
     content: &FileEncContent,
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &CryptoContext,
     workspace_root: Option<&Path>,
     target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
-    let all_members = collect_target_recipient_ids(workspace_root, target_members)?;
+    let all_members = collect_target_recipient_handles(workspace_root, target_members)?;
     let verified_target_members =
         resolve_verified_recipients(target_members, key_ctx, &all_members, options.debug)?;
 
     let verified = verify_file_content(content, options.debug)?;
-    let stale_recipients = collect_stale_recipient_ids(
+    let stale_recipients = collect_stale_recipient_handles(
         &verified.document().protected.wrap,
         &verified_target_members,
     );
 
-    let ctx = RewrapContext::new(options, member_id, key_ctx, Some(&verified_target_members));
+    let ctx = RewrapContext::new(
+        options,
+        member_handle,
+        key_ctx,
+        Some(&verified_target_members),
+    );
     let executor = FileRewrapExecutor::new(verified, &ctx);
     let plan = build_rewrap_operation_plan(
         &executor.current_recipients(),

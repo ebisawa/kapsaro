@@ -8,7 +8,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::cli::common::{cmd, ALICE_MEMBER_ID};
+use crate::cli::common::{cmd, ALICE_MEMBER_HANDLE};
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use assert_cmd::cargo;
 #[cfg(unix)]
@@ -17,7 +17,7 @@ use predicates::prelude::*;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::io::trust::paths::get_trust_store_file_path;
 use secretenv::io::trust::store::save_trust_store;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use serde_json::Value;
 use tempfile::TempDir;
@@ -25,13 +25,13 @@ use tempfile::TempDir;
 const KID_BOB: &str = "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0";
 const KID_CHARLIE: &str = "C4AR1E00C4AR1E00C4AR1E00C4AR1E00";
 const DISPLAY_KID_BOB: &str = "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0";
-const BOB_MEMBER_ID: &str = "bob@example.com";
-const CHARLIE_MEMBER_ID: &str = "charlie@example.com";
+const BOB_MEMBER_HANDLE: &str = "bob@example.com";
+const CHARLIE_MEMBER_HANDLE: &str = "charlie@example.com";
 
-fn build_known_key(kid: &str, member_id: &str, approved_at: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_handle: &str, approved_at: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
-        member_id: member_id.to_string(),
+        subject_handle: member_handle.to_string(),
         approved_at: approved_at.to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -40,26 +40,26 @@ fn build_known_key(kid: &str, member_id: &str, approved_at: &str) -> KnownKey {
 }
 
 fn save_signed_trust_store(home: &TempDir) {
-    let key_ctx = setup_member_key_context(home, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V2.to_string(),
-        owner_member_id: ALICE_MEMBER_ID.to_string(),
+        format: TRUST_LOCAL_V3.to_string(),
+        owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
         known_keys: vec![
-            build_known_key(KID_BOB, BOB_MEMBER_ID, "2026-03-29T12:40:00Z"),
-            build_known_key(KID_CHARLIE, CHARLIE_MEMBER_ID, "2026-03-29T12:41:00Z"),
+            build_known_key(KID_BOB, BOB_MEMBER_HANDLE, "2026-03-29T12:40:00Z"),
+            build_known_key(KID_CHARLIE, CHARLIE_MEMBER_HANDLE, "2026-03-29T12:41:00Z"),
         ],
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     save_trust_store(&path, &document).unwrap();
 }
 
-fn install_secondary_member_fixture(home: &TempDir, member_id: &str) {
-    let secondary_home = setup_test_keystore_from_fixtures(member_id);
-    let source = secondary_home.path().join("keys").join(member_id);
-    let destination = home.path().join("keys").join(member_id);
+fn install_secondary_member_fixture(home: &TempDir, member_handle: &str) {
+    let secondary_home = setup_test_keystore_from_fixtures(member_handle);
+    let source = secondary_home.path().join("keys").join(member_handle);
+    let destination = home.path().join("keys").join(member_handle);
     copy_dir_all(&source, &destination);
 }
 
@@ -80,7 +80,7 @@ fn copy_dir_all(source: &std::path::Path, destination: &std::path::Path) {
 
 #[test]
 fn test_trust_list_succeeds_without_ssh_agent() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     let assert = cargo::cargo_bin_cmd!("secretenv")
@@ -95,15 +95,15 @@ fn test_trust_list_succeeds_without_ssh_agent() {
 
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
     assert!(
-        stderr.contains(BOB_MEMBER_ID),
+        stderr.contains(BOB_MEMBER_HANDLE),
         "expected trust list output to contain '{}', got: {}",
-        BOB_MEMBER_ID,
+        BOB_MEMBER_HANDLE,
         stderr
     );
     assert!(
-        stderr.contains(CHARLIE_MEMBER_ID),
+        stderr.contains(CHARLIE_MEMBER_HANDLE),
         "expected trust list output to contain '{}', got: {}",
-        CHARLIE_MEMBER_ID,
+        CHARLIE_MEMBER_HANDLE,
         stderr
     );
     assert!(
@@ -112,12 +112,12 @@ fn test_trust_list_succeeds_without_ssh_agent() {
         DISPLAY_KID_BOB,
         stderr
     );
-    assert.stderr(predicate::str::contains(BOB_MEMBER_ID));
+    assert.stderr(predicate::str::contains(BOB_MEMBER_HANDLE));
 }
 
 #[test]
 fn test_trust_list_json_keeps_canonical_kid() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     let assert = cargo::cargo_bin_cmd!("secretenv")
@@ -136,7 +136,7 @@ fn test_trust_list_json_keeps_canonical_kid() {
         .expect("known_keys should be an array");
     let bob = known_keys
         .iter()
-        .find(|entry| entry["member_id"] == BOB_MEMBER_ID)
+        .find(|entry| entry["subject_handle"] == BOB_MEMBER_HANDLE)
         .expect("bob entry should exist");
 
     assert_eq!(bob["kid"], KID_BOB);
@@ -145,9 +145,9 @@ fn test_trust_list_json_keeps_canonical_kid() {
 #[cfg(unix)]
 #[test]
 fn test_trust_remove_prints_insecure_permission_warning() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()
@@ -183,9 +183,9 @@ fn test_trust_remove_prints_insecure_permission_warning() {
 #[cfg(unix)]
 #[test]
 fn test_trust_remove_colors_warning_when_forced() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()
@@ -214,9 +214,9 @@ fn test_trust_remove_colors_warning_when_forced() {
 }
 
 #[test]
-fn test_trust_remove_requires_member_id_when_keystore_is_ambiguous() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
-    install_secondary_member_fixture(&home, BOB_MEMBER_ID);
+fn test_trust_remove_requires_member_handle_when_keystore_is_ambiguous() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -233,9 +233,9 @@ fn test_trust_remove_requires_member_id_when_keystore_is_ambiguous() {
 }
 
 #[test]
-fn test_trust_remove_accepts_member_id_when_keystore_is_ambiguous() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
-    install_secondary_member_fixture(&home, BOB_MEMBER_ID);
+fn test_trust_remove_accepts_member_handle_when_keystore_is_ambiguous() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -243,7 +243,7 @@ fn test_trust_remove_accepts_member_id_when_keystore_is_ambiguous() {
         .arg("remove")
         .arg(KID_BOB)
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .arg("--home")
         .arg(home.path())
         .arg("--ssh-identity")
@@ -255,7 +255,7 @@ fn test_trust_remove_accepts_member_id_when_keystore_is_ambiguous() {
 
 #[test]
 fn test_trust_remove_accepts_display_kid() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -273,7 +273,7 @@ fn test_trust_remove_accepts_display_kid() {
 
 #[test]
 fn test_trust_remove_accepts_unique_prefix_kid() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -292,7 +292,7 @@ fn test_trust_remove_accepts_unique_prefix_kid() {
 #[cfg(unix)]
 #[test]
 fn test_trust_remove_old_identity_option_fails() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -311,9 +311,9 @@ fn test_trust_remove_old_identity_option_fails() {
 #[cfg(unix)]
 #[test]
 fn test_trust_list_prints_warning_after_known_key_output() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()
@@ -325,7 +325,7 @@ fn test_trust_list_prints_warning_after_known_key_output() {
         .success();
 
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
-    let known_key_pos = stderr.find(BOB_MEMBER_ID).unwrap();
+    let known_key_pos = stderr.find(BOB_MEMBER_HANDLE).unwrap();
     let warning_pos = stderr.find("Warning: Insecure permissions").unwrap();
     assert!(
         known_key_pos < warning_pos,
@@ -336,7 +336,7 @@ fn test_trust_list_prints_warning_after_known_key_output() {
 
 #[test]
 fn test_trust_purge_with_force() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -364,16 +364,16 @@ fn test_trust_purge_with_force() {
 }
 
 #[test]
-fn test_trust_purge_accepts_member_id_when_keystore_is_ambiguous() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
-    install_secondary_member_fixture(&home, BOB_MEMBER_ID);
+fn test_trust_purge_accepts_member_handle_when_keystore_is_ambiguous() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
         .arg("trust")
         .arg("purge")
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .arg("--older-than")
         .arg("1d")
         .arg("--force")
@@ -388,7 +388,7 @@ fn test_trust_purge_accepts_member_id_when_keystore_is_ambiguous() {
 
 #[test]
 fn test_trust_purge_with_force_short_option() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -408,7 +408,7 @@ fn test_trust_purge_with_force_short_option() {
 
 #[test]
 fn test_trust_purge_without_force_in_non_interactive_mode_error() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()
@@ -429,7 +429,7 @@ fn test_trust_purge_without_force_in_non_interactive_mode_error() {
 
 #[test]
 fn test_trust_purge_yes_option_error() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     cmd()

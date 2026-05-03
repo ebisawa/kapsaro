@@ -16,16 +16,16 @@ use super::RemoveArgs;
 
 pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_id = args.member_handle.clone();
+    let member_handle = args.member_handle.clone();
     let result = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, member_id.clone()),
+        || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
-            let (_, execution) = resolve_execution_input(&args.common, member_id.clone())?;
+            let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
             remove_known_key_command(&options, &execution, &args.kid, options.verbose)
         },
     )?;
     text::print_warnings(&result.warnings);
-    print_trust_remove_summary(&result.value.kid, &result.value.member_id);
+    print_trust_remove_summary(&result.value.kid, &result.value.member_handle);
     Ok(())
 }

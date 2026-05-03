@@ -59,26 +59,34 @@ fn load_post_promotion_members(
         .values()
         .cloned()
         .collect::<Vec<_>>();
-    members.sort_by(|left, right| left.protected.member_id.cmp(&right.protected.member_id));
+    members.sort_by(|left, right| {
+        left.protected
+            .subject_handle
+            .cmp(&right.protected.subject_handle)
+    });
     if accepted_promotions.is_empty() {
         return Ok((members, Vec::new()));
     }
 
-    let self_member_id = trust_ctx.self_trust.member_id();
+    let self_member_handle = trust_ctx.self_trust.member_handle();
     let mut accepted_promotion_candidates = Vec::new();
     for candidate in accepted_promotions {
         replace_post_promotion_member(&mut members, &candidate.public_key);
-        if Some(candidate.review.member_id.as_str()) == self_member_id {
+        if Some(candidate.review.member_handle.as_str()) == self_member_handle {
             continue;
         }
         accepted_promotion_candidates.push(ApprovedKnownKey::from_review(
-            &candidate.review.member_id,
+            &candidate.review.member_handle,
             &candidate.review.kid,
             candidate.review.attestor_pub.clone(),
             candidate.review.verified_github.as_ref(),
         ));
     }
-    members.sort_by(|left, right| left.protected.member_id.cmp(&right.protected.member_id));
+    members.sort_by(|left, right| {
+        left.protected
+            .subject_handle
+            .cmp(&right.protected.subject_handle)
+    });
 
     Ok((members, accepted_promotion_candidates))
 }
@@ -86,7 +94,7 @@ fn load_post_promotion_members(
 fn replace_post_promotion_member(members: &mut Vec<PublicKey>, candidate: &PublicKey) {
     if let Some(existing) = members
         .iter_mut()
-        .find(|member| member.protected.member_id == candidate.protected.member_id)
+        .find(|member| member.protected.subject_handle == candidate.protected.subject_handle)
     {
         *existing = candidate.clone();
         return;

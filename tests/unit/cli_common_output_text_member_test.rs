@@ -33,12 +33,12 @@ fn test_format_member_list_lines_renders_dashed_kids() {
     let document = json!({});
     let view = MemberListView {
         active: vec![MemberListEntryView {
-            member_id: "alice@example.com",
+            member_handle: "alice@example.com",
             kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD",
             document: &document,
         }],
         incoming: vec![MemberListEntryView {
-            member_id: "bob@example.com",
+            member_handle: "bob@example.com",
             kid: "KBD2AAAA1111BBBB2222CCCC3333DDDD",
             document: &document,
         }],
@@ -132,7 +132,7 @@ fn build_member_show_view(
     github_claim: Option<MemberGithubClaimView<'static>>,
 ) -> MemberShowView<'static> {
     MemberShowView {
-        member_id: "alice@example.com",
+        member_handle: "alice@example.com",
         kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD",
         expires_at: "2027-01-14T00:00:00Z",
         created_at: Some("2026-01-14T00:00:00Z"),

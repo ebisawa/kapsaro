@@ -19,9 +19,9 @@ const ENV_KEY_PASSWORD: &str = "SECRETENV_KEY_PASSWORD";
 
 /// Generate a key pair and export it as a portable string.
 ///
-/// Returns (exported_base64url, member_id, kid, plaintext, public_key).
+/// Returns (exported_base64url, member_handle, kid, plaintext, public_key).
 fn generate_and_export(
-    member_id: &str,
+    member_handle: &str,
     password: &str,
 ) -> (
     String,
@@ -32,12 +32,12 @@ fn generate_and_export(
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let (plaintext, public_key) =
-        keygen_test(member_id, &ssh_priv, &ssh_pub_content).expect("keygen should succeed");
+        keygen_test(member_handle, &ssh_priv, &ssh_pub_content).expect("keygen should succeed");
 
     let password = SecretString::new(password.to_string());
     let exported = export_private_key_portable(
         &plaintext,
-        &public_key.protected.member_id,
+        &public_key.protected.subject_handle,
         &public_key.protected.kid,
         public_key
             .protected
@@ -57,18 +57,18 @@ fn generate_and_export(
 #[test]
 fn test_env_key_roundtrip_with_attested_keys() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
-    let member_id = "ci-roundtrip@example.com";
+    let member_handle = "ci-roundtrip@example.com";
     let password = "strong-test-password-42";
 
-    let (exported, plaintext, public_key) = generate_and_export(member_id, password);
+    let (exported, plaintext, public_key) = generate_and_export(member_handle, password);
 
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
     std::env::set_var(ENV_KEY_PASSWORD, password);
 
     let result = load_private_key_from_env(false).expect("load from env should succeed");
 
-    assert_eq!(result.member_id, member_id);
-    assert_eq!(result.verified_key.proof().member_id(), member_id);
+    assert_eq!(result.member_handle, member_handle);
+    assert_eq!(result.verified_key.proof().member_handle(), member_handle);
     assert_eq!(result.verified_key.proof().kid(), public_key.protected.kid);
     assert!(result.verified_key.proof().ssh_fpr().is_none());
 
@@ -94,10 +94,10 @@ fn test_env_key_roundtrip_with_attested_keys() {
 #[test]
 fn test_env_key_wrong_password_error() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
-    let member_id = "wrong-pass@example.com";
+    let member_handle = "wrong-pass@example.com";
     let password = "strong-test-password-42";
 
-    let (exported, _plaintext, _public_key) = generate_and_export(member_id, password);
+    let (exported, _plaintext, _public_key) = generate_and_export(member_handle, password);
 
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
     std::env::set_var(ENV_KEY_PASSWORD, "different-wrong-password");
@@ -117,10 +117,10 @@ fn test_env_key_wrong_password_error() {
 #[test]
 fn test_env_key_roundtrip_preserves_key_material_for_decryption() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
-    let member_id = "ci-decrypt@example.com";
+    let member_handle = "ci-decrypt@example.com";
     let password = "strong-test-password-42";
 
-    let (exported, _plaintext, public_key) = generate_and_export(member_id, password);
+    let (exported, _plaintext, public_key) = generate_and_export(member_handle, password);
 
     // Load from env
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
@@ -128,7 +128,10 @@ fn test_env_key_roundtrip_preserves_key_material_for_decryption() {
 
     let env_result = load_private_key_from_env(false).expect("load from env should succeed");
 
-    assert_eq!(env_result.member_id, public_key.protected.member_id);
+    assert_eq!(
+        env_result.member_handle,
+        public_key.protected.subject_handle
+    );
     assert_eq!(
         env_result.verified_key.proof().kid(),
         public_key.protected.kid
@@ -161,7 +164,7 @@ fn test_load_crypto_context_from_env_does_not_require_workspace_member_file() {
     let ctx = load_crypto_context_from_env(workspace.path().to_path_buf(), false)
         .expect("env crypto context should not require own workspace member file");
 
-    assert_eq!(ctx.member_id, public_key.protected.member_id);
+    assert_eq!(ctx.member_handle, public_key.protected.subject_handle);
     assert_eq!(ctx.kid, public_key.protected.kid);
     assert_eq!(
         ctx.private_key.document().keys.sig.x,

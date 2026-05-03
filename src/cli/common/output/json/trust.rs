@@ -11,7 +11,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 struct KnownKeyJsonItem<'a> {
     kid: &'a str,
-    member_id: &'a str,
+    subject_handle: &'a str,
     approved_at: &'a str,
     approved_via: &'a str,
 }
@@ -27,7 +27,7 @@ pub(crate) fn print_known_key_list(items: &[TrustListItemView<'_>]) -> Result<()
             .iter()
             .map(|item| KnownKeyJsonItem {
                 kid: item.kid,
-                member_id: item.member_id,
+                subject_handle: item.member_handle,
                 approved_at: item.approved_at,
                 approved_via: item.approved_via,
             })

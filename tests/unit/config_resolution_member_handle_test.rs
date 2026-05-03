@@ -9,15 +9,19 @@ use std::env;
 use std::fs;
 use tempfile::TempDir;
 
-fn save_global_config(temp_home: &TempDir, member_id: &str) {
+fn save_global_config(temp_home: &TempDir, member_handle: &str) {
     let config_path = temp_home.path().join("config.toml");
-    fs::write(config_path, format!("member_handle = \"{}\"\n", member_id)).unwrap();
+    fs::write(
+        config_path,
+        format!("member_handle = \"{}\"\n", member_handle),
+    )
+    .unwrap();
 }
 
-fn setup_keystore(temp_dir: &TempDir, member_ids: &[&str]) {
+fn setup_keystore(temp_dir: &TempDir, member_handles: &[&str]) {
     let keystore_root = temp_dir.path().join("keys");
     fs::create_dir_all(&keystore_root).unwrap();
-    for &id in member_ids {
+    for &id in member_handles {
         fs::create_dir_all(keystore_root.join(id)).unwrap();
     }
 }

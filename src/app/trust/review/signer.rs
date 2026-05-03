@@ -81,7 +81,7 @@ pub(crate) fn enforce_read_trust_member_eligibility(
             rule: "E_TRUST_NON_MEMBER".to_string(),
             message: format!(
                 "Signer '{}' ({}) is not eligible for {} trust approval",
-                candidate.member_id, candidate.kid, approval_subject
+                candidate.member_handle, candidate.kid, approval_subject
             ),
         });
     }

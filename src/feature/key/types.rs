@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 /// Result for key generation.
 pub struct KeyGenerationResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub created_at: String,
     pub expires_at: String,
@@ -23,7 +23,7 @@ pub struct KeyGenerationResult {
 #[derive(Debug, Clone)]
 pub struct KeyInfo {
     pub kid: String,
-    pub member_id: String,
+    pub member_handle: String,
     pub created_at: String,
     pub expires_at: String,
     pub active: bool,
@@ -38,20 +38,20 @@ pub struct KeyListResult {
 
 /// Result for key activation.
 pub struct KeyActivateResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
 }
 
 /// Result for key removal.
 pub struct KeyRemoveResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub was_active: bool,
 }
 
 /// Result for key export.
 pub struct KeyExportResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub public_key: PublicKey,
 }

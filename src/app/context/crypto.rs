@@ -17,12 +17,12 @@ use crate::io::keystore::public_key_source::{
     KeystorePublicKeySource, PublicKeySource, WorkspacePublicKeySource,
 };
 use crate::io::ssh::backend::SignatureBackend;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::support::kid::format_kid_display;
 use crate::Result;
 
 pub fn load_crypto_context(
-    member_id: &str,
+    member_handle: &str,
     backend: Box<dyn SignatureBackend>,
     ssh_pubkey: String,
     explicit_kid: Option<&str>,
@@ -30,12 +30,12 @@ pub fn load_crypto_context(
     workspace_path: Option<PathBuf>,
     debug_enabled: bool,
 ) -> Result<CryptoContext> {
-    log_crypto_context_load(member_id, explicit_kid, debug_enabled);
+    log_crypto_context_load(member_handle, explicit_kid, debug_enabled);
     let keystore_root = resolve_keystore_root(keystore_root)?;
-    let kid = resolve_keystore_kid(&keystore_root, member_id, explicit_kid, debug_enabled)?;
+    let kid = resolve_keystore_kid(&keystore_root, member_handle, explicit_kid, debug_enabled)?;
     let decrypted_key = load_verified_private_key_from_keystore(
         &keystore_root,
-        member_id,
+        member_handle,
         &kid,
         backend.as_ref(),
         &ssh_pubkey,
@@ -45,7 +45,7 @@ pub fn load_crypto_context(
         explicit_kid.map(|_| decrypted_key.private_key.proof().kid().to_string());
     let local_key_access = build_local_key_access(keystore_root.clone(), ssh_pubkey, backend);
     let context = build_keystore_crypto_context(
-        member_id,
+        member_handle,
         kid,
         keystore_root,
         workspace_path,
@@ -63,7 +63,7 @@ pub fn load_crypto_context_from_env(
     let kid = Kid::try_from(result.verified_key.proof().kid.clone())?;
     let signing_key = build_signing_key(result.verified_key.document())?;
     let context = CryptoContext::new(
-        result.member_id,
+        result.member_handle,
         kid,
         Box::new(WorkspacePublicKeySource::new(workspace_path.clone())),
         Some(workspace_path),
@@ -74,11 +74,11 @@ pub fn load_crypto_context_from_env(
     Ok(context.with_local_key_access(None, None))
 }
 
-fn log_crypto_context_load(member_id: &str, explicit_kid: Option<&str>, debug_enabled: bool) {
+fn log_crypto_context_load(member_handle: &str, explicit_kid: Option<&str>, debug_enabled: bool) {
     if debug_enabled {
         debug!(
-            "[CRYPTO] load_crypto_context: member_id={}, explicit_kid={}",
-            member_id,
+            "[CRYPTO] load_crypto_context: member_handle={}, explicit_kid={}",
+            member_handle,
             explicit_kid.unwrap_or("(none)")
         );
     }
@@ -96,11 +96,11 @@ fn resolve_keystore_root(keystore_root: Option<&PathBuf>) -> Result<PathBuf> {
 
 fn resolve_keystore_kid(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     explicit_kid: Option<&str>,
     debug_enabled: bool,
 ) -> Result<String> {
-    let kid = resolve_kid(keystore_root, member_id, explicit_kid)?;
+    let kid = resolve_kid(keystore_root, member_handle, explicit_kid)?;
     if debug_enabled {
         let kid_display = format_kid_display(&kid).unwrap_or_else(|_| kid.clone());
         debug!("[CRYPTO] load_crypto_context: resolved kid={}", kid_display);
@@ -109,7 +109,7 @@ fn resolve_keystore_kid(
 }
 
 fn build_keystore_crypto_context(
-    member_id: &str,
+    member_handle: &str,
     kid: String,
     keystore_root: PathBuf,
     workspace_path: Option<PathBuf>,
@@ -121,7 +121,7 @@ fn build_keystore_crypto_context(
         Box::new(KeystorePublicKeySource::new(keystore_root.clone()));
 
     let context = CryptoContext::new(
-        MemberId::try_from(member_id)?,
+        MemberHandle::try_from(member_handle)?,
         Kid::try_from(kid)?,
         pub_key_source,
         workspace_path,

@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncomingMemberPromotionSnapshot {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub source_path: PathBuf,
     pub source_content: String,
@@ -28,14 +28,14 @@ pub struct IncomingMemberPromotionSnapshot {
 struct PromotionPlan {
     source: PathBuf,
     destination: PathBuf,
-    member_id: String,
+    member_handle: String,
 }
 
 fn build_promotion_plan(
     workspace_path: &Path,
-    member_ids: Option<&[String]>,
+    member_handles: Option<&[String]>,
 ) -> Result<Vec<PromotionPlan>> {
-    let plans = match member_ids {
+    let plans = match member_handles {
         Some(ids) => build_plans_from_ids(workspace_path, ids)?,
         None => build_plans_from_incoming_dir(workspace_path)?,
     };
@@ -43,31 +43,31 @@ fn build_promotion_plan(
     Ok(plans)
 }
 
-/// Build plans from a caller-supplied list of incoming member IDs.
+/// Build plans from a caller-supplied list of incoming member handles.
 fn build_plans_from_ids(
     workspace_path: &Path,
-    member_ids: &[String],
+    member_handles: &[String],
 ) -> Result<Vec<PromotionPlan>> {
-    member_ids
+    member_handles
         .iter()
-        .map(|member_id| build_plan_for_id(workspace_path, member_id))
+        .map(|member_handle| build_plan_for_id(workspace_path, member_handle))
         .collect()
 }
 
-fn build_plan_for_id(workspace_path: &Path, member_id: &str) -> Result<PromotionPlan> {
-    let source = get_incoming_member_file_path(workspace_path, member_id);
+fn build_plan_for_id(workspace_path: &Path, member_handle: &str) -> Result<PromotionPlan> {
+    let source = get_incoming_member_file_path(workspace_path, member_handle);
     if !source.exists() {
         return Err(Error::NotFound {
-            message: format!("Member '{}' not found in incoming/", member_id),
+            message: format!("Member '{}' not found in incoming/", member_handle),
         });
     }
 
-    let destination = member_file_path(workspace_path, MemberStatus::Active, member_id);
+    let destination = member_file_path(workspace_path, MemberStatus::Active, member_handle);
 
     Ok(PromotionPlan {
         source,
         destination,
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
     })
 }
 
@@ -82,7 +82,7 @@ fn build_plans_from_incoming_dir(workspace_path: &Path) -> Result<Vec<PromotionP
 }
 
 fn build_plan_from_incoming_file(active_dir: &Path, source: PathBuf) -> Result<PromotionPlan> {
-    let member_id = source
+    let member_handle = source
         .file_stem()
         .and_then(|s| s.to_str())
         .map(String::from)
@@ -93,12 +93,12 @@ fn build_plan_from_incoming_file(active_dir: &Path, source: PathBuf) -> Result<P
             ))
         })?;
 
-    let destination = active_dir.join(format!("{}.json", member_id));
+    let destination = active_dir.join(format!("{}.json", member_handle));
 
     Ok(PromotionPlan {
         source,
         destination,
-        member_id,
+        member_handle,
     })
 }
 
@@ -124,14 +124,17 @@ fn execute_promotion_plan(workspace_path: &Path, plans: &[PromotionPlan]) -> Res
             Error::build_io_error_with_source(
                 format!(
                     "Failed to clean incoming member '{}': {}",
-                    plan.member_id, e
+                    plan.member_handle, e
                 ),
                 e,
             )
         })?;
     }
 
-    Ok(plans.iter().map(|plan| plan.member_id.clone()).collect())
+    Ok(plans
+        .iter()
+        .map(|plan| plan.member_handle.clone())
+        .collect())
 }
 
 pub fn promote_incoming_members(workspace_path: &Path) -> Result<Vec<String>> {
@@ -141,9 +144,9 @@ pub fn promote_incoming_members(workspace_path: &Path) -> Result<Vec<String>> {
 
 pub fn promote_specified_incoming_members(
     workspace_path: &Path,
-    member_ids: &[String],
+    member_handles: &[String],
 ) -> Result<Vec<String>> {
-    let plans = build_promotion_plan(workspace_path, Some(member_ids))?;
+    let plans = build_promotion_plan(workspace_path, Some(member_handles))?;
     execute_promotion_plan(workspace_path, &plans)
 }
 
@@ -164,7 +167,7 @@ pub fn promote_snapshotted_incoming_members(
 
     Ok(snapshots
         .iter()
-        .map(|snapshot| snapshot.member_id.clone())
+        .map(|snapshot| snapshot.member_handle.clone())
         .collect())
 }
 
@@ -172,9 +175,13 @@ fn promote_snapshotted_member(
     workspace_path: &Path,
     snapshot: &IncomingMemberPromotionSnapshot,
 ) -> Result<()> {
-    let destination = member_file_path(workspace_path, MemberStatus::Active, &snapshot.member_id);
+    let destination = member_file_path(
+        workspace_path,
+        MemberStatus::Active,
+        &snapshot.member_handle,
+    );
     with_promotion_file_locks(&snapshot.source_path, &destination, || {
-        let subject_display = format!("Incoming member '{}'", snapshot.member_id);
+        let subject_display = format!("Incoming member '{}'", snapshot.member_handle);
         ensure_text_file_matches_snapshot_with_limit(
             &snapshot.source_path,
             Some(&snapshot.source_content),
@@ -186,7 +193,7 @@ fn promote_snapshotted_member(
             Error::build_io_error_with_source(
                 format!(
                     "Failed to clean incoming member '{}': {}",
-                    snapshot.member_id, e
+                    snapshot.member_handle, e
                 ),
                 e,
             )
@@ -219,7 +226,7 @@ fn ensure_promotion_kids_are_unique(workspace_path: &Path, plans: &[PromotionPla
         .map(|plan| {
             let public_key = load_verified_member_file_from_path(&plan.source)?;
             Ok(MemberKidCandidate {
-                member_id: plan.member_id.clone(),
+                member_handle: plan.member_handle.clone(),
                 kid: public_key.protected.kid,
                 status: MemberStatus::Active,
             })
@@ -229,8 +236,8 @@ fn ensure_promotion_kids_are_unique(workspace_path: &Path, plans: &[PromotionPla
         .iter()
         .flat_map(|plan| {
             [
-                (MemberStatus::Active, plan.member_id.clone()),
-                (MemberStatus::Incoming, plan.member_id.clone()),
+                (MemberStatus::Active, plan.member_handle.clone()),
+                (MemberStatus::Incoming, plan.member_handle.clone()),
             ]
         })
         .collect::<Vec<_>>();
@@ -249,14 +256,14 @@ fn ensure_snapshotted_promotion_kids_are_unique(
     let candidates = snapshots
         .iter()
         .map(|snapshot| MemberKidCandidate {
-            member_id: snapshot.member_id.clone(),
+            member_handle: snapshot.member_handle.clone(),
             kid: snapshot.kid.clone(),
             status: MemberStatus::Active,
         })
         .collect::<Vec<_>>();
     let ignored_existing = snapshots
         .iter()
-        .map(|snapshot| (MemberStatus::Incoming, snapshot.member_id.clone()))
+        .map(|snapshot| (MemberStatus::Incoming, snapshot.member_handle.clone()))
         .collect::<Vec<_>>();
     check_workspace_member_kid_uniqueness(
         workspace_path,

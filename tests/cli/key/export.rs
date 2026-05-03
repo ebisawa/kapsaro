@@ -3,7 +3,7 @@
 
 //! Integration tests for `key export` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use console::strip_ansi_codes;
 use predicates::prelude::*;
@@ -18,13 +18,13 @@ use tempfile::TempDir;
 fn generate_exportable_private_key(
     temp_dir: &TempDir,
     ssh_priv: &std::path::Path,
-    member_id: &str,
+    member_handle: &str,
 ) {
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -37,14 +37,14 @@ fn test_key_export_explicit_kid() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate a key
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -53,7 +53,7 @@ fn test_key_export_explicit_kid() {
 
     // Get the kid
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Export to a temp file
@@ -64,7 +64,7 @@ fn test_key_export_explicit_kid() {
         .arg("export")
         .arg(&kid)
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -81,13 +81,13 @@ fn test_key_export_explicit_kid() {
     // Verify fields
     assert_eq!(exported.protected.kid, kid, "Exported kid should match");
     assert_eq!(
-        exported.protected.member_id, member_id,
-        "Exported member_id should match"
+        exported.protected.subject_handle, member_handle,
+        "Exported member_handle should match"
     );
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V4,
-        "Exported format should be v3"
+        format::PUBLIC_KEY_V5,
+        "Exported format should be v5"
     );
 
     // Keep temp directories alive
@@ -99,14 +99,14 @@ fn test_key_export_active() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate a key
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -120,7 +120,7 @@ fn test_key_export_active() {
         .arg("key")
         .arg("export")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -136,8 +136,8 @@ fn test_key_export_active() {
 
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V4,
-        "Exported format should be v3"
+        format::PUBLIC_KEY_V5,
+        "Exported format should be v5"
     );
 
     // Keep temp directories alive
@@ -148,13 +148,13 @@ fn test_key_export_active() {
 fn test_key_export_accepts_display_kid() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -162,7 +162,7 @@ fn test_key_export_accepts_display_kid() {
         .success();
 
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
     let export_file = temp_dir.path().join("display-exported.json");
 
@@ -171,7 +171,7 @@ fn test_key_export_accepts_display_kid() {
         .arg("export")
         .arg(format_kid_display(&kid).unwrap())
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -189,8 +189,8 @@ fn test_key_export_accepts_display_kid() {
 fn test_key_export_private_warns_for_accepted_short_password_to_file() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
-    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
     let export_file = temp_dir.path().join("portable-private-key.txt");
 
     cmd()
@@ -198,7 +198,7 @@ fn test_key_export_private_warns_for_accepted_short_password_to_file() {
         .arg("export")
         .arg("--private")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -219,8 +219,8 @@ fn test_key_export_private_warns_for_accepted_short_password_to_file() {
 fn test_key_export_private_colors_short_password_warning_when_forced() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
-    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
     let export_file = temp_dir.path().join("portable-private-key.txt");
 
     let assert = cmd()
@@ -228,7 +228,7 @@ fn test_key_export_private_colors_short_password_warning_when_forced() {
         .arg("export")
         .arg("--private")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -255,8 +255,8 @@ fn test_key_export_private_colors_short_password_warning_when_forced() {
 fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
-    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
 
     let output = cmd()
         .arg("key")
@@ -264,7 +264,7 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
         .arg("--private")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("12345678\n12345678\n")
@@ -299,8 +299,8 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
 fn test_key_export_private_does_not_warn_for_recommended_password() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
-    generate_exportable_private_key(&temp_dir, &ssh_priv, member_id);
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
     let export_file = temp_dir.path().join("portable-private-key.txt");
 
     cmd()
@@ -308,7 +308,7 @@ fn test_key_export_private_does_not_warn_for_recommended_password() {
         .arg("export")
         .arg("--private")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -325,13 +325,13 @@ fn test_key_export_private_does_not_warn_for_recommended_password() {
 fn test_key_export_private_writes_password_protected_key_file() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -345,7 +345,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         .arg("export")
         .arg("--private")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -360,8 +360,8 @@ fn test_key_export_private_writes_password_protected_key_file() {
     let private_key: PrivateKey =
         serde_json::from_slice(&json).expect("Should deserialize as PrivateKey");
 
-    assert_eq!(private_key.protected.member_id, member_id);
-    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V5);
+    assert_eq!(private_key.protected.subject_handle, member_handle);
+    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V6);
 
     drop(ssh_temp);
 }
@@ -370,13 +370,13 @@ fn test_key_export_private_writes_password_protected_key_file() {
 fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -389,7 +389,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         .arg("--private")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("strong-password-42\nstrong-password-42\n")
@@ -408,14 +408,14 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
     let private_key: PrivateKey =
         serde_json::from_slice(&json).expect("Should deserialize stdout as PrivateKey");
 
-    assert_eq!(private_key.protected.member_id, member_id);
-    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V5);
+    assert_eq!(private_key.protected.subject_handle, member_handle);
+    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V6);
 
     drop(ssh_temp);
 }
 
 #[test]
-fn test_key_export_private_requires_member_id_before_password_input() {
+fn test_key_export_private_requires_member_handle_before_password_input() {
     let temp_dir = TempDir::new().unwrap();
 
     cmd()
@@ -437,13 +437,13 @@ fn test_key_export_private_requires_member_id_before_password_input() {
 fn test_key_export_private_requires_explicit_output_destination() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -455,7 +455,7 @@ fn test_key_export_private_requires_explicit_output_destination() {
         .arg("export")
         .arg("--private")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -472,13 +472,13 @@ fn test_key_export_private_requires_explicit_output_destination() {
 fn test_key_export_private_rejects_stdout_and_out_together() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -493,7 +493,7 @@ fn test_key_export_private_rejects_stdout_and_out_together() {
         .arg("--private")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())

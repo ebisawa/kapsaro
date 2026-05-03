@@ -11,7 +11,7 @@ use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub(crate) struct MemberKidCandidate {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub status: MemberStatus,
 }
@@ -19,17 +19,17 @@ pub(crate) struct MemberKidCandidate {
 pub fn ensure_member_document_kid_is_unique(
     workspace_path: &Path,
     status: MemberStatus,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     allow_replace_self: bool,
 ) -> Result<()> {
     let ignored_existing = if allow_replace_self {
-        vec![(status, member_id.to_string())]
+        vec![(status, member_handle.to_string())]
     } else {
         Vec::new()
     };
     let candidate = MemberKidCandidate {
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         kid: kid.to_string(),
         status,
     };
@@ -83,7 +83,7 @@ fn load_member_kid_candidates(
     let mut candidates = Vec::new();
     for status in statuses {
         for path in load_json_files_in_dir(&members_dir(workspace_path, *status))? {
-            let Some(member_id) = path
+            let Some(member_handle) = path
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .map(String::from)
@@ -92,15 +92,15 @@ fn load_member_kid_candidates(
             };
             if ignored_existing
                 .iter()
-                .any(|(ignored_status, ignored_member_id)| {
-                    *ignored_status == *status && *ignored_member_id == member_id
+                .any(|(ignored_status, ignored_member_handle)| {
+                    *ignored_status == *status && *ignored_member_handle == member_handle
                 })
             {
                 continue;
             }
             let member = load_verified_member_file_from_path(&path)?;
             candidates.push(MemberKidCandidate {
-                member_id,
+                member_handle,
                 kid: member.protected.kid.clone(),
                 status: *status,
             });
@@ -115,9 +115,9 @@ fn duplicate_kid_error(existing: &MemberKidCandidate, candidate: &MemberKidCandi
             "Duplicate kid '{}' in workspace members: {}/'{}' conflicts with {}/'{}'",
             format_kid_display_lossy(&candidate.kid),
             member_status_dir_name(existing.status),
-            existing.member_id,
+            existing.member_handle,
             member_status_dir_name(candidate.status),
-            candidate.member_id
+            candidate.member_handle
         ),
     }
 }

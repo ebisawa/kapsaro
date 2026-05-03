@@ -4,8 +4,8 @@
 //! Output path-related encryption tests
 
 use crate::cli::common::{
-    cmd, default_common_options, set_ssh_key_from_temp_dir, setup_workspace, ALICE_MEMBER_ID,
-    TEST_MEMBER_ID,
+    cmd, default_common_options, set_ssh_key_from_temp_dir, setup_workspace, ALICE_MEMBER_HANDLE,
+    TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{setup_test_workspace, with_temp_cwd};
 use predicates::prelude::*;
@@ -15,7 +15,7 @@ use std::fs;
 
 #[test]
 fn test_encrypt_default_output_is_encrypted_in_cwd() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
 
     let input_path = workspace_dir.join("data.bin");
     fs::write(&input_path, b"some data").unwrap();
@@ -28,7 +28,7 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
 
         let args = encrypt::EncryptArgs {
             common: common_opts,
-            member_handle: Some(ALICE_MEMBER_ID.to_string()),
+            member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
             out: None,
             stdout: false,
             stdin: false,
@@ -42,13 +42,13 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
 
         let content = fs::read_to_string(&expected).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V3);
+        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
     })
 }
 
 #[test]
 fn test_encrypt_explicit_out_option() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
 
     let input_path = workspace_dir.join("test.bin");
     fs::write(&input_path, b"data").unwrap();
@@ -61,7 +61,7 @@ fn test_encrypt_explicit_out_option() {
 
     let args = encrypt::EncryptArgs {
         common: common_opts,
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         out: Some(explicit_output.clone()),
         stdout: false,
         stdin: false,
@@ -88,7 +88,7 @@ fn test_encrypt_explicit_out_option_reports_output_path() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -110,7 +110,7 @@ fn test_encrypt_stdin_with_out_option_writes_encrypted_file() {
         .arg("--out")
         .arg(&output_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -122,7 +122,7 @@ fn test_encrypt_stdin_with_out_option_writes_encrypted_file() {
 
     let content = fs::read_to_string(&output_file).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V3);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn test_encrypt_stdin_with_stdout_writes_json_to_stdout() {
         .arg("--stdin")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -146,7 +146,7 @@ fn test_encrypt_stdin_with_stdout_writes_json_to_stdout() {
 
     let stdout = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V3);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn test_encrypt_file_with_stdout_writes_json_to_stdout() {
         .arg(input_file.to_str().unwrap())
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -171,7 +171,7 @@ fn test_encrypt_file_with_stdout_writes_json_to_stdout() {
 
     let stdout = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V3);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn test_encrypt_stdin_requires_out_or_stdout() {
         .arg("encrypt")
         .arg("--stdin")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -209,7 +209,7 @@ fn test_encrypt_rejects_stdout_and_out_together() {
         .arg("--out")
         .arg(&output_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -231,7 +231,7 @@ fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg("--stdin")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -248,7 +248,7 @@ fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg("--out")
         .arg(&decrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())

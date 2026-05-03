@@ -13,35 +13,35 @@ use super::common::resolve_keystore_root;
 
 pub fn activate_key(
     home: Option<PathBuf>,
-    member_id: String,
+    member_handle: String,
     kid: Option<String>,
 ) -> Result<KeyActivateResult> {
     let keystore_root = resolve_keystore_root(home)?;
-    let kid = resolve_activated_kid(&keystore_root, &member_id, kid)?;
-    validate_key_exists(&keystore_root, &member_id, &kid)?;
-    set_active_kid(&member_id, &kid, &keystore_root)?;
-    Ok(KeyActivateResult { member_id, kid })
+    let kid = resolve_activated_kid(&keystore_root, &member_handle, kid)?;
+    validate_key_exists(&keystore_root, &member_handle, &kid)?;
+    set_active_kid(&member_handle, &kid, &keystore_root)?;
+    Ok(KeyActivateResult { member_handle, kid })
 }
 
 pub fn remove_key(
     home: Option<PathBuf>,
-    member_id: String,
+    member_handle: String,
     kid: String,
     force: bool,
 ) -> Result<KeyRemoveResult> {
     let keystore_root = resolve_keystore_root(home)?;
-    let kid = resolve_member_kid_query(&keystore_root, &member_id, &kid)?;
-    validate_key_directory_exists(&keystore_root, &member_id, &kid)?;
-    let was_active = load_active_kid(&member_id, &keystore_root)?.as_ref() == Some(&kid);
+    let kid = resolve_member_kid_query(&keystore_root, &member_handle, &kid)?;
+    validate_key_directory_exists(&keystore_root, &member_handle, &kid)?;
+    let was_active = load_active_kid(&member_handle, &keystore_root)?.as_ref() == Some(&kid);
     validate_key_removal(&kid, was_active, force)?;
-    remove_key_directory(&keystore_root, &member_id, &kid)?;
+    remove_key_directory(&keystore_root, &member_handle, &kid)?;
 
     if was_active {
-        clear_active_kid(&member_id, &keystore_root)?;
+        clear_active_kid(&member_handle, &keystore_root)?;
     }
 
     Ok(KeyRemoveResult {
-        member_id,
+        member_handle,
         kid,
         was_active,
     })
@@ -49,17 +49,17 @@ pub fn remove_key(
 
 fn resolve_activated_kid(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: Option<String>,
 ) -> Result<String> {
     match kid {
-        Some(kid) => resolve_member_kid_query(keystore_root, member_id, &kid),
-        None => select_latest_valid_kid(keystore_root, member_id),
+        Some(kid) => resolve_member_kid_query(keystore_root, member_handle, &kid),
+        None => select_latest_valid_kid(keystore_root, member_handle),
     }
 }
 
-fn validate_key_exists(keystore_root: &Path, member_id: &str, kid: &str) -> Result<()> {
-    let private_key_path = get_private_key_file_path_from_root(keystore_root, member_id, kid);
+fn validate_key_exists(keystore_root: &Path, member_handle: &str, kid: &str) -> Result<()> {
+    let private_key_path = get_private_key_file_path_from_root(keystore_root, member_handle, kid);
     if private_key_path.exists() {
         return Ok(());
     }
@@ -69,8 +69,12 @@ fn validate_key_exists(keystore_root: &Path, member_id: &str, kid: &str) -> Resu
     })
 }
 
-fn validate_key_directory_exists(keystore_root: &Path, member_id: &str, kid: &str) -> Result<()> {
-    let key_dir = keystore_root.join(member_id).join(kid);
+fn validate_key_directory_exists(
+    keystore_root: &Path,
+    member_handle: &str,
+    kid: &str,
+) -> Result<()> {
+    let key_dir = keystore_root.join(member_handle).join(kid);
     if key_dir.exists() {
         return Ok(());
     }

@@ -6,7 +6,7 @@
 //! Tests for KV operations (get/set/unset/list).
 
 use crate::keygen_helpers::build_verified_recipient_keys;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures, setup_test_workspace_from_fixtures,
 };
@@ -23,7 +23,7 @@ use secretenv::format::content::KvEncContent;
 use secretenv::format::kv::enc::canonical::parse_kv_wrap;
 use secretenv::format::token::TokenCodec;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::io::workspace::members::{list_active_member_ids, load_member_files};
+use secretenv::io::workspace::members::{list_active_member_handles, load_member_files};
 use tempfile::TempDir;
 
 fn build_test_kv_enc_content(
@@ -33,12 +33,12 @@ fn build_test_kv_enc_content(
     let keystore_root = temp_dir.path().join("keys");
 
     // Get public key from keystore first
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Load CryptoContext to get signing key
-    let key_ctx = setup_member_key_context(temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
     let signer_pub = public_key.clone();
     let members = vec![public_key];
     let verified_members = build_verified_recipient_keys(&members);
@@ -68,14 +68,14 @@ fn list_kv_keys(content: &KvEncContent) -> secretenv::Result<Vec<String>> {
 
 fn decrypt_kv_value(
     content: &KvEncContent,
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &secretenv::feature::context::crypto::CryptoContext,
     key: &str,
 ) -> secretenv::Result<String> {
     let verified = verify_kv_content(content, false)?;
     let value = decrypt_kv_single_entry(
         &verified,
-        member_id,
+        member_handle,
         &key_ctx.kid,
         &key_ctx.private_key,
         key,
@@ -90,12 +90,12 @@ fn decrypt_kv_value(
 fn build_recipient_snapshot(
     workspace_root: &std::path::Path,
 ) -> secretenv::Result<KvRecipientSnapshot> {
-    let member_ids = list_active_member_ids(workspace_root)?;
-    let public_keys = load_member_files(workspace_root, &member_ids)?;
+    let member_handles = list_active_member_handles(workspace_root)?;
+    let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
         secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
     Ok(KvRecipientSnapshot {
-        member_ids,
+        member_handles,
         verified_members,
     })
 }
@@ -139,7 +139,7 @@ fn test_list_kv_keys() {
     );
     kv_map.insert("API_KEY".to_string(), "secret123".to_string());
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let encrypted = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     // List keys
@@ -154,7 +154,7 @@ fn test_list_kv_keys() {
 fn test_list_kv_keys_empty() {
     let kv_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let encrypted = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     // List keys
@@ -172,17 +172,18 @@ fn test_decrypt_kv_value() {
     );
     kv_map.insert("API_KEY".to_string(), "secret123".to_string());
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let encrypted = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Get value
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let value = decrypt_kv_value(&encrypted, ALICE_MEMBER_ID, &key_ctx, "DATABASE_URL").unwrap();
+    let value =
+        decrypt_kv_value(&encrypted, ALICE_MEMBER_HANDLE, &key_ctx, "DATABASE_URL").unwrap();
 
     assert_eq!(value, "postgres://localhost");
 }
@@ -195,17 +196,17 @@ fn test_decrypt_kv_value_not_found() {
         "postgres://localhost".to_string(),
     );
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let encrypted = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Get non-existent value
     let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = decrypt_kv_value(&encrypted, ALICE_MEMBER_ID, &key_ctx, "NONEXISTENT");
+    let result = decrypt_kv_value(&encrypted, ALICE_MEMBER_HANDLE, &key_ctx, "NONEXISTENT");
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("not found"));
@@ -213,14 +214,14 @@ fn test_decrypt_kv_value_not_found() {
 
 #[test]
 fn test_set_kv_entry_new_file() {
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Set context
-    let mut ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
     ctx.token_codec = Some(TokenCodec::JsonJcs);
 
     // Set new key-value pair (new file)
@@ -238,7 +239,7 @@ fn test_set_kv_entry_new_file() {
 
     // Verify result
     assert!(result.encrypted.as_str().contains("DATABASE_URL"));
-    assert_eq!(result.recipients, vec![ALICE_MEMBER_ID.to_string()]);
+    assert_eq!(result.recipients, vec![ALICE_MEMBER_HANDLE.to_string()]);
 }
 
 #[test]
@@ -247,16 +248,16 @@ fn test_set_kv_entry_existing_file() {
     let mut kv_map = std::collections::HashMap::new();
     kv_map.insert("API_KEY".to_string(), "secret123".to_string());
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let existing_content = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Set context
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
 
     // Set new key-value pair (existing file - workspace_root not used for recipient lookup)
     let entries = vec![(
@@ -282,16 +283,16 @@ fn test_unset_kv_entry() {
     );
     kv_map.insert("API_KEY".to_string(), "secret123".to_string());
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let existing_content = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Unset context
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
 
     // Unset key
     let existing_content = KvEncContent::new_unchecked(existing_content);
@@ -311,16 +312,16 @@ fn test_unset_kv_entry_not_found() {
         "postgres://localhost".to_string(),
     );
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let existing_content = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Unset context
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
 
     // Unset non-existent key
     let existing_content = KvEncContent::new_unchecked(existing_content);
@@ -332,13 +333,13 @@ fn test_unset_kv_entry_not_found() {
 
 #[test]
 fn test_set_kv_entry_multiple_entries_new_file() {
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
-    let mut ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
     ctx.token_codec = Some(TokenCodec::JsonJcs);
 
     let entries = vec![
@@ -354,7 +355,7 @@ fn test_set_kv_entry_multiple_entries_new_file() {
     assert!(result.encrypted.as_str().contains("DATABASE_URL"));
     assert!(result.encrypted.as_str().contains("API_KEY"));
     assert!(result.encrypted.as_str().contains("APP_SECRET"));
-    assert_eq!(result.recipients, vec![ALICE_MEMBER_ID.to_string()]);
+    assert_eq!(result.recipients, vec![ALICE_MEMBER_HANDLE.to_string()]);
 }
 
 #[test]
@@ -363,15 +364,15 @@ fn test_set_kv_entry_multiple_entries_existing_file() {
     let mut kv_map = std::collections::HashMap::new();
     kv_map.insert("EXISTING_KEY".to_string(), "existing_value".to_string());
 
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let existing_content = build_test_kv_enc_content(&temp_dir, &kv_map);
 
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
 
     let new_entries = vec![
         ("NEW_KEY_1".to_string(), "value1".to_string()),
@@ -390,20 +391,20 @@ fn test_set_kv_entry_multiple_entries_existing_file() {
 #[test]
 fn test_set_kv_entry_existing_file_uses_current_workspace_recipients() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, "bob@example.com"]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, "bob@example.com"]);
     let keystore_root = temp_dir.path().join("keys");
-    let kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+    let kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
         .unwrap()
         .first()
         .unwrap()
         .clone();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&kid));
     let existing_content = KvEncContent::new_unchecked(build_test_kv_enc_content(
         &temp_dir,
         &std::collections::HashMap::from([("API_KEY".to_string(), "secret123".to_string())]),
     ));
     let recipients = build_recipient_snapshot(&workspace_dir).unwrap();
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
 
     let result = set_kv_entry_with_recipients(
         Some(&existing_content),
@@ -414,66 +415,72 @@ fn test_set_kv_entry_existing_file_uses_current_workspace_recipients() {
     .unwrap();
 
     let (_, _, wrap) = parse_kv_wrap(result.encrypted.as_str()).unwrap();
-    let mut rids = wrap
+    let mut recipient_handles = wrap
         .wrap
         .iter()
-        .map(|item| item.rid.clone())
+        .map(|item| item.recipient_handle.clone())
         .collect::<Vec<_>>();
-    rids.sort();
+    recipient_handles.sort();
     assert_eq!(
-        rids,
-        vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()]
+        recipient_handles,
+        vec![
+            ALICE_MEMBER_HANDLE.to_string(),
+            "bob@example.com".to_string()
+        ]
     );
 }
 
 #[test]
 fn test_unset_kv_entry_existing_file_uses_current_workspace_recipients() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, "bob@example.com"]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, "bob@example.com"]);
     let keystore_root = temp_dir.path().join("keys");
-    let kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+    let kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
         .unwrap()
         .first()
         .unwrap()
         .clone();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&kid));
     let existing_content = KvEncContent::new_unchecked(build_test_kv_enc_content(
         &temp_dir,
         &std::collections::HashMap::from([("API_KEY".to_string(), "secret123".to_string())]),
     ));
     let recipients = build_recipient_snapshot(&workspace_dir).unwrap();
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
 
     let result =
         unset_kv_entry_with_recipients(&existing_content, "API_KEY", &recipients, &ctx).unwrap();
 
     let (_, _, wrap) = parse_kv_wrap(&result).unwrap();
-    let mut rids = wrap
+    let mut recipient_handles = wrap
         .wrap
         .iter()
-        .map(|item| item.rid.clone())
+        .map(|item| item.recipient_handle.clone())
         .collect::<Vec<_>>();
-    rids.sort();
+    recipient_handles.sort();
     assert_eq!(
-        rids,
-        vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()]
+        recipient_handles,
+        vec![
+            ALICE_MEMBER_HANDLE.to_string(),
+            "bob@example.com".to_string()
+        ]
     );
 }
 
 #[test]
 fn test_set_kv_entry_new_file_uses_recipients_snapshot_not_pub_key_source() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, "bob@example.com"]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, "bob@example.com"]);
     let keystore_root = temp_dir.path().join("keys");
-    let kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+    let kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
         .unwrap()
         .first()
         .unwrap()
         .clone();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&kid));
     std::fs::remove_dir_all(keystore_root.join("bob@example.com")).unwrap();
     let recipients = build_recipient_snapshot(&workspace_dir).unwrap();
-    let mut ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
     ctx.token_codec = Some(TokenCodec::JsonJcs);
 
     let result = set_kv_entry_with_recipients(
@@ -485,14 +492,17 @@ fn test_set_kv_entry_new_file_uses_recipients_snapshot_not_pub_key_source() {
     .unwrap();
 
     let (_, _, wrap) = parse_kv_wrap(result.encrypted.as_str()).unwrap();
-    let mut rids = wrap
+    let mut recipient_handles = wrap
         .wrap
         .iter()
-        .map(|item| item.rid.clone())
+        .map(|item| item.recipient_handle.clone())
         .collect::<Vec<_>>();
-    rids.sort();
+    recipient_handles.sort();
     assert_eq!(
-        rids,
-        vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()]
+        recipient_handles,
+        vec![
+            ALICE_MEMBER_HANDLE.to_string(),
+            "bob@example.com".to_string()
+        ]
     );
 }

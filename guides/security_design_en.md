@@ -586,7 +586,7 @@ file-enc and kv-enc artifact signatures share the same `signature_v4` structure 
 - Use `kid` to state which key statement performed the signing
 - Treat validation of the signer key and verification of the artifact signature as one continuous chain (§5.4)
 
-The local trust store (`secretenv.trust.local@2`) `signature` shares the `alg` / `kid` / `sig` representation but **does not embed `signer_pub`**. The verification exception is covered at the end of §5.4 and in §10.4.
+The local trust store (`secretenv.trust.local@3`) `signature` shares the `alg` / `kid` / `sig` representation but **does not embed `signer_pub`**. The verification exception is covered at the end of §5.4 and in §10.4.
 
 The main fields of `signature_v4` (artifact signature) are as follows.
 
@@ -706,7 +706,7 @@ In cryptographic terms, one of these may appear sufficient in isolation, but als
 In file-enc wrap, the same bytes are used for HPKE info and AAD:
 
 ```
-info_bytes = jcs({"kid": ..., "p": "secretenv:file:hpke-wrap@3", "sid": ...})
+info_bytes = jcs({"kid": ..., "p": "secretenv:file:hpke-wrap@4", "sid": ...})
 aad_bytes  = info_bytes
 ```
 
@@ -714,7 +714,7 @@ This makes the wrap binding inputs (`kid`, `p`, `sid`) identical for both `info`
 
 ### 6.4 Design Decision to Exclude recipients from Payload AAD
 
-Recipients, meaning the list of rids in the wrap array, are **not** included in payload AAD.
+Recipients, meaning the list of recipient_handles in the wrap array, are **not** included in payload AAD.
 
 **Reason:** This allows `rewrap` to replace only the wraps while keeping the payload fixed. If recipients were included in AAD, every recipient change would require re-encrypting the entire payload.
 
@@ -755,18 +755,18 @@ file-enc is a JSON-based signed container. The elements that matter most for rev
 | `payload.encrypted` | Nonce and ciphertext | Holds the file body protected by the DEK |
 | `signature` | `signature_v4` signature | Protects the integrity of the full `protected` object, including wrap and payload |
 
-`wrap[].rid` is informational and helpful for review, but it is not the cryptographic lookup key. Recipient binding is keyed by `kid`.
+`wrap[].recipient_handle` is informational and helpful for review, but it is not the cryptographic lookup key. Recipient binding is keyed by `kid`.
 
 The full document layout is as follows.
 
 ```json
 {
   "protected": {
-    "format": "secretenv.file@3",
+    "format": "secretenv.file@4",
     "sid": "<UUID>",
     "wrap": [
       {
-        "rid": "<member_id>",
+        "recipient_handle": "<member_handle>",
         "kid": "<canonical kid>",
         "alg": "hpke-32-1-3",
         "enc": "<b64url>",
@@ -775,14 +775,14 @@ The full document layout is as follows.
     ],
     "removed_recipients": [
       {
-        "rid": "<member_id>",
+        "recipient_handle": "<member_handle>",
         "kid": "<canonical kid>",
         "removed_at": "<RFC3339>"
       }
     ],
     "payload": {
       "protected": {
-        "format": "secretenv.file.payload@3",
+        "format": "secretenv.file.payload@4",
         "sid": "<UUID>",
         "alg": { "aead": "xchacha20-poly1305" }
       },
@@ -859,13 +859,13 @@ This order keeps key delivery, payload binding, and document integrity as distin
 ### 7.4 HPKE wrap
 
 - The HPKE suite is `hpke-32-1-3`; the relevant parameters are described in §3.1 and §3.2.
-- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:file:hpke-wrap@3`, and the file identifier `sid`.
+- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:file:hpke-wrap@4`, and the file identifier `sid`.
 - HPKE `info` and `AAD` use the same JCS-canonicalized context bytes. This keeps the key-schedule path and AEAD-verification path aligned and makes implementation drift surface early as unwrap failure.
-- The recipient member ID remains operationally important, but cryptographic wrap binding is keyed by `kid`.
+- The recipient member handle remains operationally important, but cryptographic wrap binding is keyed by `kid`.
 
 ### 7.5 Payload Encryption
 
-- The payload header carries `format = secretenv.file.payload@3`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
+- The payload header carries `format = secretenv.file.payload@4`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
 - `jcs(payload.protected)` is used as AAD, with a random 24-byte nonce for XChaCha20-Poly1305.
 - Keeping `sid` at the payload layer binds the payload to the file context independently of the outer signature.
 
@@ -893,7 +893,7 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 | Line type | Content | Security role |
 | --- | --- | --- |
-| `:SECRETENV_KV 3` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
+| `:SECRETENV_KV 4` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
 | `:HEAD` | File context such as `sid` and timestamps | Binds wraps and entries to a single file context |
 | `:WRAP` | HPKE-wrapped MK and removal history | Represents recipient state and key-distribution state |
 | `KEY` lines | Per-entry ciphertext | Self-contained encrypted units carrying salt, nonce, and AEAD metadata |
@@ -904,7 +904,7 @@ Each token is represented as a JCS-canonicalized JSON object encoded in base64ur
 The full document layout is as follows.
 
 ```text
-:SECRETENV_KV 3
+:SECRETENV_KV 4
 :HEAD <token>
 :WRAP <token>
 <KEY> <token>
@@ -995,20 +995,20 @@ As with file-enc, signature verification always precedes decryption.
 
 ### 8.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:kv:cek@3` and `sid`.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:kv:cek@4` and `sid`.
 - The salt is independently generated for each entry.
 - Including `sid` in the derivation context ensures that copying an entry to a different file does not reproduce the same CEK.
 
 ### 8.4 Entry AAD
 
-- Entry AAD includes the dotenv key name `k`, the file identifier `sid`, and the protocol identifier `p = secretenv:kv:payload@3`.
+- Entry AAD includes the dotenv key name `k`, the file identifier `sid`, and the protocol identifier `p = secretenv:kv:payload@4`.
 - Including `k` prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - `salt` is already consumed by HKDF, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 8.5 HPKE wrap (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:kv:hpke-wrap@3`.
+- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:kv:hpke-wrap@4`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into unwrap failure.
 
@@ -1081,11 +1081,11 @@ Each `kid` directory in the local keystore (a key-statement directory) contains 
 - `public.json`: a PublicKey document that can be distributed to the workspace
 - `private.json`: an encrypted SecretEnv private key document
 
-When loading keys from the local keystore, if `private.json` is used, the sibling `public.json` in the same directory is also loaded and verified as a PublicKey, and the implementation confirms `private.protected.member_id == public.protected.member_id` and `private.protected.kid == public.protected.kid`. This is a local keystore invariant intended to detect swapped public/private pairs or other broken local state early. When loading keys via the `SECRETENV_PRIVATE_KEY` environment variable, this sibling `public.json` check is intentionally not assumed.
+When loading keys from the local keystore, if `private.json` is used, the sibling `public.json` in the same directory is also loaded and verified as a PublicKey, and the implementation confirms `private.protected.subject_handle == public.protected.subject_handle` and `private.protected.kid == public.protected.kid`. This is a local keystore invariant intended to detect swapped public/private pairs or other broken local state early. When loading keys via the `SECRETENV_PRIVATE_KEY` environment variable, this sibling `public.json` check is intentionally not assumed.
 
 `private.json` itself has two layers.
 
-- `protected`: header fields such as `member_id`, `kid`, `alg.fpr`, `alg.ikm_salt`, `alg.hkdf_salt`, `created_at`, and `expires_at`; these define the decryption conditions and tamper-detection scope
+- `protected`: header fields such as `member_handle`, `kid`, `alg.fpr`, `alg.ikm_salt`, `alg.hkdf_salt`, `created_at`, and `expires_at`; these define the decryption conditions and tamper-detection scope
 - `encrypted`: the ciphertext containing the actual SecretEnv private key material
 
 Here `alg.fpr` is only an identifier for the SSH key used to protect that key generation. It is not the SSH private key itself.
@@ -1151,7 +1151,7 @@ To decrypt `private.json` in the local keystore, all of the following conditions
 
 Given these, actual decryption proceeds in three steps.
 
-1. When loading from the local keystore, verify the sibling `public.json` and confirm `member_id` / `kid` consistency
+1. When loading from the local keystore, verify the sibling `public.json` and confirm `member_handle` / `kid` consistency
 2. Reconstruct IKM and `enc_key` from the target private.json protected header (`ikm_salt`, `hkdf_salt`, `kid`) plus SSH signing capability
 3. Decrypt using `jcs(protected)` as AAD so that header tampering is detected
 
@@ -1225,7 +1225,7 @@ SecretEnv explicitly separates cryptographic authenticity by `signer_pub`, curre
 Acceptance of a signed artifact is divided into at least the following three layers.
 
 - **Cryptographic verification**: Use the embedded `signer_pub` to determine, in a self-contained way, which key signed the artifact
-- **Authorization**: Use `members/active` in the current workspace to decide whether that `(member_id, kid)` belongs to the current member set
+- **Authorization**: Use `members/active` in the current workspace to decide whether that `(member_handle, kid)` belongs to the current member set
 - **Approval cache**: Use `known_keys` in the local trust store to decide whether the user has previously approved that `kid`
 
 This separation keeps the roles distinct: `members/active` is the authority for current trust, `known_keys` is a TOFU approval cache, and `signer_pub` is the signature verification key source.
@@ -1234,12 +1234,12 @@ This separation keeps the roles distinct: `members/active` is the authority for 
 
 Even if cryptographic signature verification succeeds, the artifact is not automatically acceptable in the current workspace. On the read path, the following conditions must be satisfied.
 
-1. `(signer_pub.protected.member_id, signer_pub.protected.kid)` exists in the current workspace's `members/active`
+1. `(signer_pub.protected.subject_handle, signer_pub.protected.kid)` exists in the current workspace's `members/active`
 2. `signer_pub.protected.kid` exists in the local trust store's `known_keys`, or the user manually approves it in the current execution
 
 Notes:
 
-- A `signer_pub` that matches the running user's own signing private key, or an existing self key for the same `member_id` in the local keystore, may skip conditions 1 and 2. This exception applies only to self keys, never to other members' keys
+- A `signer_pub` that matches the running user's own signing private key, or an existing self key for the same `member_handle` in the local keystore, may skip conditions 1 and 2. This exception applies only to self keys, never to other members' keys
 - `SECRETENV_STRICT_KEY_CHECKING=no` may skip condition 2 only on explicitly requested read paths. This exception does not skip condition 1, the `members/active` check
 - There is no implicit auto-update of `known_keys`
 
@@ -1329,7 +1329,7 @@ For concrete attack analysis, the tables in this chapter directly use the contex
 
 | Item | Content |
 |------|---------|
-| **Attack** | An attacker coherently replaces or rolls back `<SECRETENV_HOME>/trust/<owner_member_id>.json` |
+| **Attack** | An attacker coherently replaces or rolls back `<SECRETENV_HOME>/trust/<owner_handle>.json` |
 | **Capability** | Write access to the user's local trust directory |
 | **Primary defense** | (1) Local trusted area assumption (2) trust-store signature for corruption detection (3) atomic update and permission management |
 | **When it weakens** | OS or filesystem access control is broken |
@@ -1533,11 +1533,11 @@ graph TB
     end
 
     subgraph public_key["PublicKey (workspace)"]
-        PK_DOC["secretenv.public.key@4<br/>self-signature + SSH attestation"]
+        PK_DOC["secretenv.public.key@5<br/>self-signature + SSH attestation"]
     end
 
     subgraph private_key["PrivateKey (local keystore)"]
-        PK_ENC["secretenv.private.key@5<br/>SSH signature-based encryption"]
+        PK_ENC["secretenv.private.key@6<br/>SSH signature-based encryption"]
     end
 
     subgraph file_enc["file-enc"]

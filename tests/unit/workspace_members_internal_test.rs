@@ -5,13 +5,13 @@ use super::*;
 use std::fs;
 use tempfile::TempDir;
 
-fn setup_workspace_with_incoming(member_ids: &[&str]) -> TempDir {
+fn setup_workspace_with_incoming(member_handles: &[&str]) -> TempDir {
     let tmp = TempDir::new().unwrap();
     let active_dir = tmp.path().join("members/active");
     let incoming_dir = tmp.path().join("members/incoming");
     fs::create_dir_all(&active_dir).unwrap();
     fs::create_dir_all(&incoming_dir).unwrap();
-    for (index, id) in member_ids.iter().enumerate() {
+    for (index, id) in member_handles.iter().enumerate() {
         let path = incoming_dir.join(format!("{}.json", id));
         fs::write(&path, build_public_key_json(id, &test_kid(index))).unwrap();
     }
@@ -32,7 +32,7 @@ fn test_promote_specified_selects_only_specified() {
 }
 
 #[test]
-fn test_promote_specified_replaces_existing_active_member_with_same_member_id() {
+fn test_promote_specified_replaces_existing_active_member_with_same_member_handle() {
     let tmp = setup_workspace_with_incoming(&["alice"]);
     fs::write(
         tmp.path().join("members/active/alice.json"),
@@ -190,7 +190,7 @@ fn test_save_member_content_incoming_new() {
 
     assert!(incoming_dir.join("alice.json").exists());
     let content = fs::read_to_string(incoming_dir.join("alice.json")).unwrap();
-    assert!(content.contains("\"member_id\": \"alice\""));
+    assert!(content.contains("\"subject_handle\": \"alice\""));
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn test_save_member_content_creates_directory_if_missing() {
     .unwrap();
 
     let content = fs::read_to_string(tmp.path().join("members/incoming/alice.json")).unwrap();
-    assert!(content.contains("\"member_id\": \"alice\""));
+    assert!(content.contains("\"subject_handle\": \"alice\""));
 }
 
 #[test]
@@ -399,15 +399,15 @@ fn test_find_active_member_by_kid_returns_matching_member() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(found.protected.member_id, "bob");
+    assert_eq!(found.protected.subject_handle, "bob");
 }
 
-fn build_public_key_json(member_id: &str, kid: &str) -> String {
+fn build_public_key_json(member_handle: &str, kid: &str) -> String {
     format!(
         r#"{{
   "protected": {{
-    "format": "secretenv.public.key@4",
-    "member_id": "{member_id}",
+    "format": "secretenv.public.key@5",
+    "subject_handle": "{member_handle}",
     "kid": "{kid}",
     "identity": {{
       "keys": {{

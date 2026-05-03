@@ -26,7 +26,7 @@ pub fn rotate_file_key(
     debug: bool,
 ) -> Result<()> {
     let old_content_key =
-        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_id, key_ctx, debug)?
+        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_handle, key_ctx, debug)?
             .value;
     let plaintext_bytes =
         decrypt_file_payload(verified, &old_content_key, debug, "rotate_file_key")?;

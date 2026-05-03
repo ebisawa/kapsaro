@@ -5,17 +5,17 @@
 
 use crate::test_utils::save_public_key;
 use secretenv::io::keystore::active::set_active_kid;
-use secretenv::io::keystore::public_keys::load_public_keys_for_member_ids;
+use secretenv::io::keystore::public_keys::load_public_keys_for_member_handles;
 use secretenv::model::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
 use tempfile::TempDir;
 
-fn build_test_public_key(member_id: &str, kid: &str) -> PublicKey {
+fn build_test_public_key(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
-            member_id: member_id.to_string(),
+            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
@@ -46,7 +46,7 @@ fn build_test_public_key(member_id: &str, kid: &str) -> PublicKey {
 }
 
 #[test]
-fn test_load_public_keys_for_member_ids() {
+fn test_load_public_keys_for_member_handles() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_root = temp_dir.path();
 
@@ -67,8 +67,8 @@ fn test_load_public_keys_for_member_ids() {
         "bob@example.com".to_string(),
     ];
 
-    let result = load_public_keys_for_member_ids(keystore_root, &recipients).unwrap();
+    let result = load_public_keys_for_member_handles(keystore_root, &recipients).unwrap();
     assert_eq!(result.len(), 2);
-    assert_eq!(result[0].protected.member_id, "alice@example.com");
-    assert_eq!(result[1].protected.member_id, "bob@example.com");
+    assert_eq!(result[0].protected.subject_handle, "alice@example.com");
+    assert_eq!(result[1].protected.subject_handle, "bob@example.com");
 }

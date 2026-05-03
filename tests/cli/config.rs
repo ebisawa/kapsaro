@@ -5,7 +5,7 @@
 //!
 //! Tests the config command subcommands: get, set, unset, list.
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -241,7 +241,7 @@ fn test_workspace_config_is_used_for_workspace_commands() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains(TEST_MEMBER_ID));
+        .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
 }
 
 #[test]

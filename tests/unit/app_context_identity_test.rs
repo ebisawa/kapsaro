@@ -16,10 +16,10 @@ fn save_global_config(temp_home: &TempDir, lines: &[&str]) {
     fs::write(config_path, lines.join("\n")).unwrap();
 }
 
-fn setup_keystore(temp_dir: &TempDir, member_ids: &[&str]) {
+fn setup_keystore(temp_dir: &TempDir, member_handles: &[&str]) {
     let keystore_root = temp_dir.path().join("keys");
     fs::create_dir_all(&keystore_root).unwrap();
-    for &id in member_ids {
+    for &id in member_handles {
         fs::create_dir_all(keystore_root.join(id)).unwrap();
     }
 }

@@ -18,6 +18,7 @@ use crate::cli::options::CommonOptions;
 use crate::format::content::FileEncContent;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
 #[derive(Args)]
@@ -59,10 +60,11 @@ pub struct DecryptArgs {
 // ============================================================================
 
 pub fn run(args: DecryptArgs) -> Result<()> {
-    let content = FileEncContent::detect(resolve_decrypt_input_content(
-        args.input.as_ref(),
-        args.stdin,
-    )?)?;
+    let source_name = resolve_decrypt_input_source(args.input.as_ref(), args.stdin);
+    let content = FileEncContent::detect_with_source(
+        resolve_decrypt_input_content(args.input.as_ref(), args.stdin)?,
+        source_name,
+    )?;
     let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
     let options = resolve_options(&args.common);
     let plaintext_bytes = run_with_trust_store_reset_recovery(
@@ -109,6 +111,15 @@ fn resolve_decrypt_input_content(input_path: Option<&PathBuf>, from_stdin: bool)
         .ok_or_else(|| {
             Error::build_invalid_argument_error("INPUT is required unless --stdin is used")
         })
+}
+
+fn resolve_decrypt_input_source(input_path: Option<&PathBuf>, from_stdin: bool) -> String {
+    if from_stdin {
+        return "stdin".to_string();
+    }
+    input_path
+        .map(|path| format_path_relative_to_cwd(path))
+        .unwrap_or_else(|| "input".to_string())
 }
 
 fn load_decrypt_input_from_stdin() -> Result<String> {

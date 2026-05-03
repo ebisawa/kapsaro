@@ -11,7 +11,7 @@ use crate::format::schema::validator::load_embedded_trust_validator;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
 use crate::model::identifiers::alg::SIGNATURE_ED25519;
-use crate::model::identifiers::format::TRUST_LOCAL_V2;
+use crate::model::identifiers::format::TRUST_LOCAL_V3;
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::TrustStoreDocument;
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
@@ -27,12 +27,12 @@ use time::OffsetDateTime;
 ///
 /// Checks the trust store signature, signer key, owner, and known key integrity.
 /// 1. JSON Schema validity
-/// 2. signer public key is loaded from local keystore by owner_member_id + kid
-/// 3. format == TRUST_LOCAL_V2
+/// 2. signer public key is loaded from local keystore by owner_handle + kid
+/// 3. format == TRUST_LOCAL_V3
 /// 4. signer public key is a valid PublicKey
 /// 5. Cryptographic signature verification
 /// 6. signature.kid == signer_public_key.protected.kid
-/// 7. signer_public_key.protected.member_id == protected.owner_member_id
+/// 7. signer_public_key.protected.subject_handle == protected.owner_handle
 /// 8. known_keys[] kid uniqueness
 /// 9. Timestamp format validation (RFC 3339 UTC 'Z')
 pub fn verify_trust_store(
@@ -49,7 +49,7 @@ pub fn verify_trust_store(
     validate_known_keys_uniqueness(doc)?;
     validate_timestamps(doc)?;
 
-    let proof = TrustStoreVerificationProof::new(doc.protected.owner_member_id.clone());
+    let proof = TrustStoreVerificationProof::new(doc.protected.owner_handle.clone());
     Ok(VerifiedTrustStore::new(doc.clone(), proof))
 }
 
@@ -66,12 +66,12 @@ fn validate_schema(doc: &TrustStoreDocument) -> Result<()> {
 }
 
 fn validate_format(doc: &TrustStoreDocument) -> Result<()> {
-    if doc.protected.format != TRUST_LOCAL_V2 {
+    if doc.protected.format != TRUST_LOCAL_V3 {
         return Err(Error::Verify {
             rule: "E_TRUST_FORMAT_MISMATCH".to_string(),
             message: format!(
                 "Expected format '{}', got '{}'",
-                TRUST_LOCAL_V2, doc.protected.format
+                TRUST_LOCAL_V3, doc.protected.format
             ),
         });
     }
@@ -81,7 +81,7 @@ fn validate_format(doc: &TrustStoreDocument) -> Result<()> {
 fn load_signer_public_key(doc: &TrustStoreDocument, keystore_root: &Path) -> Result<PublicKey> {
     load_public_key(
         keystore_root,
-        &doc.protected.owner_member_id,
+        &doc.protected.owner_handle,
         &doc.signature.kid,
     )
 }
@@ -128,12 +128,12 @@ fn validate_kid_match(doc: &TrustStoreDocument, signer_public_key: &PublicKey) -
 }
 
 fn validate_owner_match(doc: &TrustStoreDocument, signer_public_key: &PublicKey) -> Result<()> {
-    if signer_public_key.protected.member_id != doc.protected.owner_member_id {
+    if signer_public_key.protected.subject_handle != doc.protected.owner_handle {
         return Err(Error::Verify {
             rule: "E_TRUST_OWNER_MISMATCH".to_string(),
             message: format!(
-                "keystore public key member_id '{}' != protected.owner_member_id '{}'",
-                signer_public_key.protected.member_id, doc.protected.owner_member_id
+                "keystore public key member_handle '{}' != protected.owner_handle '{}'",
+                signer_public_key.protected.subject_handle, doc.protected.owner_handle
             ),
         });
     }

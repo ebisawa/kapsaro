@@ -7,23 +7,23 @@ use crate::app::rewrap::promotion::{
     PromotionReviewFailure, PromotionReviewPrompt, PromotionReviewView,
 };
 use crate::app::trust::TrustApprovalCandidate;
-use crate::test_utils::{kid as test_kid, member_id as test_member_id};
+use crate::test_utils::{kid as test_kid, member_handle as test_member_handle};
 
 use super::{confirm_incoming_promotions_with_reader, promotion_prompt_label};
 
-fn build_prompt(member_id: &str) -> PromotionReviewPrompt {
-    let kid = match member_id {
+fn build_prompt(member_handle: &str) -> PromotionReviewPrompt {
+    let kid = match member_handle {
         "alice" => "KAD1AAAA1111BBBB2222CCCC3333DDDD",
         "bob" => "KBD1AAAA1111BBBB2222CCCC3333DDDD",
         _ => "KCD1AAAA1111BBBB2222CCCC3333DDDD",
     };
     PromotionReviewPrompt {
         candidate: TrustApprovalCandidate {
-            member_id: test_member_id(member_id),
+            member_handle: test_member_handle(member_handle),
             kid: test_kid(kid),
             fingerprint: Some("SHA256:abc".to_string()),
             github_id: Some(12345),
-            github_login: Some(format!("{}-gh", member_id)),
+            github_login: Some(format!("{}-gh", member_handle)),
             attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
             verified_github: None,
             github_binding_configured: true,
@@ -79,7 +79,7 @@ fn test_confirm_incoming_promotions_accepts_mixed_prompt_responses() {
 fn test_confirm_incoming_promotions_ignores_failed_candidates() {
     let review_view = build_review_view(
         vec![PromotionReviewFailure {
-            member_id: "carol".to_string(),
+            member_handle: "carol".to_string(),
             message: "verification failed".to_string(),
         }],
         vec![build_prompt("alice")],

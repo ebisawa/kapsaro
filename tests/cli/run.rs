@@ -3,7 +3,7 @@
 
 //! Integration tests for `run` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, setup_workspace, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, setup_workspace, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -104,7 +104,7 @@ fn test_run_error_when_default_file_not_exists() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()

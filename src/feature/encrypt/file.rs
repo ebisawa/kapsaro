@@ -22,26 +22,26 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 fn validate_recipient_members(
-    recipient_ids: &[String],
+    recipient_handles: &[String],
     members: &[VerifiedRecipientKey],
 ) -> Result<()> {
-    if recipient_ids.len() != members.len() {
+    if recipient_handles.len() != members.len() {
         return Err(crate::Error::InvalidArgument {
             message: format!(
                 "Recipients count ({}) does not match public keys ({})",
-                recipient_ids.len(),
+                recipient_handles.len(),
                 members.len()
             ),
         });
     }
 
-    for (recipient_id, member) in recipient_ids.iter().zip(members.iter()) {
-        let member_id = &member.document().protected.member_id;
-        if recipient_id != member_id {
+    for (recipient_handle, member) in recipient_handles.iter().zip(members.iter()) {
+        let member_handle = &member.document().protected.subject_handle;
+        if recipient_handle != member_handle {
             return Err(crate::Error::InvalidArgument {
                 message: format!(
                     "Recipient '{}' does not match member '{}'",
-                    recipient_id, member_id
+                    recipient_handle, member_handle
                 ),
             });
         }
@@ -74,7 +74,7 @@ fn encrypt_payload(
     caller: &str,
 ) -> Result<(FilePayloadHeader, FilePayloadCiphertext)> {
     let payload_protected = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V3.to_string(),
+        format: format::FILE_PAYLOAD_V4.to_string(),
         sid: *sid,
         alg: FileEncAlgorithm {
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
@@ -111,7 +111,7 @@ fn build_file_enc_document_protected(
     timestamp: String,
 ) -> FileEncDocumentProtected {
     FileEncDocumentProtected {
-        format: format::FILE_ENC_V3.to_string(),
+        format: format::FILE_ENC_V4.to_string(),
         sid,
         wrap,
         removed_recipients: None,
@@ -121,11 +121,11 @@ fn build_file_enc_document_protected(
     }
 }
 
-/// Encrypt file content to file-enc v3 format
+/// Encrypt file content to file-enc v4 format
 ///
 /// # Arguments
 /// * `content` - File content bytes to encrypt
-/// * `recipient_ids` - Normalized list of recipient member IDs (order must match members)
+/// * `recipient_handles` - Normalized list of recipient member handles (order must match members)
 /// * `members` - Verified public keys with attested identity
 /// * `signing` - Signing context (signing_key, signer_kid, signer_pub, debug)
 ///
@@ -133,11 +133,11 @@ fn build_file_enc_document_protected(
 /// FileEncDocument structure
 pub fn encrypt_file_document(
     content: &[u8],
-    recipient_ids: &[String],
+    recipient_handles: &[String],
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
 ) -> Result<FileEncDocument> {
-    validate_recipient_members(recipient_ids, members)?;
+    validate_recipient_members(recipient_handles, members)?;
     let sid = Uuid::new_v4();
     let timestamp = generate_current_timestamp()?;
     let (content_key, payload) =

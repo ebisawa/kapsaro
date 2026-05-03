@@ -3,11 +3,11 @@
 
 //! Integration tests for decrypt command
 //!
-//! Tests the decrypt command with CommonOptions, member_id resolution, and file-enc format
+//! Tests the decrypt command with CommonOptions, member_handle resolution, and file-enc format
 
 use crate::cli::common::{
-    cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID,
-    EVE_MEMBER_ID, FRANK_MEMBER_ID, TEST_MEMBER_ID,
+    cmd, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE,
+    DAVE_MEMBER_HANDLE, EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use predicates::prelude::*;
@@ -18,9 +18,9 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Create a test keystore with a private key
-fn build_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::path::PathBuf {
+fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> std::path::PathBuf {
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid_dir = member_dir.join(kid);
     fs::create_dir_all(&kid_dir).unwrap();
 
@@ -33,8 +33,8 @@ fn build_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::p
     let private_json = format!(
         r#"{{
     "protected": {{
-        "format": "secretenv.private.key@5",
-        "member_id": "{}",
+        "format": "secretenv.private.key@6",
+        "subject_handle": "{}",
         "kid": "{}",
         "alg": {{
             "kdf": "{}",
@@ -51,23 +51,23 @@ fn build_test_keystore(temp_dir: &TempDir, member_id: &str, kid: &str) -> std::p
         "ct": "dGVzdA"
     }}
 }}"#,
-        member_id, kid, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256, ikm_salt, hkdf_salt
+        member_handle, kid, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256, ikm_salt, hkdf_salt
     );
     fs::write(kid_dir.join("private.json"), private_json).unwrap();
 
     keystore_root
 }
 
-/// Create a minimal test file-enc v3 file
+/// Create a minimal test file-enc v4 file
 fn save_test_encrypted_file(path: &std::path::Path) {
     let content = r#"{
   "protected": {
-    "format": "secretenv.file@3",
+    "format": "secretenv.file@4",
     "sid": "550e8400-e29b-41d4-a716-446655440000",
     "wrap": [],
     "payload": {
       "protected": {
-        "format": "secretenv.file.payload@3",
+        "format": "secretenv.file.payload@4",
         "sid": "550e8400-e29b-41d4-a716-446655440000",
         "alg": {
           "aead": "xchacha20-poly1305"
@@ -124,11 +124,11 @@ fn test_decrypt_missing_input() {
 }
 
 #[test]
-fn test_decrypt_with_explicit_member_id() {
+fn test_decrypt_with_explicit_member_handle() {
     let temp_dir = TempDir::new().unwrap();
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
     let input_file = temp_dir.path().join("test.enc");
@@ -141,17 +141,20 @@ fn test_decrypt_with_explicit_member_id() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .failure(); // Will fail due to invalid test data, but should parse args correctly
 }
 
 #[test]
-fn test_decrypt_with_member_id_from_env() {
+fn test_decrypt_with_member_handle_from_env() {
     let temp_dir = TempDir::new().unwrap();
-    let _keystore_root =
-        build_test_keystore(&temp_dir, BOB_MEMBER_ID, "XXCXP9PZWD1FXT336XSBT9W1BR5EADN8");
+    let _keystore_root = build_test_keystore(
+        &temp_dir,
+        BOB_MEMBER_HANDLE,
+        "XXCXP9PZWD1FXT336XSBT9W1BR5EADN8",
+    );
     let input_file = temp_dir.path().join("test.enc");
     save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
@@ -162,7 +165,7 @@ fn test_decrypt_with_member_id_from_env() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", BOB_MEMBER_ID)
+        .env("SECRETENV_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
         .assert()
         .failure(); // Will fail due to invalid test data, but should parse args correctly
 }
@@ -176,7 +179,7 @@ fn test_decrypt_with_workspace_option() {
 
     let _keystore_root = build_test_keystore(
         &temp_dir,
-        CAROL_MEMBER_ID,
+        CAROL_MEMBER_HANDLE,
         "9N4R1H8VW6PKT3XNC5JY2F9AR8GD7M2Q",
     );
     let input_file = temp_dir.path().join("test.enc");
@@ -191,7 +194,7 @@ fn test_decrypt_with_workspace_option() {
         .arg("--workspace")
         .arg(workspace.to_str().unwrap())
         .arg("--member-handle")
-        .arg(CAROL_MEMBER_ID)
+        .arg(CAROL_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .failure(); // Will fail due to invalid test data, but should parse args correctly
@@ -202,7 +205,7 @@ fn test_decrypt_accepts_out_option_parsing() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root = build_test_keystore(
         &temp_dir,
-        DAVE_MEMBER_ID,
+        DAVE_MEMBER_HANDLE,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
     );
     let input_file = temp_dir.path().join("test.enc");
@@ -215,7 +218,7 @@ fn test_decrypt_accepts_out_option_parsing() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(DAVE_MEMBER_ID)
+        .arg(DAVE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .failure(); // Will fail due to invalid test data, but should parse args correctly
@@ -224,8 +227,11 @@ fn test_decrypt_accepts_out_option_parsing() {
 #[test]
 fn test_decrypt_with_kid_option() {
     let temp_dir = TempDir::new().unwrap();
-    let _keystore_root =
-        build_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+    let _keystore_root = build_test_keystore(
+        &temp_dir,
+        EVE_MEMBER_HANDLE,
+        "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR",
+    );
     let input_file = temp_dir.path().join("test.enc");
     save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output.dat");
@@ -236,7 +242,7 @@ fn test_decrypt_with_kid_option() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(EVE_MEMBER_ID)
+        .arg(EVE_MEMBER_HANDLE)
         .arg("--kid")
         .arg("5EADN8XXCXP9PZWD1FXT336XSBT9W1BR")
         .env("SECRETENV_HOME", temp_dir.path())
@@ -247,8 +253,11 @@ fn test_decrypt_with_kid_option() {
 #[test]
 fn test_decrypt_with_display_kid_option() {
     let temp_dir = TempDir::new().unwrap();
-    let _keystore_root =
-        build_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+    let _keystore_root = build_test_keystore(
+        &temp_dir,
+        EVE_MEMBER_HANDLE,
+        "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR",
+    );
     let input_file = temp_dir.path().join("test.enc");
     save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output-display.dat");
@@ -259,7 +268,7 @@ fn test_decrypt_with_display_kid_option() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(EVE_MEMBER_ID)
+        .arg(EVE_MEMBER_HANDLE)
         .arg("--kid")
         .arg("5EAD-N8XX-CXP9-PZWD-1FXT-336X-SBT9-W1BR")
         .env("SECRETENV_HOME", temp_dir.path())
@@ -270,8 +279,11 @@ fn test_decrypt_with_display_kid_option() {
 #[test]
 fn test_decrypt_with_prefix_kid_option() {
     let temp_dir = TempDir::new().unwrap();
-    let _keystore_root =
-        build_test_keystore(&temp_dir, EVE_MEMBER_ID, "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR");
+    let _keystore_root = build_test_keystore(
+        &temp_dir,
+        EVE_MEMBER_HANDLE,
+        "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR",
+    );
     let input_file = temp_dir.path().join("test.enc");
     save_test_encrypted_file(&input_file);
     let output_file = temp_dir.path().join("output-prefix.dat");
@@ -282,7 +294,7 @@ fn test_decrypt_with_prefix_kid_option() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(EVE_MEMBER_ID)
+        .arg(EVE_MEMBER_HANDLE)
         .arg("--kid")
         .arg("5EAD")
         .env("SECRETENV_HOME", temp_dir.path())
@@ -295,7 +307,7 @@ fn test_decrypt_with_ssh_key_option() {
     let temp_dir = TempDir::new().unwrap();
     let _keystore_root = build_test_keystore(
         &temp_dir,
-        FRANK_MEMBER_ID,
+        FRANK_MEMBER_HANDLE,
         "KANJ8XHG10HW16VD7ADNCXM1WN44J04Q",
     );
     let input_file = temp_dir.path().join("test.enc");
@@ -310,7 +322,7 @@ fn test_decrypt_with_ssh_key_option() {
         .arg("--out")
         .arg(output_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(FRANK_MEMBER_ID)
+        .arg(FRANK_MEMBER_HANDLE)
         .arg("-i")
         .arg(ssh_key_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -346,7 +358,7 @@ fn test_decrypt_rejects_kv_enc_format() {
     let test_dir = temp_dir.path();
 
     let encrypted_path = test_dir.join("test.kv");
-    let content = r#":SECRETENV_KV 3
+    let content = r#":SECRETENV_KV 4
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
@@ -355,7 +367,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -365,7 +377,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
         .arg("--out")
         .arg(test_dir.join("out.dat").to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
@@ -374,17 +386,17 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 
 #[test]
 fn test_decrypt_detects_file_enc_format_version3() {
-    // Test that decrypt detects file-enc v3 format
+    // Test that decrypt detects file-enc v4 format
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    // Create a minimal file-enc v3 file
+    // Create a minimal file-enc v4 file
     let encrypted_path = test_dir.join("test.json");
     save_test_encrypted_file(&encrypted_path);
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -393,7 +405,7 @@ fn test_decrypt_detects_file_enc_format_version3() {
         .arg("decrypt")
         .arg(encrypted_path.to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
@@ -415,7 +427,7 @@ fn test_decrypt_rejects_plain_kv_format() {
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -424,7 +436,7 @@ fn test_decrypt_rejects_plain_kv_format() {
         .arg("decrypt")
         .arg(plain_path.to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
@@ -444,7 +456,7 @@ fn test_decrypt_rejects_unknown_format() {
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -453,7 +465,7 @@ fn test_decrypt_rejects_unknown_format() {
         .arg("decrypt")
         .arg(unknown_path.to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
@@ -483,7 +495,7 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -500,7 +512,7 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
         .arg("--out")
         .arg(decrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -531,15 +543,15 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
     )
     .unwrap();
     let expires_at = build_expiring_soon_timestamp(15);
-    update_active_private_key_expires_at(home_dir.path(), TEST_MEMBER_ID, &expires_at);
-    let active_key = find_active_key_document(TEST_MEMBER_ID, &home_dir.path().join("keys"))
+    update_active_private_key_expires_at(home_dir.path(), TEST_MEMBER_HANDLE, &expires_at);
+    let active_key = find_active_key_document(TEST_MEMBER_HANDLE, &home_dir.path().join("keys"))
         .unwrap()
         .unwrap();
     fs::write(
         workspace_dir
             .path()
             .join("members/active")
-            .join(format!("{TEST_MEMBER_ID}.json")),
+            .join(format!("{TEST_MEMBER_HANDLE}.json")),
         serde_json::to_string_pretty(&active_key.public_key).unwrap(),
     )
     .unwrap();
@@ -557,7 +569,7 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -572,7 +584,7 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
         .arg("--out")
         .arg(decrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -605,7 +617,7 @@ fn test_decrypt_file_with_stdout_writes_bytes_to_stdout() {
         .arg("--out")
         .arg(&encrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -618,7 +630,7 @@ fn test_decrypt_file_with_stdout_writes_bytes_to_stdout() {
         .arg(&encrypted_file)
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -645,7 +657,7 @@ fn test_decrypt_stdin_with_out_writes_decrypted_file() {
         .arg("--out")
         .arg(&encrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -661,7 +673,7 @@ fn test_decrypt_stdin_with_out_writes_decrypted_file() {
         .arg("--out")
         .arg(&decrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -688,7 +700,7 @@ fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
         .arg("--out")
         .arg(&encrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -703,7 +715,7 @@ fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
         .arg("--stdin")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -730,7 +742,7 @@ fn test_decrypt_file_requires_out_or_stdout() {
         .arg("--out")
         .arg(&encrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -742,7 +754,7 @@ fn test_decrypt_file_requires_out_or_stdout() {
         .arg("decrypt")
         .arg(&encrypted_file)
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -792,7 +804,7 @@ fn test_decrypt_rejects_input_and_stdin_together() {
 #[test]
 fn test_decrypt_stdin_rejects_kv_enc_format() {
     let temp_dir = TempDir::new().unwrap();
-    let content = r#":SECRETENV_KV 3
+    let content = r#":SECRETENV_KV 4
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
@@ -800,7 +812,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -808,7 +820,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
         .arg("decrypt")
         .arg("--stdin")
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .write_stdin(content)
         .assert()
@@ -822,7 +834,7 @@ fn test_decrypt_stdin_rejects_plain_kv_format() {
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -830,7 +842,7 @@ fn test_decrypt_stdin_rejects_plain_kv_format() {
         .arg("decrypt")
         .arg("--stdin")
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .write_stdin("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n")
         .assert()
@@ -844,7 +856,7 @@ fn test_decrypt_stdin_rejects_unknown_format() {
 
     build_test_keystore(
         &temp_dir,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
     );
 
@@ -852,7 +864,7 @@ fn test_decrypt_stdin_rejects_unknown_format() {
         .arg("decrypt")
         .arg("--stdin")
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .write_stdin("This is just some random text that doesn't match any format\n")
         .assert()
@@ -870,7 +882,7 @@ fn test_decrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg("--stdin")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -884,7 +896,7 @@ fn test_decrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg("--stdin")
         .arg("--stdout")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())

@@ -138,7 +138,7 @@ pub fn build_recipient_key_expiry_warning(
             days_remaining,
         } => Ok(Some(format!(
             "Recipient public key for '{}' expires in {} days (expires_at: {})",
-            sanitize_display_field(&doc.protected.member_id),
+            sanitize_display_field(&doc.protected.subject_handle),
             days_remaining,
             sanitize_display_field(&expires_at)
         ))),
@@ -168,7 +168,7 @@ pub fn enforce_recipient_key_not_expired(doc: &VerifiedPublicKeyAttested) -> Res
             message: format!(
                 "Recipient public key for '{}' has expired (expires_at: {}). \
                  Expired keys cannot be used as encryption recipients.",
-                sanitize_display_field(&doc.protected.member_id),
+                sanitize_display_field(&doc.protected.subject_handle),
                 sanitize_display_field(&expires_at)
             ),
         }),

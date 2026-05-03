@@ -10,12 +10,12 @@ use crate::Result;
 /// Add a recipient to the removed recipient history list.
 pub fn add_to_removed_history(
     removed_recipients: &mut Option<Vec<RemovedRecipient>>,
-    rid: &str,
+    recipient_handle: &str,
     kid: &str,
 ) -> Result<()> {
     let timestamp = generate_current_timestamp()?;
     let removed = RemovedRecipient {
-        rid: rid.to_string(),
+        recipient_handle: recipient_handle.to_string(),
         kid: kid.to_string(),
         removed_at: timestamp,
     };

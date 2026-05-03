@@ -3,11 +3,11 @@
 
 //! Config bootstrap functionality
 //!
-//! Provides validation helpers for member_id.
+//! Provides validation helpers for member_handle.
 
 use crate::support::validation;
 
-/// Validate member_id using the common ASCII identifier rules
-pub fn validate_member_id(input: &str) -> std::result::Result<(), String> {
-    validation::validate_member_id(input).map_err(|e| e.to_string())
+/// Validate member_handle using the common ASCII identifier rules
+pub fn validate_member_handle(input: &str) -> std::result::Result<(), String> {
+    validation::validate_member_handle(input).map_err(|e| e.to_string())
 }

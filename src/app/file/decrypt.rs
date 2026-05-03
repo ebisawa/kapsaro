@@ -52,7 +52,7 @@ pub(crate) fn execute_decrypt_file_command(
 ) -> Result<Zeroizing<Vec<u8>>> {
     decrypt_file_document_with_context(
         &command.verified_doc,
-        &command.execution.member_id,
+        &command.execution.member_handle,
         &command.execution.key_ctx,
         command.verbose,
     )

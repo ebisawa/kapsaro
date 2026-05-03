@@ -65,7 +65,7 @@ pub enum ActiveMembershipState {
 
 #[derive(Debug, Clone)]
 pub struct MemberSetupResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub key_result: MemberKeySetupResult,
 }
 
@@ -103,7 +103,7 @@ pub struct RegistrationOutcome {
     pub workspace_path: PathBuf,
     pub target: RegistrationTarget,
     pub is_new_workspace: bool,
-    pub member_id: String,
+    pub member_handle: String,
     pub key_result: MemberKeySetupResult,
     pub result: RegistrationResult,
 }

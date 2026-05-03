@@ -16,7 +16,7 @@ use zeroize::Zeroizing;
 #[test]
 fn test_decode_wrap_item_fields_unsupported_alg() {
     let wrap_item = WrapItem {
-        rid: "alice@example.com".to_string(),
+        recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GK".to_string(),
         alg: "unsupported-alg-99".to_string(),
         enc: "AAAA".to_string(),

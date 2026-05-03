@@ -9,7 +9,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     /// JSON Schema validation failed.
-    #[error("Schema validation error: {message}")]
+    #[error("{message}")]
     Schema {
         message: String,
         #[source]
@@ -177,11 +177,10 @@ impl Error {
     /// Return a concise user-facing message without variant prefix.
     ///
     /// Unlike `Display` (e.g. "Cryptographic error: message"), this returns
-    /// only the message body. For `Schema`, the potentially large instance
-    /// data is replaced with a fixed description.
+    /// only the message body.
     pub fn format_user_message(&self) -> &str {
         match self {
-            Error::Schema { .. } => "Schema validation failed",
+            Error::Schema { message, .. } => message,
             Error::Crypto { message, .. }
             | Error::Ssh { message, .. }
             | Error::Verify { message, .. }

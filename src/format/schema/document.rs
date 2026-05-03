@@ -76,20 +76,59 @@ pub fn parse_file_enc_bytes(bytes: &[u8], source_name: &str) -> Result<FileEncDo
 }
 
 pub fn parse_kv_head_token(token: &str) -> Result<KvHeader> {
-    parse_json_token(token, "HEAD token", Validator::validate_kv_head)
+    parse_kv_head_token_with_source(token, "HEAD token")
 }
 
 pub fn parse_kv_wrap_token(token: &str) -> Result<KvWrap> {
-    let wrap = parse_json_token(token, "WRAP token", Validator::validate_kv_wrap)?;
-    validate_kv_wrap_limits(wrap)
+    parse_kv_wrap_token_with_source(token, "WRAP token")
 }
 
 pub fn parse_kv_entry_token(token: &str) -> Result<KvEntryValue> {
-    parse_json_token(token, "KV entry token", Validator::validate_kv_entry)
+    parse_kv_entry_token_with_source(token, "KV entry token")
 }
 
 pub fn parse_kv_signature_token(token: &str) -> Result<ArtifactSignature> {
-    parse_json_token(token, "SIG token", Validator::validate_artifact_signature)
+    parse_kv_signature_token_with_source(token, "SIG token")
+}
+
+pub fn parse_kv_head_token_with_source(token: &str, source_name: &str) -> Result<KvHeader> {
+    parse_json_token(
+        token,
+        "HEAD token",
+        source_name,
+        Validator::validate_kv_head,
+    )
+}
+
+pub fn parse_kv_wrap_token_with_source(token: &str, source_name: &str) -> Result<KvWrap> {
+    let wrap = parse_json_token(
+        token,
+        "WRAP token",
+        source_name,
+        Validator::validate_kv_wrap,
+    )?;
+    validate_kv_wrap_limits(wrap)
+}
+
+pub fn parse_kv_entry_token_with_source(token: &str, source_name: &str) -> Result<KvEntryValue> {
+    parse_json_token(
+        token,
+        "KV entry token",
+        source_name,
+        Validator::validate_kv_entry,
+    )
+}
+
+pub fn parse_kv_signature_token_with_source(
+    token: &str,
+    source_name: &str,
+) -> Result<ArtifactSignature> {
+    parse_json_token(
+        token,
+        "SIG token",
+        source_name,
+        Validator::validate_artifact_signature,
+    )
 }
 
 fn parse_json_document_str<T>(
@@ -115,19 +154,26 @@ where
 {
     validate_json_limits(bytes)?;
     let value = parse_json_value(bytes, source_name, kind)?;
-    validate(load_embedded_validator()?, &value)?;
+    validate(load_embedded_validator()?, &value)
+        .map_err(|e| add_source_to_schema_error(e, source_name))?;
     deserialize_json_value(value, source_name, kind)
 }
 
-fn parse_json_token<T>(token: &str, token_name: &str, validate: ValidateJsonFn) -> Result<T>
+fn parse_json_token<T>(
+    token: &str,
+    token_name: &str,
+    source_name: &str,
+    validate: ValidateJsonFn,
+) -> Result<T>
 where
     T: DeserializeOwned,
 {
     let (bytes, _) = decode_token_bytes(token, false, Some(token_name))?;
     validate_json_limits(&bytes)?;
-    let value = parse_json_value(&bytes, token_name, token_name)?;
-    validate(load_embedded_validator()?, &value)?;
-    deserialize_json_value(value, token_name, token_name)
+    let value = parse_json_value(&bytes, source_name, token_name)?;
+    validate(load_embedded_validator()?, &value)
+        .map_err(|e| add_source_to_schema_error(e, source_name))?;
+    deserialize_json_value(value, source_name, token_name)
 }
 
 fn parse_json_value(bytes: &[u8], source_name: &str, kind: &str) -> Result<Value> {
@@ -145,6 +191,35 @@ where
         message: format!("Failed to deserialize {} from {}: {}", kind, source_name, e),
         source: Some(Box::new(e)),
     })
+}
+
+fn add_source_to_schema_error(error: Error, source_name: &str) -> Error {
+    match error {
+        Error::Schema { message, source } => Error::Schema {
+            message: insert_schema_source(&message, source_name),
+            source,
+        },
+        other => other,
+    }
+}
+
+fn insert_schema_source(message: &str, source_name: &str) -> String {
+    if source_name.is_empty() {
+        return message.to_string();
+    }
+
+    let source_line = format!("Source: {}", source_name);
+    if message.lines().any(|line| line == source_line) {
+        return message.to_string();
+    }
+
+    if let Some(rest) = message.strip_prefix("Invalid secretenv document\n") {
+        return format!("Invalid secretenv document\n{}\n{}", source_line, rest);
+    }
+    if message == "Invalid secretenv document" {
+        return format!("{}\n{}", message, source_line);
+    }
+    format!("{}\n{}", message, source_line)
 }
 
 fn validate_file_enc_limits(doc: FileEncDocument) -> Result<FileEncDocument> {

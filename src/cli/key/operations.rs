@@ -27,7 +27,7 @@ use super::{ActivateArgs, ExportArgs, RemoveArgs};
 pub fn run_activate(args: ActivateArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let result = activate_key_command(&options, args.member_handle.clone(), args.kid.clone())?;
-    print_key_activate_summary(&result.member_id, &result.kid);
+    print_key_activate_summary(&result.member_handle, &result.kid);
     Ok(())
 }
 
@@ -40,7 +40,7 @@ pub fn run_remove(args: RemoveArgs) -> Result<()> {
         args.kid.clone(),
         args.force,
     )?;
-    print_key_remove_summary(&result.member_id, &result.kid, result.was_active);
+    print_key_remove_summary(&result.member_handle, &result.kid, result.was_active);
     Ok(())
 }
 
@@ -54,7 +54,7 @@ pub fn run_export(args: ExportArgs) -> Result<()> {
         })?;
     let options = resolve_options(&args.common);
     let result = export_key_command(&options, args.member_handle.clone(), args.kid.clone(), out)?;
-    print_key_export_summary(&result.member_id, &result.kid, out);
+    print_key_export_summary(&result.member_handle, &result.kid, out);
 
     Ok(())
 }
@@ -68,13 +68,19 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
     }
 
     let options = resolve_options(&args.common);
-    let member_id = resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
-    validate_kid(&options, &member_id, args.kid.clone())?;
-    let ssh_ctx = resolve_ssh_context_for_active_key(&options, Some(member_id.clone()))?;
+    let member_handle =
+        resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
+    validate_kid(&options, &member_handle, args.kid.clone())?;
+    let ssh_ctx = resolve_ssh_context_for_active_key(&options, Some(member_handle.clone()))?;
     let password = prompt_export_password()?;
 
-    let result =
-        export_private_key_command(&options, member_id, args.kid.clone(), &password, ssh_ctx)?;
+    let result = export_private_key_command(
+        &options,
+        member_handle,
+        args.kid.clone(),
+        &password,
+        ssh_ctx,
+    )?;
 
     if let Some(warning) = result.password_warning.as_deref() {
         print_warning(warning);
@@ -82,11 +88,11 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
 
     if let Some(out) = args.out.as_ref() {
         atomic::save_text(out, result.encoded_key.as_str())?;
-        print_private_key_export_file_summary(&result.member_id, &result.kid, out);
+        print_private_key_export_file_summary(&result.member_handle, &result.kid, out);
     } else if args.stdout {
         eprintln!();
         println!("{}", result.encoded_key.as_str());
-        print_private_key_export_stdout_summary(&result.member_id, &result.kid);
+        print_private_key_export_stdout_summary(&result.member_handle, &result.kid);
     }
 
     Ok(())

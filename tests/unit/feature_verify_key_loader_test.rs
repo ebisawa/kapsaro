@@ -6,7 +6,7 @@
 //! Tests for embedded signer_pub based verifying key loading.
 
 use crate::test_utils::setup_test_workspace_from_fixtures;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv::feature::verify::key_loader::load_verifying_key_from_signature;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::signature::ArtifactSignature;
@@ -18,12 +18,12 @@ use crate::test_utils::setup_test_keystore_from_fixtures;
 /// load_verifying_key_from_signature extracts key from embedded signer_pub.
 #[test]
 fn test_load_verifying_key_from_signature_with_signer_pub() {
-    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
 
     // Read Alice's public key from workspace to get the kid
     let member_file = workspace_dir
         .join("members/active")
-        .join(format!("{}.json", ALICE_MEMBER_ID));
+        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
     let content = fs::read_to_string(&member_file).unwrap();
     let public_key: secretenv::model::public_key::PublicKey =
         serde_json::from_str(&content).unwrap();
@@ -38,13 +38,16 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
 
     let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
 
-    assert_eq!(loaded.member_id, ALICE_MEMBER_ID);
+    assert_eq!(loaded.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(loaded.source, VerifyingKeySource::SignerPubEmbedded);
     // Verify the key is not zero (sanity check)
     let key_bytes: [u8; 32] = loaded.verifying_key.to_bytes();
     assert_ne!(key_bytes, [0u8; 32]);
     // Verify public_key is populated
-    assert_eq!(loaded.public_key.protected.member_id, ALICE_MEMBER_ID);
+    assert_eq!(
+        loaded.public_key.protected.subject_handle,
+        ALICE_MEMBER_HANDLE
+    );
     assert_eq!(loaded.public_key.protected.kid, kid);
 }
 
@@ -52,7 +55,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
 /// workspace active members because cryptographic verification is self-contained.
 #[test]
 fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succeeds() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     // Create a separate empty workspace (not the one setup_test_keystore created)
@@ -60,9 +63,9 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succ
     fs::create_dir_all(empty_workspace.join("members/active")).unwrap();
     fs::create_dir_all(empty_workspace.join("members/incoming")).unwrap();
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     let signature = ArtifactSignature {
         alg: "eddsa-ed25519".to_string(),
@@ -73,7 +76,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succ
 
     let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
 
-    assert_eq!(loaded.member_id, ALICE_MEMBER_ID);
+    assert_eq!(loaded.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(loaded.public_key.protected.kid, kid.as_str());
 }
 
@@ -81,12 +84,12 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succ
 /// embedded signer_pub is the verification source.
 #[test]
 fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     let signature = ArtifactSignature {
         alg: "eddsa-ed25519".to_string(),
@@ -97,7 +100,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds(
 
     let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
 
-    assert_eq!(loaded.member_id, ALICE_MEMBER_ID);
+    assert_eq!(loaded.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(loaded.public_key.protected.kid, kid.as_str());
 }
 
@@ -105,12 +108,12 @@ fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds(
 /// does not match kid in embedded signer_pub
 #[test]
 fn test_load_verifying_key_from_signature_kid_mismatch() {
-    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
 
     // Read Alice's public key from workspace
     let member_file = workspace_dir
         .join("members/active")
-        .join(format!("{}.json", ALICE_MEMBER_ID));
+        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
     let content = fs::read_to_string(&member_file).unwrap();
     let public_key: secretenv::model::public_key::PublicKey =
         serde_json::from_str(&content).unwrap();

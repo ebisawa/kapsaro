@@ -48,7 +48,7 @@ pub(super) fn verify_trust_candidate_online(
         rule: "E_TRUST_REVIEW_SOURCE_MISSING".to_string(),
         message: format!(
             "Missing public key required for online verification of '{}' ({})",
-            candidate.member_id, candidate.kid
+            candidate.member_handle, candidate.kid
         ),
     })?;
     let results = block_on_result(verify_member_public_keys(
@@ -59,16 +59,16 @@ pub(super) fn verify_trust_candidate_online(
         rule: "E_TRUST_ONLINE_VERIFY_MISSING".to_string(),
         message: format!(
             "Online verification produced no result for '{}' ({})",
-            candidate.member_id, candidate.kid
+            candidate.member_handle, candidate.kid
         ),
     })?;
 
-    if result.member_id != candidate.member_id.as_str() {
+    if result.member_handle != candidate.member_handle.as_str() {
         return Err(Error::Verify {
             rule: "E_TRUST_ONLINE_VERIFY_MISMATCH".to_string(),
             message: format!(
-                "Online verification result member_id '{}' did not match candidate '{}'",
-                result.member_id, candidate.member_id
+                "Online verification result member_handle '{}' did not match candidate '{}'",
+                result.member_handle, candidate.member_handle
             ),
         });
     }
@@ -98,7 +98,7 @@ fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) 
         rule: "E_TRUST_ONLINE_VERIFY_REQUIRED".to_string(),
         message: format!(
             "Online verification required for trust approval of '{}' ({}): {}",
-            candidate.member_id,
+            candidate.member_handle,
             candidate.kid,
             candidate
                 .online_verification_message

@@ -6,7 +6,7 @@
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use secretenv::feature::key::material::generate_keypairs;
 use secretenv::feature::trust::signature::sign_trust_store;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
 use secretenv::model::trust_store::TrustStoreProtected;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
@@ -15,7 +15,7 @@ use secretenv::support::codec::base64_public::encode_base64url_nopad;
 /// This is a lightweight helper for trust store tests only. It generates
 /// real Ed25519 keys and creates a proper self-signed PublicKey document.
 fn build_self_signed_public_key(
-    member_id: &str,
+    member_handle: &str,
     signing_key: &SigningKey,
 ) -> (secretenv::model::public_key::PublicKey, String) {
     use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
@@ -63,7 +63,7 @@ fn build_self_signed_public_key(
             .unwrap();
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_id,
+        member_handle,
         identity,
         created_at: &created_at,
         expires_at: &expires_at,
@@ -83,15 +83,15 @@ fn test_sign_trust_store_produces_valid_document() {
     let (_public_key, kid) = build_self_signed_public_key("alice@example.com", &signing_key);
 
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V2.to_string(),
-        owner_member_id: "alice@example.com".to_string(),
+        format: TRUST_LOCAL_V3.to_string(),
+        owner_handle: "alice@example.com".to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
         known_keys: vec![],
     };
 
     let doc = sign_trust_store(&protected, &signing_key, &kid).unwrap();
-    assert_eq!(doc.protected.format, TRUST_LOCAL_V2);
+    assert_eq!(doc.protected.format, TRUST_LOCAL_V3);
     assert_eq!(doc.signature.kid, kid);
     assert!(!doc.signature.sig.is_empty());
 }

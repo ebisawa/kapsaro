@@ -13,7 +13,7 @@ use super::types::{
 
 pub(crate) fn build_member_list_entry(public_key: PublicKey) -> Result<MemberListEntry> {
     Ok(MemberListEntry {
-        member_id: public_key.protected.member_id.clone(),
+        member_handle: public_key.protected.subject_handle.clone(),
         kid: public_key.protected.kid.clone(),
         document: serialize_to_json_value(&public_key)?,
     })
@@ -33,7 +33,7 @@ pub(crate) fn build_member_document_view(
         build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_)?;
 
     Ok(MemberDocumentView {
-        member_id: public_key.protected.member_id.clone(),
+        member_handle: public_key.protected.subject_handle.clone(),
         kid: public_key.protected.kid.clone(),
         expires_at: public_key.protected.expires_at.clone(),
         created_at: public_key.protected.created_at.clone(),
@@ -60,7 +60,7 @@ pub(crate) fn build_member_verification_result(
 ) -> MemberVerificationResult {
     let verified = result.is_verified();
     MemberVerificationResult {
-        member_id: result.member_id,
+        member_handle: result.member_handle,
         verified,
         message: result.message,
         fingerprint: result.fingerprint,

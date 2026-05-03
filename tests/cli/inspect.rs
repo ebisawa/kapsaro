@@ -7,8 +7,8 @@
 //! invalid inputs, and signature verification display.
 
 use crate::cli::common::{
-    cmd, default_common_options, set_ssh_key_from_temp_dir, setup_workspace, ALICE_MEMBER_ID,
-    BOB_MEMBER_ID, TEST_MEMBER_ID,
+    cmd, default_common_options, set_ssh_key_from_temp_dir, setup_workspace, ALICE_MEMBER_HANDLE,
+    BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{
     build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace,
@@ -37,7 +37,7 @@ fn test_inspect_file_enc_shows_metadata() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -57,7 +57,7 @@ fn test_inspect_file_enc_shows_metadata() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("File-Enc v3 Metadata"))
+        .stdout(predicate::str::contains("File-Enc v4 Metadata"))
         .stdout(predicate::str::contains("Format:"))
         .stdout(predicate::str::contains("SID:"))
         .stdout(predicate::str::contains("Recipients"))
@@ -87,7 +87,7 @@ fn test_inspect_kv_enc_shows_metadata() {
         .arg("DB_URL")
         .arg("pg://host")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -173,7 +173,7 @@ fn test_inspect_shows_signature_verification() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -205,7 +205,7 @@ fn test_inspect_kv_shows_entry_count() {
         .arg("API_KEY")
         .arg("secret123")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -243,7 +243,7 @@ fn test_inspect_succeeds_without_workspace_or_private_key() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -274,7 +274,7 @@ fn test_inspect_ignores_trust_store_and_strict_key_checking() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -285,7 +285,7 @@ fn test_inspect_ignores_trust_store_and_strict_key_checking() {
     let trust_dir = home_dir.path().join("trust");
     fs::create_dir_all(&trust_dir).unwrap();
     fs::write(
-        trust_dir.join(format!("{}.json", TEST_MEMBER_ID)),
+        trust_dir.join(format!("{}.json", TEST_MEMBER_HANDLE)),
         "{ this is not valid trust store json",
     )
     .unwrap();
@@ -313,7 +313,7 @@ fn test_inspect_colors_public_key_expiry_warning_when_forced() {
     )
     .unwrap();
     let expires_at = build_expiring_soon_timestamp(15);
-    update_active_private_key_expires_at(home_dir.path(), TEST_MEMBER_ID, &expires_at);
+    update_active_private_key_expires_at(home_dir.path(), TEST_MEMBER_HANDLE, &expires_at);
 
     let input_file = home_dir.path().join("inspect_warning.txt");
     fs::write(&input_file, b"inspect warning test").unwrap();
@@ -325,7 +325,7 @@ fn test_inspect_colors_public_key_expiry_warning_when_forced() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -359,9 +359,14 @@ fn test_inspect_colors_public_key_expiry_warning_when_forced() {
 
 #[test]
 fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -371,7 +376,7 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
 
     let set_args = set::SetArgs {
         common: common_opts.clone(),
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         name: Some("disclosed".to_string()),
         key: "API_KEY".to_string(),
         value: Some("secret123".to_string()),
@@ -382,14 +387,14 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
     fs::remove_file(
         workspace_dir
             .join("members/active")
-            .join(format!("{}.json", BOB_MEMBER_ID)),
+            .join(format!("{}.json", BOB_MEMBER_HANDLE)),
     )
     .unwrap();
 
     let rewrap_args = RewrapArgs {
         common: common_opts,
         clear_disclosure_history: false,
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         rotate_key: false,
         targets: Vec::new(),
     };

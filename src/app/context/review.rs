@@ -4,7 +4,7 @@
 //! Shared review snapshot guards for app-layer commands.
 
 use crate::app::trust::WorkspaceMemberSnapshot;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::support::fs;
 use crate::support::fs::atomic;
@@ -123,7 +123,7 @@ pub(crate) fn ensure_public_key_snapshot_matches(
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PublicKeySnapshotEntry {
-    member_id: MemberId,
+    member_handle: MemberHandle,
     kid: Kid,
 }
 
@@ -131,8 +131,8 @@ fn normalize_public_key_snapshot(members: &[PublicKey]) -> Vec<PublicKeySnapshot
     let mut normalized = members
         .iter()
         .map(|member| PublicKeySnapshotEntry {
-            member_id: MemberId::try_from(member.protected.member_id.clone())
-                .expect("public key member_id must be valid"),
+            member_handle: MemberHandle::try_from(member.protected.subject_handle.clone())
+                .expect("public key member_handle must be valid"),
             kid: Kid::try_from(member.protected.kid.clone()).expect("public key kid must be valid"),
         })
         .collect::<Vec<_>>();

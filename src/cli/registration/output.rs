@@ -19,28 +19,28 @@ use std::path::Path;
 pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Result<(), Error> {
     match outcome.result {
         RegistrationResult::NewMember | RegistrationResult::Updated => {
-            print_key_info(&outcome.member_id, &outcome.key_result)?;
+            print_key_info(&outcome.member_handle, &outcome.key_result)?;
             if outcome.is_new_workspace {
                 print_created_workspace_summary(&outcome.workspace_path);
             }
             eprintln!(
                 "Added '{}' to {}/",
-                outcome.member_id,
+                outcome.member_handle,
                 target_directory_name(outcome.target)
             );
             eprintln!();
             print_registration_next_steps(outcome.mode, outcome.is_new_workspace);
         }
         RegistrationResult::AlreadyExists => print_existing_member_message(outcome),
-        RegistrationResult::Skipped => print_skipped_message(&outcome.member_id),
+        RegistrationResult::Skipped => print_skipped_message(&outcome.member_handle),
     }
     Ok(())
 }
 
-pub(super) fn print_missing_key_notice(member_id: &str) {
+pub(super) fn print_missing_key_notice(member_handle: &str) {
     eprintln!(
         "No local key found for '{}'. Generating a new key...",
-        member_id
+        member_handle
     );
 }
 
@@ -59,18 +59,18 @@ fn print_existing_member_message(outcome: &RegistrationOutcome) {
     );
 }
 
-fn print_skipped_message(member_id: &str) {
+fn print_skipped_message(member_handle: &str) {
     print_warning_line(&format!(
         "Warning: Member '{}' already exists in workspace (use --force to overwrite)",
-        member_id
+        member_handle
     ));
 }
 
-fn print_key_info(member_id: &str, key_result: &MemberKeySetupResult) -> Result<(), Error> {
+fn print_key_info(member_handle: &str, key_result: &MemberKeySetupResult) -> Result<(), Error> {
     if key_result.created {
         print_generated_key_binding_info(key_result)?;
         print_generated_key_summary(
-            member_id,
+            member_handle,
             &key_result.kid,
             format_expiry_date(&key_result.expires_at),
             false,
@@ -78,7 +78,7 @@ fn print_key_info(member_id: &str, key_result: &MemberKeySetupResult) -> Result<
         return Ok(());
     }
 
-    print_existing_key_summary(member_id, &key_result.kid);
+    print_existing_key_summary(member_handle, &key_result.kid);
     Ok(())
 }
 

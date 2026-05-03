@@ -15,8 +15,8 @@ use crate::support::codec::base64_public::encode_base64url_nopad;
 
 use super::{build_promotion_review_plan, build_promotion_review_session_with_verifier};
 
-fn kid_for(member_id: &str) -> &'static str {
-    match member_id {
+fn kid_for(member_handle: &str) -> &'static str {
+    match member_handle {
         "alice" => "KAD1AAAA1111BBBB2222CCCC3333DDDD",
         "bob" => "KBD1AAAA1111BBBB2222CCCC3333DDDD",
         "carol" => "KCD1AAAA1111BBBB2222CCCC3333DDDD",
@@ -36,9 +36,9 @@ fn build_report(
     }
 }
 
-fn binding_configured_result(member_id: &str) -> IncomingPromotionCandidate {
+fn binding_configured_result(member_handle: &str) -> IncomingPromotionCandidate {
     build_candidate(
-        member_id,
+        member_handle,
         IncomingVerificationCategory::BindingConfigured,
         "pending online verification",
         true,
@@ -47,15 +47,15 @@ fn binding_configured_result(member_id: &str) -> IncomingPromotionCandidate {
 }
 
 fn build_candidate(
-    member_id: &str,
+    member_handle: &str,
     category: IncomingVerificationCategory,
     message: &str,
     github_binding_configured: bool,
     verified_github: Option<VerifiedGithubIdentity>,
 ) -> IncomingPromotionCandidate {
     let review = IncomingVerificationItem {
-        member_id: member_id.to_string(),
-        kid: kid_for(member_id).to_string(),
+        member_handle: member_handle.to_string(),
+        kid: kid_for(member_handle).to_string(),
         category,
         message: message.to_string(),
         fingerprint: Some("SHA256:abc".to_string()),
@@ -66,11 +66,11 @@ fn build_candidate(
 
     IncomingPromotionCandidate {
         review,
-        source_path: std::path::PathBuf::from(format!("members/incoming/{}.json", member_id)),
+        source_path: std::path::PathBuf::from(format!("members/incoming/{}.json", member_handle)),
         source_content: "{}".to_string(),
         public_key: PublicKey::new(
-            member_id.to_string(),
-            kid_for(member_id).to_string(),
+            member_handle.to_string(),
+            kid_for(member_handle).to_string(),
             Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
@@ -98,10 +98,10 @@ fn build_candidate(
     }
 }
 
-fn known_key(member_id: &str) -> KnownKey {
+fn known_key(member_handle: &str) -> KnownKey {
     KnownKey {
-        kid: kid_for(member_id).to_string(),
-        member_id: member_id.to_string(),
+        kid: kid_for(member_handle).to_string(),
+        subject_handle: member_handle.to_string(),
         approved_at: "2026-04-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -132,7 +132,7 @@ fn test_build_promotion_review_plan_keeps_failed_candidates_without_aborting_bat
     let result = build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
 
     assert_eq!(result.failed_candidates.len(), 1);
-    assert_eq!(result.failed_candidates[0].review.member_id, "bob");
+    assert_eq!(result.failed_candidates[0].review.member_handle, "bob");
     assert!(result.auto_accepted_candidates.is_empty());
     assert!(result.prompt_candidates.is_empty());
 }
@@ -195,7 +195,10 @@ fn test_build_promotion_review_plan_auto_accepts_known_kid() {
     .unwrap();
 
     assert_eq!(result.auto_accepted_candidates.len(), 1);
-    assert_eq!(result.auto_accepted_candidates[0].review.member_id, "alice");
+    assert_eq!(
+        result.auto_accepted_candidates[0].review.member_handle,
+        "alice"
+    );
     assert!(result.prompt_candidates.is_empty());
 }
 
@@ -204,7 +207,7 @@ fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_p
     let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {
         kid: kid_for("alice").to_string(),
-        member_id: "bob".to_string(),
+        subject_handle: "bob".to_string(),
         approved_at: "2026-04-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -222,7 +225,7 @@ fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_p
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("candidate has member_id 'alice'"));
+        .contains("candidate has subject_handle 'alice'"));
 }
 
 #[test]
@@ -250,7 +253,7 @@ fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_
     assert!(session.view().failed_candidates.is_empty());
     assert_eq!(session.view().prompt_candidates.len(), 1);
     assert_eq!(
-        session.view().prompt_candidates[0].candidate.member_id,
+        session.view().prompt_candidates[0].candidate.member_handle,
         "carol"
     );
 }
@@ -307,7 +310,7 @@ fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_
     let accepted = session.into_accepted_candidates(&["alice".to_string(), "carol".to_string()]);
     let accepted_ids = accepted
         .into_iter()
-        .map(|candidate| candidate.review.member_id)
+        .map(|candidate| candidate.review.member_handle)
         .collect::<Vec<_>>();
 
     assert_eq!(accepted_ids, vec!["alice".to_string(), "carol".to_string()]);
@@ -333,7 +336,10 @@ fn test_build_promotion_review_plan_auto_accepts_self_candidate_without_known_ke
     let result = build_promotion_review_plan(&report, &[], &self_trust(), false).unwrap();
 
     assert_eq!(result.auto_accepted_candidates.len(), 1);
-    assert_eq!(result.auto_accepted_candidates[0].review.member_id, "alice");
+    assert_eq!(
+        result.auto_accepted_candidates[0].review.member_handle,
+        "alice"
+    );
     assert!(result.prompt_candidates.is_empty());
 }
 
@@ -370,7 +376,7 @@ fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candida
     let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {
         kid: kid_for("alice").to_string(),
-        member_id: "bob".to_string(),
+        subject_handle: "bob".to_string(),
         approved_at: "2026-04-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -384,5 +390,5 @@ fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candida
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("candidate has member_id 'alice'"));
+        .contains("candidate has subject_handle 'alice'"));
 }

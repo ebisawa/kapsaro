@@ -6,7 +6,7 @@
 //! Key storage structure:
 //! ```text
 //! ~/.config/secretenv/keys/
-//! └── <member_id>/
+//! └── <member_handle>/
 //!     ├── <kid>/
 //!     │   ├── private.json  (PrivateKey)
 //!     │   └── public.json   (PublicKey)

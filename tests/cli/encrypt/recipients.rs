@@ -7,8 +7,8 @@
 //! --recipients オプションは廃止。
 
 use crate::cli::common::{
-    default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_ID, BOB_MEMBER_ID,
-    CAROL_MEMBER_ID,
+    default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    CAROL_MEMBER_HANDLE,
 };
 use crate::test_utils::{
     setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
@@ -19,11 +19,16 @@ use std::fs;
 #[test]
 fn test_encrypt_recipients_are_all_active_members() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID]);
+        setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE]);
 
     // Set up trust store with all active members approved
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let input_path = workspace_dir.join("secret.bin");
     fs::write(&input_path, b"secret data").unwrap();
@@ -36,7 +41,7 @@ fn test_encrypt_recipients_are_all_active_members() {
 
     let args = encrypt::EncryptArgs {
         common: common_opts,
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         out: Some(output_path.clone()),
         stdout: false,
         stdin: false,
@@ -49,16 +54,19 @@ fn test_encrypt_recipients_are_all_active_members() {
     let wrap = parsed["protected"]["wrap"].as_array().unwrap();
     assert_eq!(wrap.len(), 3, "All 3 active members should be recipients");
 
-    let rids: Vec<&str> = wrap.iter().map(|w| w["rid"].as_str().unwrap()).collect();
-    assert!(rids.contains(&ALICE_MEMBER_ID));
-    assert!(rids.contains(&BOB_MEMBER_ID));
-    assert!(rids.contains(&CAROL_MEMBER_ID));
+    let recipient_handles: Vec<&str> = wrap
+        .iter()
+        .map(|w| w["recipient_handle"].as_str().unwrap())
+        .collect();
+    assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE));
+    assert!(recipient_handles.contains(&BOB_MEMBER_HANDLE));
+    assert!(recipient_handles.contains(&CAROL_MEMBER_HANDLE));
 }
 
 #[test]
 fn test_encrypt_workspace_required() {
     use crate::test_utils::{setup_test_keystore, with_temp_cwd};
-    let temp_dir = setup_test_keystore(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore(ALICE_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     with_temp_cwd(test_dir, || {
         let input_path = test_dir.join("test.bin");
@@ -70,7 +78,7 @@ fn test_encrypt_workspace_required() {
 
         let args = encrypt::EncryptArgs {
             common: common_opts,
-            member_handle: Some(ALICE_MEMBER_ID.to_string()),
+            member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
             out: Some(test_dir.join("out.encrypted")),
             stdout: false,
             stdin: false,

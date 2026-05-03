@@ -6,7 +6,7 @@
 //! Verifies that the inspect command correctly displays signature verification
 //! results for file-enc and kv-enc formats, and properly detects tampered files.
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -27,7 +27,7 @@ fn test_verify_file_enc_valid_signature() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -61,7 +61,7 @@ fn test_verify_kv_enc_valid_signature() {
         .arg("VERIFY_KEY")
         .arg("verify_value")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
@@ -102,7 +102,7 @@ fn test_verify_file_enc_tampered_fails() {
         .arg("--out")
         .arg(encrypted_file.to_str().unwrap())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())

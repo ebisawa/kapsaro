@@ -26,7 +26,7 @@ use super::unsigned::{
 
 pub(crate) struct VerifiedKvRewriteSession<'a> {
     verified: VerifiedKvEncDocument,
-    member_id: &'a str,
+    member_handle: &'a str,
     key_ctx: &'a CryptoContext,
     token_codec: Option<TokenCodec>,
     debug: bool,
@@ -42,7 +42,7 @@ pub(crate) struct KvRecipientRewriteRequest<'a> {
 impl<'a> VerifiedKvRewriteSession<'a> {
     pub(crate) fn load(
         content: &KvEncContent,
-        member_id: &'a str,
+        member_handle: &'a str,
         key_ctx: &'a CryptoContext,
         token_codec: Option<TokenCodec>,
         debug: bool,
@@ -50,7 +50,7 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         let verified = verify_kv_content(content, debug)?;
         Ok(Self::from_verified(
             verified,
-            member_id,
+            member_handle,
             key_ctx,
             token_codec,
             debug,
@@ -59,14 +59,14 @@ impl<'a> VerifiedKvRewriteSession<'a> {
 
     pub(crate) fn from_verified(
         verified: VerifiedKvEncDocument,
-        member_id: &'a str,
+        member_handle: &'a str,
         key_ctx: &'a CryptoContext,
         token_codec: Option<TokenCodec>,
         debug: bool,
     ) -> Self {
         Self {
             verified,
-            member_id,
+            member_handle,
             key_ctx,
             token_codec,
             debug,
@@ -99,12 +99,17 @@ impl<'a> VerifiedKvRewriteSession<'a> {
     }
 
     pub(crate) fn unwrap_master_key(&self) -> Result<MasterKey> {
-        unwrap_master_key_from_verified(&self.verified, self.member_id, self.key_ctx, self.debug)
+        unwrap_master_key_from_verified(
+            &self.verified,
+            self.member_handle,
+            self.key_ctx,
+            self.debug,
+        )
     }
 
     pub(crate) fn decrypt_all_values(&self) -> Result<HashMap<String, SecretString>> {
         let content = KvEncContent::new_unchecked(self.document().content().to_string());
-        decrypt_all_kv_values(&content, self.member_id, self.key_ctx, self.debug)
+        decrypt_all_kv_values(&content, self.member_handle, self.key_ctx, self.debug)
     }
 
     pub(crate) fn rewrap_kv_with_recipients(

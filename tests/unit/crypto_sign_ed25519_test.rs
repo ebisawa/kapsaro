@@ -124,7 +124,7 @@ fn test_sign_kv_returns_valid_structure() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
 
-    let canonical_bytes = b":SECRETENV_KV 3\n:WRAP {...}\nKEY {...}\n";
+    let canonical_bytes = b":SECRETENV_KV 4\n:WRAP {...}\nKEY {...}\n";
 
     let sig = sign_trust_store_bytes(
         canonical_bytes,
@@ -145,7 +145,7 @@ fn test_verify_kv_accepts_valid_signature() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let canonical_bytes = b":SECRETENV_KV 3\n:WRAP {...}\nKEY {...}\n";
+    let canonical_bytes = b":SECRETENV_KV 4\n:WRAP {...}\nKEY {...}\n";
 
     let sig = sign_trust_store_bytes(
         canonical_bytes,
@@ -163,8 +163,8 @@ fn test_verify_kv_rejects_tampered_content() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let original = b":SECRETENV_KV 3\n:WRAP {...}\nKEY {...}\n";
-    let tampered = b":SECRETENV_KV 3\n:WRAP {...}\nKEY {!!!}\n";
+    let original = b":SECRETENV_KV 4\n:WRAP {...}\nKEY {...}\n";
+    let tampered = b":SECRETENV_KV 4\n:WRAP {...}\nKEY {!!!}\n";
 
     let sig = sign_trust_store_bytes(
         original,
@@ -210,8 +210,8 @@ fn test_kv_lf_normalization_matters() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let lf_version = b":SECRETENV_KV 3\nKEY {...}\n";
-    let crlf_version = b":SECRETENV_KV 3\r\nKEY {...}\r\n";
+    let lf_version = b":SECRETENV_KV 4\nKEY {...}\n";
+    let crlf_version = b":SECRETENV_KV 4\r\nKEY {...}\r\n";
 
     // Sign LF version
     let sig = sign_trust_store_bytes(

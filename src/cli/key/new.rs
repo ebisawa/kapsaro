@@ -16,7 +16,8 @@ use super::NewArgs;
 /// Main entry point for key generation
 pub fn run(args: NewArgs) -> Result<()> {
     let options = resolve_options(&args.common);
-    let member_id = resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
+    let member_handle =
+        resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
     let github_user = resolve_key_generation_github_user(
         true,
         args.github_user.clone(),
@@ -26,7 +27,7 @@ pub fn run(args: NewArgs) -> Result<()> {
     let ssh_ctx = resolve_ssh_context(&options)?;
     let result = generate_key_command(
         &options,
-        member_id,
+        member_handle,
         github_user,
         &args.expires_at,
         &args.valid_for,
@@ -40,7 +41,7 @@ pub fn run(args: NewArgs) -> Result<()> {
         result.github_verification,
     )?;
     print_generated_key_summary(
-        &result.member_id,
+        &result.member_handle,
         &result.kid,
         &result.expires_at,
         result.activated,

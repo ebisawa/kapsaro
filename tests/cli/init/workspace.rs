@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::setup_init_env;
-use crate::cli::common::{cmd, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, TEST_MEMBER_HANDLE};
 
 #[test]
 fn test_init_creates_workspace() {
@@ -13,7 +13,7 @@ fn test_init_creates_workspace() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -45,7 +45,7 @@ fn test_init_completes_incomplete_workspace_structure() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -58,6 +58,6 @@ fn test_init_completes_incomplete_workspace_structure() {
     assert!(workspace_dir.path().join("secrets/.gitkeep").exists());
     assert!(workspace_dir
         .path()
-        .join(format!("members/active/{}.json", TEST_MEMBER_ID))
+        .join(format!("members/active/{}.json", TEST_MEMBER_HANDLE))
         .exists());
 }

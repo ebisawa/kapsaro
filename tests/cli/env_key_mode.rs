@@ -6,7 +6,7 @@
 //! Tests that env key mode is restricted to read-only operations:
 //! `run`, `decrypt`, and `get`.
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_HANDLE};
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
 use secretenv::feature::key::portable_export::export_private_key_portable;
@@ -36,13 +36,13 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
     let keystore_root = home_dir.path().join("keys");
 
     // Read active kid
-    let kid = load_active_kid(TEST_MEMBER_ID, &keystore_root)
+    let kid = load_active_kid(TEST_MEMBER_HANDLE, &keystore_root)
         .expect("should load active kid")
         .expect("active kid should exist");
 
     // Load encrypted private key from keystore
-    let private_key =
-        load_private_key(&keystore_root, TEST_MEMBER_ID, &kid).expect("should load private key");
+    let private_key = load_private_key(&keystore_root, TEST_MEMBER_HANDLE, &kid)
+        .expect("should load private key");
 
     // Read SSH public key content
     let ssh_pub_path = ssh_priv.with_extension("pub");
@@ -60,7 +60,7 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
     let password = SecretString::new(TEST_PASSWORD.to_string());
     let exported = export_private_key_portable(
         &plaintext,
-        &private_key.protected.member_id,
+        &private_key.protected.subject_handle,
         &private_key.protected.kid,
         &private_key.protected.created_at,
         &private_key.protected.expires_at,
@@ -346,7 +346,7 @@ fn test_env_key_mode_rejects_key_new() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .assert()
         .failure()
         .stderr(predicate::str::contains("environment-variable key mode"))
@@ -362,7 +362,7 @@ fn test_env_key_mode_rejects_init() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .assert()
         .failure()
         .stderr(predicate::str::contains("environment-variable key mode"))

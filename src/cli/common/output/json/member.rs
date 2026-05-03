@@ -23,7 +23,7 @@ struct MemberVerificationResultsOutput<'a> {
 
 #[derive(Serialize)]
 struct MemberVerificationJsonItem<'a> {
-    member_id: &'a str,
+    member_handle: &'a str,
     verified: bool,
     message: &'a str,
     fingerprint: Option<&'a str>,
@@ -37,7 +37,7 @@ struct MemberApprovalResultsOutput<'a> {
 
 #[derive(Serialize)]
 struct MemberApprovalJsonItem<'a> {
-    member_id: &'a str,
+    member_handle: &'a str,
     kid: &'a str,
     verified: bool,
     approved: bool,
@@ -72,7 +72,7 @@ pub(crate) fn print_member_verification_results(
             .results
             .iter()
             .map(|result| MemberVerificationJsonItem {
-                member_id: result.member_id,
+                member_handle: result.member_handle,
                 verified: result.verified,
                 message: result.message,
                 fingerprint: result.fingerprint,
@@ -89,7 +89,7 @@ pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>
             .results
             .iter()
             .map(|result| MemberApprovalJsonItem {
-                member_id: result.member_id,
+                member_handle: result.member_handle,
                 kid: result.kid,
                 verified: result.verified,
                 approved: result.approved,

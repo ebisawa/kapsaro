@@ -17,7 +17,7 @@ use super::public_key::{verify_public_key_for_verification_context, EMBEDDED_SIG
 #[derive(Debug)]
 pub struct SignatureVerificationKey {
     pub verifying_key: VerifyingKey,
-    pub member_id: String,
+    pub member_handle: String,
     pub source: VerifyingKeySource,
     pub warnings: Vec<String>,
     pub public_key: PublicKey,
@@ -78,7 +78,7 @@ fn build_loaded_verifying_key(
 
     Ok(SignatureVerificationKey {
         verifying_key: extract_verifying_key(doc)?,
-        member_id: doc.protected.member_id.clone(),
+        member_handle: doc.protected.subject_handle.clone(),
         source,
         warnings: verified.warnings,
         public_key: public_key.clone(),

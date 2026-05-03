@@ -13,23 +13,23 @@ use std::path::Path;
 
 pub fn resolve_member_kid_query(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid_query: &str,
 ) -> Result<String> {
-    let kids = list_kids(keystore_root, member_id)?;
+    let kids = list_kids(keystore_root, member_handle)?;
     resolve_unique_kid(kids.iter().map(String::as_str), kid_query).map_err(|error| match error {
         Error::NotFound { .. } => Error::NotFound {
             message: format!(
                 "Specified kid '{}' not found for member '{}'",
                 format_kid_display_lossy(kid_query),
-                member_id
+                member_handle
             ),
         },
         other => other,
     })
 }
 
-/// Resolves the kid to use for a given member_id
+/// Resolves the kid to use for a given member_handle
 ///
 /// Resolution order:
 /// 1. If `kid_override` is provided, use it
@@ -38,27 +38,27 @@ pub fn resolve_member_kid_query(
 ///
 /// # Arguments
 /// * `keystore_root` - Path to the keystore root directory
-/// * `member_id` - The member ID to resolve the kid for
+/// * `member_handle` - The member handle to resolve the kid for
 /// * `kid_override` - Optional explicit kid to use (bypasses active/latest selection)
 ///
 /// # Returns
 /// The resolved kid as a String
 ///
 /// # Errors
-/// - `Error::NotFound` if no keys found for the member_id
+/// - `Error::NotFound` if no keys found for the member_handle
 /// - `Error::NotFound` if kid_override is provided but doesn't exist
 pub fn resolve_kid(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid_override: Option<&str>,
 ) -> Result<String> {
     if let Some(kid) = kid_override {
-        return resolve_member_kid_query(keystore_root, member_id, kid);
+        return resolve_member_kid_query(keystore_root, member_handle, kid);
     }
 
-    if let Some(active_kid) = load_active_kid(member_id, keystore_root)? {
+    if let Some(active_kid) = load_active_kid(member_handle, keystore_root)? {
         return Ok(active_kid);
     }
 
-    select_most_recent_kid(keystore_root, member_id)
+    select_most_recent_kid(keystore_root, member_handle)
 }

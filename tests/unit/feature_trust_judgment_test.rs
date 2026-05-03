@@ -7,7 +7,7 @@ use secretenv::feature::trust::judgment::{
     judge_recipients_trust, judge_signer_trust, ActiveMemberSnapshot, KnownKeyCache, SelfTrustSet,
     TrustIdentity, TrustJudgment,
 };
-use secretenv::model::identity::{Kid, MemberId};
+use secretenv::model::identity::{Kid, MemberHandle};
 use secretenv::model::public_key::PublicKey;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia};
 use std::collections::BTreeMap;
@@ -15,18 +15,18 @@ use std::collections::BTreeMap;
 const KID1: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 const KID2: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";
 
-fn member_id(value: &str) -> MemberId {
-    MemberId::try_from(value).unwrap()
+fn member_handle(value: &str) -> MemberHandle {
+    MemberHandle::try_from(value).unwrap()
 }
 
 fn kid_value(value: &str) -> Kid {
     Kid::try_from(value).unwrap()
 }
 
-fn build_known_key(kid: &str, member_id: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_handle: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
-        member_id: member_id.to_string(),
+        subject_handle: member_handle.to_string(),
         approved_at: "2026-03-29T12:40:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -36,19 +36,20 @@ fn build_known_key(kid: &str, member_id: &str) -> KnownKey {
 
 fn build_active_members(entries: &[(&str, &str)]) -> BTreeMap<String, PublicKey> {
     let mut map = BTreeMap::new();
-    for (kid, member_id) in entries {
-        let pk: PublicKey = serde_json::from_str(&minimal_public_key_json(kid, member_id)).unwrap();
+    for (kid, member_handle) in entries {
+        let pk: PublicKey =
+            serde_json::from_str(&minimal_public_key_json(kid, member_handle)).unwrap();
         map.insert(kid.to_string(), pk);
     }
     map
 }
 
-fn minimal_public_key_json(kid: &str, member_id: &str) -> String {
+fn minimal_public_key_json(kid: &str, member_handle: &str) -> String {
     format!(
         r#"{{
         "protected": {{
-            "format": "secretenv.public.key@4",
-            "member_id": "{}",
+            "format": "secretenv.public.key@5",
+            "subject_handle": "{}",
             "kid": "{}",
             "identity": {{
                 "keys": {{
@@ -65,7 +66,7 @@ fn minimal_public_key_json(kid: &str, member_id: &str) -> String {
         }},
         "signature": "test_sig"
     }}"#,
-        member_id, kid
+        member_handle, kid
     )
 }
 
@@ -103,7 +104,7 @@ fn test_judge_signer_trust_needs_approval() {
     assert_eq!(
         result,
         TrustJudgment::NeedsApproval {
-            member_id: member_id("bob"),
+            member_handle: member_handle("bob"),
             kid: kid_value(kid),
         }
     );
@@ -126,7 +127,7 @@ fn test_judge_signer_trust_non_member() {
     assert_eq!(
         result,
         TrustJudgment::NonMember {
-            member_id: member_id("bob"),
+            member_handle: member_handle("bob"),
             kid: kid_value(kid),
         }
     );
@@ -186,7 +187,7 @@ fn test_judge_signer_trust_self_trust_set_not_matched() {
     assert_eq!(
         result,
         TrustJudgment::NeedsApproval {
-            member_id: member_id("other"),
+            member_handle: member_handle("other"),
             kid: kid_value(kid),
         }
     );
@@ -210,7 +211,7 @@ fn test_judge_signer_trust_self_trust_set_accepts_historical_self_key() {
     assert_eq!(result, TrustJudgment::Trusted);
 }
 
-// === P2 regression: kid cached with different member_id (spec §9.4) ===
+// === P2 regression: kid cached with different member_handle (spec §9.4) ===
 
 #[test]
 fn test_judge_signer_trust_cached_kid_different_member_integrity_anomaly() {
@@ -230,9 +231,9 @@ fn test_judge_signer_trust_cached_kid_different_member_integrity_anomaly() {
     assert_eq!(
         result,
         TrustJudgment::KnownKeyIntegrityAnomaly {
-            member_id: member_id("bob"),
+            member_handle: member_handle("bob"),
             kid: kid_value(kid),
-            known_member_id: member_id("alice"),
+            known_member_handle: member_handle("alice"),
         }
     );
 }
@@ -255,7 +256,7 @@ fn test_judge_signer_trust_cached_kid_same_member_trusted() {
 }
 
 #[test]
-fn test_judge_signer_trust_member_id_mismatch_is_not_current_member() {
+fn test_judge_signer_trust_member_handle_mismatch_is_not_current_member() {
     let kid = KID1;
     let active = build_active_members(&[(kid, "alice@example.com")]);
     let known = vec![build_known_key(kid, "bob@example.com")];
@@ -271,9 +272,9 @@ fn test_judge_signer_trust_member_id_mismatch_is_not_current_member() {
     assert_eq!(
         result,
         TrustJudgment::ActiveMemberMismatch {
-            member_id: member_id("bob@example.com"),
+            member_handle: member_handle("bob@example.com"),
             kid: kid_value(kid),
-            active_member_id: member_id("alice@example.com"),
+            active_member_handle: member_handle("alice@example.com"),
         }
     );
 }
@@ -309,7 +310,7 @@ fn test_judge_recipients_trust_unknown_kid() {
     )
     .unwrap();
     assert_eq!(needs.len(), 1);
-    assert_eq!(needs[0].member_id(), "bob");
+    assert_eq!(needs[0].member_handle(), "bob");
 }
 
 #[test]
@@ -324,7 +325,7 @@ fn test_judge_recipients_trust_cached_kid_different_member() {
     )
     .unwrap();
     assert_eq!(needs.len(), 1);
-    assert_eq!(needs[0].member_id(), "bob");
+    assert_eq!(needs[0].member_handle(), "bob");
 }
 
 #[test]
@@ -351,5 +352,5 @@ fn test_judge_recipients_trust_self_trust_set_skips_only_self_keys() {
         judge_recipients_trust(&recipients, &KnownKeyCache::new(&known), &self_keys).unwrap();
 
     assert_eq!(needs.len(), 1);
-    assert_eq!(needs[0].member_id(), "other");
+    assert_eq!(needs[0].member_handle(), "other");
 }

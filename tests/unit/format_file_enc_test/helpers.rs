@@ -22,20 +22,20 @@ pub(super) fn b64url(data: &[u8]) -> String {
 
 pub(super) fn decrypt_file_document_for_test(
     file_enc_doc: &secretenv::model::file_enc::FileEncDocument,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     private_key: &PrivateKeyPlaintext,
     signer_kid: &str,
 ) -> zeroize::Zeroizing<Vec<u8>> {
     let proof = SignatureVerificationProof::new(
-        member_id.to_string(),
+        member_handle.to_string(),
         signer_kid.to_string(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
     );
     let verified_doc = VerifiedFileEncDocument::new(file_enc_doc.clone(), proof);
-    let decrypted_key = build_verified_private_key(private_key, member_id, kid, "SHA256:test");
-    decrypt_file_document(&verified_doc, member_id, kid, &decrypted_key, false).unwrap()
+    let decrypted_key = build_verified_private_key(private_key, member_handle, kid, "SHA256:test");
+    decrypt_file_document(&verified_doc, member_handle, kid, &decrypted_key, false).unwrap()
 }
 
 pub(super) fn generate_x25519_keypair(seed: [u8; 32]) -> (X25519SecretKey, X25519PublicKey) {
@@ -57,7 +57,7 @@ pub(super) fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
 pub(super) fn recipients_and_members(
     recipients_with_keys: &[(String, PublicKey)],
 ) -> (Vec<String>, Vec<VerifiedRecipientKey>) {
-    let recipient_ids = recipients_with_keys
+    let recipient_handles = recipients_with_keys
         .iter()
         .map(|(id, _)| id.clone())
         .collect();
@@ -65,14 +65,14 @@ pub(super) fn recipients_and_members(
         .iter()
         .map(|(_, pk)| build_verified_recipient_key(pk.clone()))
         .collect();
-    (recipient_ids, members)
+    (recipient_handles, members)
 }
 
-pub(super) fn build_test_public_key(member_id: &str, kid: &str, kem_pub: &str) -> PublicKey {
+pub(super) fn build_test_public_key(member_handle: &str, kid: &str, kem_pub: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
-            member_id: member_id.to_string(),
+            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {

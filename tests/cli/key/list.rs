@@ -3,7 +3,7 @@
 
 //! Integration tests for `key list` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use tempfile::TempDir;
 
 #[test]
@@ -11,14 +11,14 @@ fn test_key_list_basic() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate 2 keys
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -29,7 +29,7 @@ fn test_key_list_basic() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -41,17 +41,17 @@ fn test_key_list_basic() {
         .arg("key")
         .arg("list")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();
 
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
 
-    // Verify output contains member_id
+    // Verify output contains member_handle
     assert!(
-        stdout.contains(member_id),
-        "Output should contain member_id"
+        stdout.contains(member_handle),
+        "Output should contain member_handle"
     );
 
     // Verify output contains "active" marker (one key should be active)
@@ -69,14 +69,14 @@ fn test_key_list_json_output() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate a key
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -88,7 +88,7 @@ fn test_key_list_json_output() {
         .arg("key")
         .arg("list")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--json")
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
@@ -116,8 +116,8 @@ fn test_key_list_json_output() {
             "Should have expires_at field"
         );
         assert!(
-            first_key.get("member_id").is_some(),
-            "Should have member_id field"
+            first_key.get("member_handle").is_some(),
+            "Should have member_handle field"
         );
     }
 
@@ -129,14 +129,14 @@ fn test_key_list_json_output() {
 fn test_key_list_empty() {
     let temp_dir = TempDir::new().unwrap();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key list on empty keystore
     let output = cmd()
         .arg("key")
         .arg("list")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();
@@ -156,18 +156,18 @@ fn test_key_list_empty() {
 }
 
 #[test]
-fn test_key_list_auto_resolve_member_id() {
+fn test_key_list_auto_resolve_member_handle() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate a key
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -184,10 +184,10 @@ fn test_key_list_auto_resolve_member_id() {
 
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
 
-    // Verify output contains the member_id
+    // Verify output contains the member_handle
     assert!(
-        stdout.contains(member_id),
-        "Output should contain auto-resolved member_id"
+        stdout.contains(member_handle),
+        "Output should contain auto-resolved member_handle"
     );
 
     // Keep temp directories alive

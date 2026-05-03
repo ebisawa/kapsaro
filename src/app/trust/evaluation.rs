@@ -41,7 +41,7 @@ where
     let loaded = load_read_trust_context(
         options,
         &workspace.root_path,
-        &execution.member_id,
+        &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?;

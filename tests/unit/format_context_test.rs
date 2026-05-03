@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv::feature::envelope::binding;
 use secretenv::feature::key::protection::binding as private_key_binding;
 use secretenv::model::identifiers::{alg, context as wire_context, format};
@@ -22,7 +22,7 @@ fn test_hpke_info_kv_file() {
     let parsed: serde_json::Value = serde_json::from_str(info_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::HPKE_WRAP_KV_FILE_V3);
+    assert_eq!(parsed["p"], wire_context::HPKE_WRAP_KV_FILE_V4);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
     // Should NOT have "rd" field (removed in Rev29)
@@ -44,7 +44,7 @@ fn test_hpke_info_file() {
     let parsed: serde_json::Value = serde_json::from_str(info_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::HPKE_WRAP_FILE_V3);
+    assert_eq!(parsed["p"], wire_context::HPKE_WRAP_FILE_V4);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
     // Should NOT have "rd" field (removed in Rev29)
@@ -71,7 +71,7 @@ fn test_aad_payload_kv() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::PAYLOAD_KV_V3);
+    assert_eq!(parsed["p"], wire_context::PAYLOAD_KV_V4);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["k"], key);
     // salt is NOT in AAD (used in HKDF salt parameter instead)
@@ -86,7 +86,7 @@ fn test_aad_file_payload() {
 
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
     let payload_protected = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V3.to_string(),
+        format: format::FILE_PAYLOAD_V4.to_string(),
         sid,
         alg: FileEncAlgorithm {
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
@@ -102,7 +102,7 @@ fn test_aad_file_payload() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields from payload.protected
-    assert_eq!(parsed["format"], format::FILE_PAYLOAD_V3);
+    assert_eq!(parsed["format"], format::FILE_PAYLOAD_V4);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["alg"]["aead"], alg::AEAD_XCHACHA20_POLY1305);
 }
@@ -113,8 +113,8 @@ fn test_aad_private_key() {
     use secretenv::model::private_key::{PrivateKeyAlgorithm, PrivateKeyProtected};
 
     let protected = PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V5.to_string(),
-        member_id: ALICE_MEMBER_ID.to_string(),
+        format: format::PRIVATE_KEY_V6.to_string(),
+        subject_handle: ALICE_MEMBER_HANDLE.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: "SHA256:ABCDEFGH123456789".to_string(),
@@ -135,8 +135,8 @@ fn test_aad_private_key() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields from protected
-    assert_eq!(parsed["format"], format::PRIVATE_KEY_V5);
-    assert_eq!(parsed["member_id"], ALICE_MEMBER_ID);
+    assert_eq!(parsed["format"], format::PRIVATE_KEY_V6);
+    assert_eq!(parsed["subject_handle"], ALICE_MEMBER_HANDLE);
     assert_eq!(parsed["kid"], "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(parsed["alg"]["fpr"], "SHA256:ABCDEFGH123456789");
     assert_eq!(parsed["expires_at"], "2027-01-15T00:00:00Z");

@@ -40,8 +40,8 @@ fn build_password_private_key_with_plaintext_json(
     let ikm_salt = PrivateKeyIkmSalt::new([7u8; 32]);
     let hkdf_salt = HkdfSalt::new([8u8; 32]);
     let protected = PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V5.to_string(),
-        member_id: "alice@example.com".to_string(),
+        format: format::PRIVATE_KEY_V6.to_string(),
+        subject_handle: "alice@example.com".to_string(),
         kid: TEST_KID.to_string(),
         alg: PrivateKeyAlgorithm::Argon2id {
             ikm_salt: encode_base64url_nopad(ikm_salt.as_bytes()),
@@ -161,14 +161,14 @@ fn test_password_encrypt_alg_kdf_is_argon2id() {
 #[test]
 fn test_password_encrypt_preserves_metadata() {
     let plaintext = build_test_plaintext();
-    let member_id = "bob@example.com";
+    let member_handle = "bob@example.com";
     let kid = TEST_KID;
     let created_at = "2026-03-01T12:00:00Z";
     let expires_at = "2027-03-01T12:00:00Z";
 
     let encrypted = encrypt_private_key_with_password(
         &plaintext,
-        member_id,
+        member_handle,
         kid,
         created_at,
         expires_at,
@@ -177,19 +177,19 @@ fn test_password_encrypt_preserves_metadata() {
     )
     .expect("encryption should succeed");
 
-    assert_eq!(encrypted.protected.member_id, member_id);
+    assert_eq!(encrypted.protected.subject_handle, member_handle);
     assert_eq!(encrypted.protected.kid, kid);
     assert_eq!(encrypted.protected.created_at, created_at);
     assert_eq!(encrypted.protected.expires_at, expires_at);
-    assert_eq!(encrypted.protected.format, format::PRIVATE_KEY_V5);
+    assert_eq!(encrypted.protected.format, format::PRIVATE_KEY_V6);
 }
 
 #[test]
 fn test_password_decrypt_rejects_sshsig_key() {
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: format::PRIVATE_KEY_V5.to_string(),
-            member_id: "alice@example.com".to_string(),
+            format: format::PRIVATE_KEY_V6.to_string(),
+            subject_handle: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:dummy".to_string(),

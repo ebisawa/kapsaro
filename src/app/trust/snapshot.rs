@@ -46,7 +46,7 @@ impl TrustContext {
 pub(crate) struct WorkspaceMemberSnapshot {
     active_members: Vec<PublicKey>,
     active_members_by_kid: BTreeMap<String, PublicKey>,
-    member_ids: Vec<String>,
+    member_handles: Vec<String>,
     verified_recipients: Vec<VerifiedRecipientKey>,
     recipient_expiry_warnings: Vec<String>,
 }
@@ -63,15 +63,19 @@ impl WorkspaceMemberSnapshot {
     }
 
     pub(crate) fn from_active_members(active_members: Vec<PublicKey>, debug: bool) -> Result<Self> {
-        let mut member_ids = active_members
+        let mut member_handles = active_members
             .iter()
-            .map(|member| member.protected.member_id.clone())
+            .map(|member| member.protected.subject_handle.clone())
             .collect::<Vec<_>>();
-        member_ids.sort();
-        Self::build(active_members, member_ids, debug)
+        member_handles.sort();
+        Self::build(active_members, member_handles, debug)
     }
 
-    fn build(active_members: Vec<PublicKey>, member_ids: Vec<String>, debug: bool) -> Result<Self> {
+    fn build(
+        active_members: Vec<PublicKey>,
+        member_handles: Vec<String>,
+        debug: bool,
+    ) -> Result<Self> {
         let mut active_members_by_kid = BTreeMap::new();
         for member in &active_members {
             let kid = member.protected.kid.clone();
@@ -95,7 +99,7 @@ impl WorkspaceMemberSnapshot {
         Ok(Self {
             active_members,
             active_members_by_kid,
-            member_ids,
+            member_handles,
             verified_recipients,
             recipient_expiry_warnings,
         })
@@ -113,8 +117,8 @@ impl WorkspaceMemberSnapshot {
         self.active_members_by_kid == other.active_members_by_kid
     }
 
-    pub(crate) fn member_ids(&self) -> &[String] {
-        &self.member_ids
+    pub(crate) fn member_handles(&self) -> &[String] {
+        &self.member_handles
     }
 
     pub(crate) fn verified_recipients(&self) -> &[VerifiedRecipientKey] {
@@ -145,24 +149,24 @@ where
     pub(crate) fn load(
         options: &CommonCommandOptions,
         workspace_path: &Path,
-        self_member_id: &str,
+        self_member_handle: &str,
         self_sig_x: Option<[u8; 32]>,
         debug: bool,
     ) -> Result<Self> {
         let workspace_members = WorkspaceMemberSnapshot::load(workspace_path, debug)?;
-        Self::from_workspace_members(options, workspace_members, self_member_id, self_sig_x)
+        Self::from_workspace_members(options, workspace_members, self_member_handle, self_sig_x)
     }
 
     pub(crate) fn from_workspace_members(
         options: &CommonCommandOptions,
         workspace_members: WorkspaceMemberSnapshot,
-        self_member_id: &str,
+        self_member_handle: &str,
         self_sig_x: Option<[u8; 32]>,
     ) -> Result<Self> {
         let trust_ctx = load_trust_context(
             options,
             workspace_members.active_members_by_kid().clone(),
-            self_member_id,
+            self_member_handle,
             self_sig_x,
         )?;
         enforce_policy_strict_key_checking::<P>(trust_ctx.strict_key_checking)?;
@@ -185,7 +189,7 @@ where
 pub(crate) fn load_read_trust_context(
     options: &CommonCommandOptions,
     workspace_path: &Path,
-    self_member_id: &str,
+    self_member_handle: &str,
     self_sig_x: Option<[u8; 32]>,
     debug: bool,
 ) -> Result<ReadTrustContextLoadResult> {
@@ -193,7 +197,7 @@ pub(crate) fn load_read_trust_context(
     let trust_ctx = load_trust_context(
         options,
         verified_active_members.active_members_by_kid,
-        self_member_id,
+        self_member_handle,
         self_sig_x,
     )?;
     let mut warnings = trust_ctx.permission_warnings.clone();
@@ -217,14 +221,14 @@ where
     pub(crate) fn load(
         options: &CommonCommandOptions,
         workspace_path: &Path,
-        self_member_id: &str,
+        self_member_handle: &str,
         self_sig_x: Option<[u8; 32]>,
         debug: bool,
     ) -> Result<Self> {
         let trust_snapshot = CommandTrustSnapshot::<P>::load(
             options,
             workspace_path,
-            self_member_id,
+            self_member_handle,
             self_sig_x,
             debug,
         )?;
@@ -267,17 +271,17 @@ where
 fn load_trust_context(
     options: &CommonCommandOptions,
     active_members_by_kid: BTreeMap<String, PublicKey>,
-    self_member_id: &str,
+    self_member_handle: &str,
     derive_self_sig_x: Option<[u8; 32]>,
 ) -> Result<TrustContext> {
     let strict_key_checking = resolve_strict_key_checking();
     let is_interactive = tty::is_interactive();
-    let (_, loaded) = load_optional_trust_store_for_member(options, self_member_id)?;
+    let (_, loaded) = load_optional_trust_store_for_member(options, self_member_handle)?;
     let (known_keys, permission_warnings) = match loaded {
         Some(loaded) => (loaded.protected.known_keys, loaded.warnings),
         None => (Vec::new(), Vec::new()),
     };
-    let self_trust = load_self_trust(options, self_member_id, derive_self_sig_x)?;
+    let self_trust = load_self_trust(options, self_member_handle, derive_self_sig_x)?;
 
     Ok(TrustContext {
         known_keys,
@@ -334,9 +338,9 @@ fn load_active_member_index_for_read_trust(
 
 fn load_self_trust(
     options: &CommonCommandOptions,
-    self_member_id: &str,
+    self_member_handle: &str,
     derive_self_sig_x: Option<[u8; 32]>,
 ) -> Result<SelfTrustSet> {
     let keystore_root = options.resolve_keystore_root()?;
-    SelfTrustSet::try_new_with_keystore(self_member_id, derive_self_sig_x, keystore_root)
+    SelfTrustSet::try_new_with_keystore(self_member_handle, derive_self_sig_x, keystore_root)
 }

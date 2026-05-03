@@ -31,11 +31,11 @@ fn test_build_verification_result_groups_mixed() {
     ];
     let (verified, failed, not_configured) = build_verification_result_groups(&results);
     assert_eq!(verified.len(), 1);
-    assert_eq!(verified[0].member_id, "alice");
+    assert_eq!(verified[0].member_handle, "alice");
     assert_eq!(failed.len(), 1);
-    assert_eq!(failed[0].member_id, "bob");
+    assert_eq!(failed[0].member_handle, "bob");
     assert_eq!(not_configured.len(), 1);
-    assert_eq!(not_configured[0].member_id, "carol");
+    assert_eq!(not_configured[0].member_handle, "carol");
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn test_build_offline_verification_failure_preserves_claim_flag_and_prefix() {
         true,
     );
 
-    assert_eq!(result.member_id, "alice");
+    assert_eq!(result.member_handle, "alice");
     assert_eq!(result.status, VerificationStatus::Failed);
     assert_eq!(
         result.message,

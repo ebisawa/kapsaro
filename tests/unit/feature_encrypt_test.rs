@@ -6,7 +6,7 @@
 //! Tests for encryption use cases.
 
 use crate::keygen_helpers::build_verified_recipient_key;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
 use secretenv::feature::decrypt::file::decrypt_file_document;
@@ -18,7 +18,7 @@ use secretenv::feature::verify::kv::signature::verify_kv_document;
 use secretenv::format::kv::document::parse_kv_document;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::file_enc::FileEncDocument;
-use secretenv::model::identifiers::format::FILE_ENC_V3;
+use secretenv::model::identifiers::format::FILE_ENC_V4;
 
 /// Generate Ed25519 signing key from seed for tests
 fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
@@ -28,20 +28,20 @@ fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
 #[test]
 fn test_encrypt_file_document() {
     // Use keys from fixture keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
     // Load CryptoContext to get signing key
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     let signing_key = &key_ctx.signing_key;
 
     // Input content
     let content = b"Hello, World!";
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let recipients = vec![ALICE_MEMBER_HANDLE.to_string()];
     let attested_members = vec![build_verified_recipient_key(public_key.clone())];
 
     // Encrypt
@@ -58,10 +58,10 @@ fn test_encrypt_file_document() {
     let file_enc_doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
 
     // Verify structure
-    assert_eq!(file_enc_doc.protected.format, FILE_ENC_V3);
+    assert_eq!(file_enc_doc.protected.format, FILE_ENC_V4);
     assert_eq!(
-        file_enc_doc.signature.signer_pub.protected.member_id,
-        ALICE_MEMBER_ID
+        file_enc_doc.signature.signer_pub.protected.subject_handle,
+        ALICE_MEMBER_HANDLE
     );
 
     // Decrypt and verify
@@ -69,7 +69,7 @@ fn test_encrypt_file_document() {
     let verified_doc = verify_file_document(&doc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,
@@ -82,16 +82,19 @@ fn test_encrypt_file_document() {
 #[test]
 fn test_encrypt_file_document_recipient_count_mismatch() {
     // Use keys from fixture keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
     let signing_key = generate_ed25519_keypair([2u8; 32]);
 
     // Input content
     let content = b"Hello, World!";
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), "bob@example.com".to_string()];
+    let recipients = vec![
+        ALICE_MEMBER_HANDLE.to_string(),
+        "bob@example.com".to_string(),
+    ];
     let signer_pub = public_key.clone();
     let attested_members = vec![build_verified_recipient_key(public_key)]; // Only one member, but two recipients
 
@@ -115,13 +118,13 @@ fn test_encrypt_kv_document_via_inner_api() {
     use std::collections::HashMap;
 
     // Use keys from fixture keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
     let signing_key = &key_ctx.signing_key;
 
     let mut kv_map = HashMap::new();
@@ -143,7 +146,7 @@ fn test_encrypt_kv_document_via_inner_api() {
         encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 3\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 4\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));
@@ -153,13 +156,13 @@ fn test_encrypt_kv_document_via_inner_api() {
     let doc = parse_kv_document(&encrypted).unwrap();
     let sig_token = &doc.signature_token;
     let sig = secretenv::format::schema::document::parse_kv_signature_token(sig_token).unwrap();
-    assert_eq!(sig.signer_pub.protected.member_id, ALICE_MEMBER_ID);
+    assert_eq!(sig.signer_pub.protected.subject_handle, ALICE_MEMBER_HANDLE);
 
     // Decrypt and verify
     let verified_doc = verify_kv_document(&doc, false).unwrap();
     let decrypted_map_zeroizing = decrypt_kv_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,

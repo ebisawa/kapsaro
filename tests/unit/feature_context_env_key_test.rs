@@ -80,7 +80,7 @@ fn test_decode_env_private_key() {
     std::env::set_var(ENV_KEY_PASSWORD, password);
 
     let result = load_private_key_from_env(false).expect("should succeed");
-    assert_eq!(result.member_id, "alice@example.com");
+    assert_eq!(result.member_handle, "alice@example.com");
     assert_eq!(result.verified_key.proof().kid(), TEST_KID);
     assert!(result.verified_key.proof().ssh_fpr().is_none());
     assert_eq!(
@@ -146,7 +146,7 @@ fn test_env_key_rejects_invalid_format() {
     let bad_format_key = PrivateKey {
         protected: PrivateKeyProtected {
             format: "secretenv.private.key@2".to_string(),
-            member_id: "alice@example.com".to_string(),
+            subject_handle: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::Argon2id {
                 ikm_salt: encode_base64url_nopad(&[0u8; 32]),
@@ -172,10 +172,11 @@ fn test_env_key_rejects_invalid_format() {
     assert!(result.is_err(), "Wrong format should be rejected");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Expected format"),
-        "error should mention expected format: {}",
+        err.contains("unsupported document format"),
+        "error should mention unsupported document format: {}",
         err
     );
+    assert!(!err.contains("Schema validation error"));
     assert_env_key_vars_cleared();
 }
 
@@ -186,8 +187,8 @@ fn test_env_key_rejects_sshsig_algorithm() {
     // Build a PrivateKey with SshSig algorithm and encode it
     let sshsig_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: format::PRIVATE_KEY_V5.to_string(),
-            member_id: "alice@example.com".to_string(),
+            format: format::PRIVATE_KEY_V6.to_string(),
+            subject_handle: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:dummy".to_string(),

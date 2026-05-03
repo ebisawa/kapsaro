@@ -12,10 +12,10 @@ use std::collections::BTreeMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-fn build_known_key(kid: &str, member_id: &str) -> KnownKey {
+fn build_known_key(kid: &str, member_handle: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
-        member_id: member_id.to_string(),
+        subject_handle: member_handle.to_string(),
         approved_at: "2026-03-29T12:40:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
         evidence: None,
@@ -98,7 +98,7 @@ fn test_add_known_key_same_kid_different_member_fails() {
 fn test_remove_known_key_removes_existing_entry() {
     let mut keys = vec![build_known_key("KJD1AAAA1111BBBB2222CCCC3333DDDD", "bob")];
     let removed = remove_known_key(&mut keys, "KJD1AAAA1111BBBB2222CCCC3333DDDD").unwrap();
-    assert_eq!(removed.member_id, "bob");
+    assert_eq!(removed.subject_handle, "bob");
     assert!(keys.is_empty());
 }
 
@@ -134,9 +134,9 @@ fn test_purge_known_keys_removes_old_entries() {
 
     let removed = purge_known_keys(&mut keys, parse_timestamp("2026-04-01T00:00:00Z")).unwrap();
     assert_eq!(removed.len(), 1);
-    assert_eq!(removed[0].member_id, "bob");
+    assert_eq!(removed[0].subject_handle, "bob");
     assert_eq!(keys.len(), 1);
-    assert_eq!(keys[0].member_id, "charlie");
+    assert_eq!(keys[0].subject_handle, "charlie");
 }
 
 #[test]

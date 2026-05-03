@@ -90,8 +90,8 @@ fn test_unknown_kdf_fails() {
 fn test_existing_private_key_document_roundtrip() {
     let doc = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V5.to_string(),
-            member_id: "alice@example.com".to_string(),
+            format: secretenv::model::identifiers::format::PRIVATE_KEY_V6.to_string(),
+            subject_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:ABCDEFGH123456789".to_string(),

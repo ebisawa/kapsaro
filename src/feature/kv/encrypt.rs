@@ -93,17 +93,17 @@ where
     Ok(entries)
 }
 
-/// Encrypt KV map to kv-enc v3 format
+/// Encrypt KV map to kv-enc v4 format
 ///
 /// # Arguments
 /// * `kv_map` - Key-value map to encrypt
-/// * `recipients` - List of recipient member_ids
+/// * `recipients` - List of recipient member_handles
 /// * `members` - Verified public keys with attested identity for recipients
 /// * `signing` - Signing context (signing_key, signer_kid, signer_pub, debug)
 /// * `token_codec` - Token codec to use (JSON/JCS or CBOR)
 ///
 /// # Returns
-/// kv-enc v3 format string with SIG line
+/// kv-enc v4 format string with SIG line
 pub fn encrypt_kv_document<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
@@ -116,7 +116,7 @@ where
     encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
 
-/// Encrypt KV map to kv-enc v3 format with disclosed flag control
+/// Encrypt KV map to kv-enc v4 format with disclosed flag control
 pub(crate) fn encrypt_kv_document_with_disclosed<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],

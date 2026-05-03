@@ -6,7 +6,7 @@
 //! Tests for file-enc decryption.
 
 use crate::keygen_helpers::build_verified_recipient_keys;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures,
     update_active_private_key_expires_at,
@@ -27,24 +27,24 @@ use tempfile::TempDir;
 #[test]
 fn test_file_enc_content_detect_accepts_file_enc() {
     // Create file-enc content
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     // Get public key from keystore first
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Load CryptoContext to get signing key
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     let content = b"Hello, World!";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -76,32 +76,32 @@ fn test_file_enc_content_detect_rejects_plain_kv() {
 #[test]
 fn test_file_enc_content_detect_rejects_kv_enc() {
     // kv-enc format should be rejected by FileEncContent::detect
-    let kv_enc = ":SECRETENV_KV 3\n:HEAD dummy\n:WRAP dummy\n";
+    let kv_enc = ":SECRETENV_KV 4\n:HEAD dummy\n:WRAP dummy\n";
     let result = FileEncContent::detect(kv_enc.to_string());
     assert!(result.is_err());
 }
 
 #[test]
 fn test_verify_content_then_decrypt_file() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     // Get public key from keystore first
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Load CryptoContext to get signing key
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     // Create file-enc content using signing key from CryptoContext
     let content = b"Hello, World!";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -118,7 +118,7 @@ fn test_verify_content_then_decrypt_file() {
     let verified = verify_file_content(&file_enc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,
@@ -130,24 +130,24 @@ fn test_verify_content_then_decrypt_file() {
 #[test]
 fn test_parse_verify_decrypt_file() {
     // Test that Verified types enforce verification before decryption
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     // Get public key from keystore first
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Load CryptoContext to get signing key
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     let content = b"Hello, Verified World!";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -166,7 +166,7 @@ fn test_parse_verify_decrypt_file() {
     let verified_file_doc = verify_file_document(&file_doc, false).unwrap();
     let decrypted = decrypt_file_document(
         &verified_file_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,
@@ -179,19 +179,19 @@ fn test_parse_verify_decrypt_file() {
 
 #[test]
 fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     let old_kid = old_key_ctx.kid.to_string();
-    let old_public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &old_kid).unwrap();
+    let old_public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &old_kid).unwrap();
 
     let content = b"Hello from the old key";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&old_public_key));
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &old_key_ctx.signing_key,
@@ -202,15 +202,19 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
     )
     .unwrap();
 
-    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, "2028-01-01T00:00:00Z");
-    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_HANDLE,
+        "2028-01-01T00:00:00Z",
+    );
+    let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     assert_ne!(new_key_ctx.kid.to_string(), old_kid);
 
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
     let verified =
         verify_file_content(&FileEncContent::new_unchecked(encrypted_json), false).unwrap();
     let decrypted =
-        decrypt_file_document_with_context(&verified, ALICE_MEMBER_ID, &new_key_ctx, false)
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_HANDLE, &new_key_ctx, false)
             .unwrap();
 
     assert_eq!(decrypted.value.as_ref() as &[u8], content);
@@ -221,24 +225,24 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
 #[test]
 fn test_verify_file_document_returns_verified() {
     // Test that verify_file_document returns Verified<FileEncDocument>
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     // Get public key from keystore first
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     // Load CryptoContext to get signing key
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     let content = b"Test content";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -253,7 +257,7 @@ fn test_verify_file_document_returns_verified() {
     let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
 
     // Check that we have verified proof information
-    assert_eq!(verified_doc.proof().member_id, ALICE_MEMBER_ID);
+    assert_eq!(verified_doc.proof().member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(verified_doc.proof().kid, kid.as_str());
 }
 
@@ -270,21 +274,21 @@ fn build_encrypted_file_for_error_tests() -> (
     String, // kid
     TempDir,
 ) {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap().clone();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &kid).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     let content = b"test content";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -304,7 +308,7 @@ fn wrap_as_verified(
     kid: &str,
 ) -> VerifiedFileEncDocument {
     let proof = SignatureVerificationProof::new(
-        ALICE_MEMBER_ID.to_string(),
+        ALICE_MEMBER_HANDLE.to_string(),
         kid.to_string(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
@@ -322,7 +326,7 @@ fn test_decrypt_file_wrong_format() {
     let verified = wrap_as_verified(doc, &kid);
     let result = decrypt_file_document(
         &verified,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,
@@ -346,7 +350,7 @@ fn test_decrypt_file_wrong_payload_format() {
     let verified = wrap_as_verified(doc, &kid);
     let result = decrypt_file_document(
         &verified,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,
@@ -370,7 +374,7 @@ fn test_decrypt_file_unsupported_aead() {
     let verified = wrap_as_verified(doc, &kid);
     let result = decrypt_file_document(
         &verified,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,
@@ -394,7 +398,7 @@ fn test_decrypt_file_sid_mismatch() {
     let verified = wrap_as_verified(doc, &kid);
     let result = decrypt_file_document(
         &verified,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &key_ctx.kid,
         &key_ctx.private_key,
         false,

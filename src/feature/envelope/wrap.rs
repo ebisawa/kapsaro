@@ -68,7 +68,7 @@ pub fn build_wrap_item(
     let (enc, ct) = seal_base(&kem_pk, &info, &aad, &master_key_plaintext)?;
 
     Ok(WrapItem {
-        rid: public_key.protected.member_id.clone(),
+        recipient_handle: public_key.protected.subject_handle.clone(),
         kid: public_key.protected.kid.clone(),
         alg: ALG_HPKE_32_1_3.to_string(),
         enc: encode_base64url_nopad(enc.as_bytes()),

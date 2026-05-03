@@ -13,7 +13,7 @@ use crate::Result;
 pub(crate) fn build_error_report(message: String) -> SignatureVerificationReport {
     SignatureVerificationReport {
         verified: false,
-        signer_member_id: None,
+        signer_handle: None,
         source: None,
         warnings: Vec::new(),
         message,
@@ -23,14 +23,14 @@ pub(crate) fn build_error_report(message: String) -> SignatureVerificationReport
 
 /// Build a success verification report.
 pub(crate) fn build_success_report(
-    member_id: String,
+    member_handle: String,
     source: VerifyingKeySource,
     warnings: Vec<String>,
     signer_public_key: PublicKey,
 ) -> SignatureVerificationReport {
     SignatureVerificationReport {
         verified: true,
-        signer_member_id: Some(member_id),
+        signer_handle: Some(member_handle),
         source: Some(source),
         warnings,
         message: "OK".to_string(),
@@ -42,7 +42,7 @@ pub(crate) fn build_success_report_from_loaded_key(
     loaded: SignatureVerificationKey,
 ) -> SignatureVerificationReport {
     build_success_report(
-        loaded.member_id,
+        loaded.member_handle,
         loaded.source,
         loaded.warnings,
         loaded.public_key,

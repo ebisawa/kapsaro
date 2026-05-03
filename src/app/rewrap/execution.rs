@@ -20,6 +20,7 @@ use crate::io::workspace::members::{
 };
 use crate::model::verification::SignatureVerificationProof;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
 use std::path::Path;
 
@@ -46,7 +47,7 @@ pub(crate) fn promote_accepted_incoming_members(
     let snapshots = accepted_promotions
         .iter()
         .map(|candidate| IncomingMemberPromotionSnapshot {
-            member_id: candidate.review.member_id.clone(),
+            member_handle: candidate.review.member_handle.clone(),
             kid: candidate.review.kid.clone(),
             source_path: candidate.source_path.clone(),
             source_content: candidate.source_content.clone(),
@@ -68,7 +69,7 @@ where
     ConfirmKnown: FnMut(&TrustApprovalCandidate, &str, &Path) -> Result<bool>,
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
 {
-    let promoted_member_ids =
+    let promoted_member_handles =
         promote_accepted_incoming_members(&plan.workspace_root, &request.accepted_promotions)?;
     let actual_post_promotion_members = load_verified_post_promotion_members(
         &plan.workspace_root,
@@ -85,7 +86,7 @@ where
         &mut confirm_known,
         &mut confirm_non_member,
     )?;
-    outcome.promoted_member_ids = promoted_member_ids;
+    outcome.promoted_member_handles = promoted_member_handles;
     approval_warnings.extend(outcome.warnings);
     outcome.warnings = approval_warnings;
     Ok(outcome)
@@ -108,7 +109,7 @@ where
     let mut processed_files = Vec::new();
     let mut failed_files = Vec::new();
     let mut warnings = Vec::new();
-    let current_recipients = collect_current_recipient_ids(post_promotion_members);
+    let current_recipients = collect_current_recipient_handles(post_promotion_members);
     let ctx = RewrapBatchExecutionContext {
         plan,
         execution: &execution,
@@ -138,7 +139,7 @@ where
     Ok(RewrapBatchOutcome {
         processed_files,
         failed_files,
-        promoted_member_ids: Vec::new(),
+        promoted_member_handles: Vec::new(),
         warnings,
     })
 }
@@ -175,13 +176,13 @@ fn save_known_key_approval_warnings(
     Ok(save_known_key_approvals(options, execution, approvals)?.warnings)
 }
 
-fn collect_current_recipient_ids(
+fn collect_current_recipient_handles(
     post_promotion_members: &VerifiedPostPromotionRecipients,
 ) -> Vec<String> {
     let mut recipients = post_promotion_members
         .verified_members()
         .iter()
-        .map(|member| member.document().protected.member_id.clone())
+        .map(|member| member.document().protected.subject_handle.clone())
         .collect::<Vec<_>>();
     recipients.sort();
     recipients
@@ -199,7 +200,10 @@ where
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String], &Path) -> Result<bool>,
 {
     let captured = load_captured_artifact(file_path)?;
-    let content = EncContent::detect(captured.require_content()?.to_string())?;
+    let content = EncContent::detect_with_source(
+        captured.require_content()?.to_string(),
+        format_path_relative_to_cwd(file_path),
+    )?;
     review_captured_artifact_signer(
         &captured,
         &content,
@@ -231,7 +235,7 @@ fn rewrite_captured_artifact(
 
 fn build_rewrap_request<'a>(ctx: &'a RewrapBatchExecutionContext<'a>) -> RewrapRequest<'a> {
     RewrapRequest {
-        member_id: ctx.execution.member_id.as_str(),
+        member_handle: ctx.execution.member_handle.as_str(),
         key_ctx: &ctx.execution.key_ctx,
         workspace_root: Some(ctx.plan.workspace_root.as_path()),
         target_members: Some(ctx.post_promotion_members.verified_members()),
@@ -286,7 +290,7 @@ fn load_rewrap_signer_trust_context(
     let mut trust_ctx = load_read_trust_context(
         &request.options,
         &plan.workspace_root,
-        &execution.member_id,
+        &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         request.options.verbose,
     )?

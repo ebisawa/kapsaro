@@ -16,7 +16,7 @@ use crate::{Error, Result};
 
 /// Output of a portable private key export operation.
 pub struct PortableExportOutput {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub encoded_key: SecretString,
     pub password_warning: Option<String>,
@@ -31,7 +31,7 @@ const RECOMMENDED_PASSWORD_LENGTH: usize = 20;
 /// containing the password-encrypted private key.
 pub fn export_private_key_portable(
     plaintext: &PrivateKeyPlaintext,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     created_at: &str,
     expires_at: &str,
@@ -41,7 +41,13 @@ pub fn export_private_key_portable(
     validate_password_length(password.as_str())?;
 
     let private_key = encrypt_private_key_with_password(
-        plaintext, member_id, kid, created_at, expires_at, password, debug,
+        plaintext,
+        member_handle,
+        kid,
+        created_at,
+        expires_at,
+        password,
+        debug,
     )?;
 
     let jcs_bytes = SecretBytes::new(jcs::normalize(&private_key)?);

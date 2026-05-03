@@ -69,7 +69,7 @@ fn build_test_public_key(expires_at: &str) -> (PublicKey, String) {
         attestation,
     };
     let params = PublicKeyDocumentParams {
-        member_id: "test@example.com",
+        member_handle: "test@example.com",
         identity,
         created_at: "2026-01-01T00:00:00Z",
         expires_at,

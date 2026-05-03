@@ -5,7 +5,7 @@
 //!
 //! Tests the join command that joins an existing workspace without creating it.
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
@@ -43,11 +43,11 @@ fn test_join_existing_workspace() {
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let missing_key_message = format!(
         "No local key found for '{}'. Generating a new key...",
-        TEST_MEMBER_ID
+        TEST_MEMBER_HANDLE
     );
     let using_ssh_key_message = "Using SSH key:";
     let ssh_determinism_message = "SSH signature determinism: OK";
-    let generated_key_message = format!("Generated key for '{}':", TEST_MEMBER_ID);
+    let generated_key_message = format!("Generated key for '{}':", TEST_MEMBER_HANDLE);
 
     // Manually create workspace structure (without init)
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -59,7 +59,7 @@ fn test_join_existing_workspace() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -68,7 +68,7 @@ fn test_join_existing_workspace() {
         .stderr(predicate::str::contains(using_ssh_key_message))
         .stderr(predicate::str::contains(ssh_determinism_message))
         .stderr(predicate::str::contains(&generated_key_message))
-        .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_ID)))
+        .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_HANDLE)))
         .stderr(predicate::str::contains(
             "An active member needs to run 'secretenv rewrap' to promote the incoming key and sync secrets.",
         ));
@@ -93,7 +93,7 @@ fn test_join_existing_workspace() {
     let member_file = workspace_dir
         .path()
         .join("members/incoming")
-        .join(format!("{}.json", TEST_MEMBER_ID));
+        .join(format!("{}.json", TEST_MEMBER_HANDLE));
     assert!(
         member_file.exists(),
         "Member file should be created by join"
@@ -118,7 +118,7 @@ fn test_join_force_overwrites_existing_member() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -130,13 +130,15 @@ fn test_join_force_overwrites_existing_member() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--force")
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_ID)));
+        .stderr(
+            predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_HANDLE)),
+        );
 }
 
 /// Test: join reuses an existing key without resolving github_user
@@ -155,7 +157,7 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -166,7 +168,7 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .arg("--force")
         .arg("--github-user")
         .arg("definitely-not-a-real-github-user-for-secretenv-tests")
@@ -192,7 +194,7 @@ fn test_join_nonexistent_workspace_fails() {
         .arg("--workspace")
         .arg("/tmp/secretenv-nonexistent-workspace-xyz-99999")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -212,7 +214,7 @@ fn test_join_incomplete_workspace_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -292,7 +294,7 @@ fn test_join_reports_existing_active_member_without_leading_blank_line() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -303,7 +305,7 @@ fn test_join_reports_existing_active_member_without_leading_blank_line() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -330,7 +332,7 @@ fn test_join_stages_new_generation_for_existing_active_member() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -339,14 +341,14 @@ fn test_join_stages_new_generation_for_existing_active_member() {
     let active_path = workspace_dir
         .path()
         .join("members/active")
-        .join(format!("{TEST_MEMBER_ID}.json"));
+        .join(format!("{TEST_MEMBER_HANDLE}.json"));
     let active_kid = load_member_kid(&active_path);
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -355,7 +357,7 @@ fn test_join_stages_new_generation_for_existing_active_member() {
     let incoming_path = workspace_dir
         .path()
         .join("members/incoming")
-        .join(format!("{TEST_MEMBER_ID}.json"));
+        .join(format!("{TEST_MEMBER_HANDLE}.json"));
     assert!(
         !incoming_path.exists(),
         "incoming member file should not exist before rotation join"
@@ -366,14 +368,14 @@ fn test_join_stages_new_generation_for_existing_active_member() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains(format!(
             "Added '{}' to members/incoming/",
-            TEST_MEMBER_ID
+            TEST_MEMBER_HANDLE
         )));
 
     let incoming_kid = load_member_kid(&incoming_path);

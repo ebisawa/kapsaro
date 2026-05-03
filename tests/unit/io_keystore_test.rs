@@ -5,7 +5,7 @@
 //!
 //! Tests for key operation helper functions.
 
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{build_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
 use secretenv::io::keystore::active::set_active_kid;
 use secretenv::io::keystore::helpers::resolve_kid;
@@ -26,7 +26,7 @@ fn test_ensure_keystore_dir() {
 
 #[test]
 fn test_save_and_activate() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
         .unwrap()
@@ -34,11 +34,11 @@ fn test_save_and_activate() {
         .to_string();
     let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
     let (private_key_plaintext, public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = &public_key.protected.kid;
     let private_key = build_test_private_key(
         &private_key_plaintext,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         kid,
         &ssh_priv,
         &ssh_pub_content,
@@ -48,7 +48,7 @@ fn test_save_and_activate() {
     // Save keys
     save_key_pair_atomic(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         kid,
         &private_key,
         &public_key,
@@ -56,23 +56,23 @@ fn test_save_and_activate() {
     .unwrap();
 
     // Activate
-    set_active_kid(ALICE_MEMBER_ID, kid, &keystore_root).unwrap();
+    set_active_kid(ALICE_MEMBER_HANDLE, kid, &keystore_root).unwrap();
 
     // Verify keys are saved
-    let loaded_private = load_private_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let loaded_public = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let loaded_private = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let loaded_public = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     assert_eq!(loaded_private.protected.kid, *kid);
     assert_eq!(loaded_public.protected.kid, *kid);
 
     // Verify active kid is set
-    let active_kid = resolve_kid(&keystore_root, ALICE_MEMBER_ID, None).unwrap();
+    let active_kid = resolve_kid(&keystore_root, ALICE_MEMBER_HANDLE, None).unwrap();
     assert_eq!(active_kid, *kid);
 }
 
 #[test]
 fn test_save_without_activate() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
         .unwrap()
@@ -80,11 +80,11 @@ fn test_save_without_activate() {
         .to_string();
     let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
     let (private_key_plaintext, public_key) =
-        keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = &public_key.protected.kid;
     let private_key = build_test_private_key(
         &private_key_plaintext,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         kid,
         &ssh_priv,
         &ssh_pub_content,
@@ -94,7 +94,7 @@ fn test_save_without_activate() {
     // Save without activating
     save_key_pair_atomic(
         &keystore_root,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         kid,
         &private_key,
         &public_key,
@@ -102,8 +102,8 @@ fn test_save_without_activate() {
     .unwrap();
 
     // Verify keys are saved
-    let loaded_private = load_private_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let loaded_public = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let loaded_private = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let loaded_public = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
     assert_eq!(loaded_private.protected.kid, *kid);
     assert_eq!(loaded_public.protected.kid, *kid);

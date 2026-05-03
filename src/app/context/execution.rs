@@ -8,18 +8,18 @@ use crate::app::context::paths::CommandPathResolution;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::expiry::{build_key_expiry_warning, build_signing_key_expiry_warning};
-use crate::model::identity::MemberId;
+use crate::model::identity::MemberHandle;
 use crate::{Error, Result};
 
 /// Fully resolved command execution context.
 pub(crate) struct ExecutionContext {
-    pub member_id: MemberId,
+    pub member_handle: MemberHandle,
     pub key_ctx: CryptoContext,
     pub workspace_root: Option<crate::io::workspace::detection::WorkspaceRoot>,
 }
 
 impl ExecutionContext {
-    /// Resolve workspace, SSH signing context, member ID, and key material for a command.
+    /// Resolve workspace, SSH signing context, member handle, and key material for a command.
     fn load_with_signing_context(
         options: &CommonCommandOptions,
         member_handle: Option<String>,
@@ -29,7 +29,7 @@ impl ExecutionContext {
         let resolved = resolve_command_member(options, member_handle)?;
         let workspace_root = resolved.paths.workspace_root.clone();
         let key_ctx = load_crypto_context(
-            resolved.member_id.as_str(),
+            resolved.member_handle.as_str(),
             ssh_ctx.backend,
             ssh_ctx.public_key,
             explicit_kid,
@@ -39,7 +39,7 @@ impl ExecutionContext {
         )?;
 
         Ok(Self {
-            member_id: resolved.member_id,
+            member_handle: resolved.member_handle,
             key_ctx,
             workspace_root,
         })
@@ -57,10 +57,10 @@ impl ExecutionContext {
         })?;
         let key_ctx =
             load_crypto_context_from_env(workspace_root.root_path.clone(), options.verbose)?;
-        let member_id = key_ctx.member_id.clone();
+        let member_handle = key_ctx.member_handle.clone();
 
         Ok(Self {
-            member_id,
+            member_handle,
             key_ctx,
             workspace_root: Some(workspace_root),
         })

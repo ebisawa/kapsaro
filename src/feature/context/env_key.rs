@@ -10,7 +10,7 @@ use crate::feature::context::crypto::build_verified_private_key_from_password;
 use crate::feature::context::expiry::VerifiedExpiresAt;
 use crate::feature::key::protection::password_encryption::decrypt_private_key_with_password;
 use crate::format::schema::document::parse_private_key_bytes;
-use crate::model::identity::MemberId;
+use crate::model::identity::MemberHandle;
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
 use crate::model::verified::VerifiedPrivateKey;
 use crate::support::codec::base64_secret::decode_base64url_nopad_secret_bytes;
@@ -40,7 +40,7 @@ pub fn is_env_key_mode() -> bool {
 #[derive(Debug)]
 pub struct EnvKeyLoadResult {
     pub verified_key: VerifiedPrivateKey,
-    pub member_id: MemberId,
+    pub member_handle: MemberHandle,
     pub expires_at: VerifiedExpiresAt,
 }
 
@@ -121,14 +121,14 @@ fn build_env_key_load_result(
     password: &SecretString,
     debug: bool,
 ) -> Result<EnvKeyLoadResult> {
-    let member_id = private_key.protected.member_id.clone();
+    let member_handle = private_key.protected.subject_handle.clone();
     let kid = private_key.protected.kid.clone();
     let plaintext = decrypt_private_key_with_password(private_key, password, debug)?;
-    let verified_key = build_verified_private_key_from_password(plaintext, &member_id, &kid)?;
+    let verified_key = build_verified_private_key_from_password(plaintext, &member_handle, &kid)?;
 
     Ok(EnvKeyLoadResult {
         verified_key,
-        member_id: MemberId::try_from(member_id)?,
+        member_handle: MemberHandle::try_from(member_handle)?,
         expires_at: VerifiedExpiresAt::from_verified_private_key_metadata(
             private_key.protected.expires_at.clone(),
         ),

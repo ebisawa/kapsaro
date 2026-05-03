@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use secretenv::format::token::TokenCodec;
+use secretenv::model::common::WrapItem;
+use secretenv::model::identifiers::{alg, hpke};
+use secretenv::model::kv_enc::header::KvHeader;
 use secretenv::support::limits::MAX_JSON_DEPTH;
+use uuid::Uuid;
 
 fn deeply_nested_json(depth: usize) -> String {
     let mut json = String::new();
@@ -24,7 +29,7 @@ fn file_enc_detect_rejects_non_json() {
 
 #[test]
 fn kv_enc_detect_rejects_json() {
-    let result = KvEncContent::detect(r#"{"format":"secretenv.file@3"}"#.to_string());
+    let result = KvEncContent::detect(r#"{"format":"secretenv.file@4"}"#.to_string());
     assert!(result.is_err());
 }
 
@@ -63,4 +68,63 @@ fn new_unchecked_preserves_content() {
 
     let kv = KvEncContent::new_unchecked(content.to_string());
     assert_eq!(kv.as_str(), content);
+}
+
+#[test]
+fn file_enc_schema_error_includes_source_name() {
+    let content = r#"{"protected":{"format":"secretenv.file@4"}}"#;
+    let file = FileEncContent::new_unchecked_with_source(
+        content.to_string(),
+        ".secretenv/secrets/app.json",
+    );
+
+    let error = file.parse().unwrap_err();
+    let message = error.format_user_message();
+
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("Source: .secretenv/secrets/app.json"));
+    assert!(message.contains("Reason"));
+}
+
+#[test]
+fn kv_enc_schema_error_includes_source_name_and_token_context() {
+    let head = KvHeader {
+        sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+        created_at: "2026-01-14T00:00:00Z".to_string(),
+        updated_at: "2026-01-14T00:00:00Z".to_string(),
+    };
+    let head_token = TokenCodec::encode(TokenCodec::JsonJcs, &head).unwrap();
+    let wrap_token = TokenCodec::encode(
+        TokenCodec::JsonJcs,
+        &serde_json::json!({
+            "wrap": [WrapItem {
+                recipient_handle: "alice@example.com".to_string(),
+                kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ct: "AAAAAAAAAAAAAAAA".to_string(),
+            }]
+        }),
+    )
+    .unwrap();
+    let signature_token = TokenCodec::encode(
+        TokenCodec::JsonJcs,
+        &serde_json::json!({
+            "alg": alg::SIGNATURE_ED25519,
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+        }),
+    )
+    .unwrap();
+    let content = format!(
+        ":SECRETENV_KV 4\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
+    );
+    let kv = KvEncContent::new_unchecked_with_source(content, ".secretenv/secrets/default.kvenc");
+
+    let error = kv.parse().unwrap_err();
+    let message = error.format_user_message();
+
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("Source: .secretenv/secrets/default.kvenc (SIG token)"));
+    assert!(message.contains("signer_pub"));
 }

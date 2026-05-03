@@ -21,27 +21,30 @@ pub struct IncomingVerificationReport {
 }
 
 impl IncomingVerificationReport {
-    /// Return member IDs from all categories.
-    pub fn collect_member_ids(&self) -> Vec<String> {
+    /// Return member handles from all categories.
+    pub fn collect_member_handles(&self) -> Vec<String> {
         self.verified
             .iter()
             .chain(self.failed.iter())
             .chain(self.not_configured.iter())
-            .map(|r| r.member_id.clone())
+            .map(|r| r.member_handle.clone())
             .collect()
     }
 
-    /// Return member IDs from verified category only.
-    pub fn collect_verified_member_ids(&self) -> Vec<String> {
-        self.verified.iter().map(|r| r.member_id.clone()).collect()
+    /// Return member handles from verified category only.
+    pub fn collect_verified_member_handles(&self) -> Vec<String> {
+        self.verified
+            .iter()
+            .map(|r| r.member_handle.clone())
+            .collect()
     }
 
-    /// Return member IDs excluding online-verification-failed members.
-    pub fn collect_promotable_member_ids(&self) -> Vec<String> {
+    /// Return member handles excluding online-verification-failed members.
+    pub fn collect_promotable_member_handles(&self) -> Vec<String> {
         self.verified
             .iter()
             .chain(self.not_configured.iter())
-            .map(|r| r.member_id.clone())
+            .map(|r| r.member_handle.clone())
             .collect()
     }
 }
@@ -60,11 +63,11 @@ pub fn build_incoming_verification_report(
 }
 
 /// Promote specified members from incoming to active.
-pub fn promote_verified_members(workspace_path: &Path, member_ids: &[String]) -> Result<()> {
-    if member_ids.is_empty() {
+pub fn promote_verified_members(workspace_path: &Path, member_handles: &[String]) -> Result<()> {
+    if member_handles.is_empty() {
         return Ok(());
     }
-    promote_specified_incoming_members(workspace_path, member_ids)?;
+    promote_specified_incoming_members(workspace_path, member_handles)?;
     Ok(())
 }
 

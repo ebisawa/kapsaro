@@ -12,14 +12,14 @@ use secretenv::io::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_rewrap_requires_workspace() {
-    let (temp_dir, _workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, _workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
     common_opts.workspace = None;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let rewrap_args = default_rewrap_args(common_opts, ALICE_MEMBER_ID);
+    let rewrap_args = default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE);
     let invalid_workspace = temp_dir.path().join("workspace-does-not-exist");
     let result = with_vars(
         [(
@@ -34,7 +34,7 @@ fn test_rewrap_requires_workspace() {
 
 #[test]
 fn test_rewrap_with_no_files_fails_gracefully() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -42,7 +42,7 @@ fn test_rewrap_with_no_files_fails_gracefully() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let rewrap_args = default_rewrap_args(common_opts, ALICE_MEMBER_ID);
+    let rewrap_args = default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE);
     let result = rewrap::run(rewrap_args);
     assert!(result.is_err(), "Should fail with no files in secrets/");
 
@@ -64,7 +64,7 @@ fn test_rewrap_nonexistent_workspace_fails() {
         .arg("--workspace")
         .arg("/tmp/nonexistent_workspace_secretenv_test")
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -86,11 +86,16 @@ fn test_rewrap_help() {
 fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
     use std::os::unix::fs::PermissionsExt;
 
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let mut common_opts = default_common_options();
@@ -102,7 +107,7 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
     save_kv_file(
         &workspace_dir,
         common_opts.clone(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "warn_rewrap",
         &[("KEY", "value")],
     );
@@ -113,7 +118,7 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()
@@ -123,9 +128,14 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
 
 #[test]
 fn test_rewrap_cli_rejects_strict_key_checking_no() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -136,7 +146,7 @@ fn test_rewrap_cli_rejects_strict_key_checking_no() {
     save_kv_file(
         &workspace_dir,
         common_opts,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "strict_no",
         &[("KEY", "value")],
     );
@@ -147,7 +157,7 @@ fn test_rewrap_cli_rejects_strict_key_checking_no() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .env("SECRETENV_STRICT_KEY_CHECKING", "no")
@@ -160,12 +170,18 @@ fn test_rewrap_cli_rejects_strict_key_checking_no() {
 
 #[test]
 fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let expires_at = build_expiring_soon_timestamp(15);
-    update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
-    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_HANDLE)
+        .unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -176,7 +192,7 @@ fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
     save_kv_file(
         &workspace_dir,
         common_opts,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "recipient_expiry",
         &[("KEY", "value")],
     );
@@ -187,7 +203,7 @@ fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_key)
         .assert()

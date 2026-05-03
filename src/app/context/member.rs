@@ -7,12 +7,12 @@ use crate::app::context::identity::{
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::CommandPathResolution;
 use crate::io::keystore::storage;
-use crate::model::identity::MemberId;
+use crate::model::identity::MemberHandle;
 use crate::Result;
 
 #[derive(Debug, Clone)]
 pub(crate) struct CommandMemberResolution {
-    pub member_id: MemberId,
+    pub member_handle: MemberHandle,
     pub paths: CommandPathResolution,
 }
 
@@ -21,12 +21,15 @@ pub(crate) fn resolve_command_member(
     member_handle: Option<String>,
 ) -> Result<CommandMemberResolution> {
     let paths = CommandPathResolution::load(options)?;
-    let member_id = MemberId::try_from(require_member_handle_input(
+    let member_handle = MemberHandle::try_from(require_member_handle_input(
         member_handle,
         Some(paths.base_dir.as_path()),
         false,
     )?)?;
-    Ok(CommandMemberResolution { member_id, paths })
+    Ok(CommandMemberResolution {
+        member_handle,
+        paths,
+    })
 }
 
 pub(crate) fn resolve_required_member(
@@ -44,7 +47,7 @@ pub(crate) fn resolve_key_owner(
 ) -> Result<String> {
     let paths = CommandPathResolution::load(options)?;
     match resolve_member_handle_input(member_handle.clone(), Some(paths.base_dir.as_path())) {
-        Ok(Some(member_id)) => Ok(member_id),
+        Ok(Some(member_handle)) => Ok(member_handle),
         Ok(None) if member_handle.is_none() => {
             storage::find_member_by_kid(&paths.keystore_root, kid)
         }

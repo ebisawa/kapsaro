@@ -109,8 +109,8 @@ where
         plan.pre_promotion_trust.is_interactive,
     )?;
     let session = promotion::build_promotion_review_session(&review_plan, verbose)?;
-    let accepted_member_ids = confirm_promotions(session.view())?;
-    Ok(session.into_accepted_candidates(&accepted_member_ids))
+    let accepted_member_handles = confirm_promotions(session.view())?;
+    Ok(session.into_accepted_candidates(&accepted_member_handles))
 }
 
 fn review_rewrap_recipient_trust<ConfirmRecipients>(

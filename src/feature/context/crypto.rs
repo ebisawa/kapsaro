@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use crate::feature::context::expiry::VerifiedExpiresAt;
 use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::io::ssh::backend::SignatureBackend;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::verified::VerifiedPrivateKey;
 
 mod decryption_key;
@@ -29,7 +29,7 @@ pub struct LocalKeyAccess {
 
 /// Context for cryptographic operations requiring member keys
 pub struct CryptoContext {
-    pub member_id: MemberId,
+    pub member_handle: MemberHandle,
     pub kid: Kid,
     pub pub_key_source: Box<dyn PublicKeySource>,
     pub workspace_path: Option<PathBuf>,
@@ -101,7 +101,7 @@ impl<'a> DecryptionKeyResolution<'a> {
 
 impl CryptoContext {
     pub fn new(
-        member_id: MemberId,
+        member_handle: MemberHandle,
         kid: Kid,
         pub_key_source: Box<dyn PublicKeySource>,
         workspace_path: Option<PathBuf>,
@@ -110,7 +110,7 @@ impl CryptoContext {
         expires_at: VerifiedExpiresAt,
     ) -> Self {
         Self {
-            member_id,
+            member_handle,
             kid,
             pub_key_source,
             workspace_path,

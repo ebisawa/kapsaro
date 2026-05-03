@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 /// Options for key generation.
 pub struct KeyGenerationOptions {
-    pub member_id: String,
+    pub member_handle: String,
     pub home: Option<PathBuf>,
     pub created_at: String,
     pub expires_at: String,
@@ -35,7 +35,7 @@ pub struct KeyGenerationOptions {
 }
 
 struct KeyDocumentParams<'a> {
-    member_id: &'a str,
+    member_handle: &'a str,
     created_at: &'a str,
     expires_at: &'a str,
     github_account: Option<GithubAccount>,
@@ -45,7 +45,7 @@ struct KeyDocumentParams<'a> {
 /// Generate a new key pair and save to keystore.
 pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     let KeyGenerationOptions {
-        member_id,
+        member_handle,
         home,
         created_at,
         expires_at,
@@ -60,7 +60,7 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     ensure_determinism(&ssh_binding.determinism)?;
     let key_material = material::generate_keypairs()?;
     let request = KeyDocumentParams {
-        member_id: &member_id,
+        member_handle: &member_handle,
         created_at: &created_at,
         expires_at: &expires_at,
         github_account,
@@ -73,16 +73,16 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
         encrypt_private_key_document(&request, &key_material, &derived_kid, &ssh_binding)?;
     save_generated_key(
         &keystore_root,
-        &member_id,
+        &member_handle,
         &derived_kid,
         &private_key,
         &public_key,
         no_activate,
     )?;
 
-    let key_dir = keystore_root.join(&member_id).join(&derived_kid);
+    let key_dir = keystore_root.join(&member_handle).join(&derived_kid);
     Ok(KeyGenerationResult {
-        member_id,
+        member_handle,
         kid: derived_kid,
         created_at,
         expires_at,
@@ -97,11 +97,11 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
 
 fn ensure_kid_not_in_keystore(keystore_root: &Path, kid: &str) -> Result<()> {
     match find_member_by_kid(keystore_root, kid) {
-        Ok(owner_member_id) => Err(Error::Crypto {
+        Ok(owner_handle) => Err(Error::Crypto {
             message: format!(
-                "kid '{}' already exists in keystore (member_id: '{}')",
+                "kid '{}' already exists in keystore (member_handle: '{}')",
                 format_kid_display_lossy(kid),
-                owner_member_id
+                owner_handle
             ),
             source: None,
         }),
@@ -136,7 +136,7 @@ fn build_public_key_document(
         attestation,
     };
     public_key_document::build_public_key(&public_key_document::PublicKeyDocumentParams {
-        member_id: request.member_id,
+        member_handle: request.member_handle,
         identity,
         created_at: request.created_at,
         expires_at: request.expires_at,
@@ -160,7 +160,7 @@ fn encrypt_private_key_document(
     );
     encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: request.member_id.to_string(),
+        member_handle: request.member_handle.to_string(),
         kid: derived_kid.to_string(),
         backend: ssh_binding.backend.as_ref(),
         ssh_pubkey: &ssh_binding.public_key,
@@ -178,15 +178,15 @@ pub(crate) fn ensure_keystore_dir(home: &Option<PathBuf>) -> Result<PathBuf> {
 
 fn save_generated_key(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     private_key: &PrivateKey,
     public_key: &PublicKey,
     no_activate: bool,
 ) -> Result<()> {
-    save_key_pair_atomic(keystore_root, member_id, kid, private_key, public_key)?;
+    save_key_pair_atomic(keystore_root, member_handle, kid, private_key, public_key)?;
     if !no_activate {
-        set_active_kid(member_id, kid, keystore_root)?;
+        set_active_kid(member_handle, kid, keystore_root)?;
     }
     Ok(())
 }

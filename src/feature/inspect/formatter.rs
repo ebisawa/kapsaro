@@ -31,7 +31,10 @@ pub(crate) fn append_file_payload_info(payload: &FilePayload, out: &mut String) 
 /// Append wrap item information.
 pub(crate) fn append_wrap_item(index: usize, wrap: &WrapItem, out: &mut String) {
     let kid_display = format_kid_display(&wrap.kid).unwrap_or_else(|_| wrap.kid.clone());
-    append_line(out, format!("    [{}] RID:   {}", index, wrap.rid));
+    append_line(
+        out,
+        format!("    [{}] RID:   {}", index, wrap.recipient_handle),
+    );
     append_line(out, format!("        Kid:   {}", kid_display));
     append_line(out, format!("        Alg:   {}", wrap.alg));
     append_line(
@@ -56,7 +59,7 @@ pub(crate) fn append_removed_recipients(removed: Option<&Vec<RemovedRecipient>>,
                     out,
                     format!(
                         "    \u{2022} {} (kid: {}, removed at {})",
-                        r.rid, kid_display, r.removed_at
+                        r.recipient_handle, kid_display, r.removed_at
                     ),
                 );
             }
@@ -75,7 +78,7 @@ pub(crate) fn append_signer_info(
             out,
             format!(
                 "  Signer:      {} (claimed)",
-                signer_pub.protected.member_id
+                signer_pub.protected.subject_handle
             ),
         );
         append_line(out, format!("  Attestation: {}", attestation.method));

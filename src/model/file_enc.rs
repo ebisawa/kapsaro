@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! FileEncDocument v3 model
+//! FileEncDocument v4 model
 //!
-//! Format: secretenv.file@3
-//! Used for encrypting arbitrary files with v3 format
+//! Format: secretenv.file@4
+//! Used for encrypting arbitrary files with v4 format
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use super::common::{RemovedRecipient, WrapItem};
 use super::signature::ArtifactSignature;
 use super::verification::SignatureVerificationProof;
 
-/// FileEncDocument v3 top-level structure
+/// FileEncDocument v4 top-level structure
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FileEncDocument {
@@ -27,7 +27,7 @@ pub struct FileEncDocument {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FileEncDocumentProtected {
-    /// Format identifier: "secretenv.file@3"
+    /// Format identifier: "secretenv.file@4"
     pub format: String,
 
     /// Secret identifier (UUID)
@@ -53,7 +53,10 @@ pub struct FileEncDocumentProtected {
 impl FileEncDocumentProtected {
     /// Derives the list of recipients from wrap items
     pub fn recipients(&self) -> Vec<String> {
-        self.wrap.iter().map(|w| w.rid.clone()).collect()
+        self.wrap
+            .iter()
+            .map(|w| w.recipient_handle.clone())
+            .collect()
     }
 }
 
@@ -71,7 +74,7 @@ pub struct FilePayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FilePayloadHeader {
-    /// Format identifier: "secretenv.file.payload@3"
+    /// Format identifier: "secretenv.file.payload@4"
     pub format: String,
     /// Secret identifier (UUID). Must match the outer `protected.sid`
     pub sid: Uuid,
@@ -138,7 +141,7 @@ impl FileEncDocument {
 /// // Access verified document and proof information
 /// let document = verified.document();
 /// let proof = verified.proof();
-/// assert_eq!(proof.member_id, "alice");
+/// assert_eq!(proof.member_handle, "alice");
 ///
 /// // The VerifiedFileEncDocument wrapper ensures type-level guarantees that verification
 /// // has occurred before the document can be used in trusted operations.

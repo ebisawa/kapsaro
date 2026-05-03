@@ -23,20 +23,20 @@ use zeroize::Zeroizing;
 
 /// Find a wrap item by key ID in a slice of WrapItems.
 ///
-/// Searches by `kid` (cryptographically bound) rather than `rid` (informational only).
-/// If `rid` does not match `member_id`, unwrapping fails with an error.
+/// Searches by `kid` (cryptographically bound) rather than `recipient_handle` (informational only).
+/// If `recipient_handle` does not match `member_handle`, unwrapping fails with an error.
 ///
 /// # Arguments
 /// * `wrap_items` - Slice of WrapItems to search
 /// * `kid` - Key ID to find
-/// * `member_id` - Resolved member ID for error messages and rid-mismatch validation
+/// * `member_handle` - Resolved member handle for error messages and recipient_handle-mismatch validation
 ///
 /// # Returns
 /// Reference to the matching WrapItem, or an error if not found
 pub(crate) fn find_wrap_item_by_kid<'a>(
     wrap_items: &'a [WrapItem],
     kid: &str,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<&'a WrapItem> {
     let wrap_item = wrap_items
         .iter()
@@ -45,19 +45,19 @@ pub(crate) fn find_wrap_item_by_kid<'a>(
             message: format!(
                 "No wrap found for kid '{}' (member: {})",
                 format_kid_display_lossy(kid),
-                member_id
+                member_handle
             ),
             source: None,
         })?;
 
-    // Treat rid mismatch as a hard failure for defence-in-depth, even though
+    // Treat recipient_handle mismatch as a hard failure for defence-in-depth, even though
     // cryptographic binding is still anchored on kid.
-    if wrap_item.rid != member_id {
+    if wrap_item.recipient_handle != member_handle {
         return Err(Error::Crypto {
             message: format!(
-                "wrap_item.rid '{}' does not match member_id '{}' for kid '{}'",
-                wrap_item.rid,
-                member_id,
+                "wrap_item.recipient_handle '{}' does not match member_handle '{}' for kid '{}'",
+                wrap_item.recipient_handle,
+                member_handle,
                 format_kid_display_lossy(kid)
             ),
             source: None,
@@ -147,19 +147,19 @@ pub fn unwrap_master_key(
 /// This is useful for rewrap operations where you need to get the content key
 /// without decrypting the entire payload.
 ///
-/// **Note**: This function selects wrap_item by `kid` (key ID) rather than `rid` (recipient ID),
-/// then validates that the located wrap_item carries the expected `member_id`.
+/// **Note**: This function selects wrap_item by `kid` (key ID) rather than `recipient_handle` (recipient ID),
+/// then validates that the located wrap_item carries the expected `member_handle`.
 /// This preserves the cryptographic binding on `kid` (HPKE info includes `kid`) while
 /// rejecting inconsistent recipient metadata.
 pub fn unwrap_master_key_for_file(
     verified: &VerifiedFileEncDocument,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
     debug: bool,
 ) -> Result<MasterKey> {
     let secret = verified.document();
-    let wrap_item = find_wrap_item_by_kid(&secret.protected.wrap, kid, member_id)?;
+    let wrap_item = find_wrap_item_by_kid(&secret.protected.wrap, kid, member_handle)?;
 
     // Decode KEM secret key
     let kem_sk = decode_kem_secret_key(private_key)?;
@@ -176,15 +176,18 @@ pub fn unwrap_master_key_for_file(
 
 pub fn unwrap_master_key_for_file_with_context(
     verified: &VerifiedFileEncDocument,
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &CryptoContext,
     debug: bool,
 ) -> Result<DecryptionResult<MasterKey>> {
     let secret = verified.document();
     let selected_key =
-        key_ctx.select_local_decryption_key(&secret.protected.wrap, member_id, debug)?;
-    let wrap_item =
-        find_wrap_item_by_kid(&secret.protected.wrap, &selected_key.info().kid, member_id)?;
+        key_ctx.select_local_decryption_key(&secret.protected.wrap, member_handle, debug)?;
+    let wrap_item = find_wrap_item_by_kid(
+        &secret.protected.wrap,
+        &selected_key.info().kid,
+        member_handle,
+    )?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key(
         wrap_item,
@@ -230,19 +233,19 @@ pub fn unwrap_master_key_from_item(
 /// # Arguments
 /// * `sid` - Session ID (UUID)
 /// * `wrap_items` - Slice of WrapItems to search
-/// * `member_id` - Resolved member ID for error messages
+/// * `member_handle` - Resolved member handle for error messages
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - VerifiedPrivateKey containing the KEM private key
 /// * `debug` - Enable debug logging
 pub fn unwrap_master_key_for_kv(
     sid: &Uuid,
     wrap_items: &[WrapItem],
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
     debug: bool,
 ) -> Result<MasterKey> {
-    let wrap_item = find_wrap_item_by_kid(wrap_items, kid, member_id)?;
+    let wrap_item = find_wrap_item_by_kid(wrap_items, kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(private_key)?;
     unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)
 }
@@ -250,12 +253,12 @@ pub fn unwrap_master_key_for_kv(
 pub fn unwrap_master_key_for_kv_with_context(
     sid: &Uuid,
     wrap_items: &[WrapItem],
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &CryptoContext,
     debug: bool,
 ) -> Result<DecryptionResult<MasterKey>> {
-    let selected_key = key_ctx.select_local_decryption_key(wrap_items, member_id, debug)?;
-    let wrap_item = find_wrap_item_by_kid(wrap_items, &selected_key.info().kid, member_id)?;
+    let selected_key = key_ctx.select_local_decryption_key(wrap_items, member_handle, debug)?;
+    let wrap_item = find_wrap_item_by_kid(wrap_items, &selected_key.info().kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)?;
     Ok(DecryptionResult {

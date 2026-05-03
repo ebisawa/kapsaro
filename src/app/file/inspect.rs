@@ -49,11 +49,14 @@ pub(crate) fn execute_inspect_file_command(
 }
 
 fn load_inspect_content(input_path: &Path) -> Result<EncContent> {
-    EncContent::detect(load_text_with_limit(
-        input_path,
-        resolve_encrypted_artifact_read_limit(input_path),
-        "encrypted artifact",
-    )?)
+    EncContent::detect_with_source(
+        load_text_with_limit(
+            input_path,
+            resolve_encrypted_artifact_read_limit(input_path),
+            "encrypted artifact",
+        )?,
+        format_path_relative_to_cwd(input_path),
+    )
 }
 
 fn build_signature_report(
@@ -93,7 +96,7 @@ fn build_online_section(
     let result = match block_on_result(verify_github_account(public_key, options.verbose, None)) {
         Ok(result) => result,
         Err(err) => OnlineVerificationResult::failed(
-            &public_key.protected.member_id,
+            &public_key.protected.subject_handle,
             err.format_user_message().to_string(),
             None,
             true,

@@ -10,7 +10,7 @@ use crate::Result;
 /// Load signer's public key for embedding in signatures.
 pub fn load_signer_public_key(
     pub_key_source: &dyn PublicKeySource,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<PublicKey> {
-    pub_key_source.load_public_key(member_id)
+    pub_key_source.load_public_key(member_handle)
 }

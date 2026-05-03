@@ -3,21 +3,21 @@
 
 //! Unit tests for keystore storage
 
-use secretenv::io::keystore::storage::list_member_ids;
+use secretenv::io::keystore::storage::list_member_handles;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn test_list_member_ids_empty() {
+fn test_list_member_handles_empty() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_root = temp_dir.path();
 
-    let result = list_member_ids(keystore_root).unwrap();
+    let result = list_member_handles(keystore_root).unwrap();
     assert_eq!(result, Vec::<String>::new());
 }
 
 #[test]
-fn test_list_member_ids_multiple_members() {
+fn test_list_member_handles_multiple_members() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_root = temp_dir.path();
 
@@ -26,7 +26,7 @@ fn test_list_member_ids_multiple_members() {
     fs::create_dir_all(keystore_root.join("bob@example.com")).unwrap();
     fs::create_dir_all(keystore_root.join("charlie@example.com")).unwrap();
 
-    let result = list_member_ids(keystore_root).unwrap();
+    let result = list_member_handles(keystore_root).unwrap();
     assert_eq!(
         result,
         vec![
@@ -38,10 +38,10 @@ fn test_list_member_ids_multiple_members() {
 }
 
 #[test]
-fn test_list_member_ids_nonexistent_keystore() {
+fn test_list_member_handles_nonexistent_keystore() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_root = temp_dir.path().join("nonexistent");
 
-    let result = list_member_ids(&keystore_root).unwrap();
+    let result = list_member_handles(&keystore_root).unwrap();
     assert_eq!(result, Vec::<String>::new());
 }

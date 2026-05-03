@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Debug test for kv-enc v3 HPKE issue
+//! Debug test for kv-enc v4 HPKE issue
 
 use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_keys};
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use ed25519_dalek::SigningKey;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -30,10 +30,10 @@ fn test_debug_hpke_single_recipient() {
     // Generate single test key
     let ssh_temp = TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
-    let (private, public) = keygen_test(ALICE_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+    let (private, public) = keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
 
     println!("Generated key:");
-    println!("  member_id: {}", public.protected.member_id);
+    println!("  member_handle: {}", public.protected.subject_handle);
     println!("  kid: {}", public.protected.kid);
     println!("  kem.x: {}", public.protected.identity.keys.kem.x);
     println!("  kem.d (first 20): {}", &private.keys.kem.d[..20]);
@@ -42,7 +42,7 @@ fn test_debug_hpke_single_recipient() {
     let input = "TEST_KEY=test_value\n";
 
     // Encrypt for single recipient
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let recipients = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = vec![public.clone()];
     let verified_members = build_verified_recipient_keys(&members);
 
@@ -64,7 +64,7 @@ fn test_debug_hpke_single_recipient() {
     )
     .unwrap();
 
-    println!("\nEncrypted kv-enc v3:");
+    println!("\nEncrypted kv-enc v4:");
     for (i, line) in encrypted.lines().enumerate() {
         if line.len() > 100 {
             println!("  Line {}: {}... ({} bytes)", i, &line[..100], line.len());
@@ -77,7 +77,7 @@ fn test_debug_hpke_single_recipient() {
     println!("\nDecrypting...");
     let doc = parse_kv_document(&encrypted).unwrap();
     let proof = SignatureVerificationProof::new(
-        ALICE_MEMBER_ID.to_string(),
+        ALICE_MEMBER_HANDLE.to_string(),
         signer_kid.to_string(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
@@ -85,13 +85,13 @@ fn test_debug_hpke_single_recipient() {
     let verified_doc = VerifiedKvEncDocument::new(doc, proof);
     let decrypted_key = build_verified_private_key(
         &private,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &public.protected.kid,
         "SHA256:test",
     );
     match decrypt_kv_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &public.protected.kid,
         &decrypted_key,
         false,

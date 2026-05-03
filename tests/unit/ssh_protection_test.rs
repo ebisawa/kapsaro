@@ -16,7 +16,7 @@ use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::model::identifiers::{
     alg,
-    context::{SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5},
+    context::{SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6},
     format,
 };
 use secretenv::model::private_key::{
@@ -53,7 +53,7 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
 
 fn derive_enc_key(raw_sig: &[u8], salt: &HkdfSalt, kid: &str) -> secretenv::Result<XChaChaKey> {
     let ikm = Ikm::from(raw_sig);
-    let info = Info::from_string(&format!("{}:{}", SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5, kid));
+    let info = Info::from_string(&format!("{}:{}", SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6, kid));
     let cek = expand_to_array(&ikm, Some(salt), &info)?;
     XChaChaKey::from_slice(cek.as_bytes())
 }
@@ -70,8 +70,8 @@ fn build_ssh_private_key_with_plaintext_json(plaintext_json: &[u8]) -> PrivateKe
     let ikm_salt = PrivateKeyIkmSalt::new([9u8; 32]);
     let hkdf_salt = HkdfSalt::new([10u8; 32]);
     let protected = PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V5.to_string(),
-        member_id: "alice".to_string(),
+        format: format::PRIVATE_KEY_V6.to_string(),
+        subject_handle: "alice".to_string(),
         kid: kid.to_string(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
@@ -102,7 +102,7 @@ fn test_build_sign_message() {
 
     let message = build_sign_message(ikm_salt);
 
-    assert!(message.starts_with(&format!("{}\n", SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5)));
+    assert!(message.starts_with(&format!("{}\n", SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6)));
     assert!(message.ends_with(ikm_salt));
 }
 
@@ -114,7 +114,7 @@ fn test_build_sign_message_format() {
 
     let expected = format!(
         "{}\n{}",
-        SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5, ikm_salt
+        SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6, ikm_salt
     );
 
     assert_eq!(message, expected);
@@ -185,7 +185,7 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
 
     let plaintext = build_test_plaintext();
 
-    let member_id = "alice";
+    let member_handle = "alice";
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
     let ssh_pubkey = TEST_SSH_PUBKEY;
     let ssh_fpr = build_sha256_fingerprint(ssh_pubkey).unwrap();
@@ -198,7 +198,7 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
 
     let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         kid: kid.to_string(),
         backend: &backend,
         ssh_pubkey,
@@ -245,7 +245,7 @@ fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
     };
     let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: "alice".to_string(),
+        member_handle: "alice".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
         backend: &backend,
         ssh_pubkey: TEST_SSH_PUBKEY,
@@ -305,7 +305,7 @@ fn test_decrypt_private_key_rejects_unsupported_aead_before_kdf() {
     };
     let mut encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: "alice".to_string(),
+        member_handle: "alice".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
         backend: &backend,
         ssh_pubkey: TEST_SSH_PUBKEY,
@@ -368,7 +368,7 @@ fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
     );
     let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: "alice".to_string(),
+        member_handle: "alice".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
         backend: &backend,
         ssh_pubkey: TEST_SSH_PUBKEY,
@@ -407,7 +407,7 @@ fn test_decrypt_private_key_retries_signature_only_after_failure() {
     };
     let mut encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: "alice".to_string(),
+        member_handle: "alice".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
         backend: &backend,
         ssh_pubkey: TEST_SSH_PUBKEY,
@@ -499,7 +499,7 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
     let plaintext = build_test_plaintext();
     let mut encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: "alice".to_string(),
+        member_handle: "alice".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
         backend: &EncryptBackend,
         ssh_pubkey: TEST_SSH_PUBKEY,
@@ -564,7 +564,7 @@ fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
     let plaintext = build_test_plaintext();
     let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext: &plaintext,
-        member_id: "alice".to_string(),
+        member_handle: "alice".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
         backend: &EncryptBackend,
         ssh_pubkey: TEST_SSH_PUBKEY,

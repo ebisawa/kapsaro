@@ -41,7 +41,7 @@ pub(crate) fn build_rewrap_batch_plan(
     let pre_promotion_trust = load_read_trust_context(
         options,
         &workspace.root_path,
-        &execution.member_id,
+        &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?
@@ -163,7 +163,7 @@ fn build_incoming_candidate(
     ) {
         Ok(_) => build_pending_review(snapshot),
         Err(error) => IncomingVerificationItem {
-            member_id: snapshot.public_key.protected.member_id.clone(),
+            member_handle: snapshot.public_key.protected.subject_handle.clone(),
             kid: snapshot.public_key.protected.kid.clone(),
             category: IncomingVerificationCategory::Failed,
             message: format!(
@@ -198,7 +198,7 @@ fn build_pending_review(snapshot: &IncomingSnapshot) -> IncomingVerificationItem
     let fingerprint = build_sha256_fingerprint(&attestor_pub).ok();
 
     IncomingVerificationItem {
-        member_id: snapshot.public_key.protected.member_id.clone(),
+        member_handle: snapshot.public_key.protected.subject_handle.clone(),
         kid: snapshot.public_key.protected.kid.clone(),
         category,
         message,
@@ -249,7 +249,7 @@ fn load_incoming_index(workspace_root: &Path) -> Result<BTreeMap<String, Incomin
         let source_content =
             load_text_with_limit(&source_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
         index.insert(
-            public_key.protected.member_id.clone(),
+            public_key.protected.subject_handle.clone(),
             IncomingSnapshot {
                 source_path,
                 source_content,

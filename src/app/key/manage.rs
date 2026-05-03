@@ -32,8 +32,8 @@ pub fn activate_key_command(
     member_handle: Option<String>,
     kid: Option<String>,
 ) -> Result<KeyActivateResult> {
-    let member_id = resolve_required_member(options, member_handle)?;
-    activate_key(options.home.clone(), member_id, kid)
+    let member_handle = resolve_required_member(options, member_handle)?;
+    activate_key(options.home.clone(), member_handle, kid)
 }
 
 pub fn remove_key_command(
@@ -42,8 +42,8 @@ pub fn remove_key_command(
     kid: String,
     force: bool,
 ) -> Result<KeyRemoveResult> {
-    let resolved_member_id = resolve_key_owner(options, member_handle, &kid)?;
-    remove_key(options.home.clone(), resolved_member_id, kid, force)
+    let resolved_member_handle = resolve_key_owner(options, member_handle, &kid)?;
+    remove_key(options.home.clone(), resolved_member_handle, kid, force)
 }
 
 pub fn export_key_command(
@@ -52,8 +52,8 @@ pub fn export_key_command(
     kid: Option<String>,
     out: &Path,
 ) -> Result<KeyExportResult> {
-    let member_id = resolve_required_member(options, member_handle)?;
-    let result = export_key(options.home.clone(), member_id, kid)?;
+    let member_handle = resolve_required_member(options, member_handle)?;
+    let result = export_key(options.home.clone(), member_handle, kid)?;
     save_exported_public_key(out, &result.public_key)?;
     Ok(result)
 }
@@ -61,24 +61,24 @@ pub fn export_key_command(
 /// Validate that the specified KID exists before expensive operations.
 pub fn validate_kid(
     options: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
     kid: Option<String>,
 ) -> Result<()> {
     let keystore_root = resolve_keystore_root(options.home.clone())?;
-    resolve_active_kid(&keystore_root, member_id, kid)?;
+    resolve_active_kid(&keystore_root, member_handle, kid)?;
     Ok(())
 }
 
 pub fn export_private_key_command(
     options: &CommonCommandOptions,
-    member_id: String,
+    member_handle: String,
     kid: Option<String>,
     password: &SecretString,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<KeyExportPrivateResult> {
     let loaded = load_private_key_export_material(
         options.home.clone(),
-        member_id,
+        member_handle,
         kid,
         ssh_ctx.backend.as_ref(),
         &ssh_ctx.public_key,
@@ -87,7 +87,7 @@ pub fn export_private_key_command(
 
     let encoded_key = export_private_key_portable(
         &loaded.plaintext,
-        &loaded.member_id,
+        &loaded.member_handle,
         &loaded.kid,
         &loaded.created_at,
         &loaded.expires_at,
@@ -96,7 +96,7 @@ pub fn export_private_key_command(
     )?;
 
     Ok(crate::feature::key::portable_export::PortableExportOutput {
-        member_id: loaded.member_id,
+        member_handle: loaded.member_handle,
         kid: loaded.kid,
         encoded_key,
         password_warning: build_password_strength_warning(password.as_str()),

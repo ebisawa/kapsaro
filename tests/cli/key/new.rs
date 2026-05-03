@@ -3,7 +3,7 @@
 
 //! Integration tests for `key new` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
 use secretenv::io::ssh::protocol::constants as ssh_constants;
@@ -14,7 +14,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn test_key_new_requires_member_id_before_ssh_resolution() {
+fn test_key_new_requires_member_handle_before_ssh_resolution() {
     let temp_dir = TempDir::new().unwrap();
 
     cmd()
@@ -37,14 +37,14 @@ fn test_key_new_generates_private_key() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -55,7 +55,7 @@ fn test_key_new_generates_private_key() {
     let keystore_root = temp_dir.path().join("keys");
 
     // Find the generated kid directory
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     assert!(
         member_dir.exists(),
         "Member directory should be created: {}",
@@ -81,12 +81,12 @@ fn test_key_new_generates_private_key() {
     // Verify fields
     assert_eq!(
         private_key.protected.format,
-        format::PRIVATE_KEY_V5,
-        "Format should be secretenv.private.key@5"
+        format::PRIVATE_KEY_V6,
+        "Format should be secretenv.private.key@6"
     );
     assert_eq!(
-        private_key.protected.member_id, member_id,
-        "member_id should match"
+        private_key.protected.subject_handle, member_handle,
+        "member_handle should match"
     );
     assert_eq!(
         private_key.protected.kid, kid,
@@ -110,14 +110,14 @@ fn test_key_new_ssh_protection() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -126,7 +126,7 @@ fn test_key_new_ssh_protection() {
 
     // Read private.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let private_key_path = member_dir.join(&kid).join("private.json");
@@ -201,14 +201,14 @@ fn test_key_new_generates_attestation() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command (explicitly use ssh-keygen to ensure the specified -i key is used)
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--ssh-keygen")
@@ -218,7 +218,7 @@ fn test_key_new_generates_attestation() {
 
     // Read public.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let public_key_path = member_dir.join(&kid).join("public.json");
@@ -273,14 +273,14 @@ fn test_key_new_generates_self_sig() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -289,7 +289,7 @@ fn test_key_new_generates_self_sig() {
 
     // Read public.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let public_key_path = member_dir.join(&kid).join("public.json");
@@ -319,7 +319,7 @@ fn test_key_new_expires_at_option() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
     let expires_at = "2027-12-31T23:59:59Z";
 
     // Run key new command with --expires-at
@@ -327,7 +327,7 @@ fn test_key_new_expires_at_option() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--expires-at")
@@ -338,7 +338,7 @@ fn test_key_new_expires_at_option() {
 
     // Read private.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let private_key_path = member_dir.join(&kid).join("private.json");
@@ -367,14 +367,14 @@ fn test_key_new_valid_for_1y() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command with --valid-for 1y
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--valid-for")
@@ -385,7 +385,7 @@ fn test_key_new_valid_for_1y() {
 
     // Read private.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let private_key_path = member_dir.join(&kid).join("private.json");
@@ -418,14 +418,14 @@ fn test_key_new_valid_for_6m() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command with --valid-for 6m
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--valid-for")
@@ -436,7 +436,7 @@ fn test_key_new_valid_for_6m() {
 
     // Read private.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let private_key_path = member_dir.join(&kid).join("private.json");
@@ -469,14 +469,14 @@ fn test_key_new_valid_for_30d() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command with --valid-for 30d
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--valid-for")
@@ -487,7 +487,7 @@ fn test_key_new_valid_for_30d() {
 
     // Read private.json
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let private_key_path = member_dir.join(&kid).join("private.json");
@@ -520,14 +520,14 @@ fn test_key_new_no_activate_option() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command with --no-activate
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -537,7 +537,7 @@ fn test_key_new_no_activate_option() {
 
     // Verify key was created
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     let private_key_path = member_dir.join(&kid).join("private.json");
@@ -559,14 +559,14 @@ fn test_key_new_default_activate() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Run key new command without --no-activate
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -575,12 +575,12 @@ fn test_key_new_default_activate() {
 
     // Get the generated kid
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Verify active file is created
     use secretenv::io::keystore::active::load_active_kid;
-    let active_kid = load_active_kid(member_id, &keystore_root).expect("Should get active kid");
+    let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert_eq!(
         active_kid,
         Some(kid),

@@ -3,7 +3,7 @@
 
 #[derive(Debug)]
 pub struct MemberListEntry {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub document: serde_json::Value,
 }
@@ -38,7 +38,7 @@ impl MemberDocumentStatus {
 
 #[derive(Debug)]
 pub struct MemberDocumentView {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub expires_at: String,
     pub created_at: Option<String>,
@@ -83,19 +83,19 @@ pub struct MemberShowResult {
 
 #[derive(Debug)]
 pub struct MemberRemoveResult {
-    pub member_id: String,
+    pub member_handle: String,
 }
 
 #[derive(Debug)]
 pub struct MemberRemovalReport {
-    pub member_id: String,
+    pub member_handle: String,
     pub affected_artifacts: Vec<std::path::PathBuf>,
     pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MemberVerificationResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub verified: bool,
     pub message: String,
     pub fingerprint: Option<String>,

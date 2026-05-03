@@ -24,7 +24,7 @@ pub(crate) fn confirm_known_key_approval(
 ) -> Result<bool> {
     eprintln!(
         "Trust review for '{}' ({}):",
-        candidate.member_id, context_label
+        candidate.member_handle, context_label
     );
     print_candidate_review(candidate);
     prompt_yes_no("Approve this key and add it to local trust store?", false)
@@ -37,7 +37,7 @@ pub(crate) fn confirm_non_member_acceptance(
 ) -> Result<bool> {
     eprintln!(
         "Non-member acceptance for '{}' ({}):",
-        candidate.member_id, context_label
+        candidate.member_handle, context_label
     );
     print_candidate_review(candidate);
     if !recipients.is_empty() {
@@ -61,7 +61,7 @@ pub(crate) fn confirm_recipient_approvals(
 
 pub(crate) fn run_with_trust_store_reset_recovery<T, ResolveOwner, Run>(
     options: &CommonCommandOptions,
-    resolve_owner_member_id: ResolveOwner,
+    resolve_owner_handle: ResolveOwner,
     mut run: Run,
 ) -> Result<T>
 where
@@ -73,8 +73,8 @@ where
         match run() {
             Ok(value) => return Ok(value),
             Err(error) if !attempted_reset && requires_trust_store_reset(&error) => {
-                let owner_member_id = resolve_owner_member_id()?;
-                recover_invalid_trust_store(options, &owner_member_id, error)?;
+                let owner_handle = resolve_owner_handle()?;
+                recover_invalid_trust_store(options, &owner_handle, error)?;
                 attempted_reset = true;
             }
             Err(error) => return Err(error),
@@ -91,7 +91,7 @@ fn requires_trust_store_reset(error: &Error) -> bool {
 
 fn recover_invalid_trust_store(
     options: &CommonCommandOptions,
-    owner_member_id: &str,
+    owner_handle: &str,
     error: Error,
 ) -> Result<()> {
     if !tty::is_interactive() {
@@ -104,7 +104,7 @@ fn recover_invalid_trust_store(
     }
 
     let base_dir = options.resolve_base_dir()?;
-    let path = get_trust_store_file_path(&base_dir, owner_member_id);
+    let path = get_trust_store_file_path(&base_dir, owner_handle);
     print_warning(error.format_user_message());
     if !confirm_trust_store_reset(&path)? {
         return Err(Error::InvalidOperation {
@@ -134,7 +134,7 @@ fn recover_invalid_trust_store(
 #[cfg(test)]
 fn recover_invalid_trust_store_with_reader<R>(
     options: &CommonCommandOptions,
-    owner_member_id: &str,
+    owner_handle: &str,
     error: Error,
     reader: R,
     is_interactive: bool,
@@ -152,7 +152,7 @@ where
     }
 
     let base_dir = options.resolve_base_dir()?;
-    let path = get_trust_store_file_path(&base_dir, owner_member_id);
+    let path = get_trust_store_file_path(&base_dir, owner_handle);
     print_warning(error.format_user_message());
     if !confirm_trust_store_reset_with_reader(&path, reader)? {
         return Err(Error::InvalidOperation {

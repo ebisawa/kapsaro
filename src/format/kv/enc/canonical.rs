@@ -74,7 +74,7 @@ pub fn extract_kv_header_tokens(lines: &[KvEncLine]) -> Result<(String, String)>
             KvEncLine::Head { token } => Some(token.clone()),
             _ => None,
         })
-        .ok_or_else(|| FormatError::build_parse_error("HEAD line not found in kv-enc v3"))?;
+        .ok_or_else(|| FormatError::build_parse_error("HEAD line not found in kv-enc v4"))?;
 
     let wrap_token = lines
         .iter()
@@ -82,7 +82,7 @@ pub fn extract_kv_header_tokens(lines: &[KvEncLine]) -> Result<(String, String)>
             KvEncLine::Wrap { token } => Some(token.clone()),
             _ => None,
         })
-        .ok_or_else(|| FormatError::build_parse_error("WRAP line not found in kv-enc v3"))?;
+        .ok_or_else(|| FormatError::build_parse_error("WRAP line not found in kv-enc v4"))?;
 
     Ok((head_token, wrap_token))
 }
@@ -113,7 +113,10 @@ pub fn parse_kv_wrap(content: &str) -> Result<(Vec<KvEncLine>, KvHeader, KvWrap)
 /// * `wrap` - KvWrap structure
 ///
 /// # Returns
-/// Vector of recipient member IDs
+/// Vector of recipient member handles
 pub fn extract_recipients_from_wrap(wrap: &KvWrap) -> Vec<String> {
-    wrap.wrap.iter().map(|w| w.rid.clone()).collect()
+    wrap.wrap
+        .iter()
+        .map(|w| w.recipient_handle.clone())
+        .collect()
 }

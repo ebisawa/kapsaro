@@ -35,21 +35,21 @@ pub fn list_members(options: &CommonCommandOptions) -> Result<MemberListResult> 
 
 pub fn load_member_show_result(
     options: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<MemberShowResult> {
     let workspace = require_workspace(options, "member show")?;
-    let active_path = get_active_member_file_path(&workspace.root_path, member_id);
-    let incoming_path = get_incoming_member_file_path(&workspace.root_path, member_id);
+    let active_path = get_active_member_file_path(&workspace.root_path, member_handle);
+    let incoming_path = get_incoming_member_file_path(&workspace.root_path, member_handle);
     let (member_path, status) = if active_path.exists() {
         (active_path, MemberStatus::Active)
     } else if incoming_path.exists() {
         (incoming_path, MemberStatus::Incoming)
     } else {
         return Err(Error::NotFound {
-            message: format!("Member '{}' not found in workspace", member_id),
+            message: format!("Member '{}' not found in workspace", member_handle),
         });
     };
-    let verified = verify_member_file(&member_path, Some(member_id), options.verbose)?;
+    let verified = verify_member_file(&member_path, Some(member_handle), options.verbose)?;
     Ok(MemberShowResult {
         member: build_member_document_view(verified.public_key, verified.warnings)?,
         status: MembershipStatus::from(status),

@@ -6,7 +6,7 @@ use super::helpers::{
     generate_x25519_keypair, recipients_and_members,
 };
 use crate::keygen_helpers::build_verified_private_key;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file as file_enc;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -18,16 +18,20 @@ fn test_encrypt_file() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
-        ALICE_MEMBER_ID.to_string(),
-        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        ALICE_MEMBER_HANDLE.to_string(),
+        build_test_public_key(
+            ALICE_MEMBER_HANDLE,
+            "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            &pk_b64,
+        ),
     )];
-    let (recipient_ids, members) = recipients_and_members(&recipients_with_keys);
+    let (recipient_handles, members) = recipients_and_members(&recipients_with_keys);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
     let content = b"Hello, World! ".repeat(100);
 
     let file_enc_doc = file_enc::encrypt_file_document(
         &content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
@@ -39,13 +43,13 @@ fn test_encrypt_file() {
     .unwrap();
     assert_eq!(
         file_enc_doc.protected.format,
-        secretenv::model::identifiers::format::FILE_ENC_V3
+        secretenv::model::identifiers::format::FILE_ENC_V4
     );
 
     let verified_doc = VerifiedFileEncDocument::new(
         file_enc_doc,
         SignatureVerificationProof::new(
-            ALICE_MEMBER_ID.to_string(),
+            ALICE_MEMBER_HANDLE.to_string(),
             signer_kid.to_string(),
             VerifyingKeySource::SignerPubEmbedded,
             Vec::new(),
@@ -53,13 +57,13 @@ fn test_encrypt_file() {
     );
     let decrypted_key = build_verified_private_key(
         &build_test_private_key(&sk, &pk),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         signer_kid,
         "SHA256:test",
     );
     let decrypted = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         signer_kid,
         &decrypted_key,
         false,
@@ -74,15 +78,19 @@ fn test_defence_in_depth_sid_mismatch() {
     let (sk, pk) = generate_x25519_keypair([1u8; 32]);
     let pk_b64 = b64url(pk.as_bytes());
     let recipients_with_keys = vec![(
-        ALICE_MEMBER_ID.to_string(),
-        build_test_public_key(ALICE_MEMBER_ID, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", &pk_b64),
+        ALICE_MEMBER_HANDLE.to_string(),
+        build_test_public_key(
+            ALICE_MEMBER_HANDLE,
+            "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            &pk_b64,
+        ),
     )];
-    let (recipient_ids, members) = recipients_and_members(&recipients_with_keys);
+    let (recipient_handles, members) = recipients_and_members(&recipients_with_keys);
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let mut file_enc_doc = file_enc::encrypt_file_document(
         b"Hello, World!",
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
@@ -97,7 +105,7 @@ fn test_defence_in_depth_sid_mismatch() {
     let verified_doc = VerifiedFileEncDocument::new(
         file_enc_doc,
         SignatureVerificationProof::new(
-            ALICE_MEMBER_ID.to_string(),
+            ALICE_MEMBER_HANDLE.to_string(),
             signer_kid.to_string(),
             VerifyingKeySource::SignerPubEmbedded,
             Vec::new(),
@@ -105,13 +113,13 @@ fn test_defence_in_depth_sid_mismatch() {
     );
     let decrypted_key = build_verified_private_key(
         &build_test_private_key(&sk, &pk),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         signer_kid,
         "SHA256:test",
     );
     let result = decrypt_file_document(
         &verified_doc,
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         signer_kid,
         &decrypted_key,
         false,

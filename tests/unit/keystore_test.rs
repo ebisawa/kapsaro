@@ -17,6 +17,10 @@ use tempfile::TempDir;
 
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 const TEST_KID_2: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE";
+const B64URL_24: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const B64URL_64: &str =
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
 #[test]
 fn test_save_and_load_private_key() {
@@ -35,15 +39,15 @@ fn test_save_and_load_private_key() {
             kid: kid.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TEST123".to_string(),
-                ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
+                ikm_salt: B64URL_32.to_string(),
+                hkdf_salt: B64URL_32.to_string(),
                 aead: secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305.to_string(),
             },
             created_at: "2024-01-01T00:00:00Z".to_string(),
             expires_at: "2025-01-01T00:00:00Z".to_string(),
         },
         encrypted: PrivateKeyEncData {
-            nonce: "bm9uY2U".to_string(),
+            nonce: B64URL_24.to_string(),
             ct: "Y3Q".to_string(),
         },
     };
@@ -58,26 +62,26 @@ fn test_save_and_load_private_key() {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
-                        x: "a2VtcHVi".to_string(),
+                        x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
-                        x: "c2lncHVi".to_string(),
+                        x: B64URL_32.to_string(),
                     },
                 },
                 attestation: Attestation {
                     method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
                         .to_string(),
                     pub_: "ssh-ed25519 AAAA...".to_string(),
-                    sig: "c2ln".to_string(),
+                    sig: B64URL_64.to_string(),
                 },
             },
             binding_claims: None,
             expires_at: "2025-01-01T00:00:00Z".to_string(),
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
         },
-        signature: "c2VsZnNpZw".to_string(),
+        signature: B64URL_64.to_string(),
     };
 
     // Save
@@ -121,26 +125,26 @@ fn test_save_and_load_public_key() {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
-                        x: "a2VtcHVi".to_string(),
+                        x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
-                        x: "c2lncHVi".to_string(),
+                        x: B64URL_32.to_string(),
                     },
                 },
                 attestation: Attestation {
                     method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
                         .to_string(),
                     pub_: "ssh-ed25519 AAAA...".to_string(),
-                    sig: "c2ln".to_string(),
+                    sig: B64URL_64.to_string(),
                 },
             },
             binding_claims: None,
             expires_at: "2025-01-01T00:00:00Z".to_string(),
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
         },
-        signature: "c2VsZnNpZw".to_string(),
+        signature: B64URL_64.to_string(),
     };
 
     // Save

@@ -312,6 +312,6 @@ pub fn build_dummy_public_key(kid: &str) -> PublicKey {
             expires_at: "2099-01-01T00:00:00Z".to_string(),
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
         },
-        signature: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        signature: encode_base64url_nopad(&[0u8; 64]),
     }
 }

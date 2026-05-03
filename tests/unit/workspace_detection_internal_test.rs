@@ -12,10 +12,7 @@ fn resolve_workspace_from_config_toml() {
     fs::create_dir_all(ws_path.join("secrets")).unwrap();
 
     let config_dir = tempfile::tempdir().unwrap();
-    let config_content = format!(
-        "format = \"secretenv/config@1\"\nworkspace = \"{}\"\n",
-        ws_path.display()
-    );
+    let config_content = format!("workspace = \"{}\"\n", ws_path.display());
     fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
 
     temp_env::with_vars(
@@ -33,8 +30,7 @@ fn resolve_workspace_from_config_toml() {
 #[test]
 fn resolve_workspace_config_invalid_path_shows_config_source() {
     let config_dir = tempfile::tempdir().unwrap();
-    let config_content =
-        "format = \"secretenv/config@1\"\nworkspace = \"/nonexistent/path/.secretenv\"\n";
+    let config_content = "workspace = \"/nonexistent/path/.secretenv\"\n";
     fs::write(config_dir.path().join("config.toml"), config_content).unwrap();
 
     temp_env::with_vars(
@@ -68,10 +64,7 @@ fn resolve_workspace_env_var_takes_priority_over_config() {
     fs::create_dir_all(config_ws_path.join("secrets")).unwrap();
 
     let config_dir = tempfile::tempdir().unwrap();
-    let config_content = format!(
-        "format = \"secretenv/config@1\"\nworkspace = \"{}\"\n",
-        config_ws_path.display()
-    );
+    let config_content = format!("workspace = \"{}\"\n", config_ws_path.display());
     fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
 
     temp_env::with_vars(
@@ -99,10 +92,7 @@ fn resolve_workspace_explicit_option_takes_priority_over_config() {
     fs::create_dir_all(config_ws_path.join("secrets")).unwrap();
 
     let config_dir = tempfile::tempdir().unwrap();
-    let config_content = format!(
-        "format = \"secretenv/config@1\"\nworkspace = \"{}\"\n",
-        config_ws_path.display()
-    );
+    let config_content = format!("workspace = \"{}\"\n", config_ws_path.display());
     fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
 
     temp_env::with_vars(

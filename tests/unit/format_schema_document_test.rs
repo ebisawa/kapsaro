@@ -44,7 +44,7 @@ fn test_parse_public_key_str_with_schema() {
             },
             "expires_at": "2027-01-01T00:00:00Z"
         },
-        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     });
 
     let parsed = parse_public_key_str(&public_key.to_string(), "inline public key").unwrap();
@@ -102,8 +102,8 @@ fn test_parse_file_enc_str_with_schema() {
                     "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
             },
             "wrap": [{
@@ -111,7 +111,7 @@ fn test_parse_file_enc_str_with_schema() {
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAA"
+                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }],
             "created_at": "2026-01-14T00:00:00Z",
             "updated_at": "2026-01-14T00:00:00Z"
@@ -142,7 +142,7 @@ fn test_parse_kv_tokens_with_schema() {
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: hpke::ALG_HPKE_32_1_3.to_string(),
             enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-            ct: "AAAAAAAAAAAAAAAA".to_string(),
+            ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         }],
         removed_recipients: None,
     };
@@ -229,7 +229,7 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
         "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "alg": hpke::ALG_HPKE_32_1_3,
         "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "ct": "AAAAAAAAAAAAAAAA"
+        "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     });
     let wrap: Vec<_> = (0..=MAX_WRAP_ITEMS).map(|_| wrap_item.clone()).collect();
     let file_enc = serde_json::json!({
@@ -243,8 +243,8 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
                     "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
             },
             "wrap": wrap,
@@ -272,7 +272,7 @@ fn test_parse_kv_wrap_token_rejects_wrap_count_over_limit() {
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         alg: hpke::ALG_HPKE_32_1_3.to_string(),
         enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-        ct: "AAAAAAAAAAAAAAAA".to_string(),
+        ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
     };
     let wrap = KvWrap {
         wrap: vec![wrap_item; MAX_WRAP_ITEMS + 1],
@@ -300,8 +300,8 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
                     "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
             },
             "wrap": [
@@ -310,14 +310,14 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
                     "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                     "alg": hpke::ALG_HPKE_32_1_3,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 },
                 {
                     "recipient_handle": "alice@example.com",
                     "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
                     "alg": hpke::ALG_HPKE_32_1_3,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
             ],
             "created_at": "2026-01-14T00:00:00Z",
@@ -348,14 +348,14 @@ fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rid() {
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
                 alg: hpke::ALG_HPKE_32_1_3.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                ct: "AAAAAAAAAAAAAAAA".to_string(),
+                ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             },
             WrapItem {
                 recipient_handle: "alice@example.com".to_string(),
                 kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
                 alg: hpke::ALG_HPKE_32_1_3.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                ct: "AAAAAAAAAAAAAAAA".to_string(),
+                ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             },
         ],
         removed_recipients: None,

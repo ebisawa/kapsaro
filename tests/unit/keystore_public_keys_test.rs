@@ -11,6 +11,10 @@ use secretenv::model::public_key::{
 };
 use tempfile::TempDir;
 
+const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const B64URL_64: &str =
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
 fn build_test_public_key(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
@@ -22,26 +26,26 @@ fn build_test_public_key(member_handle: &str, kid: &str) -> PublicKey {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
-                        x: "dummy".to_string(),
+                        x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
-                        x: "dummy".to_string(),
+                        x: B64URL_32.to_string(),
                     },
                 },
                 attestation: Attestation {
                     method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
                         .to_string(),
                     pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
-                    sig: "dummy".to_string(),
+                    sig: B64URL_64.to_string(),
                 },
             },
             binding_claims: None,
             expires_at: "2030-01-01T00:00:00Z".to_string(),
             created_at: Some("2025-01-01T00:00:00Z".to_string()),
         },
-        signature: "dummy".to_string(),
+        signature: B64URL_64.to_string(),
     }
 }
 

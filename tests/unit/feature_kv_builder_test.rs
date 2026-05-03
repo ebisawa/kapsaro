@@ -28,7 +28,7 @@ fn sample_wrap() -> KvWrap {
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: "hpke-32-1-3".to_string(),
             enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-            ct: "AAAAAAAAAAAAAAAA".to_string(),
+            ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         }],
         removed_recipients: None,
     }

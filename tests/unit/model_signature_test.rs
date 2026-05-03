@@ -49,7 +49,7 @@ fn test_signature_deserialization() {
                 },
                 "expires_at": "2027-01-01T00:00:00Z"
             },
-            "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         },
         "sig": "YWJjZGVmZ2hp"
     }"#;

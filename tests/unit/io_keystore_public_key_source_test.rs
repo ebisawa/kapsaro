@@ -17,7 +17,7 @@ fn build_test_public_key_json(member_handle: &str, kid: &str) -> String {
     "identity": {{
       "keys": {{
         "kem": {{ "kty": "OKP", "crv": "X25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }},
-        "sig": {{ "kty": "OKP", "crv": "Ed25519", "x": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" }}
+        "sig": {{ "kty": "OKP", "crv": "Ed25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }}
       }},
       "attestation": {{
         "method": "ssh-sign",
@@ -28,7 +28,7 @@ fn build_test_public_key_json(member_handle: &str, kid: &str) -> String {
     "created_at": "2026-01-01T00:00:00Z",
     "expires_at": "2027-01-01T00:00:00Z"
   }},
-  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 }}"#,
         member_handle, kid
     )

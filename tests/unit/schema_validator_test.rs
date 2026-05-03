@@ -8,6 +8,12 @@ use secretenv::format::schema::validator::Validator;
 use secretenv::model::identifiers::hpke;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
+const B64URL_24: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const B64URL_48: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const B64URL_64: &str =
+    "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ";
+
 #[test]
 fn test_validator_creation() {
     let validator = Validator::new();
@@ -99,7 +105,7 @@ fn test_validate_public_key_basic() {
             },
             "expires_at": "2027-01-01T00:00:00Z"
         },
-        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     });
 
     let result = validator.validate_public_key(&valid_public_key);
@@ -136,6 +142,52 @@ fn test_validate_public_key_rejects_invalid_github_login() {
 }
 
 #[test]
+fn test_validate_public_key_rejects_wrong_crypto_field_lengths() {
+    let validator = Validator::new().unwrap();
+
+    for (field, path, value) in [
+        (
+            "kem.x",
+            &["protected", "identity", "keys", "kem", "x"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "sig.x",
+            &["protected", "identity", "keys", "sig", "x"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "attestation.sig",
+            &["protected", "identity", "attestation", "sig"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        ("signature", &["signature"][..], "AAAAAAAAAAAAAAAAAAAAAA"),
+    ] {
+        let mut public_key = build_public_key_with_github_login("alice-gh");
+        set_json_path(&mut public_key, path, value);
+
+        let result = validator.validate_public_key(&public_key);
+
+        assert!(result.is_err(), "should reject wrong {field} length");
+    }
+}
+
+#[test]
+fn test_validate_public_key_rejects_non_canonical_fixed_length_tail_bits() {
+    let validator = Validator::new().unwrap();
+    let mut public_key = build_public_key_with_github_login("alice-gh");
+    set_json_path(
+        &mut public_key,
+        &["protected", "identity", "keys", "kem", "x"],
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+    );
+
+    let result = validator.validate_public_key(&public_key);
+
+    assert!(result.is_err(), "should reject non-canonical kem.x");
+}
+
+#[test]
 fn test_schema_error_message_describes_invalid_field_without_raw_value() {
     let validator = Validator::new().unwrap();
     let invalid_login = "alice#keys";
@@ -152,6 +204,16 @@ fn test_schema_error_message_describes_invalid_field_without_raw_value() {
     assert!(!message.contains(invalid_login));
 }
 
+fn set_json_path(value: &mut serde_json::Value, path: &[&str], replacement: &str) {
+    let mut current = value;
+    for segment in &path[..path.len() - 1] {
+        current = current
+            .get_mut(*segment)
+            .expect("test fixture path should exist");
+    }
+    current[path[path.len() - 1]] = serde_json::Value::String(replacement.to_string());
+}
+
 fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
     serde_json::json!({
         "protected": {
@@ -163,18 +225,18 @@ fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
                     "kem": {
                         "kty": "OKP",
                         "crv": secretenv::model::identifiers::jwk::CRV_X25519,
-                        "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                        "x": B64URL_32
                     },
                     "sig": {
                         "kty": "OKP",
                         "crv": secretenv::model::identifiers::jwk::CRV_ED25519,
-                        "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                        "x": B64URL_32
                     }
                 },
                 "attestation": {
                     "method": "ssh-sign",
                     "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+                    "sig": B64URL_64
                 }
             },
             "binding_claims": {
@@ -185,7 +247,7 @@ fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
             },
             "expires_at": "2027-01-01T00:00:00Z"
         },
-        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "signature": B64URL_64
     })
 }
 
@@ -293,6 +355,61 @@ fn test_validate_private_key_argon2id_rejects_legacy_params() {
 }
 
 #[test]
+fn test_validate_private_key_rejects_wrong_fixed_lengths() {
+    let validator = Validator::new().unwrap();
+
+    for (field, path, value) in [
+        (
+            "ikm_salt",
+            &["protected", "alg", "ikm_salt"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "hkdf_salt",
+            &["protected", "alg", "hkdf_salt"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "nonce",
+            &["encrypted", "nonce"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+    ] {
+        let mut private_key = build_valid_private_key();
+        set_json_path(&mut private_key, path, value);
+
+        let result = validator.validate_private_key(&private_key);
+
+        assert!(result.is_err(), "should reject wrong {field} length");
+    }
+}
+
+fn build_valid_private_key() -> serde_json::Value {
+    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
+    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
+    serde_json::json!({
+        "protected": {
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V6,
+            "subject_handle": "alice@example.com",
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "alg": {
+                "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
+                "fpr": "SHA256:abcdef1234567890",
+                "ikm_salt": ikm_salt,
+                "hkdf_salt": hkdf_salt,
+                "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
+            },
+            "created_at": "2026-01-14T00:00:00Z",
+            "expires_at": "2027-01-14T00:00:00Z"
+        },
+        "encrypted": {
+            "nonce": B64URL_24,
+            "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+        }
+    })
+}
+
+#[test]
 fn test_validate_file_enc_document_basic() {
     let validator = Validator::new().unwrap();
     // File encryption documents require protected metadata, payload, wraps, and signature.
@@ -310,8 +427,8 @@ fn test_validate_file_enc_document_basic() {
                     }
                 },
                 "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
             },
             "wrap": [{
@@ -319,7 +436,7 @@ fn test_validate_file_enc_document_basic() {
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAA"
+                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }],
             "created_at": "2026-01-14T00:00:00Z",
             "updated_at": "2026-01-14T00:00:00Z"
@@ -338,6 +455,90 @@ fn test_validate_file_enc_document_basic() {
         "Valid file secret v3 should pass validation: {:?}",
         result
     );
+}
+
+#[test]
+fn test_validate_file_enc_rejects_wrong_fixed_lengths() {
+    let validator = Validator::new().unwrap();
+
+    for (field, path, value) in [
+        (
+            "payload nonce",
+            &["protected", "payload", "encrypted", "nonce"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "wrap enc",
+            &["protected", "wrap", "0", "enc"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "wrap ct",
+            &["protected", "wrap", "0", "ct"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+        (
+            "signature sig",
+            &["signature", "sig"][..],
+            "AAAAAAAAAAAAAAAAAAAAAA",
+        ),
+    ] {
+        let mut file_enc = build_valid_file_enc_doc("alice@example.com");
+        set_json_path_with_array(&mut file_enc, path, value);
+
+        let result = validator.validate_file_enc_document(&file_enc);
+
+        assert!(result.is_err(), "should reject wrong {field} length");
+    }
+}
+
+fn set_json_path_with_array(value: &mut serde_json::Value, path: &[&str], replacement: &str) {
+    let mut current = value;
+    for segment in &path[..path.len() - 1] {
+        current = if let Ok(index) = segment.parse::<usize>() {
+            current
+                .get_mut(index)
+                .expect("test fixture array path should exist")
+        } else {
+            current
+                .get_mut(*segment)
+                .expect("test fixture object path should exist")
+        };
+    }
+    current[path[path.len() - 1]] = serde_json::Value::String(replacement.to_string());
+}
+
+fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
+    let sid = "123e4567-e89b-12d3-a456-426614174000";
+    serde_json::json!({
+        "protected": {
+            "format": secretenv::model::identifiers::format::FILE_ENC_V4,
+            "sid": sid,
+            "payload": {
+                "protected": {
+                    "format": secretenv::model::identifiers::format::FILE_PAYLOAD_V4,
+                    "sid": sid,
+                    "alg": { "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305 }
+                },
+                "encrypted": { "nonce": B64URL_24, "ct": B64URL_48 }
+            },
+            "wrap": [{
+                "recipient_handle": recipient_handle,
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "alg": hpke::ALG_HPKE_32_1_3,
+                "enc": B64URL_32,
+                "ct": B64URL_48
+            }],
+            "created_at": "2026-01-14T00:00:00Z",
+            "updated_at": "2026-01-14T00:00:00Z"
+        },
+        "signature": {
+            "alg": secretenv::model::identifiers::alg::SIGNATURE_ED25519,
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
+            "sig": B64URL_64
+        }
+    })
 }
 
 #[test]
@@ -361,8 +562,8 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rid() {
                     }
                 },
                 "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAA"
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
             },
             "wrap": [{
@@ -370,7 +571,7 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rid() {
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAA"
+                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }],
             "created_at": "2026-01-14T00:00:00Z",
             "updated_at": "2026-01-14T00:00:00Z"

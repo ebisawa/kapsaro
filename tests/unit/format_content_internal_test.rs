@@ -102,7 +102,7 @@ fn kv_enc_schema_error_includes_source_name_and_token_context() {
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
                 alg: hpke::ALG_HPKE_32_1_3.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                ct: "AAAAAAAAAAAAAAAA".to_string(),
+                ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             }]
         }),
     )

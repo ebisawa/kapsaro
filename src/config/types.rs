@@ -1,17 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Configuration types (Phase 10 - TDD Refactor phase)
+//! Configuration types.
 //!
-//! Defines the data structures for secretenv configuration.
+//! Defines shared value types used while resolving secretenv configuration.
 
 use serde::{Deserialize, Serialize};
-
-/// Default ssh-add command path
-const DEFAULT_SSH_ADD_PATH: &str = "ssh-add";
-
-/// Default ssh-keygen command path
-const DEFAULT_SSH_KEYGEN_PATH: &str = "ssh-keygen";
 
 /// Signing method configuration value
 ///
@@ -49,67 +43,6 @@ impl std::fmt::Display for SshSigningMethod {
             SshSigningMethod::SshKeygen => write!(f, "ssh-keygen"),
         }
     }
-}
-
-/// SSH-related configuration
-///
-/// Controls how secretenv interacts with SSH tooling for signature operations.
-/// All fields have sensible defaults and can be omitted in TOML.
-///
-/// # Default Values
-///
-/// - `ssh_add_path`: `"ssh-add"`
-/// - `ssh_keygen_path`: `"ssh-keygen"`
-/// - `ssh_signing_method`: `SshSigningMethodConfig::Auto`
-///
-/// # TOML Example
-///
-/// ```toml
-/// [ssh]
-/// ssh_add_path = "/usr/local/bin/ssh-add"
-/// ssh_keygen_path = "/usr/local/bin/ssh-keygen"
-/// ssh_signing_method = "auto"
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SshConfig {
-    /// Path to ssh-add command
-    ///
-    /// Used for listing loaded SSH keys (`ssh-add -L`).
-    /// Default: `"ssh-add"`
-    #[serde(default = "default_ssh_add_path")]
-    pub ssh_add_path: String,
-
-    /// Path to ssh-keygen command
-    ///
-    /// Used for `ssh-keygen -Y sign` operations when `ssh_signing_method` is `SshKeygen`.
-    /// Default: `"ssh-keygen"`
-    #[serde(default = "default_ssh_keygen_path")]
-    pub ssh_keygen_path: String,
-
-    /// Signing method to use
-    ///
-    /// Determines how SSH signatures are obtained for LocalIdentityEncrypted.
-    /// Default: `SshSigningMethodConfig::Auto`
-    #[serde(default, rename = "ssh_signing_method")]
-    pub signing_method: SshSigningMethodConfig,
-}
-
-impl Default for SshConfig {
-    fn default() -> Self {
-        Self {
-            ssh_add_path: DEFAULT_SSH_ADD_PATH.to_string(),
-            ssh_keygen_path: DEFAULT_SSH_KEYGEN_PATH.to_string(),
-            signing_method: SshSigningMethodConfig::default(),
-        }
-    }
-}
-
-fn default_ssh_add_path() -> String {
-    DEFAULT_SSH_ADD_PATH.to_string()
-}
-
-fn default_ssh_keygen_path() -> String {
-    DEFAULT_SSH_KEYGEN_PATH.to_string()
 }
 
 /// Strict key checking mode for read-path trust judgment.
@@ -159,42 +92,4 @@ impl StrictKeyCheckingResolution {
     pub const fn is_disabled(self) -> bool {
         matches!(self.mode, StrictKeyChecking::No)
     }
-}
-
-/// Top-level configuration document
-///
-/// Root structure for `~/.config/secretenv/config.toml`.
-///
-/// # Format
-///
-/// Must include `format = "secretenv/config@1"` for version validation.
-/// `member_handle` is required.
-/// The `ssh` section is optional and uses defaults if omitted.
-///
-/// # TOML Example
-///
-/// ```toml
-/// format = "secretenv/config@1"
-/// member_handle = "alice@example.com"
-///
-/// [ssh]
-/// ssh_signing_method = "auto"
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConfigDocument {
-    /// Format version (must be "secretenv/config@1")
-    ///
-    /// Used for forward compatibility. Loading will fail if format is unsupported.
-    pub format: String,
-
-    /// Member handle
-    ///
-    /// User-facing selector used across SecretEnv workspaces.
-    pub member_handle: String,
-
-    /// SSH configuration
-    ///
-    /// Controls SSH signing behavior. Defaults to `SshConfig::default()` if omitted.
-    #[serde(default)]
-    pub ssh: SshConfig,
 }

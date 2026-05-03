@@ -10,11 +10,7 @@ fn returns_none_when_no_workspace_in_config() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME", "HOME"]);
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
-    fs::write(
-        &config_path,
-        "format = \"secretenv/config@1\"\nmember_handle = \"alice\"\n",
-    )
-    .unwrap();
+    fs::write(&config_path, "member_handle = \"alice\"\n").unwrap();
 
     temp_env::with_vars(
         [("SECRETENV_HOME", Some(tmp.path().to_str().unwrap()))],
@@ -32,7 +28,7 @@ fn returns_path_when_workspace_in_config() {
     let config_path = tmp.path().join("config.toml");
     fs::write(
         &config_path,
-        "format = \"secretenv/config@1\"\nworkspace = \"/tmp/test-workspace/.secretenv\"\n",
+        "workspace = \"/tmp/test-workspace/.secretenv\"\n",
     )
     .unwrap();
 
@@ -53,11 +49,7 @@ fn expands_tilde_in_workspace_path() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME", "HOME"]);
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
-    fs::write(
-        &config_path,
-        "format = \"secretenv/config@1\"\nworkspace = \"~/projects/.secretenv\"\n",
-    )
-    .unwrap();
+    fs::write(&config_path, "workspace = \"~/projects/.secretenv\"\n").unwrap();
 
     temp_env::with_vars(
         [("SECRETENV_HOME", Some(tmp.path().to_str().unwrap()))],

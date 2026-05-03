@@ -13,11 +13,11 @@ use crate::cli::common::prompt::prompt_yes_no;
 use crate::support::validation;
 use crate::{Error, Result};
 
-pub(crate) fn confirm_member_overwrite(member_id: &str) -> Result<bool> {
+pub(crate) fn confirm_member_overwrite(member_handle: &str) -> Result<bool> {
     prompt_yes_no(
         &format!(
             "Member '{}' already exists in workspace. Update with current key?",
-            member_id
+            member_handle
         ),
         false,
     )
@@ -79,7 +79,7 @@ pub(crate) fn prompt_member_handle() -> Result<String> {
     Input::new()
         .with_prompt("Enter your member handle (alphanumeric and .@_+-)")
         .validate_with(|input: &String| {
-            validation::validate_member_id(input)
+            validation::validate_member_handle(input)
                 .map(|_| ())
                 .map_err(|e| e.to_string())
         })

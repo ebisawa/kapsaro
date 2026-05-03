@@ -5,12 +5,15 @@ use secretenv::crypto::CryptoError;
 use secretenv::Error;
 
 #[test]
-fn test_user_message_schema_returns_fixed_string() {
+fn test_user_message_schema_returns_message_field() {
     let error = Error::Schema {
-        message: r#"{"key":"value"} is not valid under any of the schemas"#.to_string(),
+        message: "Invalid secretenv document\nReason: signature.signer_pub is missing".to_string(),
         source: None,
     };
-    assert_eq!(error.format_user_message(), "Schema validation failed");
+    assert_eq!(
+        error.format_user_message(),
+        "Invalid secretenv document\nReason: signature.signer_pub is missing"
+    );
 }
 
 #[test]

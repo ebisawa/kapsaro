@@ -28,13 +28,13 @@ secretenv config set ssh_signing_method ssh-keygen
 
 ### 設定のポイント
 
-1. **`ssh-keygen` コマンドを使って SSH 署名を行う**  
+1. **`ssh-keygen` コマンドを使って SSH 署名を行う**
    署名の生成自体は `ssh-keygen` コマンドを使って行うため、署名方式として `ssh-keygen` を指定します。
 
-2. **`ssh_keygen_command` に `.exe` をつける**  
+2. **`ssh_keygen_command` に `.exe` をつける**
    WSL2 から Windows 側の `ssh-keygen.exe` を呼び出すことで、Windows 側で動作している 1Password SSH agent と連携して署名を行います。そのため、コマンド名として `.exe` をつけた `ssh-keygen.exe` を指定します。
 
-3. **`ssh_identity` として、署名に使いたい SSH 鍵（1Password 内の SSH 鍵）をファイルに保存し、そのファイル名を指定する**  
+3. **`ssh_identity` として、署名に使いたい SSH 鍵（1Password 内の SSH 鍵）をファイルに保存し、そのファイル名を指定する**
    署名に使いたい SSH 鍵（1Password 内の SSH 鍵）の **公開鍵** をあらかじめ WSL 内のファイルとして保存しておき、そのファイルパスを `ssh_identity` に指定します。
 
 ## 参考資料

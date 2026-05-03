@@ -64,7 +64,7 @@ A `kid` is an identifier for a key statement. Re-verifying the same key every ti
 With this update, reading a cryptographic artifact requires all of the following to be satisfied:
 
 1. The signature is cryptographically valid (verified with `signer_pub`)
-2. The signer's `(member_id, kid)` exists in `members/active`
+2. The signer's `(member_handle, kid)` exists in `members/active`
 3. The signer's `kid` is in `known_keys`, **or** is approved interactively in the current session
 
 In other words, **a valid signature alone is not sufficient — you must also have previously verified the signer**.
@@ -83,7 +83,7 @@ When an unverified `kid` is encountered, information like the following is displ
 
 ```
 Trust review for signer:
-  member_id: bob@example.com
+  member_handle: bob@example.com
   kid: 7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD
   attestation fingerprint: SHA256:xxxx...
   GitHub account id: 12345678 (bob-gh)
@@ -212,7 +212,7 @@ Artifacts signed by a former member who has been removed from `members/active` a
 
 ```
 Non-member acceptance for signer:
-  member_id: ex-member@example.com
+  member_handle: ex-member@example.com
   kid: 5FT8K3N2...
   ...
 Accept this artifact one time only? [y/N]
@@ -290,7 +290,7 @@ SECRETENV_STRICT_KEY_CHECKING=no secretenv run -- ./deploy.sh
 ## 9. Trust Store Location
 
 ```text
-${SECRETENV_HOME:-~/.config/secretenv}/trust/<owner_member_id>.json
+${SECRETENV_HOME:-~/.config/secretenv}/trust/<owner_handle>.json
 ```
 
 - Located outside the repository, so it is not tracked by Git

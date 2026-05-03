@@ -13,11 +13,11 @@ pub(super) fn compute_attestation_fingerprint(
     public_key: &PublicKey,
     verbose: bool,
 ) -> Option<String> {
-    let member_id = &public_key.protected.member_id;
+    let member_handle = &public_key.protected.subject_handle;
     if verbose {
         debug!(
             "[VERIFY] Verify {}: computing fingerprint from attestation.pub",
-            member_id
+            member_handle
         );
     }
 
@@ -26,7 +26,7 @@ pub(super) fn compute_attestation_fingerprint(
             if verbose {
                 debug!(
                     "[VERIFY] Verify {}: attestation fingerprint {}",
-                    member_id, fingerprint
+                    member_handle, fingerprint
                 );
             }
             Some(fingerprint)
@@ -35,7 +35,7 @@ pub(super) fn compute_attestation_fingerprint(
             if verbose {
                 debug!(
                     "[VERIFY] Verify {}: failed to compute fingerprint",
-                    member_id
+                    member_handle
                 );
             }
             None
@@ -51,7 +51,7 @@ pub(super) fn find_key_by_fingerprint(
     login_for_keys: &str,
     verbose: bool,
 ) -> Option<VerificationResult> {
-    let member_id = &public_key.protected.member_id;
+    let member_handle = &public_key.protected.subject_handle;
 
     for github_key in github_keys {
         let Ok(github_fingerprint) = fingerprint::build_sha256_fingerprint(&github_key.key) else {
@@ -64,11 +64,11 @@ pub(super) fn find_key_by_fingerprint(
         if verbose {
             debug!(
                 "[VERIFY] Verify {}: fingerprint match (GitHub key id={})",
-                member_id, github_key.id
+                member_handle, github_key.id
             );
         }
         return Some(VerificationResult::verified(
-            member_id,
+            member_handle,
             format!(
                 "SSH key verified on GitHub (id={}, login={})",
                 id_used, login_for_keys

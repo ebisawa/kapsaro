@@ -7,7 +7,9 @@
 //! and verify report construction via the public verify_*_document_report API.
 
 use crate::test_utils::{setup_test_keystore, EnvGuard};
-use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID};
+use crate::test_utils::{
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
+};
 use secretenv::feature::inspect::{build_inspect_view, InspectOutput};
 use secretenv::feature::verify::file::verify_file_document_report;
 use secretenv::feature::verify::kv::signature::verify_kv_document_report;
@@ -28,14 +30,14 @@ fn inspect_contains(output: &InspectOutput, needle: &str) -> bool {
 fn setup_workspace_with_member(
     keystore_root: &std::path::Path,
     workspace_dir: &std::path::Path,
-    member_id: &str,
+    member_handle: &str,
 ) {
     let members_dir = workspace_dir.join("members/active");
     fs::create_dir_all(&members_dir).unwrap();
     fs::create_dir_all(workspace_dir.join("members/incoming")).unwrap();
     fs::create_dir_all(workspace_dir.join("secrets")).unwrap();
 
-    let keystore_member_files = fs::read_dir(keystore_root.join(member_id)).unwrap();
+    let keystore_member_files = fs::read_dir(keystore_root.join(member_handle)).unwrap();
     for entry in keystore_member_files {
         let entry = entry.unwrap();
         if !entry.path().is_dir() {
@@ -44,7 +46,7 @@ fn setup_workspace_with_member(
         let pub_file = entry.path().join("public.json");
         if pub_file.exists() {
             let pub_content = fs::read_to_string(&pub_file).unwrap();
-            let member_file = members_dir.join(format!("{}.json", member_id));
+            let member_file = members_dir.join(format!("{}.json", member_handle));
             fs::write(&member_file, pub_content).unwrap();
             break;
         }
@@ -71,14 +73,14 @@ fn build_common_opts(
 }
 
 /// Helper: create a kv-enc encrypted file and return its content as String.
-fn build_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
+fn build_kv_enc_content(member_handle: &str) -> (tempfile::TempDir, String) {
     let _guard = EnvGuard::new(&["SECRETENV_PRIVATE_KEY", "SECRETENV_KEY_PASSWORD"]);
-    let temp_dir = setup_test_keystore(member_id);
+    let temp_dir = setup_test_keystore(member_handle);
     let test_dir = temp_dir.path().to_path_buf();
     let keystore_root = test_dir.join("keys");
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, member_id);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, member_handle);
 
     use secretenv::cli::set;
     let common_opts = build_common_opts(&test_dir, &workspace_dir);
@@ -86,7 +88,7 @@ fn build_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_handle: Some(member_id.to_string()),
+        member_handle: Some(member_handle.to_string()),
         name: None,
         key: "DATABASE_URL".to_string(),
         value: Some("postgres://localhost".to_string()),
@@ -99,14 +101,14 @@ fn build_kv_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 }
 
 /// Helper: create a file-enc encrypted file and return its content as String.
-fn build_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
+fn build_file_enc_content(member_handle: &str) -> (tempfile::TempDir, String) {
     let _guard = EnvGuard::new(&["SECRETENV_PRIVATE_KEY", "SECRETENV_KEY_PASSWORD"]);
-    let temp_dir = setup_test_keystore(member_id);
+    let temp_dir = setup_test_keystore(member_handle);
     let test_dir = temp_dir.path().to_path_buf();
     let keystore_root = test_dir.join("keys");
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, member_id);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, member_handle);
 
     let input_path = workspace_dir.join("secret.txt");
     fs::write(&input_path, b"super secret content").unwrap();
@@ -117,7 +119,7 @@ fn build_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
-        member_handle: Some(member_id.to_string()),
+        member_handle: Some(member_handle.to_string()),
         out: Some(encrypted_path.clone()),
         stdout: false,
         stdin: false,
@@ -135,7 +137,7 @@ fn build_file_enc_content(member_id: &str) -> (tempfile::TempDir, String) {
 
 #[test]
 fn test_inspect_file_enc_header_contains_sid_and_timestamps() {
-    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -169,7 +171,7 @@ fn test_inspect_file_enc_header_contains_sid_and_timestamps() {
 
 #[test]
 fn test_inspect_file_enc_wrap_data_contains_recipients() {
-    let (_temp_dir, content) = build_file_enc_content(BOB_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(BOB_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -192,7 +194,7 @@ fn test_inspect_file_enc_wrap_data_contains_recipients() {
 
 #[test]
 fn test_inspect_file_enc_payload_contains_sid() {
-    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -211,7 +213,7 @@ fn test_inspect_file_enc_payload_contains_sid() {
 
 #[test]
 fn test_inspect_file_enc_shows_signature() {
-    let (_temp_dir, content) = build_file_enc_content(CAROL_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(CAROL_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -245,7 +247,7 @@ fn test_inspect_file_enc_shows_signature() {
 
 #[test]
 fn test_inspect_kv_enc_shows_header() {
-    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -267,7 +269,7 @@ fn test_inspect_kv_enc_shows_header() {
 
 #[test]
 fn test_inspect_kv_enc_shows_entries() {
-    let (_temp_dir, content) = build_kv_enc_content(BOB_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(BOB_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -284,7 +286,7 @@ fn test_inspect_kv_enc_shows_entries() {
 
 #[test]
 fn test_inspect_kv_enc_shows_wrap_data() {
-    let (_temp_dir, content) = build_kv_enc_content(CAROL_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(CAROL_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -300,7 +302,7 @@ fn test_inspect_kv_enc_shows_wrap_data() {
 
 #[test]
 fn test_inspect_kv_enc_entries_contain_k_field() {
-    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
@@ -323,7 +325,7 @@ fn test_inspect_kv_enc_entries_contain_k_field() {
 
 #[test]
 fn test_build_error_report() {
-    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_ID);
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
 
     // Corrupt the signature kid to trigger a "Cannot find public key" error
     let lines: Vec<&str> = content.lines().collect();
@@ -341,8 +343,8 @@ fn test_build_error_report() {
 
     assert!(!report.verified, "Error report should have verified=false");
     assert!(
-        report.signer_member_id.is_none(),
-        "Error report should have no signer_member_id"
+        report.signer_handle.is_none(),
+        "Error report should have no signer_handle"
     );
     assert!(
         report.source.is_none(),
@@ -356,7 +358,7 @@ fn test_build_error_report() {
 
 #[test]
 fn test_build_success_report() {
-    let (_temp_dir, content) = build_file_enc_content(DAVE_MEMBER_ID);
+    let (_temp_dir, content) = build_file_enc_content(DAVE_MEMBER_HANDLE);
 
     let file_enc_doc: secretenv::model::file_enc::FileEncDocument =
         serde_json::from_str(&content).unwrap();
@@ -365,9 +367,9 @@ fn test_build_success_report() {
 
     assert!(report.verified, "Success report should have verified=true");
     assert_eq!(
-        report.signer_member_id,
-        Some(DAVE_MEMBER_ID.to_string()),
-        "Success report should contain the signer member_id"
+        report.signer_handle,
+        Some(DAVE_MEMBER_HANDLE.to_string()),
+        "Success report should contain the signer member_handle"
     );
     assert!(
         matches!(report.source, Some(VerifyingKeySource::SignerPubEmbedded)),
@@ -385,13 +387,13 @@ fn test_build_success_report() {
 
 #[test]
 fn test_inspect_kv_enc_with_verification() {
-    let temp_dir = setup_test_keystore(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore(ALICE_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     let keystore_root = test_dir.join("keys");
 
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, ALICE_MEMBER_ID);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, ALICE_MEMBER_HANDLE);
 
     // Create kv-enc file via set command
     use secretenv::cli::set;
@@ -400,7 +402,7 @@ fn test_inspect_kv_enc_with_verification() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         name: None,
         key: "DATABASE_URL".to_string(),
         value: Some("postgres://localhost".to_string()),
@@ -422,8 +424,8 @@ fn test_inspect_kv_enc_with_verification() {
         "signature report should indicate verification success"
     );
     assert!(
-        signature_report.signer_member_id.as_deref() == Some(ALICE_MEMBER_ID),
-        "signature report should include signer member_id"
+        signature_report.signer_handle.as_deref() == Some(ALICE_MEMBER_HANDLE),
+        "signature report should include signer member_handle"
     );
     assert!(
         inspect_contains(&output, "Attestation:"),
@@ -437,13 +439,13 @@ fn test_inspect_kv_enc_with_verification() {
 
 #[test]
 fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
-    let temp_dir = setup_test_keystore(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore(ALICE_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     let keystore_root = test_dir.join("keys");
 
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, ALICE_MEMBER_ID);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, ALICE_MEMBER_HANDLE);
 
     // Create kv-enc file via set command
     use secretenv::cli::set;
@@ -452,7 +454,7 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -508,13 +510,13 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
 
 #[test]
 fn test_verify_kv_document_report() {
-    let temp_dir = setup_test_keystore(BOB_MEMBER_ID);
+    let temp_dir = setup_test_keystore(BOB_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     let keystore_root = test_dir.join("keys");
 
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, BOB_MEMBER_ID);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, BOB_MEMBER_HANDLE);
 
     // Create kv-enc file via set command
     use secretenv::cli::set;
@@ -523,7 +525,7 @@ fn test_verify_kv_document_report() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_handle: Some(BOB_MEMBER_ID.to_string()),
+        member_handle: Some(BOB_MEMBER_HANDLE.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -537,7 +539,7 @@ fn test_verify_kv_document_report() {
     let report = verify_kv_document_report(&encrypted_content, false);
 
     assert!(report.verified, "Signature should be verified");
-    assert_eq!(report.signer_member_id, Some(BOB_MEMBER_ID.to_string()));
+    assert_eq!(report.signer_handle, Some(BOB_MEMBER_HANDLE.to_string()));
     assert!(matches!(
         report.source,
         Some(VerifyingKeySource::SignerPubEmbedded)
@@ -547,13 +549,13 @@ fn test_verify_kv_document_report() {
 
 #[test]
 fn test_verify_file_document_report() {
-    let temp_dir = setup_test_keystore(CAROL_MEMBER_ID);
+    let temp_dir = setup_test_keystore(CAROL_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     let keystore_root = test_dir.join("keys");
 
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, CAROL_MEMBER_ID);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, CAROL_MEMBER_HANDLE);
 
     // Create and encrypt a binary file using encrypt command
     let input_path = workspace_dir.join("test.bin");
@@ -565,7 +567,7 @@ fn test_verify_file_document_report() {
     let encrypted_path = test_dir.join("test.json");
     let encrypt_args = encrypt::EncryptArgs {
         common: common_opts,
-        member_handle: Some(CAROL_MEMBER_ID.to_string()),
+        member_handle: Some(CAROL_MEMBER_HANDLE.to_string()),
         out: Some(encrypted_path.clone()),
         stdout: false,
         stdin: false,
@@ -581,7 +583,7 @@ fn test_verify_file_document_report() {
     let report = verify_file_document_report(&file_enc_doc, false);
 
     assert!(report.verified, "Signature should be verified");
-    assert_eq!(report.signer_member_id, Some(CAROL_MEMBER_ID.to_string()));
+    assert_eq!(report.signer_handle, Some(CAROL_MEMBER_HANDLE.to_string()));
     assert!(matches!(
         report.source,
         Some(VerifyingKeySource::SignerPubEmbedded)
@@ -591,13 +593,13 @@ fn test_verify_file_document_report() {
 
 #[test]
 fn test_verify_kv_document_report_failure_wrong_key() {
-    let temp_dir = setup_test_keystore(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore(ALICE_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     let keystore_root = test_dir.join("keys");
 
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, ALICE_MEMBER_ID);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, ALICE_MEMBER_HANDLE);
 
     // Create kv-enc file via set command
     use secretenv::cli::set;
@@ -606,7 +608,7 @@ fn test_verify_kv_document_report_failure_wrong_key() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_handle: Some(ALICE_MEMBER_ID.to_string()),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -640,7 +642,7 @@ fn test_verify_kv_document_report_failure_wrong_key() {
     let report = verify_kv_document_report(&kv_content, false);
 
     assert!(!report.verified, "Signature should not be verified");
-    assert!(report.signer_member_id.is_none());
+    assert!(report.signer_handle.is_none());
     assert!(report.source.is_none());
     assert!(
         report.message.contains("kid mismatch"),
@@ -651,13 +653,13 @@ fn test_verify_kv_document_report_failure_wrong_key() {
 
 #[test]
 fn test_verify_kv_document_report_with_embedded_signer_pub() {
-    let temp_dir = setup_test_keystore(DAVE_MEMBER_ID);
+    let temp_dir = setup_test_keystore(DAVE_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     let keystore_root = test_dir.join("keys");
 
     let workspace_dir = test_dir.join("workspace");
     fs::create_dir_all(&workspace_dir).unwrap();
-    setup_workspace_with_member(&keystore_root, &workspace_dir, DAVE_MEMBER_ID);
+    setup_workspace_with_member(&keystore_root, &workspace_dir, DAVE_MEMBER_HANDLE);
 
     // Create and encrypt a kv file
     use secretenv::cli::set;
@@ -666,7 +668,7 @@ fn test_verify_kv_document_report_with_embedded_signer_pub() {
 
     let set_args = set::SetArgs {
         common: common_opts,
-        member_handle: Some(DAVE_MEMBER_ID.to_string()),
+        member_handle: Some(DAVE_MEMBER_HANDLE.to_string()),
         name: None,
         key: "KEY".to_string(),
         value: Some("value".to_string()),
@@ -685,7 +687,7 @@ fn test_verify_kv_document_report_with_embedded_signer_pub() {
         "Signature should be verified with embedded signer_pub. Message: {}, Source: {:?}",
         report.message, report.source
     );
-    assert_eq!(report.signer_member_id, Some(DAVE_MEMBER_ID.to_string()));
+    assert_eq!(report.signer_handle, Some(DAVE_MEMBER_HANDLE.to_string()));
     assert!(matches!(
         report.source,
         Some(VerifyingKeySource::SignerPubEmbedded)

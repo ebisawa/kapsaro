@@ -3,7 +3,7 @@
 
 //! Known keys CRUD operations and integrity checks.
 
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::KnownKey;
 use crate::support::kid::resolve_unique_kid;
 use crate::{Error, Result};
@@ -18,36 +18,36 @@ pub enum KnownKeyJudgment {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct KnownKeyIdentity {
-    member_id: MemberId,
+    member_handle: MemberHandle,
     kid: Kid,
 }
 
 impl KnownKeyIdentity {
-    pub fn new<M, K>(member_id: M, kid: K) -> Self
+    pub fn new<M, K>(member_handle: M, kid: K) -> Self
     where
-        M: IntoKnownMemberId,
+        M: IntoKnownMemberHandle,
         K: IntoKnownKid,
     {
-        Self::try_new(member_id, kid).expect("known key identity inputs must be valid")
+        Self::try_new(member_handle, kid).expect("known key identity inputs must be valid")
     }
 
-    pub fn try_new<M, K>(member_id: M, kid: K) -> Result<Self>
+    pub fn try_new<M, K>(member_handle: M, kid: K) -> Result<Self>
     where
-        M: IntoKnownMemberId,
+        M: IntoKnownMemberHandle,
         K: IntoKnownKid,
     {
         Ok(Self {
-            member_id: member_id.into_member_id()?,
+            member_handle: member_handle.into_member_handle()?,
             kid: kid.into_kid()?,
         })
     }
 
-    pub fn member_id(&self) -> &str {
-        self.member_id.as_str()
+    pub fn member_handle(&self) -> &str {
+        self.member_handle.as_str()
     }
 
-    pub fn member_id_value(&self) -> &MemberId {
-        &self.member_id
+    pub fn member_handle_value(&self) -> &MemberHandle {
+        &self.member_handle
     }
 
     pub fn kid(&self) -> &str {
@@ -59,25 +59,25 @@ impl KnownKeyIdentity {
     }
 }
 
-pub trait IntoKnownMemberId {
-    fn into_member_id(self) -> Result<MemberId>;
+pub trait IntoKnownMemberHandle {
+    fn into_member_handle(self) -> Result<MemberHandle>;
 }
 
-impl IntoKnownMemberId for MemberId {
-    fn into_member_id(self) -> Result<MemberId> {
+impl IntoKnownMemberHandle for MemberHandle {
+    fn into_member_handle(self) -> Result<MemberHandle> {
         Ok(self)
     }
 }
 
-impl IntoKnownMemberId for String {
-    fn into_member_id(self) -> Result<MemberId> {
-        MemberId::try_from(self)
+impl IntoKnownMemberHandle for String {
+    fn into_member_handle(self) -> Result<MemberHandle> {
+        MemberHandle::try_from(self)
     }
 }
 
-impl IntoKnownMemberId for &str {
-    fn into_member_id(self) -> Result<MemberId> {
-        MemberId::try_from(self)
+impl IntoKnownMemberHandle for &str {
+    fn into_member_handle(self) -> Result<MemberHandle> {
+        MemberHandle::try_from(self)
     }
 }
 
@@ -105,11 +105,11 @@ impl IntoKnownKid for &str {
 
 /// Add a known key entry.
 ///
-/// - Different member_id with same kid → integrity anomaly error
-/// - Same member_id and kid → already approved, no update (`Ok(false)`)
-/// - New `(member_id, kid)` → inserted (`Ok(true)`)
+/// - Different subject_handle with same kid -> integrity anomaly error
+/// - Same subject_handle and kid -> already approved, no update (`Ok(false)`)
+/// - New `(subject_handle, kid)` -> inserted (`Ok(true)`)
 pub fn add_known_key(keys: &mut Vec<KnownKey>, new_key: KnownKey) -> Result<bool> {
-    validate_kid_integrity(keys, &new_key.kid, &new_key.member_id)?;
+    validate_kid_integrity(keys, &new_key.kid, &new_key.subject_handle)?;
 
     if find_known_key(keys, &new_key.kid).is_some() {
         return Ok(false);
@@ -170,9 +170,9 @@ pub fn find_known_key<'a>(keys: &'a [KnownKey], kid: &str) -> Option<&'a KnownKe
 pub fn judge_known_key(
     keys: &[KnownKey],
     candidate_kid: &str,
-    candidate_member_id: &str,
+    candidate_member_handle: &str,
 ) -> Result<KnownKeyJudgment> {
-    validate_kid_integrity(keys, candidate_kid, candidate_member_id)?;
+    validate_kid_integrity(keys, candidate_kid, candidate_member_handle)?;
     if find_known_key(keys, candidate_kid).is_some() {
         Ok(KnownKeyJudgment::Existing)
     } else {
@@ -182,19 +182,19 @@ pub fn judge_known_key(
 
 /// Validate that a candidate kid does not conflict with existing known_keys.
 ///
-/// Fails if the same kid exists with a different member_id.
+/// Fails if the same kid exists with a different subject_handle.
 pub fn validate_kid_integrity(
     keys: &[KnownKey],
     candidate_kid: &str,
-    candidate_member_id: &str,
+    candidate_member_handle: &str,
 ) -> Result<()> {
     if let Some(existing) = find_known_key(keys, candidate_kid) {
-        if existing.member_id != candidate_member_id {
+        if existing.subject_handle != candidate_member_handle {
             return Err(Error::Verify {
                 rule: "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
                 message: format!(
-                    "kid '{}' exists with member_id '{}' but candidate has member_id '{}'",
-                    candidate_kid, existing.member_id, candidate_member_id
+                    "kid '{}' exists with subject_handle '{}' but candidate has subject_handle '{}'",
+                    candidate_kid, existing.subject_handle, candidate_member_handle
                 ),
             });
         }

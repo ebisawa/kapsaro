@@ -42,7 +42,7 @@ fn build_file_enc_wrap_section(doc: &FileEncDocument) -> InspectSection {
         format_section_lines(|out| {
             append_line(out, format!("  Recipients ({}):", doc.protected.wrap.len()));
             for wrap in &doc.protected.wrap {
-                append_line(out, format!("    \u{2022} {}", wrap.rid));
+                append_line(out, format!("    \u{2022} {}", wrap.recipient_handle));
             }
             append_line(out, "  Wrap Items:");
             for (i, wrap) in doc.protected.wrap.iter().enumerate() {
@@ -72,7 +72,7 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
 
 pub(crate) fn build_file_inspect_output(doc: &FileEncDocument) -> InspectOutput {
     InspectOutput {
-        title: "File-Enc v3 Metadata".to_string(),
+        title: "File-Enc v4 Metadata".to_string(),
         sections: vec![
             build_file_enc_header_section(doc),
             build_file_enc_wrap_section(doc),

@@ -26,7 +26,7 @@ fn test_key_new_result_github_verification_not_configured_by_default() {
         OnlineVerificationStatus,
     ) {
         (
-            &r.member_id,
+            &r.member_handle,
             &r.kid,
             &r.expires_at,
             r.activated,

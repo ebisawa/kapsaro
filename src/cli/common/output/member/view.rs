@@ -8,7 +8,7 @@ use crate::app::member::types::{MemberListResult, MemberShowResult, MemberVerifi
 use crate::app::trust::TrustApprovalCandidate;
 
 pub(crate) struct MemberListEntryView<'a> {
-    pub(crate) member_id: &'a str,
+    pub(crate) member_handle: &'a str,
     pub(crate) kid: &'a str,
     pub(crate) document: &'a serde_json::Value,
 }
@@ -25,7 +25,7 @@ pub(crate) struct MemberGithubClaimView<'a> {
 }
 
 pub(crate) struct MemberShowView<'a> {
-    pub(crate) member_id: &'a str,
+    pub(crate) member_handle: &'a str,
     pub(crate) kid: &'a str,
     pub(crate) expires_at: &'a str,
     pub(crate) created_at: Option<&'a str>,
@@ -39,7 +39,7 @@ pub(crate) struct MemberShowView<'a> {
 }
 
 pub(crate) struct MemberVerificationItemView<'a> {
-    pub(crate) member_id: &'a str,
+    pub(crate) member_handle: &'a str,
     pub(crate) verified: bool,
     pub(crate) message: &'a str,
     pub(crate) fingerprint: Option<&'a str>,
@@ -51,7 +51,7 @@ pub(crate) struct MemberVerificationResultsView<'a> {
 }
 
 pub(crate) struct MemberApprovalItemView<'a> {
-    pub(crate) member_id: &'a str,
+    pub(crate) member_handle: &'a str,
     pub(crate) kid: &'a str,
     pub(crate) verified: bool,
     pub(crate) approved: bool,
@@ -75,7 +75,7 @@ pub(crate) fn build_member_list_view(result: &MemberListResult) -> MemberListVie
             .active
             .iter()
             .map(|member| MemberListEntryView {
-                member_id: &member.member_id,
+                member_handle: &member.member_handle,
                 kid: &member.kid,
                 document: &member.document,
             })
@@ -84,7 +84,7 @@ pub(crate) fn build_member_list_view(result: &MemberListResult) -> MemberListVie
             .incoming
             .iter()
             .map(|member| MemberListEntryView {
-                member_id: &member.member_id,
+                member_handle: &member.member_handle,
                 kid: &member.kid,
                 document: &member.document,
             })
@@ -96,7 +96,7 @@ pub(crate) fn build_member_list_view(result: &MemberListResult) -> MemberListVie
 pub(crate) fn build_member_show_view(result: &MemberShowResult) -> MemberShowView<'_> {
     let algorithm = format!("{} + {}", result.member.kem_curve, result.member.sig_curve);
     MemberShowView {
-        member_id: &result.member.member_id,
+        member_handle: &result.member.member_handle,
         kid: &result.member.kid,
         expires_at: &result.member.expires_at,
         created_at: result.member.created_at.as_deref(),
@@ -124,7 +124,7 @@ pub(crate) fn build_member_verification_results_view(
         results: results
             .iter()
             .map(|result| MemberVerificationItemView {
-                member_id: &result.member_id,
+                member_handle: &result.member_handle,
                 verified: result.verified,
                 message: &result.message,
                 fingerprint: result.fingerprint.as_deref(),
@@ -142,7 +142,7 @@ pub(crate) fn build_member_approval_results_view(
             .iter()
             .filter(|result| !result.already_known)
             .map(|result| MemberApprovalItemView {
-                member_id: &result.member_id,
+                member_handle: &result.member_handle,
                 kid: &result.kid,
                 verified: result.verified,
                 approved: result.approved,

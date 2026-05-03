@@ -49,8 +49,11 @@ fn build_kv_enc_wrap_section(data: &KvEncInspectionData) -> Option<InspectSectio
             "Wrap Data",
             format_section_lines(|out| {
                 append_line(out, format!("  Recipients ({}):", wrap.wrap.len()));
-                for rid in &wrap.wrap {
-                    append_line(out, format!("    \u{2022} {}", rid.rid));
+                for recipient_handle in &wrap.wrap {
+                    append_line(
+                        out,
+                        format!("    \u{2022} {}", recipient_handle.recipient_handle),
+                    );
                 }
                 append_line(out, "  Wrap Items:");
                 for (i, wrap_item) in wrap.wrap.iter().enumerate() {

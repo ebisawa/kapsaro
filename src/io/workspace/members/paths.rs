@@ -23,9 +23,9 @@ pub(super) fn members_dir(workspace_path: &Path, status: MemberStatus) -> PathBu
 pub(super) fn member_file_path(
     workspace_path: &Path,
     status: MemberStatus,
-    member_id: &str,
+    member_handle: &str,
 ) -> PathBuf {
-    members_dir(workspace_path, status).join(format!("{}.json", member_id))
+    members_dir(workspace_path, status).join(format!("{}.json", member_handle))
 }
 
 pub(super) fn ensure_members_dir(workspace_path: &Path, status: MemberStatus) -> Result<PathBuf> {
@@ -42,22 +42,22 @@ pub(super) fn ensure_members_dir(workspace_path: &Path, status: MemberStatus) ->
 
 pub(super) fn find_member_path(
     workspace_path: &Path,
-    member_id: &str,
+    member_handle: &str,
 ) -> Option<(PathBuf, MemberStatus)> {
     [MemberStatus::Active, MemberStatus::Incoming]
         .into_iter()
         .find_map(|status| {
-            let path = member_file_path(workspace_path, status, member_id);
+            let path = member_file_path(workspace_path, status, member_handle);
             path.exists().then_some((path, status))
         })
 }
 
 /// Return the path to a member file in the active/ directory.
-pub fn get_active_member_file_path(workspace_path: &Path, member_id: &str) -> PathBuf {
-    member_file_path(workspace_path, MemberStatus::Active, member_id)
+pub fn get_active_member_file_path(workspace_path: &Path, member_handle: &str) -> PathBuf {
+    member_file_path(workspace_path, MemberStatus::Active, member_handle)
 }
 
 /// Return the path to a member file in the incoming/ directory.
-pub fn get_incoming_member_file_path(workspace_path: &Path, member_id: &str) -> PathBuf {
-    member_file_path(workspace_path, MemberStatus::Incoming, member_id)
+pub fn get_incoming_member_file_path(workspace_path: &Path, member_handle: &str) -> PathBuf {
+    member_file_path(workspace_path, MemberStatus::Incoming, member_handle)
 }

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::identity::MemberId;
+use crate::model::identity::MemberHandle;
 use crate::model::public_key::PublicKey;
 
 use super::identity::TrustIdentity;
@@ -17,7 +17,7 @@ pub struct ActiveMemberSnapshot<'a> {
 pub enum CurrentMemberMatch {
     Missing,
     Matched,
-    MemberIdMismatch { active_member_id: MemberId },
+    MemberHandleMismatch { active_member_handle: MemberHandle },
 }
 
 impl<'a> ActiveMemberSnapshot<'a> {
@@ -30,12 +30,14 @@ impl<'a> ActiveMemberSnapshot<'a> {
             return CurrentMemberMatch::Missing;
         };
 
-        let active_member_id = MemberId::try_from(member.protected.member_id.clone())
-            .expect("workspace member_id must be valid");
-        if active_member_id == *identity.member_id_value() {
+        let active_member_handle = MemberHandle::try_from(member.protected.subject_handle.clone())
+            .expect("workspace member_handle must be valid");
+        if active_member_handle == *identity.member_handle_value() {
             CurrentMemberMatch::Matched
         } else {
-            CurrentMemberMatch::MemberIdMismatch { active_member_id }
+            CurrentMemberMatch::MemberHandleMismatch {
+                active_member_handle,
+            }
         }
     }
 }

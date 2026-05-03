@@ -75,7 +75,7 @@ pub async fn verify_github_account_with_api(
     known_github_account: Option<(u64, String)>,
     api: &impl GitHubVerificationApi,
 ) -> Result<VerificationResult> {
-    let member_id = &public_key.protected.member_id;
+    let member_handle = &public_key.protected.subject_handle;
     let github = match public_key
         .protected
         .binding_claims
@@ -87,12 +87,12 @@ pub async fn verify_github_account_with_api(
             if verbose {
                 debug!(
                     "[VERIFY] Verify {}: no binding_claims.github_account configured (skipped)",
-                    member_id
+                    member_handle
                 );
             }
             let fingerprint = compute_attestation_fingerprint(public_key, verbose);
             return Ok(VerificationResult::not_configured(
-                member_id,
+                member_handle,
                 "No binding_claims.github_account configured",
                 fingerprint,
                 false,
@@ -104,7 +104,7 @@ pub async fn verify_github_account_with_api(
         Some(fp) => fp,
         None => {
             return Ok(VerificationResult::failed(
-                member_id,
+                member_handle,
                 "Invalid attestation.pub (cannot compute fingerprint)".to_string(),
                 None,
                 true,
@@ -112,8 +112,14 @@ pub async fn verify_github_account_with_api(
         }
     };
 
-    let (id_used, login_for_keys) =
-        resolve_github_identity(api, github.id, &known_github_account, member_id, verbose).await?;
+    let (id_used, login_for_keys) = resolve_github_identity(
+        api,
+        github.id,
+        &known_github_account,
+        member_handle,
+        verbose,
+    )
+    .await?;
 
     verify_github_keys(
         api,

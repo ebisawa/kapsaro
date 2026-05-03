@@ -27,7 +27,7 @@ use tracing::debug;
 
 /// Build protected header for PrivateKey encryption
 fn build_protected_header(
-    member_id: String,
+    member_handle: String,
     kid: String,
     ssh_fpr: String,
     ikm_salt_b64: String,
@@ -36,8 +36,8 @@ fn build_protected_header(
     expires_at: String,
 ) -> PrivateKeyProtected {
     PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V5.to_string(),
-        member_id: member_id.clone(),
+        format: format::PRIVATE_KEY_V6.to_string(),
+        subject_handle: member_handle.clone(),
         kid: kid.clone(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: ssh_fpr.clone(),
@@ -183,7 +183,7 @@ pub(super) fn decrypt_private_key_plaintext(
 /// Parameters for encrypting a private key with SSH key.
 pub struct PrivateKeyEncryptionParams<'a> {
     pub plaintext: &'a PrivateKeyPlaintext,
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub backend: &'a dyn SignatureBackend,
     pub ssh_pubkey: &'a str,
@@ -202,7 +202,7 @@ pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<Pr
 
     // Build protected header
     let protected = build_protected_header(
-        params.member_id.clone(),
+        params.member_handle.clone(),
         params.kid.clone(),
         params.ssh_fpr.clone(),
         ikm_salt_b64.clone(),

@@ -11,8 +11,13 @@ use crate::{Error, Result};
 use std::path::Path;
 use tracing::warn;
 
-pub(crate) fn check_recipient_exists(current_recipients: &[String], rid: &str) -> bool {
-    current_recipients.iter().any(|recipient| recipient == rid)
+pub(crate) fn check_recipient_exists(
+    current_recipients: &[String],
+    recipient_handle: &str,
+) -> bool {
+    current_recipients
+        .iter()
+        .any(|recipient| recipient == recipient_handle)
 }
 
 pub(crate) fn validate_not_empty_recipients(recipients: &[String]) -> Result<()> {
@@ -25,8 +30,11 @@ pub(crate) fn validate_not_empty_recipients(recipients: &[String]) -> Result<()>
     Ok(())
 }
 
-pub(crate) fn print_recipient_not_found_warning(rid: &str) {
-    warn!("[CRYPTO] Warning: {} is not a recipient, skipping", rid);
+pub(crate) fn print_recipient_not_found_warning(recipient_handle: &str) {
+    warn!(
+        "[CRYPTO] Warning: {} is not a recipient, skipping",
+        recipient_handle
+    );
 }
 
 pub(crate) fn build_new_wrap_items<T, Build>(
@@ -58,20 +66,20 @@ where
 pub(crate) fn resolve_verified_recipients(
     target_members: Option<&[VerifiedRecipientKey]>,
     key_ctx: &CryptoContext,
-    recipient_ids: &[String],
+    recipient_handles: &[String],
     debug: bool,
 ) -> Result<Vec<VerifiedRecipientKey>> {
     match target_members {
-        Some(members) => load_snapshot_verified_recipients(members, recipient_ids),
+        Some(members) => load_snapshot_verified_recipients(members, recipient_handles),
         None => verify_recipient_public_keys_from_source(
             key_ctx.pub_key_source.as_ref(),
-            recipient_ids,
+            recipient_handles,
             debug,
         ),
     }
 }
 
-pub(crate) fn collect_target_recipient_ids(
+pub(crate) fn collect_target_recipient_handles(
     workspace_root: Option<&Path>,
     target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<Vec<String>> {
@@ -79,7 +87,7 @@ pub(crate) fn collect_target_recipient_ids(
         Some(members) => {
             let mut recipients = members
                 .iter()
-                .map(|member| member.document().protected.member_id.clone())
+                .map(|member| member.document().protected.subject_handle.clone())
                 .collect::<Vec<_>>();
             recipients.sort();
             Ok(recipients)
@@ -88,7 +96,7 @@ pub(crate) fn collect_target_recipient_ids(
             let workspace_root = workspace_root.ok_or_else(|| Error::Config {
                 message: "rewrap requires a workspace".to_string(),
             })?;
-            crate::io::workspace::members::list_active_member_ids(workspace_root)
+            crate::io::workspace::members::list_active_member_handles(workspace_root)
         }
     }
 }
@@ -96,16 +104,20 @@ pub(crate) fn collect_target_recipient_ids(
 fn resolve_new_verified_recipients(
     target_members: Option<&[VerifiedRecipientKey]>,
     key_ctx: &CryptoContext,
-    recipient_ids: &[String],
+    recipient_handles: &[String],
     current_recipients: &[String],
     debug: bool,
 ) -> Result<Vec<VerifiedRecipientKey>> {
-    let recipients = resolve_verified_recipients(target_members, key_ctx, recipient_ids, debug)?;
+    let recipients =
+        resolve_verified_recipients(target_members, key_ctx, recipient_handles, debug)?;
     Ok(filter_existing_recipients(recipients, current_recipients))
 }
 
-fn print_recipient_already_exists_warning(rid: &str) {
-    warn!("[CRYPTO] Warning: {} is already a recipient, skipping", rid);
+fn print_recipient_already_exists_warning(recipient_handle: &str) {
+    warn!(
+        "[CRYPTO] Warning: {} is already a recipient, skipping",
+        recipient_handle
+    );
 }
 
 fn filter_existing_recipients(
@@ -114,9 +126,9 @@ fn filter_existing_recipients(
 ) -> Vec<VerifiedRecipientKey> {
     let mut filtered = Vec::new();
     for member in recipients {
-        let member_id = &member.document().protected.member_id;
-        if check_recipient_exists(current_recipients, member_id) {
-            print_recipient_already_exists_warning(member_id);
+        let member_handle = &member.document().protected.subject_handle;
+        if check_recipient_exists(current_recipients, member_handle) {
+            print_recipient_already_exists_warning(member_handle);
             continue;
         }
         filtered.push(member);
@@ -126,19 +138,19 @@ fn filter_existing_recipients(
 
 fn load_snapshot_verified_recipients(
     target_members: &[VerifiedRecipientKey],
-    member_ids: &[String],
+    member_handles: &[String],
 ) -> Result<Vec<VerifiedRecipientKey>> {
-    member_ids
+    member_handles
         .iter()
-        .map(|member_id| {
+        .map(|member_handle| {
             target_members
                 .iter()
-                .find(|member| member.document().protected.member_id == *member_id)
+                .find(|member| member.document().protected.subject_handle == *member_handle)
                 .cloned()
                 .ok_or_else(|| Error::NotFound {
                     message: format!(
                         "Member '{}' was not found in the fixed post-promotion snapshot",
-                        member_id
+                        member_handle
                     ),
                 })
         })

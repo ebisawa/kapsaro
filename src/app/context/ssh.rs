@@ -119,7 +119,7 @@ pub(crate) fn resolve_ssh_context_by_active_key(
 ) -> Result<SshSigningContextResolution> {
     let resolved = resolve_command_member(options, member_handle)?;
     let fingerprint =
-        resolve_active_key_ssh_fingerprint(&resolved.member_id, &resolved.paths.keystore_root)?;
+        resolve_active_key_ssh_fingerprint(&resolved.member_handle, &resolved.paths.keystore_root)?;
     resolve_ssh_context_for_fingerprint(options, &fingerprint)
 }
 
@@ -159,20 +159,20 @@ fn resolve_ssh_context_for_fingerprint(
 }
 
 fn resolve_active_key_ssh_fingerprint(
-    member_id: &str,
+    member_handle: &str,
     keystore_root: &std::path::Path,
 ) -> Result<String> {
-    let kid = load_active_kid_for_ssh_context(member_id, keystore_root)?;
-    let private_key = load_private_key(keystore_root, member_id, &kid)?;
+    let kid = load_active_kid_for_ssh_context(member_handle, keystore_root)?;
+    let private_key = load_private_key(keystore_root, member_handle, &kid)?;
     Ok(resolve_ssh_fingerprint_from_private_key(&private_key)?.to_string())
 }
 
 fn load_active_kid_for_ssh_context(
-    member_id: &str,
+    member_handle: &str,
     keystore_root: &std::path::Path,
 ) -> Result<String> {
-    load_active_kid(member_id, keystore_root)?.ok_or_else(|| Error::NotFound {
-        message: format!("No active key for member: {}", member_id),
+    load_active_kid(member_handle, keystore_root)?.ok_or_else(|| Error::NotFound {
+        message: format!("No active key for member: {}", member_handle),
     })
 }
 

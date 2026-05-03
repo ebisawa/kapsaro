@@ -10,9 +10,9 @@ use secretenv::support::kid::{
 };
 use serde_json::json;
 
-const CANONICAL_KID: &str = "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N";
-const DISPLAY_KID: &str = "RDKJ-8YHM-PPJH-W7QC-3446-GPNX-HNRT-X61N";
-const HALF_DISPLAY_KID: &str = "RDKJ-8YHM-PPJH-W7QC";
+const CANONICAL_KID: &str = "BZ55EQ3M7S8KHTT3WAA8DW46QYTA93XE";
+const DISPLAY_KID: &str = "BZ55-EQ3M-7S8K-HTT3-WAA8-DW46-QYTA-93XE";
+const HALF_DISPLAY_KID: &str = "BZ55-EQ3M-7S8K-HTT3";
 
 #[test]
 fn test_normalize_kid_accepts_display_and_lowercase_forms() {
@@ -35,18 +35,18 @@ fn test_normalize_kid_rejects_invalid_length() {
 
 #[test]
 fn test_normalize_kid_query_accepts_prefix_and_display_form() {
-    assert_eq!(normalize_kid_query("rdkj-8y").unwrap(), "RDKJ8Y");
+    assert_eq!(normalize_kid_query("bz55-eq").unwrap(), "BZ55EQ");
     assert_eq!(normalize_kid_query("83").unwrap(), "83");
 }
 
 #[test]
 fn test_resolve_unique_kid_accepts_unique_prefix() {
     let candidates = [
-        "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N",
-        "83ZZ8YHMPPJHW7QC3446GPNXHNRTX61N",
+        "BZ55EQ3M7S8KHTT3WAA8DW46QYTA93XE",
+        "83ZZEQ3M7S8KHTT3WAA8DW46QYTA93XE",
     ];
 
-    let resolved = resolve_unique_kid(candidates, "rdkj-8y").unwrap();
+    let resolved = resolve_unique_kid(candidates, "bz55-eq").unwrap();
 
     assert_eq!(resolved, CANONICAL_KID);
 }
@@ -91,8 +91,8 @@ fn test_format_kid_display_rejects_invalid_canonical_value() {
 #[test]
 fn test_derive_public_key_kid_matches_spec_vector() {
     let protected_without_kid = json!({
-        "format": "secretenv.public.key@4",
-        "member_id": "alice@example.com",
+        "format": "secretenv.public.key@5",
+        "subject_handle": "alice@example.com",
         "identity": {
             "keys": {
                 "kem": {
@@ -131,8 +131,8 @@ fn test_derive_public_key_kid_matches_spec_vector() {
 #[test]
 fn test_derive_public_key_kid_changes_when_binding_claims_change() {
     let protected_without_kid = json!({
-        "format": "secretenv.public.key@4",
-        "member_id": "alice@example.com",
+        "format": "secretenv.public.key@5",
+        "subject_handle": "alice@example.com",
         "identity": {
             "keys": {
                 "kem": {
@@ -162,8 +162,8 @@ fn test_derive_public_key_kid_changes_when_binding_claims_change() {
         "created_at": "2026-01-14T00:00:00Z"
     });
     let changed_binding_claims = json!({
-        "format": "secretenv.public.key@4",
-        "member_id": "alice@example.com",
+        "format": "secretenv.public.key@5",
+        "subject_handle": "alice@example.com",
         "identity": {
             "keys": {
                 "kem": {

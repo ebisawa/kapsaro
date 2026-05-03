@@ -25,7 +25,7 @@ pub struct KvSetResult {
 
 /// Context for kv write operations (set/unset).
 pub struct KvWriteContext<'a> {
-    pub member_id: &'a str,
+    pub member_handle: &'a str,
     pub key_ctx: &'a CryptoContext,
     pub token_codec: Option<TokenCodec>,
     pub verbose: bool,
@@ -33,9 +33,9 @@ pub struct KvWriteContext<'a> {
 
 impl<'a> KvWriteContext<'a> {
     /// Build a new KvWriteContext.
-    pub fn new(member_id: &'a str, key_ctx: &'a CryptoContext, verbose: bool) -> Self {
+    pub fn new(member_handle: &'a str, key_ctx: &'a CryptoContext, verbose: bool) -> Self {
         Self {
-            member_id,
+            member_handle,
             key_ctx,
             token_codec: None,
             verbose,
@@ -45,7 +45,7 @@ impl<'a> KvWriteContext<'a> {
 
 #[derive(Debug, Clone)]
 pub struct KvRecipientSnapshot {
-    pub member_ids: Vec<String>,
+    pub member_handles: Vec<String>,
     pub verified_members: Vec<VerifiedRecipientKey>,
 }
 
@@ -99,7 +99,7 @@ fn set_kv_new_file(
     )?;
     Ok(KvSetResult {
         encrypted: KvEncContent::new_unchecked(encrypted),
-        recipients: recipients.member_ids.clone(),
+        recipients: recipients.member_handles.clone(),
     })
 }
 
@@ -128,7 +128,7 @@ fn set_kv_existing_file(
         })?;
     Ok(KvSetResult {
         encrypted: KvEncContent::new_unchecked(encrypted),
-        recipients: recipients.member_ids.clone(),
+        recipients: recipients.member_handles.clone(),
     })
 }
 
@@ -147,7 +147,7 @@ where
 {
     let session = super::rewrite_session::VerifiedKvRewriteSession::load(
         content,
-        ctx.member_id,
+        ctx.member_handle,
         ctx.key_ctx,
         ctx.token_codec,
         ctx.verbose,

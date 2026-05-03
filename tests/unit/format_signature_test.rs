@@ -19,10 +19,10 @@ use crate::keygen_helpers::build_dummy_public_key;
 fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
-        format: secretenv::model::identifiers::format::FILE_ENC_V3.to_string(),
+        format: secretenv::model::identifiers::format::FILE_ENC_V4.to_string(),
         sid,
         wrap: vec![WrapItem {
-            rid: "alice@example.com".to_string(),
+            recipient_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: hpke::ALG_HPKE_32_1_3.to_string(),
             enc: "enc_base64url".to_string(),
@@ -31,7 +31,7 @@ fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
         removed_recipients: None,
         payload: FilePayload {
             protected: FilePayloadHeader {
-                format: secretenv::model::identifiers::format::FILE_PAYLOAD_V3.to_string(),
+                format: secretenv::model::identifiers::format::FILE_PAYLOAD_V4.to_string(),
                 sid,
                 alg: FileEncAlgorithm {
                     aead: secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305.to_string(),
@@ -79,7 +79,7 @@ fn test_sign_file_document_returns_valid_structure() {
         secretenv::model::identifiers::alg::SIGNATURE_ED25519
     );
     assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    assert_eq!(sig.signer_pub.protected.member_id, "signer@test");
+    assert_eq!(sig.signer_pub.protected.subject_handle, "signer@test");
     assert!(!sig.sig.is_empty());
 }
 
@@ -121,7 +121,7 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
 
     // Tamper document
     let mut tampered = doc.clone();
-    tampered.format = "secretenv.file@4".to_string();
+    tampered.updated_at = "2025-01-01T00:00:01Z".to_string();
 
     let result = verify_file_signature(&tampered, &vk, &sig, false);
     assert!(result.is_err());

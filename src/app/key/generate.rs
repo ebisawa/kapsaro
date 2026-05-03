@@ -34,7 +34,7 @@ fn generate_key_with_github_user(
 
 pub fn generate_key_command(
     options: &CommonCommandOptions,
-    member_id: String,
+    member_handle: String,
     github_user_arg: Option<String>,
     expires_at_arg: &Option<String>,
     valid_for_arg: &Option<String>,
@@ -46,7 +46,7 @@ pub fn generate_key_command(
 
     generate_key_with_github_user(
         KeyGenerationOptions {
-            member_id,
+            member_handle,
             home: options.home.clone(),
             created_at,
             expires_at,

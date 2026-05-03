@@ -10,7 +10,7 @@
 //! 4. Single member entry in keystore
 
 use crate::io::config as io_config;
-use crate::io::keystore::member::load_single_member_id_from_keystore;
+use crate::io::keystore::member::load_single_member_handle_from_keystore;
 use crate::io::keystore::paths;
 use crate::support::validation;
 use crate::Result;
@@ -31,7 +31,7 @@ pub(crate) fn resolve_member_handle_with_fallback(
         base_dir,
         None,
     )? {
-        validation::validate_member_id(&member_handle)?;
+        validation::validate_member_handle(&member_handle)?;
         return Ok(Some(member_handle));
     }
 
@@ -48,7 +48,7 @@ fn resolve_optional_member_handle_from_keystore(base_dir: Option<&Path>) -> Resu
         }
     };
 
-    load_single_member_id_from_keystore(&keystore_root)
+    load_single_member_handle_from_keystore(&keystore_root)
 }
 
 #[cfg(test)]

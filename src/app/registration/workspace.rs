@@ -62,19 +62,19 @@ pub(crate) fn ensure_init_workspace_structure(workspace_path: &Path) -> Result<(
 
 pub(crate) fn save_registration_member(
     workspace_path: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     overwrite: bool,
     keystore_root: &Path,
     target: RegistrationTarget,
 ) -> Result<RegistrationResult> {
-    let member_file = member_file_path(workspace_path, member_id, target);
+    let member_file = member_file_path(workspace_path, member_handle, target);
 
     if !member_file.exists() {
         save_member_document(
             &member_file,
             workspace_path,
-            member_id,
+            member_handle,
             kid,
             false,
             keystore_root,
@@ -87,7 +87,7 @@ pub(crate) fn save_registration_member(
         save_member_document(
             &member_file,
             workspace_path,
-            member_id,
+            member_handle,
             kid,
             true,
             keystore_root,
@@ -102,14 +102,18 @@ pub(crate) fn save_registration_member(
 pub(crate) fn resolve_registration_paths(
     common: &CommonCommandOptions,
     mode: RegistrationMode,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<RegistrationPaths> {
     let workspace_path = resolve_workspace_creation_path(common.workspace.clone())?;
     let is_new_workspace = resolve_workspace_for_registration(mode, &workspace_path)?;
     let keystore_root = KeystoreResolver::resolve(common.home.as_ref())?;
     let target = registration_target(mode);
-    let conflict_exists =
-        member_file_path(&workspace_path, member_id, RegistrationTarget::from(target)).exists();
+    let conflict_exists = member_file_path(
+        &workspace_path,
+        member_handle,
+        RegistrationTarget::from(target),
+    )
+    .exists();
     Ok(RegistrationPaths {
         workspace_path,
         keystore_root,
@@ -122,14 +126,14 @@ pub(crate) fn resolve_registration_paths(
 pub(crate) fn resolve_active_membership_state(
     mode: RegistrationMode,
     workspace_path: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
 ) -> Result<ActiveMembershipState> {
     if mode != RegistrationMode::Join {
         return Ok(ActiveMembershipState::None);
     }
 
-    let active_path = get_active_member_file_path(workspace_path, member_id);
+    let active_path = get_active_member_file_path(workspace_path, member_handle);
     if !active_path.exists() {
         return Ok(ActiveMembershipState::None);
     }
@@ -142,23 +146,29 @@ pub(crate) fn resolve_active_membership_state(
     }
 }
 
-fn member_file_path(workspace_path: &Path, member_id: &str, target: RegistrationTarget) -> PathBuf {
+fn member_file_path(
+    workspace_path: &Path,
+    member_handle: &str,
+    target: RegistrationTarget,
+) -> PathBuf {
     match target {
-        RegistrationTarget::Active => get_active_member_file_path(workspace_path, member_id),
-        RegistrationTarget::Incoming => get_incoming_member_file_path(workspace_path, member_id),
+        RegistrationTarget::Active => get_active_member_file_path(workspace_path, member_handle),
+        RegistrationTarget::Incoming => {
+            get_incoming_member_file_path(workspace_path, member_handle)
+        }
     }
 }
 
 fn save_member_document(
     member_file: &Path,
     workspace_path: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     overwrite: bool,
     keystore_root: &Path,
     target: RegistrationTarget,
 ) -> Result<()> {
-    let public_key = load_public_key(keystore_root, member_id, kid)?;
+    let public_key = load_public_key(keystore_root, member_handle, kid)?;
     let status = match target {
         RegistrationTarget::Active => MemberStatus::Active,
         RegistrationTarget::Incoming => MemberStatus::Incoming,
@@ -166,7 +176,7 @@ fn save_member_document(
     ensure_member_document_kid_is_unique(
         workspace_path,
         status,
-        member_id,
+        member_handle,
         &public_key.protected.kid,
         overwrite && member_file.exists(),
     )?;

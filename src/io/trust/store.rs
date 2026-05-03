@@ -56,19 +56,19 @@ fn parse_trust_store(content: &str, path: &Path) -> Result<TrustStoreDocument> {
     })
 }
 
-/// Validate that file name stem matches protected.owner_member_id.
+/// Validate that file name stem matches protected.owner_handle.
 fn validate_filename_matches_owner(path: &Path, document: &TrustStoreDocument) -> Result<()> {
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or_default();
 
-    if stem != document.protected.owner_member_id {
+    if stem != document.protected.owner_handle {
         return Err(Error::Verify {
             rule: "E_TRUST_STORE_FILENAME_MISMATCH".to_string(),
             message: format!(
-                "File name stem '{}' does not match owner_member_id '{}'",
-                stem, document.protected.owner_member_id
+                "File name stem '{}' does not match owner_handle '{}'",
+                stem, document.protected.owner_handle
             ),
         });
     }

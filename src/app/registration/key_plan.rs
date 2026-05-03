@@ -7,10 +7,10 @@ use crate::Result;
 use super::types::RegistrationKeyPlan;
 
 pub fn resolve_registration_key_plan(
-    member_id: &str,
+    member_handle: &str,
     keystore_root: &std::path::Path,
 ) -> Result<RegistrationKeyPlan> {
-    let Some(active) = find_active_key_document(member_id, keystore_root)? else {
+    let Some(active) = find_active_key_document(member_handle, keystore_root)? else {
         return Ok(RegistrationKeyPlan::GenerateNew);
     };
 

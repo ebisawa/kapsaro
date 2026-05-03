@@ -27,7 +27,7 @@ fn build_signature_verification_proof(
     loaded: SignatureVerificationKey,
 ) -> SignatureVerificationProof {
     SignatureVerificationProof::new_with_signer_public_key(
-        loaded.member_id,
+        loaded.member_handle,
         signature.kid.clone(),
         loaded.public_key,
         loaded.source,

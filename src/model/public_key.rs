@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! PublicKey v3 model
+//! PublicKey model
 //!
 //! Includes attested identity and verified public key types for functional domain modeling.
 
-use crate::model::identifiers::format::PUBLIC_KEY_V4;
+use crate::model::identifiers::format::PUBLIC_KEY_V5;
 use serde::{Deserialize, Serialize};
 
 pub use super::public_key_verified::{
@@ -13,7 +13,7 @@ pub use super::public_key_verified::{
     VerifiedPublicKeyAttested, VerifiedRecipientKey,
 };
 
-/// PublicKey v4 document (signed container)
+/// PublicKey v5 document (signed container)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKey {
@@ -28,11 +28,11 @@ pub struct PublicKey {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKeyProtected {
-    /// Format identifier: "secretenv.public.key@4"
+    /// Format identifier: "secretenv.public.key@5"
     pub format: String,
 
-    /// Member handle serialized with the on-wire field name `member_id`
-    pub member_id: String,
+    /// Subject handle asserted by this key statement.
+    pub subject_handle: String,
 
     /// Statement ID (canonical Crockford Base32, 32 characters)
     pub kid: String,
@@ -118,7 +118,7 @@ pub struct GithubAccount {
 impl PublicKey {
     /// Create a new PublicKey with the given parameters
     pub fn new(
-        member_id: String,
+        subject_handle: String,
         kid: String,
         identity: Identity,
         binding_claims: Option<BindingClaims>,
@@ -127,8 +127,8 @@ impl PublicKey {
         signature: String,
     ) -> Self {
         let protected = PublicKeyProtected {
-            format: PUBLIC_KEY_V4.to_string(),
-            member_id,
+            format: PUBLIC_KEY_V5.to_string(),
+            subject_handle,
             kid,
             identity,
             binding_claims,

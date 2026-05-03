@@ -13,7 +13,7 @@ pub(super) async fn resolve_github_identity(
     api: &impl GitHubVerificationApi,
     document_id: u64,
     known: &Option<(u64, String)>,
-    member_id: &str,
+    member_handle: &str,
     verbose: bool,
 ) -> Result<(u64, String)> {
     match known {
@@ -30,19 +30,19 @@ pub(super) async fn resolve_github_identity(
             if verbose {
                 debug!(
                     "[VERIFY] Verify {}: using known github id/current login (skip GET /user/{{id}})",
-                    member_id
+                    member_handle
                 );
             }
             Ok((*id_known, login_known.clone()))
         }
-        None => resolve_github_identity_from_api(api, document_id, member_id, verbose).await,
+        None => resolve_github_identity_from_api(api, document_id, member_handle, verbose).await,
     }
 }
 
 async fn resolve_github_identity_from_api(
     api: &impl GitHubVerificationApi,
     document_id: u64,
-    _member_id: &str,
+    _member_handle: &str,
     verbose: bool,
 ) -> Result<(u64, String)> {
     if verbose {
@@ -81,7 +81,7 @@ pub(super) async fn verify_github_keys(
     login_for_keys: &str,
     verbose: bool,
 ) -> Result<VerificationResult> {
-    let member_id = &public_key.protected.member_id;
+    let member_handle = &public_key.protected.subject_handle;
 
     if verbose {
         debug!(
@@ -97,7 +97,7 @@ pub(super) async fn verify_github_keys(
 
     if github_keys.is_empty() {
         return Ok(VerificationResult::failed(
-            member_id,
+            member_handle,
             format!("No SSH keys found for GitHub user id {}", id_used),
             None,
             true,
@@ -118,13 +118,13 @@ pub(super) async fn verify_github_keys(
     if verbose {
         debug!(
             "[VERIFY] Verify {}: no matching key among {} key(s)",
-            member_id,
+            member_handle,
             github_keys.len()
         );
     }
 
     Ok(VerificationResult::failed(
-        member_id,
+        member_handle,
         format!(
             "SSH key not found on GitHub (id={}, checked {} keys)",
             id_used,

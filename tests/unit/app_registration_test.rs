@@ -61,7 +61,7 @@ fn test_resolve_registration_command_reuses_existing_key_without_github_user() {
 
     assert_eq!(prepared.mode, RegistrationMode::Join);
     assert!(!prepared.setup.key_result.created);
-    assert_eq!(prepared.setup.member_id, "alice@example.com");
+    assert_eq!(prepared.setup.member_handle, "alice@example.com");
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
     let error = execute_registration_command(&prepared, false).unwrap_err();
     let message = error.to_string();
     // The file's stem ("duplicate-owner") does not match its content's
-    // member_id, so the stem-binding check rejects it before the kid
+    // member_handle, so the stem-binding check rejects it before the kid
     // uniqueness check runs. Either rejection path is acceptable.
     assert!(
         message.contains("kid") || message.contains("Member handle mismatch"),

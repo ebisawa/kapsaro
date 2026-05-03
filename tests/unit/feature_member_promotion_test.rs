@@ -10,7 +10,7 @@ fn dummy_github() -> VerifiedGithubIdentity {
 }
 
 #[test]
-fn test_report_all_member_ids_returns_all_categories() {
+fn test_report_all_member_handles_returns_all_categories() {
     let report = IncomingVerificationReport {
         verified: vec![VerificationResult::verified(
             "alice",
@@ -30,13 +30,13 @@ fn test_report_all_member_ids_returns_all_categories() {
             false,
         )],
     };
-    let mut ids = report.collect_member_ids();
+    let mut ids = report.collect_member_handles();
     ids.sort();
     assert_eq!(ids, vec!["alice", "bob", "carol"]);
 }
 
 #[test]
-fn test_report_verified_member_ids() {
+fn test_report_verified_member_handles() {
     let report = IncomingVerificationReport {
         verified: vec![VerificationResult::verified(
             "alice",
@@ -46,12 +46,12 @@ fn test_report_verified_member_ids() {
         failed: vec![],
         not_configured: vec![],
     };
-    let ids = report.collect_verified_member_ids();
+    let ids = report.collect_verified_member_handles();
     assert_eq!(ids, vec!["alice"]);
 }
 
 #[test]
-fn test_report_non_failed_member_ids_excludes_failed() {
+fn test_report_non_failed_member_handles_excludes_failed() {
     let report = IncomingVerificationReport {
         verified: vec![VerificationResult::verified(
             "alice",
@@ -71,7 +71,7 @@ fn test_report_non_failed_member_ids_excludes_failed() {
             false,
         )],
     };
-    let mut ids = report.collect_promotable_member_ids();
+    let mut ids = report.collect_promotable_member_handles();
     ids.sort();
     assert_eq!(ids, vec!["alice", "carol"]);
 }

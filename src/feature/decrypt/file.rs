@@ -21,14 +21,14 @@ use crate::{Error, Result};
 use tracing::debug;
 use zeroize::Zeroizing;
 
-/// Validate file-enc v3 format structure.
+/// Validate file-enc v4 format structure.
 fn validate_file_enc_document_format(verified_doc: &VerifiedFileEncDocument) -> Result<()> {
     let doc = verified_doc.document();
-    if doc.protected.format != format::FILE_ENC_V3 {
+    if doc.protected.format != format::FILE_ENC_V4 {
         return Err(Error::Parse {
             message: format!(
                 "Invalid format: expected '{}', got '{}'",
-                format::FILE_ENC_V3,
+                format::FILE_ENC_V4,
                 doc.protected.format
             ),
             source: None,
@@ -38,14 +38,14 @@ fn validate_file_enc_document_format(verified_doc: &VerifiedFileEncDocument) -> 
     Ok(())
 }
 
-/// Validate file-enc v3 payload structure and algorithm.
+/// Validate file-enc v4 payload structure and algorithm.
 fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) -> Result<()> {
     let doc = verified_doc.document();
-    if doc.protected.payload.protected.format != format::FILE_PAYLOAD_V3 {
+    if doc.protected.payload.protected.format != format::FILE_PAYLOAD_V4 {
         return Err(Error::Parse {
             message: format!(
                 "Invalid payload format: expected '{}', got '{}'",
-                format::FILE_PAYLOAD_V3,
+                format::FILE_PAYLOAD_V4,
                 doc.protected.payload.protected.format
             ),
             source: None,
@@ -65,7 +65,7 @@ fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) ->
     Ok(())
 }
 
-/// Decrypt file-enc v3 payload content.
+/// Decrypt file-enc v4 payload content.
 pub(crate) fn decrypt_file_payload(
     verified_doc: &VerifiedFileEncDocument,
     content_key: &MasterKey,
@@ -96,14 +96,14 @@ pub(crate) fn decrypt_file_payload(
     Ok(plaintext.to_zeroizing_vec())
 }
 
-/// Decrypt file-enc v3 format (value-based)
+/// Decrypt file-enc v4 format (value-based)
 ///
 /// This function requires a VerifiedFileEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.
 ///
 /// # Arguments
 /// * `verified_doc` - Verified FileEncDocument structure (signature must be verified)
-/// * `member_id` - Resolved member ID used to find the wrap
+/// * `member_handle` - Resolved member handle used to find the wrap
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - PrivateKeyPlaintext containing the KEM private key
 /// * `debug` - Enable debug logging
@@ -112,7 +112,7 @@ pub(crate) fn decrypt_file_payload(
 /// Decrypted content wrapped in Zeroizing to ensure it's zeroed when dropped
 pub fn decrypt_file_document(
     verified_doc: &VerifiedFileEncDocument,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
     debug: bool,
@@ -133,14 +133,15 @@ pub fn decrypt_file_document(
     }
 
     // Unwrap content key using the shared helper
-    let content_key = unwrap_master_key_for_file(verified_doc, member_id, kid, private_key, debug)?;
+    let content_key =
+        unwrap_master_key_for_file(verified_doc, member_handle, kid, private_key, debug)?;
 
     decrypt_file_payload(verified_doc, &content_key, debug, "decrypt_file_document")
 }
 
 pub fn decrypt_file_document_with_context(
     verified_doc: &VerifiedFileEncDocument,
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &CryptoContext,
     debug: bool,
 ) -> Result<DecryptionResult<Zeroizing<Vec<u8>>>> {
@@ -159,7 +160,7 @@ pub fn decrypt_file_document_with_context(
     }
 
     let content_key =
-        unwrap_master_key_for_file_with_context(verified_doc, member_id, key_ctx, debug)?;
+        unwrap_master_key_for_file_with_context(verified_doc, member_handle, key_ctx, debug)?;
     let plaintext = decrypt_file_payload(
         verified_doc,
         &content_key.value,

@@ -5,14 +5,14 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::load_optional_trust_store_for_member;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::KnownKey;
 use crate::Result;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TrustListItem {
     pub(crate) kid: Kid,
-    pub(crate) member_id: MemberId,
+    pub(crate) member_handle: MemberHandle,
     pub(crate) approved_at: String,
     pub(crate) approved_via: String,
 }
@@ -28,8 +28,8 @@ impl From<&KnownKey> for TrustListItem {
     fn from(known_key: &KnownKey) -> Self {
         Self {
             kid: Kid::try_from(known_key.kid.clone()).expect("known key kid must be valid"),
-            member_id: MemberId::try_from(known_key.member_id.clone())
-                .expect("known key member_id must be valid"),
+            member_handle: MemberHandle::try_from(known_key.subject_handle.clone())
+                .expect("known key member_handle must be valid"),
             approved_at: known_key.approved_at.clone(),
             approved_via: known_key.approved_via.to_string(),
         }
@@ -39,9 +39,9 @@ impl From<&KnownKey> for TrustListItem {
 /// List known_keys from the local trust store.
 pub(crate) fn list_known_keys(
     options: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<TrustListResult> {
-    let (_, loaded) = load_optional_trust_store_for_member(options, member_id)?;
+    let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
     let Some(loaded) = loaded else {
         return Ok(TrustListResult {
             items: Vec::new(),

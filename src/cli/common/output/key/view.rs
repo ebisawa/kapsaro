@@ -7,7 +7,7 @@ use crate::app::key::types::KeyListResult;
 
 pub(crate) struct KeyInfoView<'a> {
     pub(crate) kid: &'a str,
-    pub(crate) member_id: &'a str,
+    pub(crate) member_handle: &'a str,
     pub(crate) created_at: &'a str,
     pub(crate) expires_at: &'a str,
     pub(crate) active: bool,
@@ -15,7 +15,7 @@ pub(crate) struct KeyInfoView<'a> {
 }
 
 pub(crate) struct KeyMemberView<'a> {
-    pub(crate) member_id: &'a str,
+    pub(crate) member_handle: &'a str,
     pub(crate) keys: Vec<KeyInfoView<'a>>,
 }
 
@@ -29,13 +29,13 @@ pub(crate) fn build_key_list_view(result: &KeyListResult) -> KeyListView<'_> {
         entries: result
             .entries
             .iter()
-            .map(|(member_id, keys)| KeyMemberView {
-                member_id,
+            .map(|(member_handle, keys)| KeyMemberView {
+                member_handle,
                 keys: keys
                     .iter()
                     .map(|key| KeyInfoView {
                         kid: &key.kid,
-                        member_id: &key.member_id,
+                        member_handle: &key.member_handle,
                         created_at: &key.created_at,
                         expires_at: &key.expires_at,
                         active: key.active,

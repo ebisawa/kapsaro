@@ -27,14 +27,14 @@ pub enum RegistrationDecision {
 
 pub fn resolve_registration_command(
     common: &CommonCommandOptions,
-    member_id: String,
+    member_handle: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     mode: RegistrationMode,
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<RegistrationCommand> {
     let setup =
-        ensure_registration_member_setup(common, member_id, github_user, key_plan, ssh_ctx)?;
+        ensure_registration_member_setup(common, member_handle, github_user, key_plan, ssh_ctx)?;
     resolve_registration_context(common, mode, setup)
 }
 
@@ -44,7 +44,7 @@ pub fn execute_registration_command(
 ) -> Result<RegistrationOutcome> {
     let result = save_registration_member(
         &command.workspace_path,
-        &command.setup.member_id,
+        &command.setup.member_handle,
         command.setup.kid(),
         overwrite,
         &command.keystore_root,
@@ -100,7 +100,7 @@ pub fn evaluate_registration_decision(
         RegistrationMode::Join => Err(crate::Error::InvalidOperation {
             message: format!(
                 "Member '{}' already exists. Use --force to overwrite.",
-                command.setup.member_id
+                command.setup.member_handle
             ),
         }),
     }
@@ -115,7 +115,7 @@ fn build_registration_outcome(
         workspace_path: command.workspace_path.clone(),
         target: command.target,
         is_new_workspace: command.is_new_workspace,
-        member_id: command.setup.member_id.clone(),
+        member_handle: command.setup.member_handle.clone(),
         key_result: command.setup.key_result.clone(),
         result,
     }
@@ -123,18 +123,18 @@ fn build_registration_outcome(
 
 fn ensure_registration_member_setup(
     common: &CommonCommandOptions,
-    member_id: String,
+    member_handle: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<MemberSetupResult> {
     match key_plan {
         RegistrationKeyPlan::UseExisting { kid, expires_at } => {
-            Ok(build_existing_member_setup(member_id, kid, expires_at))
+            Ok(build_existing_member_setup(member_handle, kid, expires_at))
         }
         RegistrationKeyPlan::GenerateNew => resolve_generated_member_setup(
             common,
-            &member_id,
+            &member_handle,
             github_user,
             require_generation_ssh_context(ssh_ctx)?,
         ),
@@ -143,26 +143,27 @@ fn ensure_registration_member_setup(
 
 fn resolve_generated_member_setup(
     common: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
     github_user: Option<String>,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberSetupResult> {
     let github_account = resolve_github_account(github_user, common.verbose)?;
     let github_verification =
         resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref(), common.verbose)?;
-    let mut key_result = generate_member_key_result(common, member_id, github_account, ssh_ctx)?;
+    let mut key_result =
+        generate_member_key_result(common, member_handle, github_account, ssh_ctx)?;
     key_result.github_verification = github_verification;
 
-    Ok(build_generated_member_setup(member_id, key_result))
+    Ok(build_generated_member_setup(member_handle, key_result))
 }
 
 fn build_existing_member_setup(
-    member_id: String,
+    member_handle: String,
     kid: String,
     expires_at: String,
 ) -> MemberSetupResult {
     MemberSetupResult {
-        member_id,
+        member_handle,
         key_result: build_existing_member_key_result(kid, expires_at),
     }
 }
@@ -172,11 +173,11 @@ fn resolve_registration_context(
     mode: RegistrationMode,
     setup: MemberSetupResult,
 ) -> Result<RegistrationCommand> {
-    let paths = resolve_registration_paths(common, mode, &setup.member_id)?;
+    let paths = resolve_registration_paths(common, mode, &setup.member_handle)?;
     let active_membership = resolve_active_membership_state(
         mode,
         &paths.workspace_path,
-        &setup.member_id,
+        &setup.member_handle,
         setup.kid(),
     )?;
     Ok(RegistrationCommand {
@@ -206,13 +207,13 @@ fn resolve_github_verification(
 
 fn generate_member_key_result(
     common: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
     github_account: Option<GithubAccount>,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberKeySetupResult> {
     let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
     let result = generate_key(KeyGenerationOptions {
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         home: common.home.clone(),
         created_at,
         expires_at,
@@ -233,11 +234,11 @@ fn generate_member_key_result(
 }
 
 fn build_generated_member_setup(
-    member_id: &str,
+    member_handle: &str,
     key_result: MemberKeySetupResult,
 ) -> MemberSetupResult {
     MemberSetupResult {
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         key_result,
     }
 }

@@ -41,7 +41,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
             let evaluation = evaluate_members_for_approval(
                 &options,
                 &args.member_handles,
-                &execution.member_id,
+                &execution.member_handle,
             )?;
             text::print_warnings(&evaluation.warnings);
             let mut results = evaluation.results;

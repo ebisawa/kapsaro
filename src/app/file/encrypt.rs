@@ -20,7 +20,7 @@ pub(crate) struct EncryptFileCommand {
     pub execution: ExecutionContext,
     pub warnings: Vec<String>,
     input_bytes: Vec<u8>,
-    member_ids: Vec<String>,
+    member_handles: Vec<String>,
     verified_keys: Vec<VerifiedRecipientKey>,
     pub recipient_trust: RecipientTrustOutcome,
 }
@@ -36,7 +36,7 @@ pub(crate) fn resolve_encrypt_file_command(
     let trust_plan = WriteRecipientTrustPlan::<EncryptPolicy>::load(
         options,
         &workspace_root.root_path,
-        &execution.member_id,
+        &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )?;
@@ -48,7 +48,7 @@ pub(crate) fn resolve_encrypt_file_command(
         execution,
         warnings,
         input_bytes,
-        member_ids: workspace_members.member_ids().to_vec(),
+        member_handles: workspace_members.member_handles().to_vec(),
         verified_keys: workspace_members.verified_recipients().to_vec(),
         recipient_trust: trust_plan.recipient_trust().clone(),
     })
@@ -61,7 +61,7 @@ pub(crate) fn execute_encrypt_file_command(
     let signing = build_signing_context(&command.execution.key_ctx, debug)?;
     encrypt_file_content(
         &command.input_bytes,
-        &command.member_ids,
+        &command.member_handles,
         &command.verified_keys,
         &signing,
     )

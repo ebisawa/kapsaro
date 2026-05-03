@@ -63,8 +63,8 @@ pub enum VerifyingKeySource {
 /// signature verification has occurred.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignatureVerificationProof {
-    /// Signer's member ID (verified)
-    pub member_id: String,
+    /// Signer's member handle (verified)
+    pub member_handle: String,
     /// Key statement ID of the signing key
     pub kid: String,
     /// Embedded signer public key used for cryptographic verification
@@ -78,13 +78,13 @@ pub struct SignatureVerificationProof {
 impl SignatureVerificationProof {
     /// Create a new SignatureVerificationProof
     pub fn new(
-        member_id: String,
+        member_handle: String,
         kid: String,
         verifying_key_source: VerifyingKeySource,
         warnings: Vec<String>,
     ) -> Self {
         Self {
-            member_id,
+            member_handle,
             kid,
             signer_public_key: None,
             verifying_key_source,
@@ -94,14 +94,14 @@ impl SignatureVerificationProof {
 
     /// Create a new SignatureVerificationProof with embedded signer metadata.
     pub fn new_with_signer_public_key(
-        member_id: String,
+        member_handle: String,
         kid: String,
         signer_public_key: PublicKey,
         verifying_key_source: VerifyingKeySource,
         warnings: Vec<String>,
     ) -> Self {
         Self {
-            member_id,
+            member_handle,
             kid,
             signer_public_key: Some(signer_public_key),
             verifying_key_source,

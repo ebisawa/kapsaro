@@ -14,21 +14,21 @@ use crate::{
     io::workspace::members::load_active_member_files, model::public_key::PublicKey,
 };
 
-const ALICE_MEMBER_ID: &str = "alice@example.com";
-const BOB_MEMBER_ID: &str = "bob@example.com";
+const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
+const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 
-fn find_kid(active_members: &[PublicKey], member_id: &str) -> String {
+fn find_kid(active_members: &[PublicKey], member_handle: &str) -> String {
     active_members
         .iter()
-        .find(|pk| pk.protected.member_id == member_id)
+        .find(|pk| pk.protected.subject_handle == member_handle)
         .map(|pk| pk.protected.kid.clone())
         .unwrap()
 }
 
-fn find_member(active_members: &[PublicKey], member_id: &str) -> PublicKey {
+fn find_member(active_members: &[PublicKey], member_handle: &str) -> PublicKey {
     active_members
         .iter()
-        .find(|pk| pk.protected.member_id == member_id)
+        .find(|pk| pk.protected.subject_handle == member_handle)
         .cloned()
         .unwrap()
 }
@@ -36,16 +36,17 @@ fn find_member(active_members: &[PublicKey], member_id: &str) -> PublicKey {
 #[test]
 fn test_save_member_approvals_persists_only_manually_approved_candidates() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let bob_kid = find_kid(&active_members, BOB_MEMBER_ID);
+    let bob_kid = find_kid(&active_members, BOB_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
+    let execution =
+        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
 
     save_member_approvals(
         &options,
         &[MemberApprovalResult {
-            member_id: BOB_MEMBER_ID.to_string(),
+            member_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: bob_kid.clone(),
             verified: false,
             approved: true,
@@ -57,7 +58,7 @@ fn test_save_member_approvals_persists_only_manually_approved_candidates() {
             github_login: None,
             github_binding_configured: false,
             attestor_pub: Some(
-                find_member(&active_members, BOB_MEMBER_ID)
+                find_member(&active_members, BOB_MEMBER_HANDLE)
                     .protected
                     .identity
                     .attestation
@@ -69,7 +70,7 @@ fn test_save_member_approvals_persists_only_manually_approved_candidates() {
     )
     .unwrap();
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -79,27 +80,28 @@ fn test_save_member_approvals_persists_only_manually_approved_candidates() {
         .protected
         .known_keys
         .iter()
-        .any(|entry| entry.member_id == BOB_MEMBER_ID && entry.kid == bob_kid));
+        .any(|entry| entry.subject_handle == BOB_MEMBER_HANDLE && entry.kid == bob_kid));
 }
 
 #[test]
 fn test_save_member_approvals_rejects_expired_signing_key() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let bob_kid = find_kid(&active_members, BOB_MEMBER_ID);
+    let bob_kid = find_kid(&active_members, BOB_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     crate::test_utils::update_active_private_key_expires_at(
         temp_dir.path(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "2020-01-01T00:00:00Z",
     );
-    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
+    let execution =
+        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
 
     let result = save_member_approvals(
         &options,
         &[MemberApprovalResult {
-            member_id: BOB_MEMBER_ID.to_string(),
+            member_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: bob_kid,
             verified: false,
             approved: true,
@@ -111,7 +113,7 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
             github_login: None,
             github_binding_configured: false,
             attestor_pub: Some(
-                find_member(&active_members, BOB_MEMBER_ID)
+                find_member(&active_members, BOB_MEMBER_HANDLE)
                     .protected
                     .identity
                     .attestation
@@ -124,7 +126,7 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     assert!(load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .is_none());
@@ -133,16 +135,17 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
 #[test]
 fn test_save_member_approvals_rejects_self_member() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let alice = find_member(&active_members, ALICE_MEMBER_ID);
+    let alice = find_member(&active_members, ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
+    let execution =
+        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
 
     let result = save_member_approvals(
         &options,
         &[MemberApprovalResult {
-            member_id: ALICE_MEMBER_ID.to_string(),
+            member_handle: ALICE_MEMBER_HANDLE.to_string(),
             kid: alice.protected.kid.clone(),
             verified: true,
             approved: true,
@@ -169,16 +172,17 @@ fn test_save_member_approvals_rejects_self_member() {
 #[test]
 fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let bob = find_member(&active_members, BOB_MEMBER_ID);
+    let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
     let original_attestor_pub = bob.protected.identity.attestation.pub_.clone();
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
+    let execution =
+        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
     let bob_file = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let mut tampered: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&bob_file).unwrap()).unwrap();
     tampered["protected"]["identity"]["attestation"]["pub"] =
@@ -188,7 +192,7 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
     save_member_approvals(
         &options,
         &[MemberApprovalResult {
-            member_id: BOB_MEMBER_ID.to_string(),
+            member_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: bob.protected.kid.clone(),
             verified: true,
             approved: true,
@@ -206,7 +210,7 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
     )
     .unwrap();
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -216,7 +220,7 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
         .protected
         .known_keys
         .iter()
-        .find(|entry| entry.member_id == BOB_MEMBER_ID)
+        .find(|entry| entry.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
     assert_eq!(
         saved.evidence.as_ref().unwrap().ssh_attestor_pub.as_deref(),
@@ -227,16 +231,17 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
 #[test]
 fn test_save_member_approvals_persists_verified_github_login_from_review() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let bob = find_member(&active_members, BOB_MEMBER_ID);
+    let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
+    let execution =
+        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
 
     save_member_approvals(
         &options,
         &[MemberApprovalResult {
-            member_id: BOB_MEMBER_ID.to_string(),
+            member_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: bob.protected.kid.clone(),
             verified: true,
             approved: true,
@@ -259,7 +264,7 @@ fn test_save_member_approvals_persists_verified_github_login_from_review() {
     )
     .unwrap();
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -269,7 +274,7 @@ fn test_save_member_approvals_persists_verified_github_login_from_review() {
         .protected
         .known_keys
         .iter()
-        .find(|entry| entry.member_id == BOB_MEMBER_ID)
+        .find(|entry| entry.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
     let github = saved
         .evidence
@@ -286,16 +291,17 @@ fn test_evaluate_members_for_approval_surfaces_insecure_trust_store_warning() {
     use std::os::unix::fs::PermissionsExt;
 
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let bob = find_member(&active_members, BOB_MEMBER_ID);
+    let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution = build_test_execution_context(&temp_dir, ALICE_MEMBER_ID, Some(&workspace_dir));
+    let execution =
+        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
 
     save_member_approvals(
         &options,
         &[MemberApprovalResult {
-            member_id: BOB_MEMBER_ID.to_string(),
+            member_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: bob.protected.kid.clone(),
             verified: true,
             approved: true,
@@ -313,12 +319,15 @@ fn test_evaluate_members_for_approval_surfaces_insecure_trust_store_warning() {
     )
     .unwrap();
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
-    let evaluation =
-        evaluate_members_for_approval(&options, &[BOB_MEMBER_ID.to_string()], ALICE_MEMBER_ID)
-            .unwrap();
+    let evaluation = evaluate_members_for_approval(
+        &options,
+        &[BOB_MEMBER_HANDLE.to_string()],
+        ALICE_MEMBER_HANDLE,
+    )
+    .unwrap();
 
     assert!(!evaluation.warnings.is_empty());
     assert!(evaluation
@@ -330,20 +339,23 @@ fn test_evaluate_members_for_approval_surfaces_insecure_trust_store_warning() {
 #[test]
 fn test_evaluate_members_for_approval_rejects_incoming_member() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
 
-    let result =
-        evaluate_members_for_approval(&options, &[BOB_MEMBER_ID.to_string()], ALICE_MEMBER_ID);
+    let result = evaluate_members_for_approval(
+        &options,
+        &[BOB_MEMBER_HANDLE.to_string()],
+        ALICE_MEMBER_HANDLE,
+    );
 
     assert!(result.is_err());
     assert!(result
@@ -355,11 +367,11 @@ fn test_evaluate_members_for_approval_rejects_incoming_member() {
 #[test]
 fn test_evaluate_members_for_approval_excludes_self_from_default_targets() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
 
-    let evaluation = evaluate_members_for_approval(&options, &[], ALICE_MEMBER_ID).unwrap();
+    let evaluation = evaluate_members_for_approval(&options, &[], ALICE_MEMBER_HANDLE).unwrap();
 
     assert_eq!(evaluation.results.len(), 1);
-    assert_eq!(evaluation.results[0].member_id, BOB_MEMBER_ID);
+    assert_eq!(evaluation.results[0].member_handle, BOB_MEMBER_HANDLE);
 }

@@ -37,11 +37,17 @@ pub(crate) fn sign_unsigned_with_key_context(
 
 pub(crate) fn unwrap_master_key_from_verified(
     verified: &VerifiedKvEncDocument,
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &CryptoContext,
     debug: bool,
 ) -> Result<MasterKey> {
     let doc = verified.document();
-    unwrap_master_key_for_kv_with_context(&doc.head.sid, &doc.wrap.wrap, member_id, key_ctx, debug)
-        .map(|result| result.value)
+    unwrap_master_key_for_kv_with_context(
+        &doc.head.sid,
+        &doc.wrap.wrap,
+        member_handle,
+        key_ctx,
+        debug,
+    )
+    .map(|result| result.value)
 }

@@ -24,8 +24,8 @@ use std::path::{Path, PathBuf};
 // ============================================================================
 
 /// Build the key directory path
-fn key_dir(keystore_root: &Path, member_id: &str, kid: &str) -> PathBuf {
-    keystore_root.join(member_id).join(kid)
+fn key_dir(keystore_root: &Path, member_handle: &str, kid: &str) -> PathBuf {
+    keystore_root.join(member_handle).join(kid)
 }
 
 /// Write key pair files to a temporary directory, cleaning up on failure.
@@ -50,18 +50,18 @@ fn save_key_pair_to_tmp(
 
 /// Save a key pair atomically.
 ///
-/// 1. Create a temporary directory `<member_id>/.tmp-<uuid>/`
+/// 1. Create a temporary directory `<member_handle>/.tmp-<uuid>/`
 /// 2. Write `private.json` and `public.json`
-/// 3. Rename to `<member_id>/<kid>/`
+/// 3. Rename to `<member_handle>/<kid>/`
 ///    The destination directory is either complete or absent.
 pub fn save_key_pair_atomic(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     private_key: &PrivateKey,
     public_key: &PublicKey,
 ) -> Result<()> {
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     ensure_dir_restricted(&member_dir)?;
 
     let tmp_name = format!(".tmp-{}", uuid::Uuid::new_v4());
@@ -87,8 +87,12 @@ pub fn save_key_pair_atomic(
 }
 
 /// Load PrivateKey from keystore
-pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Result<PrivateKey> {
-    let path = key_dir(keystore_root, member_id, kid).join("private.json");
+pub fn load_private_key(
+    keystore_root: &Path,
+    member_handle: &str,
+    kid: &str,
+) -> Result<PrivateKey> {
+    let path = key_dir(keystore_root, member_handle, kid).join("private.json");
     if let Some(msg) = check_permission_chain(&path, keystore_root)
         .into_iter()
         .next()
@@ -99,8 +103,8 @@ pub fn load_private_key(keystore_root: &Path, member_id: &str, kid: &str) -> Res
 }
 
 /// Load PublicKey from keystore
-pub fn load_public_key(keystore_root: &Path, member_id: &str, kid: &str) -> Result<PublicKey> {
-    let path = key_dir(keystore_root, member_id, kid).join("public.json");
+pub fn load_public_key(keystore_root: &Path, member_handle: &str, kid: &str) -> Result<PublicKey> {
+    let path = key_dir(keystore_root, member_handle, kid).join("public.json");
     for warning in check_permission_chain(&path, keystore_root) {
         tracing::warn!("{}", warning);
     }
@@ -150,31 +154,33 @@ fn list_directories(path: &Path, filter: impl Fn(&str) -> bool) -> Result<Vec<St
 /// List all key IDs for a member
 ///
 /// Returns canonical key IDs sorted lexicographically.
-pub fn list_kids(keystore_root: &Path, member_id: &str) -> Result<Vec<String>> {
-    let member_path = keystore_root.join(member_id);
+pub fn list_kids(keystore_root: &Path, member_handle: &str) -> Result<Vec<String>> {
+    let member_path = keystore_root.join(member_handle);
     list_directories(
         &member_path,
         |name| name != "active", // Skip "active" file
     )
 }
 
-/// List all member IDs in the keystore
+/// List all member handles in the keystore
 ///
-/// Returns member IDs sorted lexicographically.
-pub fn list_member_ids(keystore_root: &Path) -> Result<Vec<String>> {
+/// Returns member handles sorted lexicographically.
+pub fn list_member_handles(keystore_root: &Path) -> Result<Vec<String>> {
     list_directories(keystore_root, |_| true)
 }
 
-/// Find member_id by kid (scanning all members in keystore)
+/// Find member_handle by kid (scanning all members in keystore)
 ///
-/// Scans all members in the keystore and returns the member_id that owns
+/// Scans all members in the keystore and returns the member_handle that owns
 /// the given kid directory. Since key directory names use canonical `kid`, at most
 /// one member will match.
 pub fn find_member_by_kid(keystore_root: &Path, kid: &str) -> Result<String> {
-    let member_ids = list_member_ids(keystore_root)?;
-    let candidates = member_ids
+    let member_handles = list_member_handles(keystore_root)?;
+    let candidates = member_handles
         .iter()
-        .map(|member_id| list_kids(keystore_root, member_id).map(|kids| (member_id, kids)))
+        .map(|member_handle| {
+            list_kids(keystore_root, member_handle).map(|kids| (member_handle, kids))
+        })
         .collect::<Result<Vec<_>>>()?;
     let candidate_kids = candidates
         .iter()
@@ -182,9 +188,9 @@ pub fn find_member_by_kid(keystore_root: &Path, kid: &str) -> Result<String> {
         .collect::<Vec<_>>();
     let resolved_kid = resolve_unique_kid(candidate_kids, kid)?;
 
-    for (member_id, kids) in candidates {
+    for (member_handle, kids) in candidates {
         if kids.iter().any(|candidate| candidate == &resolved_kid) {
-            return Ok(member_id.clone());
+            return Ok(member_handle.clone());
         }
     }
 

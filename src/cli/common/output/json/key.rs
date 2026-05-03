@@ -11,7 +11,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 struct KeyInfoJsonView {
     kid: String,
-    member_id: String,
+    member_handle: String,
     created_at: String,
     expires_at: String,
     active: bool,
@@ -34,7 +34,7 @@ pub(crate) fn print_key_list(result: &KeyListView<'_>) -> Result<()> {
 fn build_key_info_json_view(key: &KeyInfoView<'_>) -> KeyInfoJsonView {
     KeyInfoJsonView {
         kid: key.kid.to_string(),
-        member_id: key.member_id.to_string(),
+        member_handle: key.member_handle.to_string(),
         created_at: key.created_at.to_string(),
         expires_at: key.expires_at.to_string(),
         active: key.active,

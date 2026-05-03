@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::setup_init_env;
-use crate::cli::common::{cmd, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 
 fn assert_stderr_order(stderr: &[u8], first: &str, second: &str) {
@@ -24,18 +24,18 @@ fn test_init_new_workspace_new_key_output() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
     let missing_key_message = format!(
         "No local key found for '{}'. Generating a new key...",
-        TEST_MEMBER_ID
+        TEST_MEMBER_HANDLE
     );
     let using_ssh_key_message = "Using SSH key:";
     let ssh_determinism_message = "SSH signature determinism: OK";
-    let generated_key_message = format!("Generated key for '{}':", TEST_MEMBER_ID);
+    let generated_key_message = format!("Generated key for '{}':", TEST_MEMBER_HANDLE);
 
     let assert = cmd()
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -49,7 +49,7 @@ fn test_init_new_workspace_new_key_output() {
         .stderr(predicate::str::contains("Expires:"))
         .stderr(predicate::str::contains(format!(
             "Added '{}' to members/active/",
-            TEST_MEMBER_ID
+            TEST_MEMBER_HANDLE
         )))
         .stderr(predicate::str::contains(
             "Ready! Commit .secretenv/ to your repository.",
@@ -82,7 +82,7 @@ fn test_init_existing_workspace_noop_output() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -93,7 +93,7 @@ fn test_init_existing_workspace_noop_output() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(BOB_MEMBER_ID)
+        .arg(BOB_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir2.path())
         .assert()
         .success()
@@ -115,7 +115,7 @@ fn test_init_existing_workspace_output_does_not_start_with_blank_line() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -146,7 +146,7 @@ fn test_init_already_member_ci_output() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()

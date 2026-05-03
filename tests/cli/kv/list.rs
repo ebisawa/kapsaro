@@ -3,7 +3,7 @@
 
 //! Integration tests for `list` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -24,7 +24,7 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir) {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -119,7 +119,7 @@ fn test_list_error_when_file_not_exists() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()

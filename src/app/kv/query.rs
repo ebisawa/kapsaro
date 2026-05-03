@@ -73,7 +73,7 @@ pub(crate) fn execute_kv_read_command(
         KvReadMode::All => decode_decrypted_kv_values(
             decrypt_kv_document_with_context(
                 &command.verified_doc,
-                &command.execution.member_id,
+                &command.execution.member_handle,
                 &command.execution.key_ctx,
                 debug,
             )?
@@ -82,7 +82,7 @@ pub(crate) fn execute_kv_read_command(
         KvReadMode::Single(key) => {
             let value = decrypt_kv_single_entry_with_context(
                 &command.verified_doc,
-                &command.execution.member_id,
+                &command.execution.member_handle,
                 &command.execution.key_ctx,
                 key,
                 debug,
@@ -104,7 +104,7 @@ pub(crate) fn execute_kv_env_command(command: &KvReadCommand) -> Result<SecretEn
     decode_decrypted_kv_values(
         decrypt_kv_document_with_context(
             &command.verified_doc,
-            &command.execution.member_id,
+            &command.execution.member_handle,
             &command.execution.key_ctx,
             false,
         )?

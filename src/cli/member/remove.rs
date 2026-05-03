@@ -23,7 +23,7 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     print_member_remove_preview(&preview);
     confirm_member_remove(args.force, &args.member_handle)?;
     let result = remove_member(&options, &args.member_handle)?;
-    print_member_remove_summary(&result.member_id);
+    print_member_remove_summary(&result.member_handle);
 
     Ok(())
 }
@@ -39,7 +39,7 @@ fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemova
 
     print_warning_line(&format!(
         "Warning: removing member '{}' affects {} encrypted artifact(s):",
-        preview.member_id,
+        preview.member_handle,
         preview.affected_artifacts.len()
     ));
     for artifact in &preview.affected_artifacts {
@@ -50,19 +50,19 @@ fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemova
     );
 }
 
-fn confirm_member_remove(force: bool, member_id: &str) -> Result<(), Error> {
+fn confirm_member_remove(force: bool, member_handle: &str) -> Result<(), Error> {
     if force {
         return Ok(());
     }
     if !tty::is_interactive() {
         return Err(Error::build_invalid_operation_error(format!(
             "Refusing to remove member '{}' without --force in non-interactive mode",
-            member_id
+            member_handle
         )));
     }
 
     if prompt_yes_no(
-        &format!("Remove member '{}' from the workspace?", member_id),
+        &format!("Remove member '{}' from the workspace?", member_handle),
         false,
     )? {
         return Ok(());
@@ -70,14 +70,14 @@ fn confirm_member_remove(force: bool, member_id: &str) -> Result<(), Error> {
 
     Err(Error::build_invalid_operation_error(format!(
         "Member removal cancelled for '{}'",
-        member_id
+        member_handle
     )))
 }
 
 #[cfg(test)]
 fn confirm_member_remove_with_reader<R>(
     force: bool,
-    member_id: &str,
+    member_handle: &str,
     is_interactive: bool,
     mut reader: R,
 ) -> Result<(), Error>
@@ -90,12 +90,12 @@ where
     if !is_interactive {
         return Err(Error::build_invalid_operation_error(format!(
             "Refusing to remove member '{}' without --force in non-interactive mode",
-            member_id
+            member_handle
         )));
     }
 
     if prompt_yes_no_with_reader(
-        &format!("Remove member '{}' from the workspace?", member_id),
+        &format!("Remove member '{}' from the workspace?", member_handle),
         false,
         &mut reader,
     )? {
@@ -104,7 +104,7 @@ where
 
     Err(Error::build_invalid_operation_error(format!(
         "Member removal cancelled for '{}'",
-        member_id
+        member_handle
     )))
 }
 

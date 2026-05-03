@@ -5,7 +5,7 @@
 
 use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
+use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::envelope::signature::SigningContext;
 use secretenv::feature::kv::encrypt::encrypt_kv_document;
@@ -19,16 +19,16 @@ use secretenv::format::kv::document::parse_kv_document;
 use secretenv::format::schema::document::parse_kv_entry_token;
 use secretenv::format::token::TokenCodec;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::io::workspace::members::{list_active_member_ids, load_member_files};
+use secretenv::io::workspace::members::{list_active_member_handles, load_member_files};
 use secretenv::model::kv_enc::entry::KvEntryValue;
 use secretenv::model::kv_enc::line::KvEncLine;
 use std::fs;
 use tempfile::TempDir;
 
 fn setup_two_member_keystore() -> (TempDir, String, String) {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
-    let alice_kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+    let alice_kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
         .unwrap()
         .first()
         .unwrap()
@@ -40,11 +40,11 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         .to_string();
     let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
     let (bob_private, bob_public) =
-        crate::keygen_helpers::keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        crate::keygen_helpers::keygen_test(BOB_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
     let bob_kid = bob_public.protected.kid.clone();
     let bob_private_doc = crate::keygen_helpers::build_test_private_key(
         &bob_private,
-        &bob_public.protected.member_id,
+        &bob_public.protected.subject_handle,
         &bob_public.protected.kid,
         &ssh_priv,
         &ssh_pub_content,
@@ -52,7 +52,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
     .unwrap();
     secretenv::io::keystore::storage::save_key_pair_atomic(
         &keystore_root,
-        BOB_MEMBER_ID,
+        BOB_MEMBER_HANDLE,
         &bob_kid,
         &bob_private_doc,
         &bob_public,
@@ -62,13 +62,13 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
     (temp_dir, alice_kid, bob_kid)
 }
 
-fn setup_workspace_members(temp_dir: &TempDir, member_id: &str, kid: &str) {
+fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
     let keystore_root = temp_dir.path().join("keys");
-    let public_key = load_public_key(&keystore_root, member_id, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, member_handle, kid).unwrap();
     let members_dir = temp_dir.path().join("members/active");
     fs::create_dir_all(&members_dir).unwrap();
     fs::create_dir_all(temp_dir.path().join("members/incoming")).unwrap();
-    let member_file = members_dir.join(format!("{}.json", member_id));
+    let member_file = members_dir.join(format!("{}.json", member_handle));
     fs::write(
         &member_file,
         serde_json::to_string_pretty(&public_key).unwrap(),
@@ -105,8 +105,8 @@ fn encrypt_two_member_document(
     key_ctx: &CryptoContext,
 ) -> String {
     let keystore_root = temp_dir.path().join("keys");
-    let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
-    let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
+    let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_kid).unwrap();
+    let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_kid).unwrap();
     let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let kv_map = std::collections::HashMap::from([
         ("KEY1".to_string(), "value1".to_string()),
@@ -132,7 +132,7 @@ fn single_rewrap_request<'a>(
     workspace_root: Option<&'a std::path::Path>,
 ) -> RewrapRequest<'a> {
     RewrapRequest {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
         workspace_root,
         target_members: None,
@@ -149,7 +149,7 @@ fn remove_bob_recipient(
     key_ctx: &CryptoContext,
     kid: &str,
 ) -> String {
-    setup_workspace_members(temp_dir, ALICE_MEMBER_ID, kid);
+    setup_workspace_members(temp_dir, ALICE_MEMBER_HANDLE, kid);
     let request = single_rewrap_request(key_ctx, Some(temp_dir.path()));
     let encrypted = KvEncContent::new_unchecked(encrypted);
 
@@ -159,12 +159,12 @@ fn remove_bob_recipient(
 fn build_recipient_snapshot(
     workspace_root: &std::path::Path,
 ) -> secretenv::Result<KvRecipientSnapshot> {
-    let member_ids = list_active_member_ids(workspace_root)?;
-    let public_keys = load_member_files(workspace_root, &member_ids)?;
+    let member_handles = list_active_member_handles(workspace_root)?;
+    let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
         secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
     Ok(KvRecipientSnapshot {
-        member_ids,
+        member_handles,
         verified_members,
     })
 }
@@ -186,7 +186,7 @@ fn set_kv_entry(
 #[test]
 fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
     let encrypted = encrypt_two_member_document(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
 
     let original_flags = extract_disclosed_flags(&encrypted);
@@ -196,7 +196,7 @@ fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
     let flags_after_remove = extract_disclosed_flags(&after_remove);
     assert!(flags_after_remove.iter().all(|(_, disclosed)| *disclosed));
 
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
     let after_remove = KvEncContent::new_unchecked(after_remove);
     let result = set_kv_entry(
         Some(&after_remove),
@@ -220,11 +220,11 @@ fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
 #[test]
 fn test_set_kv_entry_new_entry_has_disclosed_false() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
     let encrypted = encrypt_two_member_document(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
     let after_remove = remove_bob_recipient(&temp_dir, encrypted, &key_ctx, &alice_kid);
 
-    let ctx = KvWriteContext::new(ALICE_MEMBER_ID, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
     let after_remove = KvEncContent::new_unchecked(after_remove);
     let result = set_kv_entry(
         Some(&after_remove),

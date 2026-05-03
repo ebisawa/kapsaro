@@ -3,7 +3,7 @@
 
 //! Local Trust Store document model
 //!
-//! Format: secretenv.trust.local@2
+//! Format: secretenv.trust.local@3
 //! A signed JSON container holding TOFU approval cache (known_keys).
 
 use serde::{Deserialize, Serialize};
@@ -38,11 +38,11 @@ pub struct TrustStoreSignature {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TrustStoreProtected {
-    /// Format identifier: "secretenv.trust.local@2"
+    /// Format identifier: "secretenv.trust.local@3"
     pub format: String,
 
-    /// Owner member ID for this local trust store
-    pub owner_member_id: String,
+    /// Owner handle for this local trust store.
+    pub owner_handle: String,
 
     /// Creation timestamp (RFC 3339 UTC, trailing 'Z')
     pub created_at: String,
@@ -63,8 +63,8 @@ pub struct KnownKey {
     /// Key ID (canonical Crockford Base32)
     pub kid: String,
 
-    /// Member handle associated with this key
-    pub member_id: String,
+    /// Subject handle associated with this key statement.
+    pub subject_handle: String,
 
     /// Approval timestamp (RFC 3339 UTC, trailing 'Z')
     pub approved_at: String,

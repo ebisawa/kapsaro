@@ -3,7 +3,7 @@
 
 //! Integration tests for `set` command
 
-use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID};
+use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
 use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
 };
@@ -210,24 +210,24 @@ fn test_set_without_stdin_and_without_value_fails() {
 #[test]
 fn test_set_existing_file_updates_wrap_to_current_active_members() {
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let home_dir = temp_dir.path();
     let ssh_priv = temp_dir.path().join(".ssh").join("test_ed25519");
     let keystore_root = temp_dir.path().join("keys");
-    let alice_kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+    let alice_kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
         .unwrap()
         .into_iter()
         .next()
         .unwrap();
-    set_active_kid(ALICE_MEMBER_ID, &alice_kid, &keystore_root).unwrap();
+    set_active_kid(ALICE_MEMBER_HANDLE, &alice_kid, &keystore_root).unwrap();
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     cmd()
@@ -237,15 +237,15 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir)
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
     fs::rename(&bob_incoming, &bob_active).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
-    setup_trust_store_for_workspace(home_dir, &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
+    setup_trust_store_for_workspace(home_dir, &workspace_dir, ALICE_MEMBER_HANDLE, &key_ctx);
 
     cmd()
         .arg("set")
@@ -254,7 +254,7 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_ID)
+        .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir)
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -263,15 +263,18 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
     let kv_path = workspace_dir.join("secrets").join("default.kvenc");
     let content = fs::read_to_string(kv_path).unwrap();
     let (_, _, wrap) = parse_kv_wrap(&content).unwrap();
-    let mut rids = wrap
+    let mut recipient_handles = wrap
         .wrap
         .iter()
-        .map(|item| item.rid.clone())
+        .map(|item| item.recipient_handle.clone())
         .collect::<Vec<_>>();
-    rids.sort();
+    recipient_handles.sort();
     assert_eq!(
-        rids,
-        vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()]
+        recipient_handles,
+        vec![
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string()
+        ]
     );
 }
 

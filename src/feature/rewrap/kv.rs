@@ -1,13 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for kv-enc v3 format.
+//! Rewrap operations for kv-enc v4 format.
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::document::KvDocumentDraft;
 use crate::feature::kv::rewrite_session::{KvRecipientRewriteRequest, VerifiedKvRewriteSession};
 use crate::feature::recipient::{
-    check_recipient_exists, collect_target_recipient_ids, print_recipient_not_found_warning,
+    check_recipient_exists, collect_target_recipient_handles, print_recipient_not_found_warning,
     resolve_verified_recipients, validate_not_empty_recipients,
 };
 use crate::feature::rewrap::kv_op::recipients::{add_kv_recipients, rewrite_kv_recipient_wraps};
@@ -20,8 +20,8 @@ use crate::Result;
 use std::path::Path;
 
 use super::{
-    build_rewrap_operation_plan, collect_stale_recipient_ids, rewrite_with_rewrap_operation_plan,
-    RewrapContext, RewrapExecutor, RewrapOptions,
+    build_rewrap_operation_plan, collect_stale_recipient_handles,
+    rewrite_with_rewrap_operation_plan, RewrapContext, RewrapExecutor, RewrapOptions,
 };
 
 /// Executor for kv-enc rewrap operations.
@@ -124,7 +124,7 @@ impl<'a> KvRewrapExecutor<'a> {
     ) -> Result<Self> {
         let session = VerifiedKvRewriteSession::from_verified(
             verified,
-            ctx.member_id,
+            ctx.member_handle,
             ctx.key_ctx(),
             ctx.options().token_codec,
             ctx.options().debug,
@@ -140,7 +140,7 @@ impl<'a> KvRewrapExecutor<'a> {
         let kv_content = KvEncContent::new_unchecked(content.to_string());
         self.session = VerifiedKvRewriteSession::load(
             &kv_content,
-            self.ctx.member_id,
+            self.ctx.member_handle,
             self.ctx.key_ctx(),
             self.ctx.options().token_codec,
             self.ctx.options().debug,
@@ -151,24 +151,29 @@ impl<'a> KvRewrapExecutor<'a> {
     }
 }
 
-/// Rewrap kv-enc v3 content.
+/// Rewrap kv-enc v4 content.
 pub fn rewrap_kv_document(
     options: &RewrapOptions,
     content: &KvEncContent,
-    member_id: &str,
+    member_handle: &str,
     key_ctx: &CryptoContext,
     workspace_root: Option<&Path>,
     target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
-    let all_members = collect_target_recipient_ids(workspace_root, target_members)?;
+    let all_members = collect_target_recipient_handles(workspace_root, target_members)?;
     let verified_target_members =
         resolve_verified_recipients(target_members, key_ctx, &all_members, options.debug)?;
 
     let verified = verify_kv_content(content, options.debug)?;
     let stale_recipients =
-        collect_stale_recipient_ids(&verified.document().wrap.wrap, &verified_target_members);
+        collect_stale_recipient_handles(&verified.document().wrap.wrap, &verified_target_members);
 
-    let ctx = RewrapContext::new(options, member_id, key_ctx, Some(&verified_target_members));
+    let ctx = RewrapContext::new(
+        options,
+        member_handle,
+        key_ctx,
+        Some(&verified_target_members),
+    );
     let executor = KvRewrapExecutor::new_from_verified(verified, &ctx)?;
     let plan = build_rewrap_operation_plan(
         &executor.current_recipients(),

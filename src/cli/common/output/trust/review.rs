@@ -70,7 +70,7 @@ pub(crate) fn print_failed_promotion_reviews(failed_candidates: &[PromotionRevie
     for candidate in failed_candidates {
         eprintln!(
             "Skipping incoming member '{}' due to failed verification: {}",
-            candidate.member_id, candidate.message
+            candidate.member_handle, candidate.message
         );
     }
 }

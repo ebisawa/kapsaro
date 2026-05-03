@@ -91,7 +91,7 @@ where
     F: FnOnce() -> Result<String>,
 {
     match resolve_member_handle_input(member_handle, options.home.as_deref())? {
-        Some(member_id) => Ok(member_id),
+        Some(member_handle) => Ok(member_handle),
         None if allow_prompt && prompt_available => prompt(),
         None => Err(build_missing_member_handle_error(allow_prompt)),
     }
@@ -111,9 +111,9 @@ pub(crate) fn resolve_trust_store_owner_member(
     member_handle: Option<String>,
 ) -> Result<String> {
     match resolve_required_member(options, member_handle.clone()) {
-        Ok(member_id) => Ok(member_id),
+        Ok(member_handle) => Ok(member_handle),
         Err(_) if is_env_key_mode() => Ok(resolve_write_execution(options, member_handle, None)?
-            .member_id
+            .member_handle
             .to_string()),
         Err(error) => Err(error),
     }

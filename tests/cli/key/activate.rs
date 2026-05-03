@@ -3,7 +3,7 @@
 
 //! Integration tests for `key activate` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::support::kid::format_kid_display;
 use std::fs;
@@ -14,14 +14,14 @@ fn test_key_activate_explicit_kid() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate 2 keys
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -32,7 +32,7 @@ fn test_key_activate_explicit_kid() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -41,7 +41,7 @@ fn test_key_activate_explicit_kid() {
 
     // Get the kids
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kids: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()
         .filter_map(|e| e.ok())
@@ -58,13 +58,13 @@ fn test_key_activate_explicit_kid() {
         .arg("activate")
         .arg(first_kid)
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();
 
     // Verify active kid
-    let active_kid = load_active_kid(member_id, &keystore_root).expect("Should get active kid");
+    let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert_eq!(active_kid, Some(first_kid.clone()));
 
     // Keep temp directories alive
@@ -76,14 +76,14 @@ fn test_key_activate_latest() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate 2 keys (second one will be newer)
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -97,7 +97,7 @@ fn test_key_activate_latest() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -110,14 +110,14 @@ fn test_key_activate_latest() {
         .arg("key")
         .arg("activate")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();
 
     // Verify active kid is set
     let keystore_root = temp_dir.path().join("keys");
-    let active_kid = load_active_kid(member_id, &keystore_root).expect("Should get active kid");
+    let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert!(active_kid.is_some(), "Should have an active kid");
 
     // Keep temp directories alive
@@ -128,13 +128,13 @@ fn test_key_activate_latest() {
 fn test_key_activate_accepts_display_kid() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -145,7 +145,7 @@ fn test_key_activate_accepts_display_kid() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -154,7 +154,7 @@ fn test_key_activate_accepts_display_kid() {
         .success();
 
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kids: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()
         .filter_map(|e| e.ok())
@@ -168,12 +168,12 @@ fn test_key_activate_accepts_display_kid() {
         .arg("activate")
         .arg(format_kid_display(&target).unwrap())
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();
 
-    let active_kid = load_active_kid(member_id, &keystore_root).unwrap();
+    let active_kid = load_active_kid(member_handle, &keystore_root).unwrap();
     assert_eq!(active_kid, Some(target));
 
     drop(ssh_temp);

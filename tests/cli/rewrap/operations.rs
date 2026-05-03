@@ -6,7 +6,7 @@ use crate::test_utils::{setup_member_key_context, setup_trust_store_for_workspac
 
 #[test]
 fn test_rewrap_rotate_key() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -17,14 +17,14 @@ fn test_rewrap_rotate_key() {
     let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "test_rotate",
         &[("KEY", "value")],
     );
 
     let content_before = fs::read_to_string(&kv_path).unwrap();
 
-    let mut rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_ID);
+    let mut rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
     rewrap_args.rotate_key = true;
     let result = rewrap::run(rewrap_args);
     assert!(
@@ -39,16 +39,16 @@ fn test_rewrap_rotate_key() {
         "File content should change after rotate_key"
     );
 
-    let rids_after = load_kv_rids(&kv_path);
+    let recipient_handles_after = load_kv_recipient_handles(&kv_path);
     assert!(
-        rids_after.contains(&ALICE_MEMBER_ID.to_string()),
+        recipient_handles_after.contains(&ALICE_MEMBER_HANDLE.to_string()),
         "ALICE should still be in wrap after rotate_key"
     );
 }
 
 #[test]
 fn test_rewrap_noop_rewrites_file() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -59,12 +59,12 @@ fn test_rewrap_noop_rewrites_file() {
     let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "test_noop",
         &[("KEY", "value")],
     );
 
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_ID);
+    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
     let result = rewrap::run(rewrap_args);
     assert!(
         result.is_ok(),
@@ -76,18 +76,23 @@ fn test_rewrap_noop_rewrites_file() {
         kv_path.exists(),
         "File should still exist after noop rewrap"
     );
-    let rids = load_kv_rids(&kv_path);
+    let recipient_handles = load_kv_recipient_handles(&kv_path);
     assert!(
-        rids.contains(&ALICE_MEMBER_ID.to_string()),
+        recipient_handles.contains(&ALICE_MEMBER_HANDLE.to_string()),
         "ALICE should still be in wrap after noop rewrap"
     );
 }
 
 #[test]
 fn test_rewrap_clear_disclosure_history() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -98,7 +103,7 @@ fn test_rewrap_clear_disclosure_history() {
     let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "test_clear_history",
         &[("KEY", "value")],
     );
@@ -106,21 +111,21 @@ fn test_rewrap_clear_disclosure_history() {
     fs::remove_file(
         workspace_dir
             .join("members/active")
-            .join(format!("{}.json", BOB_MEMBER_ID)),
+            .join(format!("{}.json", BOB_MEMBER_HANDLE)),
     )
     .unwrap();
 
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_ID);
+    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
     rewrap::run(rewrap_args).unwrap();
 
-    let removed = load_kv_removed_rids(&kv_path);
+    let removed = load_kv_removed_recipient_handles(&kv_path);
     assert!(
-        removed.contains(&BOB_MEMBER_ID.to_string()),
+        removed.contains(&BOB_MEMBER_HANDLE.to_string()),
         "BOB should be in removed_recipients after first rewrap: {:?}",
         removed
     );
 
-    let mut rewrap_args2 = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_ID);
+    let mut rewrap_args2 = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
     rewrap_args2.clear_disclosure_history = true;
     let result = rewrap::run(rewrap_args2);
     assert!(
@@ -129,7 +134,7 @@ fn test_rewrap_clear_disclosure_history() {
         result.err()
     );
 
-    let removed_after = load_kv_removed_rids(&kv_path);
+    let removed_after = load_kv_removed_recipient_handles(&kv_path);
     assert!(
         removed_after.is_empty(),
         "removed_recipients should be empty after clear_disclosure_history: {:?}",
@@ -148,7 +153,7 @@ fn test_rewrap_with_rotate_key_flag() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -160,7 +165,7 @@ fn test_rewrap_with_rotate_key_flag() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -189,7 +194,7 @@ fn test_rewrap_with_clear_disclosure_history_flag() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -201,7 +206,7 @@ fn test_rewrap_with_clear_disclosure_history_flag() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()

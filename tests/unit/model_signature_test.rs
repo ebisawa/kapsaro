@@ -33,8 +33,8 @@ fn test_signature_deserialization() {
         "kid": "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA",
         "signer_pub": {
             "protected": {
-                "format": "secretenv.public.key@4",
-                "member_id": "alice@example.com",
+                "format": "secretenv.public.key@5",
+                "subject_handle": "alice@example.com",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "identity": {
                     "keys": {
@@ -61,7 +61,7 @@ fn test_signature_deserialization() {
     );
     assert_eq!(sig.kid, "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA");
     assert_eq!(sig.sig, "YWJjZGVmZ2hp");
-    assert_eq!(sig.signer_pub.protected.member_id, "alice@example.com");
+    assert_eq!(sig.signer_pub.protected.subject_handle, "alice@example.com");
 }
 
 #[test]

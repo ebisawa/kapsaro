@@ -12,12 +12,12 @@ use crate::cli::common::output::member::view::{
 fn test_build_member_list_view_preserves_kid() {
     let result = MemberListResult {
         active: vec![MemberListEntry {
-            member_id: "alice@example.com".to_string(),
+            member_handle: "alice@example.com".to_string(),
             kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
             document: serde_json::json!({}),
         }],
         incoming: vec![MemberListEntry {
-            member_id: "bob@example.com".to_string(),
+            member_handle: "bob@example.com".to_string(),
             kid: "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string(),
             document: serde_json::json!({}),
         }],
@@ -33,7 +33,7 @@ fn test_build_member_list_view_preserves_kid() {
 #[test]
 fn test_build_member_approval_candidate_preserves_review_fields() {
     let result = MemberApprovalResult {
-        member_id: "alice@example.com".to_string(),
+        member_handle: "alice@example.com".to_string(),
         kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
         verified: true,
         approved: false,
@@ -50,7 +50,7 @@ fn test_build_member_approval_candidate_preserves_review_fields() {
 
     let candidate = TrustApprovalCandidate::from(&result);
 
-    assert_eq!(candidate.member_id, result.member_id);
+    assert_eq!(candidate.member_handle, result.member_handle);
     assert_eq!(candidate.kid, result.kid);
     assert_eq!(candidate.fingerprint, result.fingerprint);
     assert_eq!(candidate.github_id, result.github_id);
@@ -63,7 +63,7 @@ fn test_build_member_approval_candidate_preserves_review_fields() {
 #[test]
 fn test_build_member_approval_results_view_preserves_review_candidate() {
     let result = MemberApprovalResult {
-        member_id: "alice@example.com".to_string(),
+        member_handle: "alice@example.com".to_string(),
         kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
         verified: true,
         approved: false,
@@ -81,7 +81,10 @@ fn test_build_member_approval_results_view_preserves_review_candidate() {
     let view = build_member_approval_results_view(std::slice::from_ref(&result));
 
     assert_eq!(view.results.len(), 1);
-    assert_eq!(view.results[0].review_candidate.member_id, result.member_id);
+    assert_eq!(
+        view.results[0].review_candidate.member_handle,
+        result.member_handle
+    );
     assert_eq!(view.results[0].review_candidate.kid, result.kid);
     assert_eq!(
         view.results[0].review_candidate.fingerprint,
@@ -97,7 +100,7 @@ fn test_build_member_approval_results_view_preserves_review_candidate() {
 #[test]
 fn test_build_member_approval_results_view_skips_already_known_results() {
     let known_result = MemberApprovalResult {
-        member_id: "alice@example.com".to_string(),
+        member_handle: "alice@example.com".to_string(),
         kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
         verified: true,
         approved: false,
@@ -112,7 +115,7 @@ fn test_build_member_approval_results_view_skips_already_known_results() {
         verified_github: None,
     };
     let new_result = MemberApprovalResult {
-        member_id: "bob@example.com".to_string(),
+        member_handle: "bob@example.com".to_string(),
         kid: "B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2".to_string(),
         verified: true,
         approved: false,
@@ -131,6 +134,6 @@ fn test_build_member_approval_results_view_skips_already_known_results() {
     let view = build_member_approval_results_view(&results);
 
     assert_eq!(view.results.len(), 1);
-    assert_eq!(view.results[0].member_id, "bob@example.com");
+    assert_eq!(view.results[0].member_handle, "bob@example.com");
     assert!(!view.results[0].already_known);
 }

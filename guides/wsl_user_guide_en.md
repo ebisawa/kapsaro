@@ -28,13 +28,13 @@ secretenv config set ssh_signing_method ssh-keygen
 
 ### Key points
 
-1. **Use `ssh-keygen` to perform SSH signing**  
+1. **Use `ssh-keygen` to perform SSH signing**
    Signing is performed via the `ssh-keygen` command, so set the signing method to `ssh-keygen`.
 
-2. **Set `ssh_keygen_command` to `ssh-keygen.exe` (with `.exe`)**  
+2. **Set `ssh_keygen_command` to `ssh-keygen.exe` (with `.exe`)**
    From WSL2, calling `ssh-keygen.exe` runs the Windows binary, which can integrate with the 1Password SSH agent running on the Windows host.
 
-3. **Set `ssh_identity` to the public key file you want to use for signing**  
+3. **Set `ssh_identity` to the public key file you want to use for signing**
    Save the **public key** of the SSH key you want to use for signing (stored in 1Password) as a file inside WSL, and point `ssh_identity` to that file path.
 
 ## References

@@ -23,13 +23,13 @@ pub fn get_keystore_root_from_base(base_dir: &Path) -> PathBuf {
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_handle` - Member handle
 ///
 /// # Returns
 ///
-/// Path to `keystore_root/<member_id>/`
-pub fn get_member_keystore_path_from_root(keystore_root: &Path, member_id: &str) -> PathBuf {
-    keystore_root.join(member_id)
+/// Path to `keystore_root/<member_handle>/`
+pub fn get_member_keystore_path_from_root(keystore_root: &Path, member_handle: &str) -> PathBuf {
+    keystore_root.join(member_handle)
 }
 
 /// Get key path for a specific kid from keystore root
@@ -37,14 +37,14 @@ pub fn get_member_keystore_path_from_root(keystore_root: &Path, member_id: &str)
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_handle` - Member handle
 /// * `kid` - Key ID
 ///
 /// # Returns
 ///
-/// Path to `keystore_root/<member_id>/<kid>/`
-pub fn get_key_path_from_root(keystore_root: &Path, member_id: &str, kid: &str) -> PathBuf {
-    get_member_keystore_path_from_root(keystore_root, member_id).join(kid)
+/// Path to `keystore_root/<member_handle>/<kid>/`
+pub fn get_key_path_from_root(keystore_root: &Path, member_handle: &str, kid: &str) -> PathBuf {
+    get_member_keystore_path_from_root(keystore_root, member_handle).join(kid)
 }
 
 /// Get private key file path from keystore root
@@ -52,18 +52,18 @@ pub fn get_key_path_from_root(keystore_root: &Path, member_id: &str, kid: &str) 
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_handle` - Member handle
 /// * `kid` - Key ID
 ///
 /// # Returns
 ///
-/// Path to `keystore_root/<member_id>/<kid>/private.json`
+/// Path to `keystore_root/<member_handle>/<kid>/private.json`
 pub fn get_private_key_file_path_from_root(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
 ) -> PathBuf {
-    get_key_path_from_root(keystore_root, member_id, kid).join("private.json")
+    get_key_path_from_root(keystore_root, member_handle, kid).join("private.json")
 }
 
 /// Get public key file path from keystore root
@@ -71,18 +71,18 @@ pub fn get_private_key_file_path_from_root(
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_handle` - Member handle
 /// * `kid` - Key ID
 ///
 /// # Returns
 ///
-/// Path to `keystore_root/<member_id>/<kid>/public.json`
+/// Path to `keystore_root/<member_handle>/<kid>/public.json`
 pub fn get_public_key_file_path_from_root(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
 ) -> PathBuf {
-    get_key_path_from_root(keystore_root, member_id, kid).join("public.json")
+    get_key_path_from_root(keystore_root, member_handle, kid).join("public.json")
 }
 
 /// Get active key file path from keystore root
@@ -90,11 +90,11 @@ pub fn get_public_key_file_path_from_root(
 /// # Arguments
 ///
 /// * `keystore_root` - Path to keystore root directory
-/// * `member_id` - Member ID
+/// * `member_handle` - Member handle
 ///
 /// # Returns
 ///
-/// Path to `keystore_root/<member_id>/active`
-pub fn get_active_file_path_from_root(keystore_root: &Path, member_id: &str) -> PathBuf {
-    get_member_keystore_path_from_root(keystore_root, member_id).join("active")
+/// Path to `keystore_root/<member_handle>/active`
+pub fn get_active_file_path_from_root(keystore_root: &Path, member_handle: &str) -> PathBuf {
+    get_member_keystore_path_from_root(keystore_root, member_handle).join("active")
 }

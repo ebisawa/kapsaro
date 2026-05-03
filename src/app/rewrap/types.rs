@@ -42,7 +42,7 @@ pub(crate) enum IncomingVerificationCategory {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct IncomingVerificationItem {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub category: IncomingVerificationCategory,
     pub message: String,
@@ -113,6 +113,6 @@ pub(crate) struct RewrapFileFailure {
 pub(crate) struct RewrapBatchOutcome {
     pub(crate) processed_files: Vec<RewrapFileSuccess>,
     pub(crate) failed_files: Vec<RewrapFileFailure>,
-    pub(crate) promoted_member_ids: Vec<String>,
+    pub(crate) promoted_member_handles: Vec<String>,
     pub(crate) warnings: Vec<String>,
 }

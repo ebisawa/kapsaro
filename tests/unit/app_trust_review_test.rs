@@ -21,21 +21,21 @@ use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
 };
 use crate::test_utils::{
-    kid as test_kid, member_id as test_member_id, setup_test_keystore_from_fixtures,
+    kid as test_kid, member_handle as test_member_handle, setup_test_keystore_from_fixtures,
 };
 use std::path::{Path, PathBuf};
 
-fn build_candidate(member_id: &str, kid: &str) -> TrustApprovalCandidate {
-    build_candidate_with_binding(member_id, kid, false)
+fn build_candidate(member_handle: &str, kid: &str) -> TrustApprovalCandidate {
+    build_candidate_with_binding(member_handle, kid, false)
 }
 
 fn build_candidate_with_binding(
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     github_binding_configured: bool,
 ) -> TrustApprovalCandidate {
     TrustApprovalCandidate {
-        member_id: test_member_id(member_id),
+        member_handle: test_member_handle(member_handle),
         kid: test_kid(kid),
         fingerprint: Some("SHA256:test".to_string()),
         github_id: None,
@@ -45,12 +45,16 @@ fn build_candidate_with_binding(
         github_binding_configured,
         online_verification_attempted: false,
         online_verification_message: None,
-        public_key: Some(build_public_key(member_id, kid, github_binding_configured)),
+        public_key: Some(build_public_key(
+            member_handle,
+            kid,
+            github_binding_configured,
+        )),
         requires_out_of_band_verification: true,
     }
 }
 
-fn build_public_key(member_id: &str, kid: &str, github_binding_configured: bool) -> PublicKey {
+fn build_public_key(member_handle: &str, kid: &str, github_binding_configured: bool) -> PublicKey {
     let binding_claims = github_binding_configured.then(|| BindingClaims {
         github_account: Some(GithubAccount {
             id: 42,
@@ -59,7 +63,7 @@ fn build_public_key(member_id: &str, kid: &str, github_binding_configured: bool)
     });
 
     PublicKey::new(
-        member_id.to_string(),
+        member_handle.to_string(),
         kid.to_string(),
         Identity {
             keys: IdentityKeys {
@@ -109,9 +113,9 @@ fn build_failed_online_candidate(
     reviewed
 }
 
-fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_id: &str, kid: &str) {
+fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_handle: &str, kid: &str) {
     let identity = KnownKeyIdentity::from(approval);
-    assert_eq!(identity.member_id(), member_id);
+    assert_eq!(identity.member_handle(), member_handle);
     assert_eq!(identity.kid(), kid);
 }
 
@@ -205,7 +209,7 @@ fn test_review_signer_trust_with_confirmation_accepts_known_key_approval() {
     .unwrap();
 
     assert_eq!(approvals.len(), 1);
-    assert_manual_review_approval(&approvals[0], &candidate.member_id, &candidate.kid);
+    assert_manual_review_approval(&approvals[0], &candidate.member_handle, &candidate.kid);
 }
 
 #[test]
@@ -280,7 +284,7 @@ fn test_review_signer_trust_with_confirmation_rejects_non_member_acceptance() {
         .contains("Non-member acceptance rejected"));
     assert!(error
         .format_user_message()
-        .contains(candidate.member_id.as_str()));
+        .contains(candidate.member_handle.as_str()));
     assert!(error.format_user_message().contains(candidate.kid.as_str()));
 }
 
@@ -378,8 +382,8 @@ fn test_review_recipient_trust_with_confirmation_collects_all_approved_candidate
     .unwrap();
 
     assert_eq!(approvals.len(), 2);
-    assert_manual_review_approval(&approvals[0], &alice.member_id, &alice.kid);
-    assert_manual_review_approval(&approvals[1], &bob.member_id, &bob.kid);
+    assert_manual_review_approval(&approvals[0], &alice.member_handle, &alice.kid);
+    assert_manual_review_approval(&approvals[1], &bob.member_handle, &bob.kid);
 }
 
 #[test]
@@ -492,7 +496,7 @@ fn test_review_rewrap_signer_requirements_with_confirmation_dedupes_known_key_ap
     .unwrap();
 
     assert_eq!(approvals.len(), 1);
-    assert_manual_review_approval(&approvals[0], &candidate.member_id, &candidate.kid);
+    assert_manual_review_approval(&approvals[0], &candidate.member_handle, &candidate.kid);
     assert_eq!(prompted_paths, vec![PathBuf::from("secrets/one.json")]);
 }
 
@@ -514,6 +518,6 @@ fn test_enforce_read_trust_member_eligibility_rejects_run_policy() {
         .contains("not eligible for run trust approval"));
     assert!(error
         .format_user_message()
-        .contains(candidate.member_id.as_str()));
+        .contains(candidate.member_handle.as_str()));
     assert!(error.format_user_message().contains(candidate.kid.as_str()));
 }

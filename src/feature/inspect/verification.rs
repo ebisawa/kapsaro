@@ -30,8 +30,8 @@ pub(crate) fn build_signature_verification_section(
     )];
 
     if report.verified {
-        if let Some(ref member_id) = report.signer_member_id {
-            lines.push(format!("  Signer:      {} (verified)", member_id));
+        if let Some(ref member_handle) = report.signer_handle {
+            lines.push(format!("  Signer:      {} (verified)", member_handle));
         }
         if let Some(ref source) = report.source {
             let source_str = match source {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::model::identity::MemberId;
+use crate::model::identity::MemberHandle;
 use crate::model::trust_store::KnownKey;
 use crate::{Error, Result};
 
@@ -12,7 +12,7 @@ use super::identity::TrustIdentity;
 pub enum KnownKeyMatch {
     Missing,
     Exact,
-    MemberIdMismatch { known_member_id: MemberId },
+    MemberHandleMismatch { known_member_handle: MemberHandle },
 }
 
 #[derive(Clone, Copy)]
@@ -50,16 +50,17 @@ impl<'a> AdditionalKnownKeyCache<'a> {
 
     pub fn validate_recipient_integrity(&self, recipients: &[TrustIdentity]) -> Result<()> {
         for recipient in recipients {
-            if let KnownKeyMatch::MemberIdMismatch { known_member_id } =
-                self.judge_identity_match(recipient)
+            if let KnownKeyMatch::MemberHandleMismatch {
+                known_member_handle,
+            } = self.judge_identity_match(recipient)
             {
                 return Err(Error::Verify {
                     rule: "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
                     message: format!(
-                        "kid '{}' exists with member_id '{}' but candidate has member_id '{}'",
+                        "kid '{}' exists with member_handle '{}' but candidate has member_handle '{}'",
                         recipient.kid(),
-                        known_member_id,
-                        recipient.member_id()
+                        known_member_handle,
+                        recipient.member_handle()
                     ),
                 });
             }
@@ -73,35 +74,37 @@ fn judge_known_identity_match(
     additional_known_keys: &[KnownKeyIdentity],
     identity: &TrustIdentity,
 ) -> KnownKeyMatch {
-    if let Some(known_member_id) =
-        find_known_member_id(known_keys, additional_known_keys, identity.kid())
+    if let Some(known_member_handle) =
+        find_known_member_handle(known_keys, additional_known_keys, identity.kid())
     {
-        if known_member_id == *identity.member_id_value() {
+        if known_member_handle == *identity.member_handle_value() {
             KnownKeyMatch::Exact
         } else {
-            KnownKeyMatch::MemberIdMismatch { known_member_id }
+            KnownKeyMatch::MemberHandleMismatch {
+                known_member_handle,
+            }
         }
     } else {
         KnownKeyMatch::Missing
     }
 }
 
-fn find_known_member_id(
+fn find_known_member_handle(
     known_keys: &[KnownKey],
     additional_known_keys: &[KnownKeyIdentity],
     kid: &str,
-) -> Option<MemberId> {
+) -> Option<MemberHandle> {
     additional_known_keys
         .iter()
         .find(|identity| identity.kid() == kid)
-        .map(|identity| identity.member_id_value().clone())
+        .map(|identity| identity.member_handle_value().clone())
         .or_else(|| {
             known_keys
                 .iter()
                 .find(|known_key| known_key.kid == kid)
                 .map(|known_key| {
-                    MemberId::try_from(known_key.member_id.clone())
-                        .expect("known key member_id must be valid")
+                    MemberHandle::try_from(known_key.subject_handle.clone())
+                        .expect("known key member_handle must be valid")
                 })
         })
 }

@@ -15,7 +15,7 @@ fn encrypt_file_payload_content_returns_valid_ciphertext() {
     let plaintext = Plaintext::from(b"hello world".as_slice());
     let sid = Uuid::new_v4();
     let header = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V3.to_string(),
+        format: format::FILE_PAYLOAD_V4.to_string(),
         sid,
         alg: FileEncAlgorithm {
             aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),

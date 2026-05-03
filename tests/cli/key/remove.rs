@@ -3,7 +3,7 @@
 
 //! Integration tests for `key remove` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use secretenv::io::keystore::active::load_active_kid;
 use secretenv::support::kid::format_kid_display;
@@ -15,14 +15,14 @@ fn test_key_remove_non_active() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate 2 keys
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -33,7 +33,7 @@ fn test_key_remove_non_active() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -43,7 +43,7 @@ fn test_key_remove_non_active() {
 
     // Get the kids
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kids: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()
         .filter_map(|e| e.ok())
@@ -54,7 +54,7 @@ fn test_key_remove_non_active() {
     assert_eq!(kids.len(), 2, "Should have 2 kids");
 
     // Find the active kid and the non-active kid
-    let active_kid = load_active_kid(member_id, &keystore_root)
+    let active_kid = load_active_kid(member_handle, &keystore_root)
         .expect("Should get active kid")
         .unwrap();
     let non_active_kid = kids.iter().find(|k| k != &&active_kid).unwrap();
@@ -65,7 +65,7 @@ fn test_key_remove_non_active() {
         .arg("remove")
         .arg(non_active_kid)
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();
@@ -89,14 +89,14 @@ fn test_key_remove_active_without_force() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate a key
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -105,7 +105,7 @@ fn test_key_remove_active_without_force() {
 
     // Get the kid
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Try to remove active key without --force (should fail)
@@ -114,7 +114,7 @@ fn test_key_remove_active_without_force() {
         .arg("remove")
         .arg(&kid)
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .failure();
@@ -135,14 +135,14 @@ fn test_key_remove_active_with_force() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     // Generate a key
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -151,7 +151,7 @@ fn test_key_remove_active_with_force() {
 
     // Get the kid
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Remove active key with --force
@@ -160,7 +160,7 @@ fn test_key_remove_active_with_force() {
         .arg("remove")
         .arg(&kid)
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("--force")
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
@@ -174,7 +174,7 @@ fn test_key_remove_active_with_force() {
     );
 
     // Verify active is cleared
-    let active_kid = load_active_kid(member_id, &keystore_root).expect("Should get active kid");
+    let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert!(active_kid.is_none(), "Active kid should be cleared");
 
     // Keep temp directories alive
@@ -182,16 +182,16 @@ fn test_key_remove_active_with_force() {
 }
 
 #[test]
-fn test_key_remove_accepts_unique_prefix_without_member_id() {
+fn test_key_remove_accepts_unique_prefix_without_member_handle() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -202,7 +202,7 @@ fn test_key_remove_accepts_unique_prefix_without_member_id() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -211,14 +211,16 @@ fn test_key_remove_accepts_unique_prefix_without_member_id() {
         .success();
 
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kids: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_str().unwrap().to_string())
         .collect();
-    let active_kid = load_active_kid(member_id, &keystore_root).unwrap().unwrap();
+    let active_kid = load_active_kid(member_handle, &keystore_root)
+        .unwrap()
+        .unwrap();
     let non_active_kid = kids.into_iter().find(|kid| kid != &active_kid).unwrap();
 
     cmd()
@@ -238,13 +240,13 @@ fn test_key_remove_accepts_unique_prefix_without_member_id() {
 fn test_key_remove_accepts_display_kid() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
 
     cmd()
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
@@ -255,7 +257,7 @@ fn test_key_remove_accepts_display_kid() {
         .arg("key")
         .arg("new")
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
@@ -264,14 +266,16 @@ fn test_key_remove_accepts_display_kid() {
         .success();
 
     let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_id);
+    let member_dir = keystore_root.join(member_handle);
     let kids: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_str().unwrap().to_string())
         .collect();
-    let active_kid = load_active_kid(member_id, &keystore_root).unwrap().unwrap();
+    let active_kid = load_active_kid(member_handle, &keystore_root)
+        .unwrap()
+        .unwrap();
     let non_active_kid = kids.into_iter().find(|kid| kid != &active_kid).unwrap();
 
     cmd()
@@ -279,7 +283,7 @@ fn test_key_remove_accepts_display_kid() {
         .arg("remove")
         .arg(format_kid_display(&non_active_kid).unwrap())
         .arg("--member-handle")
-        .arg(member_id)
+        .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .assert()
         .success();

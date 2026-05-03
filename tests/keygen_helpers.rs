@@ -113,7 +113,7 @@ fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
 /// Uses the provided SSH key to create a proper attestation signature.
 /// The returned PublicKey passes `verify_public_key_with_attestation()`.
 pub fn keygen_test(
-    member_id: &str,
+    member_handle: &str,
     ssh_key_path: &Path,
     ssh_pubkey: &str,
 ) -> Result<(PrivateKeyPlaintext, PublicKey)> {
@@ -162,7 +162,7 @@ pub fn keygen_test(
         attestation,
     };
     let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_id,
+        member_handle,
         identity,
         created_at: &created_at,
         expires_at: &expires_at,
@@ -180,7 +180,7 @@ pub fn keygen_test(
 /// a properly encrypted PrivateKey document.
 pub fn build_test_private_key(
     plaintext: &PrivateKeyPlaintext,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     ssh_key_path: &Path,
     ssh_pubkey: &str,
@@ -198,7 +198,7 @@ pub fn build_test_private_key(
 
     encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext,
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         kid: kid.to_string(),
         backend: backend.as_ref(),
         ssh_pubkey,
@@ -215,12 +215,12 @@ pub fn build_test_private_key(
 /// performing full validation. It's intended for test code only.
 pub fn build_verified_private_key(
     plaintext: &PrivateKeyPlaintext,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     ssh_fpr: &str,
 ) -> VerifiedPrivateKey {
     let proof = DecryptionProof::new(
-        member_id.to_string(),
+        member_handle.to_string(),
         kid.to_string(),
         Some(ssh_fpr.to_string()),
     );
@@ -286,8 +286,8 @@ pub fn build_dummy_public_key(kid: &str) -> PublicKey {
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@4".to_string(),
-            member_id: "signer@test".to_string(),
+            format: "secretenv.public.key@5".to_string(),
+            subject_handle: "signer@test".to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {

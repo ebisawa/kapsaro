@@ -13,13 +13,13 @@ pub(crate) fn resolve_keystore_root(home: Option<PathBuf>) -> Result<PathBuf> {
 
 pub(crate) fn resolve_active_kid(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
     kid: Option<String>,
 ) -> Result<String> {
     match kid {
-        Some(kid) => resolve_member_kid_query(keystore_root, member_id, &kid),
-        None => load_active_kid(member_id, keystore_root)?.ok_or_else(|| Error::NotFound {
-            message: format!("No active key for member: {}", member_id),
+        Some(kid) => resolve_member_kid_query(keystore_root, member_handle, &kid),
+        None => load_active_kid(member_handle, keystore_root)?.ok_or_else(|| Error::NotFound {
+            message: format!("No active key for member: {}", member_handle),
         }),
     }
 }

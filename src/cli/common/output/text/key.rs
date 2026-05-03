@@ -18,7 +18,7 @@ pub(crate) fn print_key_list(result: &KeyListView<'_>, verbose: bool) {
         if entry.keys.is_empty() {
             continue;
         }
-        println!("Keys for member: {}", entry.member_id);
+        println!("Keys for member: {}", entry.member_handle);
         println!();
         for key_info in &entry.keys {
             print_key_info(key_info, verbose);
@@ -36,15 +36,15 @@ pub(crate) fn print_key_list(result: &KeyListView<'_>, verbose: bool) {
     }
 }
 
-pub(crate) fn print_key_activate_summary(member_id: &str, kid: &str) {
+pub(crate) fn print_key_activate_summary(member_handle: &str, kid: &str) {
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
-    eprintln!("Activated key for '{}':", member_id);
+    eprintln!("Activated key for '{}':", member_handle);
     eprintln!("  Kid: {}", kid_display);
 }
 
-pub(crate) fn print_key_remove_summary(member_id: &str, kid: &str, was_active: bool) {
+pub(crate) fn print_key_remove_summary(member_handle: &str, kid: &str, was_active: bool) {
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
-    eprintln!("Removed key for '{}':", member_id);
+    eprintln!("Removed key for '{}':", member_handle);
     eprintln!("  Kid: {}", kid_display);
     if was_active {
         eprintln!("  Note: This was the active key. No key is now active.");
@@ -52,7 +52,7 @@ pub(crate) fn print_key_remove_summary(member_id: &str, kid: &str, was_active: b
 }
 
 pub(crate) fn print_generated_key_summary(
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     expires_at: &str,
     activated: bool,
@@ -60,37 +60,40 @@ pub(crate) fn print_generated_key_summary(
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!();
     if activated {
-        eprintln!("Generated and activated key for '{}':", member_id);
+        eprintln!("Generated and activated key for '{}':", member_handle);
     } else {
-        eprintln!("Generated key for '{}':", member_id);
+        eprintln!("Generated key for '{}':", member_handle);
     }
     eprintln!("  Key ID:  {}", kid_display);
     eprintln!("  Expires: {}", expires_at);
 }
 
-pub(crate) fn print_existing_key_summary(member_id: &str, kid: &str) {
+pub(crate) fn print_existing_key_summary(member_handle: &str, kid: &str) {
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
-    eprintln!("Using existing key for '{}' ({})", member_id, kid_display);
+    eprintln!(
+        "Using existing key for '{}' ({})",
+        member_handle, kid_display
+    );
 }
 
-pub(crate) fn print_key_export_summary(member_id: &str, kid: &str, out: &Path) {
+pub(crate) fn print_key_export_summary(member_handle: &str, kid: &str, out: &Path) {
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
-    eprintln!("Exported public key for '{}':", member_id);
+    eprintln!("Exported public key for '{}':", member_handle);
     eprintln!("  Kid:    {}", kid_display);
     eprintln!("  Output: {}", format_path_relative_to_cwd(out));
 }
 
-pub(crate) fn print_private_key_export_file_summary(member_id: &str, kid: &str, out: &Path) {
+pub(crate) fn print_private_key_export_file_summary(member_handle: &str, kid: &str, out: &Path) {
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
-    eprintln!("Exported private key for '{}':", member_id);
+    eprintln!("Exported private key for '{}':", member_handle);
     eprintln!("  Kid:    {}", kid_display);
     eprintln!("  Output: {}", format_path_relative_to_cwd(out));
 }
 
-pub(crate) fn print_private_key_export_stdout_summary(member_id: &str, kid: &str) {
+pub(crate) fn print_private_key_export_stdout_summary(member_handle: &str, kid: &str) {
     let kid_display = format_kid_display(kid).unwrap_or_else(|_| kid.to_string());
     eprintln!();
-    eprintln!("Exported private key for '{}':", member_id);
+    eprintln!("Exported private key for '{}':", member_handle);
     eprintln!("  Kid: {}", kid_display);
 }
 
@@ -100,7 +103,7 @@ fn print_key_info(key_info: &KeyInfoView<'_>, verbose: bool) {
     println!("  Kid:        {}{}", kid_display, active_marker);
     if verbose {
         println!("  Format:     {}", key_info.format);
-        println!("  Member Handle: {}", key_info.member_id);
+        println!("  Member Handle: {}", key_info.member_handle);
         println!("  Created:    {}", key_info.created_at);
     }
     println!("  Expires:    {}", key_info.expires_at);

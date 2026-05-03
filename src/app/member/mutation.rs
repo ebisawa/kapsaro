@@ -26,25 +26,25 @@ pub fn add_member(options: &CommonCommandOptions, filename: &Path, force: bool) 
 
 pub fn evaluate_member_removal(
     options: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<MemberRemovalReport> {
     let workspace = require_workspace(options, "member remove")?;
     let active_member = workspace
         .root_path
         .join("members")
         .join("active")
-        .join(format!("{member_id}.json"));
+        .join(format!("{member_handle}.json"));
     if !active_member.exists() {
         return Err(Error::build_not_found_error(format!(
             "Member '{}' not found in active/",
-            member_id
+            member_handle
         )));
     }
 
     let mut affected_artifacts = Vec::new();
     let mut warnings = Vec::new();
     for artifact_path in find_encrypted_artifacts(&workspace.root_path)? {
-        match artifact_contains_member(&artifact_path, member_id) {
+        match artifact_contains_member(&artifact_path, member_handle) {
             Ok(true) => affected_artifacts.push(artifact_path),
             Ok(false) => {}
             Err(error) => warnings.push(format_artifact_warning(&artifact_path, &error)),
@@ -52,7 +52,7 @@ pub fn evaluate_member_removal(
     }
 
     Ok(MemberRemovalReport {
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         affected_artifacts,
         warnings,
     })
@@ -60,12 +60,12 @@ pub fn evaluate_member_removal(
 
 pub fn remove_member(
     options: &CommonCommandOptions,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<MemberRemoveResult> {
     let workspace = require_workspace(options, "member remove")?;
-    remove_member_file(&workspace.root_path, member_id)?;
+    remove_member_file(&workspace.root_path, member_handle)?;
     Ok(MemberRemoveResult {
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
     })
 }
 
@@ -92,18 +92,20 @@ fn is_encrypted_artifact(path: &Path) -> bool {
     name.ends_with(KV_ENC_EXTENSION) || name.ends_with(".json") || name.ends_with(".encrypted")
 }
 
-fn artifact_contains_member(path: &Path, member_id: &str) -> Result<bool> {
+fn artifact_contains_member(path: &Path, member_handle: &str) -> Result<bool> {
     let content = load_text_with_limit(
         path,
         resolve_encrypted_artifact_read_limit(path),
         "encrypted artifact",
     )?;
-    let recipients = verified_artifact_recipients(content)?;
-    Ok(recipients.iter().any(|recipient| recipient == member_id))
+    let recipients = verified_artifact_recipients(content, &format_path_relative_to_cwd(path))?;
+    Ok(recipients
+        .iter()
+        .any(|recipient| recipient == member_handle))
 }
 
-fn verified_artifact_recipients(content: String) -> Result<Vec<String>> {
-    match EncContent::detect(content)? {
+fn verified_artifact_recipients(content: String, source_name: &str) -> Result<Vec<String>> {
+    match EncContent::detect_with_source(content, source_name)? {
         EncContent::FileEnc(file_content) => Ok(verify_file_content(&file_content, false)?
             .document()
             .recipients()),

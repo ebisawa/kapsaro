@@ -3,27 +3,27 @@
 
 //! Unit tests for internal identity newtypes.
 
-use secretenv::model::identity::{Kid, MemberId};
+use secretenv::model::identity::{Kid, MemberHandle};
 
 #[test]
-fn test_member_id_try_from_valid() {
-    let member_id = MemberId::try_from("alice@example.com").unwrap();
-    assert_eq!(member_id.as_str(), "alice@example.com");
+fn test_member_handle_try_from_valid() {
+    let member_handle = MemberHandle::try_from("alice@example.com").unwrap();
+    assert_eq!(member_handle.as_str(), "alice@example.com");
 }
 
 #[test]
-fn test_member_id_try_from_invalid_error() {
-    let error = MemberId::try_from("@example.com").unwrap_err();
-    assert!(error.to_string().contains("member_id"));
+fn test_member_handle_try_from_invalid_error() {
+    let error = MemberHandle::try_from("@example.com").unwrap_err();
+    assert!(error.to_string().contains("member_handle"));
 }
 
 #[test]
-fn test_member_id_serde_roundtrip() {
-    let member_id = MemberId::try_from("alice@example.com").unwrap();
-    let encoded = serde_json::to_string(&member_id).unwrap();
-    let decoded: MemberId = serde_json::from_str(&encoded).unwrap();
+fn test_member_handle_serde_roundtrip() {
+    let member_handle = MemberHandle::try_from("alice@example.com").unwrap();
+    let encoded = serde_json::to_string(&member_handle).unwrap();
+    let decoded: MemberHandle = serde_json::from_str(&encoded).unwrap();
 
-    assert_eq!(decoded, member_id);
+    assert_eq!(decoded, member_handle);
 }
 
 #[test]

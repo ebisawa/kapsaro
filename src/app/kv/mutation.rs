@@ -201,7 +201,7 @@ where
     let recipient_review = WriteRecipientTrustPlan::<P>::load(
         options,
         &command.target.workspace_root.root_path,
-        &command.execution.member_id,
+        &command.execution.member_handle,
         Some(derive_self_sig_x(&command.execution.key_ctx.signing_key)),
         options.verbose,
     )?;
@@ -243,7 +243,7 @@ where
         plan.review.ensure_current(plan.verbose)?;
         enforce_key_not_expired_for_signing(&plan.execution.key_ctx.expires_at)?;
         let write_ctx = KvWriteContext::new(
-            &plan.execution.member_id,
+            &plan.execution.member_handle,
             &plan.execution.key_ctx,
             plan.verbose,
         );
@@ -281,7 +281,7 @@ mod tests;
 
 fn build_recipient_snapshot(workspace_members: &WorkspaceMemberSnapshot) -> KvRecipientSnapshot {
     KvRecipientSnapshot {
-        member_ids: workspace_members.member_ids().to_vec(),
+        member_handles: workspace_members.member_handles().to_vec(),
         verified_members: workspace_members.verified_recipients().to_vec(),
     }
 }

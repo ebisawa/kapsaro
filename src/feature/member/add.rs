@@ -15,7 +15,7 @@ use std::path::Path;
 /// Add a member's public key file to members/incoming/.
 ///
 /// Reads the file, validates it as a PublicKey JSON, and saves to incoming.
-/// Returns the member_id extracted from the public key.
+/// Returns the member_handle extracted from the public key.
 pub fn add_member_from_file(
     workspace_path: &Path,
     file_path: &Path,
@@ -24,17 +24,17 @@ pub fn add_member_from_file(
     let content = load_text_with_limit(file_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
 
     let public_key = parse_public_key_str(&content, &format_path_relative_to_cwd(file_path))?;
-    verify_member_file(file_path, Some(&public_key.protected.member_id), false)?;
+    verify_member_file(file_path, Some(&public_key.protected.subject_handle), false)?;
 
-    let member_id = public_key.protected.member_id.clone();
+    let member_handle = public_key.protected.subject_handle.clone();
 
     save_member_content(
         workspace_path,
         MemberStatus::Incoming,
-        &member_id,
+        &member_handle,
         &content,
         force,
     )?;
 
-    Ok(member_id)
+    Ok(member_handle)
 }

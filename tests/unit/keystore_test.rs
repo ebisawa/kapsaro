@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::save_public_key;
-use crate::test_utils::TEST_MEMBER_ID;
+use crate::test_utils::TEST_MEMBER_HANDLE;
 use secretenv::io::keystore::storage::*;
 use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyProtected,
@@ -25,13 +25,13 @@ fn test_save_and_load_private_key() {
     fs::set_permissions(temp_dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let keystore_root = temp_dir.path();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
     let kid = TEST_KID;
 
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V5.to_string(),
-            member_id: member_id.to_string(),
+            format: secretenv::model::identifiers::format::PRIVATE_KEY_V6.to_string(),
+            subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TEST123".to_string(),
@@ -50,8 +50,8 @@ fn test_save_and_load_private_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
-            member_id: member_id.to_string(),
+            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
@@ -81,16 +81,22 @@ fn test_save_and_load_private_key() {
     };
 
     // Save
-    save_key_pair_atomic(keystore_root, member_id, kid, &private_key, &public_key).unwrap();
+    save_key_pair_atomic(keystore_root, member_handle, kid, &private_key, &public_key).unwrap();
 
     // Verify file exists
-    let key_path = keystore_root.join(member_id).join(kid).join("private.json");
+    let key_path = keystore_root
+        .join(member_handle)
+        .join(kid)
+        .join("private.json");
     assert!(key_path.exists());
 
     // Load
-    let loaded = load_private_key(keystore_root, member_id, kid).unwrap();
+    let loaded = load_private_key(keystore_root, member_handle, kid).unwrap();
 
-    assert_eq!(loaded.protected.member_id, private_key.protected.member_id);
+    assert_eq!(
+        loaded.protected.subject_handle,
+        private_key.protected.subject_handle
+    );
     assert_eq!(loaded.protected.kid, private_key.protected.kid);
     assert_eq!(loaded.protected.alg, private_key.protected.alg);
 }
@@ -102,13 +108,13 @@ fn test_save_and_load_public_key() {
     fs::set_permissions(temp_dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let keystore_root = temp_dir.path();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
     let kid = TEST_KID;
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V4.to_string(),
-            member_id: member_id.to_string(),
+            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
@@ -138,16 +144,22 @@ fn test_save_and_load_public_key() {
     };
 
     // Save
-    save_public_key(keystore_root, member_id, kid, &public_key).unwrap();
+    save_public_key(keystore_root, member_handle, kid, &public_key).unwrap();
 
     // Verify file exists
-    let key_path = keystore_root.join(member_id).join(kid).join("public.json");
+    let key_path = keystore_root
+        .join(member_handle)
+        .join(kid)
+        .join("public.json");
     assert!(key_path.exists());
 
     // Load
-    let loaded = load_public_key(keystore_root, member_id, kid).unwrap();
+    let loaded = load_public_key(keystore_root, member_handle, kid).unwrap();
 
-    assert_eq!(loaded.protected.member_id, public_key.protected.member_id);
+    assert_eq!(
+        loaded.protected.subject_handle,
+        public_key.protected.subject_handle
+    );
     assert_eq!(loaded.protected.kid, public_key.protected.kid);
     assert_eq!(loaded.signature, public_key.signature);
 }
@@ -157,17 +169,17 @@ fn test_list_kids() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_root = temp_dir.path();
 
-    let member_id = TEST_MEMBER_ID;
+    let member_handle = TEST_MEMBER_HANDLE;
     let kid1 = TEST_KID;
     let kid2 = TEST_KID_2;
 
     // Create key directories
-    let member_path = keystore_root.join(member_id);
+    let member_path = keystore_root.join(member_handle);
     fs::create_dir_all(member_path.join(kid1)).unwrap();
     fs::create_dir_all(member_path.join(kid2)).unwrap();
 
     // List kids
-    let kids = list_kids(keystore_root, member_id).unwrap();
+    let kids = list_kids(keystore_root, member_handle).unwrap();
 
     assert_eq!(kids.len(), 2);
     assert!(kids.contains(&kid1.to_string()));

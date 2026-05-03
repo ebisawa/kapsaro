@@ -16,8 +16,8 @@ use std::collections::HashSet;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct WrapItem {
-    /// Recipient member_id
-    pub rid: String,
+    /// Recipient handle.
+    pub recipient_handle: String,
 
     /// Recipient key statement ID in canonical Crockford Base32 form
     pub kid: String,
@@ -38,8 +38,8 @@ pub struct WrapItem {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RemovedRecipient {
-    /// Recipient member_id that was removed
-    pub rid: String,
+    /// Recipient handle that was removed.
+    pub recipient_handle: String,
 
     /// Recipient key statement ID copied from `wrap_item.kid`
     pub kid: String,
@@ -52,12 +52,15 @@ pub struct RemovedRecipient {
 pub fn validate_wrap_items(wrap_items: &[WrapItem], context: &str) -> Result<()> {
     validate_wrap_count(wrap_items.len(), context)?;
 
-    let mut seen_rids = HashSet::new();
+    let mut seen_recipient_handles = HashSet::new();
     for item in wrap_items {
-        if !seen_rids.insert(item.rid.as_str()) {
+        if !seen_recipient_handles.insert(item.recipient_handle.as_str()) {
             return Err(Error::Verify {
-                rule: "E_DUPLICATE_RID".to_string(),
-                message: format!("{} contains duplicate rid '{}' in wrap", context, item.rid),
+                rule: "E_DUPLICATE_RECIPIENT_HANDLE".to_string(),
+                message: format!(
+                    "{} contains duplicate recipient_handle '{}' in wrap",
+                    context, item.recipient_handle
+                ),
             });
         }
     }
@@ -71,7 +74,7 @@ pub fn validate_wrap_items(wrap_items: &[WrapItem], context: &str) -> Result<()>
 /// Recipients are sorted lexicographically (case-sensitive).
 ///
 /// # Arguments
-/// * `recipients` - Slice of recipient member_id strings
+/// * `recipients` - Slice of recipient handle strings
 ///
 /// # Returns
 /// A new Vec with sorted, deduplicated recipients

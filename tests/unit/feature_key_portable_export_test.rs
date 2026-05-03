@@ -91,14 +91,14 @@ fn test_export_roundtrip() {
 #[test]
 fn test_export_preserves_metadata() {
     let plaintext = build_test_plaintext();
-    let member_id = "bob@example.com";
+    let member_handle = "bob@example.com";
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
     let created_at = "2026-03-01T12:00:00Z";
     let expires_at = "2027-03-01T12:00:00Z";
 
     let exported = export_private_key_portable(
         &plaintext,
-        member_id,
+        member_handle,
         kid,
         created_at,
         expires_at,
@@ -112,7 +112,7 @@ fn test_export_preserves_metadata() {
     let private_key: PrivateKey =
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");
 
-    assert_eq!(private_key.protected.member_id, member_id);
+    assert_eq!(private_key.protected.subject_handle, member_handle);
     assert_eq!(private_key.protected.kid, kid);
     assert_eq!(private_key.protected.created_at, created_at);
     assert_eq!(private_key.protected.expires_at, expires_at);

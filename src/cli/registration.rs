@@ -37,19 +37,24 @@ pub(crate) fn run_registration_command(
     }
 
     let keystore_root = options.resolve_keystore_root()?;
-    let member_id = resolve_required_member_handle(&options, member_handle, true)?;
-    let key_plan = resolve_registration_key_plan(&member_id, &keystore_root)?;
+    let member_handle = resolve_required_member_handle(&options, member_handle, true)?;
+    let key_plan = resolve_registration_key_plan(&member_handle, &keystore_root)?;
     let needs_new_key = key_plan.needs_new_key();
     if needs_new_key {
-        print_missing_key_notice(&member_id);
+        print_missing_key_notice(&member_handle);
     }
     let github_user = resolve_registration_github_user(needs_new_key, github_user, &options)?;
 
     let ssh_ctx = resolve_registration_ssh_context(needs_new_key, &options)?;
     let command = match mode {
-        RegistrationMode::Init | RegistrationMode::Join => {
-            resolve_registration_command(&options, member_id, github_user, key_plan, mode, ssh_ctx)?
-        }
+        RegistrationMode::Init | RegistrationMode::Join => resolve_registration_command(
+            &options,
+            member_handle,
+            github_user,
+            key_plan,
+            mode,
+            ssh_ctx,
+        )?,
     };
     let outcome =
         execute_registration_decision(&command, resolve_registration_decision(&command, force)?)?;
@@ -65,7 +70,7 @@ fn resolve_registration_decision(
         evaluate_registration_decision(command, force, identity_prompt::is_prompt_available())?;
     match decision {
         RegistrationDecision::ConfirmOverwrite => {
-            if identity_prompt::confirm_member_overwrite(&command.setup.member_id)? {
+            if identity_prompt::confirm_member_overwrite(&command.setup.member_handle)? {
                 Ok(RegistrationDecision::Apply { overwrite: true })
             } else {
                 Ok(RegistrationDecision::Return(

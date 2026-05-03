@@ -4,9 +4,9 @@
 //! Unit tests for feature/init module
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv::io::keystore::active::load_active_kid;
-use secretenv::io::keystore::member::load_single_member_id_from_keystore;
+use secretenv::io::keystore::member::load_single_member_handle_from_keystore;
 use secretenv::io::keystore::resolver::KeystoreResolver;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::io::workspace::detection::resolve_workspace_creation_path;
@@ -41,49 +41,49 @@ fn test_resolve_keystore_root_default() {
 }
 
 // ---------------------------------------------------------------------------
-// load_single_member_id_from_keystore tests
+// load_single_member_handle_from_keystore tests
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_load_single_member_id_from_keystore_one_member() {
+fn test_load_single_member_handle_from_keystore_one_member() {
     let tmp = TempDir::new().unwrap();
     let keystore_root = tmp.path().join("keys");
     std::fs::create_dir_all(keystore_root.join("alice@example.com")).unwrap();
 
-    let result = load_single_member_id_from_keystore(&keystore_root).unwrap();
+    let result = load_single_member_handle_from_keystore(&keystore_root).unwrap();
 
     assert_eq!(result, Some("alice@example.com".to_string()));
 }
 
 #[test]
-fn test_load_single_member_id_from_keystore_multiple_members() {
+fn test_load_single_member_handle_from_keystore_multiple_members() {
     let tmp = TempDir::new().unwrap();
     let keystore_root = tmp.path().join("keys");
     std::fs::create_dir_all(keystore_root.join("alice@example.com")).unwrap();
     std::fs::create_dir_all(keystore_root.join("bob@example.com")).unwrap();
 
-    let result = load_single_member_id_from_keystore(&keystore_root).unwrap();
+    let result = load_single_member_handle_from_keystore(&keystore_root).unwrap();
 
     assert_eq!(result, None);
 }
 
 #[test]
-fn test_load_single_member_id_from_keystore_no_members() {
+fn test_load_single_member_handle_from_keystore_no_members() {
     let tmp = TempDir::new().unwrap();
     let keystore_root = tmp.path().join("keys");
     std::fs::create_dir_all(&keystore_root).unwrap();
 
-    let result = load_single_member_id_from_keystore(&keystore_root).unwrap();
+    let result = load_single_member_handle_from_keystore(&keystore_root).unwrap();
 
     assert_eq!(result, None);
 }
 
 #[test]
-fn test_load_single_member_id_from_keystore_nonexistent() {
+fn test_load_single_member_handle_from_keystore_nonexistent() {
     let tmp = TempDir::new().unwrap();
     let keystore_root = tmp.path().join("nonexistent_keys");
 
-    let result = load_single_member_id_from_keystore(&keystore_root).unwrap();
+    let result = load_single_member_handle_from_keystore(&keystore_root).unwrap();
 
     assert_eq!(result, None);
 }
@@ -127,11 +127,11 @@ fn test_resolve_workspace_creation_path_defaults_to_git_root_dot_secretenv() {
 
 #[test]
 fn test_save_member_document_creates_file() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     // Retrieve the active kid
-    let kid = load_active_kid(ALICE_MEMBER_ID, &keystore_root)
+    let kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("Expected active kid to exist");
 
@@ -142,9 +142,9 @@ fn test_save_member_document_creates_file() {
         .join("members")
         .join("active");
     std::fs::create_dir_all(&output_dir).unwrap();
-    let member_file = output_dir.join(format!("{}.json", ALICE_MEMBER_ID));
+    let member_file = output_dir.join(format!("{}.json", ALICE_MEMBER_HANDLE));
 
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, &kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
     save_member_document(&member_file, &public_key).unwrap();
 
     assert!(member_file.exists(), "Member file should be created");
@@ -154,8 +154,8 @@ fn test_save_member_document_creates_file() {
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
 
     assert_eq!(
-        json["protected"]["member_id"].as_str().unwrap(),
-        ALICE_MEMBER_ID
+        json["protected"]["subject_handle"].as_str().unwrap(),
+        ALICE_MEMBER_HANDLE
     );
     assert_eq!(json["protected"]["kid"].as_str().unwrap(), kid);
 }

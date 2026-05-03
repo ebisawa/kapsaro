@@ -8,7 +8,7 @@
 
 use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use crate::test_utils::{ALICE_MEMBER_ID, BOB_MEMBER_ID};
+use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
 use secretenv::feature::context::crypto::CryptoContext;
 use secretenv::feature::decrypt::file::decrypt_file_document;
 use secretenv::feature::encrypt::file::encrypt_file_document;
@@ -27,13 +27,13 @@ use tempfile::TempDir;
 // ============================================================================
 
 /// Create workspace members directory with the member's public key file.
-fn setup_workspace_members(temp_dir: &TempDir, member_id: &str, kid: &str) {
+fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
     let keystore_root = temp_dir.path().join("keys");
-    let public_key = load_public_key(&keystore_root, member_id, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, member_handle, kid).unwrap();
     let members_dir = temp_dir.path().join("members/active");
     fs::create_dir_all(&members_dir).unwrap();
     fs::create_dir_all(temp_dir.path().join("members/incoming")).unwrap();
-    let member_file = members_dir.join(format!("{}.json", member_id));
+    let member_file = members_dir.join(format!("{}.json", member_handle));
     fs::write(
         &member_file,
         serde_json::to_string_pretty(&public_key).unwrap(),
@@ -49,7 +49,7 @@ fn single_rewrap_request<'a>(
     debug: bool,
 ) -> RewrapRequest<'a> {
     RewrapRequest {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
         workspace_root,
         target_members: None,
@@ -71,10 +71,10 @@ fn rewrap_file_content(
 ///
 /// Returns (temp_dir, alice_kid, bob_kid).
 fn setup_two_member_keystore() -> (TempDir, String, String) {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let alice_kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let alice_kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let alice_kid = alice_kids.first().unwrap().clone();
 
     // Generate bob's keys in the same keystore
@@ -84,11 +84,11 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         .to_string();
     let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
     let (bob_private, bob_public) =
-        crate::keygen_helpers::keygen_test(BOB_MEMBER_ID, &ssh_priv, &ssh_pub_content).unwrap();
+        crate::keygen_helpers::keygen_test(BOB_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
     let bob_kid = bob_public.protected.kid.clone();
     let bob_private_doc = crate::keygen_helpers::build_test_private_key(
         &bob_private,
-        &bob_public.protected.member_id,
+        &bob_public.protected.subject_handle,
         &bob_public.protected.kid,
         &ssh_priv,
         &ssh_pub_content,
@@ -96,7 +96,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
     .unwrap();
     save_key_pair_atomic(
         &keystore_root,
-        BOB_MEMBER_ID,
+        BOB_MEMBER_HANDLE,
         &bob_kid,
         &bob_private_doc,
         &bob_public,
@@ -113,10 +113,10 @@ fn encrypt_file_for_alice(
     key_ctx: &CryptoContext,
 ) -> FileEncDocument {
     let keystore_root = temp_dir.path().join("keys");
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
     let content = b"secret-file-content";
-    let recipients = vec![ALICE_MEMBER_ID.to_string()];
+    let recipients = vec![ALICE_MEMBER_HANDLE.to_string()];
 
     encrypt_file_document(
         content,
@@ -140,11 +140,14 @@ fn encrypt_file_for_alice_and_bob(
     key_ctx: &CryptoContext,
 ) -> FileEncDocument {
     let keystore_root = temp_dir.path().join("keys");
-    let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_ID, alice_kid).unwrap();
-    let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_ID, bob_kid).unwrap();
+    let alice_pub = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_kid).unwrap();
+    let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_kid).unwrap();
     let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let content = b"secret-file-content";
-    let recipients = vec![ALICE_MEMBER_ID.to_string(), BOB_MEMBER_ID.to_string()];
+    let recipients = vec![
+        ALICE_MEMBER_HANDLE.to_string(),
+        BOB_MEMBER_HANDLE.to_string(),
+    ];
 
     encrypt_file_document(
         content,
@@ -166,13 +169,13 @@ fn encrypt_file_for_alice_and_bob(
 
 #[test]
 fn test_rotate_file_key_changes_content() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, kid);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
 
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
@@ -196,13 +199,13 @@ fn test_rotate_file_key_changes_content() {
 
 #[test]
 fn test_rotate_file_key_preserves_decryptability() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, kid);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
 
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
@@ -218,9 +221,14 @@ fn test_rotate_file_key_preserves_decryptability() {
     // Verify and decrypt the rewrapped document
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
     let verified = verify_file_document(&rewrapped_doc, false).unwrap();
-    let decrypted =
-        decrypt_file_document(&verified, ALICE_MEMBER_ID, kid, &key_ctx.private_key, false)
-            .unwrap();
+    let decrypted = decrypt_file_document(
+        &verified,
+        ALICE_MEMBER_HANDLE,
+        kid,
+        &key_ctx.private_key,
+        false,
+    )
+    .unwrap();
 
     assert_eq!(
         decrypted.as_slice(),
@@ -231,13 +239,13 @@ fn test_rotate_file_key_preserves_decryptability() {
 
 #[test]
 fn test_rotate_file_key_updates_wrap() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, kid);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
 
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
@@ -268,49 +276,49 @@ fn test_rotate_file_key_updates_wrap() {
 #[test]
 fn test_add_file_recipient_via_rewrap() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
 
     // Encrypt for alice only
     let doc = encrypt_file_for_alice(&temp_dir, &alice_kid, &key_ctx);
     let json = serde_json::to_string_pretty(&doc).unwrap();
 
     // Setup workspace with both alice and bob as active members
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &alice_kid);
-    setup_workspace_members(&temp_dir, BOB_MEMBER_ID, &bob_kid);
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
+    setup_workspace_members(&temp_dir, BOB_MEMBER_HANDLE, &bob_kid);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
-    let recipient_ids: Vec<&str> = rewrapped_doc
+    let recipient_handles: Vec<&str> = rewrapped_doc
         .protected
         .wrap
         .iter()
-        .map(|w| w.rid.as_str())
+        .map(|w| w.recipient_handle.as_str())
         .collect();
 
     assert!(
-        recipient_ids.contains(&ALICE_MEMBER_ID),
+        recipient_handles.contains(&ALICE_MEMBER_HANDLE),
         "rewrapped file must still include alice, got: {:?}",
-        recipient_ids
+        recipient_handles
     );
     assert!(
-        recipient_ids.contains(&BOB_MEMBER_ID),
+        recipient_handles.contains(&BOB_MEMBER_HANDLE),
         "rewrapped file must include bob after adding, got: {:?}",
-        recipient_ids
+        recipient_handles
     );
 }
 
 #[test]
 fn test_add_file_recipient_already_exists_noop() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, kid);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
 
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let json = serde_json::to_string_pretty(&doc).unwrap();
@@ -336,50 +344,50 @@ fn test_add_file_recipient_already_exists_noop() {
 #[test]
 fn test_remove_file_recipient_via_rewrap() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
 
     // Encrypt for alice and bob
     let doc = encrypt_file_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
     let json = serde_json::to_string_pretty(&doc).unwrap();
 
     // Setup workspace with only alice (bob removed from workspace)
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &alice_kid);
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
-    let recipient_ids: Vec<&str> = rewrapped_doc
+    let recipient_handles: Vec<&str> = rewrapped_doc
         .protected
         .wrap
         .iter()
-        .map(|w| w.rid.as_str())
+        .map(|w| w.recipient_handle.as_str())
         .collect();
 
     assert!(
-        recipient_ids.contains(&ALICE_MEMBER_ID),
+        recipient_handles.contains(&ALICE_MEMBER_HANDLE),
         "alice must remain after bob's removal, got: {:?}",
-        recipient_ids
+        recipient_handles
     );
     assert!(
-        !recipient_ids.contains(&BOB_MEMBER_ID),
+        !recipient_handles.contains(&BOB_MEMBER_HANDLE),
         "bob must be removed from recipients, got: {:?}",
-        recipient_ids
+        recipient_handles
     );
 }
 
 #[test]
 fn test_remove_file_recipient_adds_disclosure() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(&alice_kid));
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
 
     // Encrypt for alice and bob
     let doc = encrypt_file_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
     let json = serde_json::to_string_pretty(&doc).unwrap();
 
     // Setup workspace with only alice (bob removed)
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, &alice_kid);
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
 
     let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
     let rewrapped_json =
@@ -399,9 +407,12 @@ fn test_remove_file_recipient_adds_disclosure() {
     );
 
     let removed = removed.unwrap();
-    let removed_ids: Vec<&str> = removed.iter().map(|r| r.rid.as_str()).collect();
+    let removed_ids: Vec<&str> = removed
+        .iter()
+        .map(|r| r.recipient_handle.as_str())
+        .collect();
     assert!(
-        removed_ids.contains(&BOB_MEMBER_ID),
+        removed_ids.contains(&BOB_MEMBER_HANDLE),
         "bob must appear in removed_recipients, got: {:?}",
         removed_ids
     );
@@ -409,13 +420,13 @@ fn test_remove_file_recipient_adds_disclosure() {
 
 #[test]
 fn test_rewrap_file_roundtrip_with_rotation() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, kid);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
 
     // Encrypt
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);

@@ -12,11 +12,11 @@ use super::view::build_member_verification_result;
 
 pub fn verify_members(
     options: &CommonCommandOptions,
-    member_ids: &[String],
+    member_handles: &[String],
     verbose: bool,
 ) -> Result<Vec<MemberVerificationResult>> {
     let workspace = require_workspace(options, "member verify")?;
-    let results = block_on_result(verify_member(&workspace.root_path, member_ids, verbose))?;
+    let results = block_on_result(verify_member(&workspace.root_path, member_handles, verbose))?;
     Ok(results
         .into_iter()
         .map(build_member_verification_result)

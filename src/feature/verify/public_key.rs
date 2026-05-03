@@ -229,13 +229,13 @@ pub(crate) fn build_public_key_expiry_warning(
             days_remaining,
         } => Ok(Some(format!(
             "PublicKey for '{}' expires in {} days (expires_at: {})",
-            sanitize_display_field(&doc.protected.member_id),
+            sanitize_display_field(&doc.protected.subject_handle),
             days_remaining,
             sanitize_display_field(&expires_at)
         ))),
         KeyExpiryStatus::Expired { expires_at } => Ok(Some(format!(
             "PublicKey for '{}' has expired (expires_at: {})",
-            sanitize_display_field(&doc.protected.member_id),
+            sanitize_display_field(&doc.protected.subject_handle),
             sanitize_display_field(&expires_at)
         ))),
     }

@@ -46,15 +46,16 @@ pub struct UnsetArgs {
 
 pub fn run(args: UnsetArgs) -> Result<()> {
     let options = resolve_options(&args.common);
-    let member_id = resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
+    let member_handle =
+        resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
     confirm_unset_operation(args.force, &args.key)?;
     let outcome = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, Some(member_id.clone())),
+        || resolve_trust_store_owner_member(&options, Some(member_handle.clone())),
         || {
             run_kv_write_command_with_trust::<UnsetPolicy, _, _>(
                 &args.common,
-                Some(member_id.clone()),
+                Some(member_handle.clone()),
                 args.name.as_deref(),
                 false,
                 WriteCommandLabels {

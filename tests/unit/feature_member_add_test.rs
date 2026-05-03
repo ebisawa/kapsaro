@@ -35,12 +35,12 @@ fn test_add_member_valid_file() {
     fs::create_dir_all(workspace_dir2.join("members/active")).unwrap();
     fs::create_dir_all(workspace_dir2.join("members/incoming")).unwrap();
 
-    let member_id = add_member_from_file(&workspace_dir2, &export_file, false).unwrap();
-    assert_eq!(member_id, "alice@example.com");
+    let member_handle = add_member_from_file(&workspace_dir2, &export_file, false).unwrap();
+    assert_eq!(member_handle, "alice@example.com");
 
     let incoming = load_incoming_member_files(&workspace_dir2).unwrap();
     assert_eq!(incoming.len(), 1);
-    assert_eq!(incoming[0].protected.member_id, "alice@example.com");
+    assert_eq!(incoming[0].protected.subject_handle, "alice@example.com");
 }
 
 #[test]

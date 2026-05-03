@@ -13,7 +13,7 @@ use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
 use crate::io::workspace::members::load_active_member_files;
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
 
@@ -25,7 +25,7 @@ pub struct MemberApprovalEvaluation {
 
 #[derive(Debug)]
 pub struct MemberApprovalResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub verified: bool,
     pub approved: bool,
@@ -42,13 +42,13 @@ pub struct MemberApprovalResult {
 
 /// Evaluate members for approval (does NOT write trust store).
 ///
-/// `self_member_id` must be the resolved identity of the current user
+/// `self_member_handle` must be the resolved identity of the current user
 /// (from ExecutionContext or equivalent). This ensures evaluate and
 /// commit operate on the same trust store.
 pub fn evaluate_members_for_approval(
     options: &CommonCommandOptions,
-    member_ids: &[String],
-    self_member_id: &str,
+    member_handles: &[String],
+    self_member_handle: &str,
 ) -> Result<MemberApprovalEvaluation> {
     let workspace = require_workspace(options, "member verify --approve")?;
 
@@ -57,11 +57,12 @@ pub fn evaluate_members_for_approval(
     // preventing TOCTOU where a file changes between verify and evaluate.
     let active_members = load_active_member_files(&workspace.root_path)?;
 
-    let approval_targets = select_approval_targets(&active_members, member_ids, self_member_id)?;
+    let approval_targets =
+        select_approval_targets(&active_members, member_handles, self_member_handle)?;
     let verification_results =
         block_on_result(verify_member_public_keys(&approval_targets, false))?;
 
-    let (_, loaded) = load_or_build_trust_store_for_member(options, self_member_id)?;
+    let (_, loaded) = load_or_build_trust_store_for_member(options, self_member_handle)?;
     let protected = loaded.protected;
 
     let mut results = Vec::new();
@@ -97,32 +98,32 @@ pub fn save_member_approvals(
 
 fn select_approval_targets(
     active_members: &[crate::model::public_key::PublicKey],
-    member_ids: &[String],
-    self_member_id: &str,
+    member_handles: &[String],
+    self_member_handle: &str,
 ) -> Result<Vec<crate::model::public_key::PublicKey>> {
-    if member_ids.is_empty() {
+    if member_handles.is_empty() {
         return Ok(active_members
             .iter()
-            .filter(|pk| pk.protected.member_id != self_member_id)
+            .filter(|pk| pk.protected.subject_handle != self_member_handle)
             .cloned()
             .collect());
     }
 
-    member_ids
+    member_handles
         .iter()
-        .map(|member_id| {
-            if member_id == self_member_id {
+        .map(|member_handle| {
+            if member_handle == self_member_handle {
                 return Err(Error::InvalidOperation {
                     message: format!(
                         "Self member '{}' must not be approved into known_keys",
-                        self_member_id
+                        self_member_handle
                     ),
                 });
             }
-            find_member_public_key(active_members, member_id)
+            find_member_public_key(active_members, member_handle)
                 .cloned()
                 .ok_or_else(|| Error::NotFound {
-                    message: format!("Member '{}' not found in active/", member_id),
+                    message: format!("Member '{}' not found in active/", member_handle),
                 })
         })
         .collect()
@@ -138,13 +139,13 @@ fn evaluate_candidate_with_snapshot(
     active_members: &[crate::model::public_key::PublicKey],
     known_keys: &[crate::model::trust_store::KnownKey],
 ) -> MemberApprovalResult {
-    let member_pk = find_member_public_key(active_members, &vr.member_id);
+    let member_pk = find_member_public_key(active_members, &vr.member_handle);
     let fingerprint = vr.fingerprint.clone();
     let (github_id, github_login) = extract_github_info(vr);
 
     let Some(pk) = member_pk else {
         return MemberApprovalResult {
-            member_id: vr.member_id.clone(),
+            member_handle: vr.member_handle.clone(),
             kid: String::new(),
             verified: false,
             approved: false,
@@ -175,11 +176,11 @@ fn evaluate_candidate_with_snapshot(
         return build_not_verified_result(vr, &kid, github_binding_configured);
     }
 
-    let known_key_state = match judge_known_key(known_keys, &kid, &vr.member_id) {
+    let known_key_state = match judge_known_key(known_keys, &kid, &vr.member_handle) {
         Ok(state) => state,
         Err(e) => {
             return MemberApprovalResult {
-                member_id: vr.member_id.clone(),
+                member_handle: vr.member_handle.clone(),
                 kid,
                 verified: true,
                 approved: false,
@@ -197,7 +198,7 @@ fn evaluate_candidate_with_snapshot(
     };
 
     MemberApprovalResult {
-        member_id: vr.member_id.clone(),
+        member_handle: vr.member_handle.clone(),
         kid,
         verified: vr.status == VerificationStatus::Verified,
         approved: false,
@@ -215,11 +216,11 @@ fn evaluate_candidate_with_snapshot(
 
 fn find_member_public_key<'a>(
     active_members: &'a [crate::model::public_key::PublicKey],
-    member_id: &str,
+    member_handle: &str,
 ) -> Option<&'a crate::model::public_key::PublicKey> {
     active_members
         .iter()
-        .find(|pk| pk.protected.member_id == member_id)
+        .find(|pk| pk.protected.subject_handle == member_handle)
 }
 
 #[cfg(test)]
@@ -240,7 +241,7 @@ fn build_not_verified_result(
 ) -> MemberApprovalResult {
     let (github_id, github_login) = extract_github_info(vr);
     MemberApprovalResult {
-        member_id: vr.member_id.clone(),
+        member_handle: vr.member_handle.clone(),
         kid: kid.to_string(),
         verified: false,
         approved: false,
@@ -266,7 +267,7 @@ fn collect_persistable_approvals(results: &[MemberApprovalResult]) -> Vec<Approv
 
 fn build_approved_known_key(result: &MemberApprovalResult) -> ApprovedKnownKey {
     ApprovedKnownKey::from_review(
-        &result.member_id,
+        &result.member_handle,
         &result.kid,
         result.attestor_pub.clone(),
         result.verified_github.as_ref(),
@@ -276,8 +277,8 @@ fn build_approved_known_key(result: &MemberApprovalResult) -> ApprovedKnownKey {
 impl From<&MemberApprovalResult> for TrustApprovalCandidate {
     fn from(result: &MemberApprovalResult) -> Self {
         TrustApprovalCandidate {
-            member_id: MemberId::try_from(result.member_id.clone())
-                .expect("approved member_id must be valid"),
+            member_handle: MemberHandle::try_from(result.member_handle.clone())
+                .expect("approved member_handle must be valid"),
             kid: Kid::try_from(result.kid.clone()).expect("approved kid must be valid"),
             fingerprint: result.fingerprint.clone(),
             github_id: result.github_id,

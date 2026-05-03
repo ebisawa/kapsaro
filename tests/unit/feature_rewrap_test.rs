@@ -6,7 +6,7 @@
 //! Tests for file-enc rewrap, including signature verification at entry.
 
 use crate::keygen_helpers::build_verified_recipient_keys;
-use crate::test_utils::ALICE_MEMBER_ID;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use secretenv::feature::encrypt::file::encrypt_file_document;
 use secretenv::feature::envelope::signature::SigningContext;
@@ -19,15 +19,15 @@ use tempfile::TempDir;
 
 /// Create workspace members directory with the member's public key file.
 ///
-/// The rewrap operation calls `list_active_member_ids(workspace_root)` to determine target recipients,
-/// so the workspace must have a `members/active/<member_id>.json` file.
-fn setup_workspace_members(temp_dir: &TempDir, member_id: &str, kid: &str) {
+/// The rewrap operation calls `list_active_member_handles(workspace_root)` to determine target recipients,
+/// so the workspace must have a `members/active/<member_handle>.json` file.
+fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
     let keystore_root = temp_dir.path().join("keys");
-    let public_key = load_public_key(&keystore_root, member_id, kid).unwrap();
+    let public_key = load_public_key(&keystore_root, member_handle, kid).unwrap();
     let members_dir = temp_dir.path().join("members/active");
     fs::create_dir_all(&members_dir).unwrap();
     fs::create_dir_all(temp_dir.path().join("members/incoming")).unwrap();
-    let member_file = members_dir.join(format!("{}.json", member_id));
+    let member_file = members_dir.join(format!("{}.json", member_handle));
     fs::write(
         &member_file,
         serde_json::to_string_pretty(&public_key).unwrap(),
@@ -41,7 +41,7 @@ fn single_rewrap_request<'a>(
     debug: bool,
 ) -> RewrapRequest<'a> {
     RewrapRequest {
-        member_id: ALICE_MEMBER_ID,
+        member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
         workspace_root,
         target_members: None,
@@ -62,21 +62,21 @@ fn rewrap_file_content(
 #[test]
 fn test_rewrap_file_operation_rejects_invalid_signature() {
     // Create valid file-enc content, then tamper the signature so verification fails.
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     let content = b"secret";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,
@@ -102,22 +102,22 @@ fn test_rewrap_file_operation_rejects_invalid_signature() {
 
 #[test]
 fn test_rewrap_file_operation_succeeds_with_valid_signature() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_ID);
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_ID).unwrap();
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_ID, kid).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_ID, kid);
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
 
     let content = b"secret";
-    let recipient_ids = vec![ALICE_MEMBER_ID.to_string()];
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
     let file_enc_doc = encrypt_file_document(
         content,
-        &recipient_ids,
+        &recipient_handles,
         &members,
         &SigningContext {
             signing_key: &key_ctx.signing_key,

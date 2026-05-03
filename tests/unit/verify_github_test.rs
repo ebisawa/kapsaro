@@ -59,8 +59,8 @@ impl GitHubVerificationApi for FakeGitHubApi {
 fn sample_public_key() -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@4".to_string(),
-            member_id: "alice@example.com".to_string(),
+            format: "secretenv.public.key@5".to_string(),
+            subject_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             identity: Identity {
                 keys: IdentityKeys {
@@ -272,7 +272,7 @@ fn test_verification_result_verified_github_some() {
         VerifiedGithubIdentity::new(99, "bob".to_string(), "SHA256:fp".to_string(), 100);
 
     let result = VerificationResult {
-        member_id: "bob@example.com".to_string(),
+        member_handle: "bob@example.com".to_string(),
         status: VerificationStatus::Verified,
         message: "SSH key verified on GitHub".to_string(),
         fingerprint: Some("SHA256:fp".to_string()),

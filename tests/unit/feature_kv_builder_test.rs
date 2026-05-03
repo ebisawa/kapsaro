@@ -24,7 +24,7 @@ fn sample_head() -> KvHeader {
 fn sample_wrap() -> KvWrap {
     KvWrap {
         wrap: vec![WrapItem {
-            rid: "alice@example.com".to_string(),
+            recipient_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: "hpke-32-1-3".to_string(),
             enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
@@ -112,7 +112,7 @@ fn test_builder_from_lines_with_some_wrap() {
     let wrap_tok = encode_wrap_token(&wrap);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V3,
+            version: KvEncVersion::V4,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -143,7 +143,7 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
     let wrap_tok = encode_wrap_token(&wrap);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V3,
+            version: KvEncVersion::V4,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -242,7 +242,7 @@ fn test_unsigned_doc_wrap_mut_promotes() {
     let wrap_tok = encode_wrap_token(&wrap);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V3,
+            version: KvEncVersion::V4,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -273,7 +273,7 @@ fn test_serialize_unsigned_format() {
         .build();
 
     let s = doc.serialize_unsigned().unwrap();
-    assert!(s.starts_with(":SECRETENV_KV 3\n"));
+    assert!(s.starts_with(":SECRETENV_KV 4\n"));
     assert!(s.contains(":HEAD "));
     assert!(s.contains(":WRAP "));
     assert!(s.contains("A "));
@@ -287,7 +287,7 @@ fn test_serialize_unsigned_raw_wrap_passthrough() {
     let wrap_tok = encode_wrap_token(&wrap);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V3,
+            version: KvEncVersion::V4,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -314,7 +314,7 @@ fn test_clear_disclosed_flags_clears_disclosed_true() {
 
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V3,
+            version: KvEncVersion::V4,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -358,7 +358,7 @@ fn test_clear_disclosed_flags_noop_when_all_false() {
     let tok = encode_entry(&val);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V3,
+            version: KvEncVersion::V4,
         },
         KvEncLine::Head {
             token: "ht".to_string(),

@@ -13,31 +13,70 @@ fn test_validator_creation() {
     let validator = Validator::new();
     assert!(
         validator.is_ok(),
-        "Validator v3 should be created successfully"
+        "Validator should be created successfully"
     );
 }
 
 #[test]
-fn test_load_trust_schema_with_aligned_filename() {
+fn test_load_main_schema_uses_stable_metadata() {
+    let schema = Validator::load_schema_from_paths("secretenv_schema.json")
+        .expect("Main schema should be loadable");
+
+    assert_stable_schema_metadata(&schema, "secretenv.schema.json", "secretenv schema");
+}
+
+#[test]
+fn test_load_trust_schema_uses_stable_metadata() {
     let schema = Validator::load_schema_from_paths("secretenv_trust_local_schema.json")
         .expect("Trust schema should be loadable with the aligned filename");
-    assert!(
-        schema
-            .get("$id")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|id| id == "secretenv.trust.local.schema.v2.json"),
-        "Trust schema should expose the aligned schema id"
+
+    assert_stable_schema_metadata(
+        &schema,
+        "secretenv.trust.local.schema.json",
+        "secretenv local trust store schema",
     );
+}
+
+fn assert_stable_schema_metadata(
+    schema: &serde_json::Value,
+    expected_id: &str,
+    expected_title: &str,
+) {
+    let id = schema.get("$id").and_then(serde_json::Value::as_str);
+    let title = schema.get("title").and_then(serde_json::Value::as_str);
+
+    assert_eq!(id, Some(expected_id));
+    assert_eq!(title, Some(expected_title));
+    for value in [expected_id, expected_title] {
+        assert!(!contains_schema_version_or_revision(value));
+    }
+}
+
+fn contains_schema_version_or_revision(value: &str) -> bool {
+    value
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .any(is_version_or_revision_token)
+}
+
+fn is_version_or_revision_token(token: &str) -> bool {
+    token == "rev" || is_version_token(token)
+}
+
+fn is_version_token(token: &str) -> bool {
+    let Some(digits) = token.strip_prefix('v') else {
+        return false;
+    };
+    !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit())
 }
 
 #[test]
 fn test_validate_public_key_basic() {
     let validator = Validator::new().unwrap();
-    // v3 schema requires: protected (format, member_id, kid, identity, attestation, expires_at), signature
+    // PublicKey requires: protected (format, subject_handle, kid, identity, attestation, expires_at), signature.
     let valid_public_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PUBLIC_KEY_V4,
-            "member_id": "alice@example.com",
+            "format": secretenv::model::identifiers::format::PUBLIC_KEY_V5,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "identity": {
                 "keys": {
@@ -96,11 +135,28 @@ fn test_validate_public_key_rejects_invalid_github_login() {
     }
 }
 
+#[test]
+fn test_schema_error_message_describes_invalid_field_without_raw_value() {
+    let validator = Validator::new().unwrap();
+    let invalid_login = "alice#keys";
+    let public_key = build_public_key_with_github_login(invalid_login);
+
+    let error = validator.validate_public_key(&public_key).unwrap_err();
+    let message = error.format_user_message();
+
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("protected.binding_claims.github_account.login"));
+    assert!(message.contains("does not match"));
+    assert!(!message.contains("E_SCHEMA_INVALID"));
+    assert!(!message.contains("schema"));
+    assert!(!message.contains(invalid_login));
+}
+
 fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
     serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PUBLIC_KEY_V4,
-            "member_id": "alice@example.com",
+            "format": secretenv::model::identifiers::format::PUBLIC_KEY_V5,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "identity": {
                 "keys": {
@@ -138,11 +194,11 @@ fn test_validate_private_key_basic() {
     let validator = Validator::new().unwrap();
     let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
-    // v3 schema (Rev11): external format with protection and encrypted fields
+    // PrivateKey external format includes protected and encrypted sections.
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
-            "member_id": "alice@example.com",
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V6,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
@@ -175,8 +231,8 @@ fn test_validate_private_key_argon2id_without_params() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
-            "member_id": "alice@example.com",
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V6,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
@@ -208,8 +264,8 @@ fn test_validate_private_key_argon2id_rejects_legacy_params() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let invalid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V5,
-            "member_id": "alice@example.com",
+            "format": secretenv::model::identifiers::format::PRIVATE_KEY_V6,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": secretenv::model::identifiers::private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
@@ -239,17 +295,15 @@ fn test_validate_private_key_argon2id_rejects_legacy_params() {
 #[test]
 fn test_validate_file_enc_document_basic() {
     let validator = Validator::new().unwrap();
-    // v3 schema requires: protected { format, sid, payload, wrap, created_at, updated_at }, signature
-    // payload is envelope: { protected { format, sid, alg }, encrypted { nonce, ct } }
-    // wrap_item v3 requires: rid, kid, alg, enc, ct
+    // File encryption documents require protected metadata, payload, wraps, and signature.
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let valid_file_enc_doc = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::FILE_ENC_V3,
+            "format": secretenv::model::identifiers::format::FILE_ENC_V4,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv::model::identifiers::format::FILE_PAYLOAD_V3,
+                    "format": secretenv::model::identifiers::format::FILE_PAYLOAD_V4,
                     "sid": sid,
                     "alg": {
                         "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
@@ -261,7 +315,7 @@ fn test_validate_file_enc_document_basic() {
                 }
             },
             "wrap": [{
-                "rid": "alice@example.com",
+                "recipient_handle": "alice@example.com",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -287,20 +341,20 @@ fn test_validate_file_enc_document_basic() {
 }
 
 #[test]
-fn test_validator_allows_member_id_without_at_in_wrap_rid() {
+fn test_validator_allows_member_handle_without_at_in_wrap_rid() {
     let validator = Validator::new().unwrap();
 
     // Regression test:
-    // - CLI validation allows member_id without '@' (e.g. GitHub login like "ebisawa")
-    // - v3 JSON schema should accept the same to avoid runtime validation failures
+    // - CLI validation allows member_handle without '@' (e.g. GitHub login like "ebisawa")
+    // - JSON schema should accept the same to avoid runtime validation failures
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let valid_file_enc_doc = serde_json::json!({
         "protected": {
-            "format": secretenv::model::identifiers::format::FILE_ENC_V3,
+            "format": secretenv::model::identifiers::format::FILE_ENC_V4,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv::model::identifiers::format::FILE_PAYLOAD_V3,
+                    "format": secretenv::model::identifiers::format::FILE_PAYLOAD_V4,
                     "sid": sid,
                     "alg": {
                         "aead": secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
@@ -312,7 +366,7 @@ fn test_validator_allows_member_id_without_at_in_wrap_rid() {
                 }
             },
             "wrap": [{
-                "rid": "ebisawa",
+                "recipient_handle": "ebisawa",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -332,7 +386,7 @@ fn test_validator_allows_member_id_without_at_in_wrap_rid() {
     let result = validator.validate_file_enc_document(&valid_file_enc_doc);
     assert!(
         result.is_ok(),
-        "Schema should allow member_id without '@' in wrap.rid: {:?}",
+        "Schema should allow member_handle without '@' in wrap.recipient_handle: {:?}",
         result
     );
 }

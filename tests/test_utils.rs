@@ -20,8 +20,8 @@ pub mod keygen_helpers;
 mod ssh_stubs;
 #[allow(unused_imports)]
 pub use constants::{
-    ALICE_MEMBER_ID, BOB_MEMBER_ID, CAROL_MEMBER_ID, DAVE_MEMBER_ID, EVE_MEMBER_ID,
-    FRANK_MEMBER_ID, TEST_MEMBER_ID,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
+    EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 #[allow(unused_imports)]
 pub use crypto_context::setup_member_key_context;
@@ -33,14 +33,14 @@ pub use fixture::{
 };
 #[allow(unused_imports)]
 pub use keygen_helpers::{build_test_private_key, keygen_test};
-use secretenv::model::identity::{Kid, MemberId};
+use secretenv::model::identity::{Kid, MemberHandle};
 use secretenv::{io::keystore::member::find_active_key_document, Error};
 #[allow(unused_imports)]
 pub use ssh_stubs::{stub_agent_signer, stub_ssh_keygen};
 
 #[allow(dead_code)]
-pub fn member_id(value: impl Into<String>) -> MemberId {
-    MemberId::try_from(value.into()).expect("test member_id must be valid")
+pub fn member_handle(value: impl Into<String>) -> MemberHandle {
+    MemberHandle::try_from(value.into()).expect("test member_handle must be valid")
 }
 
 #[allow(dead_code)]
@@ -62,19 +62,19 @@ pub fn error_chain_contains_serde_json(error: &(dyn std::error::Error + 'static)
 
 /// Set up a trust store that approves all active members in a workspace.
 ///
-/// Creates `<home>/trust/<owner_member_id>.json` with all active members'
+/// Creates `<home>/trust/<owner_handle>.json` with all active members'
 /// kids pre-approved. Used by CLI integration tests to pass trust checks.
 pub fn setup_trust_store_for_workspace(
     home: &std::path::Path,
     workspace_path: &std::path::Path,
-    owner_member_id: &str,
+    owner_handle: &str,
     key_ctx: &secretenv::feature::context::crypto::CryptoContext,
 ) {
     use secretenv::feature::trust::signature::sign_trust_store;
     use secretenv::io::trust::paths::get_trust_store_file_path;
     use secretenv::io::trust::store::save_trust_store;
     use secretenv::io::workspace::members::load_active_member_files;
-    use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
+    use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
     use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
     use std::collections::BTreeMap;
 
@@ -83,7 +83,7 @@ pub fn setup_trust_store_for_workspace(
         .iter()
         .map(|pk| KnownKey {
             kid: pk.protected.kid.clone(),
-            member_id: pk.protected.member_id.clone(),
+            subject_handle: pk.protected.subject_handle.clone(),
             approved_at: "2026-01-01T00:00:00Z".to_string(),
             approved_via: KnownKeyApprovalVia::ManualReview,
             evidence: None,
@@ -93,20 +93,20 @@ pub fn setup_trust_store_for_workspace(
 
     let now = "2026-01-01T00:00:00Z".to_string();
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V2.to_string(),
-        owner_member_id: owner_member_id.to_string(),
+        format: TRUST_LOCAL_V3.to_string(),
+        owner_handle: owner_handle.to_string(),
         created_at: now.clone(),
         updated_at: now,
         known_keys,
     };
 
     let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
-    let path = get_trust_store_file_path(home, owner_member_id);
+    let path = get_trust_store_file_path(home, owner_handle);
     save_trust_store(&path, &doc).unwrap();
 }
 
 /// Generate and activate a new test key for a member with the requested expires_at.
-pub fn update_active_private_key_expires_at(home: &Path, member_id: &str, expires_at: &str) {
+pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, expires_at: &str) {
     use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
     use secretenv::feature::key::ssh_binding::SshBindingContext;
     use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
@@ -134,7 +134,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_id: &str, expire
     };
 
     generate_key(KeyGenerationOptions {
-        member_id: member_id.to_string(),
+        member_handle: member_handle.to_string(),
         home: Some(home.to_path_buf()),
         created_at,
         expires_at: expires_at.to_string(),
@@ -155,17 +155,18 @@ pub fn build_expiring_soon_timestamp(days_from_now: i64) -> String {
 pub fn save_active_public_key_to_workspace(
     home: &Path,
     workspace: &Path,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<(), Error> {
-    let active_key = find_active_key_document(member_id, &home.join("keys"))?.ok_or_else(|| {
-        Error::NotFound {
-            message: format!("Active key not found for member: {}", member_id),
-        }
-    })?;
+    let active_key =
+        find_active_key_document(member_handle, &home.join("keys"))?.ok_or_else(|| {
+            Error::NotFound {
+                message: format!("Active key not found for member: {}", member_handle),
+            }
+        })?;
     let member_path = workspace
         .join("members")
         .join("active")
-        .join(format!("{member_id}.json"));
+        .join(format!("{member_handle}.json"));
     std::fs::write(
         &member_path,
         serde_json::to_string_pretty(&active_key.public_key).unwrap(),
@@ -186,17 +187,18 @@ pub fn save_active_public_key_to_workspace(
 pub fn save_active_public_key_to_workspace_incoming(
     home: &Path,
     workspace: &Path,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<(), Error> {
-    let active_key = find_active_key_document(member_id, &home.join("keys"))?.ok_or_else(|| {
-        Error::NotFound {
-            message: format!("Active key not found for member: {}", member_id),
-        }
-    })?;
+    let active_key =
+        find_active_key_document(member_handle, &home.join("keys"))?.ok_or_else(|| {
+            Error::NotFound {
+                message: format!("Active key not found for member: {}", member_handle),
+            }
+        })?;
     let member_path = workspace
         .join("members")
         .join("incoming")
-        .join(format!("{member_id}.json"));
+        .join(format!("{member_handle}.json"));
     std::fs::write(
         &member_path,
         serde_json::to_string_pretty(&active_key.public_key).unwrap(),

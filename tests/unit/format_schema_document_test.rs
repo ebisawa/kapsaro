@@ -20,8 +20,8 @@ use uuid::Uuid;
 fn test_parse_public_key_str_with_schema() {
     let public_key = serde_json::json!({
         "protected": {
-            "format": format::PUBLIC_KEY_V4,
-            "member_id": "alice@example.com",
+            "format": format::PUBLIC_KEY_V5,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "identity": {
                 "keys": {
@@ -48,7 +48,7 @@ fn test_parse_public_key_str_with_schema() {
     });
 
     let parsed = parse_public_key_str(&public_key.to_string(), "inline public key").unwrap();
-    assert_eq!(parsed.protected.member_id, "alice@example.com");
+    assert_eq!(parsed.protected.subject_handle, "alice@example.com");
 }
 
 #[test]
@@ -57,8 +57,8 @@ fn test_parse_private_key_bytes_rejects_legacy_argon2_fields_error() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let private_key = serde_json::json!({
         "protected": {
-            "format": format::PRIVATE_KEY_V5,
-            "member_id": "alice@example.com",
+            "format": format::PRIVATE_KEY_V6,
+            "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
                 "kdf": private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
@@ -78,7 +78,14 @@ fn test_parse_private_key_bytes_rejects_legacy_argon2_fields_error() {
 
     let result =
         parse_private_key_bytes(private_key.to_string().as_bytes(), "SECRETENV_PRIVATE_KEY");
-    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("protected.alg"));
+    assert!(message.contains("m"));
+    assert!(!message.contains("E_SCHEMA_INVALID"));
+    assert!(!message.contains("schema"));
+    assert!(!message.contains("47104"));
 }
 
 #[test]
@@ -86,11 +93,11 @@ fn test_parse_file_enc_str_with_schema() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V3,
+            "format": format::FILE_ENC_V4,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V3,
+                    "format": format::FILE_PAYLOAD_V4,
                     "sid": sid,
                     "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -100,7 +107,7 @@ fn test_parse_file_enc_str_with_schema() {
                 }
             },
             "wrap": [{
-                "rid": "alice@example.com",
+                "recipient_handle": "alice@example.com",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -118,7 +125,7 @@ fn test_parse_file_enc_str_with_schema() {
     });
 
     let parsed = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
-    assert_eq!(parsed.protected.format, format::FILE_ENC_V3);
+    assert_eq!(parsed.protected.format, format::FILE_ENC_V4);
 }
 
 #[test]
@@ -131,7 +138,7 @@ fn test_parse_kv_tokens_with_schema() {
     };
     let wrap = KvWrap {
         wrap: vec![WrapItem {
-            rid: "alice@example.com".to_string(),
+            recipient_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: hpke::ALG_HPKE_32_1_3.to_string(),
             enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
@@ -184,7 +191,13 @@ fn test_parse_kv_signature_token_rejects_unknown_field_error() {
     .unwrap();
 
     let result = parse_kv_signature_token(&invalid_token);
-    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("document"));
+    assert!(message.contains("unexpected"));
+    assert!(!message.contains("E_SCHEMA_INVALID"));
+    assert!(!message.contains("schema"));
 }
 
 #[test]
@@ -200,14 +213,19 @@ fn test_parse_kv_signature_token_requires_signer_pub_error() {
     .unwrap();
 
     let result = parse_kv_signature_token(&invalid_token);
-    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("signer_pub"));
+    assert!(!message.contains("E_SCHEMA_INVALID"));
+    assert!(!message.contains("schema"));
 }
 
 #[test]
 fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let wrap_item = serde_json::json!({
-        "rid": "alice@example.com",
+        "recipient_handle": "alice@example.com",
         "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "alg": hpke::ALG_HPKE_32_1_3,
         "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -216,11 +234,11 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
     let wrap: Vec<_> = (0..=MAX_WRAP_ITEMS).map(|_| wrap_item.clone()).collect();
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V3,
+            "format": format::FILE_ENC_V4,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V3,
+                    "format": format::FILE_PAYLOAD_V4,
                     "sid": sid,
                     "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -250,7 +268,7 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
 #[test]
 fn test_parse_kv_wrap_token_rejects_wrap_count_over_limit() {
     let wrap_item = WrapItem {
-        rid: "alice@example.com".to_string(),
+        recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         alg: hpke::ALG_HPKE_32_1_3.to_string(),
         enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
@@ -273,11 +291,11 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V3,
+            "format": format::FILE_ENC_V4,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V3,
+                    "format": format::FILE_PAYLOAD_V4,
                     "sid": sid,
                     "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -288,14 +306,14 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
             },
             "wrap": [
                 {
-                    "rid": "alice@example.com",
+                    "recipient_handle": "alice@example.com",
                     "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                     "alg": hpke::ALG_HPKE_32_1_3,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "ct": "AAAAAAAAAAAAAAAA"
                 },
                 {
-                    "rid": "alice@example.com",
+                    "recipient_handle": "alice@example.com",
                     "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
                     "alg": hpke::ALG_HPKE_32_1_3,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -315,7 +333,10 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
 
     let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("E_DUPLICATE_RID"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("E_DUPLICATE_RECIPIENT_HANDLE"));
 }
 
 #[test]
@@ -323,14 +344,14 @@ fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rid() {
     let wrap = KvWrap {
         wrap: vec![
             WrapItem {
-                rid: "alice@example.com".to_string(),
+                recipient_handle: "alice@example.com".to_string(),
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
                 alg: hpke::ALG_HPKE_32_1_3.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 ct: "AAAAAAAAAAAAAAAA".to_string(),
             },
             WrapItem {
-                rid: "alice@example.com".to_string(),
+                recipient_handle: "alice@example.com".to_string(),
                 kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
                 alg: hpke::ALG_HPKE_32_1_3.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
@@ -343,5 +364,8 @@ fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rid() {
 
     let result = parse_kv_wrap_token(&wrap_token);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("E_DUPLICATE_RID"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("E_DUPLICATE_RECIPIENT_HANDLE"));
 }

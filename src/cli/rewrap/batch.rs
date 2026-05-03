@@ -32,6 +32,6 @@ pub(crate) fn run_batch_rewrap(args: &RewrapArgs) -> Result<()> {
         },
         confirm_recipient_approvals,
     )?;
-    print_promotion_summary(&outcome.promoted_member_ids, args.common.quiet);
+    print_promotion_summary(&outcome.promoted_member_handles, args.common.quiet);
     print_rewrap_batch_outcome(&outcome, args.common.json, args.common.quiet)
 }

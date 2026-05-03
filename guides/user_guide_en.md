@@ -156,7 +156,7 @@ Removing a member does not erase secrets they already saw. If needed, rotate the
 What secretenv protects cryptographically is the secret value or the file content in file-enc. Some metadata remains visible in plaintext because it is needed for operation and audit.
 
 - kv-enc key names
-- Recipient lists (`member_id` / `kid`)
+- Recipient lists (`member_handle` / `kid`)
 - The signer's `kid`
 - Created and updated timestamps
 - Disclosure history

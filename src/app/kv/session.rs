@@ -16,6 +16,7 @@ use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::support::validation::validate_kv_file_basename;
 use crate::{Error, Result};
 
@@ -66,7 +67,10 @@ impl KvFileSession {
         Ok(Self { target, content })
     }
     pub(crate) fn kv_content(&self) -> KvEncContent {
-        KvEncContent::new_unchecked(self.content.clone())
+        KvEncContent::new_unchecked_with_source(
+            self.content.clone(),
+            format_path_relative_to_cwd(&self.target.file_path),
+        )
     }
 }
 
@@ -120,7 +124,10 @@ pub(crate) fn load_existing_content(
 ) -> Result<Option<KvEncContent>> {
     if target.file_path.exists() {
         let content = load_text_with_limit(&target.file_path, MAX_KV_ENC_FILE_SIZE, "kv-enc file")?;
-        Ok(Some(KvEncContent::new_unchecked(content)))
+        Ok(Some(KvEncContent::new_unchecked_with_source(
+            content,
+            format_path_relative_to_cwd(&target.file_path),
+        )))
     } else if allow_missing {
         Ok(None)
     } else {

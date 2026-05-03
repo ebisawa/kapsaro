@@ -4,7 +4,7 @@
 //! Unit tests for trust store file I/O
 
 use secretenv::io::trust::store::{load_trust_store, save_trust_store};
-use secretenv::model::identifiers::format::TRUST_LOCAL_V2;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
 use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
@@ -18,13 +18,13 @@ use tempfile::TempDir;
 fn build_test_document(owner: &str) -> TrustStoreDocument {
     TrustStoreDocument {
         protected: TrustStoreProtected {
-            format: TRUST_LOCAL_V2.to_string(),
-            owner_member_id: owner.to_string(),
+            format: TRUST_LOCAL_V3.to_string(),
+            owner_handle: owner.to_string(),
             created_at: "2026-03-29T12:34:56Z".to_string(),
             updated_at: "2026-03-29T12:34:56Z".to_string(),
             known_keys: vec![KnownKey {
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-                member_id: "bob@example.com".to_string(),
+                subject_handle: "bob@example.com".to_string(),
                 approved_at: "2026-03-29T12:40:00Z".to_string(),
                 approved_via: KnownKeyApprovalVia::ManualReview,
                 evidence: Some(KnownKeyEvidence {

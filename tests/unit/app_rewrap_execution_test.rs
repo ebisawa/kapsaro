@@ -33,8 +33,8 @@ use crate::test_utils::{
     setup_member_key_context, setup_test_workspace, update_active_private_key_expires_at, EnvGuard,
 };
 
-const ALICE_MEMBER_ID: &str = "alice@example.com";
-const BOB_MEMBER_ID: &str = "bob@example.com";
+const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
+const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 
 fn strict_key_checking_guard() -> EnvGuard {
     let guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
@@ -44,25 +44,25 @@ fn strict_key_checking_guard() -> EnvGuard {
 
 fn encrypt_file_for_members(
     home: &std::path::Path,
-    signer_member_id: &str,
+    signer_handle: &str,
     signer_kid: &str,
     key_ctx: &crate::feature::context::crypto::CryptoContext,
-    recipient_ids: &[&str],
+    recipient_handles: &[&str],
 ) -> String {
     let keystore_root = home.join("keys");
-    let signer_pub = load_public_key(&keystore_root, signer_member_id, signer_kid).unwrap();
-    let recipient_members = recipient_ids
+    let signer_pub = load_public_key(&keystore_root, signer_handle, signer_kid).unwrap();
+    let recipient_members = recipient_handles
         .iter()
-        .map(|member_id| {
-            let kid = list_kids(&keystore_root, member_id).unwrap().remove(0);
-            load_public_key(&keystore_root, member_id, &kid).unwrap()
+        .map(|member_handle| {
+            let kid = list_kids(&keystore_root, member_handle).unwrap().remove(0);
+            load_public_key(&keystore_root, member_handle, &kid).unwrap()
         })
         .collect::<Vec<_>>();
     let verified_members =
         crate::test_utils::keygen_helpers::build_verified_recipient_keys(&recipient_members);
-    let recipients = recipient_ids
+    let recipients = recipient_handles
         .iter()
-        .map(|member_id| (*member_id).to_string())
+        .map(|member_handle| (*member_handle).to_string())
         .collect::<Vec<_>>();
     let document = encrypt_file_document(
         b"snapshot-test-secret",
@@ -81,14 +81,14 @@ fn encrypt_file_for_members(
 
 fn find_incoming_candidate(
     workspace: &std::path::Path,
-    member_id: &str,
+    member_handle: &str,
 ) -> IncomingPromotionCandidate {
-    let source_path = get_incoming_member_file_path(workspace, member_id);
+    let source_path = get_incoming_member_file_path(workspace, member_handle);
     let public_key = load_member_file_from_path(&source_path).unwrap();
     let source_content = fs::read_to_string(&source_path).unwrap();
     IncomingPromotionCandidate {
         review: crate::app::rewrap::types::IncomingVerificationItem {
-            member_id: member_id.to_string(),
+            member_handle: member_handle.to_string(),
             kid: public_key.protected.kid.clone(),
             category: crate::app::rewrap::types::IncomingVerificationCategory::NotConfigured,
             message: "snapshot".to_string(),
@@ -111,7 +111,7 @@ fn build_empty_plan(
     let pre_promotion_trust = CommandTrustSnapshot::<RewrapInputPolicy>::load(
         options,
         workspace_dir,
-        &execution.member_id,
+        &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
         options.verbose,
     )
@@ -136,25 +136,25 @@ fn build_verified_post_promotion_recipients(
 #[test]
 fn test_execute_rewrap_batch_does_not_promote_members() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let plan = build_empty_plan(&options, &execution, &workspace_dir);
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
         clear_disclosure_history: false,
-        accepted_promotions: vec![find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID)],
+        accepted_promotions: vec![find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE)],
     };
 
     let outcome = execute_rewrap_batch(
@@ -171,7 +171,7 @@ fn test_execute_rewrap_batch_does_not_promote_members() {
 
     assert!(outcome.processed_files.is_empty());
     assert!(outcome.failed_files.is_empty());
-    assert!(outcome.promoted_member_ids.is_empty());
+    assert!(outcome.promoted_member_handles.is_empty());
     assert_eq!(load_active_member_files(&workspace_dir).unwrap().len(), 1);
     assert_eq!(load_incoming_member_files(&workspace_dir).unwrap().len(), 1);
 }
@@ -179,21 +179,21 @@ fn test_execute_rewrap_batch_does_not_promote_members() {
 #[test]
 fn test_promote_accepted_incoming_members_moves_accepted_members_to_active() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     assert!(!key_ctx.kid.is_empty());
 
-    let bob = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
+    let bob = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
 
     promote_accepted_incoming_members(&workspace_dir, &[bob]).unwrap();
 
@@ -201,35 +201,42 @@ fn test_promote_accepted_incoming_members_moves_accepted_members_to_active() {
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
     assert!(active_members
         .iter()
-        .any(|member| member.protected.member_id == BOB_MEMBER_ID));
+        .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
     assert!(incoming_members.is_empty());
 }
 
 #[test]
 fn test_promote_accepted_incoming_members_replaces_existing_active_member_on_rotation() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
     let active_path = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", ALICE_MEMBER_ID));
+        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
     let old_active = load_member_file_from_path(&active_path).unwrap();
     update_active_private_key_expires_at(
         temp_dir.path(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &build_expiring_soon_timestamp(365),
     );
-    save_active_public_key_to_workspace_incoming(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID)
-        .unwrap();
+    save_active_public_key_to_workspace_incoming(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+    )
+    .unwrap();
 
-    let alice = find_incoming_candidate(&workspace_dir, ALICE_MEMBER_ID);
+    let alice = find_incoming_candidate(&workspace_dir, ALICE_MEMBER_HANDLE);
 
     promote_accepted_incoming_members(&workspace_dir, &[alice]).unwrap();
 
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
     assert_eq!(active_members.len(), 1);
-    assert_eq!(active_members[0].protected.member_id, ALICE_MEMBER_ID);
+    assert_eq!(
+        active_members[0].protected.subject_handle,
+        ALICE_MEMBER_HANDLE
+    );
     assert_ne!(active_members[0].protected.kid, old_active.protected.kid);
     assert!(incoming_members.is_empty());
 }
@@ -237,33 +244,33 @@ fn test_promote_accepted_incoming_members_replaces_existing_active_member_on_rot
 #[test]
 fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
     let invalid_file = workspace_dir.join("secrets").join("broken.json");
     fs::write(&invalid_file, "not encrypted").unwrap();
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
     let bob = incoming_members
         .iter()
-        .find(|member| member.protected.member_id == BOB_MEMBER_ID)
+        .find(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
     let plan = RewrapBatchPlan {
         workspace_root: workspace_dir.clone(),
         pre_promotion_trust: CommandTrustSnapshot::<RewrapInputPolicy>::load(
             &options,
             &workspace_dir,
-            &execution.member_id,
+            &execution.member_handle,
             Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
             options.verbose,
         )
@@ -280,7 +287,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         accepted_promotions: vec![bob_candidate],
     };
     let approvals = vec![ApprovedKnownKey::from_review(
-        &bob.protected.member_id,
+        &bob.protected.subject_handle,
         &bob.protected.kid,
         Some(bob.protected.identity.attestation.pub_.clone()),
         None,
@@ -301,13 +308,16 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
 
     assert!(outcome.processed_files.is_empty());
     assert_eq!(outcome.failed_files.len(), 1);
-    assert_eq!(outcome.promoted_member_ids, vec![BOB_MEMBER_ID.to_string()]);
+    assert_eq!(
+        outcome.promoted_member_handles,
+        vec![BOB_MEMBER_HANDLE.to_string()]
+    );
     assert!(load_active_member_files(&workspace_dir)
         .unwrap()
         .iter()
-        .any(|member| member.protected.member_id == BOB_MEMBER_ID));
+        .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -317,35 +327,35 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         .protected
         .known_keys
         .iter()
-        .any(|entry| entry.member_id == BOB_MEMBER_ID && entry.kid == bob.protected.kid));
+        .any(|entry| entry.subject_handle == BOB_MEMBER_HANDLE && entry.kid == bob.protected.kid));
 }
 
 #[test]
 fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_update() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     crate::test_utils::update_active_private_key_expires_at(
         temp_dir.path(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         "2020-01-01T00:00:00Z",
     );
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
     let bob = incoming_members
         .iter()
-        .find(|member| member.protected.member_id == BOB_MEMBER_ID)
+        .find(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
     let plan = build_empty_plan(&options, &execution, &workspace_dir);
     let request = RewrapBatchRequest {
@@ -355,7 +365,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
         accepted_promotions: vec![bob_candidate],
     };
     let approvals = vec![ApprovedKnownKey::from_review(
-        &bob.protected.member_id,
+        &bob.protected.subject_handle,
         &bob.protected.kid,
         Some(bob.protected.identity.attestation.pub_.clone()),
         None,
@@ -379,8 +389,8 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
     assert!(load_active_member_files(&workspace_dir)
         .unwrap()
         .iter()
-        .any(|member| member.protected.member_id == BOB_MEMBER_ID));
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+        .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     assert!(load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .is_none());
@@ -389,18 +399,19 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
 #[test]
 fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_review() {
     let _guard = strict_key_checking_guard();
-    let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (_temp_dir, workspace_dir) =
+        setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
-    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
+    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
     let reviewed_kid = bob_candidate.review.kid.clone();
     let reviewed_source = bob_candidate.source_content.clone();
 
@@ -424,7 +435,7 @@ fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_r
     assert!(!load_active_member_files(&workspace_dir)
         .unwrap()
         .iter()
-        .any(|member| member.protected.member_id == BOB_MEMBER_ID));
+        .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
     assert!(bob_incoming.exists());
     let current_incoming = fs::read_to_string(&bob_incoming).unwrap();
     assert_ne!(current_incoming, reviewed_source);
@@ -440,16 +451,16 @@ fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_r
 #[test]
 fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let alice_kid = execution.key_ctx.kid.clone();
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &alice_kid,
         &execution.key_ctx,
-        &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("snapshot-file.json");
     fs::write(&secret_path, &encrypted).unwrap();
@@ -465,7 +476,7 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
         load_active_member_files(&workspace_dir)
             .unwrap()
             .into_iter()
-            .filter(|member| member.protected.member_id == ALICE_MEMBER_ID)
+            .filter(|member| member.protected.subject_handle == ALICE_MEMBER_HANDLE)
             .collect::<Vec<_>>(),
     );
 
@@ -487,24 +498,24 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
         .protected
         .wrap
         .iter()
-        .map(|wrap| wrap.rid.clone())
+        .map(|wrap| wrap.recipient_handle.clone())
         .collect::<Vec<_>>();
-    assert_eq!(recipients, vec![ALICE_MEMBER_ID.to_string()]);
+    assert_eq!(recipients, vec![ALICE_MEMBER_HANDLE.to_string()]);
 }
 
 #[test]
 fn test_execute_rewrap_batch_uses_current_artifact_content_at_execution_time() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let alice_kid = execution.key_ctx.kid.clone();
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &alice_kid,
         &execution.key_ctx,
-        &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("stale-file.json");
     fs::write(&secret_path, &encrypted).unwrap();
@@ -543,16 +554,16 @@ fn test_execute_rewrap_batch_uses_current_artifact_content_at_execution_time() {
 #[test]
 fn test_execute_rewrap_batch_uses_captured_content_after_live_path_changes() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_HANDLE, None);
     let bob_signed = encrypt_file_for_members(
         temp_dir.path(),
-        BOB_MEMBER_ID,
+        BOB_MEMBER_HANDLE,
         &bob_key_ctx.kid,
         &bob_key_ctx,
-        &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("captured-file.json");
     fs::write(&secret_path, &bob_signed).unwrap();
@@ -586,26 +597,26 @@ fn test_execute_rewrap_batch_uses_captured_content_after_live_path_changes() {
     assert_eq!(outcome.processed_files.len(), 1);
     let rewritten = fs::read_to_string(&secret_path).unwrap();
     assert_ne!(rewritten, "tampered-after-capture");
-    assert!(rewritten.contains(ALICE_MEMBER_ID));
+    assert!(rewritten.contains(ALICE_MEMBER_HANDLE));
 }
 
 #[test]
 fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_review() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_HANDLE, None);
     let first_path = workspace_dir.join("secrets").join("one.json");
     let second_path = workspace_dir.join("secrets").join("two.json");
     fs::write(
         &first_path,
         encrypt_file_for_members(
             temp_dir.path(),
-            BOB_MEMBER_ID,
+            BOB_MEMBER_HANDLE,
             &bob_key_ctx.kid,
             &bob_key_ctx,
-            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+            &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -613,10 +624,10 @@ fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_revie
         &second_path,
         encrypt_file_for_members(
             temp_dir.path(),
-            BOB_MEMBER_ID,
+            BOB_MEMBER_HANDLE,
             &bob_key_ctx.kid,
             &bob_key_ctx,
-            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+            &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -647,7 +658,7 @@ fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_revie
 
     assert_eq!(prompt_count, 1);
     assert_eq!(outcome.processed_files.len(), 2);
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     let loaded = load_trust_store(&trust_path, temp_dir.path())
         .unwrap()
         .unwrap();
@@ -656,26 +667,26 @@ fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_revie
         .protected
         .known_keys
         .iter()
-        .any(|entry| entry.member_id == BOB_MEMBER_ID && bob_key_ctx.kid == entry.kid));
+        .any(|entry| entry.subject_handle == BOB_MEMBER_HANDLE && bob_key_ctx.kid == entry.kid));
 }
 
 #[test]
 fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_HANDLE, None);
     let bob_path = workspace_dir.join("secrets").join("reject.json");
     let alice_path = workspace_dir.join("secrets").join("accepted.json");
     fs::write(
         &bob_path,
         encrypt_file_for_members(
             temp_dir.path(),
-            BOB_MEMBER_ID,
+            BOB_MEMBER_HANDLE,
             &bob_key_ctx.kid,
             &bob_key_ctx,
-            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+            &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -683,10 +694,10 @@ fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
         &alice_path,
         encrypt_file_for_members(
             temp_dir.path(),
-            ALICE_MEMBER_ID,
+            ALICE_MEMBER_HANDLE,
             &execution.key_ctx.kid,
             &execution.key_ctx,
-            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+            &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -719,24 +730,24 @@ fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
         .error_message
         .contains("Manual signer trust was rejected"));
     let accepted_output = fs::read_to_string(&alice_path).unwrap();
-    assert!(accepted_output.contains(ALICE_MEMBER_ID));
+    assert!(accepted_output.contains(ALICE_MEMBER_HANDLE));
 }
 
 #[test]
 fn test_execute_rewrap_batch_does_not_create_artifact_lock_file() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let secret_path = workspace_dir.join("secrets").join("default.json");
     fs::write(
         &secret_path,
         encrypt_file_for_members(
             temp_dir.path(),
-            ALICE_MEMBER_ID,
+            ALICE_MEMBER_HANDLE,
             &execution.key_ctx.kid,
             &execution.key_ctx,
-            &[ALICE_MEMBER_ID],
+            &[ALICE_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -770,19 +781,19 @@ fn test_execute_rewrap_batch_does_not_create_artifact_lock_file() {
 #[test]
 fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_review() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
-    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_ID, None);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_HANDLE, None);
     let secret_path = workspace_dir.join("secrets").join("incoming-signer.json");
     fs::write(
         &secret_path,
         encrypt_file_for_members(
             temp_dir.path(),
-            BOB_MEMBER_ID,
+            BOB_MEMBER_HANDLE,
             &bob_key_ctx.kid,
             &bob_key_ctx,
-            &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+            &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -790,16 +801,16 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     plan.pre_promotion_trust.is_interactive = true;
-    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID);
+    let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
     let bob_public = load_member_file_from_path(&bob_incoming).unwrap();
     let request = RewrapBatchRequest {
         options,
@@ -808,7 +819,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
         accepted_promotions: vec![bob_candidate.clone()],
     };
     let approvals = vec![ApprovedKnownKey::from_review(
-        &bob_candidate.review.member_id,
+        &bob_candidate.review.member_handle,
         &bob_candidate.review.kid,
         bob_candidate.review.attestor_pub.clone(),
         None,
@@ -840,15 +851,15 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
 fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mismatch() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) =
-        setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID, "carol"]);
+        setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, "carol"]);
     let bob_active = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let bob_incoming = workspace_dir
         .join("members")
         .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let carol_active = workspace_dir
@@ -859,19 +870,19 @@ fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mi
     fs::remove_file(&carol_active).unwrap();
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let plan = build_empty_plan(&options, &execution, &workspace_dir);
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
         clear_disclosure_history: false,
-        accepted_promotions: vec![find_incoming_candidate(&workspace_dir, BOB_MEMBER_ID)],
+        accepted_promotions: vec![find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE)],
     };
     let expected_post_promotion_members = vec![
         load_active_member_files(&workspace_dir)
             .unwrap()
             .into_iter()
-            .find(|member| member.protected.member_id == ALICE_MEMBER_ID)
+            .find(|member| member.protected.subject_handle == ALICE_MEMBER_HANDLE)
             .unwrap(),
         load_member_file_from_path(&bob_incoming).unwrap(),
     ];
@@ -898,15 +909,15 @@ fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mi
 #[test]
 fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_keys() {
     let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_ID);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
-        ALICE_MEMBER_ID,
+        ALICE_MEMBER_HANDLE,
         &execution.key_ctx.kid,
         &execution.key_ctx,
-        &[ALICE_MEMBER_ID, BOB_MEMBER_ID],
+        &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("invalid-recipient.json");
     fs::write(&secret_path, &encrypted).unwrap();
@@ -921,7 +932,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
     let bob_file = workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", BOB_MEMBER_ID));
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let mut tampered: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&bob_file).unwrap()).unwrap();
     tampered["protected"]["expires_at"] =

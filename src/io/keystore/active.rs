@@ -15,8 +15,8 @@ const ACTIVE_FILE_SUBJECT: &str = "active key file";
 /// Load the active kid for a member.
 ///
 /// Returns the canonical serialized `kid`, or None if no active key is set.
-pub fn load_active_kid(member_id: &str, keystore_root: &Path) -> Result<Option<String>, Error> {
-    let active_path = keystore_root.join(member_id).join("active");
+pub fn load_active_kid(member_handle: &str, keystore_root: &Path) -> Result<Option<String>, Error> {
+    let active_path = keystore_root.join(member_handle).join("active");
 
     if !active_path.exists() {
         return Ok(None);
@@ -42,9 +42,9 @@ pub fn load_active_kid(member_id: &str, keystore_root: &Path) -> Result<Option<S
 /// Set the active kid for a member.
 ///
 /// Creates or updates the active file with the canonical serialized `kid`.
-pub fn set_active_kid(member_id: &str, kid: &str, keystore_root: &Path) -> Result<(), Error> {
+pub fn set_active_kid(member_handle: &str, kid: &str, keystore_root: &Path) -> Result<(), Error> {
     let canonical_kid = normalize_kid(kid)?;
-    let active_path = keystore_root.join(member_id).join("active");
+    let active_path = keystore_root.join(member_handle).join("active");
 
     // Write kid to active file atomically (with trailing newline)
     atomic::save_text_restricted(&active_path, &format!("{}\n", canonical_kid))
@@ -53,8 +53,8 @@ pub fn set_active_kid(member_id: &str, kid: &str, keystore_root: &Path) -> Resul
 /// Clear the active kid for a member
 ///
 /// Removes the active file
-pub fn clear_active_kid(member_id: &str, keystore_root: &Path) -> Result<(), Error> {
-    let active_path = keystore_root.join(member_id).join("active");
+pub fn clear_active_kid(member_handle: &str, keystore_root: &Path) -> Result<(), Error> {
+    let active_path = keystore_root.join(member_handle).join("active");
 
     if active_path.exists() {
         fs::remove_file(&active_path).map_err(|e| {

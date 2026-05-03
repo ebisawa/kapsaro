@@ -28,7 +28,7 @@ fn validate_recipient_key_count(
     Ok(())
 }
 
-/// Encrypt binary content to file-enc v3 format and return JSON string.
+/// Encrypt binary content to file-enc v4 format and return JSON string.
 pub fn encrypt_file_content(
     content: &[u8],
     recipients: &[String],
@@ -43,7 +43,7 @@ pub fn encrypt_file_content(
         .map(|id| {
             members
                 .iter()
-                .find(|m| m.document().protected.member_id == *id)
+                .find(|m| m.document().protected.subject_handle == *id)
                 .ok_or_else(|| Error::NotFound {
                     message: format!("Member not found for recipient: {}", id),
                 })

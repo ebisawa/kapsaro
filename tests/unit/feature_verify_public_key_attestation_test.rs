@@ -35,7 +35,7 @@ fn generate_real_ssh_attested_public_key(
         build_ssh_signing_context_with_params(&params, &candidates[0].public_key).unwrap();
 
     let result = generate_key(KeyGenerationOptions {
-        member_id: "attestation-test@example.com".to_string(),
+        member_handle: "attestation-test@example.com".to_string(),
         home: Some(home_dir.clone()),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2026-12-31T23:59:59Z".to_string(),

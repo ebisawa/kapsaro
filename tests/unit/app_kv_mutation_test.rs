@@ -18,17 +18,17 @@ use crate::test_utils::{
 };
 use std::fs;
 
-const ALICE_MEMBER_ID: &str = "alice@example.com";
-const BOB_MEMBER_ID: &str = "bob@example.com";
+const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
+const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 
 fn evaluate_set_plan(
     options: &CommonCommandOptions,
     name: Option<&str>,
 ) -> MutationWriteTrustPlan<SetPolicy> {
-    let ssh_ctx = Some(resolve_test_ssh_context(options, ALICE_MEMBER_ID));
+    let ssh_ctx = Some(resolve_test_ssh_context(options, ALICE_MEMBER_HANDLE));
     resolve_mutation_write_plan::<SetPolicy>(
         options,
-        Some(ALICE_MEMBER_ID.to_string()),
+        Some(ALICE_MEMBER_HANDLE.to_string()),
         name,
         true,
         ssh_ctx,
@@ -38,19 +38,19 @@ fn evaluate_set_plan(
 
 fn activate_fixture_key(home: &std::path::Path) {
     let keystore_root = home.join("keys");
-    let kid = list_kids(&keystore_root, ALICE_MEMBER_ID)
+    let kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
         .unwrap()
         .into_iter()
         .next()
         .unwrap();
-    set_active_kid(ALICE_MEMBER_ID, &kid, &keystore_root).unwrap();
+    set_active_kid(ALICE_MEMBER_HANDLE, &kid, &keystore_root).unwrap();
 }
 
 #[test]
 fn test_execute_set_rejects_existing_file_mismatch_after_review() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
 
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
 
@@ -60,7 +60,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
 
         let reviewed = evaluate_set_plan(&options, None);
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
-        fs::write(&kv_path, ":SECRETENV_KV 3\n:HEAD {}\n:WRAP {}\n").unwrap();
+        fs::write(&kv_path, ":SECRETENV_KV 4\n:HEAD {}\n:WRAP {}\n").unwrap();
 
         let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY2", "value2")], None);
 
@@ -70,7 +70,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
         }
         assert_eq!(
             fs::read_to_string(&kv_path).unwrap(),
-            ":SECRETENV_KV 3\n:HEAD {}\n:WRAP {}\n"
+            ":SECRETENV_KV 4\n:HEAD {}\n:WRAP {}\n"
         );
     });
 }
@@ -79,7 +79,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
 fn test_execute_set_rejects_file_created_after_missing_review() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
 
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
 
@@ -105,7 +105,7 @@ fn test_execute_set_rejects_symlinked_existing_file_after_review() {
 
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
 
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
 
@@ -136,22 +136,27 @@ fn test_execute_set_rejects_active_member_snapshot_change_after_review() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
 
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     with_temp_cwd(temp_dir.path(), || {
         let reviewed = evaluate_set_plan(&options, None);
         let bob_active = workspace_dir
             .join("members")
             .join("active")
-            .join(format!("{}.json", BOB_MEMBER_ID));
+            .join(format!("{}.json", BOB_MEMBER_HANDLE));
         let bob_incoming = workspace_dir
             .join("members")
             .join("incoming")
-            .join(format!("{}.json", BOB_MEMBER_ID));
+            .join(format!("{}.json", BOB_MEMBER_HANDLE));
         fs::rename(&bob_active, &bob_incoming).unwrap();
 
         let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY1", "value1")], None);
@@ -169,7 +174,7 @@ fn test_execute_set_rejects_active_member_snapshot_change_after_review() {
 fn test_evaluate_set_rejects_strict_key_checking_no_for_existing_file() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
 
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
 
@@ -178,10 +183,10 @@ fn test_evaluate_set_rejects_strict_key_checking_no_for_existing_file() {
         set_kv_command(&initial, vec![KvInputEntry::new("KEY1", "value1")], None).unwrap();
         std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "no");
 
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_ID));
+        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let result = resolve_mutation_write_plan::<SetPolicy>(
             &options,
-            Some(ALICE_MEMBER_ID.to_string()),
+            Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             true,
             ssh_ctx,
@@ -200,12 +205,17 @@ fn test_evaluate_kv_write_trust_surfaces_insecure_trust_store_warning() {
     use std::os::unix::fs::PermissionsExt;
 
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_ID);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     with_temp_cwd(temp_dir.path(), || {
@@ -221,11 +231,11 @@ fn test_evaluate_kv_write_trust_surfaces_insecure_trust_store_warning() {
 #[test]
 fn test_resolve_mutation_write_plan_includes_private_key_expiry_warning() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
     let expires_at = build_expiring_soon_timestamp(15);
-    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_ID, &expires_at);
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
 
     with_temp_cwd(temp_dir.path(), || {
         let plan = evaluate_set_plan(&options, None);
@@ -240,14 +250,20 @@ fn test_resolve_mutation_write_plan_includes_private_key_expiry_warning() {
 fn test_resolve_mutation_write_plan_includes_recipient_key_expiry_warning() {
     let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
     let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_ID, BOB_MEMBER_ID]);
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
     let expires_at = build_expiring_soon_timestamp(15);
-    update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_ID, &expires_at);
-    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_ID).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_ID, None);
-    setup_trust_store_for_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_ID, &key_ctx);
+    update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, BOB_MEMBER_HANDLE)
+        .unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     with_temp_cwd(temp_dir.path(), || {
         let plan = evaluate_set_plan(&options, None);

@@ -20,12 +20,13 @@ use std::error::Error as StdError;
 #[test]
 fn test_display_schema_variant() {
     let err = Error::Schema {
-        message: "instance is not valid under any schema".to_string(),
+        message: "Invalid secretenv document\nReason: signature.signer_pub is missing".to_string(),
         source: None,
     };
     let text = format!("{}", err);
-    assert!(text.contains("Schema validation error:"));
-    assert!(text.contains("instance is not valid under any schema"));
+    assert!(text.contains("Invalid secretenv document"));
+    assert!(text.contains("signature.signer_pub is missing"));
+    assert!(!text.contains("Schema validation error"));
 }
 
 #[test]

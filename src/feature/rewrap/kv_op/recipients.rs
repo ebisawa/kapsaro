@@ -55,7 +55,7 @@ pub fn rewrite_kv_recipient_wraps(
         resolve_verified_recipients(target_members, key_ctx, refreshed_recipients, debug)?;
     wrap_data
         .wrap
-        .retain(|wrap| !refreshed_recipients.contains(&wrap.rid));
+        .retain(|wrap| !refreshed_recipients.contains(&wrap.recipient_handle));
     for member in &refreshed_members {
         wrap_data
             .wrap

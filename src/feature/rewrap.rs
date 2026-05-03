@@ -30,7 +30,7 @@ pub(crate) struct RewrapOptions {
 /// Context for rewrap operations that provides common functionality.
 pub(crate) struct RewrapContext<'a> {
     options: &'a RewrapOptions,
-    member_id: &'a str,
+    member_handle: &'a str,
     key_ctx: &'a CryptoContext,
     target_members: Option<&'a [VerifiedRecipientKey]>,
 }
@@ -38,7 +38,7 @@ pub(crate) struct RewrapContext<'a> {
 /// Request for rewrapping a single encrypted artifact.
 #[derive(Clone, Copy)]
 pub struct RewrapRequest<'a> {
-    pub member_id: &'a str,
+    pub member_handle: &'a str,
     pub key_ctx: &'a CryptoContext,
     pub workspace_root: Option<&'a Path>,
     pub target_members: Option<&'a [VerifiedRecipientKey]>,
@@ -50,13 +50,13 @@ pub struct RewrapRequest<'a> {
 impl<'a> RewrapContext<'a> {
     pub(crate) fn new(
         options: &'a RewrapOptions,
-        member_id: &'a str,
+        member_handle: &'a str,
         key_ctx: &'a CryptoContext,
         target_members: Option<&'a [VerifiedRecipientKey]>,
     ) -> Self {
         Self {
             options,
-            member_id,
+            member_handle,
             key_ctx,
             target_members,
         }
@@ -64,7 +64,7 @@ impl<'a> RewrapContext<'a> {
 
     /// Load signer's public key for embedding in signatures.
     pub(crate) fn load_signer_pub(&self) -> Result<PublicKey> {
-        load_signer_public_key(self.key_ctx.pub_key_source.as_ref(), self.member_id)
+        load_signer_public_key(self.key_ctx.pub_key_source.as_ref(), self.member_handle)
     }
 
     pub(crate) fn options(&self) -> &'a RewrapOptions {
@@ -83,13 +83,13 @@ impl<'a> RewrapContext<'a> {
 /// Trait for rewrap executors that can perform rewrap operations.
 pub(crate) trait RewrapExecutor {
     /// Return the current recipients list from the encrypted file.
-    /// - file-enc: rid fields from protected.wrap
+    /// - file-enc: recipient_handle fields from protected.wrap
     /// - kv-enc: result of extract_recipients_from_wrap(&wrap_data)
     fn current_recipients(&self) -> Vec<String>;
 
     /// Add recipients to the encrypted file (wrap only, MK/DEK unchanged).
     ///
-    /// `recipients` are plain member ID strings.
+    /// `recipients` are plain member handle strings.
     fn add_recipients(&mut self, recipients: &[String]) -> Result<()>;
 
     /// Rewrite wrap items for recipients whose target kid changed.
@@ -100,7 +100,7 @@ pub(crate) trait RewrapExecutor {
     /// - file-enc: removes wrap items and records in removed_recipients (MK/DEK unchanged)
     /// - kv-enc: full re-encryption with new MK/DEK, records in removed_recipients
     ///
-    /// `recipients` are plain member ID strings.
+    /// `recipients` are plain member handle strings.
     fn remove_recipients(&mut self, recipients: &[String]) -> Result<()>;
 
     /// Rotate master key / content key (full re-encryption).
@@ -116,7 +116,7 @@ pub(crate) trait RewrapExecutor {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RewrapOperationPlan {
     remove_recipients: Vec<String>,
-    stale_recipient_ids: Vec<String>,
+    stale_recipient_handles: Vec<String>,
     add_recipients: Vec<String>,
     rotate_key: bool,
     clear_disclosure_history: bool,
@@ -142,7 +142,7 @@ pub(crate) fn build_rewrap_operation_plan(
 
     RewrapOperationPlan {
         remove_recipients,
-        stale_recipient_ids: stale_recipients.to_vec(),
+        stale_recipient_handles: stale_recipients.to_vec(),
         add_recipients,
         rotate_key: options.rotate_key,
         clear_disclosure_history: options.clear_disclosure_history,
@@ -157,8 +157,8 @@ pub(crate) fn rewrite_with_rewrap_operation_plan<E: RewrapExecutor>(
     if !plan.remove_recipients.is_empty() {
         executor.remove_recipients(&plan.remove_recipients)?;
     }
-    if !plan.stale_recipient_ids.is_empty() {
-        executor.rewrite_recipient_wraps(&plan.stale_recipient_ids)?;
+    if !plan.stale_recipient_handles.is_empty() {
+        executor.rewrite_recipient_wraps(&plan.stale_recipient_handles)?;
     }
     if !plan.add_recipients.is_empty() {
         executor.add_recipients(&plan.add_recipients)?;
@@ -173,7 +173,7 @@ pub(crate) fn rewrite_with_rewrap_operation_plan<E: RewrapExecutor>(
     executor.finalize()
 }
 
-pub(crate) fn collect_stale_recipient_ids(
+pub(crate) fn collect_stale_recipient_handles(
     current_wrap: &[WrapItem],
     target_members: &[VerifiedRecipientKey],
 ) -> Vec<String> {
@@ -183,9 +183,9 @@ pub(crate) fn collect_stale_recipient_ids(
             let protected = &member.document().protected;
             current_wrap
                 .iter()
-                .find(|wrap| wrap.rid == protected.member_id)
+                .find(|wrap| wrap.recipient_handle == protected.subject_handle)
                 .filter(|wrap| wrap.kid != protected.kid)
-                .map(|_| protected.member_id.clone())
+                .map(|_| protected.subject_handle.clone())
         })
         .collect()
 }
@@ -205,7 +205,7 @@ pub fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Resu
         EncContent::FileEnc(file_content) => file::rewrap_file_document(
             &options,
             file_content,
-            request.member_id,
+            request.member_handle,
             request.key_ctx,
             request.workspace_root,
             request.target_members,
@@ -213,7 +213,7 @@ pub fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Resu
         EncContent::KvEnc(kv_content) => kv::rewrap_kv_document(
             &options,
             kv_content,
-            request.member_id,
+            request.member_handle,
             request.key_ctx,
             request.workspace_root,
             request.target_members,

@@ -8,14 +8,14 @@ use super::trust_store::TrustStoreDocument;
 /// Proof that a Trust Store document has been verified.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustStoreVerificationProof {
-    /// Owner member ID confirmed by verification
-    pub owner_member_id: String,
+    /// Owner member handle confirmed by verification
+    pub owner_handle: String,
 }
 
 impl TrustStoreVerificationProof {
     /// Create a new TrustStoreVerificationProof.
-    pub fn new(owner_member_id: String) -> Self {
-        Self { owner_member_id }
+    pub fn new(owner_handle: String) -> Self {
+        Self { owner_handle }
     }
 }
 

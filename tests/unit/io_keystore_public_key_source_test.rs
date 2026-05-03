@@ -7,12 +7,12 @@ use secretenv::io::keystore::public_key_source::{PublicKeySource, WorkspacePubli
 use std::fs;
 use tempfile::TempDir;
 
-fn build_test_public_key_json(member_id: &str, kid: &str) -> String {
+fn build_test_public_key_json(member_handle: &str, kid: &str) -> String {
     format!(
         r#"{{
   "protected": {{
-    "format": "secretenv.public.key@4",
-    "member_id": "{}",
+    "format": "secretenv.public.key@5",
+    "subject_handle": "{}",
     "kid": "{}",
     "identity": {{
       "keys": {{
@@ -30,15 +30,15 @@ fn build_test_public_key_json(member_id: &str, kid: &str) -> String {
   }},
   "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 }}"#,
-        member_id, kid
+        member_handle, kid
     )
 }
 
-fn setup_workspace_member(workspace_path: &std::path::Path, member_id: &str, kid: &str) {
+fn setup_workspace_member(workspace_path: &std::path::Path, member_handle: &str, kid: &str) {
     let active_dir = workspace_path.join("members/active");
     std::fs::create_dir_all(&active_dir).unwrap();
-    let json = build_test_public_key_json(member_id, kid);
-    std::fs::write(active_dir.join(format!("{}.json", member_id)), json).unwrap();
+    let json = build_test_public_key_json(member_handle, kid);
+    std::fs::write(active_dir.join(format!("{}.json", member_handle)), json).unwrap();
 }
 
 #[test]
@@ -46,16 +46,16 @@ fn test_workspace_public_key_source_load_public_key() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_path = temp_dir.path();
 
-    let member_id = "alice@example.com";
+    let member_handle = "alice@example.com";
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
-    setup_workspace_member(workspace_path, member_id, kid);
+    setup_workspace_member(workspace_path, member_handle, kid);
 
     let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
-    let result = source.load_public_key(member_id);
+    let result = source.load_public_key(member_handle);
     assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
 
     let public_key = result.unwrap();
-    assert_eq!(public_key.protected.member_id, member_id);
+    assert_eq!(public_key.protected.subject_handle, member_handle);
     assert_eq!(public_key.protected.kid, kid);
 }
 
@@ -70,11 +70,11 @@ fn test_workspace_public_key_source_load_not_found() {
     assert!(result.is_err());
 }
 
-fn setup_incoming_member(workspace_path: &std::path::Path, member_id: &str, kid: &str) {
+fn setup_incoming_member(workspace_path: &std::path::Path, member_handle: &str, kid: &str) {
     let incoming_dir = workspace_path.join("members/incoming");
     std::fs::create_dir_all(&incoming_dir).unwrap();
-    let json = build_test_public_key_json(member_id, kid);
-    std::fs::write(incoming_dir.join(format!("{}.json", member_id)), json).unwrap();
+    let json = build_test_public_key_json(member_handle, kid);
+    std::fs::write(incoming_dir.join(format!("{}.json", member_handle)), json).unwrap();
 }
 
 #[test]
@@ -120,11 +120,11 @@ fn test_workspace_public_key_source_bulk_rejects_incoming_member() {
     );
 
     let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
-    let member_ids = vec![
+    let member_handles = vec![
         "alice@example.com".to_string(),
         "pending@example.com".to_string(),
     ];
-    let result = source.load_public_keys_for_member_ids(&member_ids);
+    let result = source.load_public_keys_for_member_handles(&member_handles);
     assert!(
         result.is_err(),
         "Bulk load should reject when any member is not active"
@@ -142,20 +142,20 @@ fn test_workspace_public_key_source_load_multiple() {
         ("charlie@example.com", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GF"),
     ];
 
-    for (member_id, kid) in &members {
-        setup_workspace_member(workspace_path, member_id, kid);
+    for (member_handle, kid) in &members {
+        setup_workspace_member(workspace_path, member_handle, kid);
     }
 
     let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
-    let member_ids: Vec<String> = members.iter().map(|(id, _)| id.to_string()).collect();
-    let result = source.load_public_keys_for_member_ids(&member_ids);
+    let member_handles: Vec<String> = members.iter().map(|(id, _)| id.to_string()).collect();
+    let result = source.load_public_keys_for_member_handles(&member_handles);
     assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
 
     let keys = result.unwrap();
     assert_eq!(keys.len(), 3);
-    assert_eq!(keys[0].protected.member_id, "alice@example.com");
-    assert_eq!(keys[1].protected.member_id, "bob@example.com");
-    assert_eq!(keys[2].protected.member_id, "charlie@example.com");
+    assert_eq!(keys[0].protected.subject_handle, "alice@example.com");
+    assert_eq!(keys[1].protected.subject_handle, "bob@example.com");
+    assert_eq!(keys[2].protected.subject_handle, "charlie@example.com");
 }
 
 #[test]

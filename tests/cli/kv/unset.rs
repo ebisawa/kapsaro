@@ -3,7 +3,7 @@
 
 //! Integration tests for `unset` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_ID};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--member-handle")
-        .arg(TEST_MEMBER_ID)
+        .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
@@ -122,7 +122,7 @@ fn test_unset_non_interactive_without_force_fails() {
 }
 
 #[test]
-fn test_unset_requires_member_id_before_confirmation() {
+fn test_unset_requires_member_handle_before_confirmation() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = TempDir::new().unwrap();
 

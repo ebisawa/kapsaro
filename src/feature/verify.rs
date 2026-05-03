@@ -21,8 +21,8 @@ use crate::model::verification::VerifyingKeySource;
 pub struct SignatureVerificationReport {
     /// Whether verification succeeded
     pub verified: bool,
-    /// Signer's member_id (if successfully identified)
-    pub signer_member_id: Option<String>,
+    /// Signer's member_handle (if successfully identified)
+    pub signer_handle: Option<String>,
     /// Source of the verifying key
     pub source: Option<VerifyingKeySource>,
     /// Warnings (e.g., expired key)

@@ -19,7 +19,7 @@ use crate::{Error, Result};
 
 /// Build protected header for password-based PrivateKey encryption
 fn build_protected_header(
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     ikm_salt_b64: String,
     hkdf_salt_b64: String,
@@ -27,8 +27,8 @@ fn build_protected_header(
     expires_at: &str,
 ) -> PrivateKeyProtected {
     PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V5.to_string(),
-        member_id: member_id.to_string(),
+        format: format::PRIVATE_KEY_V6.to_string(),
+        subject_handle: member_handle.to_string(),
         kid: kid.to_string(),
         alg: PrivateKeyAlgorithm::Argon2id {
             ikm_salt: ikm_salt_b64,
@@ -43,7 +43,7 @@ fn build_protected_header(
 /// Encrypt a private key with a password using Argon2id key derivation
 pub fn encrypt_private_key_with_password(
     plaintext: &PrivateKeyPlaintext,
-    member_id: &str,
+    member_handle: &str,
     kid: &str,
     created_at: &str,
     expires_at: &str,
@@ -56,7 +56,7 @@ pub fn encrypt_private_key_with_password(
     let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
 
     let protected = build_protected_header(
-        member_id,
+        member_handle,
         kid,
         ikm_salt_b64,
         hkdf_salt_b64,

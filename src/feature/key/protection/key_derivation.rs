@@ -28,7 +28,7 @@ pub(super) struct PrivateKeyUseKey {
 pub fn build_sign_message(ikm_salt_b64: &str) -> String {
     format!(
         "{}\n{}",
-        context::SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V5,
+        context::SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6,
         ikm_salt_b64
     )
 }
@@ -147,7 +147,7 @@ fn derive_key_from_raw_signature(
     let ikm = Ikm::from(&raw_sig.as_bytes()[..]);
     let info = Info::from_string(&format!(
         "{}:{}",
-        context::SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V5,
+        context::SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6,
         kid
     ));
     let cek = kdf::expand_to_array(&ikm, Some(hkdf_salt), &info)?;

@@ -7,7 +7,7 @@
 
 use crate::cli::common::{
     cmd, default_common_options, generate_temp_ssh_keypair, set_ssh_key_from_temp_dir,
-    setup_workspace, ALICE_MEMBER_ID, BOB_MEMBER_ID, TEST_MEMBER_ID,
+    setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;
@@ -30,10 +30,10 @@ mod preconditions;
 mod roundtrip;
 
 /// Build a default RewrapArgs for testing.
-fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArgs {
+fn default_rewrap_args(common_opts: CommonOptions, member_handle: &str) -> RewrapArgs {
     RewrapArgs {
         common: common_opts,
-        member_handle: Some(member_id.to_string()),
+        member_handle: Some(member_handle.to_string()),
         rotate_key: false,
         clear_disclosure_history: false,
         targets: Vec::new(),
@@ -46,7 +46,7 @@ fn default_rewrap_args(common_opts: CommonOptions, member_id: &str) -> RewrapArg
 fn save_kv_file(
     workspace_dir: &Path,
     common_opts: CommonOptions,
-    member_id: &str,
+    member_handle: &str,
     name: &str,
     entries: &[(&str, &str)],
 ) -> PathBuf {
@@ -54,7 +54,7 @@ fn save_kv_file(
         let set_args = set::SetArgs {
             common: common_opts.clone(),
 
-            member_handle: Some(member_id.to_string()),
+            member_handle: Some(member_handle.to_string()),
             name: Some(name.to_string()),
             stdin: false,
             key: key.to_string(),
@@ -67,21 +67,25 @@ fn save_kv_file(
         .join(format!("{}.kvenc", name))
 }
 
-/// Parse the rids from a kv-enc .kv file's WRAP line.
-fn load_kv_rids(kv_path: &Path) -> Vec<String> {
+/// Parse the recipient_handles from a kv-enc .kv file's WRAP line.
+fn load_kv_recipient_handles(kv_path: &Path) -> Vec<String> {
     let content = fs::read_to_string(kv_path).unwrap();
     let (_, _, wrap_data) = parse_kv_wrap(&content).unwrap();
-    wrap_data.wrap.iter().map(|w| w.rid.clone()).collect()
+    wrap_data
+        .wrap
+        .iter()
+        .map(|w| w.recipient_handle.clone())
+        .collect()
 }
 
-/// Get the removed_recipients rids from a kv-enc file.
-fn load_kv_removed_rids(kv_path: &Path) -> Vec<String> {
+/// Get the removed_recipients recipient_handles from a kv-enc file.
+fn load_kv_removed_recipient_handles(kv_path: &Path) -> Vec<String> {
     let content = fs::read_to_string(kv_path).unwrap();
     let (_, _, wrap_data) = parse_kv_wrap(&content).unwrap();
     wrap_data
         .removed_recipients
         .unwrap_or_default()
         .iter()
-        .map(|r| r.rid.clone())
+        .map(|r| r.recipient_handle.clone())
         .collect()
 }

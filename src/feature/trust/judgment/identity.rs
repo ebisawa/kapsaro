@@ -1,34 +1,34 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::model::identity::{Kid, MemberId};
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustIdentity {
-    member_id: MemberId,
+    member_handle: MemberHandle,
     kid: Kid,
     sig_x: [u8; 32],
 }
 
 impl TrustIdentity {
-    pub fn new<M, K>(member_id: M, kid: K, sig_x: [u8; 32]) -> Self
+    pub fn new<M, K>(member_handle: M, kid: K, sig_x: [u8; 32]) -> Self
     where
-        M: IntoMemberId,
+        M: IntoMemberHandle,
         K: IntoKid,
     {
-        Self::try_new(member_id, kid, sig_x).expect("trust identity inputs must be valid")
+        Self::try_new(member_handle, kid, sig_x).expect("trust identity inputs must be valid")
     }
 
-    pub fn try_new<M, K>(member_id: M, kid: K, sig_x: [u8; 32]) -> Result<Self>
+    pub fn try_new<M, K>(member_handle: M, kid: K, sig_x: [u8; 32]) -> Result<Self>
     where
-        M: IntoMemberId,
+        M: IntoMemberHandle,
         K: IntoKid,
     {
         Ok(Self {
-            member_id: member_id.into_member_id()?,
+            member_handle: member_handle.into_member_handle()?,
             kid: kid.into_kid()?,
             sig_x,
         })
@@ -36,7 +36,7 @@ impl TrustIdentity {
 
     pub fn from_public_key(public_key: &PublicKey) -> Result<Self> {
         Self::try_new(
-            public_key.protected.member_id.clone(),
+            public_key.protected.subject_handle.clone(),
             public_key.protected.kid.clone(),
             decode_base64url_nopad_array(
                 &public_key.protected.identity.keys.sig.x,
@@ -45,12 +45,12 @@ impl TrustIdentity {
         )
     }
 
-    pub fn member_id(&self) -> &str {
-        self.member_id.as_str()
+    pub fn member_handle(&self) -> &str {
+        self.member_handle.as_str()
     }
 
-    pub fn member_id_value(&self) -> &MemberId {
-        &self.member_id
+    pub fn member_handle_value(&self) -> &MemberHandle {
+        &self.member_handle
     }
 
     pub fn kid(&self) -> &str {
@@ -66,25 +66,25 @@ impl TrustIdentity {
     }
 }
 
-pub trait IntoMemberId {
-    fn into_member_id(self) -> Result<MemberId>;
+pub trait IntoMemberHandle {
+    fn into_member_handle(self) -> Result<MemberHandle>;
 }
 
-impl IntoMemberId for MemberId {
-    fn into_member_id(self) -> Result<MemberId> {
+impl IntoMemberHandle for MemberHandle {
+    fn into_member_handle(self) -> Result<MemberHandle> {
         Ok(self)
     }
 }
 
-impl IntoMemberId for String {
-    fn into_member_id(self) -> Result<MemberId> {
-        MemberId::try_from(self)
+impl IntoMemberHandle for String {
+    fn into_member_handle(self) -> Result<MemberHandle> {
+        MemberHandle::try_from(self)
     }
 }
 
-impl IntoMemberId for &str {
-    fn into_member_id(self) -> Result<MemberId> {
-        MemberId::try_from(self)
+impl IntoMemberHandle for &str {
+    fn into_member_handle(self) -> Result<MemberHandle> {
+        MemberHandle::try_from(self)
     }
 }
 

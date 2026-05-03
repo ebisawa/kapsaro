@@ -19,7 +19,7 @@ use super::common::{resolve_active_kid, resolve_keystore_root};
 /// Decrypted private key with metadata for portable export.
 pub struct PrivateKeyExportMaterial {
     pub plaintext: PrivateKeyPlaintext,
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
     pub created_at: String,
     pub expires_at: String,
@@ -27,18 +27,18 @@ pub struct PrivateKeyExportMaterial {
 
 pub fn load_private_key_export_material(
     home: Option<PathBuf>,
-    member_id: String,
+    member_handle: String,
     kid: Option<String>,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     debug: bool,
 ) -> Result<PrivateKeyExportMaterial> {
     let keystore_root = resolve_keystore_root(home)?;
-    let kid = resolve_active_kid(&keystore_root, &member_id, kid)?;
-    let encrypted = load_private_key(&keystore_root, &member_id, &kid)?;
+    let kid = resolve_active_kid(&keystore_root, &member_handle, kid)?;
+    let encrypted = load_private_key(&keystore_root, &member_handle, &kid)?;
 
     // Verify the corresponding public.json in the same key directory.
-    let public_key = load_public_key(&keystore_root, &member_id, &kid)?;
+    let public_key = load_public_key(&keystore_root, &member_handle, &kid)?;
     let verified_public_key = verify_public_key_with_attestation_context(
         &public_key,
         debug,
@@ -51,7 +51,7 @@ pub fn load_private_key_export_material(
 
     Ok(PrivateKeyExportMaterial {
         plaintext,
-        member_id,
+        member_handle,
         kid,
         created_at: encrypted.protected.created_at.clone(),
         expires_at: encrypted.protected.expires_at.clone(),

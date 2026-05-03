@@ -18,8 +18,8 @@ pub struct ActiveKeyDocument {
     pub public_key: PublicKey,
 }
 
-/// Load member_id from keystore if exactly one exists.
-pub fn load_single_member_id_from_keystore(keystore_root: &Path) -> Result<Option<String>> {
+/// Load member_handle from keystore if exactly one exists.
+pub fn load_single_member_handle_from_keystore(keystore_root: &Path) -> Result<Option<String>> {
     if !keystore_root.exists() {
         return Ok(None);
     }
@@ -43,48 +43,48 @@ pub fn load_single_member_id_from_keystore(keystore_root: &Path) -> Result<Optio
 
 /// Load the active public key document for a member when the private key still exists.
 pub fn find_active_key_document(
-    member_id: &str,
+    member_handle: &str,
     keystore_root: &Path,
 ) -> Result<Option<ActiveKeyDocument>> {
-    let Some(kid) = active::load_active_kid(member_id, keystore_root)? else {
+    let Some(kid) = active::load_active_kid(member_handle, keystore_root)? else {
         return Ok(None);
     };
 
     let private_key_path =
-        paths::get_private_key_file_path_from_root(keystore_root, member_id, &kid);
+        paths::get_private_key_file_path_from_root(keystore_root, member_handle, &kid);
     if !private_key_path.exists() {
-        active::clear_active_kid(member_id, keystore_root)?;
+        active::clear_active_kid(member_handle, keystore_root)?;
         return Ok(None);
     }
 
-    let public_key = load_public_key(keystore_root, member_id, &kid)?;
+    let public_key = load_public_key(keystore_root, member_handle, &kid)?;
     Ok(Some(ActiveKeyDocument { kid, public_key }))
 }
 
 /// Load all public key documents for a member from the local keystore.
 pub fn load_public_keys_for_member(
     keystore_root: &Path,
-    member_id: &str,
+    member_handle: &str,
 ) -> Result<Vec<PublicKey>> {
-    let kids = list_kids(keystore_root, member_id)?;
+    let kids = list_kids(keystore_root, member_handle)?;
     kids.into_iter()
-        .map(|kid| load_public_key(keystore_root, member_id, &kid))
+        .map(|kid| load_public_key(keystore_root, member_handle, &kid))
         .collect()
 }
 
 /// Select latest valid (non-expired) key for a member.
-pub fn select_latest_valid_kid(keystore_root: &Path, member_id: &str) -> Result<String> {
-    let kids = list_kids(keystore_root, member_id)?;
+pub fn select_latest_valid_kid(keystore_root: &Path, member_handle: &str) -> Result<String> {
+    let kids = list_kids(keystore_root, member_handle)?;
     if kids.is_empty() {
         return Err(Error::NotFound {
-            message: format!("No keys found for member: {}", member_id),
+            message: format!("No keys found for member: {}", member_handle),
         });
     }
 
     let now = time::OffsetDateTime::now_utc();
     let mut candidates = Vec::new();
     for kid in kids {
-        let public_key = load_public_key(keystore_root, member_id, &kid)?;
+        let public_key = load_public_key(keystore_root, member_handle, &kid)?;
         let expires_at = parse_expires_at(&public_key)?;
         let created_at = parse_created_at(&public_key)?;
 
@@ -100,14 +100,14 @@ pub fn select_latest_valid_kid(keystore_root: &Path, member_id: &str) -> Result<
     Err(Error::NotFound {
         message: format!(
             "No valid (non-expired) keys found for member: {}",
-            member_id
+            member_handle
         ),
     })
 }
 
 /// Remove a key directory from the keystore.
-pub fn remove_key_directory(keystore_root: &Path, member_id: &str, kid: &str) -> Result<()> {
-    let key_dir = keystore_root.join(member_id).join(kid);
+pub fn remove_key_directory(keystore_root: &Path, member_handle: &str, kid: &str) -> Result<()> {
+    let key_dir = keystore_root.join(member_handle).join(kid);
     std::fs::remove_dir_all(&key_dir).map_err(|e| {
         Error::build_io_error_with_source(
             format!(
@@ -121,18 +121,18 @@ pub fn remove_key_directory(keystore_root: &Path, member_id: &str, kid: &str) ->
 }
 
 /// Select the most recent key for a member based on `created_at desc, kid asc`.
-pub fn select_most_recent_kid(keystore_root: &Path, member_id: &str) -> Result<String> {
-    let kids = list_kids(keystore_root, member_id)?;
+pub fn select_most_recent_kid(keystore_root: &Path, member_handle: &str) -> Result<String> {
+    let kids = list_kids(keystore_root, member_handle)?;
     if kids.is_empty() {
         return Err(Error::NotFound {
-            message: format!("No keys found for member: {}", member_id),
+            message: format!("No keys found for member: {}", member_handle),
         });
     }
 
     let candidates = kids
         .into_iter()
         .map(|kid| {
-            let public_key = load_public_key(keystore_root, member_id, &kid)?;
+            let public_key = load_public_key(keystore_root, member_handle, &kid)?;
             let created_at = parse_created_at(&public_key)?;
             Ok((kid, created_at))
         })

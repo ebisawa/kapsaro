@@ -5,7 +5,7 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemovedKnownKey {
-    pub member_id: String,
+    pub member_handle: String,
     pub kid: String,
 }
 

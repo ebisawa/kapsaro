@@ -41,7 +41,7 @@ impl VerifiedGithubIdentity {
 /// Verification result
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VerificationResult {
-    pub member_id: String,
+    pub member_handle: String,
     pub status: VerificationStatus,
     pub message: String,
     pub fingerprint: Option<String>,
@@ -55,13 +55,13 @@ pub struct VerificationResult {
 impl VerificationResult {
     /// Create a result for when verification is not configured / skipped.
     pub(crate) fn not_configured(
-        member_id: &str,
+        member_handle: &str,
         message: &str,
         fingerprint: Option<String>,
         github_claim_present: bool,
     ) -> Self {
         Self {
-            member_id: member_id.to_string(),
+            member_handle: member_handle.to_string(),
             status: VerificationStatus::NotConfigured,
             message: message.to_string(),
             fingerprint,
@@ -73,13 +73,13 @@ impl VerificationResult {
 
     /// Create a failed verification result.
     pub(crate) fn failed(
-        member_id: &str,
+        member_handle: &str,
         message: String,
         fingerprint: Option<String>,
         github_claim_present: bool,
     ) -> Self {
         Self {
-            member_id: member_id.to_string(),
+            member_handle: member_handle.to_string(),
             status: VerificationStatus::Failed,
             message,
             fingerprint,
@@ -91,12 +91,12 @@ impl VerificationResult {
 
     /// Create a successful verification result.
     pub(crate) fn verified(
-        member_id: &str,
+        member_handle: &str,
         message: String,
         verified_github: VerifiedGithubIdentity,
     ) -> Self {
         Self {
-            member_id: member_id.to_string(),
+            member_handle: member_handle.to_string(),
             status: VerificationStatus::Verified,
             message,
             fingerprint: Some(verified_github.fingerprint.clone()),

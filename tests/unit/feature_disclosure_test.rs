@@ -19,7 +19,10 @@ fn test_add_to_removed_history() {
 
     assert!(removed.is_some());
     assert_eq!(removed.as_ref().unwrap().len(), 1);
-    assert_eq!(removed.as_ref().unwrap()[0].rid, "alice@example.com");
+    assert_eq!(
+        removed.as_ref().unwrap()[0].recipient_handle,
+        "alice@example.com"
+    );
     assert_eq!(
         removed.as_ref().unwrap()[0].kid,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"
@@ -51,12 +54,12 @@ fn test_merge_removed_history() {
     let mut target: Option<Vec<RemovedRecipient>> = None;
     let source = Some(vec![
         RemovedRecipient {
-            rid: "alice@example.com".to_string(),
+            recipient_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             removed_at: "2024-01-01T00:00:00Z".to_string(),
         },
         RemovedRecipient {
-            rid: "bob@example.com".to_string(),
+            recipient_handle: "bob@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
             removed_at: "2024-01-02T00:00:00Z".to_string(),
         },
@@ -71,12 +74,12 @@ fn test_merge_removed_history() {
 #[test]
 fn test_merge_removed_history_into_existing() {
     let mut target = Some(vec![RemovedRecipient {
-        rid: "charlie@example.com".to_string(),
+        recipient_handle: "charlie@example.com".to_string(),
         kid: "01HABC1234DEFGHIJKLMNOPQRS".to_string(),
         removed_at: "2024-01-03T00:00:00Z".to_string(),
     }]);
     let source = Some(vec![RemovedRecipient {
-        rid: "alice@example.com".to_string(),
+        recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         removed_at: "2024-01-01T00:00:00Z".to_string(),
     }]);
@@ -90,7 +93,7 @@ fn test_merge_removed_history_into_existing() {
 fn test_add_to_removed_history_same_kid_updates_existing_record() {
     let original_removed_at = "2024-01-01T00:00:00Z";
     let mut removed = Some(vec![RemovedRecipient {
-        rid: "alice@example.com".to_string(),
+        recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         removed_at: original_removed_at.to_string(),
     }]);
@@ -104,26 +107,26 @@ fn test_add_to_removed_history_same_kid_updates_existing_record() {
 
     let removed = removed.unwrap();
     assert_eq!(removed.len(), 1);
-    assert_eq!(removed[0].rid, "alice@example.com");
+    assert_eq!(removed[0].recipient_handle, "alice@example.com");
     assert_ne!(removed[0].removed_at, original_removed_at);
 }
 
 #[test]
 fn test_merge_removed_history_deduplicates_by_kid() {
     let retained = RemovedRecipient {
-        rid: "alice@example.com".to_string(),
+        recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         removed_at: "2024-01-03T00:00:00Z".to_string(),
     };
     let mut target = Some(vec![retained.clone()]);
     let source = Some(vec![
         RemovedRecipient {
-            rid: "alice@example.com".to_string(),
+            recipient_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             removed_at: "2024-01-01T00:00:00Z".to_string(),
         },
         RemovedRecipient {
-            rid: "bob@example.com".to_string(),
+            recipient_handle: "bob@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
             removed_at: "2024-01-02T00:00:00Z".to_string(),
         },

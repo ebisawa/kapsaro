@@ -8,7 +8,7 @@ use crate::Error;
 use std::path::Path;
 
 #[cfg(test)]
-#[path = "../../tests/unit/app_errors_test.rs"]
+#[path = "../../tests/unit/internal/app_errors_test.rs"]
 mod tests;
 
 /// Build a KV key-not-found error with file path context when applicable.

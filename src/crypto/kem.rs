@@ -6,7 +6,7 @@
 //! HPKE Base mode: X25519-HKDF-SHA256 + ChaCha20-Poly1305
 
 use crate::crypto::build_crypto_operation_error;
-use crate::crypto::rng::fill_secret_array;
+use crate::crypto::rng::{fill_secret_array, hpke_sender_setup_rng};
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 use crate::model::verified::VerifiedPrivateKey;
 use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
@@ -15,7 +15,6 @@ use hpke::{
     aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::X25519HkdfSha256, Deserializable,
     Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
-use rand::{rngs::OsRng, TryRngCore};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 /// X25519 secret key with Zeroizing memory protection
@@ -98,8 +97,7 @@ pub fn seal_base(
     let pk_recip_hpke = <Kem as KemTrait>::PublicKey::from_bytes(pk_recip.as_bytes())
         .map_err(|_| build_crypto_operation_error("Invalid recipient public key"))?;
 
-    let mut os_rng = OsRng;
-    let mut csprng = os_rng.unwrap_mut();
+    let mut csprng = hpke_sender_setup_rng()?;
     let (enc, mut sender_ctx) = hpke::setup_sender::<Aead, Kdf, Kem, _>(
         &OpModeS::Base,
         &pk_recip_hpke,
@@ -107,6 +105,7 @@ pub fn seal_base(
         &mut csprng,
     )
     .map_err(|_| build_crypto_operation_error("HPKE setup sender failed"))?;
+    csprng.ensure_consumed_exactly()?;
 
     let ciphertext = sender_ctx
         .seal(plaintext.as_bytes(), aad.as_bytes())

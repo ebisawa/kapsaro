@@ -1,6 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::support::fs::policy::is_real_dir;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::fs;
@@ -196,18 +197,4 @@ fn validate_workspace_structure(path: &Path) -> Option<WorkspaceRoot> {
     } else {
         None
     }
-}
-
-/// Return true only when `path` is a real directory (not a directory symlink).
-///
-/// The workspace layout `members/active` / `secrets` is treated as non-trusted
-/// repository input. A directory symlink there could redirect later reads and
-/// writes outside the workspace, so we insist on `symlink_metadata`.
-fn is_real_dir(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|m| {
-            let t = m.file_type();
-            t.is_dir() && !t.is_symlink()
-        })
-        .unwrap_or(false)
 }

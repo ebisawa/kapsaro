@@ -3,8 +3,9 @@
 
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
+use crate::feature::kv::decrypt::decrypt_kv_document_with_context;
 use crate::feature::kv::document::KvDocumentDraft;
-use crate::feature::kv::query::decrypt_all_kv_values;
+use crate::feature::kv::query::decode_decrypted_kv_values;
 use crate::feature::recipient::resolve_verified_recipients;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
@@ -87,7 +88,7 @@ impl<'a> VerifiedKvRewriteSession<'a> {
     }
 
     pub(crate) fn disclosed(&self) -> bool {
-        detect_disclosed_entries(self.document().lines())
+        detect_disclosed_entries(self.document())
     }
 
     pub(crate) fn build_unsigned(&self, head: KvHeader) -> Result<KvDocumentDraft> {
@@ -108,8 +109,14 @@ impl<'a> VerifiedKvRewriteSession<'a> {
     }
 
     pub(crate) fn decrypt_all_values(&self) -> Result<HashMap<String, SecretString>> {
-        let content = KvEncContent::new_unchecked(self.document().content().to_string());
-        decrypt_all_kv_values(&content, self.member_handle, self.key_ctx, self.debug)
+        let kv_map = decrypt_kv_document_with_context(
+            &self.verified,
+            self.member_handle,
+            self.key_ctx,
+            self.debug,
+        )?
+        .value;
+        Ok(decode_decrypted_kv_values(kv_map)?.into_iter().collect())
     }
 
     pub(crate) fn rewrap_kv_with_recipients(

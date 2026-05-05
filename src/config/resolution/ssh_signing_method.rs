@@ -83,5 +83,5 @@ pub(crate) fn resolve_ssh_signing_method(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_ssh_signing_method_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_ssh_signing_method_test.rs"]
 mod tests;

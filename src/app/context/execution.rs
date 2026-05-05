@@ -139,5 +139,5 @@ fn build_execution_warnings(warning: Option<String>) -> Result<Vec<String>> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_context_env_dispatch_test.rs"]
+#[path = "../../../tests/unit/internal/app_context_env_dispatch_test.rs"]
 mod tests;

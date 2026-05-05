@@ -152,5 +152,5 @@ impl EncContent {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/format_content_internal_test.rs"]
+#[path = "../../tests/unit/internal/format_content_internal_test.rs"]
 mod tests;

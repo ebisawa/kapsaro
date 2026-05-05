@@ -238,5 +238,5 @@ fn format_member_show_row(label: &str, value: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../../../tests/unit/cli_common_output_text_member_test.rs"]
+#[path = "../../../../../tests/unit/internal/cli_common_output_text_member_test.rs"]
 mod tests;

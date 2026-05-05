@@ -7,95 +7,15 @@
 //! This module implements the encryption and decryption process.
 
 use super::key_derivation;
-use crate::crypto::aead::xchacha;
-use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
-use crate::crypto::types::keys::XChaChaKey;
-use crate::crypto::types::primitives::{HkdfSalt, XChaChaNonce};
-use crate::feature::key::protection::binding::build_private_key_aad;
+use super::material::{
+    build_private_key_protected, build_sshsig_algorithm, decode_ciphertext_params,
+    decode_hkdf_salt, decrypt_private_key_plaintext, encrypt_private_key_plaintext,
+    validate_aead_algorithm, PrivateKeyProtectionMaterial, PrivateKeyProtectionMetadata,
+};
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
-use crate::model::identifiers::{alg, format};
-use crate::model::private_key::{
-    PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
-};
-use crate::support::codec::base64_public::{
-    decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
-};
-use crate::support::kid::format_kid_display_lossy;
+use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use crate::{Error, Result};
-use tracing::debug;
-
-/// Build protected header for PrivateKey encryption
-fn build_protected_header(
-    member_handle: String,
-    kid: String,
-    ssh_fpr: String,
-    ikm_salt_b64: String,
-    hkdf_salt_b64: String,
-    created_at: String,
-    expires_at: String,
-) -> PrivateKeyProtected {
-    PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V6.to_string(),
-        subject_handle: member_handle.clone(),
-        kid: kid.clone(),
-        alg: PrivateKeyAlgorithm::SshSig {
-            fpr: ssh_fpr.clone(),
-            ikm_salt: ikm_salt_b64,
-            hkdf_salt: hkdf_salt_b64,
-            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
-        },
-        created_at: created_at.clone(),
-        expires_at: expires_at.clone(),
-    }
-}
-
-/// Serialize plaintext and encrypt with XChaCha20-Poly1305
-pub(super) fn encrypt_serialized_private_key(
-    plaintext: &PrivateKeyPlaintext,
-    enc_key: &XChaChaKey,
-    protected: &PrivateKeyProtected,
-    debug: bool,
-    caller: &str,
-) -> Result<PrivateKeyEncData> {
-    // Serialize plaintext
-    let plaintext_json = serde_json::to_vec(plaintext).map_err(|e| Error::Crypto {
-        message: format!("Failed to serialize plaintext: {}", e),
-        source: Some(Box::new(e)),
-    })?;
-    let plaintext = Plaintext::from(plaintext_json);
-
-    // Build AAD from protected header and encrypt
-    let aad = build_private_key_aad(protected)?;
-    if debug {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (kid: {})",
-            caller,
-            format_kid_display_lossy(&protected.kid)
-        );
-    }
-    let (ct, nonce) = xchacha::encrypt_with_nonce(enc_key, &plaintext, &aad)?;
-
-    Ok(PrivateKeyEncData {
-        nonce: encode_base64url_nopad(nonce.as_bytes()),
-        ct: encode_base64url_nopad(ct.as_bytes()),
-    })
-}
-
-/// Decode ciphertext parameters from PrivateKey.
-pub(super) fn decode_ciphertext_params(
-    private_key: &PrivateKey,
-) -> Result<(XChaChaNonce, Ciphertext, Aad)> {
-    let nonce_bytes: [u8; 24] =
-        decode_base64url_nopad_array(&private_key.encrypted.nonce, "nonce")?;
-    let nonce = XChaChaNonce::new(nonce_bytes);
-    let ct = decode_base64url_nopad_ciphertext(&private_key.encrypted.ct, "ct")?;
-
-    // Build AAD from protected header
-    let aad = build_private_key_aad(&private_key.protected)?;
-
-    Ok((nonce, ct, aad))
-}
 
 fn normalize_fingerprint_prefix(fingerprint: &str) -> String {
     match fingerprint.get(..7) {
@@ -135,49 +55,12 @@ fn verify_ssh_fingerprint_matches(private_key: &PrivateKey, ssh_pubkey: &str) ->
 
 fn validate_ssh_protection_algorithm(private_key: &PrivateKey) -> Result<()> {
     match &private_key.protected.alg {
-        PrivateKeyAlgorithm::SshSig { aead, .. } => {
-            if aead != alg::AEAD_XCHACHA20_POLY1305 {
-                return Err(Error::Crypto {
-                    message: format!(
-                        "Unsupported AEAD algorithm '{}', expected '{}'",
-                        aead,
-                        alg::AEAD_XCHACHA20_POLY1305
-                    ),
-                    source: None,
-                });
-            }
-            Ok(())
-        }
+        PrivateKeyAlgorithm::SshSig { aead, .. } => validate_aead_algorithm(aead),
         _ => Err(Error::Crypto {
             message: "Expected SshSig algorithm for SSH-based decryption".to_string(),
             source: None,
         }),
     }
-}
-
-/// Decrypt and deserialize plaintext
-pub(super) fn decrypt_private_key_plaintext(
-    enc_key: &XChaChaKey,
-    nonce: &XChaChaNonce,
-    aad: &Aad,
-    ct: &Ciphertext,
-    kid: &str,
-    debug: bool,
-    caller: &str,
-) -> Result<PrivateKeyPlaintext> {
-    if debug {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (kid: {})",
-            caller,
-            format_kid_display_lossy(kid)
-        );
-    }
-    let plaintext_json = xchacha::decrypt(enc_key, nonce, aad, ct)?;
-
-    serde_json::from_slice(plaintext_json.as_bytes()).map_err(|_| Error::Crypto {
-        message: "Failed to deserialize plaintext".to_string(),
-        source: None,
-    })
 }
 
 /// Parameters for encrypting a private key with SSH key.
@@ -195,34 +78,26 @@ pub struct PrivateKeyEncryptionParams<'a> {
 
 /// Encrypt PrivateKey with SSH key
 pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<PrivateKey> {
-    let ikm_salt = key_derivation::generate_ikm_salt()?;
-    let hkdf_salt = key_derivation::generate_hkdf_salt()?;
-    let ikm_salt_b64 = encode_base64url_nopad(ikm_salt.as_bytes());
-    let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
+    let material = PrivateKeyProtectionMaterial::generate()?;
+    let metadata = PrivateKeyProtectionMetadata {
+        member_handle: &params.member_handle,
+        kid: &params.kid,
+        created_at: &params.created_at,
+        expires_at: &params.expires_at,
+    };
+    let protected =
+        build_private_key_protected(metadata, build_sshsig_algorithm(&params.ssh_fpr, &material));
 
-    // Build protected header
-    let protected = build_protected_header(
-        params.member_handle.clone(),
-        params.kid.clone(),
-        params.ssh_fpr.clone(),
-        ikm_salt_b64.clone(),
-        hkdf_salt_b64,
-        params.created_at.clone(),
-        params.expires_at.clone(),
-    );
-
-    // Derive encryption key
     let enc_key = key_derivation::derive_key_from_ssh(
         &params.kid,
-        &ikm_salt_b64,
-        &hkdf_salt,
+        material.ikm_salt_b64(),
+        &material.hkdf_salt,
         params.backend,
         params.ssh_pubkey,
         params.debug,
     )?;
 
-    // Serialize and encrypt
-    let encrypted = encrypt_serialized_private_key(
+    let encrypted = encrypt_private_key_plaintext(
         params.plaintext,
         &enc_key,
         &protected,
@@ -246,11 +121,9 @@ pub fn decrypt_private_key(
     validate_ssh_protection_algorithm(private_key)?;
     verify_ssh_fingerprint_matches(private_key, ssh_pubkey)?;
 
-    let hkdf_salt_bytes: [u8; 32] =
-        decode_base64url_nopad_array(private_key.protected.alg.hkdf_salt(), "hkdf_salt")?;
-    let hkdf_salt = HkdfSalt::new(hkdf_salt_bytes);
+    let hkdf_salt = decode_hkdf_salt(private_key)?;
     let ikm_salt_b64 = private_key.protected.alg.ikm_salt();
-    let (nonce, ct, aad) = decode_ciphertext_params(private_key)?;
+    let ciphertext = decode_ciphertext_params(private_key)?;
 
     let derived = key_derivation::derive_key_for_private_key_use(
         &private_key.protected.kid,
@@ -263,9 +136,7 @@ pub fn decrypt_private_key(
 
     match decrypt_private_key_plaintext(
         &derived.enc_key,
-        &nonce,
-        &aad,
-        &ct,
+        &ciphertext,
         &private_key.protected.kid,
         debug,
         "decrypt_private_key",

@@ -3,42 +3,17 @@
 
 //! Password-based private key encryption/decryption using Argon2id + XChaCha20-Poly1305.
 
-use super::encryption::{
-    build_private_key_decrypt_error, decode_ciphertext_params, decrypt_private_key_plaintext,
-    encrypt_serialized_private_key,
+use super::encryption::build_private_key_decrypt_error;
+use super::material::{
+    build_argon2id_algorithm, build_private_key_protected, decode_ciphertext_params,
+    decode_hkdf_salt, decode_ikm_salt, decrypt_private_key_plaintext,
+    encrypt_private_key_plaintext, validate_aead_algorithm, PrivateKeyProtectionMaterial,
+    PrivateKeyProtectionMetadata,
 };
 use super::password_key_derivation;
-use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
-use crate::model::identifiers::{alg, format};
-use crate::model::private_key::{
-    PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext, PrivateKeyProtected,
-};
-use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
+use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use crate::support::secret::SecretString;
 use crate::{Error, Result};
-
-/// Build protected header for password-based PrivateKey encryption
-fn build_protected_header(
-    member_handle: &str,
-    kid: &str,
-    ikm_salt_b64: String,
-    hkdf_salt_b64: String,
-    created_at: &str,
-    expires_at: &str,
-) -> PrivateKeyProtected {
-    PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V6.to_string(),
-        subject_handle: member_handle.to_string(),
-        kid: kid.to_string(),
-        alg: PrivateKeyAlgorithm::Argon2id {
-            ikm_salt: ikm_salt_b64,
-            hkdf_salt: hkdf_salt_b64,
-            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
-        },
-        created_at: created_at.to_string(),
-        expires_at: expires_at.to_string(),
-    }
-}
 
 /// Encrypt a private key with a password using Argon2id key derivation
 pub fn encrypt_private_key_with_password(
@@ -50,25 +25,24 @@ pub fn encrypt_private_key_with_password(
     password: &SecretString,
     debug: bool,
 ) -> Result<PrivateKey> {
-    let ikm_salt = password_key_derivation::generate_ikm_salt()?;
-    let hkdf_salt = password_key_derivation::generate_hkdf_salt()?;
-    let ikm_salt_b64 = encode_base64url_nopad(ikm_salt.as_bytes());
-    let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
-
-    let protected = build_protected_header(
+    let material = PrivateKeyProtectionMaterial::generate()?;
+    let metadata = PrivateKeyProtectionMetadata {
         member_handle,
         kid,
-        ikm_salt_b64,
-        hkdf_salt_b64,
         created_at,
         expires_at,
-    );
+    };
+    let protected = build_private_key_protected(metadata, build_argon2id_algorithm(&material));
 
     let enc_key = password_key_derivation::derive_key_from_password(
-        password, &ikm_salt, &hkdf_salt, kid, debug,
+        password,
+        &material.ikm_salt,
+        &material.hkdf_salt,
+        kid,
+        debug,
     )?;
 
-    let encrypted = encrypt_serialized_private_key(
+    let encrypted = encrypt_private_key_plaintext(
         plaintext,
         &enc_key,
         &protected,
@@ -89,18 +63,7 @@ pub fn decrypt_private_key_with_password(
     debug: bool,
 ) -> Result<PrivateKeyPlaintext> {
     match &private_key.protected.alg {
-        PrivateKeyAlgorithm::Argon2id { aead, .. } => {
-            if aead != alg::AEAD_XCHACHA20_POLY1305 {
-                return Err(Error::Crypto {
-                    message: format!(
-                        "Unsupported AEAD algorithm '{}', expected '{}'",
-                        aead,
-                        alg::AEAD_XCHACHA20_POLY1305
-                    ),
-                    source: None,
-                });
-            }
-        }
+        PrivateKeyAlgorithm::Argon2id { aead, .. } => validate_aead_algorithm(aead)?,
         _ => {
             return Err(Error::Crypto {
                 message: "Expected Argon2id algorithm, got SSH-based".to_string(),
@@ -109,13 +72,9 @@ pub fn decrypt_private_key_with_password(
         }
     }
 
-    let ikm_salt_bytes: [u8; 32] =
-        decode_base64url_nopad_array(private_key.protected.alg.ikm_salt(), "ikm_salt")?;
-    let hkdf_salt_bytes: [u8; 32] =
-        decode_base64url_nopad_array(private_key.protected.alg.hkdf_salt(), "hkdf_salt")?;
-    let ikm_salt = PrivateKeyIkmSalt::new(ikm_salt_bytes);
-    let hkdf_salt = HkdfSalt::new(hkdf_salt_bytes);
-    let (nonce, ct, aad) = decode_ciphertext_params(private_key)?;
+    let ikm_salt = decode_ikm_salt(private_key)?;
+    let hkdf_salt = decode_hkdf_salt(private_key)?;
+    let ciphertext = decode_ciphertext_params(private_key)?;
 
     let enc_key = password_key_derivation::derive_key_from_password(
         password,
@@ -127,9 +86,7 @@ pub fn decrypt_private_key_with_password(
 
     match decrypt_private_key_plaintext(
         &enc_key,
-        &nonce,
-        &aad,
-        &ct,
+        &ciphertext,
         &private_key.protected.kid,
         debug,
         "decrypt_private_key_with_password",

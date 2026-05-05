@@ -178,5 +178,5 @@ fn build_evidence(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_trust_approval_test.rs"]
+#[path = "../../../tests/unit/internal/app_trust_approval_test.rs"]
 mod tests;

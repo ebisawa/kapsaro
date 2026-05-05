@@ -16,6 +16,7 @@ use secretenv::model::private_key::{
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::secret::SecretString;
+use std::collections::BTreeSet;
 
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
@@ -182,6 +183,33 @@ fn test_password_encrypt_preserves_metadata() {
     assert_eq!(encrypted.protected.created_at, created_at);
     assert_eq!(encrypted.protected.expires_at, expires_at);
     assert_eq!(encrypted.protected.format, format::PRIVATE_KEY_V6);
+}
+
+#[test]
+fn test_password_encrypt_protected_algorithm_shape() {
+    let plaintext = build_test_plaintext();
+
+    let encrypted = encrypt_private_key_with_password(
+        &plaintext,
+        "alice@example.com",
+        TEST_KID,
+        "2026-01-01T00:00:00Z",
+        "2027-01-01T00:00:00Z",
+        &secret("test-password"),
+        false,
+    )
+    .expect("encryption should succeed");
+
+    let value = serde_json::to_value(&encrypted.protected.alg).unwrap();
+    let object = value.as_object().unwrap();
+    let fields = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        fields,
+        BTreeSet::from(["aead", "hkdf_salt", "ikm_salt", "kdf"])
+    );
+    assert_eq!(object["kdf"], "argon2id-m64t3p4-hkdf-sha256");
+    assert_eq!(object["aead"], alg::AEAD_XCHACHA20_POLY1305);
 }
 
 #[test]

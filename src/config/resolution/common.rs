@@ -169,5 +169,5 @@ pub(crate) fn resolve_ssh_add_path(base_dir: Option<&Path>) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_common_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_common_test.rs"]
 mod tests;

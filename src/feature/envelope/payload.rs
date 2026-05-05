@@ -38,5 +38,5 @@ pub(crate) fn encrypt_file_payload_content(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_envelope_payload_test.rs"]
+#[path = "../../../tests/unit/internal/feature_envelope_payload_test.rs"]
 mod tests;

@@ -2,21 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::feature::disclosure::{add_to_removed_history, merge_removed_history};
-use crate::format::schema::document::parse_kv_entry_token;
+use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::header::KvWrap;
-use crate::model::kv_enc::line::KvEncLine;
 use crate::Result;
 
-pub(super) fn detect_disclosed_entries(lines: &[KvEncLine]) -> bool {
-    lines.iter().any(|line| {
-        if let KvEncLine::KV { token, .. } = line {
-            parse_kv_entry_token(token.as_str())
-                .map(|entry| entry.disclosed)
-                .unwrap_or(false)
-        } else {
-            false
-        }
-    })
+pub(super) fn detect_disclosed_entries(doc: &KvEncDocument) -> bool {
+    doc.entries().iter().any(|entry| entry.value().disclosed)
 }
 
 pub(super) fn merge_removed_history_from_old(

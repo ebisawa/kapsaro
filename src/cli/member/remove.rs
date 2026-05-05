@@ -109,5 +109,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/cli_member_remove_test.rs"]
+#[path = "../../../tests/unit/internal/cli_member_remove_test.rs"]
 mod tests;

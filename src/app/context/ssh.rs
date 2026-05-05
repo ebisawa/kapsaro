@@ -187,17 +187,17 @@ fn resolve_ssh_fingerprint_from_private_key(private_key: &PrivateKey) -> Result<
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_context_ssh_member_handle_test.rs"]
+#[path = "../../../tests/unit/internal/app_context_ssh_member_handle_test.rs"]
 mod app_context_ssh_member_handle_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_context_ssh_match_test.rs"]
+#[path = "../../../tests/unit/internal/feature_context_ssh_match_test.rs"]
 mod feature_context_ssh_match_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_context_ssh_test.rs"]
+#[path = "../../../tests/unit/internal/feature_context_ssh_test.rs"]
 mod feature_context_ssh_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_verify_public_key_attestation_test.rs"]
+#[path = "../../../tests/unit/internal/feature_verify_public_key_attestation_test.rs"]
 mod feature_verify_public_key_attestation_test;

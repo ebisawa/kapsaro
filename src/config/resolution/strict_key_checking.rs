@@ -26,5 +26,5 @@ pub(crate) fn resolve_strict_key_checking() -> StrictKeyCheckingResolution {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_strict_key_checking_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_strict_key_checking_test.rs"]
 mod tests;

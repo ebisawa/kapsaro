@@ -11,5 +11,5 @@ pub(crate) mod timestamp;
 pub(crate) mod types;
 
 #[cfg(test)]
-#[path = "../../tests/unit/app_key_github_test.rs"]
+#[path = "../../tests/unit/internal/app_key_github_test.rs"]
 mod tests;

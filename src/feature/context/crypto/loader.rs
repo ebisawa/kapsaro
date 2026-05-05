@@ -89,7 +89,9 @@ pub fn load_crypto_context_from_keystore(
         &ssh_pubkey,
         debug_enabled,
     )?;
-    let selected_kid_override = explicit_kid.map(|_| loaded.private_key.proof().kid().to_string());
+    let selected_kid_override = explicit_kid
+        .map(|_| Kid::try_from(loaded.private_key.proof().kid().to_string()))
+        .transpose()?;
     let signing_key = build_signing_key(loaded.private_key.document())?;
     let context = CryptoContext::new(
         MemberHandle::try_from(member_handle)?,

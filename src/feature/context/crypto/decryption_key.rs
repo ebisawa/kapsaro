@@ -5,7 +5,7 @@
 
 use super::loader::load_verified_private_key_from_keystore;
 use super::{CryptoContext, DecryptionKeyInfo, DecryptionKeyResolution};
-use crate::model::common::WrapItem;
+use crate::model::common::WrapSet;
 use crate::model::identity::Kid;
 use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
@@ -13,20 +13,20 @@ use crate::{Error, Result};
 impl CryptoContext {
     pub(crate) fn select_local_decryption_key<'a>(
         &'a self,
-        wrap_items: &[WrapItem],
+        wrap_set: &WrapSet,
         member_handle: &str,
         debug_enabled: bool,
     ) -> Result<DecryptionKeyResolution<'a>> {
-        let wrap_kids = collect_self_wrap_kids(wrap_items, member_handle);
+        let wrap_kids = wrap_set.self_wrap_kids(member_handle);
         let candidates =
-            build_candidate_kids(&wrap_kids, self.selected_kid_override.as_deref(), &self.kid);
+            build_candidate_kids(&wrap_kids, self.selected_kid_override.as_ref(), &self.kid);
 
         for kid in &candidates {
-            if kid == self.kid.as_ref() {
+            if kid == &self.kid {
                 return Ok(DecryptionKeyResolution::Active {
                     private_key: &self.private_key,
                     info: DecryptionKeyInfo {
-                        kid: kid.clone(),
+                        kid: kid.to_string(),
                         expires_at: self.expires_at.as_str().to_string(),
                         used_fallback: false,
                     },
@@ -40,7 +40,7 @@ impl CryptoContext {
             match load_verified_private_key_from_keystore(
                 &local_key_access.keystore_root,
                 member_handle,
-                kid,
+                kid.as_str(),
                 local_key_access.ssh_backend.as_ref(),
                 &local_key_access.ssh_pubkey,
                 debug_enabled,
@@ -49,7 +49,7 @@ impl CryptoContext {
                     return Ok(DecryptionKeyResolution::Fallback {
                         private_key: Box::new(loaded.private_key),
                         info: DecryptionKeyInfo {
-                            kid: kid.clone(),
+                            kid: kid.to_string(),
                             expires_at: loaded.expires_at.as_str().to_string(),
                             used_fallback: true,
                         },
@@ -62,35 +62,24 @@ impl CryptoContext {
 
         Err(build_missing_wrap_error(
             member_handle,
-            self.selected_kid_override.as_deref(),
+            self.selected_kid_override.as_ref(),
             &candidates,
         ))
     }
 }
 
-fn collect_self_wrap_kids(wrap_items: &[WrapItem], member_handle: &str) -> Vec<String> {
-    let mut kids = Vec::new();
-    for wrap_item in wrap_items {
-        if wrap_item.recipient_handle != member_handle || kids.contains(&wrap_item.kid) {
-            continue;
-        }
-        kids.push(wrap_item.kid.clone());
-    }
-    kids
-}
-
 fn build_candidate_kids(
-    wrap_kids: &[String],
-    explicit_kid: Option<&str>,
+    wrap_kids: &[Kid],
+    explicit_kid: Option<&Kid>,
     active_kid: &Kid,
-) -> Vec<String> {
+) -> Vec<Kid> {
     if let Some(kid) = explicit_kid {
-        return vec![kid.to_string()];
+        return vec![kid.clone()];
     }
 
     let mut candidates = Vec::new();
-    if wrap_kids.iter().any(|kid| kid == active_kid.as_ref()) {
-        candidates.push(active_kid.to_string());
+    if wrap_kids.iter().any(|kid| kid == active_kid) {
+        candidates.push(active_kid.clone());
     }
     for kid in wrap_kids {
         if candidates.contains(kid) {
@@ -103,14 +92,14 @@ fn build_candidate_kids(
 
 fn build_missing_wrap_error(
     member_handle: &str,
-    explicit_kid: Option<&str>,
-    searched_kids: &[String],
+    explicit_kid: Option<&Kid>,
+    searched_kids: &[Kid],
 ) -> Error {
     match explicit_kid {
         Some(kid) => Error::Crypto {
             message: format!(
                 "No wrap found for kid '{}' (member: {})",
-                format_kid_display_lossy(kid),
+                format_kid_display_lossy(kid.as_str()),
                 member_handle
             ),
             source: None,
@@ -118,7 +107,7 @@ fn build_missing_wrap_error(
         None => {
             let searched = searched_kids
                 .iter()
-                .map(|kid| format_kid_display_lossy(kid))
+                .map(|kid| format_kid_display_lossy(kid.as_str()))
                 .collect::<Vec<_>>()
                 .join(", ");
             Error::Crypto {

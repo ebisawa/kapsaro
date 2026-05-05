@@ -276,7 +276,7 @@ fn evaluate_signer_trust(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_kv_mutation_test.rs"]
+#[path = "../../../tests/unit/internal/app_kv_mutation_test.rs"]
 mod tests;
 
 fn build_recipient_snapshot(workspace_members: &WorkspaceMemberSnapshot) -> KvRecipientSnapshot {

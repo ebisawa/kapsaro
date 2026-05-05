@@ -272,5 +272,5 @@ impl<P> WriteCommandPlan for MutationWriteTrustPlan<P> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/cli_common_command_test.rs"]
+#[path = "../../../tests/unit/internal/cli_common_command_test.rs"]
 mod tests;

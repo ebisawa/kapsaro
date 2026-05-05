@@ -63,5 +63,5 @@ pub(crate) fn list_known_keys(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_trust_list_test.rs"]
+#[path = "../../../tests/unit/internal/app_trust_list_test.rs"]
 mod tests;

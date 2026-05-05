@@ -36,6 +36,15 @@ fn test_wrap_item_with(recipient_handle: &str, kid: &str) -> WrapItem {
     }
 }
 
+fn test_signature() -> ArtifactSignature {
+    ArtifactSignature {
+        alg: alg::SIGNATURE_ED25519.to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+        signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        sig: "invalid".to_string(),
+    }
+}
+
 #[test]
 fn test_verify_file_document_rejects_wrap_count_over_limit() {
     let sid = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
@@ -88,7 +97,9 @@ fn test_verify_kv_document_rejects_wrap_count_over_limit() {
             wrap: vec![test_wrap_item(); MAX_WRAP_ITEMS + 1],
             removed_recipients: None,
         },
+        Vec::new(),
         "invalid".to_string(),
+        test_signature(),
     );
 
     let result = verify_kv_document(&doc, false);
@@ -157,7 +168,9 @@ fn test_verify_kv_document_rejects_duplicate_wrap_rid() {
             ],
             removed_recipients: None,
         },
+        Vec::new(),
         "invalid".to_string(),
+        test_signature(),
     );
 
     let result = verify_kv_document(&doc, false);

@@ -187,5 +187,5 @@ pub fn verify_kv_signature(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_envelope_signature_test.rs"]
+#[path = "../../../tests/unit/internal/feature_envelope_signature_test.rs"]
 mod tests;

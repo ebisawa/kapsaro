@@ -3,12 +3,11 @@
 
 use std::collections::BTreeSet;
 
-use crate::app::trust::TrustApprovalCandidate;
+use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::VerificationStatus;
-use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::KnownKey;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
@@ -249,32 +248,19 @@ fn build_failed_candidate(candidate: &IncomingPromotionCandidate) -> PromotionRe
 
 impl From<&IncomingPromotionCandidate> for TrustApprovalCandidate {
     fn from(candidate: &IncomingPromotionCandidate) -> Self {
-        TrustApprovalCandidate {
-            member_handle: MemberHandle::try_from(candidate.review.member_handle.clone())
-                .expect("incoming member_handle must be valid"),
-            kid: Kid::try_from(candidate.review.kid.clone()).expect("incoming kid must be valid"),
-            fingerprint: candidate.review.fingerprint.clone(),
-            github_id: candidate
-                .review
-                .verified_github
-                .as_ref()
-                .map(|account| account.id),
-            github_login: candidate
-                .review
-                .verified_github
-                .as_ref()
-                .map(|account| account.login.clone()),
-            attestor_pub: candidate.review.attestor_pub.clone(),
-            verified_github: candidate.review.verified_github.clone(),
-            github_binding_configured: candidate.review.github_binding_configured,
-            online_verification_attempted: candidate.review.github_binding_configured,
-            online_verification_message: Some(candidate.review.message.clone()),
-            public_key: Some(candidate.public_key.clone()),
-            requires_out_of_band_verification: true,
-        }
+        TrustApprovalCandidateBuilder::from_public_key(&candidate.public_key)
+            .with_fingerprint(candidate.review.fingerprint.clone())
+            .with_attestor_pub(candidate.review.attestor_pub.clone())
+            .with_verified_github(candidate.review.verified_github.clone())
+            .with_github_binding_configured(candidate.review.github_binding_configured)
+            .with_online_verification_context(
+                candidate.review.github_binding_configured,
+                Some(candidate.review.message.clone()),
+            )
+            .build()
     }
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_rewrap_promotion_test.rs"]
+#[path = "../../../tests/unit/internal/app_rewrap_promotion_test.rs"]
 mod tests;

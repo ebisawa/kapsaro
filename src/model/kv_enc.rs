@@ -10,5 +10,5 @@ pub mod line;
 pub mod verified;
 
 #[cfg(test)]
-#[path = "../../tests/unit/model_kv_enc_internal_test.rs"]
+#[path = "../../tests/unit/internal/model_kv_enc_internal_test.rs"]
 mod tests;

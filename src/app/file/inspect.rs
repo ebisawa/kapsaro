@@ -3,14 +3,12 @@
 
 use std::path::Path;
 
-use console::Style;
-
 use crate::app::context::options::CommonCommandOptions;
-use crate::feature::inspect::build_inspect_view;
 use crate::feature::inspect::verification::{
     build_online_verification_section, build_signature_verification_section,
     OnlineVerificationDisplay,
 };
+use crate::feature::inspect::{build_inspect_view, InspectOutput, InspectSection};
 use crate::feature::verify::file::verify_file_document_report;
 use crate::feature::verify::kv::signature::verify_kv_document_report;
 use crate::feature::verify::SignatureVerificationReport;
@@ -25,7 +23,7 @@ use crate::Result;
 
 pub(crate) struct InspectCommand {
     pub input_display: String,
-    pub rendered: String,
+    pub output: InspectOutput,
 }
 
 pub(crate) fn execute_inspect_file_command(
@@ -33,18 +31,19 @@ pub(crate) fn execute_inspect_file_command(
     input_path: &Path,
 ) -> Result<InspectCommand> {
     let content = load_inspect_content(input_path)?;
-    let inspect_output = build_inspect_view(&content)?;
+    let mut inspect_output = build_inspect_view(&content)?;
     let signature_report = build_signature_report(&content, options.verbose)?;
-    let mut sections = inspect_output.sections;
-    sections.push(build_signature_verification_section(&signature_report));
+    inspect_output
+        .sections
+        .push(build_signature_verification_section(&signature_report));
 
     if let Some(section) = build_online_section(options, &signature_report) {
-        sections.push(section);
+        inspect_output.sections.push(section);
     }
 
     Ok(InspectCommand {
         input_display: format_path_relative_to_cwd(input_path),
-        rendered: format_inspect_output(&inspect_output.title, &sections),
+        output: inspect_output,
     })
 }
 
@@ -75,7 +74,7 @@ fn build_signature_report(
 fn build_online_section(
     options: &CommonCommandOptions,
     report: &SignatureVerificationReport,
-) -> Option<crate::feature::inspect::InspectSection> {
+) -> Option<InspectSection> {
     let public_key = report.signer_public_key.as_ref()?;
     if !report.verified {
         return None;
@@ -118,53 +117,6 @@ fn build_online_section(
     ))
 }
 
-fn format_inspect_output(
-    title: &str,
-    sections: &[crate::feature::inspect::InspectSection],
-) -> String {
-    let title_style = Style::new().bold();
-    let section_style = Style::new().bold();
-
-    let mut out = String::new();
-    out.push_str(&format!("{}\n", title_style.apply_to(title)));
-    out.push('\n');
-    for (index, section) in sections.iter().enumerate() {
-        out.push_str(&format!("{}\n", section_style.apply_to(&section.title)));
-        for line in &section.lines {
-            out.push_str(&colorize_inspect_line(line));
-            out.push('\n');
-        }
-        if index + 1 != sections.len() {
-            out.push('\n');
-        }
-    }
-    out.push('\n');
-    out
-}
-
-fn colorize_inspect_line(line: &str) -> String {
-    let ok_style = Style::new().green().for_stdout();
-    let ng_style = Style::new().red().for_stdout();
-    let warning_style = Style::new().yellow().for_stdout();
-    let is_disclosed_warning =
-        line.contains("\u{26a0} DISCLOSED \u{2014} Secret may need rotation");
-    if line.contains("\u{2714} OK") {
-        line.replace(
-            "\u{2714} OK",
-            &format!("{}", ok_style.apply_to("\u{2714} OK")),
-        )
-    } else if line.contains("\u{2718} FAILED") {
-        line.replace(
-            "\u{2718} FAILED",
-            &format!("{}", ng_style.apply_to("\u{2718} FAILED")),
-        )
-    } else if line.trim_start().starts_with("Warning:") || is_disclosed_warning {
-        warning_style.apply_to(line).to_string()
-    } else {
-        line.to_string()
-    }
-}
-
 #[cfg(test)]
-#[path = "../../../tests/unit/app_file_inspect_test.rs"]
+#[path = "../../../tests/unit/internal/app_file_inspect_test.rs"]
 mod tests;

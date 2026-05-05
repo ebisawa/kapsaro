@@ -7,8 +7,6 @@ use super::decrypt::decrypt_kv_document_with_context;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
-use crate::format::schema::document::parse_kv_entry_token;
-use crate::model::kv_enc::line::KvEncLine;
 use crate::support::secret::SecretString;
 use crate::{Error, Result};
 use std::collections::{BTreeMap, HashMap};
@@ -23,16 +21,14 @@ pub struct KvDisclosedEntry {
 /// List all KV keys with their disclosed status.
 pub fn list_kv_keys_with_disclosed(content: &KvEncContent) -> Result<Vec<KvDisclosedEntry>> {
     let doc = content.parse()?;
-    let mut keys = Vec::new();
-    for line in doc.lines() {
-        if let KvEncLine::KV { key, token } = line {
-            let entry = parse_kv_entry_token(token)?;
-            keys.push(KvDisclosedEntry {
-                key: key.clone(),
-                disclosed: entry.disclosed,
-            });
-        }
-    }
+    let mut keys: Vec<KvDisclosedEntry> = doc
+        .entries()
+        .iter()
+        .map(|entry| KvDisclosedEntry {
+            key: entry.key().to_string(),
+            disclosed: entry.value().disclosed,
+        })
+        .collect();
     keys.sort_by(|a, b| a.key.cmp(&b.key));
     Ok(keys)
 }

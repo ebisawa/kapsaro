@@ -45,5 +45,5 @@ pub(crate) fn print_warnings(warnings: &[String]) {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/cli_common_output_text_test.rs"]
+#[path = "../../../../tests/unit/internal/cli_common_output_text_test.rs"]
 mod tests;

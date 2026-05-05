@@ -80,5 +80,5 @@ pub fn validate_json_limits(input: &[u8]) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/support_json_limits_internal_test.rs"]
+#[path = "../../tests/unit/internal/support_json_limits_internal_test.rs"]
 mod tests;

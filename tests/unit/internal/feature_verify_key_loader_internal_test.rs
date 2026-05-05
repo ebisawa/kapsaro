@@ -11,8 +11,8 @@ use crate::feature::key::public_key_document::{
 };
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::feature::verify::public_key::{
-    build_public_key_expiry_warning, verify_public_key_with_attestation_context,
-    verify_recipient_public_keys,
+    build_public_key_expiry_warning, verify_public_key_for_verification_context,
+    verify_public_key_with_attestation_context, verify_recipient_public_keys,
 };
 use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use crate::io::ssh::backend::SignatureBackend;
@@ -21,6 +21,7 @@ use crate::io::ssh::protocol::{build_sha256_fingerprint, SshKeyDescriptor};
 use crate::model::public_key::{Identity, PublicKey};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::model::verification::VerifyingKeySource;
+use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use std::path::Path;
 
 /// Build SSH binding context from test SSH keypair
@@ -140,6 +141,27 @@ fn test_build_loaded_verifying_key_valid() {
     assert!(result.is_ok());
     let loaded = result.unwrap();
     assert!(loaded.warnings.is_empty());
+}
+
+#[test]
+fn test_verify_public_key_for_verification_exposes_signing_key_material() {
+    let (public_key, _kid) = build_test_public_key("2099-12-31T23:59:59Z");
+
+    let verified = verify_public_key_for_verification_context(&public_key, false, "test").unwrap();
+
+    let expected_key: [u8; 32] = decode_base64url_nopad_array(
+        &public_key.protected.identity.keys.sig.x,
+        "Ed25519 public key",
+    )
+    .unwrap();
+    assert_eq!(
+        verified.verified_public_key.verifying_key().to_bytes(),
+        expected_key
+    );
+    assert_eq!(
+        verified.verified_public_key.document().protected.kid,
+        public_key.protected.kid
+    );
 }
 
 #[test]

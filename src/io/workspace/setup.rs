@@ -4,11 +4,13 @@
 //! Workspace setup and validation helpers.
 
 use crate::model::public_key::PublicKey;
-use crate::support::fs::atomic;
+use crate::support::fs::{
+    atomic,
+    policy::{ensure_real_directory_tree, is_real_dir, DirectoryMode, DirectoryPurpose},
+};
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn save_gitkeep(dir: &Path) -> Result<()> {
     atomic::save_text(&dir.join(".gitkeep"), "")
@@ -46,7 +48,7 @@ pub fn ensure_workspace_structure(workspace_path: &Path) -> Result<bool> {
 /// Return true when the workspace already has at least one active member file.
 pub fn check_workspace_has_active_members(workspace_path: &Path) -> Result<bool> {
     let active_dir = workspace_path.join("members").join("active");
-    if !active_dir.is_dir() {
+    if !is_real_dir(&active_dir) {
         return Ok(false);
     }
 
@@ -106,82 +108,6 @@ pub fn save_member_document(member_file: &Path, public_key: &PublicKey) -> Resul
     atomic::save_json(member_file, public_key)
 }
 
-fn is_real_dir(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|metadata| {
-            let file_type = metadata.file_type();
-            file_type.is_dir() && !file_type.is_symlink()
-        })
-        .unwrap_or(false)
-}
-
 fn ensure_workspace_dir(path: &Path) -> Result<()> {
-    for missing_dir in collect_missing_directories(path)?.into_iter().rev() {
-        fs::create_dir(&missing_dir).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to create directory {}: {}",
-                    format_path_relative_to_cwd(&missing_dir),
-                    e
-                ),
-                e,
-            )
-        })?;
-    }
-    Ok(())
-}
-
-fn collect_missing_directories(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut missing = Vec::new();
-
-    for ancestor in path.ancestors() {
-        let candidate = if ancestor.as_os_str().is_empty() {
-            Path::new(".")
-        } else {
-            ancestor
-        };
-        match fs::symlink_metadata(candidate) {
-            Ok(metadata) => {
-                validate_workspace_directory(candidate, &metadata)?;
-                return Ok(missing);
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                missing.push(candidate.to_path_buf());
-            }
-            Err(e) => {
-                return Err(Error::build_io_error_with_source(
-                    format!(
-                        "Failed to inspect directory {}: {}",
-                        format_path_relative_to_cwd(candidate),
-                        e
-                    ),
-                    e,
-                ));
-            }
-        }
-    }
-
-    Err(Error::build_io_error(format!(
-        "Failed to resolve workspace directory ancestry for {}",
-        format_path_relative_to_cwd(path)
-    )))
-}
-
-fn validate_workspace_directory(path: &Path, metadata: &fs::Metadata) -> Result<()> {
-    let file_type = metadata.file_type();
-    if file_type.is_symlink() {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "refusing to create workspace path through symlink: {}",
-                format_path_relative_to_cwd(path)
-            ),
-        });
-    }
-    if !file_type.is_dir() {
-        return Err(Error::build_io_error(format!(
-            "Failed to create directory {}: existing path is not a directory",
-            format_path_relative_to_cwd(path)
-        )));
-    }
-    Ok(())
+    ensure_real_directory_tree(path, DirectoryPurpose::Workspace, DirectoryMode::Normal)
 }

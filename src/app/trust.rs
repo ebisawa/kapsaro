@@ -4,20 +4,21 @@
 //! Trust store management use cases.
 
 pub(crate) mod approval;
+pub(crate) mod candidate;
 pub(crate) mod enforcement;
 pub(crate) mod evaluation;
 pub(crate) mod list;
 pub(crate) mod management;
-pub(crate) mod paths;
 pub(crate) mod policy;
+pub(crate) mod recovery;
 pub(crate) mod review;
 pub(crate) mod snapshot;
 pub(crate) mod store;
 pub(crate) mod types;
 
+pub(crate) use candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 pub(crate) use enforcement::{
     enforce_recipients_trust_with_additional, RecipientTrustOutcome, SignerTrustOutcome,
-    TrustApprovalCandidate,
 };
 pub(crate) use evaluation::{
     derive_self_sig_x, evaluate_read_signer_trust, evaluate_signer_trust_with_proof,
@@ -42,5 +43,5 @@ pub(crate) use policy::RewrapInputPolicy;
 pub(crate) use snapshot::CommandTrustSnapshot;
 
 #[cfg(test)]
-#[path = "../../tests/unit/app_context_trust_test.rs"]
+#[path = "../../tests/unit/internal/app_context_trust_test.rs"]
 mod snapshot_tests;

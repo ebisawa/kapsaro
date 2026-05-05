@@ -11,7 +11,7 @@ use crate::format::kid::derive_public_key_kid;
 use crate::io::ssh::verify::verify_attestation;
 use crate::model::public_key::{
     AttestationProof, AttestedIdentity, PublicKey, VerifiedPublicKey, VerifiedPublicKeyAttested,
-    VerifiedRecipientKey,
+    VerifiedRecipientKey, VerifiedSigningPublicKey,
 };
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
@@ -25,8 +25,13 @@ use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct VerifiedPublicKeyForVerification {
-    pub verified_public_key: VerifiedPublicKeyAttested,
+    pub verified_public_key: VerifiedSigningPublicKey,
     pub warnings: Vec<String>,
+}
+
+struct PublicKeySelfSignatureVerification {
+    verified_public_key: VerifiedPublicKey,
+    verifying_key: VerifyingKey,
 }
 
 const DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT: &str = "public key";
@@ -57,6 +62,14 @@ pub fn verify_public_key_with_context(
     debug: bool,
     context: &str,
 ) -> Result<VerifiedPublicKey> {
+    Ok(verify_public_key_self_signature_context(public_key, debug, context)?.verified_public_key)
+}
+
+fn verify_public_key_self_signature_context(
+    public_key: &PublicKey,
+    debug: bool,
+    context: &str,
+) -> Result<PublicKeySelfSignatureVerification> {
     validate_derived_kid(public_key)?;
     log_public_key_verification(debug, public_key, context, "self-signature");
 
@@ -81,7 +94,10 @@ pub fn verify_public_key_with_context(
     })?;
 
     let proof = SelfSignatureProof::new();
-    Ok(VerifiedPublicKey::new(public_key.clone(), proof))
+    Ok(PublicKeySelfSignatureVerification {
+        verified_public_key: VerifiedPublicKey::new(public_key.clone(), proof),
+        verifying_key,
+    })
 }
 
 /// Verify PublicKey document (self-signature and attestation) and return VerifiedPublicKeyAttested
@@ -104,7 +120,19 @@ pub fn verify_public_key_with_attestation_context(
     debug: bool,
     context: &str,
 ) -> Result<VerifiedPublicKeyAttested> {
-    let verified = verify_public_key_with_context(public_key, debug, context)?;
+    Ok(
+        verify_signing_public_key_context(public_key, debug, context)?
+            .attested()
+            .clone(),
+    )
+}
+
+fn verify_signing_public_key_context(
+    public_key: &PublicKey,
+    debug: bool,
+    context: &str,
+) -> Result<VerifiedSigningPublicKey> {
+    let verified = verify_public_key_self_signature_context(public_key, debug, context)?;
 
     // Verify attestation
     log_public_key_verification(debug, public_key, context, "attestation");
@@ -121,10 +149,15 @@ pub fn verify_public_key_with_attestation_context(
     };
     let attested_identity = AttestedIdentity::new(public_key.protected.identity.clone(), proof);
 
-    Ok(VerifiedPublicKeyAttested::new(
+    let attested = VerifiedPublicKeyAttested::new(
         public_key.clone(),
-        verified.self_signature_proof().clone(),
+        verified.verified_public_key.self_signature_proof().clone(),
         attested_identity,
+    );
+
+    Ok(VerifiedSigningPublicKey::new(
+        attested,
+        verified.verifying_key,
     ))
 }
 
@@ -140,10 +173,9 @@ pub fn verify_public_key_for_verification_context(
     debug: bool,
     context: &str,
 ) -> Result<VerifiedPublicKeyForVerification> {
-    let verified_public_key =
-        verify_public_key_with_attestation_context(public_key, debug, context)?;
+    let verified_public_key = verify_signing_public_key_context(public_key, debug, context)?;
     let mut warnings = Vec::new();
-    if let Some(warning) = build_public_key_expiry_warning(&verified_public_key)? {
+    if let Some(warning) = build_public_key_expiry_warning(verified_public_key.attested())? {
         warnings.push(warning);
     }
     Ok(VerifiedPublicKeyForVerification {

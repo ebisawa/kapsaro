@@ -13,5 +13,5 @@ pub use resolution::{
 pub use search::{detect_workspace_root, WorkspaceRoot};
 
 #[cfg(test)]
-#[path = "../../../tests/unit/workspace_detection_internal_test.rs"]
+#[path = "../../../tests/unit/internal/workspace_detection_internal_test.rs"]
 mod tests;

@@ -3,18 +3,15 @@
 
 //! Validation tests for feature/decrypt/unwrap functions
 //!
-//! Tests validation logic in `decode_wrap_item_fields` and `parse_master_key_from_plaintext`.
+//! Tests validation logic in `WrapSet::parse` and `parse_master_key_from_plaintext`.
 
 use secretenv::crypto::types::data::Plaintext;
-use secretenv::feature::envelope::unwrap::{
-    decode_wrap_item_fields, parse_master_key_from_plaintext,
-};
-use secretenv::model::common::WrapItem;
+use secretenv::feature::envelope::unwrap::parse_master_key_from_plaintext;
+use secretenv::model::common::{WrapItem, WrapSet};
 use zeroize::Zeroizing;
 
-/// Test that `decode_wrap_item_fields` returns an error for an unsupported algorithm.
 #[test]
-fn test_decode_wrap_item_fields_unsupported_alg() {
+fn test_wrap_set_parse_unsupported_alg() {
     let wrap_item = WrapItem {
         recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GK".to_string(),
@@ -23,7 +20,7 @@ fn test_decode_wrap_item_fields_unsupported_alg() {
         ct: "BBBB".to_string(),
     };
 
-    let result = decode_wrap_item_fields(&wrap_item);
+    let result = WrapSet::parse(&[wrap_item], "Document");
     assert!(result.is_err(), "Should fail for unsupported algorithm");
 
     let err_msg = format!("{}", result.unwrap_err());

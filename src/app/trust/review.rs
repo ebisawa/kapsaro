@@ -30,5 +30,5 @@ pub(crate) use types::{
 };
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_trust_review_test.rs"]
+#[path = "../../../tests/unit/internal/app_trust_review_test.rs"]
 mod tests;

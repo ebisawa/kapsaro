@@ -163,5 +163,5 @@ fn build_ssh_key_resolution(path: PathBuf, source: SshKeySource) -> SshKeyResolu
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_ssh_key_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_ssh_key_test.rs"]
 mod tests;

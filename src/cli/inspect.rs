@@ -11,7 +11,9 @@ use std::path::PathBuf;
 
 use crate::app::file::inspect::execute_inspect_file_command;
 use crate::cli::common::command::resolve_options;
-use crate::cli::common::output::text::inspect::print_inspect_banner;
+use crate::cli::common::output::text::inspect::{
+    format_inspect_command_output, print_inspect_banner,
+};
 use crate::cli::options::CommonOptions;
 use crate::Result;
 
@@ -30,6 +32,6 @@ pub fn run(args: InspectArgs) -> Result<()> {
     let prepared = execute_inspect_file_command(&options, &args.input)?;
 
     print_inspect_banner(&prepared.input_display);
-    print!("{}", prepared.rendered);
+    print!("{}", format_inspect_command_output(&prepared));
     Ok(())
 }

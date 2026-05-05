@@ -8,7 +8,12 @@ pub(crate) mod file_op;
 pub(crate) mod kv;
 pub(crate) mod kv_op;
 
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_rewrap_common_test.rs"]
+mod common_tests;
+
 use crate::feature::context::crypto::CryptoContext;
+use crate::feature::recipient::{collect_target_recipient_handles, resolve_verified_recipients};
 use crate::format::content::EncContent;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::signer::load_signer_public_key;
@@ -113,6 +118,23 @@ pub(crate) trait RewrapExecutor {
     fn finalize(self) -> Result<String>;
 }
 
+pub(crate) trait VerifiedRewrapDocument {
+    fn current_wrap_items(&self) -> &[WrapItem];
+}
+
+pub(crate) trait RewrapDocumentAdapter {
+    type Content;
+    type Verified: VerifiedRewrapDocument;
+    type Executor<'ctx>: RewrapExecutor;
+
+    fn verify_content(content: &Self::Content, debug: bool) -> Result<Self::Verified>;
+
+    fn build_executor<'ctx>(
+        verified: Self::Verified,
+        ctx: &'ctx RewrapContext<'ctx>,
+    ) -> Result<Self::Executor<'ctx>>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RewrapOperationPlan {
     remove_recipients: Vec<String>,
@@ -188,6 +210,41 @@ pub(crate) fn collect_stale_recipient_handles(
                 .map(|_| protected.subject_handle.clone())
         })
         .collect()
+}
+
+pub(crate) fn rewrap_document_with_common_skeleton<A>(
+    options: &RewrapOptions,
+    content: &A::Content,
+    member_handle: &str,
+    key_ctx: &CryptoContext,
+    workspace_root: Option<&Path>,
+    target_members: Option<&[VerifiedRecipientKey]>,
+) -> Result<String>
+where
+    A: RewrapDocumentAdapter,
+{
+    let all_members = collect_target_recipient_handles(workspace_root, target_members)?;
+    let verified_target_members =
+        resolve_verified_recipients(target_members, key_ctx, &all_members, options.debug)?;
+
+    let verified = A::verify_content(content, options.debug)?;
+    let stale_recipients =
+        collect_stale_recipient_handles(verified.current_wrap_items(), &verified_target_members);
+
+    let ctx = RewrapContext::new(
+        options,
+        member_handle,
+        key_ctx,
+        Some(&verified_target_members),
+    );
+    let executor = A::build_executor(verified, &ctx)?;
+    let plan = build_rewrap_operation_plan(
+        &executor.current_recipients(),
+        &all_members,
+        &stale_recipients,
+        options,
+    );
+    rewrite_with_rewrap_operation_plan(executor, plan)
 }
 
 pub fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Result<String> {

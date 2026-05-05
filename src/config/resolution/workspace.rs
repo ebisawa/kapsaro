@@ -31,5 +31,5 @@ pub(crate) fn resolve_workspace_from_config_base(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_workspace_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_workspace_test.rs"]
 mod tests;

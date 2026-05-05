@@ -3,8 +3,9 @@
 
 //! KV document builder for assembling unsigned kv-enc documents.
 
-use crate::format::schema::document::parse_kv_wrap_token;
+use crate::format::schema::document::{parse_kv_entry_token, parse_kv_wrap_token};
 use crate::format::token::TokenCodec;
+use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::KvEncLine;
 use crate::{Error, Result};
@@ -33,6 +34,34 @@ impl KvDocumentBuilder {
         }
     }
 
+    /// Build from a validated KV-enc document.
+    pub fn from_document(
+        head: KvHeader,
+        wrap: Option<KvWrap>,
+        doc: &KvEncDocument,
+        token_codec: TokenCodec,
+        debug: bool,
+    ) -> Result<Self> {
+        let wrap_source = Self::wrap_source_from_lines(wrap.as_ref(), doc.lines())?;
+        let entries = doc
+            .entries()
+            .iter()
+            .map(|entry| KvDocumentEntry::Preserved {
+                key: entry.key().to_string(),
+                token: entry.token().to_string(),
+                value: entry.value().clone(),
+            })
+            .collect();
+
+        Ok(Self {
+            head,
+            wrap: wrap_source,
+            entries,
+            token_codec,
+            debug,
+        })
+    }
+
     /// Build from parsed KV-enc lines.
     ///
     /// * `wrap` — if `Some`, the WRAP line is stored as `Decoded`; if `None`,
@@ -45,32 +74,18 @@ impl KvDocumentBuilder {
         debug: bool,
     ) -> Result<Self> {
         let mut entries = Vec::new();
-        let mut wrap_source: Option<WrapSource> = None;
 
         for line in lines {
-            match line {
-                KvEncLine::KV { key, token } => {
-                    entries.push(KvDocumentEntry::Preserved {
-                        key: key.clone(),
-                        token: token.clone(),
-                    });
-                }
-                KvEncLine::Wrap { token } => {
-                    wrap_source = Some(Self::resolve_wrap_source(wrap.as_ref(), token)?);
-                }
-                _ => {}
+            if let KvEncLine::KV { key, token } = line {
+                entries.push(KvDocumentEntry::Preserved {
+                    key: key.clone(),
+                    token: token.clone(),
+                    value: parse_kv_entry_token(token)?,
+                });
             }
         }
 
-        let wrap = match wrap_source {
-            Some(wrap_source) => wrap_source,
-            None => {
-                return Err(Error::Parse {
-                    message: "WRAP line not found in document".to_string(),
-                    source: None,
-                });
-            }
-        };
+        let wrap = Self::wrap_source_from_lines(wrap.as_ref(), lines)?;
 
         Ok(Self {
             head,
@@ -79,6 +94,19 @@ impl KvDocumentBuilder {
             token_codec,
             debug,
         })
+    }
+
+    fn wrap_source_from_lines(wrap: Option<&KvWrap>, lines: &[KvEncLine]) -> Result<WrapSource> {
+        lines
+            .iter()
+            .find_map(|line| match line {
+                KvEncLine::Wrap { token } => Some(Self::resolve_wrap_source(wrap, token)),
+                _ => None,
+            })
+            .ok_or_else(|| Error::Parse {
+                message: "WRAP line not found in document".to_string(),
+                source: None,
+            })?
     }
 
     fn resolve_wrap_source(wrap: Option<&KvWrap>, token: &str) -> Result<WrapSource> {
@@ -120,5 +148,5 @@ impl KvDocumentBuilder {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_kv_builder_test.rs"]
+#[path = "../../../tests/unit/internal/feature_kv_builder_test.rs"]
 mod tests;

@@ -6,9 +6,11 @@ use std::fs;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::rewrap::execution::{
-    execute_confirmed_rewrap_batch, execute_rewrap_batch, promote_accepted_incoming_members,
+    execute_confirmed_rewrap_batch, execute_reviewed_rewrap_artifacts,
 };
 use crate::app::rewrap::plan::build_rewrap_batch_plan;
+use crate::app::rewrap::session::RewrapReviewSession;
+use crate::app::rewrap::snapshot::promote_accepted_incoming_members;
 use crate::app::rewrap::types::{
     IncomingPromotionCandidate, RewrapBatchPlan, RewrapBatchRequest,
     VerifiedPostPromotionRecipients,
@@ -133,8 +135,23 @@ fn build_verified_post_promotion_recipients(
     VerifiedPostPromotionRecipients::new(verified)
 }
 
+fn build_review_session(
+    request: &RewrapBatchRequest,
+    plan: &RewrapBatchPlan,
+    expected_post_promotion_members: &[crate::model::public_key::PublicKey],
+    approvals: &[ApprovedKnownKey],
+) -> RewrapReviewSession {
+    RewrapReviewSession {
+        request: request.clone(),
+        plan: plan.clone(),
+        expected_post_promotion_members: expected_post_promotion_members.to_vec(),
+        approvals: approvals.to_vec(),
+        review_warnings: Vec::new(),
+    }
+}
+
 #[test]
-fn test_execute_rewrap_batch_does_not_promote_members() {
+fn test_execute_reviewed_rewrap_artifacts_does_not_promote_members() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
@@ -157,7 +174,7 @@ fn test_execute_rewrap_batch_does_not_promote_members() {
         accepted_promotions: vec![find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE)],
     };
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -296,11 +313,13 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
     expected_post_promotion_members.push(bob.clone());
 
     let outcome = execute_confirmed_rewrap_batch(
-        &request,
-        &plan,
-        &expected_post_promotion_members,
+        build_review_session(
+            &request,
+            &plan,
+            &expected_post_promotion_members,
+            &approvals,
+        ),
         execution,
-        &approvals,
         |_candidate, _context_label, _path| Ok(true),
         |_candidate, _context_label, _recipients, _path| Ok(true),
     )
@@ -374,11 +393,13 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
     expected_post_promotion_members.push(bob.clone());
 
     let result = execute_confirmed_rewrap_batch(
-        &request,
-        &plan,
-        &expected_post_promotion_members,
+        build_review_session(
+            &request,
+            &plan,
+            &expected_post_promotion_members,
+            &approvals,
+        ),
         execution,
-        &approvals,
         |_candidate, _context_label, _path| Ok(true),
         |_candidate, _context_label, _recipients, _path| Ok(true),
     );
@@ -449,7 +470,7 @@ fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_r
 }
 
 #[test]
-fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
+fn test_execute_reviewed_rewrap_artifacts_uses_fixed_post_promotion_members() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -480,7 +501,7 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
             .collect::<Vec<_>>(),
     );
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -504,7 +525,7 @@ fn test_execute_rewrap_batch_uses_fixed_post_promotion_members() {
 }
 
 #[test]
-fn test_execute_rewrap_batch_uses_current_artifact_content_at_execution_time() {
+fn test_execute_reviewed_rewrap_artifacts_uses_current_artifact_content_at_execution_time() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -533,7 +554,7 @@ fn test_execute_rewrap_batch_uses_current_artifact_content_at_execution_time() {
     let fixed_members =
         build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -552,7 +573,7 @@ fn test_execute_rewrap_batch_uses_current_artifact_content_at_execution_time() {
 }
 
 #[test]
-fn test_execute_rewrap_batch_uses_captured_content_after_live_path_changes() {
+fn test_execute_reviewed_rewrap_artifacts_uses_captured_content_after_live_path_changes() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -579,7 +600,7 @@ fn test_execute_rewrap_batch_uses_captured_content_after_live_path_changes() {
         build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
     let mut prompt_count = 0usize;
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -601,7 +622,7 @@ fn test_execute_rewrap_batch_uses_captured_content_after_live_path_changes() {
 }
 
 #[test]
-fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_review() {
+fn test_execute_reviewed_rewrap_artifacts_persists_signer_approval_before_next_artifact_review() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -643,7 +664,7 @@ fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_revie
         build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
     let mut prompt_count = 0usize;
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -671,7 +692,7 @@ fn test_execute_rewrap_batch_persists_signer_approval_before_next_artifact_revie
 }
 
 #[test]
-fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
+fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejection() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -713,7 +734,7 @@ fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
         build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
     let bob_canonical = bob_path.canonicalize().unwrap();
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -734,7 +755,7 @@ fn test_execute_rewrap_batch_continues_after_signer_review_rejection() {
 }
 
 #[test]
-fn test_execute_rewrap_batch_does_not_create_artifact_lock_file() {
+fn test_execute_reviewed_rewrap_artifacts_does_not_create_artifact_lock_file() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -761,7 +782,7 @@ fn test_execute_rewrap_batch_does_not_create_artifact_lock_file() {
     let fixed_members =
         build_verified_post_promotion_recipients(load_active_member_files(&workspace_dir).unwrap());
 
-    let outcome = execute_rewrap_batch(
+    let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
         execution,
@@ -829,11 +850,13 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
     let mut non_member_prompts = 0usize;
 
     let outcome = execute_confirmed_rewrap_batch(
-        &request,
-        &plan,
-        &expected_post_promotion_members,
+        build_review_session(
+            &request,
+            &plan,
+            &expected_post_promotion_members,
+            &approvals,
+        ),
         execution,
-        &approvals,
         |_candidate, _context_label, _path| Ok(true),
         |_candidate, _context_label, _recipients, _path| {
             non_member_prompts += 1;
@@ -890,11 +913,8 @@ fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mi
     fs::write(&carol_active, carol_backup).unwrap();
 
     let result = execute_confirmed_rewrap_batch(
-        &request,
-        &plan,
-        &expected_post_promotion_members,
+        build_review_session(&request, &plan, &expected_post_promotion_members, &[]),
         execution,
-        &[],
         |_candidate, _context_label, _path| Ok(true),
         |_candidate, _context_label, _recipients, _path| Ok(true),
     );
@@ -941,11 +961,8 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
     let expected_post_promotion_members = load_active_member_files(&workspace_dir).unwrap();
 
     let result = execute_confirmed_rewrap_batch(
-        &request,
-        &plan,
-        &expected_post_promotion_members,
+        build_review_session(&request, &plan, &expected_post_promotion_members, &[]),
         execution,
-        &[],
         |_candidate, _context_label, _path| Ok(true),
         |_candidate, _context_label, _recipients, _path| Ok(true),
     );

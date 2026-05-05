@@ -81,7 +81,7 @@ fn load_verified_member_subject_from_file(
     Ok(VerifiedMemberSubject::new(
         verified
             .verified_public_key
-            .document
+            .document()
             .protected
             .subject_handle
             .clone(),
@@ -322,5 +322,5 @@ fn has_github_claim(public_key: &PublicKey) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_member_verification_test.rs"]
+#[path = "../../../tests/unit/internal/feature_member_verification_test.rs"]
 mod tests;

@@ -6,7 +6,8 @@
 //! Provides functions to read and write configuration files as flat TOML key-value pairs.
 //! Global config.toml load and save operations.
 
-use crate::support::fs::{atomic, check_permission_chain, load_text_with_limit, lock};
+use crate::io::document_store::{CollectPermissionWarnings, DocumentStore};
+use crate::support::fs::lock;
 use crate::support::limits::MAX_CONFIG_FILE_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -29,18 +30,22 @@ const CONFIG_FILE_SUBJECT: &str = "config file";
 /// - `Error::Io` - Cannot read the file
 /// - `Error::Parse` - Invalid TOML format
 pub fn load_config_file(path: &Path, base_dir: &Path) -> Result<BTreeMap<String, String>> {
-    if !path.exists() {
+    let Some(loaded) = DocumentStore::<CollectPermissionWarnings>::load_optional(
+        path,
+        base_dir,
+        MAX_CONFIG_FILE_SIZE,
+        CONFIG_FILE_SUBJECT,
+        |content| parse_toml_table(content, path),
+    )?
+    else {
         return Ok(BTreeMap::new());
-    }
-
-    for warning in check_permission_chain(path, base_dir) {
+    };
+    for warning in loaded.permission_warnings {
         tracing::warn!("{}", warning);
     }
 
-    let table = load_toml_table(path)?;
-
     let mut config = BTreeMap::new();
-    for (key, value) in table {
+    for (key, value) in loaded.document {
         if let Some(s) = value.as_str() {
             config.insert(key, s.to_string());
         }
@@ -103,8 +108,18 @@ fn load_toml_table(path: &Path) -> Result<toml::Table> {
         return Ok(toml::Table::new());
     }
 
-    let content = load_text_with_limit(path, MAX_CONFIG_FILE_SIZE, CONFIG_FILE_SUBJECT)?;
-    toml::from_str(&content).map_err(|e| Error::Parse {
+    DocumentStore::<CollectPermissionWarnings>::load_required(
+        path,
+        path.parent().unwrap_or_else(|| Path::new(".")),
+        MAX_CONFIG_FILE_SIZE,
+        CONFIG_FILE_SUBJECT,
+        |content| parse_toml_table(content, path),
+    )
+    .map(|loaded| loaded.document)
+}
+
+fn parse_toml_table(content: &str, path: &Path) -> Result<toml::Table> {
+    toml::from_str(content).map_err(|e| Error::Parse {
         message: format!(
             "Invalid TOML in config file '{}': {}",
             format_path_relative_to_cwd(path),
@@ -120,5 +135,5 @@ fn save_toml_table(path: &Path, table: &toml::Table) -> Result<()> {
         message: format!("Failed to serialize config: {}", e),
         source: Some(Box::new(e)),
     })?;
-    atomic::save_text_restricted(path, &content)
+    DocumentStore::<CollectPermissionWarnings>::save_text_restricted(path, &content)
 }

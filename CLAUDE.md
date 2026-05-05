@@ -12,8 +12,8 @@ secretenv は、オフライン優先（offline-first）の暗号ファイル共
 cargo build                    # Build
 cargo build --release          # Release build
 cargo test                     # Run all tests
-cargo test --lib               # Unit tests only (src/ 内 #[cfg(test)])
-cargo test --test unit         # Unit tests (tests/unit/ 配下)
+cargo test --lib               # Unit tests registered from src/ via #[cfg(test)] and tests/unit/internal/
+cargo test --test unit         # Unit tests registered from tests/unit.rs and tests/unit/external/
 cargo test --test cli_integration  # CLI integration tests
 cargo test <module_path>::     # Specific module tests (e.g. cargo test crypto::)
 cargo test <test_name>         # Run single test by name
@@ -80,7 +80,8 @@ KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トー
 
 ### テスト構成
 
-- `tests/unit/` — 独立したユニットテスト（80+ ファイル）
+- `tests/unit/external/` — `tests/unit.rs` から登録する独立ユニットテスト
+- `tests/unit/internal/` — `src/` 内 `#[cfg(test)]` から登録する private / crate-internal ユニットテスト
 - `tests/cli_integration.rs` — CLI の E2E テスト
 - `src/` 内 `#[cfg(test)]` — モジュール内インラインテスト
 

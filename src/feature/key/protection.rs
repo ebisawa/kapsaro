@@ -6,5 +6,6 @@
 pub mod binding;
 pub mod encryption;
 pub mod key_derivation;
+mod material;
 pub mod password_encryption;
 pub mod password_key_derivation;

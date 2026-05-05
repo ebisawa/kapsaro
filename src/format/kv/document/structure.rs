@@ -7,21 +7,47 @@ use crate::format::schema::document::{
     parse_kv_signature_token_with_source as parse_kv_signature_document_with_source,
     parse_kv_wrap_token_with_source,
 };
+use crate::model::kv_enc::document::{KvEncEntry, KvFileSignature};
 use crate::model::kv_enc::line::KvEncLine;
 use crate::{Error, Result};
 
 use super::parse::token_source;
 
-pub(super) fn validate_kv_tokens(lines: &[KvEncLine], source_name: &str) -> Result<()> {
+pub(super) struct ValidatedKvTokens {
+    pub entries: Vec<KvEncEntry>,
+    pub signature_token: String,
+    pub signature: KvFileSignature,
+}
+
+pub(super) fn validate_kv_tokens(
+    lines: &[KvEncLine],
+    source_name: &str,
+) -> Result<ValidatedKvTokens> {
+    let mut entries = Vec::new();
+    let mut signature = None;
+
     for line in lines {
         match line {
             KvEncLine::Wrap { token } => validate_wrap_token(token, source_name)?,
-            KvEncLine::KV { key, token } => validate_entry_token(key, token, source_name)?,
-            KvEncLine::Sig { token } => validate_signature_token(token, source_name)?,
+            KvEncLine::KV { key, token } => {
+                entries.push(validate_entry_token(key, token, source_name)?);
+            }
+            KvEncLine::Sig { token } => {
+                signature = Some(ValidatedSignature {
+                    token: token.clone(),
+                    signature: validate_signature_token(token, source_name)?,
+                });
+            }
             _ => {}
         }
     }
-    Ok(())
+
+    let signature = signature.ok_or_else(missing_sig_error)?;
+    Ok(ValidatedKvTokens {
+        entries,
+        signature_token: signature.token,
+        signature: signature.signature,
+    })
 }
 
 pub(super) fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {
@@ -43,17 +69,11 @@ pub(super) fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {
     validate_kv_keys(lines)
 }
 
-pub(super) fn parse_kv_signature_token(lines: &[KvEncLine]) -> Result<String> {
-    lines
-        .iter()
-        .find_map(|line| match line {
-            KvEncLine::Sig { token } => Some(token.clone()),
-            _ => None,
-        })
-        .ok_or_else(|| Error::Crypto {
-            message: "kv-enc v4 has no SIG line (v4 requires signatures)".to_string(),
-            source: None,
-        })
+fn missing_sig_error() -> Error {
+    Error::Crypto {
+        message: "kv-enc v4 has no SIG line (v4 requires signatures)".to_string(),
+        source: None,
+    }
 }
 
 fn validate_wrap_token(token: &str, source_name: &str) -> Result<()> {
@@ -61,7 +81,7 @@ fn validate_wrap_token(token: &str, source_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_entry_token(key: &str, token: &str, source_name: &str) -> Result<()> {
+fn validate_entry_token(key: &str, token: &str, source_name: &str) -> Result<KvEncEntry> {
     let entry =
         parse_kv_entry_token_with_source(token, &token_source(source_name, "KV entry token"))
             .map_err(|e| Error::Parse {
@@ -69,22 +89,26 @@ fn validate_entry_token(key: &str, token: &str, source_name: &str) -> Result<()>
                 source: None,
             })?;
 
-    if key == entry.k {
-        return Ok(());
+    if key != entry.k {
+        return Err(Error::Verify {
+            rule: "E_KEY_MISMATCH".to_string(),
+            message: format!(
+                "kv-enc v4: KEY mismatch for '{}': line KEY '{}' does not match token.k '{}'",
+                key, key, entry.k
+            ),
+        });
     }
 
-    Err(Error::Verify {
-        rule: "E_KEY_MISMATCH".to_string(),
-        message: format!(
-            "kv-enc v4: KEY mismatch for '{}': line KEY '{}' does not match token.k '{}'",
-            key, key, entry.k
-        ),
-    })
+    Ok(KvEncEntry::new(key.to_string(), token.to_string(), entry))
 }
 
-fn validate_signature_token(token: &str, source_name: &str) -> Result<()> {
-    parse_kv_signature_document_with_source(token, &token_source(source_name, "SIG token"))?;
-    Ok(())
+fn validate_signature_token(token: &str, source_name: &str) -> Result<KvFileSignature> {
+    parse_kv_signature_document_with_source(token, &token_source(source_name, "SIG token"))
+}
+
+struct ValidatedSignature {
+    token: String,
+    signature: KvFileSignature,
 }
 
 fn validate_unique_line(

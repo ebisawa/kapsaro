@@ -3,86 +3,19 @@
 
 //! Unwrap operations for v3 encryption
 
-use super::wrap::ALG_HPKE_32_1_3;
 use crate::crypto::kem::{decode_kem_secret_key, open_base, X25519SecretKey};
-use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+use crate::crypto::types::data::{Aad, Info, Plaintext};
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info};
-use crate::model::common::WrapItem;
+use crate::model::common::{RecipientWrap, WrapItem, WrapSet};
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::codec::base64_public::{
-    decode_base64url_nopad, decode_base64url_nopad_ciphertext,
-};
 use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
 use uuid::Uuid;
 use zeroize::Zeroizing;
-
-/// Find a wrap item by key ID in a slice of WrapItems.
-///
-/// Searches by `kid` (cryptographically bound) rather than `recipient_handle` (informational only).
-/// If `recipient_handle` does not match `member_handle`, unwrapping fails with an error.
-///
-/// # Arguments
-/// * `wrap_items` - Slice of WrapItems to search
-/// * `kid` - Key ID to find
-/// * `member_handle` - Resolved member handle for error messages and recipient_handle-mismatch validation
-///
-/// # Returns
-/// Reference to the matching WrapItem, or an error if not found
-pub(crate) fn find_wrap_item_by_kid<'a>(
-    wrap_items: &'a [WrapItem],
-    kid: &str,
-    member_handle: &str,
-) -> Result<&'a WrapItem> {
-    let wrap_item = wrap_items
-        .iter()
-        .find(|w| w.kid == kid)
-        .ok_or_else(|| Error::Crypto {
-            message: format!(
-                "No wrap found for kid '{}' (member: {})",
-                format_kid_display_lossy(kid),
-                member_handle
-            ),
-            source: None,
-        })?;
-
-    // Treat recipient_handle mismatch as a hard failure for defence-in-depth, even though
-    // cryptographic binding is still anchored on kid.
-    if wrap_item.recipient_handle != member_handle {
-        return Err(Error::Crypto {
-            message: format!(
-                "wrap_item.recipient_handle '{}' does not match member_handle '{}' for kid '{}'",
-                wrap_item.recipient_handle,
-                member_handle,
-                format_kid_display_lossy(kid)
-            ),
-            source: None,
-        });
-    }
-
-    Ok(wrap_item)
-}
-
-/// Validate wrap item algorithm and decode enc/ct fields.
-pub fn decode_wrap_item_fields(wrap_item: &WrapItem) -> Result<(Enc, Ciphertext)> {
-    if wrap_item.alg != ALG_HPKE_32_1_3 {
-        return Err(Error::Crypto {
-            message: format!(
-                "Unsupported HPKE algorithm: {} (expected: {})",
-                wrap_item.alg, ALG_HPKE_32_1_3
-            ),
-            source: None,
-        });
-    }
-    let enc_bytes = decode_base64url_nopad(&wrap_item.enc, "enc")?;
-    let enc = Enc::from(enc_bytes);
-    let ct = decode_base64url_nopad_ciphertext(&wrap_item.ct, "ct")?;
-    Ok((enc, ct))
-}
 
 /// Convert HPKE plaintext output to a 32-byte MasterKey.
 pub fn parse_master_key_from_plaintext(mk_plaintext: Zeroizing<Plaintext>) -> Result<MasterKey> {
@@ -118,27 +51,31 @@ pub fn parse_master_key_from_plaintext(mk_plaintext: Zeroizing<Plaintext>) -> Re
 /// # Returns
 /// Unwrapped MasterKey
 pub fn unwrap_master_key(
-    wrap_item: &WrapItem,
+    wrap_item: &RecipientWrap,
     sid: &Uuid,
     kem_secret_key: &X25519SecretKey,
     info_builder: fn(&Uuid, &str) -> Result<Info>,
     debug: bool,
     caller: &str,
 ) -> Result<MasterKey> {
-    let (enc, ct) = decode_wrap_item_fields(wrap_item)?;
-
-    let info = info_builder(sid, &wrap_item.kid)?;
+    let info = info_builder(sid, wrap_item.kid().as_str())?;
     let aad = Aad::from(info.as_bytes());
 
     if debug {
         debug!(
             "[CRYPTO] HPKE: {}: open_base (kid: {})",
             caller,
-            format_kid_display_lossy(&wrap_item.kid)
+            format_kid_display_lossy(wrap_item.kid().as_str())
         );
     }
 
-    let mk_plaintext = open_base(kem_secret_key, &enc, &info, &aad, &ct)?;
+    let mk_plaintext = open_base(
+        kem_secret_key,
+        wrap_item.enc(),
+        &info,
+        &aad,
+        wrap_item.ciphertext(),
+    )?;
     parse_master_key_from_plaintext(mk_plaintext)
 }
 
@@ -159,7 +96,8 @@ pub fn unwrap_master_key_for_file(
     debug: bool,
 ) -> Result<MasterKey> {
     let secret = verified.document();
-    let wrap_item = find_wrap_item_by_kid(&secret.protected.wrap, kid, member_handle)?;
+    let wrap_set = WrapSet::parse(&secret.protected.wrap, "Document")?;
+    let wrap_item = wrap_set.find_by_kid_for_member(kid, member_handle)?;
 
     // Decode KEM secret key
     let kem_sk = decode_kem_secret_key(private_key)?;
@@ -181,13 +119,9 @@ pub fn unwrap_master_key_for_file_with_context(
     debug: bool,
 ) -> Result<DecryptionResult<MasterKey>> {
     let secret = verified.document();
-    let selected_key =
-        key_ctx.select_local_decryption_key(&secret.protected.wrap, member_handle, debug)?;
-    let wrap_item = find_wrap_item_by_kid(
-        &secret.protected.wrap,
-        &selected_key.info().kid,
-        member_handle,
-    )?;
+    let wrap_set = WrapSet::parse(&secret.protected.wrap, "Document")?;
+    let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle, debug)?;
+    let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key(
         wrap_item,
@@ -212,7 +146,7 @@ pub fn unwrap_master_key_for_file_with_context(
 /// * `debug` - Enable debug logging
 pub fn unwrap_master_key_from_item(
     sid: &Uuid,
-    wrap_item: &WrapItem,
+    wrap_item: &RecipientWrap,
     kem_secret_key: &X25519SecretKey,
     debug: bool,
 ) -> Result<MasterKey> {
@@ -245,7 +179,8 @@ pub fn unwrap_master_key_for_kv(
     private_key: &VerifiedPrivateKey,
     debug: bool,
 ) -> Result<MasterKey> {
-    let wrap_item = find_wrap_item_by_kid(wrap_items, kid, member_handle)?;
+    let wrap_set = WrapSet::parse(wrap_items, "Document")?;
+    let wrap_item = wrap_set.find_by_kid_for_member(kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(private_key)?;
     unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)
 }
@@ -257,8 +192,9 @@ pub fn unwrap_master_key_for_kv_with_context(
     key_ctx: &CryptoContext,
     debug: bool,
 ) -> Result<DecryptionResult<MasterKey>> {
-    let selected_key = key_ctx.select_local_decryption_key(wrap_items, member_handle, debug)?;
-    let wrap_item = find_wrap_item_by_kid(wrap_items, &selected_key.info().kid, member_handle)?;
+    let wrap_set = WrapSet::parse(wrap_items, "Document")?;
+    let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle, debug)?;
+    let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)?;
     Ok(DecryptionResult {

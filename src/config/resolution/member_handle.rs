@@ -52,5 +52,5 @@ fn resolve_optional_member_handle_from_keystore(base_dir: Option<&Path>) -> Resu
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_member_handle_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_member_handle_test.rs"]
 mod tests;

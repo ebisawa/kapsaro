@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::trust::TrustApprovalCandidate;
+use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::member::verification::verify_member_public_keys;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
@@ -80,17 +80,18 @@ fn apply_online_verification_result(
     candidate: &TrustApprovalCandidate,
     result: crate::io::verify_online::VerificationResult,
 ) -> TrustApprovalCandidate {
-    let mut reviewed = candidate.clone();
-    reviewed.fingerprint = result.fingerprint.or_else(|| candidate.fingerprint.clone());
-    reviewed.verified_github = result.verified_github.clone();
-    reviewed.github_id = reviewed.verified_github.as_ref().map(|account| account.id);
-    reviewed.github_login = reviewed
-        .verified_github
-        .as_ref()
-        .map(|account| account.login.clone());
-    reviewed.online_verification_attempted = true;
-    reviewed.online_verification_message = Some(result.message);
-    reviewed
+    TrustApprovalCandidateBuilder::new(candidate.member_handle.as_str(), candidate.kid.as_str())
+        .with_fingerprint(candidate.fingerprint.clone())
+        .with_attestor_pub(candidate.attestor_pub.clone())
+        .with_verified_github(candidate.verified_github.clone())
+        .with_github_binding_configured(candidate.github_binding_configured)
+        .with_public_key(candidate.public_key.clone())
+        .with_online_verification_context(
+            candidate.online_verification_attempted,
+            candidate.online_verification_message.clone(),
+        )
+        .with_verification_result(&result)
+        .build()
 }
 
 fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) -> Error {

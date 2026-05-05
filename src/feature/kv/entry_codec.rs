@@ -92,5 +92,5 @@ fn encode_encrypted_entry(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_kv_entry_codec_test.rs"]
+#[path = "../../../tests/unit/internal/feature_kv_entry_codec_test.rs"]
 mod entry_codec_tests;

@@ -12,10 +12,9 @@ use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
 use crate::model::identifiers::alg::SIGNATURE_ED25519;
 use crate::model::identifiers::format::TRUST_LOCAL_V3;
-use crate::model::public_key::PublicKey;
+use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
 use crate::model::trust_store::TrustStoreDocument;
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
-use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
 use std::collections::HashSet;
@@ -42,8 +41,8 @@ pub fn verify_trust_store(
     validate_schema(doc)?;
     validate_format(doc)?;
     let signer_public_key = load_signer_public_key(doc, keystore_root)?;
-    let verifying_key = validate_signer_public_key(&signer_public_key)?;
-    validate_signature(doc, &verifying_key)?;
+    let verified_signer_public_key = validate_signer_public_key(&signer_public_key)?;
+    validate_signature(doc, verified_signer_public_key.verifying_key())?;
     validate_kid_match(doc, &signer_public_key)?;
     validate_owner_match(doc, &signer_public_key)?;
     validate_known_keys_uniqueness(doc)?;
@@ -86,8 +85,8 @@ fn load_signer_public_key(doc: &TrustStoreDocument, keystore_root: &Path) -> Res
     )
 }
 
-fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifyingKey> {
-    let _verified = verify_public_key_for_verification_context(
+fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedSigningPublicKey> {
+    verify_public_key_for_verification_context(
         signer_public_key,
         false,
         TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
@@ -97,14 +96,8 @@ fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<Verifying
             "Trust store keystore public key verification failed",
             e,
         )
-    })?;
-
-    let bytes: [u8; 32] = decode_base64url_nopad_array(
-        &signer_public_key.protected.identity.keys.sig.x,
-        "signer Ed25519 public key",
-    )?;
-    VerifyingKey::from_bytes(&bytes)
-        .map_err(|e| Error::build_crypto_error_with_source("Invalid signer Ed25519 key", e))
+    })
+    .map(|verified| verified.verified_public_key)
 }
 
 fn validate_signature(doc: &TrustStoreDocument, verifying_key: &VerifyingKey) -> Result<()> {

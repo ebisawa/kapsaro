@@ -9,28 +9,11 @@ use crate::feature::trust::judgment::{
     judge_recipients_trust_with_additional, AdditionalKnownKeyCache, TrustIdentity, TrustJudgment,
 };
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::io::ssh::protocol::build_sha256_fingerprint;
-use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::{Error, Result};
 
-/// Review material for a manual trust decision.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TrustApprovalCandidate {
-    pub member_handle: MemberHandle,
-    pub kid: Kid,
-    pub fingerprint: Option<String>,
-    pub github_id: Option<u64>,
-    pub github_login: Option<String>,
-    pub attestor_pub: Option<String>,
-    pub verified_github: Option<VerifiedGithubIdentity>,
-    pub github_binding_configured: bool,
-    pub online_verification_attempted: bool,
-    pub online_verification_message: Option<String>,
-    pub public_key: Option<PublicKey>,
-    pub requires_out_of_band_verification: bool,
-}
+use super::candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SignerTrustOutcome {
@@ -229,27 +212,7 @@ fn enforce_non_member(
 }
 
 pub(crate) fn build_trust_approval_candidate(public_key: &PublicKey) -> TrustApprovalCandidate {
-    let github = public_key
-        .protected
-        .binding_claims
-        .as_ref()
-        .and_then(|claims| claims.github_account.as_ref());
-
-    TrustApprovalCandidate {
-        member_handle: MemberHandle::try_from(public_key.protected.subject_handle.clone())
-            .expect("public key member_handle must be valid"),
-        kid: Kid::try_from(public_key.protected.kid.clone()).expect("public key kid must be valid"),
-        fingerprint: build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_).ok(),
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some(public_key.protected.identity.attestation.pub_.clone()),
-        verified_github: None,
-        github_binding_configured: github.is_some(),
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: Some(public_key.clone()),
-        requires_out_of_band_verification: true,
-    }
+    TrustApprovalCandidateBuilder::from_public_key(public_key).build()
 }
 
 pub(crate) fn build_signer_identity(public_key: &PublicKey) -> Result<TrustIdentity> {

@@ -7,54 +7,20 @@ use std::path::Path;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
+use super::policy::{ensure_real_directory_tree, DirectoryMode, DirectoryPurpose};
+
 pub fn ensure_dir(path: &Path) -> Result<()> {
-    fs::create_dir_all(path).map_err(|e| {
-        Error::build_io_error_with_source(
-            format!(
-                "Failed to create directory {}: {}",
-                format_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )
-    })
+    ensure_real_directory_tree(path, DirectoryPurpose::General, DirectoryMode::Normal)
 }
 
 #[cfg(unix)]
 pub fn ensure_dir_restricted(path: &Path) -> Result<()> {
-    use std::fs::{DirBuilder, Permissions};
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-
-    DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(path)
-        .map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to create directory {}: {}",
-                    format_path_relative_to_cwd(path),
-                    e
-                ),
-                e,
-            )
-        })?;
-
-    fs::set_permissions(path, Permissions::from_mode(0o700)).map_err(|e| {
-        Error::build_io_error_with_source(
-            format!(
-                "Failed to set permissions on {}: {}",
-                format_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )
-    })
+    ensure_real_directory_tree(path, DirectoryPurpose::General, DirectoryMode::Restricted)
 }
 
 #[cfg(not(unix))]
 pub fn ensure_dir_restricted(path: &Path) -> Result<()> {
-    ensure_dir(path)
+    ensure_real_directory_tree(path, DirectoryPurpose::General, DirectoryMode::Restricted)
 }
 
 #[cfg(unix)]

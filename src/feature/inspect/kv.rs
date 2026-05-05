@@ -3,11 +3,9 @@
 
 //! KV-enc inspection.
 
-use crate::format::schema::document::{parse_kv_entry_token, parse_kv_signature_token};
 use crate::model::kv_enc::document::{KvEncDocument, KvFileSignature};
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
-use crate::model::kv_enc::line::KvEncLine;
 use crate::support::kid::format_kid_display;
 use crate::Result;
 
@@ -118,17 +116,18 @@ fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectS
 
 /// Build inspection data from a KvEncDocument (verified or not).
 fn kv_enc_document_to_inspection_data(doc: &KvEncDocument) -> Result<KvEncInspectionData> {
-    let mut entries = Vec::new();
-    for line in doc.lines() {
-        if let KvEncLine::KV { key, token } = line {
-            let entry = parse_kv_entry_token(token)?;
-            entries.push((key.clone(), entry, token.clone()));
-        }
-    }
-    let signature: Option<(KvFileSignature, String)> =
-        parse_kv_signature_token(doc.signature_token())
-            .ok()
-            .map(|s| (s, String::new()));
+    let entries = doc
+        .entries()
+        .iter()
+        .map(|entry| {
+            (
+                entry.key().to_string(),
+                entry.value().clone(),
+                entry.token().to_string(),
+            )
+        })
+        .collect();
+    let signature = Some((doc.signature().clone(), doc.signature_token().to_string()));
     Ok(KvEncInspectionData {
         head_data: Some((doc.head().clone(), String::new())),
         wrap_data: Some((doc.wrap().clone(), String::new())),

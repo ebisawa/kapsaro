@@ -6,7 +6,6 @@
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
 use crate::model::verification::VerifyingKeySource;
-use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
@@ -77,7 +76,7 @@ fn build_loaded_verifying_key(
     }
 
     Ok(SignatureVerificationKey {
-        verifying_key: extract_verifying_key(doc)?,
+        verifying_key: *verified.verified_public_key.verifying_key(),
         member_handle: doc.protected.subject_handle.clone(),
         source,
         warnings: verified.warnings,
@@ -85,14 +84,6 @@ fn build_loaded_verifying_key(
     })
 }
 
-/// Extract Ed25519 verifying key from a PublicKey document.
-fn extract_verifying_key(doc: &PublicKey) -> Result<VerifyingKey> {
-    let verifying_key_bytes: [u8; 32] =
-        decode_base64url_nopad_array(&doc.protected.identity.keys.sig.x, "Ed25519 public key")?;
-    VerifyingKey::from_bytes(&verifying_key_bytes)
-        .map_err(|e| Error::build_crypto_error_with_source("Invalid Ed25519 public key", e))
-}
-
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_verify_key_loader_internal_test.rs"]
+#[path = "../../../tests/unit/internal/feature_verify_key_loader_internal_test.rs"]
 mod tests;

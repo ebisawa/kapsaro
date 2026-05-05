@@ -158,5 +158,5 @@ fn validate_prompt_github_user(github_user: Option<String>) -> Result<Option<Str
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/cli_identity_prompt_test.rs"]
+#[path = "../../tests/unit/internal/cli_identity_prompt_test.rs"]
 mod tests;

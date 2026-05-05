@@ -72,5 +72,5 @@ pub fn promote_verified_members(workspace_path: &Path, member_handles: &[String]
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_member_promotion_test.rs"]
+#[path = "../../../tests/unit/internal/feature_member_promotion_test.rs"]
 mod tests;

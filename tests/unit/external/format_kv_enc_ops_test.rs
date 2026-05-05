@@ -60,6 +60,42 @@ fn decrypt_kv_document_for_test(
         .collect()
 }
 
+fn encrypt_kv_document_for_parse_test(input: &str) -> String {
+    let signing_key = generate_ed25519_keypair([2u8; 32]);
+    let ssh_temp = tempfile::TempDir::new().unwrap();
+    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
+    let (_private, public) = keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
+    let members = vec![public.clone()];
+    let verified_members = build_verified_recipient_keys(&members);
+    let kv_map = parse_dotenv(input).unwrap();
+    encrypt_kv_document(
+        &kv_map,
+        &verified_members,
+        &SigningContext {
+            signing_key: &signing_key,
+            signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            signer_pub: public,
+            debug: false,
+        },
+        TokenCodec::JsonJcs,
+    )
+    .unwrap()
+}
+
+fn replace_line_key(content: &str, old_key: &str, new_key: &str) -> String {
+    content
+        .lines()
+        .map(|line| {
+            if let Some(token) = line.strip_prefix(&format!("{} ", old_key)) {
+                format!("{} {}", new_key, token)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
 fn test_encrypt_and_decrypt_kv() {
     // Generate signing key for tests
@@ -129,6 +165,39 @@ fn test_encrypt_and_decrypt_kv() {
         decrypted2,
         "API_KEY=secret123\nDATABASE_URL=postgres://localhost\n"
     );
+}
+
+#[test]
+fn test_parse_kv_document_keeps_validated_entries_and_signature() {
+    let encrypted = encrypt_kv_document_for_parse_test("A=one\nB=two\n");
+    let doc = parse_kv_document(&encrypted).unwrap();
+
+    let keys: Vec<&str> = doc.entries().iter().map(|entry| entry.key()).collect();
+    assert_eq!(keys, vec!["A", "B"]);
+    assert_eq!(doc.entries()[0].key(), doc.entries()[0].value().k);
+    assert!(!doc.entries()[0].token().is_empty());
+    assert!(!doc.signature_token().is_empty());
+    assert_eq!(doc.signature().kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
+}
+
+#[test]
+fn test_parse_kv_document_rejects_duplicate_key_before_token_reparse() {
+    let encrypted = encrypt_kv_document_for_parse_test("A=one\nB=two\n");
+    let duplicated = replace_line_key(&encrypted, "B", "A");
+
+    let err = parse_kv_document(&duplicated).unwrap_err();
+
+    assert!(err.to_string().contains("E_DUPLICATE_KEY"));
+}
+
+#[test]
+fn test_parse_kv_document_rejects_line_key_token_key_mismatch() {
+    let encrypted = encrypt_kv_document_for_parse_test("A=one\n");
+    let mismatched = replace_line_key(&encrypted, "A", "B");
+
+    let err = parse_kv_document(&mismatched).unwrap_err();
+
+    assert!(err.to_string().contains("E_KEY_MISMATCH"));
 }
 
 #[test]

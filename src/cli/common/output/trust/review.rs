@@ -80,5 +80,5 @@ fn is_warning_line(line: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../../../tests/unit/cli_common_trust_test.rs"]
+#[path = "../../../../../tests/unit/internal/cli_common_trust_test.rs"]
 mod tests;

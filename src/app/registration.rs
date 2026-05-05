@@ -12,5 +12,5 @@ pub(crate) use workspace::{
 };
 
 #[cfg(test)]
-#[path = "../../tests/unit/app_registration_test.rs"]
+#[path = "../../tests/unit/internal/app_registration_test.rs"]
 mod tests;

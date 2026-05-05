@@ -22,5 +22,5 @@ pub use store::{
 };
 
 #[cfg(test)]
-#[path = "../../../tests/unit/workspace_members_internal_test.rs"]
+#[path = "../../../tests/unit/internal/workspace_members_internal_test.rs"]
 mod tests;

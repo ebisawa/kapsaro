@@ -3,7 +3,7 @@
 
 //! Atomic file write operations.
 
-use crate::support::fs::{ensure_dir_restricted, set_file_permission_0600};
+use crate::support::fs::{ensure_dir, ensure_dir_restricted, set_file_permission_0600};
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use serde::Serialize;
@@ -51,16 +51,13 @@ fn enforce_target_not_symlink(path: &Path) -> Result<()> {
 /// Ensure parent directory exists
 fn ensure_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to create directory {}: {}",
-                    format_path_relative_to_cwd(parent),
-                    e
-                ),
-                e,
-            )
-        })?;
+        if let Ok(metadata) = fs::symlink_metadata(parent) {
+            let file_type = metadata.file_type();
+            if file_type.is_dir() || file_type.is_symlink() {
+                return Ok(());
+            }
+        }
+        ensure_dir(parent)?;
     }
     Ok(())
 }
@@ -68,6 +65,11 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
 /// Ensure parent directory exists with restricted permissions (mode 0700)
 fn ensure_parent_dir_restricted(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
+        if let Ok(metadata) = fs::symlink_metadata(parent) {
+            if metadata.file_type().is_symlink() {
+                return Ok(());
+            }
+        }
         ensure_dir_restricted(parent)?;
     }
     Ok(())

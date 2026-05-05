@@ -192,5 +192,5 @@ fn save_generated_key(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_key_generate_internal_test.rs"]
+#[path = "../../../tests/unit/internal/feature_key_generate_internal_test.rs"]
 mod tests;

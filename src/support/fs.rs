@@ -6,6 +6,7 @@
 pub mod atomic;
 pub mod lock;
 mod permission;
+pub(crate) mod policy;
 mod read;
 mod snapshot;
 

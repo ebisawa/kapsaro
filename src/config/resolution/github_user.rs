@@ -41,5 +41,5 @@ pub(crate) fn resolve_github_user(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/config_resolution_github_user_test.rs"]
+#[path = "../../../tests/unit/internal/config_resolution_github_user_test.rs"]
 mod tests;

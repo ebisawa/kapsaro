@@ -3,12 +3,14 @@
 
 //! File locking utilities.
 
+use crate::support::fs::policy::{
+    ensure_real_directory_tree, reject_symlink, DirectoryMode, DirectoryPurpose,
+};
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use fd_lock::RwLock;
-use std::fs;
 use std::fs::OpenOptions;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Execute a function with an exclusive file lock.
 ///
@@ -64,128 +66,11 @@ fn lock_parent_dir(path: &Path) -> Option<&Path> {
 }
 
 fn ensure_lock_parent_dir(path: &Path) -> Result<()> {
-    for missing_dir in collect_missing_directories(path)?.into_iter().rev() {
-        ensure_lock_directory(&missing_dir)?;
-    }
-    Ok(())
+    ensure_real_directory_tree(path, DirectoryPurpose::LockFile, DirectoryMode::Restricted)
 }
 
 fn enforce_lock_path_not_symlink(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => Err(Error::InvalidOperation {
-            message: format!(
-                "refusing to create lock file through symlink: {}",
-                format_path_relative_to_cwd(path)
-            ),
-        }),
-        Ok(_) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(Error::build_io_error_with_source(
-            format!(
-                "Failed to inspect lock file {}: {}",
-                format_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )),
-    }
-}
-
-fn collect_missing_directories(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut missing = Vec::new();
-
-    for ancestor in path.ancestors() {
-        let candidate = if ancestor.as_os_str().is_empty() {
-            Path::new(".")
-        } else {
-            ancestor
-        };
-        match fs::symlink_metadata(candidate) {
-            Ok(metadata) => {
-                validate_real_directory(candidate, &metadata)?;
-                return Ok(missing);
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                missing.push(candidate.to_path_buf());
-            }
-            Err(e) => {
-                return Err(Error::build_io_error_with_source(
-                    format!(
-                        "Failed to inspect lock file directory {}: {}",
-                        format_path_relative_to_cwd(candidate),
-                        e
-                    ),
-                    e,
-                ));
-            }
-        }
-    }
-
-    Err(Error::build_io_error(format!(
-        "Failed to resolve parent directory for lock file: {}",
-        format_path_relative_to_cwd(path)
-    )))
-}
-
-fn validate_real_directory(path: &Path, metadata: &fs::Metadata) -> Result<()> {
-    let file_type = metadata.file_type();
-    if file_type.is_symlink() {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "refusing to create lock file in symlinked directory: {}",
-                format_path_relative_to_cwd(path)
-            ),
-        });
-    }
-    if !file_type.is_dir() {
-        return Err(Error::build_io_error(format!(
-            "Failed to create directory for lock file '{}': existing path is not a directory",
-            format_path_relative_to_cwd(path)
-        )));
-    }
-    Ok(())
-}
-
-fn ensure_lock_directory(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::fs::{DirBuilder, Permissions};
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-
-        DirBuilder::new().mode(0o700).create(path).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to create directory for lock file '{}': {}",
-                    format_path_relative_to_cwd(path),
-                    e
-                ),
-                e,
-            )
-        })?;
-        fs::set_permissions(path, Permissions::from_mode(0o700)).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to set permissions on {}: {}",
-                    format_path_relative_to_cwd(path),
-                    e
-                ),
-                e,
-            )
-        })?;
-        Ok(())
-    }
-
-    #[cfg(not(unix))]
-    {
-        fs::create_dir(path).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to create directory for lock file '{}': {}",
-                    format_path_relative_to_cwd(path),
-                    e
-                ),
-                e,
-            )
-        })
-    }
+    reject_symlink(path, |path| {
+        format!("refusing to create lock file through symlink: {}", path)
+    })
 }

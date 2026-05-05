@@ -41,8 +41,9 @@ pub fn load_crypto_context(
         &ssh_pubkey,
         debug_enabled,
     )?;
-    let selected_kid_override =
-        explicit_kid.map(|_| decrypted_key.private_key.proof().kid().to_string());
+    let selected_kid_override = explicit_kid
+        .map(|_| Kid::try_from(decrypted_key.private_key.proof().kid().to_string()))
+        .transpose()?;
     let local_key_access = build_local_key_access(keystore_root.clone(), ssh_pubkey, backend);
     let context = build_keystore_crypto_context(
         member_handle,
@@ -133,9 +134,9 @@ fn build_keystore_crypto_context(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_context_crypto_test.rs"]
+#[path = "../../../tests/unit/internal/feature_context_crypto_test.rs"]
 mod feature_context_crypto_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/feature_context_env_key_integration_test.rs"]
+#[path = "../../../tests/unit/internal/feature_context_env_key_integration_test.rs"]
 mod feature_context_env_key_integration_test;

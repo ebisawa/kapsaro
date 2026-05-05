@@ -25,6 +25,7 @@ use secretenv::model::private_key::{
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::cell::Cell;
+use std::collections::BTreeSet;
 
 const TEST_SSH_PUBKEY: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
@@ -218,6 +219,49 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
         3,
         "encrypt uses 2 signatures, decrypt uses 1"
     );
+}
+
+#[test]
+fn test_encrypt_private_key_protected_algorithm_shape() {
+    struct DeterministicBackend;
+
+    impl SignatureBackend for DeterministicBackend {
+        fn sign_sshsig(
+            &self,
+            _namespace: &str,
+            _pubkey: &str,
+            _challenge: &[u8],
+        ) -> secretenv::Result<Ed25519RawSignature> {
+            Ok(Ed25519RawSignature::new([0xAB; 64]))
+        }
+    }
+
+    let plaintext = build_test_plaintext();
+    let ssh_fpr = build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap();
+    let encrypted = encrypt_private_key(&PrivateKeyEncryptionParams {
+        plaintext: &plaintext,
+        member_handle: "alice".to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string(),
+        backend: &DeterministicBackend,
+        ssh_pubkey: TEST_SSH_PUBKEY,
+        ssh_fpr: ssh_fpr.clone(),
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        expires_at: "2027-01-01T00:00:00Z".to_string(),
+        debug: false,
+    })
+    .expect("encrypt_private_key should succeed");
+
+    let value = serde_json::to_value(&encrypted.protected.alg).unwrap();
+    let object = value.as_object().unwrap();
+    let fields = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        fields,
+        BTreeSet::from(["aead", "fpr", "hkdf_salt", "ikm_salt", "kdf"])
+    );
+    assert_eq!(object["kdf"], "sshsig-ed25519-hkdf-sha256");
+    assert_eq!(object["fpr"], ssh_fpr);
+    assert_eq!(object["aead"], alg::AEAD_XCHACHA20_POLY1305);
 }
 
 #[test]

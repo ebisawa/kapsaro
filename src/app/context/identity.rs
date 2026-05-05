@@ -50,5 +50,5 @@ pub(crate) fn build_missing_member_handle_error(include_prompt_hint: bool) -> Er
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_context_identity_test.rs"]
+#[path = "../../../tests/unit/internal/app_context_identity_test.rs"]
 mod tests;

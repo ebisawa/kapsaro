@@ -10,6 +10,7 @@ use std::path::Path;
 pub mod add;
 pub mod keygen;
 pub mod pubkey;
+pub(crate) mod runner;
 pub mod temp_file;
 pub mod traits;
 

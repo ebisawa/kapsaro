@@ -98,6 +98,27 @@ fn test_ensure_dir() {
 
 #[cfg(unix)]
 #[test]
+fn test_ensure_dir_rejects_symlinked_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real_parent = temp_dir.path().join("outside");
+    let linked_parent = temp_dir.path().join("linked");
+    fs::create_dir(&real_parent).unwrap();
+    symlink(&real_parent, &linked_parent).unwrap();
+
+    let error = ensure_dir(&linked_parent.join("nested")).unwrap_err();
+
+    let message = error.to_string();
+    assert!(message.contains("symlink"), "unexpected error: {message}");
+    assert!(
+        !real_parent.join("nested").exists(),
+        "directory creation must not follow a symlinked ancestor"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn test_ensure_dir_restricted_sets_mode_0700() {
     use std::os::unix::fs::PermissionsExt;
     let temp_dir = TempDir::new().unwrap();
@@ -106,6 +127,27 @@ fn test_ensure_dir_restricted_sets_mode_0700() {
     assert!(dir_path.exists());
     let mode = fs::metadata(&dir_path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o700);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ensure_dir_restricted_rejects_symlinked_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real_parent = temp_dir.path().join("outside");
+    let linked_parent = temp_dir.path().join("linked");
+    fs::create_dir(&real_parent).unwrap();
+    symlink(&real_parent, &linked_parent).unwrap();
+
+    let error = ensure_dir_restricted(&linked_parent.join("nested")).unwrap_err();
+
+    let message = error.to_string();
+    assert!(message.contains("symlink"), "unexpected error: {message}");
+    assert!(
+        !real_parent.join("nested").exists(),
+        "restricted directory creation must not follow a symlinked ancestor"
+    );
 }
 
 #[cfg(unix)]

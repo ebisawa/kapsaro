@@ -8,12 +8,11 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
 use crate::app::trust::approval::{save_known_key_approvals, ApprovalSaveResult, ApprovedKnownKey};
 use crate::app::trust::store::load_or_build_trust_store_for_member;
-use crate::app::trust::TrustApprovalCandidate;
+use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
 use crate::io::workspace::members::load_active_member_files;
-use crate::model::identity::{Kid, MemberHandle};
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
 
@@ -140,8 +139,6 @@ fn evaluate_candidate_with_snapshot(
     known_keys: &[crate::model::trust_store::KnownKey],
 ) -> MemberApprovalResult {
     let member_pk = find_member_public_key(active_members, &vr.member_handle);
-    let fingerprint = vr.fingerprint.clone();
-    let (github_id, github_login) = extract_github_info(vr);
 
     let Some(pk) = member_pk else {
         return MemberApprovalResult {
@@ -152,66 +149,48 @@ fn evaluate_candidate_with_snapshot(
             review_required: false,
             already_known: false,
             message: "Member not found in active members".to_string(),
-            fingerprint,
-            github_id,
-            github_login,
+            fingerprint: vr.fingerprint.clone(),
+            github_id: vr.verified_github.as_ref().map(|account| account.id),
+            github_login: vr
+                .verified_github
+                .as_ref()
+                .map(|account| account.login.clone()),
             github_binding_configured: false,
             attestor_pub: None,
             verified_github: None,
         };
     };
-    let kid = pk.protected.kid.clone();
-    let attestor_pub = pk.protected.identity.attestation.pub_.clone();
-    let github_binding_configured = pk
-        .protected
-        .binding_claims
-        .as_ref()
-        .and_then(|claims| claims.github_account.as_ref())
-        .is_some();
+    let candidate = TrustApprovalCandidateBuilder::from_public_key(pk)
+        .with_verification_result(vr)
+        .build();
 
     // Manual review is only allowed when GitHub binding is absent.
     if vr.status == VerificationStatus::Failed
-        || (github_binding_configured && vr.status != VerificationStatus::Verified)
+        || (candidate.github_binding_configured && vr.status != VerificationStatus::Verified)
     {
-        return build_not_verified_result(vr, &kid, github_binding_configured);
+        return build_member_approval_result(vr, &candidate, false, false, false);
     }
 
-    let known_key_state = match judge_known_key(known_keys, &kid, &vr.member_handle) {
+    let known_key_state = match judge_known_key(known_keys, &candidate.kid, &vr.member_handle) {
         Ok(state) => state,
         Err(e) => {
-            return MemberApprovalResult {
-                member_handle: vr.member_handle.clone(),
-                kid,
-                verified: true,
-                approved: false,
-                review_required: false,
-                already_known: false,
-                message: format!("Integrity anomaly: {}", e),
-                fingerprint,
-                github_id,
-                github_login,
-                github_binding_configured,
-                attestor_pub: Some(attestor_pub),
-                verified_github: vr.verified_github.clone(),
-            };
+            return build_member_approval_result_with_message(
+                &candidate,
+                true,
+                false,
+                false,
+                format!("Integrity anomaly: {}", e),
+            );
         }
     };
 
-    MemberApprovalResult {
-        member_handle: vr.member_handle.clone(),
-        kid,
-        verified: vr.status == VerificationStatus::Verified,
-        approved: false,
-        review_required: matches!(known_key_state, KnownKeyJudgment::New),
-        already_known: matches!(known_key_state, KnownKeyJudgment::Existing),
-        message: vr.message.clone(),
-        fingerprint,
-        github_id,
-        github_login,
-        github_binding_configured,
-        attestor_pub: Some(attestor_pub),
-        verified_github: vr.verified_github.clone(),
-    }
+    build_member_approval_result(
+        vr,
+        &candidate,
+        vr.status == VerificationStatus::Verified,
+        matches!(known_key_state, KnownKeyJudgment::New),
+        matches!(known_key_state, KnownKeyJudgment::Existing),
+    )
 }
 
 fn find_member_public_key<'a>(
@@ -224,36 +203,46 @@ fn find_member_public_key<'a>(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_member_approval_test.rs"]
+#[path = "../../../tests/unit/internal/app_member_approval_test.rs"]
 mod tests;
 
-fn extract_github_info(
+fn build_member_approval_result(
     vr: &crate::io::verify_online::VerificationResult,
-) -> (Option<u64>, Option<String>) {
-    let github = vr.verified_github.as_ref();
-    (github.map(|g| g.id), github.map(|g| g.login.clone()))
+    candidate: &TrustApprovalCandidate,
+    verified: bool,
+    review_required: bool,
+    already_known: bool,
+) -> MemberApprovalResult {
+    build_member_approval_result_with_message(
+        candidate,
+        verified,
+        review_required,
+        already_known,
+        vr.message.clone(),
+    )
 }
 
-fn build_not_verified_result(
-    vr: &crate::io::verify_online::VerificationResult,
-    kid: &str,
-    github_binding_configured: bool,
+fn build_member_approval_result_with_message(
+    candidate: &TrustApprovalCandidate,
+    verified: bool,
+    review_required: bool,
+    already_known: bool,
+    message: String,
 ) -> MemberApprovalResult {
-    let (github_id, github_login) = extract_github_info(vr);
     MemberApprovalResult {
-        member_handle: vr.member_handle.clone(),
-        kid: kid.to_string(),
-        verified: false,
+        member_handle: candidate.member_handle.to_string(),
+        kid: candidate.kid.to_string(),
+        verified,
         approved: false,
-        review_required: false,
-        already_known: false,
-        message: vr.message.clone(),
-        fingerprint: vr.fingerprint.clone(),
-        github_id,
-        github_login,
-        github_binding_configured,
-        attestor_pub: None,
-        verified_github: vr.verified_github.clone(),
+        review_required,
+        already_known,
+        message,
+        fingerprint: candidate.fingerprint.clone(),
+        github_id: candidate.github_id,
+        github_login: candidate.github_login.clone(),
+        github_binding_configured: candidate.github_binding_configured,
+        attestor_pub: candidate.attestor_pub.clone(),
+        verified_github: candidate.verified_github.clone(),
     }
 }
 
@@ -276,20 +265,16 @@ fn build_approved_known_key(result: &MemberApprovalResult) -> ApprovedKnownKey {
 
 impl From<&MemberApprovalResult> for TrustApprovalCandidate {
     fn from(result: &MemberApprovalResult) -> Self {
-        TrustApprovalCandidate {
-            member_handle: MemberHandle::try_from(result.member_handle.clone())
-                .expect("approved member_handle must be valid"),
-            kid: Kid::try_from(result.kid.clone()).expect("approved kid must be valid"),
-            fingerprint: result.fingerprint.clone(),
-            github_id: result.github_id,
-            github_login: result.github_login.clone(),
-            attestor_pub: result.attestor_pub.clone(),
-            verified_github: result.verified_github.clone(),
-            github_binding_configured: result.github_binding_configured,
-            online_verification_attempted: result.github_binding_configured,
-            online_verification_message: Some(result.message.clone()),
-            public_key: None,
-            requires_out_of_band_verification: true,
-        }
+        TrustApprovalCandidateBuilder::new(&result.member_handle, &result.kid)
+            .with_fingerprint(result.fingerprint.clone())
+            .with_attestor_pub(result.attestor_pub.clone())
+            .with_verified_github(result.verified_github.clone())
+            .with_github_review_fields(result.github_id, result.github_login.clone())
+            .with_github_binding_configured(result.github_binding_configured)
+            .with_online_verification_context(
+                result.github_binding_configured,
+                Some(result.message.clone()),
+            )
+            .build()
     }
 }

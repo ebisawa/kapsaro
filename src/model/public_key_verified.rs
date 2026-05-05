@@ -5,6 +5,7 @@
 
 use super::public_key::{BindingClaims, Identity, PublicKey};
 use super::verification::{BindingVerificationProof, ExpiryProof, SelfSignatureProof};
+use ed25519_dalek::VerifyingKey;
 
 /// Binding claims that have been verified online (e.g. via member verify).
 #[derive(Debug, Clone)]
@@ -121,6 +122,43 @@ impl VerifiedPublicKeyAttested {
     /// Get a reference to the attestation-verified identity.
     pub fn identity(&self) -> &AttestedIdentity {
         &self.identity
+    }
+}
+
+/// PublicKey verified for signature verification use.
+#[derive(Debug, Clone)]
+pub struct VerifiedSigningPublicKey {
+    attested: VerifiedPublicKeyAttested,
+    verifying_key: VerifyingKey,
+}
+
+impl VerifiedSigningPublicKey {
+    /// Construct from an attested key and its verified Ed25519 key material.
+    pub fn new(attested: VerifiedPublicKeyAttested, verifying_key: VerifyingKey) -> Self {
+        Self {
+            attested,
+            verifying_key,
+        }
+    }
+
+    /// Get a reference to the verified document.
+    pub fn document(&self) -> &PublicKey {
+        self.attested.document()
+    }
+
+    /// Get a reference to the attestation-verified identity.
+    pub fn identity(&self) -> &AttestedIdentity {
+        self.attested.identity()
+    }
+
+    /// Get a reference to the attested key wrapper.
+    pub fn attested(&self) -> &VerifiedPublicKeyAttested {
+        &self.attested
+    }
+
+    /// Get the verified Ed25519 key material for signature verification.
+    pub fn verifying_key(&self) -> &VerifyingKey {
+        &self.verifying_key
     }
 }
 

@@ -7,7 +7,10 @@
 use std::io::BufRead;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::paths::get_trust_store_file_path;
+use crate::app::trust::recovery::{
+    execute_trust_store_reset, prepare_trust_store_reset_plan, requires_trust_store_reset,
+    TrustStoreResetPlan,
+};
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::trust::review::print_candidate_review;
@@ -82,51 +85,30 @@ where
     }
 }
 
-fn requires_trust_store_reset(error: &Error) -> bool {
-    matches!(
-        error,
-        Error::Verify { rule, .. } if rule == "E_TRUST_STORE_RESET_REQUIRED"
-    )
-}
-
 fn recover_invalid_trust_store(
     options: &CommonCommandOptions,
     owner_handle: &str,
     error: Error,
 ) -> Result<()> {
-    if !tty::is_interactive() {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "{} (non-interactive mode cannot confirm trust store reset)",
-                error.format_user_message()
-            ),
-        });
-    }
+    let plan = prepare_trust_store_reset_plan(options, owner_handle, error, tty::is_interactive())?;
+    recover_prepared_trust_store(&plan, confirm_trust_store_reset)
+}
 
-    let base_dir = options.resolve_base_dir()?;
-    let path = get_trust_store_file_path(&base_dir, owner_handle);
-    print_warning(error.format_user_message());
-    if !confirm_trust_store_reset(&path)? {
+fn recover_prepared_trust_store(
+    plan: &TrustStoreResetPlan,
+    confirm: impl FnOnce(&std::path::Path) -> Result<bool>,
+) -> Result<()> {
+    print_warning(&plan.warning_message);
+    if !confirm(&plan.path)? {
         return Err(Error::InvalidOperation {
             message: "Local trust store reset was declined".to_string(),
         });
     }
 
-    if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to remove invalid local trust store {}: {}",
-                    format_path_relative_to_cwd(&path),
-                    e
-                ),
-                e,
-            )
-        })?;
-    }
+    let outcome = execute_trust_store_reset(plan)?;
     eprintln!(
         "Deleted local trust store '{}'. Continuing with an empty trust cache.",
-        format_path_relative_to_cwd(&path)
+        format_path_relative_to_cwd(&outcome.path)
     );
     Ok(())
 }
@@ -142,41 +124,10 @@ fn recover_invalid_trust_store_with_reader<R>(
 where
     R: BufRead,
 {
-    if !is_interactive {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "{} (non-interactive mode cannot confirm trust store reset)",
-                error.format_user_message()
-            ),
-        });
-    }
-
-    let base_dir = options.resolve_base_dir()?;
-    let path = get_trust_store_file_path(&base_dir, owner_handle);
-    print_warning(error.format_user_message());
-    if !confirm_trust_store_reset_with_reader(&path, reader)? {
-        return Err(Error::InvalidOperation {
-            message: "Local trust store reset was declined".to_string(),
-        });
-    }
-
-    if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to remove invalid local trust store {}: {}",
-                    format_path_relative_to_cwd(&path),
-                    e
-                ),
-                e,
-            )
-        })?;
-    }
-    eprintln!(
-        "Deleted local trust store '{}'. Continuing with an empty trust cache.",
-        format_path_relative_to_cwd(&path)
-    );
-    Ok(())
+    let plan = prepare_trust_store_reset_plan(options, owner_handle, error, is_interactive)?;
+    recover_prepared_trust_store(&plan, |path| {
+        confirm_trust_store_reset_with_reader(path, reader)
+    })
 }
 
 #[cfg(test)]
@@ -199,5 +150,5 @@ fn trust_store_reset_prompt(path: &std::path::Path) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/cli_common_trust_recovery_test.rs"]
+#[path = "../../../tests/unit/internal/cli_common_trust_recovery_test.rs"]
 mod recovery_tests;

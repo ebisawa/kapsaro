@@ -134,12 +134,12 @@ fn encrypt_kv_for_test(
 }
 
 // ============================================================================
-// Test: find_wrap_item_by_kid (tested indirectly through public APIs)
+// Test: wrap selection by kid (tested indirectly through public APIs)
 // ============================================================================
 
-/// Test that decryption succeeds when the correct kid is used (find_wrap_item_by_kid success path).
+/// Test that decryption succeeds when the correct kid is used.
 #[test]
-fn test_find_wrap_item_by_kid() {
+fn test_decrypt_file_selects_wrap_by_kid() {
     let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_file_for_test(b"test content");
 
     // Decryption with correct kid should succeed
@@ -157,7 +157,7 @@ fn test_find_wrap_item_by_kid() {
 
 /// Test that a non-existent kid produces an error containing "No wrap found".
 #[test]
-fn test_find_wrap_item_by_kid_not_found() {
+fn test_decrypt_file_reports_missing_wrap_kid() {
     let (verified_doc, key_ctx, _kid, _temp_dir) = encrypt_file_for_test(b"test content");
 
     let nonexistent_kid = "00000000000000000000000000";
@@ -180,7 +180,7 @@ fn test_find_wrap_item_by_kid_not_found() {
 
 /// Test that kid matches but recipient_handle doesn't match member_handle -- decryption fails.
 #[test]
-fn test_find_wrap_item_by_kid_rid_mismatch_fails() {
+fn test_decrypt_file_rejects_recipient_handle_mismatch() {
     let (verified_doc, key_ctx, kid, _temp_dir) =
         encrypt_file_for_test(b"recipient_handle mismatch test");
 
@@ -600,8 +600,12 @@ fn test_unwrap_master_key_from_wrap_item() {
         "SHA256:test",
     );
     let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
+    let wrap_set = secretenv::model::common::WrapSet::parse(&[wrap_item], "Document").unwrap();
+    let parsed_wrap_item = wrap_set
+        .find_by_kid_for_member(&public_key.protected.kid, ALICE_MEMBER_HANDLE)
+        .unwrap();
     let unwrapped_key = unwrap_master_key(
-        &wrap_item,
+        parsed_wrap_item,
         &sid,
         &kem_secret_key,
         build_file_wrap_info,

@@ -5,13 +5,13 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::sign_file_document;
-use crate::feature::recipient::{collect_target_recipient_handles, resolve_verified_recipients};
 use crate::feature::rewrap::file_op::recipients::{
     add_file_recipients, remove_file_recipients, rewrite_file_recipient_wraps,
 };
 use crate::feature::rewrap::file_op::rotate::rotate_file_key;
 use crate::feature::verify::file::verify_file_content;
 use crate::format::content::FileEncContent;
+use crate::model::common::WrapItem;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::file_enc::{FileEncDocument, FileEncDocumentProtected};
 use crate::model::public_key::VerifiedRecipientKey;
@@ -20,8 +20,8 @@ use crate::{Error, Result};
 use std::path::Path;
 
 use super::{
-    build_rewrap_operation_plan, collect_stale_recipient_handles,
-    rewrite_with_rewrap_operation_plan, RewrapContext, RewrapExecutor, RewrapOptions,
+    rewrap_document_with_common_skeleton, RewrapContext, RewrapDocumentAdapter, RewrapExecutor,
+    RewrapOptions, VerifiedRewrapDocument,
 };
 
 /// Executor for file-enc rewrap operations.
@@ -115,6 +115,31 @@ impl<'a> FileRewrapExecutor<'a> {
     }
 }
 
+struct FileRewrapAdapter;
+
+impl VerifiedRewrapDocument for VerifiedFileEncDocument {
+    fn current_wrap_items(&self) -> &[WrapItem] {
+        &self.document().protected.wrap
+    }
+}
+
+impl RewrapDocumentAdapter for FileRewrapAdapter {
+    type Content = FileEncContent;
+    type Verified = VerifiedFileEncDocument;
+    type Executor<'ctx> = FileRewrapExecutor<'ctx>;
+
+    fn verify_content(content: &Self::Content, debug: bool) -> Result<Self::Verified> {
+        verify_file_content(content, debug)
+    }
+
+    fn build_executor<'ctx>(
+        verified: Self::Verified,
+        ctx: &'ctx RewrapContext<'ctx>,
+    ) -> Result<Self::Executor<'ctx>> {
+        Ok(FileRewrapExecutor::new(verified, ctx))
+    }
+}
+
 /// Rewrap file-enc v4 content.
 pub fn rewrap_file_document(
     options: &RewrapOptions,
@@ -124,28 +149,12 @@ pub fn rewrap_file_document(
     workspace_root: Option<&Path>,
     target_members: Option<&[VerifiedRecipientKey]>,
 ) -> Result<String> {
-    let all_members = collect_target_recipient_handles(workspace_root, target_members)?;
-    let verified_target_members =
-        resolve_verified_recipients(target_members, key_ctx, &all_members, options.debug)?;
-
-    let verified = verify_file_content(content, options.debug)?;
-    let stale_recipients = collect_stale_recipient_handles(
-        &verified.document().protected.wrap,
-        &verified_target_members,
-    );
-
-    let ctx = RewrapContext::new(
+    rewrap_document_with_common_skeleton::<FileRewrapAdapter>(
         options,
+        content,
         member_handle,
         key_ctx,
-        Some(&verified_target_members),
-    );
-    let executor = FileRewrapExecutor::new(verified, &ctx);
-    let plan = build_rewrap_operation_plan(
-        &executor.current_recipients(),
-        &all_members,
-        &stale_recipients,
-        options,
-    );
-    rewrite_with_rewrap_operation_plan(executor, plan)
+        workspace_root,
+        target_members,
+    )
 }

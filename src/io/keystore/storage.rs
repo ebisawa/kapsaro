@@ -6,11 +6,12 @@
 //! Save and load PrivateKey and PublicKey.
 
 use crate::format::schema::document::{parse_private_key_str, parse_public_key_str};
+use crate::io::document_store::{
+    CollectPermissionWarnings, DocumentStore, FailOnPermissionWarning,
+};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::support::fs::{
-    atomic, check_permission_chain, ensure_dir_restricted, list_dir, load_text_with_limit,
-};
+use crate::support::fs::{ensure_dir_restricted, list_dir};
 use crate::support::kid::format_kid_display_lossy;
 use crate::support::kid::resolve_unique_kid;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
@@ -35,8 +36,14 @@ fn save_key_pair_to_tmp(
     public_key: &PublicKey,
 ) -> Result<()> {
     let result: Result<()> = (|| {
-        atomic::save_json_restricted(&tmp_dir.join("private.json"), private_key)?;
-        atomic::save_json_restricted(&tmp_dir.join("public.json"), public_key)?;
+        DocumentStore::<FailOnPermissionWarning>::save_json_restricted(
+            &tmp_dir.join("private.json"),
+            private_key,
+        )?;
+        DocumentStore::<CollectPermissionWarnings>::save_json_restricted(
+            &tmp_dir.join("public.json"),
+            public_key,
+        )?;
         Ok(())
     })();
 
@@ -93,34 +100,40 @@ pub fn load_private_key(
     kid: &str,
 ) -> Result<PrivateKey> {
     let path = key_dir(keystore_root, member_handle, kid).join("private.json");
-    if let Some(msg) = check_permission_chain(&path, keystore_root)
-        .into_iter()
-        .next()
-    {
-        return Err(Error::build_io_error(msg));
-    }
-    load_private_key_document(&path)
+    DocumentStore::<FailOnPermissionWarning>::load_required(
+        &path,
+        keystore_root,
+        MAX_JSON_DOCUMENT_READ_SIZE,
+        "PrivateKey file",
+        |content| parse_private_key_document(content, &path),
+    )
+    .map(|loaded| loaded.document)
 }
 
 /// Load PublicKey from keystore
 pub fn load_public_key(keystore_root: &Path, member_handle: &str, kid: &str) -> Result<PublicKey> {
     let path = key_dir(keystore_root, member_handle, kid).join("public.json");
-    for warning in check_permission_chain(&path, keystore_root) {
+    let loaded = DocumentStore::<CollectPermissionWarnings>::load_required(
+        &path,
+        keystore_root,
+        MAX_JSON_DOCUMENT_READ_SIZE,
+        "PublicKey file",
+        |content| parse_public_key_document(content, &path),
+    )?;
+    for warning in loaded.permission_warnings {
         tracing::warn!("{}", warning);
     }
-    load_public_key_document(&path)
+    Ok(loaded.document)
 }
 
-fn load_private_key_document(path: &Path) -> Result<PrivateKey> {
+fn parse_private_key_document(content: &str, path: &Path) -> Result<PrivateKey> {
     let source_name = format_path_relative_to_cwd(path);
-    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "PrivateKey file")?;
-    parse_private_key_str(&content, &source_name)
+    parse_private_key_str(content, &source_name)
 }
 
-fn load_public_key_document(path: &Path) -> Result<PublicKey> {
+fn parse_public_key_document(content: &str, path: &Path) -> Result<PublicKey> {
     let source_name = format_path_relative_to_cwd(path);
-    let content = load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
-    parse_public_key_str(&content, &source_name)
+    parse_public_key_str(content, &source_name)
 }
 
 /// List directory names in a path, filtering by predicate

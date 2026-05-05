@@ -210,3 +210,62 @@ fi\n\
 
     assert_eq!(signature.as_bytes(), &expected_raw_sig);
 }
+
+#[test]
+fn test_default_ssh_keygen_verify_uses_sanitized_env_and_stdin() {
+    let _guard = EnvGuard::new(&["HOME", "PATH", "SSH_AUTH_SOCK", "SECRETENV_PRIVATE_KEY"]);
+    let fake_home = TempDir::new().unwrap();
+    std::env::set_var("HOME", fake_home.path());
+    std::env::set_var("PATH", "/usr/bin");
+    std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
+    std::env::set_var("SECRETENV_PRIVATE_KEY", "sensitive");
+
+    let temp_dir = TempDir::new().unwrap();
+    let script_path = temp_dir.path().join("ssh-keygen-verify-wrapper.sh");
+    fs::write(
+        &script_path,
+        "#!/bin/sh\n\
+if [ \"$#\" -ne 10 ]; then\n\
+  echo \"unexpected arg count: $#\" >&2\n\
+  exit 30\n\
+fi\n\
+if [ \"$1\" != \"-Y\" ] || [ \"$2\" != \"verify\" ] || [ \"$3\" != \"-f\" ] || [ \"$5\" != \"-I\" ] || [ \"$7\" != \"-n\" ] || [ \"$9\" != \"-s\" ]; then\n\
+  echo \"unexpected args\" >&2\n\
+  exit 31\n\
+fi\n\
+if [ \"$6\" != \"secretenv-key-protection\" ] || [ \"$8\" != \"secretenv-key-protection\" ]; then\n\
+  echo \"unexpected namespace\" >&2\n\
+  exit 32\n\
+fi\n\
+if [ ! -s \"$4\" ] || [ ! -s \"${10}\" ]; then\n\
+  echo \"missing temp files\" >&2\n\
+  exit 33\n\
+fi\n\
+if [ \"${SSH_AUTH_SOCK:-}\" != \"/tmp/agent.sock\" ]; then\n\
+  echo \"missing SSH_AUTH_SOCK\" >&2\n\
+  exit 34\n\
+fi\n\
+if [ \"${SECRETENV_PRIVATE_KEY:-}\" = \"sensitive\" ]; then\n\
+  echo \"secret env leaked\" >&2\n\
+  exit 35\n\
+fi\n\
+input=$(/bin/cat)\n\
+if [ \"$input\" != \"verify-stdin-test\" ]; then\n\
+  echo \"stdin mismatch\" >&2\n\
+  exit 36\n\
+fi\n",
+    )
+    .unwrap();
+    let mut perms = fs::metadata(&script_path).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&script_path, perms).unwrap();
+
+    DefaultSshKeygen::new(script_path.to_string_lossy().into_owned())
+        .verify(
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com",
+            KEY_PROTECTION_NAMESPACE,
+            b"verify-stdin-test",
+            "-----BEGIN SSH SIGNATURE-----\ndGVzdA==\n-----END SSH SIGNATURE-----\n",
+        )
+        .unwrap();
+}

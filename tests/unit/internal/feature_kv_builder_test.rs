@@ -58,6 +58,7 @@ fn test_kv_document_entry_preserved_accessors() {
     let e = KvDocumentEntry::Preserved {
         key: "FOO".to_string(),
         token: "tok".to_string(),
+        value: sample_entry_value("FOO", false),
     };
     assert_eq!(e.key(), "FOO");
     assert_eq!(e.token(), "tok");
@@ -110,6 +111,7 @@ fn test_builder_new_creates_decoded_wrap() {
 fn test_builder_from_lines_with_some_wrap() {
     let wrap = sample_wrap();
     let wrap_tok = encode_wrap_token(&wrap);
+    let entry = sample_entry_value("A", false);
     let lines = vec![
         KvEncLine::Header {
             version: KvEncVersion::V4,
@@ -120,7 +122,7 @@ fn test_builder_from_lines_with_some_wrap() {
         KvEncLine::Wrap { token: wrap_tok },
         KvEncLine::KV {
             key: "A".to_string(),
-            token: "ta".to_string(),
+            token: encode_entry(&entry),
         },
     ];
     let b = KvDocumentBuilder::from_lines(
@@ -141,6 +143,7 @@ fn test_builder_from_lines_with_some_wrap() {
 fn test_builder_from_lines_with_none_wrap_decodes_raw() {
     let wrap = sample_wrap();
     let wrap_tok = encode_wrap_token(&wrap);
+    let entry = sample_entry_value("B", false);
     let lines = vec![
         KvEncLine::Header {
             version: KvEncVersion::V4,
@@ -153,7 +156,7 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
         },
         KvEncLine::KV {
             key: "B".to_string(),
-            token: "tb".to_string(),
+            token: encode_entry(&entry),
         },
     ];
     let b = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs, false)

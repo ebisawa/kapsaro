@@ -124,5 +124,5 @@ fn format_artifact_warning(path: &Path, error: &Error) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_member_mutation_test.rs"]
+#[path = "../../../tests/unit/internal/app_member_mutation_test.rs"]
 mod tests;

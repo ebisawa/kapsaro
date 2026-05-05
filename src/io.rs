@@ -4,6 +4,7 @@
 //! External I/O adapters (filesystem, SSH, config, online).
 
 pub mod config;
+pub(crate) mod document_store;
 pub mod github;
 pub mod keystore;
 pub mod process;

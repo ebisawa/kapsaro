@@ -37,7 +37,7 @@ pub struct CryptoContext {
     pub signing_key: SigningKey,
     /// Key expiration timestamp (RFC 3339) from PrivateKeyProtected
     pub expires_at: VerifiedExpiresAt,
-    selected_kid_override: Option<String>,
+    selected_kid_override: Option<Kid>,
     local_key_access: Option<LocalKeyAccess>,
 }
 
@@ -124,7 +124,7 @@ impl CryptoContext {
 
     pub fn with_local_key_access(
         mut self,
-        selected_kid_override: Option<String>,
+        selected_kid_override: Option<Kid>,
         local_key_access: Option<LocalKeyAccess>,
     ) -> Self {
         self.selected_kid_override = selected_kid_override;

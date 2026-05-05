@@ -106,5 +106,5 @@ fn parse_approved_at(ts: &str) -> Result<OffsetDateTime> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_trust_management_test.rs"]
+#[path = "../../../tests/unit/internal/app_trust_management_test.rs"]
 mod tests;

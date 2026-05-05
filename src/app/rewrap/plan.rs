@@ -4,12 +4,12 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
+use crate::app::trust::TrustApprovalCandidateBuilder;
 use crate::app::trust::{derive_self_sig_x, load_read_trust_context};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
 };
 use crate::format::kv::KV_ENC_EXTENSION;
-use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::io::workspace::members::{
     ensure_workspace_member_kid_uniqueness, list_incoming_member_paths,
     load_verified_member_file_from_path,
@@ -64,7 +64,7 @@ pub(crate) fn build_rewrap_batch_plan(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/app_rewrap_plan_test.rs"]
+#[path = "../../../tests/unit/internal/app_rewrap_plan_test.rs"]
 mod tests;
 
 fn find_encrypted_files_in_workspace(workspace_root: &Path) -> Result<Vec<PathBuf>> {
@@ -186,26 +186,18 @@ fn build_incoming_candidate(
 }
 
 fn build_pending_review(snapshot: &IncomingSnapshot) -> IncomingVerificationItem {
-    let binding_configured = github_binding_configured(&snapshot.public_key);
-    let (category, message) = build_pending_review_category(binding_configured);
-    let attestor_pub = snapshot
-        .public_key
-        .protected
-        .identity
-        .attestation
-        .pub_
-        .clone();
-    let fingerprint = build_sha256_fingerprint(&attestor_pub).ok();
+    let candidate = TrustApprovalCandidateBuilder::from_public_key(&snapshot.public_key).build();
+    let (category, message) = build_pending_review_category(candidate.github_binding_configured);
 
     IncomingVerificationItem {
         member_handle: snapshot.public_key.protected.subject_handle.clone(),
         kid: snapshot.public_key.protected.kid.clone(),
         category,
         message,
-        fingerprint,
+        fingerprint: candidate.fingerprint,
         verified_github: None,
-        github_binding_configured: binding_configured,
-        attestor_pub: Some(attestor_pub),
+        github_binding_configured: candidate.github_binding_configured,
+        attestor_pub: candidate.attestor_pub,
     }
 }
 

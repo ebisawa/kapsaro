@@ -11,14 +11,17 @@ use crate::app::trust::store::{
 };
 use crate::app::trust::types::{RemovedKnownKey, TrustMutationResult};
 use crate::feature::trust::known_keys::{purge_known_keys, remove_known_key};
+use crate::feature::trust::recipient_sets::{purge_recipient_sets, remove_recipient_set};
 use crate::{Error, Result};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-use super::list::{TrustListItem, TrustListResult};
+use super::list::{RecipientSetListItem, RecipientSetListResult, TrustListItem, TrustListResult};
 
 pub(crate) type RemoveKnownKeyResult = TrustMutationResult<RemovedKnownKey>;
 pub(crate) type PurgeKnownKeysResult = TrustMutationResult<usize>;
+pub(crate) type RemoveRecipientSetResult = TrustMutationResult<String>;
+pub(crate) type PurgeRecipientSetsResult = TrustMutationResult<usize>;
 
 /// Remove a known key by kid and re-sign the trust store.
 pub(crate) fn remove_known_key_command(
@@ -39,6 +42,28 @@ pub(crate) fn remove_known_key_command(
                     member_handle: removed.subject_handle,
                     kid: removed.kid,
                 },
+                changed: true,
+            })
+        },
+    )
+}
+
+/// Remove a recipient set approval by sid and re-sign the trust store.
+pub(crate) fn remove_recipient_set_command(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    sid: &str,
+    debug: bool,
+) -> Result<RemoveRecipientSetResult> {
+    execute_trust_store_mutation_with_execution(
+        options,
+        execution,
+        TrustStoreMutationMode::ExistingRequired,
+        debug,
+        |protected| {
+            let removed = remove_recipient_set(&mut protected.recipient_sets, sid)?;
+            Ok(TrustStoreMutation {
+                value: removed.sid,
                 changed: true,
             })
         },
@@ -75,6 +100,36 @@ pub(crate) fn list_purge_candidates(
     })
 }
 
+/// List recipient set purge candidates (entries older than threshold).
+pub(crate) fn list_recipient_set_purge_candidates(
+    options: &CommonCommandOptions,
+    member_handle: &str,
+    older_than_timestamp: OffsetDateTime,
+) -> Result<RecipientSetListResult> {
+    let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
+    let loaded = loaded.ok_or_else(|| Error::NotFound {
+        message: format!("Trust store not found for '{}'", member_handle),
+    })?;
+
+    let items = loaded
+        .protected
+        .recipient_sets
+        .iter()
+        .filter_map(|record| match parse_approved_at(&record.approved_at) {
+            Ok(approved_at) if approved_at < older_than_timestamp => {
+                Some(Ok(RecipientSetListItem::from(record)))
+            }
+            Ok(_) => None,
+            Err(e) => Some(Err(e)),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(RecipientSetListResult {
+        items,
+        warnings: loaded.warnings,
+    })
+}
+
 /// Execute purge: remove old entries and re-sign.
 pub(crate) fn execute_purge(
     options: &CommonCommandOptions,
@@ -89,6 +144,30 @@ pub(crate) fn execute_purge(
         debug,
         |protected| {
             let removed = purge_known_keys(&mut protected.known_keys, older_than_timestamp)?;
+            let count = removed.len();
+            Ok(TrustStoreMutation {
+                value: count,
+                changed: count > 0,
+            })
+        },
+    )
+}
+
+/// Execute recipient set purge: remove old entries and re-sign.
+pub(crate) fn execute_recipient_set_purge(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    older_than_timestamp: OffsetDateTime,
+    debug: bool,
+) -> Result<PurgeRecipientSetsResult> {
+    execute_trust_store_mutation_with_execution(
+        options,
+        execution,
+        TrustStoreMutationMode::ExistingRequired,
+        debug,
+        |protected| {
+            let removed =
+                purge_recipient_sets(&mut protected.recipient_sets, older_than_timestamp)?;
             let count = removed.len();
             Ok(TrustStoreMutation {
                 value: count,

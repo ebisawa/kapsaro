@@ -6,7 +6,10 @@
 //! Tests that env key mode is restricted to read-only operations:
 //! `run`, `decrypt`, and `get`.
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, encrypt_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
+    TEST_MEMBER_HANDLE,
+};
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
 use secretenv::feature::key::portable_export::export_private_key_portable;
@@ -97,16 +100,15 @@ fn test_env_key_get_roundtrip() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
 
     // Prepare the encrypted KV document in normal SSH mode.
-    cmd()
-        .arg("set")
-        .arg("DATABASE_URL")
-        .arg("postgres://localhost/testdb")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DATABASE_URL",
+        "postgres://localhost/testdb",
+        None,
+        None,
+    );
 
     // Read it back in env key mode.
     env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
@@ -131,17 +133,14 @@ fn test_env_key_decrypt_roundtrip() {
     let encrypted_file = home_dir.path().join("secret.txt.encrypted");
     let decrypted_file = home_dir.path().join("decrypted.txt");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     // Decrypt in env key mode.
     env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
@@ -166,16 +165,15 @@ fn test_env_key_decrypt_roundtrip() {
 fn test_env_key_run_roundtrip() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("APP_TOKEN")
-        .arg("run-mode-value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "APP_TOKEN",
+        "run-mode-value",
+        None,
+        None,
+    );
 
     #[cfg(unix)]
     let mut c = env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD);
@@ -214,16 +212,15 @@ fn test_env_key_run_roundtrip() {
 fn test_env_key_missing_password_fails() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("SOME_KEY")
-        .arg("some_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "SOME_KEY",
+        "some_value",
+        None,
+        None,
+    );
 
     // Set SECRETENV_PRIVATE_KEY but NOT SECRETENV_KEY_PASSWORD
     let mut c = cmd();
@@ -246,16 +243,15 @@ fn test_env_key_missing_password_fails() {
 fn test_env_key_wrong_password_fails() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("SOME_KEY")
-        .arg("some_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "SOME_KEY",
+        "some_value",
+        None,
+        None,
+    );
 
     // Use wrong password
     env_key_cmd(&home_dir, &exported_key, "wrong-password-99")
@@ -318,16 +314,15 @@ fn test_env_key_mode_rejects_rewrap() {
 fn test_env_key_mode_allows_list() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("LISTABLE_KEY")
-        .arg("listable-value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "LISTABLE_KEY",
+        "listable-value",
+        None,
+        None,
+    );
 
     env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
         .arg("list")

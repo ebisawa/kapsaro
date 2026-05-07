@@ -14,7 +14,7 @@ use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::{
     load_trust_store, save_trust_store, TrustStoreLoadResult as IoTrustStoreLoadResult,
 };
-use crate::model::identifiers::format::TRUST_LOCAL_V3;
+use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::trust_store::TrustStoreProtected;
 use crate::support::fs::lock;
 use crate::{Error, Result};
@@ -61,11 +61,12 @@ pub(crate) fn load_or_build_trust_store(
             let now = build_now_timestamp()?;
             Ok(TrustStoreState {
                 protected: TrustStoreProtected {
-                    format: TRUST_LOCAL_V3.to_string(),
+                    format: TRUST_LOCAL_V4.to_string(),
                     owner_handle: owner_handle.to_string(),
                     created_at: now.clone(),
                     updated_at: now,
                     known_keys: Vec::new(),
+                    recipient_sets: Vec::new(),
                 },
                 warnings: Vec::new(),
             })

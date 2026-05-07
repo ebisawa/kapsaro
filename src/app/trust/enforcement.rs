@@ -9,8 +9,13 @@ use crate::feature::trust::judgment::{
     judge_recipients_trust_with_additional, AdditionalKnownKeyCache, TrustIdentity, TrustJudgment,
 };
 use crate::feature::trust::known_keys::KnownKeyIdentity;
+use crate::feature::trust::recipient_sets::{
+    find_recipient_handle_mismatch, is_self_only_recipient_set, is_signer_in_recipient_set,
+    judge_recipient_set, ArtifactRecipientSet, RecipientSetJudgment,
+};
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
+use crate::model::trust_store::RecipientSetRecord;
 use crate::{Error, Result};
 
 use super::candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
@@ -29,6 +34,25 @@ pub(crate) enum SignerTrustOutcome {
 pub(crate) enum RecipientTrustOutcome {
     Accepted,
     NeedsManualApproval(Vec<TrustApprovalCandidate>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ArtifactRecipientTrustOutcome {
+    Accepted,
+    SkippedStrictKeyCheckingNo,
+    NeedsManualApproval(Box<ArtifactRecipientSetReview>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ArtifactRecipientSetReview {
+    pub(crate) current: ArtifactRecipientSet,
+    pub(crate) approved: Option<RecipientSetRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReadRecipientKeyTrust {
+    pub(crate) outcome: RecipientTrustOutcome,
+    pub(crate) warnings: Vec<String>,
 }
 
 pub(crate) fn enforce_signer_trust(
@@ -138,6 +162,184 @@ pub(crate) fn enforce_recipients_trust_with_additional(
     Ok(RecipientTrustOutcome::NeedsManualApproval(pending))
 }
 
+pub(crate) fn enforce_artifact_recipient_set_trust(
+    trust_ctx: &TrustContext,
+    signer_kid: &str,
+    current: &ArtifactRecipientSet,
+    capability: CommandCapability,
+) -> Result<ArtifactRecipientTrustOutcome> {
+    enforce_recipient_handle_consistency(trust_ctx, current)?;
+
+    if capability.allows_strict_key_checking_no() && trust_ctx.strict_key_checking.is_disabled() {
+        return Ok(ArtifactRecipientTrustOutcome::SkippedStrictKeyCheckingNo);
+    }
+
+    match judge_recipient_set(&trust_ctx.recipient_sets, current) {
+        RecipientSetJudgment::Accepted => {
+            enforce_signer_in_reviewed_member_set(signer_kid, current)?;
+            Ok(ArtifactRecipientTrustOutcome::Accepted)
+        }
+        RecipientSetJudgment::Missing => {
+            enforce_signer_in_reviewed_member_set(signer_kid, current)?;
+            if is_self_only_recipient_set(
+                current,
+                &trust_ctx.active_members_by_kid,
+                &trust_ctx.self_trust,
+            )? {
+                return Ok(ArtifactRecipientTrustOutcome::Accepted);
+            }
+            enforce_artifact_recipient_review(
+                trust_ctx,
+                current.clone(),
+                None,
+                "E_RECIPIENT_TRUST_MISSING",
+            )
+        }
+        RecipientSetJudgment::Changed { approved } => {
+            enforce_signer_in_reviewed_member_set(signer_kid, current)?;
+            if is_self_only_recipient_set(
+                current,
+                &trust_ctx.active_members_by_kid,
+                &trust_ctx.self_trust,
+            )? {
+                return Ok(ArtifactRecipientTrustOutcome::Accepted);
+            }
+            enforce_artifact_recipient_review(
+                trust_ctx,
+                current.clone(),
+                Some(approved),
+                "E_RECIPIENT_SET_CHANGED",
+            )
+        }
+    }
+}
+
+pub(crate) fn evaluate_read_artifact_recipient_keys(
+    trust_ctx: &TrustContext,
+    signer_kid: &str,
+    current: &ArtifactRecipientSet,
+) -> Result<ReadRecipientKeyTrust> {
+    enforce_recipient_handle_consistency(trust_ctx, current)?;
+    enforce_signer_in_reviewed_member_set(signer_kid, current)?;
+
+    let (recipients, warnings) = resolve_active_artifact_recipients(trust_ctx, current);
+    let outcome = if trust_ctx.strict_key_checking.is_disabled() {
+        RecipientTrustOutcome::Accepted
+    } else {
+        enforce_recipients_trust(trust_ctx, &recipients)?
+    };
+
+    Ok(ReadRecipientKeyTrust { outcome, warnings })
+}
+
+pub(crate) fn enforce_write_input_artifact_recipients(
+    trust_ctx: &TrustContext,
+    signer_kid: &str,
+    current: &ArtifactRecipientSet,
+) -> Result<()> {
+    enforce_recipient_handle_consistency(trust_ctx, current)?;
+    enforce_signer_in_reviewed_member_set(signer_kid, current)?;
+
+    if let Some(kid) = current
+        .recipient_kids()
+        .iter()
+        .find(|kid| !trust_ctx.active_members_by_kid.contains_key(*kid))
+    {
+        return Err(Error::Verify {
+            rule: "E_ARTIFACT_RECIPIENT_NOT_ACTIVE".to_string(),
+            message: format!(
+                "Artifact contains recipient kid '{}' that is not in current members/active. Run 'secretenv rewrap' before writing it.",
+                kid
+            ),
+        });
+    }
+
+    Ok(())
+}
+
+fn resolve_active_artifact_recipients(
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+) -> (Vec<PublicKey>, Vec<String>) {
+    let mut recipients = Vec::new();
+    let mut warnings = Vec::new();
+    for kid in current.recipient_kids() {
+        match trust_ctx.active_members_by_kid.get(kid) {
+            Some(public_key) => recipients.push(public_key.clone()),
+            None => warnings.push(format!(
+                "Recipient kid '{}' is not in current members/active; this artifact may contain a stale or historical recipient. Run 'secretenv rewrap' before writing it.",
+                kid
+            )),
+        }
+    }
+    (recipients, warnings)
+}
+
+fn enforce_recipient_handle_consistency(
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+) -> Result<()> {
+    if let Some(mismatch) =
+        find_recipient_handle_mismatch(current, &trust_ctx.active_members_by_kid)
+    {
+        return Err(Error::Verify {
+            rule: "E_RECIPIENT_SET_HANDLE_MISMATCH".to_string(),
+            message: format!(
+                "Recipient kid '{}' is labeled as '{}' in artifact wrap, but members/active labels it as '{}'",
+                mismatch.kid, mismatch.artifact_recipient_handle, mismatch.active_member_handle
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn enforce_signer_in_reviewed_member_set(
+    signer_kid: &str,
+    current: &ArtifactRecipientSet,
+) -> Result<()> {
+    let signer_kid = Kid::try_from(signer_kid.to_string())?.into_string();
+    if is_signer_in_recipient_set(&signer_kid, current)? {
+        return Ok(());
+    }
+
+    Err(Error::Verify {
+        rule: "E_RECIPIENT_SET_SIGNER_NOT_INCLUDED".to_string(),
+        message: format!(
+            "Signer key '{}' is not included in the member set for this secret",
+            signer_kid
+        ),
+    })
+}
+
+fn enforce_artifact_recipient_review(
+    trust_ctx: &TrustContext,
+    current: ArtifactRecipientSet,
+    approved: Option<RecipientSetRecord>,
+    rule: &str,
+) -> Result<ArtifactRecipientTrustOutcome> {
+    if trust_ctx.is_interactive {
+        return Ok(ArtifactRecipientTrustOutcome::NeedsManualApproval(
+            Box::new(ArtifactRecipientSetReview { current, approved }),
+        ));
+    }
+
+    Err(Error::Verify {
+        rule: rule.to_string(),
+        message: recipient_set_review_required_message(rule).to_string(),
+    })
+}
+
+fn recipient_set_review_required_message(rule: &str) -> &'static str {
+    match rule {
+        "E_RECIPIENT_SET_CHANGED" => {
+            "This secret's member set has changed since the last review on this device. Run the command interactively to review it first."
+        }
+        _ => {
+            "This secret's member set has not been reviewed on this device. Run the command interactively to review it first."
+        }
+    }
+}
+
 fn enforce_scope_strict_mode(
     trust_ctx: &TrustContext,
     capability: CommandCapability,
@@ -218,3 +420,7 @@ pub(crate) fn build_trust_approval_candidate(public_key: &PublicKey) -> TrustApp
 pub(crate) fn build_signer_identity(public_key: &PublicKey) -> Result<TrustIdentity> {
     TrustIdentity::from_public_key(public_key)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_trust_enforcement_recipient_set_test.rs"]
+mod recipient_set_tests;

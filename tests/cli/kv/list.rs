@@ -3,7 +3,10 @@
 
 //! Integration tests for `list` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
+    TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -11,7 +14,7 @@ use tempfile::TempDir;
 /// Helper to create a workspace with initialized member and keys
 fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir) {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
@@ -31,16 +34,15 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir) {
         .success();
 
     // Set multiple keys
-    cmd()
-        .arg("set")
-        .arg("DATABASE_URL")
-        .arg("postgres://localhost/db")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DATABASE_URL",
+        "postgres://localhost/db",
+        None,
+        None,
+    );
 
     cmd()
         .arg("set")
@@ -106,7 +108,7 @@ fn test_list_with_json_output() {
 #[test]
 fn test_list_error_when_file_not_exists() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure

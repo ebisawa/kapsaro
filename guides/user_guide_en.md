@@ -328,7 +328,6 @@ Generated and activated key for 'bob@example.com':
 Added 'bob@example.com' to members/incoming/
 
 Ready! Create a PR to share your public key with the team.
-An active member needs to run 'secretenv rewrap' so you can start reading secrets.
 ```
 
 Unlike `init`, `join` does not create a Workspace — it only places your public key in `members/incoming/`. Existing active members can also use `join` after `key new` to stage a rotated key generation in `members/incoming/`.
@@ -544,7 +543,7 @@ secretenv rewrap
 
 # Example:
 # Member bob@example.com
-#   GitHub account id: 12345678 (bob-gh)
+#   GitHub account: bob-gh (id: 12345678, verified)
 #   SSH key fingerprint: SHA256:xxxxx...
 # Approve? [y/N]: y    ← verify this is really their key before pressing y
 
@@ -600,24 +599,33 @@ secretenv member verify --approve alice@example.com bob@example.com
 
 ### Managing the Local Trust Store
 
-The local trust store is **where your machine remembers which public keys you have already reviewed and approved**. When an approved key is stored there, later decrypt or verification operations do not need to ask you the same question every time.
+The local trust store is where your machine remembers which public keys and write-path artifact member sets you have already reviewed. Approved keys prevent repeated key-owner prompts during later operations. Reviewed member sets prevent repeated output sharing prompts before write commands save encrypted artifacts.
 
-`trust list` shows the approved keys currently saved on your machine. `trust remove` and `trust purge` delete those local records. The local trust store basically grows over time as approvals accumulate, so these commands are useful when you want to clean up entries that are no longer relevant, remove keys that are no longer used, or force yourself to review a key again.
+`trust keys list` shows the approved keys currently saved on your machine. `trust recipients list` shows reviewed artifact member sets. The local trust store basically grows over time as approvals accumulate, so these commands are useful when you want to clean up entries that are no longer relevant, remove keys that are no longer used, or force yourself to review a key or member set again.
 
-In normal use, approvals are usually recorded automatically through `member verify --approve` or interactive approval flows, so you do not need to manage the trust store manually every day. Use these commands when you want to undo an approval, clean up old approvals, or force yourself to review a key again from scratch.
+In normal use, approvals are usually recorded automatically through `member verify --approve` or interactive approval flows, so you do not need to manage the trust store manually every day. Use these commands when you want to undo an approval, clean up old approvals, or force yourself to review a key or artifact member set again from scratch.
 
 ```bash
 # List approved keys
-secretenv trust list
+secretenv trust keys list
 
 # Remove one kid from the local trust store
-secretenv trust remove <kid>
+secretenv trust keys remove <kid>
 
-# Purge old approvals in bulk
-secretenv trust purge --older-than 180d --force
+# List reviewed artifact member sets
+secretenv trust recipients list
+
+# Remove one reviewed artifact member set
+secretenv trust recipients remove <sid>
+
+# Purge old key approvals in bulk
+secretenv trust keys purge --older-than 180d --force
+
+# Purge old member set reviews in bulk
+secretenv trust recipients purge --older-than 180d --force
 ```
 
-`trust remove` and `trust purge` change **only the records on your own machine**. They do not modify workspace membership or recipients in encrypted files. In other words, these commands do not change who is in the team; they change how much you will be asked to re-confirm on later operations.
+`trust keys ...` and `trust recipients ...` change only the records on your own machine. They do not modify workspace membership or recipients in encrypted files. In other words, these commands do not change who is in the team; they change how much you will be asked to re-confirm on later operations.
 
 ### Removing Members
 
@@ -791,7 +799,7 @@ Read this chapter only if your CI system needs to **read secrets**. The intended
 
 In CI environments, secretenv reads the private key and password from environment variables instead of the local keystore. Environment variable-based key loading guarantees read-only commands: `run`, `decrypt`, `get`, and `list` are supported.
 
-CI runners are usually temporary environments and do not keep a local trust store (`~/.config/secretenv/trust/`). For trusted CI jobs that need to read secrets signed by other members, set `SECRETENV_STRICT_KEY_CHECKING=no`. This skips only the check that depends on your machine's saved approval history; current member checks and signature verification still remain in place.
+CI runners are usually temporary environments and do not keep a local trust store (`~/.config/secretenv/trust/`). For trusted CI jobs that need to read secrets signed by other members, set `SECRETENV_STRICT_KEY_CHECKING=no`. This skips only read-path key approval checks that depend on your machine's saved approval history. Current member checks, recipient-label consistency checks, signer-recipient consistency checks, and signature verification still remain in place.
 
 Even so, you should not treat the checked-out workspace as trusted by default. Limit environment variable-based key loading to jobs that run on trusted workflows, trusted refs, and trusted runners.
 
@@ -819,7 +827,7 @@ Only three things are needed in a trusted CI context. In other words, you do not
 
 No `SECRETENV_HOME`, local keystore, SSH key, or config file is required.
 
-If a trusted CI job has no local trust store and must run read commands against artifacts signed by other active members, set `SECRETENV_STRICT_KEY_CHECKING=no` only for that job. This skips only the local approval-history check. It does not skip current member checks, does not skip signature verification, and does not auto-update the trust store.
+If a trusted CI job has no local trust store and must run read commands against artifacts signed by other active members, set `SECRETENV_STRICT_KEY_CHECKING=no` only for that job. This skips read-path `known_keys` checks. It does not skip current member checks, recipient-label consistency checks, signer-recipient consistency checks, or signature verification, and it does not update the trust store without explicit review or approval.
 
 ### Setup Workflow
 
@@ -931,7 +939,7 @@ All other commands remain unavailable when loading keys via environment variable
 
 - **Password exposure**: `SECRETENV_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
 - **Trusted CI only**: Follow the allowed and forbidden CI contexts described earlier in this chapter. Attacker-controlled checkouts must not be used as signature-verification input.
-- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not auto-update local approval history.
+- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not update local approval history without explicit review or approval. Non-interactive write commands fail before saving output when the output member set still needs review.
 - **Dedicated CI member**: Use the dedicated CI member created in the setup steps; do not reuse a human member's key. This allows independent rotation and revocation.
 - **Key rotation**: Re-export and secret-store updates should be done on a developer machine with SSH signer and local keystore access, just like the initial setup. Do not perform this inside CI jobs.
 - **Least privilege**: Only add the CI member to the secrets it actually needs access to.
@@ -1065,7 +1073,7 @@ Keys expire one year after generation by default. Follow the rotation procedure 
 
 ### Q: Unexpected approval prompts when decrypting
 
-This occurs when the signer's `kid` is not in your local trust store. Run `secretenv member verify --approve` to review and approve current active members. See [Chapter 10](#10-member-management) for details.
+This occurs when the signer's `kid` or an active recipient `kid` in the artifact has not been reviewed on your machine. Run `secretenv member verify --approve` to review and approve current active members. If a read command warns that a recipient kid is no longer in `members/active`, the artifact may still contain stale recipient metadata. Run `secretenv rewrap` before writing it.
 
 ### Q: "Non-deterministic SSH signature" error
 
@@ -1135,9 +1143,12 @@ This means your SSH key produced different signatures for the same input on two 
 
 | Command | Description |
 |---------|-------------|
-| `secretenv trust list` | List approved keys saved in the local trust store |
-| `secretenv trust remove <kid>` | Remove the approval record for a specific key from the local trust store |
-| `secretenv trust purge --older-than <duration> [-f, --force]` | Remove approval records older than the given duration from the local trust store |
+| `secretenv trust keys list` | List approved keys saved in the local trust store |
+| `secretenv trust keys remove <kid>` | Remove the approval record for a specific key from the local trust store |
+| `secretenv trust keys purge --older-than <duration> [-f, --force]` | Remove key approval records older than the given duration |
+| `secretenv trust recipients list` | List reviewed artifact member sets saved in the local trust store |
+| `secretenv trust recipients remove <sid>` | Remove the review record for a specific artifact member set |
+| `secretenv trust recipients purge --older-than <duration> [-f, --force]` | Remove artifact member set review records older than the given duration |
 
 ### Key Management
 
@@ -1245,7 +1256,7 @@ If the config file does not exist, secretenv falls back to environment variables
 **Notes:**
 
 - `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 12](#12-cicd-integration) for details.
-- `SECRETENV_STRICT_KEY_CHECKING=no` skips only the local approval-history check during read operations. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking.
+- `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
 - `SECRETENV_WORKSPACE` overrides the automatic workspace detection from the git repository root. Useful when running commands outside the repository tree.
 
 ---

@@ -4,7 +4,8 @@
 //! Pure key material builders used during key generation.
 
 use crate::crypto::kem::{
-    generate_keypair as generate_kem_keypair, X25519PublicKey, X25519SecretKey,
+    derive_public_key_from_secret, generate_keypair as generate_kem_keypair, X25519PublicKey,
+    X25519SecretKey,
 };
 use crate::crypto::rng::fill_secret_array;
 use crate::model::identifiers::jwk::{self, CRV_ED25519, CRV_X25519};
@@ -138,10 +139,29 @@ pub fn validate_ed25519_consistency(
     Ok(())
 }
 
+/// Validate that an X25519 private key derives to the provided public key.
+pub fn validate_x25519_consistency(
+    kem_d_bytes: &SecretArray<32>,
+    kem_x_bytes: &[u8; 32],
+) -> Result<()> {
+    let secret_key = X25519SecretKey::from_bytes(*kem_d_bytes.as_array());
+    let derived_public = derive_public_key_from_secret(&secret_key)?;
+    if derived_public.as_bytes() != kem_x_bytes {
+        return Err(Error::Crypto {
+            message: "X25519 key pair inconsistency: private key does not derive to public key"
+                .to_string(),
+            source: None,
+        });
+    }
+    Ok(())
+}
+
 /// Validate private key plaintext key material.
 pub(crate) fn validate_private_key_material(plaintext: &PrivateKeyPlaintext) -> Result<()> {
     let kem = &plaintext.keys.kem;
-    validate_okp_key(&kem.kty, &kem.crv, jwk::CRV_X25519, &kem.d, &kem.x, "KEM")?;
+    let (kem_d_bytes, kem_x_bytes) =
+        validate_okp_key(&kem.kty, &kem.crv, jwk::CRV_X25519, &kem.d, &kem.x, "KEM")?;
+    validate_x25519_consistency(&kem_d_bytes, &kem_x_bytes)?;
 
     let sig = &plaintext.keys.sig;
     let (sig_d_bytes, sig_x_bytes) =

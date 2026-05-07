@@ -5,7 +5,7 @@
 
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::review::review_recipient_trust_with_confirmation;
-use crate::app::trust::TrustApprovalCandidate;
+use crate::app::trust::{TrustApprovalCandidate, TrustContext};
 use crate::model::public_key::PublicKey;
 use crate::Result;
 
@@ -19,6 +19,7 @@ pub(crate) struct RewrapReviewSession {
     pub(crate) request: RewrapBatchRequest,
     pub(crate) plan: RewrapBatchPlan,
     pub(crate) expected_post_promotion_members: Vec<PublicKey>,
+    pub(crate) post_promotion_trust: TrustContext,
     pub(crate) approvals: Vec<ApprovedKnownKey>,
     pub(crate) review_warnings: Vec<String>,
 }
@@ -51,10 +52,15 @@ where
         request.options.verbose,
     )?;
     let approvals = review_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
+    let post_promotion_trust = super::trust::build_post_promotion_trust_context(
+        &plan.pre_promotion_trust,
+        &trust_plan.post_promotion_members,
+    )?;
     Ok(RewrapReviewSession {
         request,
         plan,
         expected_post_promotion_members: trust_plan.post_promotion_members,
+        post_promotion_trust,
         approvals,
         review_warnings: trust_plan.warnings,
     })

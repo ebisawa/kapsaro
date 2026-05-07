@@ -13,6 +13,7 @@ use crate::app::trust::types::TrustMutationResult;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::feature::trust::known_keys::add_known_key;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
+use crate::feature::trust::recipient_sets::{upsert_recipient_set, ArtifactRecipientSet};
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{
@@ -140,6 +141,34 @@ pub(crate) fn save_known_key_approvals(
             Ok(TrustStoreMutation {
                 value: added,
                 changed: added > 0,
+            })
+        },
+    )
+}
+
+pub(crate) fn save_recipient_set_approval(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    approval: Option<ArtifactRecipientSet>,
+) -> Result<ApprovalSaveResult> {
+    let Some(approval) = approval else {
+        return Ok(TrustMutationResult::new(0, Vec::new()));
+    };
+
+    execute_trust_store_mutation_with_execution(
+        options,
+        execution,
+        TrustStoreMutationMode::CreateIfMissing,
+        options.verbose,
+        |protected| {
+            let changed = upsert_recipient_set(
+                &mut protected.recipient_sets,
+                approval,
+                build_now_timestamp()?,
+            );
+            Ok(TrustStoreMutation {
+                value: usize::from(changed),
+                changed,
             })
         },
     )

@@ -3,8 +3,8 @@
 
 //! Local Trust Store document model
 //!
-//! Format: secretenv.trust.local@3
-//! A signed JSON container holding TOFU approval cache (known_keys).
+//! Format: secretenv.trust.local@4
+//! A signed JSON container holding local approval caches.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -38,7 +38,7 @@ pub struct TrustStoreSignature {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TrustStoreProtected {
-    /// Format identifier: "secretenv.trust.local@3"
+    /// Format identifier: "secretenv.trust.local@4"
     pub format: String,
 
     /// Owner handle for this local trust store.
@@ -52,6 +52,9 @@ pub struct TrustStoreProtected {
 
     /// Approved key records
     pub known_keys: Vec<KnownKey>,
+
+    /// Approved artifact recipient set records
+    pub recipient_sets: Vec<RecipientSetRecord>,
 }
 
 /// A single approved key record in the TOFU cache.
@@ -121,4 +124,54 @@ pub struct KnownKeyGithubAccount {
     /// GitHub login name
     #[serde(skip_serializing_if = "Option::is_none")]
     pub login: Option<String>,
+}
+
+/// A single approved artifact recipient set record.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RecipientSetRecord {
+    /// Stable artifact identifier (UUID string).
+    pub sid: String,
+
+    /// Approved recipient kids in canonical sorted order.
+    pub recipient_kids: Vec<String>,
+
+    /// Hash over the canonical recipient kid set.
+    pub recipient_set_hash: String,
+
+    /// Approval timestamp (RFC 3339 UTC, trailing 'Z').
+    pub approved_at: String,
+
+    /// Approval method.
+    pub approved_via: RecipientSetApprovalVia,
+
+    /// Optional display hints captured at approval time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipient_handle_hints: Option<Vec<RecipientHandleHint>>,
+}
+
+/// Supported approval methods for artifact recipient sets.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RecipientSetApprovalVia {
+    ManualReview,
+}
+
+impl fmt::Display for RecipientSetApprovalVia {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ManualReview => f.write_str("manual-review"),
+        }
+    }
+}
+
+/// Display-only recipient hint captured with a recipient set approval.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RecipientHandleHint {
+    /// Recipient key statement ID.
+    pub kid: String,
+
+    /// Recipient handle shown to the user.
+    pub recipient_handle: String,
 }

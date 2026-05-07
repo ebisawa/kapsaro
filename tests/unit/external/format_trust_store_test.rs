@@ -4,13 +4,13 @@
 //! Unit tests for Trust Store format canonicalization
 
 use secretenv::format::trust_store::build_trust_store_signature_bytes;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use std::collections::BTreeMap;
 
 fn build_test_protected() -> TrustStoreProtected {
     TrustStoreProtected {
-        format: TRUST_LOCAL_V3.to_string(),
+        format: TRUST_LOCAL_V4.to_string(),
         owner_handle: "alice@example.com".to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
@@ -22,6 +22,7 @@ fn build_test_protected() -> TrustStoreProtected {
             evidence: None,
             extra: BTreeMap::new(),
         }],
+        recipient_sets: Vec::new(),
     }
 }
 

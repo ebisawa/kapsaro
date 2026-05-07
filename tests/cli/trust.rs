@@ -17,7 +17,7 @@ use predicates::prelude::*;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::io::trust::paths::get_trust_store_file_path;
 use secretenv::io::trust::store::save_trust_store;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use serde_json::Value;
 use tempfile::TempDir;
@@ -42,7 +42,7 @@ fn build_known_key(kid: &str, member_handle: &str, approved_at: &str) -> KnownKe
 fn save_signed_trust_store(home: &TempDir) {
     let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V3.to_string(),
+        format: TRUST_LOCAL_V4.to_string(),
         owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
@@ -50,6 +50,7 @@ fn save_signed_trust_store(home: &TempDir) {
             build_known_key(KID_BOB, BOB_MEMBER_HANDLE, "2026-03-29T12:40:00Z"),
             build_known_key(KID_CHARLIE, CHARLIE_MEMBER_HANDLE, "2026-03-29T12:41:00Z"),
         ],
+        recipient_sets: Vec::new(),
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
     let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
@@ -85,6 +86,7 @@ fn test_trust_list_succeeds_without_ssh_agent() {
 
     let assert = cargo::cargo_bin_cmd!("secretenv")
         .arg("trust")
+        .arg("keys")
         .arg("list")
         .arg("--home")
         .arg(home.path())
@@ -116,12 +118,28 @@ fn test_trust_list_succeeds_without_ssh_agent() {
 }
 
 #[test]
+fn test_trust_flat_list_is_not_supported() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unrecognized subcommand 'list'"));
+}
+
+#[test]
 fn test_trust_list_json_keeps_canonical_kid() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
     let assert = cargo::cargo_bin_cmd!("secretenv")
         .arg("trust")
+        .arg("keys")
         .arg("list")
         .arg("--json")
         .arg("--home")
@@ -152,6 +170,7 @@ fn test_trust_remove_prints_insecure_permission_warning() {
 
     let assert = cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg(KID_BOB)
         .arg("--home")
@@ -190,6 +209,7 @@ fn test_trust_remove_colors_warning_when_forced() {
 
     let assert = cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg(KID_BOB)
         .arg("--home")
@@ -221,6 +241,7 @@ fn test_trust_remove_requires_member_handle_when_keystore_is_ambiguous() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg(KID_BOB)
         .arg("--home")
@@ -240,6 +261,7 @@ fn test_trust_remove_accepts_member_handle_when_keystore_is_ambiguous() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg(KID_BOB)
         .arg("--member-handle")
@@ -260,6 +282,7 @@ fn test_trust_remove_accepts_display_kid() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg(DISPLAY_KID_BOB)
         .arg("--home")
@@ -278,6 +301,7 @@ fn test_trust_remove_accepts_unique_prefix_kid() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg("B0B0")
         .arg("--home")
@@ -297,6 +321,7 @@ fn test_trust_remove_old_identity_option_fails() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("remove")
         .arg(KID_BOB)
         .arg("--home")
@@ -318,6 +343,7 @@ fn test_trust_list_prints_warning_after_known_key_output() {
 
     let assert = cmd()
         .arg("trust")
+        .arg("keys")
         .arg("list")
         .arg("--home")
         .arg(home.path())
@@ -341,6 +367,7 @@ fn test_trust_purge_with_force() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("purge")
         .arg("--older-than")
         .arg("1d")
@@ -355,6 +382,7 @@ fn test_trust_purge_with_force() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("list")
         .arg("--home")
         .arg(home.path())
@@ -371,6 +399,7 @@ fn test_trust_purge_accepts_member_handle_when_keystore_is_ambiguous() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("purge")
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
@@ -393,6 +422,7 @@ fn test_trust_purge_with_force_short_option() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("purge")
         .arg("--older-than")
         .arg("1d")
@@ -413,6 +443,7 @@ fn test_trust_purge_without_force_in_non_interactive_mode_error() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("purge")
         .arg("--older-than")
         .arg("1d")
@@ -434,6 +465,7 @@ fn test_trust_purge_yes_option_error() {
 
     cmd()
         .arg("trust")
+        .arg("keys")
         .arg("purge")
         .arg("--older-than")
         .arg("1d")

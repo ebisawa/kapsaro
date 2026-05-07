@@ -10,6 +10,7 @@ use crate::support::secret::SecretString;
 #[derive(Debug)]
 pub struct KvWriteOutcome {
     pub message: Option<String>,
+    pub warnings: Vec<String>,
 }
 
 pub(crate) struct KvReadResult {

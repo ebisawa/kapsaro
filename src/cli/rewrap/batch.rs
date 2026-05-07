@@ -10,7 +10,8 @@ use crate::cli::common::command::resolve_execution_input;
 use crate::cli::common::output::rewrap::print_rewrap_batch_outcome;
 use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::trust::{
-    confirm_known_key_approval, confirm_non_member_acceptance, confirm_recipient_approvals,
+    confirm_non_member_acceptance, confirm_recipient_approvals, confirm_recipient_set_approval,
+    confirm_signer_key_approval,
 };
 use crate::Result;
 
@@ -26,11 +27,12 @@ pub(crate) fn run_batch_rewrap(args: &RewrapArgs) -> Result<()> {
         },
         print_warnings,
         confirm_incoming_promotions,
-        |candidate, context_label, _path| confirm_known_key_approval(candidate, context_label),
-        |candidate, context_label, current_recipients, _path| {
+        confirm_signer_key_approval,
+        |candidate, context_label, current_recipients| {
             confirm_non_member_acceptance(candidate, context_label, current_recipients)
         },
         confirm_recipient_approvals,
+        confirm_recipient_set_approval,
     )?;
     print_promotion_summary(&outcome.promoted_member_handles, args.common.quiet);
     print_rewrap_batch_outcome(&outcome, args.common.json, args.common.quiet)

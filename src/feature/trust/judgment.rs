@@ -10,7 +10,7 @@ mod recipient;
 mod self_trust;
 mod signer;
 
-pub use active_member::{ActiveMemberSnapshot, CurrentMemberMatch};
+pub use active_member::{build_active_members_by_kid, ActiveMemberSnapshot, CurrentMemberMatch};
 pub use identity::TrustIdentity;
 pub use known_key::{AdditionalKnownKeyCache, KnownKeyCache, KnownKeyMatch};
 pub use recipient::judge_recipients_trust;

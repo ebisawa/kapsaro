@@ -6,12 +6,12 @@
 //! Tests the rewrap command with the simplified RewrapArgs (auto-sync with @all).
 
 use crate::cli::common::{
-    cmd, default_common_options, generate_temp_ssh_keypair, set_ssh_key_from_temp_dir,
-    setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    cmd, default_common_options, encrypt_file_with_member_set_review, generate_temp_ssh_keypair,
+    set_ssh_key_from_temp_dir, set_value_with_member_set_review, setup_workspace,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;
-use secretenv::cli::encrypt;
 use secretenv::cli::options::CommonOptions;
 use secretenv::cli::rewrap::{self, RewrapArgs};
 use secretenv::cli::set;
@@ -40,6 +40,47 @@ fn default_rewrap_args(common_opts: CommonOptions, member_handle: &str) -> Rewra
     }
 }
 
+fn run_rewrap_with_member_set_review(common_opts: &CommonOptions, member_handle: &str) {
+    run_rewrap_with_member_set_review_args(common_opts, member_handle, &[]);
+}
+
+fn run_rewrap_with_member_set_review_args(
+    common_opts: &CommonOptions,
+    member_handle: &str,
+    extra_args: &[&str],
+) {
+    let mut command = crate::cli::common::secretenv_std_cmd();
+    command
+        .arg("rewrap")
+        .arg("--workspace")
+        .arg(
+            common_opts
+                .workspace
+                .as_deref()
+                .expect("test common options must include workspace"),
+        )
+        .arg("--member-handle")
+        .arg(member_handle)
+        .env(
+            "SECRETENV_HOME",
+            common_opts
+                .home
+                .as_deref()
+                .expect("test common options must include home"),
+        )
+        .env(
+            "SECRETENV_SSH_IDENTITY",
+            common_opts
+                .identity
+                .as_deref()
+                .expect("test common options must include identity"),
+        );
+    for arg in extra_args {
+        command.arg(arg);
+    }
+    crate::cli::common::assert_member_set_review_success(&mut command);
+}
+
 /// Create a kv-enc file in the workspace using the set command.
 ///
 /// `entries` は `&[("KEY", "VALUE")]` 形式。
@@ -50,7 +91,28 @@ fn save_kv_file(
     name: &str,
     entries: &[(&str, &str)],
 ) -> PathBuf {
-    for (key, value) in entries {
+    for (index, (key, value)) in entries.iter().enumerate() {
+        if index == 0 {
+            set_value_with_member_set_review(
+                common_opts
+                    .workspace
+                    .as_deref()
+                    .expect("test common options must include workspace"),
+                common_opts
+                    .home
+                    .as_deref()
+                    .expect("test common options must include home"),
+                common_opts
+                    .identity
+                    .as_deref()
+                    .expect("test common options must include identity"),
+                key,
+                value,
+                Some(member_handle),
+                Some(name),
+            );
+            continue;
+        }
         let set_args = set::SetArgs {
             common: common_opts.clone(),
 

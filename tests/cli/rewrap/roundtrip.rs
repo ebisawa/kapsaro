@@ -14,19 +14,14 @@ fn test_rewrap_file_enc_roundtrip() {
     let encrypted_file = workspace_dir.path().join("secrets").join("secret.bin.json");
     let decrypted_file = home_dir.path().join("decrypted.bin");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     assert!(encrypted_file.exists(), "Encrypted file should exist");
 
@@ -67,18 +62,15 @@ fn test_rewrap_file_enc_roundtrip() {
 fn test_rewrap_kv_enc_roundtrip() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("MY_SECRET")
-        .arg("supersecretvalue")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "MY_SECRET",
+        "supersecretvalue",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
 
     cmd()
         .arg("rewrap")

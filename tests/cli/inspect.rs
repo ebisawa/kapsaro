@@ -7,17 +7,16 @@
 //! invalid inputs, and signature verification display.
 
 use crate::cli::common::{
-    cmd, default_common_options, set_ssh_key_from_temp_dir, setup_workspace, ALICE_MEMBER_HANDLE,
-    BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    assert_member_set_review_success, cmd, encrypt_file_with_member_set_review, secretenv_std_cmd,
+    set_value_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{
-    build_expiring_soon_timestamp, setup_member_key_context, setup_test_workspace,
-    setup_trust_store_for_workspace, update_active_private_key_expires_at,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
+    setup_test_workspace, setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use console::strip_ansi_codes;
 use predicates::prelude::*;
-use secretenv::cli::rewrap::{self, RewrapArgs};
-use secretenv::cli::set;
 use std::fs;
 use tempfile::TempDir;
 
@@ -31,19 +30,14 @@ fn test_inspect_file_enc_shows_metadata() {
 
     let encrypted_file = home_dir.path().join("secret.txt.encrypted");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     assert!(encrypted_file.exists(), "Encrypted file should exist");
 
@@ -82,18 +76,15 @@ fn test_inspect_kv_enc_shows_metadata() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set a KV value to create an encrypted KV file
-    cmd()
-        .arg("set")
-        .arg("DB_URL")
-        .arg("pg://host")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DB_URL",
+        "pg://host",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
 
     let encrypted_kv = workspace_dir.path().join("secrets").join("default.kvenc");
     assert!(encrypted_kv.exists(), "Encrypted KV file should exist");
@@ -167,19 +158,14 @@ fn test_inspect_shows_signature_verification() {
 
     let encrypted_file = home_dir.path().join("secret_for_sig.txt.encrypted");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     // Inspect should show signature verification section
     cmd()
@@ -200,18 +186,15 @@ fn test_inspect_kv_shows_entry_count() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set a KV value
-    cmd()
-        .arg("set")
-        .arg("API_KEY")
-        .arg("secret123")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "API_KEY",
+        "secret123",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
 
     let encrypted_kv = workspace_dir.path().join("secrets").join("default.kvenc");
     assert!(encrypted_kv.exists(), "Encrypted KV file should exist");
@@ -237,19 +220,14 @@ fn test_inspect_succeeds_without_workspace_or_private_key() {
     fs::write(&input_file, b"inspect without private key").unwrap();
 
     let encrypted_file = home_dir.path().join("no_private_key.txt.encrypted");
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     cmd()
         .arg("inspect")
@@ -268,19 +246,14 @@ fn test_inspect_ignores_trust_store_and_strict_key_checking() {
     fs::write(&input_file, b"inspect ignores trust store").unwrap();
 
     let encrypted_file = home_dir.path().join("ignore_trust.txt.encrypted");
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let trust_dir = home_dir.path().join("trust");
     fs::create_dir_all(&trust_dir).unwrap();
@@ -314,24 +287,21 @@ fn test_inspect_colors_public_key_expiry_warning_when_forced() {
     .unwrap();
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(home_dir.path(), TEST_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(home_dir.path(), workspace_dir.path(), TEST_MEMBER_HANDLE)
+        .unwrap();
 
     let input_file = home_dir.path().join("inspect_warning.txt");
     fs::write(&input_file, b"inspect warning test").unwrap();
 
     let encrypted_file = home_dir.path().join("inspect_warning.txt.encrypted");
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let assert = cmd()
         .arg("inspect")
@@ -368,21 +338,16 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
         &key_ctx,
     );
 
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    common_opts.quiet = true;
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-
-    let set_args = set::SetArgs {
-        common: common_opts.clone(),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        name: Some("disclosed".to_string()),
-        key: "API_KEY".to_string(),
-        value: Some("secret123".to_string()),
-        stdin: false,
-    };
-    set::run(set_args).unwrap();
+    let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
+    set_value_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_identity,
+        "API_KEY",
+        "secret123",
+        Some(ALICE_MEMBER_HANDLE),
+        Some("disclosed"),
+    );
 
     fs::remove_file(
         workspace_dir
@@ -391,17 +356,18 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
     )
     .unwrap();
 
-    let rewrap_args = RewrapArgs {
-        common: common_opts,
-        clear_disclosure_history: false,
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        rotate_key: false,
-        targets: Vec::new(),
-    };
-    rewrap::run(rewrap_args).unwrap();
+    let mut rewrap_cmd = secretenv_std_cmd();
+    rewrap_cmd
+        .arg("rewrap")
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", &ssh_identity);
+    assert_member_set_review_success(&mut rewrap_cmd);
 
     let encrypted_kv = workspace_dir.join("secrets").join("disclosed.kvenc");
-    let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
     let assert = cmd()
         .arg("inspect")
         .arg(&encrypted_kv)

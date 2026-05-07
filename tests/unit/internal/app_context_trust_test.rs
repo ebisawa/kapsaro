@@ -20,7 +20,7 @@ use crate::feature::trust::signature::sign_trust_store;
 use crate::io::keystore::member::find_active_key_document;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
-use crate::model::identifiers::format::TRUST_LOCAL_V3;
+use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
@@ -38,6 +38,7 @@ const VALID_TEST_KID: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 fn build_test_trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustContext {
     TrustContext {
         known_keys: Vec::new(),
+        recipient_sets: Vec::new(),
         active_members_by_kid: BTreeMap::new(),
         self_trust: SelfTrustSet::default(),
         strict_key_checking: StrictKeyCheckingResolution::explicit(strict),
@@ -771,11 +772,12 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
     let owner_handle = "alice@example.com";
     let key_ctx = crate::test_utils::setup_member_key_context(&dir, owner_handle, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V3.to_string(),
+        format: TRUST_LOCAL_V4.to_string(),
         owner_handle: owner_handle.to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-01-01T00:00:00Z".to_string(),
         known_keys: vec![build_known_key(&key_ctx.kid, owner_handle)],
+        recipient_sets: Vec::new(),
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
     let trust_path = get_trust_store_file_path(dir.path(), owner_handle);

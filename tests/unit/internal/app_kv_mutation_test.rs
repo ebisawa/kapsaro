@@ -3,9 +3,10 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::kv::mutation::{
-    resolve_mutation_write_plan, set_kv_command, MutationWriteTrustPlan,
+    resolve_mutation_write_plan, set_kv_command_with_recipient_set_confirmation,
+    unset_kv_command_with_recipient_set_confirmation, MutationWriteTrustPlan,
 };
-use crate::app::trust::SetPolicy;
+use crate::app::trust::{SetPolicy, UnsetPolicy};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
 use crate::feature::kv::types::KvInputEntry;
 use crate::io::keystore::active::set_active_kid;
@@ -36,6 +37,21 @@ fn evaluate_set_plan(
     .unwrap()
 }
 
+fn evaluate_unset_plan(
+    options: &CommonCommandOptions,
+    name: Option<&str>,
+) -> MutationWriteTrustPlan<UnsetPolicy> {
+    let ssh_ctx = Some(resolve_test_ssh_context(options, ALICE_MEMBER_HANDLE));
+    resolve_mutation_write_plan::<UnsetPolicy>(
+        options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        name,
+        false,
+        ssh_ctx,
+    )
+    .unwrap()
+}
+
 fn activate_fixture_key(home: &std::path::Path) {
     let keystore_root = home.join("keys");
     let kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
@@ -44,6 +60,112 @@ fn activate_fixture_key(home: &std::path::Path) {
         .next()
         .unwrap();
     set_active_kid(ALICE_MEMBER_HANDLE, &kid, &keystore_root).unwrap();
+}
+
+fn allow_member_set_review<P>(plan: &mut MutationWriteTrustPlan<P>) {
+    plan.trust_context.is_interactive = true;
+}
+
+fn set_kv_with_approved_member_set<P>(
+    plan: &MutationWriteTrustPlan<P>,
+    entries: Vec<KvInputEntry>,
+    success_message: Option<&str>,
+) -> crate::Result<crate::app::kv::types::KvWriteOutcome>
+where
+    P: crate::app::trust::WriteTrustPolicy,
+{
+    set_kv_command_with_recipient_set_confirmation(plan, entries, success_message, |_, _| Ok(true))
+}
+
+fn unset_kv_with_approved_member_set<P>(
+    plan: &MutationWriteTrustPlan<P>,
+    key: &str,
+    success_message: Option<&str>,
+) -> crate::Result<crate::app::kv::types::KvWriteOutcome>
+where
+    P: crate::app::trust::WriteTrustPolicy,
+{
+    unset_kv_command_with_recipient_set_confirmation(plan, key, success_message, |_, _| Ok(true))
+}
+
+#[test]
+fn test_execute_set_rejects_unreviewed_output_member_set_non_interactive() {
+    let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    with_temp_cwd(temp_dir.path(), || {
+        let reviewed = evaluate_set_plan(&options, None);
+        let kv_path = workspace_dir.join("secrets").join("default.kvenc");
+        let result = set_kv_command_with_recipient_set_confirmation(
+            &reviewed,
+            vec![KvInputEntry::new("KEY1", "value1")],
+            None,
+            |_, _| Ok(true),
+        );
+
+        match result {
+            Err(crate::Error::Verify { rule, .. }) => {
+                assert_eq!(rule, "E_RECIPIENT_TRUST_MISSING")
+            }
+            Err(err) => panic!("unexpected error: {:?}", err),
+            Ok(_) => panic!("expected missing recipient set review error"),
+        }
+        assert!(!kv_path.exists());
+    });
+}
+
+#[test]
+fn test_execute_unset_does_not_replace_file_when_recipient_set_approval_save_fails() {
+    let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    with_temp_cwd(temp_dir.path(), || {
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
+            .unwrap();
+
+        let mut reviewed = evaluate_unset_plan(&options, None);
+        allow_member_set_review(&mut reviewed);
+        reviewed.trust_context.recipient_sets.clear();
+        let kv_path = workspace_dir.join("secrets").join("default.kvenc");
+        let reviewed_content = fs::read_to_string(&kv_path).unwrap();
+        let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
+        fs::write(&trust_path, "{ invalid trust store").unwrap();
+
+        let result = unset_kv_with_approved_member_set(&reviewed, "KEY1", None);
+
+        match result {
+            Err(crate::Error::Verify { rule, .. }) => {
+                assert_eq!(rule, "E_TRUST_STORE_RESET_REQUIRED")
+            }
+            Err(err) => panic!("unexpected error: {:?}", err),
+            Ok(_) => panic!("expected trust store reset-required error"),
+        }
+        assert_eq!(fs::read_to_string(&kv_path).unwrap(), reviewed_content);
+    });
 }
 
 #[test]
@@ -55,14 +177,21 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
     activate_fixture_key(temp_dir.path());
 
     with_temp_cwd(temp_dir.path(), || {
-        let initial = evaluate_set_plan(&options, None);
-        set_kv_command(&initial, vec![KvInputEntry::new("KEY1", "value1")], None).unwrap();
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
+            .unwrap();
 
         let reviewed = evaluate_set_plan(&options, None);
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
         fs::write(&kv_path, ":SECRETENV_KV 4\n:HEAD {}\n:WRAP {}\n").unwrap();
 
-        let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY2", "value2")], None);
+        let result = set_kv_command_with_recipient_set_confirmation(
+            &reviewed,
+            vec![KvInputEntry::new("KEY2", "value2")],
+            None,
+            |_, _| Ok(false),
+        );
 
         match result {
             Err(err) => assert!(err.to_string().contains("changed since review")),
@@ -72,6 +201,54 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
             fs::read_to_string(&kv_path).unwrap(),
             ":SECRETENV_KV 4\n:HEAD {}\n:WRAP {}\n"
         );
+    });
+}
+
+#[test]
+fn test_resolve_set_plan_rejects_existing_artifact_with_inactive_recipient() {
+    let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    with_temp_cwd(temp_dir.path(), || {
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
+            .unwrap();
+        fs::remove_file(
+            workspace_dir
+                .join("members")
+                .join("active")
+                .join(format!("{}.json", BOB_MEMBER_HANDLE)),
+        )
+        .unwrap();
+
+        let result = resolve_mutation_write_plan::<SetPolicy>(
+            &options,
+            Some(ALICE_MEMBER_HANDLE.to_string()),
+            None,
+            true,
+            Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE)),
+        );
+
+        match result {
+            Err(crate::Error::Verify { rule, message }) => {
+                assert_eq!(rule, "E_ARTIFACT_RECIPIENT_NOT_ACTIVE");
+                assert!(message.contains("rewrap"));
+            }
+            Err(err) => panic!("unexpected error: {:?}", err),
+            Ok(_) => panic!("expected inactive recipient error"),
+        }
     });
 }
 
@@ -88,7 +265,12 @@ fn test_execute_set_rejects_file_created_after_missing_review() {
         let kv_path = workspace_dir.join("secrets").join("later.kvenc");
         fs::write(&kv_path, "external-content").unwrap();
 
-        let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY1", "value1")], None);
+        let result = set_kv_command_with_recipient_set_confirmation(
+            &reviewed,
+            vec![KvInputEntry::new("KEY1", "value1")],
+            None,
+            |_, _| Ok(false),
+        );
 
         match result {
             Err(err) => assert!(err.to_string().contains("changed since review")),
@@ -110,8 +292,10 @@ fn test_execute_set_rejects_symlinked_existing_file_after_review() {
     activate_fixture_key(temp_dir.path());
 
     with_temp_cwd(temp_dir.path(), || {
-        let initial = evaluate_set_plan(&options, None);
-        set_kv_command(&initial, vec![KvInputEntry::new("KEY1", "value1")], None).unwrap();
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
+            .unwrap();
 
         let reviewed = evaluate_set_plan(&options, None);
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
@@ -121,7 +305,12 @@ fn test_execute_set_rejects_symlinked_existing_file_after_review() {
         fs::remove_file(&kv_path).unwrap();
         symlink(&victim_path, &kv_path).unwrap();
 
-        let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY2", "value2")], None);
+        let result = set_kv_command_with_recipient_set_confirmation(
+            &reviewed,
+            vec![KvInputEntry::new("KEY2", "value2")],
+            None,
+            |_, _| Ok(false),
+        );
 
         match result {
             Err(err) => assert!(err.to_string().contains("changed since review")),
@@ -159,7 +348,12 @@ fn test_execute_set_rejects_active_member_snapshot_change_after_review() {
             .join(format!("{}.json", BOB_MEMBER_HANDLE));
         fs::rename(&bob_active, &bob_incoming).unwrap();
 
-        let result = set_kv_command(&reviewed, vec![KvInputEntry::new("KEY1", "value1")], None);
+        let result = set_kv_command_with_recipient_set_confirmation(
+            &reviewed,
+            vec![KvInputEntry::new("KEY1", "value1")],
+            None,
+            |_, _| Ok(false),
+        );
 
         match result {
             Err(err) => assert!(err
@@ -179,8 +373,10 @@ fn test_evaluate_set_rejects_strict_key_checking_no_for_existing_file() {
     activate_fixture_key(temp_dir.path());
 
     with_temp_cwd(temp_dir.path(), || {
-        let initial = evaluate_set_plan(&options, None);
-        set_kv_command(&initial, vec![KvInputEntry::new("KEY1", "value1")], None).unwrap();
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
+            .unwrap();
         std::env::set_var("SECRETENV_STRICT_KEY_CHECKING", "no");
 
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));

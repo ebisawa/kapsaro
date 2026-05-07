@@ -41,6 +41,7 @@ pub(crate) fn build_missing_member_handle_error(include_prompt_hint: bool) -> Er
         message: format!(
             "member handle not configured.\n\
              member handle is required but could not be determined.\n\
+             \n\
              Options:\n\
              1. Specify --member-handle <handle>\n\
              2. Set environment variable: export SECRETENV_MEMBER_HANDLE=<handle>\n\

@@ -94,6 +94,8 @@ pub mod feature_rewrap_test;
 pub mod feature_trust_judgment_test;
 #[path = "unit/external/feature_trust_known_keys_test.rs"]
 pub mod feature_trust_known_keys_test;
+#[path = "unit/external/feature_trust_recipient_sets_test.rs"]
+pub mod feature_trust_recipient_sets_test;
 #[path = "unit/external/feature_trust_signature_test.rs"]
 pub mod feature_trust_signature_test;
 #[path = "unit/external/feature_verify_key_loader_test.rs"]

@@ -1,10 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::app::artifact::kv_recipient_evidence;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::errors::build_kv_key_not_found_error;
-use crate::app::trust::{evaluate_read_signer_trust, ReadTrustPolicy, SignerTrustOutcome};
+use crate::app::trust::{
+    evaluate_read_artifact_trust, ReadTrustPolicy, RecipientTrustOutcome, SignerTrustOutcome,
+};
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
@@ -24,6 +27,7 @@ pub(crate) struct KvReadCommand {
     verified_doc: crate::model::kv_enc::verified::VerifiedKvEncDocument,
     disclosed: Vec<KvDisclosedEntry>,
     pub trust_outcome: SignerTrustOutcome,
+    pub recipient_trust_outcome: RecipientTrustOutcome,
     pub warnings: Vec<String>,
     target_path: std::path::PathBuf,
 }
@@ -49,8 +53,14 @@ where
     let file = command.load_required_file()?;
     let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?;
     let verified_doc = verify_kv_content(&file.kv_content(), options.verbose)?;
-    let trust_plan =
-        evaluate_read_signer_trust::<P>(options, &command.execution, verified_doc.proof())?;
+    let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
+    let trust_plan = evaluate_read_artifact_trust::<P>(
+        options,
+        &command.execution,
+        verified_doc.proof(),
+        &recipient_evidence.recipient_set,
+        &recipient_evidence.recipient_handles,
+    )?;
     let mut warnings = command.warnings;
     warnings.extend(trust_plan.warnings);
 
@@ -58,7 +68,8 @@ where
         execution: command.execution,
         verified_doc,
         disclosed,
-        trust_outcome: trust_plan.outcome,
+        trust_outcome: trust_plan.signer_outcome,
+        recipient_trust_outcome: trust_plan.recipient_outcome,
         warnings,
         target_path: file.target.file_path,
     })

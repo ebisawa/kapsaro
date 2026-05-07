@@ -3,7 +3,10 @@
 
 //! Integration tests for `set` command
 
-use crate::cli::common::{cmd, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, set_stdin_with_member_set_review, set_value_with_member_set_review, setup_workspace,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+};
 use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
 };
@@ -21,16 +24,15 @@ fn test_set_creates_new_file() {
     let default_file = workspace_dir.path().join("secrets").join("default.kvenc");
 
     // Set a key-value pair
-    cmd()
-        .arg("set")
-        .arg("DATABASE_URL")
-        .arg("postgres://localhost/db")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DATABASE_URL",
+        "postgres://localhost/db",
+        None,
+        None,
+    );
 
     // Verify file was created
     assert!(default_file.exists(), "Default file should be created");
@@ -45,16 +47,15 @@ fn test_set_updates_existing_key() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set initial value
-    cmd()
-        .arg("set")
-        .arg("API_KEY")
-        .arg("initial_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "API_KEY",
+        "initial_value",
+        None,
+        None,
+    );
 
     // Update the value
     cmd()
@@ -86,16 +87,15 @@ fn test_set_multiple_keys() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set multiple keys
-    cmd()
-        .arg("set")
-        .arg("KEY1")
-        .arg("value1")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "KEY1",
+        "value1",
+        None,
+        None,
+    );
 
     cmd()
         .arg("set")
@@ -145,17 +145,15 @@ fn test_set_stdin_creates_new_file() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set a key-value pair via --stdin
-    cmd()
-        .arg("set")
-        .arg("SECRET_TOKEN")
-        .arg("--stdin")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin("super-secret-token")
-        .assert()
-        .success();
+    set_stdin_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "SECRET_TOKEN",
+        b"super-secret-token",
+        None,
+        None,
+    );
 
     // Verify file was created and key exists
     let default_file = workspace_dir.path().join("secrets").join("default.kvenc");
@@ -230,35 +228,29 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
         .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
-    cmd()
-        .arg("set")
-        .arg("API_KEY")
-        .arg("initial_value")
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir)
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        &workspace_dir,
+        home_dir,
+        &ssh_priv,
+        "API_KEY",
+        "initial_value",
+        Some(ALICE_MEMBER_HANDLE),
+        None,
+    );
 
     fs::rename(&bob_incoming, &bob_active).unwrap();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
     setup_trust_store_for_workspace(home_dir, &workspace_dir, ALICE_MEMBER_HANDLE, &key_ctx);
 
-    cmd()
-        .arg("set")
-        .arg("API_KEY")
-        .arg("updated_value")
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir)
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        &workspace_dir,
+        home_dir,
+        &ssh_priv,
+        "API_KEY",
+        "updated_value",
+        Some(ALICE_MEMBER_HANDLE),
+        None,
+    );
 
     let kv_path = workspace_dir.join("secrets").join("default.kvenc");
     let content = fs::read_to_string(kv_path).unwrap();
@@ -282,16 +274,15 @@ fn test_set_existing_file_updates_wrap_to_current_active_members() {
 fn test_set_existing_file_rejects_strict_key_checking_no() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("API_KEY")
-        .arg("initial_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "API_KEY",
+        "initial_value",
+        None,
+        None,
+    );
 
     cmd()
         .arg("set")

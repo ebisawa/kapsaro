@@ -4,7 +4,8 @@
 //! Workspace-related encryption tests
 
 use crate::cli::common::{
-    cmd, default_common_options, set_ssh_key_from_temp_dir, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    cmd, default_common_options, encrypt_file_with_member_set_review, set_ssh_key_from_temp_dir,
+    set_value_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
 use crate::test_utils::{
     build_expiring_soon_timestamp, keygen_test, save_active_public_key_to_workspace,
@@ -13,7 +14,6 @@ use crate::test_utils::{
 };
 use predicates::prelude::*;
 use secretenv::cli::encrypt;
-use secretenv::cli::set;
 use secretenv::format::kv;
 use secretenv::format::schema::document::parse_kv_wrap_token;
 use secretenv::model::kv_enc::header::KvWrap;
@@ -104,24 +104,16 @@ fn test_set_creates_default_file() {
     let kv_file_path = secrets_dir.join("default.kvenc");
     assert!(!kv_file_path.exists(), "File should not exist before test");
 
-    // Set a key-value pair WITHOUT specifying recipients (should default to @all)
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-    common_opts.quiet = true; // Suppress output
-
-    let set_args = set::SetArgs {
-        common: common_opts,
-
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        name: None,
-        stdin: false,
-        key: "DATABASE_URL".to_string(),
-        value: Some("postgres://localhost/mydb".to_string()),
-    };
-
-    set::run(set_args).unwrap();
+    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
+    set_value_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_key,
+        "DATABASE_URL",
+        "postgres://localhost/mydb",
+        Some(ALICE_MEMBER_HANDLE),
+        None,
+    );
 
     // Verify file was created
     assert!(kv_file_path.exists(), "Should create default kv-enc file");
@@ -192,20 +184,15 @@ fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
     let output_path = workspace_dir.join("warn.txt.encrypted");
     let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_path)
-        .arg("--out")
-        .arg(output_path)
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Insecure permissions"));
+    let output = encrypt_file_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_key,
+        &input_path,
+        &output_path,
+        ALICE_MEMBER_HANDLE,
+    );
+    assert!(output.contains("Insecure permissions"), "{output}");
 }
 
 #[test]
@@ -246,26 +233,26 @@ fn test_encrypt_surfaces_private_key_expiry_warning_on_stderr() {
     );
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
+        .unwrap();
 
     let input_path = workspace_dir.join("expiry.txt");
     fs::write(&input_path, b"warning check").unwrap();
     let output_path = workspace_dir.join("expiry.txt.encrypted");
     let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_path)
-        .arg("--out")
-        .arg(output_path)
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Warning: Private key expires in"));
+    let output = encrypt_file_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_key,
+        &input_path,
+        &output_path,
+        ALICE_MEMBER_HANDLE,
+    );
+    assert!(
+        output.contains("Warning: Private key expires in"),
+        "{output}"
+    );
 }
 
 #[test]
@@ -288,20 +275,16 @@ fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
     let output_path = workspace_dir.join("recipient-expiry.txt.encrypted");
     let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_path)
-        .arg("--out")
-        .arg(output_path)
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
-        .assert()
-        .success()
-        .stderr(predicate::str::contains(
-            "Warning: Recipient public key for 'bob@example.com' expires in",
-        ));
+    let output = encrypt_file_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_key,
+        &input_path,
+        &output_path,
+        ALICE_MEMBER_HANDLE,
+    );
+    assert!(
+        output.contains("Warning: Recipient public key for 'bob@example.com' expires in"),
+        "{output}"
+    );
 }

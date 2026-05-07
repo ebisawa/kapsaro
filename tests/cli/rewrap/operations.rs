@@ -24,14 +24,7 @@ fn test_rewrap_rotate_key() {
 
     let content_before = fs::read_to_string(&kv_path).unwrap();
 
-    let mut rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    rewrap_args.rotate_key = true;
-    let result = rewrap::run(rewrap_args);
-    assert!(
-        result.is_ok(),
-        "Rewrap with rotate_key should succeed: {:?}",
-        result.err()
-    );
+    run_rewrap_with_member_set_review_args(&common_opts, ALICE_MEMBER_HANDLE, &["--rotate-key"]);
 
     let content_after = fs::read_to_string(&kv_path).unwrap();
     assert_ne!(
@@ -115,8 +108,7 @@ fn test_rewrap_clear_disclosure_history() {
     )
     .unwrap();
 
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    rewrap::run(rewrap_args).unwrap();
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
 
     let removed = load_kv_removed_recipient_handles(&kv_path);
     assert!(
@@ -125,9 +117,9 @@ fn test_rewrap_clear_disclosure_history() {
         removed
     );
 
-    let mut rewrap_args2 = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    rewrap_args2.clear_disclosure_history = true;
-    let result = rewrap::run(rewrap_args2);
+    let mut rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
+    rewrap_args.clear_disclosure_history = true;
+    let result = rewrap::run(rewrap_args);
     assert!(
         result.is_ok(),
         "Rewrap with clear_disclosure_history should succeed: {:?}",
@@ -146,20 +138,18 @@ fn test_rewrap_clear_disclosure_history() {
 fn test_rewrap_with_rotate_key_flag() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("ROTATE_TEST")
-        .arg("value123")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "ROTATE_TEST",
+        "value123",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
 
-    cmd()
+    let mut command = crate::cli::common::secretenv_std_cmd();
+    command
         .arg("rewrap")
         .arg("--rotate-key")
         .arg("--workspace")
@@ -167,9 +157,8 @@ fn test_rewrap_with_rotate_key_flag() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+        .env("SECRETENV_SSH_IDENTITY", &ssh_priv);
+    crate::cli::common::assert_member_set_review_success(&mut command);
 
     cmd()
         .arg("get")
@@ -187,18 +176,15 @@ fn test_rewrap_with_rotate_key_flag() {
 fn test_rewrap_with_clear_disclosure_history_flag() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
-    cmd()
-        .arg("set")
-        .arg("HISTORY_TEST")
-        .arg("histval")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "HISTORY_TEST",
+        "histval",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
 
     cmd()
         .arg("rewrap")

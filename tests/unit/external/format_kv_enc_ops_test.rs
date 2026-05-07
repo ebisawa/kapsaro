@@ -28,6 +28,12 @@ use secretenv::model::kv_enc::verified::VerifiedKvEncDocument;
 use secretenv::model::public_key::PublicKey;
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
 
+fn create_secret_home() -> tempfile::TempDir {
+    let temp = tempfile::TempDir::new().unwrap();
+    secretenv::support::fs::ensure_dir_restricted(temp.path()).unwrap();
+    temp
+}
+
 /// Generate Ed25519 signing key from seed for tests
 fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
     SigningKey::from_bytes(&seed)
@@ -586,7 +592,7 @@ fn test_set_existing_file_preserves_sid() {
     let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = public.protected.kid.clone();
 
-    let temp = tempfile::TempDir::new().unwrap();
+    let temp = create_secret_home();
     let keystore_root = temp.path().join("keys");
 
     let initial = encrypt_initial_kv_doc(
@@ -635,7 +641,7 @@ fn test_set_existing_file_uses_current_recipients_in_wrap() {
     let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = public.protected.kid.clone();
 
-    let temp = tempfile::TempDir::new().unwrap();
+    let temp = create_secret_home();
     let keystore_root = temp.path().join("keys");
 
     let initial = encrypt_initial_kv_doc(
@@ -678,7 +684,7 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
     let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = public.protected.kid.clone();
 
-    let temp = tempfile::TempDir::new().unwrap();
+    let temp = create_secret_home();
     let keystore_root = temp.path().join("keys");
 
     let initial = encrypt_initial_kv_doc(
@@ -737,7 +743,7 @@ fn setup_unset_test_ctx(
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
     let kid = public.protected.kid.clone();
-    let temp = tempfile::TempDir::new().unwrap();
+    let temp = create_secret_home();
     let keystore_root = temp.path().join("keys");
 
     let initial = encrypt_initial_kv_doc(

@@ -8,15 +8,17 @@ use std::io::{self, Read};
 use clap::Args;
 use zeroize::Zeroizing;
 
-use crate::app::kv::mutation::set_kv_command;
+use crate::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
 use crate::app::kv::types::KvInputEntry;
 use crate::app::trust::SetPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
     WriteCommandLabels,
 };
-use crate::cli::common::output::text::print_optional_status;
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::common::output::text::{print_optional_status, print_warnings};
+use crate::cli::common::trust::{
+    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
+};
 use crate::cli::options::CommonOptions;
 use crate::support::secret::SecretString;
 use crate::{Error, Result};
@@ -87,18 +89,20 @@ pub fn run(args: SetArgs) -> Result<()> {
                         args.key,
                         args.name.as_deref().unwrap_or("default")
                     );
-                    set_kv_command(
+                    set_kv_command_with_recipient_set_confirmation(
                         trust_plan,
                         vec![KvInputEntry::new_secret(
                             args.key.clone(),
                             SecretString::new(value.as_str().to_owned()),
                         )],
                         Some(&success_message),
+                        confirm_recipient_set_approval,
                     )
                 },
             )
         },
     )?;
+    print_warnings(&outcome.warnings);
     print_optional_status(outcome.message.as_deref(), args.common.quiet);
     Ok(())
 }

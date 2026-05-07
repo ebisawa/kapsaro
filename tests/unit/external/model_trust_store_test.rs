@@ -3,7 +3,7 @@
 
 //! Unit tests for TrustStoreDocument model
 
-use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
@@ -24,7 +24,7 @@ fn build_test_known_key(kid: &str, member_handle: &str) -> KnownKey {
 fn build_test_document() -> TrustStoreDocument {
     TrustStoreDocument {
         protected: TrustStoreProtected {
-            format: TRUST_LOCAL_V3.to_string(),
+            format: TRUST_LOCAL_V4.to_string(),
             owner_handle: "alice@example.com".to_string(),
             created_at: "2026-03-29T12:34:56Z".to_string(),
             updated_at: "2026-03-29T12:34:56Z".to_string(),
@@ -32,6 +32,7 @@ fn build_test_document() -> TrustStoreDocument {
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "bob@example.com",
             )],
+            recipient_sets: Vec::new(),
         },
         signature: TrustStoreSignature {
             alg: "eddsa-ed25519".to_string(),
@@ -52,7 +53,7 @@ fn test_trust_store_serialize_deserialize_roundtrip() {
 #[test]
 fn test_trust_store_format_identifier() {
     let doc = build_test_document();
-    assert_eq!(doc.protected.format, TRUST_LOCAL_V3);
+    assert_eq!(doc.protected.format, TRUST_LOCAL_V4);
 }
 
 #[test]
@@ -133,11 +134,12 @@ fn test_known_key_unknown_fields_forward_compatible() {
 fn test_trust_store_empty_known_keys() {
     let doc = TrustStoreDocument {
         protected: TrustStoreProtected {
-            format: TRUST_LOCAL_V3.to_string(),
+            format: TRUST_LOCAL_V4.to_string(),
             owner_handle: "alice@example.com".to_string(),
             created_at: "2026-03-29T12:34:56Z".to_string(),
             updated_at: "2026-03-29T12:34:56Z".to_string(),
             known_keys: vec![],
+            recipient_sets: Vec::new(),
         },
         signature: TrustStoreSignature {
             alg: "eddsa-ed25519".to_string(),
@@ -156,7 +158,7 @@ fn test_trust_store_empty_known_keys() {
 fn test_trust_store_protected_rejects_unknown_fields() {
     let json = r#"{
         "protected": {
-            "format": "secretenv.trust.local@3",
+            "format": "secretenv.trust.local@4",
             "owner_handle": "alice@example.com",
             "created_at": "2026-03-29T12:34:56Z",
             "updated_at": "2026-03-29T12:34:56Z",
@@ -178,7 +180,7 @@ fn test_trust_store_protected_rejects_unknown_fields() {
 fn test_trust_store_signature_rejects_signer_pub() {
     let json = r#"{
         "protected": {
-            "format": "secretenv.trust.local@3",
+            "format": "secretenv.trust.local@4",
             "owner_handle": "alice@example.com",
             "created_at": "2026-03-29T12:34:56Z",
             "updated_at": "2026-03-29T12:34:56Z",

@@ -12,6 +12,7 @@ pub(crate) struct SignerTrustLabels<'a> {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ReadSignerTrustReviewPlan<'a> {
     pub(crate) trust_outcome: &'a SignerTrustOutcome,
+    pub(crate) recipient_trust_outcome: &'a RecipientTrustOutcome,
     pub(crate) labels: SignerTrustLabels<'a>,
     pub(crate) allow_non_member: bool,
 }

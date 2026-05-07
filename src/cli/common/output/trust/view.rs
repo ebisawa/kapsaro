@@ -10,6 +10,14 @@ pub(crate) struct TrustListItemView<'a> {
     pub(crate) approved_via: &'a str,
 }
 
+pub(crate) struct RecipientSetListItemView<'a> {
+    pub(crate) sid: &'a str,
+    pub(crate) recipient_kids: &'a [String],
+    pub(crate) recipient_set_hash: &'a str,
+    pub(crate) approved_at: &'a str,
+    pub(crate) approved_via: &'a str,
+}
+
 pub(crate) fn build_trust_list_views<'a>(
     items: &'a [crate::app::trust::list::TrustListItem],
 ) -> Vec<TrustListItemView<'a>> {
@@ -18,6 +26,21 @@ pub(crate) fn build_trust_list_views<'a>(
         .map(|item| TrustListItemView {
             kid: &item.kid,
             member_handle: &item.member_handle,
+            approved_at: &item.approved_at,
+            approved_via: &item.approved_via,
+        })
+        .collect()
+}
+
+pub(crate) fn build_recipient_set_list_views<'a>(
+    items: &'a [crate::app::trust::list::RecipientSetListItem],
+) -> Vec<RecipientSetListItemView<'a>> {
+    items
+        .iter()
+        .map(|item| RecipientSetListItemView {
+            sid: &item.sid,
+            recipient_kids: &item.recipient_kids,
+            recipient_set_hash: &item.recipient_set_hash,
             approved_at: &item.approved_at,
             approved_via: &item.approved_via,
         })

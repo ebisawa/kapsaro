@@ -3,7 +3,10 @@
 
 //! Integration tests for `unset` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
+    TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -12,7 +15,7 @@ use tempfile::TempDir;
 /// Helper to create a workspace with initialized member and keys
 fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
@@ -32,16 +35,15 @@ fn setup_workspace_with_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
         .success();
 
     // Set multiple keys
-    cmd()
-        .arg("set")
-        .arg("KEY1")
-        .arg("value1")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "KEY1",
+        "value1",
+        None,
+        None,
+    );
 
     cmd()
         .arg("set")
@@ -124,7 +126,7 @@ fn test_unset_non_interactive_without_force_fails() {
 #[test]
 fn test_unset_requires_member_handle_before_confirmation() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
 
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();

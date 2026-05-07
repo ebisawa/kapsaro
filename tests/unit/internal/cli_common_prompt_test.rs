@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{prompt_yes_no_with_mode, prompt_yes_no_with_reader};
+use super::{prompt_yes_no, prompt_yes_no_with_reader};
+use crate::support::tty;
 use std::io::Cursor;
 use std::io::{BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -69,37 +70,14 @@ fn test_prompt_yes_no_with_reader_accepts_carriage_return_without_waiting_for_ne
 }
 
 #[test]
-fn test_prompt_yes_no_with_mode_uses_confirm_in_interactive_mode() {
-    let mut confirm_called = false;
+fn test_prompt_yes_no_rejects_non_interactive_confirmation() {
+    tty::set_interactive_override(Some(false));
+    let result = prompt_yes_no("Proceed?", false);
+    tty::set_interactive_override(None);
 
-    let accepted = prompt_yes_no_with_mode(
-        "Proceed?",
-        false,
-        true,
-        Cursor::new(Vec::<u8>::new()),
-        |prompt, default| {
-            confirm_called = true;
-            assert_eq!(prompt, "Proceed?");
-            assert!(!default);
-            Ok(true)
-        },
-    )
-    .unwrap();
-
-    assert!(accepted);
-    assert!(confirm_called);
-}
-
-#[test]
-fn test_prompt_yes_no_with_mode_uses_reader_in_non_interactive_mode() {
-    let accepted = prompt_yes_no_with_mode(
-        "Proceed?",
-        false,
-        false,
-        Cursor::new(b"y\n".to_vec()),
-        |_, _| panic!("interactive confirm should not be used"),
-    )
-    .unwrap();
-
-    assert!(accepted);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Interactive confirmation requires a terminal"));
 }

@@ -8,7 +8,7 @@ use crate::app_test_utils::build_test_command_options;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
-use crate::model::identifiers::format::TRUST_LOCAL_V3;
+use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use tempfile::TempDir;
@@ -31,7 +31,7 @@ fn build_known_key(kid: &str, member_handle: &str, approved_at: &str) -> KnownKe
 fn save_signed_trust_store(home: &TempDir) {
     let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V3.to_string(),
+        format: TRUST_LOCAL_V4.to_string(),
         owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
@@ -39,6 +39,7 @@ fn save_signed_trust_store(home: &TempDir) {
             build_known_key(KID_BOB, "bob@example.com", "2026-03-29T12:40:00Z"),
             build_known_key(KID_CHARLIE, "charlie@example.com", "2026-03-29T12:41:00Z"),
         ],
+        recipient_sets: Vec::new(),
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
     let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);

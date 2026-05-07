@@ -3,7 +3,9 @@
 
 //! Integration tests for `import` command
 
-use crate::cli::common::{cmd, setup_workspace};
+use crate::cli::common::{
+    cmd, import_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
+};
 use predicates::prelude::*;
 use std::fs;
 
@@ -20,16 +22,14 @@ fn test_import_dotenv_file() {
     .unwrap();
 
     // Import
-    cmd()
-        .arg("import")
-        .arg(env_file.to_str().unwrap())
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Imported 3 entries"));
+    let output = import_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &env_file,
+        false,
+    );
+    assert!(output.contains("Imported 3 entries"), "{output}");
 
     // Verify values can be retrieved
     for (key, expected_value) in &[
@@ -55,16 +55,15 @@ fn test_import_overwrites_existing_keys() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set initial value
-    cmd()
-        .arg("set")
-        .arg("API_KEY")
-        .arg("old_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "API_KEY",
+        "old_value",
+        None,
+        None,
+    );
 
     // Import file with same key
     let env_file = workspace_dir.path().join("test.env");
@@ -153,18 +152,15 @@ fn test_import_with_json_output() {
     let env_file = workspace_dir.path().join("test.env");
     fs::write(&env_file, "KEY1=value1\nKEY2=value2\n").unwrap();
 
-    cmd()
-        .arg("import")
-        .arg(env_file.to_str().unwrap())
-        .arg("--json")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("\"imported\""))
-        .stdout(predicate::str::contains("\"file\""));
+    let output = import_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &env_file,
+        true,
+    );
+    assert!(output.contains("\"imported\""), "{output}");
+    assert!(output.contains("\"file\""), "{output}");
 }
 
 #[test]

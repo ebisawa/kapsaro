@@ -47,6 +47,7 @@ fn test_cli_trust_remove_parses_member_handle_option() {
     let cli = Cli::try_parse_from([
         "secretenv",
         "trust",
+        "keys",
         "remove",
         "--member-handle",
         "alice@example.com",
@@ -62,6 +63,7 @@ fn test_cli_trust_purge_parses_member_handle_option() {
     let cli = Cli::try_parse_from([
         "secretenv",
         "trust",
+        "keys",
         "purge",
         "--member-handle",
         "alice@example.com",

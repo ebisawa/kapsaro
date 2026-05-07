@@ -49,13 +49,9 @@ use crate::app::trust::CommandCapability;
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
 use crate::Error;
 
-/// Offline-first CLI for sharing encrypted .env files and other secrets through Git
 #[derive(Parser)]
 #[command(name = "secretenv")]
 #[command(version)]
-#[command(
-    about = "Offline-first CLI for sharing encrypted .env files and other secrets through Git"
-)]
 #[command(disable_help_subcommand = true)]
 pub struct Cli {
     #[command(subcommand)]

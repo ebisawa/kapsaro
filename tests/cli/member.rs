@@ -4,7 +4,8 @@
 //! Integration tests for member list/show/remove/add commands
 
 use crate::cli::common::{
-    cmd, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE,
+    BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{
     save_active_public_key_to_workspace, setup_member_key_context, setup_test_workspace,
@@ -500,19 +501,14 @@ fn test_member_remove_warns_on_tampered_artifact_but_continues() {
         .join("member-remove.json");
     fs::write(&input_file, b"member remove preview").unwrap();
 
-    cmd()
-        .arg("encrypt")
-        .arg(&input_file)
-        .arg("--out")
-        .arg(&encrypted_file)
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let mut value: Value =
         serde_json::from_str(&fs::read_to_string(&encrypted_file).unwrap()).unwrap();

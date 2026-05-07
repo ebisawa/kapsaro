@@ -13,13 +13,17 @@ mod signer;
 mod types;
 
 pub(crate) use execution::TrustExecutionContext;
-pub(crate) use execution::{execute_read_with_signer_trust, execute_write_with_recipient_trust};
+pub(crate) use execution::{
+    execute_read_with_signer_trust, execute_write_with_recipient_trust,
+    review_generated_artifact_recipient_set, GeneratedArtifactRecipientSetReview,
+};
+pub(crate) use persistence::save_approved_known_key_warnings;
 pub(crate) use recipient::review_recipient_trust_with_confirmation;
 #[cfg(test)]
 pub(crate) use recipient::review_recipient_trust_with_confirmation_verifier;
-pub(crate) use rewrap::review_rewrap_signer_requirements_with_confirmation;
+pub(crate) use rewrap::review_rewrap_input_trust_requirements_with_confirmation;
 #[cfg(test)]
-pub(crate) use rewrap::review_rewrap_signer_requirements_with_confirmation_verifier;
+pub(crate) use rewrap::review_rewrap_input_trust_requirements_with_confirmation_verifier;
 #[cfg(test)]
 pub(crate) use signer::{
     enforce_read_trust_member_eligibility, review_signer_trust_with_confirmation,

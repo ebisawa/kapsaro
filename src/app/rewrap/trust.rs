@@ -50,6 +50,15 @@ pub(crate) fn build_rewrap_trust(
     })
 }
 
+pub(crate) fn build_post_promotion_trust_context(
+    pre_promotion_trust: &TrustContext,
+    post_promotion_members: &[PublicKey],
+) -> Result<TrustContext> {
+    let mut trust_ctx = pre_promotion_trust.clone();
+    trust_ctx.active_members_by_kid = build_post_promotion_index(post_promotion_members)?;
+    Ok(trust_ctx)
+}
+
 fn load_post_promotion_members(
     trust_ctx: &TrustContext,
     accepted_promotions: &[IncomingPromotionCandidate],

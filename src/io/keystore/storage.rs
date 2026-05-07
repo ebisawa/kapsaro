@@ -100,9 +100,10 @@ pub fn load_private_key(
     kid: &str,
 ) -> Result<PrivateKey> {
     let path = key_dir(keystore_root, member_handle, kid).join("private.json");
+    let permission_root = keystore_permission_root(keystore_root);
     DocumentStore::<FailOnPermissionWarning>::load_required(
         &path,
-        keystore_root,
+        permission_root.as_path(),
         MAX_JSON_DOCUMENT_READ_SIZE,
         "PrivateKey file",
         |content| parse_private_key_document(content, &path),
@@ -113,9 +114,10 @@ pub fn load_private_key(
 /// Load PublicKey from keystore
 pub fn load_public_key(keystore_root: &Path, member_handle: &str, kid: &str) -> Result<PublicKey> {
     let path = key_dir(keystore_root, member_handle, kid).join("public.json");
+    let permission_root = keystore_permission_root(keystore_root);
     let loaded = DocumentStore::<CollectPermissionWarnings>::load_required(
         &path,
-        keystore_root,
+        permission_root.as_path(),
         MAX_JSON_DOCUMENT_READ_SIZE,
         "PublicKey file",
         |content| parse_public_key_document(content, &path),
@@ -124,6 +126,15 @@ pub fn load_public_key(keystore_root: &Path, member_handle: &str, kid: &str) -> 
         tracing::warn!("{}", warning);
     }
     Ok(loaded.document)
+}
+
+fn keystore_permission_root(keystore_root: &Path) -> PathBuf {
+    if keystore_root.file_name().is_some_and(|name| name == "keys") {
+        if let Some(parent) = keystore_root.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    keystore_root.to_path_buf()
 }
 
 fn parse_private_key_document(content: &str, path: &Path) -> Result<PrivateKey> {

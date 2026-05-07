@@ -3,7 +3,7 @@
 
 //! Tests for default file path resolution
 
-use crate::cli::common::{cmd, setup_workspace};
+use crate::cli::common::{cmd, set_value_with_member_set_review, setup_workspace};
 use predicates::prelude::*;
 use tempfile::TempDir;
 
@@ -19,16 +19,15 @@ fn test_default_file_path_resolution() {
     );
 
     // Create a key-value pair (this should create the default file)
-    cmd()
-        .arg("set")
-        .arg("TEST_KEY")
-        .arg("test_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "TEST_KEY",
+        "test_value",
+        None,
+        None,
+    );
 
     // Verify default file was created
     assert!(

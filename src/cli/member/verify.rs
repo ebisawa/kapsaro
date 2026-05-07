@@ -10,7 +10,7 @@ use crate::cli::common::command::{
 use crate::cli::common::output::member::print_member_approval_results;
 use crate::cli::common::output::member::print_member_verification_results;
 use crate::cli::common::output::text;
-use crate::cli::common::trust::{confirm_known_key_approval, run_with_trust_store_reset_recovery};
+use crate::cli::common::trust::{confirm_member_key_approval, run_with_trust_store_reset_recovery};
 use crate::support::tty;
 use crate::Error;
 
@@ -78,7 +78,7 @@ fn review_approval_candidates(
 
     for result in results.iter_mut().filter(|r| r.review_required) {
         let candidate = TrustApprovalCandidate::from(&*result);
-        result.approved = confirm_known_key_approval(&candidate, "member verify")?;
+        result.approved = confirm_member_key_approval(&candidate, "member verify")?;
     }
 
     Ok(())

@@ -6,13 +6,22 @@
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::load_optional_trust_store_for_member;
 use crate::model::identity::{Kid, MemberHandle};
-use crate::model::trust_store::KnownKey;
+use crate::model::trust_store::{KnownKey, RecipientSetRecord};
 use crate::Result;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TrustListItem {
     pub(crate) kid: Kid,
     pub(crate) member_handle: MemberHandle,
+    pub(crate) approved_at: String,
+    pub(crate) approved_via: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RecipientSetListItem {
+    pub(crate) sid: String,
+    pub(crate) recipient_kids: Vec<String>,
+    pub(crate) recipient_set_hash: String,
     pub(crate) approved_at: String,
     pub(crate) approved_via: String,
 }
@@ -24,6 +33,12 @@ pub(crate) struct TrustListResult {
     pub(crate) warnings: Vec<String>,
 }
 
+#[derive(Debug)]
+pub(crate) struct RecipientSetListResult {
+    pub(crate) items: Vec<RecipientSetListItem>,
+    pub(crate) warnings: Vec<String>,
+}
+
 impl From<&KnownKey> for TrustListItem {
     fn from(known_key: &KnownKey) -> Self {
         Self {
@@ -32,6 +47,18 @@ impl From<&KnownKey> for TrustListItem {
                 .expect("known key member_handle must be valid"),
             approved_at: known_key.approved_at.clone(),
             approved_via: known_key.approved_via.to_string(),
+        }
+    }
+}
+
+impl From<&RecipientSetRecord> for RecipientSetListItem {
+    fn from(record: &RecipientSetRecord) -> Self {
+        Self {
+            sid: record.sid.clone(),
+            recipient_kids: record.recipient_kids.clone(),
+            recipient_set_hash: record.recipient_set_hash.clone(),
+            approved_at: record.approved_at.clone(),
+            approved_via: record.approved_via.to_string(),
         }
     }
 }
@@ -57,6 +84,32 @@ pub(crate) fn list_known_keys(
         .collect();
 
     Ok(TrustListResult {
+        items,
+        warnings: loaded.warnings,
+    })
+}
+
+/// List recipient_sets from the local trust store.
+pub(crate) fn list_recipient_sets(
+    options: &CommonCommandOptions,
+    member_handle: &str,
+) -> Result<RecipientSetListResult> {
+    let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
+    let Some(loaded) = loaded else {
+        return Ok(RecipientSetListResult {
+            items: Vec::new(),
+            warnings: Vec::new(),
+        });
+    };
+
+    let items = loaded
+        .protected
+        .recipient_sets
+        .iter()
+        .map(RecipientSetListItem::from)
+        .collect();
+
+    Ok(RecipientSetListResult {
         items,
         warnings: loaded.warnings,
     })

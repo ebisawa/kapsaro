@@ -19,9 +19,10 @@ pub(crate) struct RewrapBatchPlan {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RewrapSignerRequirement {
+pub(crate) struct RewrapInputTrustRequirement {
     pub(crate) file_path: PathBuf,
-    pub(crate) outcome: SignerTrustOutcome,
+    pub(crate) signer_outcome: SignerTrustOutcome,
+    pub(crate) recipient_outcome: RecipientTrustOutcome,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -74,7 +74,7 @@ pub fn setup_trust_store_for_workspace(
     use secretenv::io::trust::paths::get_trust_store_file_path;
     use secretenv::io::trust::store::save_trust_store;
     use secretenv::io::workspace::members::load_active_member_files;
-    use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
+    use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
     use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
     use std::collections::BTreeMap;
 
@@ -93,11 +93,12 @@ pub fn setup_trust_store_for_workspace(
 
     let now = "2026-01-01T00:00:00Z".to_string();
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V3.to_string(),
+        format: TRUST_LOCAL_V4.to_string(),
         owner_handle: owner_handle.to_string(),
         created_at: now.clone(),
         updated_at: now,
         known_keys,
+        recipient_sets: Vec::new(),
     };
 
     let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();

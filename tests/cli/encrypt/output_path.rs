@@ -4,14 +4,20 @@
 //! Output path-related encryption tests
 
 use crate::cli::common::{
-    cmd, default_common_options, set_ssh_key_from_temp_dir, setup_workspace, ALICE_MEMBER_HANDLE,
-    TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, encrypt_stdin_with_member_set_review,
+    setup_workspace, ALICE_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{setup_test_workspace, with_temp_cwd};
 use predicates::prelude::*;
-use secretenv::cli::encrypt;
 use secretenv::model::identifiers::format;
 use std::fs;
+
+fn parse_json_from_transcript(transcript: &str) -> serde_json::Value {
+    let start = transcript
+        .find('{')
+        .expect("transcript should contain JSON");
+    serde_json::from_str(&transcript[start..]).expect("stdout JSON should parse")
+}
 
 #[test]
 fn test_encrypt_default_output_is_encrypted_in_cwd() {
@@ -21,23 +27,19 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
     fs::write(&input_path, b"some data").unwrap();
 
     with_temp_cwd(&workspace_dir, || {
-        let mut common_opts = default_common_options();
-        common_opts.home = Some(temp_dir.path().to_path_buf());
-        common_opts.workspace = Some(workspace_dir.clone());
-        set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-
-        let args = encrypt::EncryptArgs {
-            common: common_opts,
-            member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-            out: None,
-            stdout: false,
-            stdin: false,
-            input: Some(input_path.clone()),
-        };
-        encrypt::run(args).unwrap();
+        let output_path = workspace_dir.join("data.bin.encrypted");
+        let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
+        encrypt_file_with_member_set_review(
+            &workspace_dir,
+            temp_dir.path(),
+            &ssh_identity,
+            &input_path,
+            &output_path,
+            ALICE_MEMBER_HANDLE,
+        );
 
         // Default output: <input_filename>.encrypted in current dir (= workspace_dir)
-        let expected = workspace_dir.join("data.bin.encrypted");
+        let expected = output_path;
         assert!(expected.exists(), "Should create data.bin.encrypted in cwd");
 
         let content = fs::read_to_string(&expected).unwrap();
@@ -54,20 +56,15 @@ fn test_encrypt_explicit_out_option() {
     fs::write(&input_path, b"data").unwrap();
     let explicit_output = workspace_dir.join("custom_output.encrypted");
 
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-
-    let args = encrypt::EncryptArgs {
-        common: common_opts,
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        out: Some(explicit_output.clone()),
-        stdout: false,
-        stdin: false,
-        input: Some(input_path),
-    };
-    encrypt::run(args).unwrap();
+    let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
+    encrypt_file_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_identity,
+        &input_path,
+        &explicit_output,
+        ALICE_MEMBER_HANDLE,
+    );
 
     assert!(
         explicit_output.exists(),
@@ -82,21 +79,16 @@ fn test_encrypt_explicit_out_option_reports_output_path() {
     let output_file = home_dir.path().join("custom_output.encrypted");
     fs::write(&input_file, b"secret").unwrap();
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Encrypted to:"))
-        .stderr(predicate::str::contains("custom_output.encrypted"));
+    let output = encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &output_file,
+        TEST_MEMBER_HANDLE,
+    );
+    assert!(output.contains("Encrypted to:"), "{output}");
+    assert!(output.contains("custom_output.encrypted"), "{output}");
 }
 
 #[test]
@@ -104,21 +96,16 @@ fn test_encrypt_stdin_with_out_option_writes_encrypted_file() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
     let output_file = home_dir.path().join("stdin_output.encrypted");
 
-    cmd()
-        .arg("encrypt")
-        .arg("--stdin")
-        .arg("--out")
-        .arg(&output_file)
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin("secret from stdin")
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("stdin_output.encrypted"));
+    let output = encrypt_stdin_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        b"secret from stdin",
+        Some(&output_file),
+        false,
+        TEST_MEMBER_HANDLE,
+    );
+    assert!(output.contains("stdin_output.encrypted"), "{output}");
 
     let content = fs::read_to_string(&output_file).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -129,23 +116,17 @@ fn test_encrypt_stdin_with_out_option_writes_encrypted_file() {
 fn test_encrypt_stdin_with_stdout_writes_json_to_stdout() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
-    let assert = cmd()
-        .arg("encrypt")
-        .arg("--stdin")
-        .arg("--stdout")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin("secret from stdin")
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Encrypted to:").not());
-
-    let stdout = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let output = encrypt_stdin_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        b"secret from stdin",
+        None,
+        true,
+        TEST_MEMBER_HANDLE,
+    );
+    assert!(!output.contains("Encrypted to:"), "{output}");
+    let parsed = parse_json_from_transcript(&output);
     assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
 }
 
@@ -155,22 +136,20 @@ fn test_encrypt_file_with_stdout_writes_json_to_stdout() {
     let input_file = home_dir.path().join("data.txt");
     fs::write(&input_file, b"secret").unwrap();
 
-    let assert = cmd()
+    let mut command = crate::cli::common::secretenv_std_cmd();
+    command
         .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
+        .arg(&input_file)
         .arg("--stdout")
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Encrypted to:").not());
-
-    let stdout = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        .env("SECRETENV_SSH_IDENTITY", &ssh_priv);
+    let output = crate::cli::common::assert_member_set_review_success(&mut command);
+    assert!(!output.contains("Encrypted to:"), "{output}");
+    let parsed = parse_json_from_transcript(&output);
     assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
 }
 
@@ -222,11 +201,9 @@ fn test_encrypt_rejects_stdout_and_out_together() {
 #[test]
 fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-    let encrypted_file = home_dir.path().join("stdin_binary.encrypted");
-    let decrypted_file = home_dir.path().join("stdin_binary.out");
     let plaintext = vec![0x00, 0x01, 0x02, b'a', b'\n', 0xff];
 
-    let encrypt = cmd()
+    let encrypted_output = cmd()
         .arg("encrypt")
         .arg("--stdin")
         .arg("--stdout")
@@ -238,23 +215,27 @@ fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin(plaintext.clone())
         .assert()
-        .success();
+        .success()
+        .get_output()
+        .stdout
+        .clone();
 
-    fs::write(&encrypted_file, encrypt.get_output().stdout.clone()).unwrap();
-
-    cmd()
+    let decrypted_output = cmd()
         .arg("decrypt")
-        .arg(&encrypted_file)
-        .arg("--out")
-        .arg(&decrypted_file)
+        .arg("--stdin")
+        .arg("--stdout")
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin(encrypted_output)
         .assert()
-        .success();
+        .success()
+        .get_output()
+        .stdout
+        .clone();
 
-    assert_eq!(fs::read(&decrypted_file).unwrap(), plaintext);
+    assert_eq!(decrypted_output, plaintext);
 }

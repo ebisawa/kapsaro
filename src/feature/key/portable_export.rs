@@ -58,10 +58,7 @@ pub fn export_private_key_portable(
 fn validate_password_length(password: &str) -> Result<()> {
     if password.len() < MIN_PASSWORD_LENGTH {
         return Err(Error::InvalidArgument {
-            message: format!(
-                "Password must be at least {} characters",
-                MIN_PASSWORD_LENGTH,
-            ),
+            message: format!("Password must be at least {} bytes", MIN_PASSWORD_LENGTH),
         });
     }
     Ok(())
@@ -74,7 +71,7 @@ pub fn build_password_strength_warning(password: &str) -> Option<String> {
     }
 
     Some(format!(
-        "Password accepted, but it is shorter than the recommended {} characters for offline brute-force resistance.",
+        "Password accepted, but it is shorter than the recommended {} bytes for offline brute-force resistance.",
         RECOMMENDED_PASSWORD_LENGTH
     ))
 }

@@ -26,14 +26,10 @@ fn test_format_candidate_review_lines_includes_required_fields() {
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(
-        !rendered.contains("member_handle:"),
-        "member_handle is shown in the header, not in detail lines"
-    );
-    assert!(rendered.contains("kid: KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
-    assert!(rendered.contains("attestation fingerprint: SHA256:test"));
-    assert!(rendered.contains("GitHub account id: 42 (octocat)"));
-    assert!(rendered.contains("This key is not yet trusted"));
+    assert!(rendered.contains("member handle      bob@example.com"));
+    assert!(rendered.contains("key id             KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
+    assert!(rendered.contains("SSH fingerprint    SHA256:test"));
+    assert!(rendered.contains("GitHub account     not verified"));
 }
 
 #[test]
@@ -56,8 +52,8 @@ fn test_format_candidate_review_lines_warns_when_github_binding_is_missing() {
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(rendered.contains("kid: KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
-    assert!(rendered.contains("online verification could not be performed"));
+    assert!(rendered.contains("key id             KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
+    assert!(rendered.contains("GitHub account     not configured"));
 }
 
 #[test]
@@ -80,8 +76,8 @@ fn test_format_candidate_review_lines_shows_github_id_without_login() {
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(rendered.contains("GitHub account id: 42"));
-    assert!(!rendered.contains("(octocat)"));
+    assert!(rendered.contains("GitHub account     not verified"));
+    assert!(!rendered.contains("verified)"));
 }
 
 #[test]
@@ -104,7 +100,8 @@ fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(rendered.contains("did not verify it online"));
+    assert!(rendered.contains("GitHub account     not verified"));
+    assert!(rendered.contains("online verification was not completed"));
 }
 
 #[test]
@@ -127,7 +124,7 @@ fn test_format_candidate_review_lines_shows_online_verification_failure_message(
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(rendered.contains("online verification failed"));
+    assert!(rendered.contains("GitHub account     not verified (online verification failed)"));
 }
 
 #[test]
@@ -155,14 +152,10 @@ fn test_format_candidate_review_lines_shows_verified_github_mark() {
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(
-        rendered.contains("verified"),
-        "Should show verified mark when online verification succeeded. Rendered: {}",
-        rendered
-    );
+    assert!(rendered.contains("GitHub account     octocat (id: 42, verified)"));
     assert!(
         !rendered.contains("not yet trusted"),
-        "Should not show untrusted warning when verified. Rendered: {}",
+        "Should not show warning text when verified. Rendered: {}",
         rendered
     );
 }
@@ -188,8 +181,9 @@ fn test_format_candidate_review_lines_no_verified_mark_without_online_verificati
     let rendered = lines.join("\n");
 
     assert!(
-        !rendered.contains("verified"),
+        !rendered.contains("(id: 42, verified)"),
         "Should not show verified mark without online verification. Rendered: {}",
         rendered
     );
+    assert!(rendered.contains("GitHub account     not verified"));
 }

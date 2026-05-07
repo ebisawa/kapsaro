@@ -5,5 +5,6 @@
 
 pub mod judgment;
 pub mod known_keys;
+pub mod recipient_sets;
 pub mod signature;
 pub mod verification;

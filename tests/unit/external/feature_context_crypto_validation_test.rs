@@ -6,7 +6,10 @@
 //! Tests for private key material validation helpers.
 
 use ed25519_dalek::SigningKey;
-use secretenv::feature::key::material::{validate_ed25519_consistency, validate_okp_key};
+use secretenv::crypto::kem::{derive_public_key_from_secret, generate_keypair, X25519SecretKey};
+use secretenv::feature::key::material::{
+    validate_ed25519_consistency, validate_okp_key, validate_x25519_consistency,
+};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::secret::SecretArray;
 
@@ -91,5 +94,28 @@ fn test_validate_ed25519_consistency() {
     let x_bytes = verifying_key.as_bytes();
 
     let result = validate_ed25519_consistency(&d_bytes, x_bytes);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_validate_x25519_consistency_mismatch() {
+    let secret = X25519SecretKey::from_bytes([1u8; 32]);
+    let public = derive_public_key_from_secret(&secret).unwrap();
+    let wrong_secret = X25519SecretKey::from_bytes([7u8; 32]);
+    assert_ne!(wrong_secret.as_bytes(), secret.as_bytes());
+
+    let d_bytes = SecretArray::new(*wrong_secret.as_bytes());
+    let result = validate_x25519_consistency(&d_bytes, public.as_bytes());
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("key pair inconsistency"), "got: {msg}");
+}
+
+#[test]
+fn test_validate_x25519_consistency() {
+    let (secret, public) = generate_keypair().unwrap();
+    let d_bytes = SecretArray::new(*secret.as_bytes());
+
+    let result = validate_x25519_consistency(&d_bytes, public.as_bytes());
     assert!(result.is_ok());
 }

@@ -10,13 +10,18 @@ use clap::Args;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use crate::app::file::encrypt::{execute_encrypt_file_command, resolve_encrypt_file_command};
+use crate::app::file::encrypt::{
+    execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
+};
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::common::output::text::print_warnings;
+use crate::cli::common::trust::{
+    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
+};
 use crate::cli::options::CommonOptions;
 use crate::support::fs::load_bytes;
 use crate::{Error, Result};
@@ -60,7 +65,7 @@ pub fn run(args: EncryptArgs) -> Result<()> {
         args.stdin,
     )?;
     let options = resolve_options(&args.common);
-    let encrypted = run_with_trust_store_reset_recovery(
+    let (encrypted, approval_warnings) = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
         || {
@@ -78,11 +83,19 @@ pub fn run(args: EncryptArgs) -> Result<()> {
                     signer_context: None,
                     recipient_context: "encrypt recipients",
                 },
-                || execute_encrypt_file_command(&command, options.verbose),
+                || {
+                    execute_encrypt_file_command_with_recipient_set_confirmation(
+                        &options,
+                        &command,
+                        options.verbose,
+                        confirm_recipient_set_approval,
+                    )
+                },
             )
         },
     )?;
 
+    print_warnings(&approval_warnings);
     save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet)?;
     Ok(())
 }

@@ -7,17 +7,19 @@ use clap::Args;
 #[cfg(test)]
 use std::io::BufRead;
 
-use crate::app::kv::mutation::unset_kv_command;
+use crate::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
 use crate::app::trust::UnsetPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_required_member_handle, resolve_trust_store_owner_member,
     run_kv_write_command_with_trust, WriteCommandLabels,
 };
-use crate::cli::common::output::text::print_optional_status;
+use crate::cli::common::output::text::{print_optional_status, print_warnings};
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::common::trust::{
+    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
+};
 use crate::cli::options::CommonOptions;
 use crate::support::tty;
 use crate::{Error, Result};
@@ -68,11 +70,17 @@ pub fn run(args: UnsetArgs) -> Result<()> {
                         args.key,
                         args.name.as_deref().unwrap_or("default")
                     );
-                    unset_kv_command(trust_plan, &args.key, Some(&success_message))
+                    unset_kv_command_with_recipient_set_confirmation(
+                        trust_plan,
+                        &args.key,
+                        Some(&success_message),
+                        confirm_recipient_set_approval,
+                    )
                 },
             )
         },
     )?;
+    print_warnings(&outcome.warnings);
     print_optional_status(outcome.message.as_deref(), args.common.quiet);
     Ok(())
 }

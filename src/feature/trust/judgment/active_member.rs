@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::model::identity::MemberHandle;
 use crate::model::public_key::PublicKey;
+use crate::Result;
 
 use super::identity::TrustIdentity;
 
@@ -18,6 +19,24 @@ pub enum CurrentMemberMatch {
     Missing,
     Matched,
     MemberHandleMismatch { active_member_handle: MemberHandle },
+}
+
+pub fn build_active_members_by_kid(
+    active_members: &[PublicKey],
+) -> Result<BTreeMap<String, PublicKey>> {
+    let mut active_members_by_kid = BTreeMap::new();
+    for member in active_members {
+        let kid = member.protected.kid.clone();
+        if active_members_by_kid
+            .insert(kid.clone(), member.clone())
+            .is_some()
+        {
+            return Err(crate::Error::Config {
+                message: format!("Ambiguous key: kid '{}' found in multiple members", kid),
+            });
+        }
+    }
+    Ok(active_members_by_kid)
 }
 
 impl<'a> ActiveMemberSnapshot<'a> {

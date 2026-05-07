@@ -3,7 +3,10 @@
 
 //! Integration tests for `run` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, setup_workspace, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
+    setup_workspace, TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -14,16 +17,15 @@ fn setup_workspace_with_default_file() -> (TempDir, TempDir, TempDir, PathBuf) {
     let (workspace_dir, home_dir, ssh_temp, ssh_priv) = setup_workspace();
 
     // Set a key to create default.kvenc
-    cmd()
-        .arg("set")
-        .arg("TEST_KEY")
-        .arg("test_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "TEST_KEY",
+        "test_value",
+        None,
+        None,
+    );
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
 }
@@ -64,7 +66,7 @@ fn test_run_with_default_file() {
 
 #[test]
 fn test_run_error_when_workspace_not_found() {
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Try to run without workspace (should fail)
@@ -91,7 +93,7 @@ fn test_run_error_when_workspace_not_found() {
 #[test]
 fn test_run_error_when_default_file_not_exists() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure

@@ -12,8 +12,8 @@ pub mod format {
     pub const PUBLIC_KEY_V5: &str = "secretenv.public.key@5";
     /// `PrivateKey@6` format identifier.
     pub const PRIVATE_KEY_V6: &str = "secretenv.private.key@6";
-    /// Local Trust Store v3 format identifier.
-    pub const TRUST_LOCAL_V3: &str = "secretenv.trust.local@3";
+    /// Local Trust Store v4 format identifier.
+    pub const TRUST_LOCAL_V4: &str = "secretenv.trust.local@4";
     /// FileEncDocument@4 format identifier.
     pub const FILE_ENC_V4: &str = "secretenv.file@4";
     /// `FilePayload@4` format identifier (used in file-enc payload.protected).
@@ -60,6 +60,8 @@ pub mod context {
     pub const SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6: &str = "secretenv:key-protection-ikm@6";
     /// HKDF info prefix for kv-enc entry CEK derivation.
     pub const KV_CEK_INFO_PREFIX_V4: &str = "secretenv:kv:cek@4";
+    /// Hash domain separator for artifact recipient set approval records.
+    pub const ARTIFACT_RECIPIENT_SET_HASH_V1: &str = "secretenv:artifact-recipient-set@1";
 }
 
 /// PrivateKey protection method identifiers.

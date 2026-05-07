@@ -6,36 +6,31 @@
 use crate::support::tty;
 use crate::{Error, Result};
 use dialoguer::Confirm;
+#[cfg(test)]
 use std::io::BufRead;
 
 pub(crate) fn prompt_yes_no(prompt: &str, default: bool) -> Result<bool> {
-    prompt_yes_no_with_mode(
-        prompt,
-        default,
-        tty::is_interactive(),
-        std::io::stdin().lock(),
-        confirm_yes_no_interactive,
-    )
-}
-
-fn prompt_yes_no_with_mode<R, F>(
-    prompt: &str,
-    default: bool,
-    interactive: bool,
-    reader: R,
-    confirm: F,
-) -> Result<bool>
-where
-    R: BufRead,
-    F: FnOnce(&str, bool) -> Result<bool>,
-{
-    if interactive {
-        return confirm(prompt, default);
+    if !tty::is_interactive() {
+        return Err(Error::build_invalid_operation_error(
+            "Interactive confirmation requires a terminal",
+        ));
     }
 
-    prompt_yes_no_with_reader(prompt, default, reader)
+    confirm_yes_no_interactive(prompt, default)
 }
 
+fn confirm_yes_no_interactive(prompt: &str, default: bool) -> Result<bool> {
+    eprintln!();
+    let answer = Confirm::new()
+        .with_prompt(prompt)
+        .default(default)
+        .interact()
+        .map_err(|e| Error::build_io_error_with_source("Failed to read user input", e.into()))?;
+    eprintln!();
+    Ok(answer)
+}
+
+#[cfg(test)]
 pub(crate) fn prompt_yes_no_with_reader<R>(
     prompt: &str,
     default: bool,
@@ -56,14 +51,7 @@ where
     Ok(matches!(trimmed.to_ascii_lowercase().as_str(), "y" | "yes"))
 }
 
-fn confirm_yes_no_interactive(prompt: &str, default: bool) -> Result<bool> {
-    Confirm::new()
-        .with_prompt(prompt)
-        .default(default)
-        .interact()
-        .map_err(|e| Error::build_io_error_with_source("Failed to read user input", e.into()))
-}
-
+#[cfg(test)]
 fn load_prompt_line<R>(reader: &mut R) -> Result<String>
 where
     R: BufRead,

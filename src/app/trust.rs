@@ -18,10 +18,12 @@ pub(crate) mod types;
 
 pub(crate) use candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 pub(crate) use enforcement::{
-    enforce_recipients_trust_with_additional, RecipientTrustOutcome, SignerTrustOutcome,
+    enforce_recipients_trust_with_additional, ArtifactRecipientTrustOutcome, RecipientTrustOutcome,
+    SignerTrustOutcome,
 };
 pub(crate) use evaluation::{
-    derive_self_sig_x, evaluate_read_signer_trust, evaluate_signer_trust_with_proof,
+    derive_self_sig_x, evaluate_output_recipient_set_trust, evaluate_read_artifact_trust,
+    evaluate_signer_trust_with_proof,
 };
 pub(crate) use policy::{
     CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ReadTrustPolicy,

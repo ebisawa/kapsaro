@@ -6,7 +6,7 @@
 //! Tests that `-n` correctly resolves to `<workspace>/secrets/<name>.kvenc`
 //! and that omitting `-n` defaults to `default.kvenc`.
 
-use crate::cli::common::{cmd, setup_workspace};
+use crate::cli::common::{cmd, set_value_with_member_set_review, setup_workspace};
 use predicates::prelude::*;
 
 // ============================================================================
@@ -20,18 +20,15 @@ fn test_set_with_name_option_creates_named_file() {
 
     let staging_file = workspace_dir.path().join("secrets").join("staging.kvenc");
 
-    cmd()
-        .arg("set")
-        .arg("-n")
-        .arg("staging")
-        .arg("STAGING_KEY")
-        .arg("staging_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "STAGING_KEY",
+        "staging_value",
+        None,
+        Some("staging"),
+    );
 
     assert!(staging_file.exists(), "staging.kvenc should be created");
 
@@ -50,16 +47,15 @@ fn test_set_without_name_option_defaults_to_default() {
 
     let default_file = workspace_dir.path().join("secrets").join("default.kvenc");
 
-    cmd()
-        .arg("set")
-        .arg("MY_KEY")
-        .arg("my_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "MY_KEY",
+        "my_value",
+        None,
+        None,
+    );
 
     assert!(
         default_file.exists(),
@@ -77,18 +73,15 @@ fn test_set_get_with_name_option_roundtrip() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set in custom file
-    cmd()
-        .arg("set")
-        .arg("-n")
-        .arg("myfile")
-        .arg("MY_KEY")
-        .arg("my_secret_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "MY_KEY",
+        "my_secret_value",
+        None,
+        Some("myfile"),
+    );
 
     // Get from custom file
     cmd()
@@ -115,18 +108,15 @@ fn test_list_with_name_option() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set in custom file
-    cmd()
-        .arg("set")
-        .arg("-n")
-        .arg("prod")
-        .arg("PROD_KEY")
-        .arg("prod_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "PROD_KEY",
+        "prod_value",
+        None,
+        Some("prod"),
+    );
 
     // List from custom file
     cmd()
@@ -152,18 +142,15 @@ fn test_unset_with_name_option() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set key in custom file
-    cmd()
-        .arg("set")
-        .arg("-n")
-        .arg("myfile")
-        .arg("REMOVE_KEY")
-        .arg("remove_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "REMOVE_KEY",
+        "remove_value",
+        None,
+        Some("myfile"),
+    );
 
     // Unset key from custom file
     cmd()
@@ -203,18 +190,15 @@ fn test_run_with_name_option() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set key in custom file
-    cmd()
-        .arg("set")
-        .arg("-n")
-        .arg("myfile")
-        .arg("RUN_KEY")
-        .arg("run_secret_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "RUN_KEY",
+        "run_secret_value",
+        None,
+        Some("myfile"),
+    );
 
     // Run command that prints the env var from custom file
     #[cfg(unix)]
@@ -265,30 +249,26 @@ fn test_named_file_and_default_file_are_independent() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set in default file
-    cmd()
-        .arg("set")
-        .arg("DEFAULT_KEY")
-        .arg("default_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DEFAULT_KEY",
+        "default_value",
+        None,
+        None,
+    );
 
     // Set in custom file
-    cmd()
-        .arg("set")
-        .arg("-n")
-        .arg("other")
-        .arg("OTHER_KEY")
-        .arg("other_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "OTHER_KEY",
+        "other_value",
+        None,
+        Some("other"),
+    );
 
     // Default file should only have DEFAULT_KEY
     cmd()

@@ -3,7 +3,7 @@
 
 //! Integration tests for `key export` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use console::strip_ansi_codes;
 use predicates::prelude::*;
@@ -34,7 +34,7 @@ fn generate_exportable_private_key(
 
 #[test]
 fn test_key_export_explicit_kid() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -96,7 +96,7 @@ fn test_key_export_explicit_kid() {
 
 #[test]
 fn test_key_export_active() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -146,7 +146,7 @@ fn test_key_export_active() {
 
 #[test]
 fn test_key_export_accepts_display_kid() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -187,7 +187,7 @@ fn test_key_export_accepts_display_kid() {
 
 #[test]
 fn test_key_export_private_warns_for_accepted_short_password_to_file() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -208,7 +208,7 @@ fn test_key_export_private_warns_for_accepted_short_password_to_file() {
         .success()
         .stderr(
             predicate::str::contains("Warning:")
-                .and(predicate::str::contains("recommended 20 characters")),
+                .and(predicate::str::contains("recommended 20 bytes")),
         );
 
     assert!(export_file.exists(), "export should still succeed");
@@ -217,7 +217,7 @@ fn test_key_export_private_warns_for_accepted_short_password_to_file() {
 
 #[test]
 fn test_key_export_private_colors_short_password_warning_when_forced() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -253,7 +253,7 @@ fn test_key_export_private_colors_short_password_warning_when_forced() {
 
 #[test]
 fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -284,7 +284,7 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
         "stdout should contain only base64url text: {stdout:?}"
     );
     assert!(
-        stderr.contains("Warning:") && stderr.contains("recommended 20 characters"),
+        stderr.contains("Warning:") && stderr.contains("recommended 20 bytes"),
         "stderr should contain password strength warning: {stderr}"
     );
     assert!(
@@ -297,7 +297,7 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
 
 #[test]
 fn test_key_export_private_does_not_warn_for_recommended_password() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -316,14 +316,14 @@ fn test_key_export_private_does_not_warn_for_recommended_password() {
         .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
         .assert()
         .success()
-        .stderr(predicate::str::contains("recommended 20 characters").not());
+        .stderr(predicate::str::contains("recommended 20 bytes").not());
 
     drop(ssh_temp);
 }
 
 #[test]
 fn test_key_export_private_writes_password_protected_key_file() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -368,7 +368,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
 
 #[test]
 fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -416,7 +416,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
 
 #[test]
 fn test_key_export_private_requires_member_handle_before_password_input() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
 
     cmd()
         .arg("key")
@@ -435,7 +435,7 @@ fn test_key_export_private_requires_member_handle_before_password_input() {
 
 #[test]
 fn test_key_export_private_requires_explicit_output_destination() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -470,7 +470,7 @@ fn test_key_export_private_requires_explicit_output_destination() {
 
 #[test]
 fn test_key_export_private_rejects_stdout_and_out_together() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 

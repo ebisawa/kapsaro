@@ -48,6 +48,7 @@ fn test_join_existing_workspace() {
     let using_ssh_key_message = "Using SSH key:";
     let ssh_determinism_message = "SSH signature determinism: OK";
     let generated_key_message = format!("Generated key for '{}':", TEST_MEMBER_HANDLE);
+    let deprecated_rewrap_hint = "promote the incoming key and sync secrets";
 
     // Manually create workspace structure (without init)
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -69,9 +70,7 @@ fn test_join_existing_workspace() {
         .stderr(predicate::str::contains(ssh_determinism_message))
         .stderr(predicate::str::contains(&generated_key_message))
         .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_HANDLE)))
-        .stderr(predicate::str::contains(
-            "An active member needs to run 'secretenv rewrap' to promote the incoming key and sync secrets.",
-        ));
+        .stderr(predicate::str::contains(deprecated_rewrap_hint).not());
 
     assert_stderr_order(
         &assert.get_output().stderr,

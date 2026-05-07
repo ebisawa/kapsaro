@@ -4,6 +4,7 @@
 //! Trust Store document verification.
 
 use crate::crypto::sign::verify_trust_store_bytes;
+use crate::feature::trust::recipient_sets::validate_recipient_set_record;
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
 };
@@ -11,7 +12,7 @@ use crate::format::schema::validator::load_embedded_trust_validator;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
 use crate::model::identifiers::alg::SIGNATURE_ED25519;
-use crate::model::identifiers::format::TRUST_LOCAL_V3;
+use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
 use crate::model::trust_store::TrustStoreDocument;
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
@@ -27,13 +28,14 @@ use time::OffsetDateTime;
 /// Checks the trust store signature, signer key, owner, and known key integrity.
 /// 1. JSON Schema validity
 /// 2. signer public key is loaded from local keystore by owner_handle + kid
-/// 3. format == TRUST_LOCAL_V3
+/// 3. format == TRUST_LOCAL_V4
 /// 4. signer public key is a valid PublicKey
 /// 5. Cryptographic signature verification
 /// 6. signature.kid == signer_public_key.protected.kid
 /// 7. signer_public_key.protected.subject_handle == protected.owner_handle
 /// 8. known_keys[] kid uniqueness
-/// 9. Timestamp format validation (RFC 3339 UTC 'Z')
+/// 9. recipient_sets[] integrity
+/// 10. Timestamp format validation (RFC 3339 UTC 'Z')
 pub fn verify_trust_store(
     doc: &TrustStoreDocument,
     keystore_root: &Path,
@@ -46,6 +48,7 @@ pub fn verify_trust_store(
     validate_kid_match(doc, &signer_public_key)?;
     validate_owner_match(doc, &signer_public_key)?;
     validate_known_keys_uniqueness(doc)?;
+    validate_recipient_sets(doc)?;
     validate_timestamps(doc)?;
 
     let proof = TrustStoreVerificationProof::new(doc.protected.owner_handle.clone());
@@ -65,12 +68,12 @@ fn validate_schema(doc: &TrustStoreDocument) -> Result<()> {
 }
 
 fn validate_format(doc: &TrustStoreDocument) -> Result<()> {
-    if doc.protected.format != TRUST_LOCAL_V3 {
+    if doc.protected.format != TRUST_LOCAL_V4 {
         return Err(Error::Verify {
             rule: "E_TRUST_FORMAT_MISMATCH".to_string(),
             message: format!(
                 "Expected format '{}', got '{}'",
-                TRUST_LOCAL_V3, doc.protected.format
+                TRUST_LOCAL_V4, doc.protected.format
             ),
         });
     }
@@ -146,11 +149,28 @@ fn validate_known_keys_uniqueness(doc: &TrustStoreDocument) -> Result<()> {
     Ok(())
 }
 
+fn validate_recipient_sets(doc: &TrustStoreDocument) -> Result<()> {
+    let mut seen_sids = HashSet::new();
+    for record in &doc.protected.recipient_sets {
+        if !seen_sids.insert(&record.sid) {
+            return Err(Error::Verify {
+                rule: "E_RECIPIENT_SET_DUPLICATE_SID".to_string(),
+                message: format!("Duplicate sid '{}' in recipient_sets", record.sid),
+            });
+        }
+        validate_recipient_set_record(record)?;
+    }
+    Ok(())
+}
+
 fn validate_timestamps(doc: &TrustStoreDocument) -> Result<()> {
     validate_utc_timestamp(&doc.protected.created_at, "created_at")?;
     validate_utc_timestamp(&doc.protected.updated_at, "updated_at")?;
     for key in &doc.protected.known_keys {
         validate_utc_timestamp(&key.approved_at, "known_keys[].approved_at")?;
+    }
+    for record in &doc.protected.recipient_sets {
+        validate_utc_timestamp(&record.approved_at, "recipient_sets[].approved_at")?;
     }
     Ok(())
 }

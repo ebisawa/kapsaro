@@ -15,13 +15,15 @@ use crate::app::trust::store::load_optional_trust_store_for_member;
 use crate::config::resolution::strict_key_checking::resolve_strict_key_checking;
 use crate::config::types::StrictKeyCheckingResolution;
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
-use crate::feature::trust::judgment::{ActiveMemberSnapshot, SelfTrustSet};
+use crate::feature::trust::judgment::{
+    build_active_members_by_kid, ActiveMemberSnapshot, SelfTrustSet,
+};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
 };
 use crate::io::workspace::members::load_active_member_files;
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
-use crate::model::trust_store::KnownKey;
+use crate::model::trust_store::{KnownKey, RecipientSetRecord};
 use crate::support::tty;
 use crate::Result;
 
@@ -29,6 +31,7 @@ use crate::Result;
 #[derive(Debug, Clone)]
 pub(crate) struct TrustContext {
     pub(crate) known_keys: Vec<KnownKey>,
+    pub(crate) recipient_sets: Vec<RecipientSetRecord>,
     pub(crate) active_members_by_kid: BTreeMap<String, PublicKey>,
     pub(crate) self_trust: SelfTrustSet,
     pub(crate) strict_key_checking: StrictKeyCheckingResolution,
@@ -76,19 +79,7 @@ impl WorkspaceMemberSnapshot {
         member_handles: Vec<String>,
         debug: bool,
     ) -> Result<Self> {
-        let mut active_members_by_kid = BTreeMap::new();
-        for member in &active_members {
-            let kid = member.protected.kid.clone();
-            if active_members_by_kid
-                .insert(kid.clone(), member.clone())
-                .is_some()
-            {
-                return Err(crate::Error::Config {
-                    message: format!("Ambiguous key: kid '{}' found in multiple members", kid),
-                });
-            }
-        }
-
+        let active_members_by_kid = build_active_members_by_kid(&active_members)?;
         let verified_recipients = crate::feature::verify::public_key::verify_recipient_public_keys(
             &active_members,
             debug,
@@ -277,14 +268,19 @@ fn load_trust_context(
     let strict_key_checking = resolve_strict_key_checking();
     let is_interactive = tty::is_interactive();
     let (_, loaded) = load_optional_trust_store_for_member(options, self_member_handle)?;
-    let (known_keys, permission_warnings) = match loaded {
-        Some(loaded) => (loaded.protected.known_keys, loaded.warnings),
-        None => (Vec::new(), Vec::new()),
+    let (known_keys, recipient_sets, permission_warnings) = match loaded {
+        Some(loaded) => (
+            loaded.protected.known_keys,
+            loaded.protected.recipient_sets,
+            loaded.warnings,
+        ),
+        None => (Vec::new(), Vec::new(), Vec::new()),
     };
     let self_trust = load_self_trust(options, self_member_handle, derive_self_sig_x)?;
 
     Ok(TrustContext {
         known_keys,
+        recipient_sets,
         active_members_by_kid,
         self_trust,
         strict_key_checking,
@@ -309,8 +305,8 @@ fn load_active_member_index_for_read_trust(
         });
     }
 
-    let mut active_members_by_kid = BTreeMap::new();
     let mut warnings = Vec::new();
+    let mut verified_members = Vec::with_capacity(active_members.len());
     for member in active_members {
         let verified = verify_public_key_for_verification_context(
             &member,
@@ -318,17 +314,9 @@ fn load_active_member_index_for_read_trust(
             WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
         )?;
         warnings.extend(verified.warnings);
-        let verified_member = verified.verified_public_key.document().clone();
-        let kid = verified_member.protected.kid.clone();
-        if active_members_by_kid
-            .insert(kid.clone(), verified_member)
-            .is_some()
-        {
-            return Err(crate::Error::Config {
-                message: format!("Ambiguous key: kid '{}' found in multiple members", kid),
-            });
-        }
+        verified_members.push(verified.verified_public_key.document().clone());
     }
+    let active_members_by_kid = build_active_members_by_kid(&verified_members)?;
 
     Ok(VerifiedActiveMemberIndex {
         active_members_by_kid,

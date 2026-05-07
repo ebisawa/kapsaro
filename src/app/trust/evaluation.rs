@@ -6,25 +6,31 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::enforcement::{
-    build_signer_identity, enforce_signer_trust, SignerTrustOutcome,
+    build_signer_identity, enforce_artifact_recipient_set_trust, enforce_signer_trust,
+    evaluate_read_artifact_recipient_keys, ArtifactRecipientTrustOutcome, RecipientTrustOutcome,
+    SignerTrustOutcome,
 };
 use crate::app::trust::policy::{CommandCapability, ReadTrustPolicy, TrustPolicy};
 use crate::app::trust::snapshot::{load_read_trust_context, TrustContext};
 use crate::feature::trust::judgment::judge_signer_trust_with_additional;
 use crate::feature::trust::judgment::AdditionalKnownKeyCache;
+use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::verification::SignatureVerificationProof;
 use crate::Result;
 
-pub(crate) struct ReadSignerTrustPlan {
-    pub(crate) outcome: SignerTrustOutcome,
+pub(crate) struct ReadArtifactTrustPlan {
+    pub(crate) signer_outcome: SignerTrustOutcome,
+    pub(crate) recipient_outcome: RecipientTrustOutcome,
     pub(crate) warnings: Vec<String>,
 }
 
-pub(crate) fn evaluate_read_signer_trust<P>(
+pub(crate) fn evaluate_read_artifact_trust<P>(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     proof: &SignatureVerificationProof,
-) -> Result<ReadSignerTrustPlan>
+    current_recipient_set: &ArtifactRecipientSet,
+    current_recipients: &[String],
+) -> Result<ReadArtifactTrustPlan>
 where
     P: ReadTrustPolicy,
 {
@@ -46,10 +52,16 @@ where
         options.verbose,
     )?;
     let trust_ctx = &loaded.trust_ctx;
-    let outcome = evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, &[])?;
-    Ok(ReadSignerTrustPlan {
-        outcome,
-        warnings: loaded.warnings,
+    let signer_outcome =
+        evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, current_recipients)?;
+    let recipient_trust =
+        evaluate_read_artifact_recipient_keys(trust_ctx, &proof.kid, current_recipient_set)?;
+    let mut warnings = loaded.warnings;
+    warnings.extend(recipient_trust.warnings);
+    Ok(ReadArtifactTrustPlan {
+        signer_outcome,
+        recipient_outcome: recipient_trust.outcome,
+        warnings,
     })
 }
 
@@ -81,6 +93,15 @@ pub(crate) fn evaluate_signer_trust_with_proof(
         capability,
         current_recipients,
     )
+}
+
+pub(crate) fn evaluate_output_recipient_set_trust(
+    trust_ctx: &TrustContext,
+    signer_kid: &str,
+    recipient_set: &ArtifactRecipientSet,
+    capability: CommandCapability,
+) -> Result<ArtifactRecipientTrustOutcome> {
+    enforce_artifact_recipient_set_trust(trust_ctx, signer_kid, recipient_set, capability)
 }
 
 pub(crate) fn enforce_policy_strict_key_checking<P>(

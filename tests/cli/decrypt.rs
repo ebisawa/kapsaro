@@ -6,8 +6,9 @@
 //! Tests the decrypt command with CommonOptions, member_handle resolution, and file-enc format
 
 use crate::cli::common::{
-    cmd, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE,
-    DAVE_MEMBER_HANDLE, EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE,
+    BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE, EVE_MEMBER_HANDLE,
+    FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use predicates::prelude::*;
@@ -489,19 +490,14 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
     let decrypted_file = home_dir.path().join("decrypted.txt");
 
     // encrypt で暗号化
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     assert!(encrypted_file.exists(), "Encrypted file should exist");
 
@@ -563,20 +559,18 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
     let encrypted_file = home_dir.path().join("expiry-secret.txt.encrypted");
     let decrypted_file = home_dir.path().join("expiry-decrypted.txt");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Warning: Private key expires in"));
+    let output = encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
+    assert!(
+        output.contains("Warning: Private key expires in"),
+        "{output}"
+    );
 
     cmd()
         .arg("decrypt")
@@ -611,19 +605,14 @@ fn test_decrypt_file_with_stdout_writes_bytes_to_stdout() {
     let encrypted_file = home_dir.path().join("stdout-secret.txt.encrypted");
     fs::write(&input_file, plaintext).unwrap();
 
-    cmd()
-        .arg("encrypt")
-        .arg(&input_file)
-        .arg("--out")
-        .arg(&encrypted_file)
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let assert = cmd()
         .arg("decrypt")
@@ -651,19 +640,14 @@ fn test_decrypt_stdin_with_out_writes_decrypted_file() {
     let decrypted_file = home_dir.path().join("stdin-out-secret.txt.decrypted");
     fs::write(&input_file, plaintext).unwrap();
 
-    cmd()
-        .arg("encrypt")
-        .arg(&input_file)
-        .arg("--out")
-        .arg(&encrypted_file)
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let encrypted = fs::read_to_string(&encrypted_file).unwrap();
 
@@ -694,19 +678,14 @@ fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
     let encrypted_file = home_dir.path().join("stdin-stdout-secret.txt.encrypted");
     fs::write(&input_file, plaintext).unwrap();
 
-    cmd()
-        .arg("encrypt")
-        .arg(&input_file)
-        .arg("--out")
-        .arg(&encrypted_file)
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let encrypted = fs::read_to_string(&encrypted_file).unwrap();
 
@@ -736,19 +715,14 @@ fn test_decrypt_file_requires_out_or_stdout() {
     let encrypted_file = home_dir.path().join("needs-output.txt.encrypted");
     fs::write(&input_file, plaintext).unwrap();
 
-    cmd()
-        .arg("encrypt")
-        .arg(&input_file)
-        .arg("--out")
-        .arg(&encrypted_file)
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     cmd()
         .arg("decrypt")
@@ -876,20 +850,18 @@ fn test_decrypt_stdin_rejects_unknown_format() {
 fn test_decrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
     let plaintext = vec![0x00, 0x01, 0x02, b'a', b'\n', 0xff];
+    let input_file = home_dir.path().join("stdin-stdout-binary.bin");
+    let encrypted_file = home_dir.path().join("stdin-stdout-binary.encrypted");
+    fs::write(&input_file, &plaintext).unwrap();
 
-    let encrypt = cmd()
-        .arg("encrypt")
-        .arg("--stdin")
-        .arg("--stdout")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin(plaintext.clone())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     let assert = cmd()
         .arg("decrypt")
@@ -901,7 +873,7 @@ fn test_decrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin(encrypt.get_output().stdout.clone())
+        .write_stdin(fs::read(&encrypted_file).unwrap())
         .assert()
         .success();
 

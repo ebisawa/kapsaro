@@ -26,6 +26,7 @@ impl TrustStoreVerificationProof {
 /// - Cryptographic signature correctness
 /// - local keystore public key validity and kid/owner consistency
 /// - known_keys uniqueness constraints
+/// - recipient_sets integrity constraints
 #[derive(Debug, Clone)]
 pub struct VerifiedTrustStore {
     document: TrustStoreDocument,

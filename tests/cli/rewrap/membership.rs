@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::cli::common::{run_command_with_pty, secretenv_bin};
+use crate::cli::common::{
+    encrypt_file_with_member_set_review, run_command_with_pty, secretenv_bin,
+};
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
@@ -116,9 +118,7 @@ fn test_rewrap_adds_new_member() {
         "BOB should not be in wrap before rewrap"
     );
 
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    let result = rewrap::run(rewrap_args);
-    assert!(result.is_ok(), "Rewrap should succeed: {:?}", result.err());
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
 
     let recipient_handles_after = load_kv_recipient_handles(&kv_path);
     assert!(
@@ -166,13 +166,7 @@ fn test_rewrap_non_interactive_skips_prompt_for_known_incoming_kid() {
         &[("KEY", "value")],
     );
 
-    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE));
-
-    assert!(
-        result.is_ok(),
-        "Rewrap should succeed without TOFU prompt for known incoming kid: {:?}",
-        result.err()
-    );
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
     let recipient_handles_after = load_kv_recipient_handles(&kv_path);
     assert!(recipient_handles_after.contains(&BOB_MEMBER_HANDLE.to_string()));
 }
@@ -220,13 +214,7 @@ fn test_rewrap_non_interactive_skips_online_verify_for_known_incoming_github_bin
         &[("KEY", "value")],
     );
 
-    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE));
-
-    assert!(
-        result.is_ok(),
-        "Rewrap should succeed without online verify for known incoming kid: {:?}",
-        result.err()
-    );
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
     let recipient_handles_after = load_kv_recipient_handles(&kv_path);
     assert!(recipient_handles_after.contains(&BOB_MEMBER_HANDLE.to_string()));
 }
@@ -270,15 +258,7 @@ fn test_rewrap_non_interactive_auto_accepts_self_rotation() {
     )
     .unwrap();
 
-    tty::set_interactive_override(Some(false));
-    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE));
-    tty::set_interactive_override(None);
-
-    assert!(
-        result.is_ok(),
-        "Rewrap should auto-accept self rotation in non-interactive mode: {:?}",
-        result.err()
-    );
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
     let after = load_kv_recipient_handles(&kv_path);
     assert_eq!(after, vec![ALICE_MEMBER_HANDLE.to_string()]);
 }
@@ -305,6 +285,12 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
         &temp_dir.path().join("keys"),
     )
     .unwrap();
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
 
     let bob_active = workspace_dir
         .join("members")
@@ -315,12 +301,6 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
         .join("incoming")
         .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
-    setup_trust_store_for_workspace(
-        temp_dir.path(),
-        &workspace_dir,
-        ALICE_MEMBER_HANDLE,
-        &key_ctx,
-    );
 
     let kv_path = save_kv_file(
         &workspace_dir,
@@ -345,7 +325,7 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
         .env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen")
         .env_remove("CI");
 
-    let result = run_command_with_pty(&mut command, "Accept?", b"y\r");
+    let result = run_command_with_pty(&mut command, "Trust this member set", b"y\r");
 
     assert!(
         result.status.success(),
@@ -353,8 +333,9 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
         result.output
     );
     assert!(
-        result.output.contains("Accept?"),
-        "interactive output should include Accept prompt\n{}",
+        result.output.contains("Secret sharing review")
+            && result.output.contains("Trust this member set"),
+        "interactive output should include member set prompt\n{}",
         result.output
     );
     assert!(
@@ -458,9 +439,7 @@ fn test_rewrap_removes_member_kv_enc() {
     )
     .unwrap();
 
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    let result = rewrap::run(rewrap_args);
-    assert!(result.is_ok(), "Rewrap should succeed: {:?}", result.err());
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
 
     let recipient_handles_after = load_kv_recipient_handles(&kv_path);
     assert!(
@@ -502,15 +481,15 @@ fn test_rewrap_removes_member_file_enc() {
     let input_path = workspace_dir.join("test_file_remove.bin");
     fs::write(&input_path, b"binary content").unwrap();
     let encrypted_path = workspace_dir.join("secrets").join("test_file_remove.json");
-    let encrypt_args = encrypt::EncryptArgs {
-        common: common_opts.clone(),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        out: Some(encrypted_path.clone()),
-        stdout: false,
-        stdin: false,
-        input: Some(input_path),
-    };
-    encrypt::run(encrypt_args).unwrap();
+    let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
+    encrypt_file_with_member_set_review(
+        &workspace_dir,
+        temp_dir.path(),
+        &ssh_identity,
+        &input_path,
+        &encrypted_path,
+        ALICE_MEMBER_HANDLE,
+    );
     assert!(encrypted_path.exists(), "Encrypted file should exist");
 
     fs::remove_file(
@@ -520,9 +499,7 @@ fn test_rewrap_removes_member_file_enc() {
     )
     .unwrap();
 
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    let result = rewrap::run(rewrap_args);
-    assert!(result.is_ok(), "Rewrap should succeed: {:?}", result.err());
+    run_rewrap_with_member_set_review(&common_opts, ALICE_MEMBER_HANDLE);
 
     let content = fs::read_to_string(&encrypted_path).unwrap();
     let doc: serde_json::Value = serde_json::from_str(&content).unwrap();

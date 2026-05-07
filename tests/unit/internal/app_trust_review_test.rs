@@ -5,13 +5,13 @@ use super::{
     enforce_read_trust_member_eligibility, execute_read_with_signer_trust,
     execute_write_with_recipient_trust, review_recipient_trust_with_confirmation,
     review_recipient_trust_with_confirmation_verifier,
-    review_rewrap_signer_requirements_with_confirmation,
-    review_rewrap_signer_requirements_with_confirmation_verifier,
+    review_rewrap_input_trust_requirements_with_confirmation,
+    review_rewrap_input_trust_requirements_with_confirmation_verifier,
     review_signer_trust_with_confirmation, review_signer_trust_with_confirmation_verifier,
     ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext,
     WriteRecipientTrustReviewPlan,
 };
-use crate::app::rewrap::types::RewrapSignerRequirement;
+use crate::app::rewrap::types::RewrapInputTrustRequirement;
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};
 use crate::app_test_utils::{build_test_command_options, build_test_execution_context};
@@ -23,7 +23,7 @@ use crate::model::public_key::{
 use crate::test_utils::{
     kid as test_kid, member_handle as test_member_handle, setup_test_keystore_from_fixtures,
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn build_candidate(member_handle: &str, kid: &str) -> TrustApprovalCandidate {
     build_candidate_with_binding(member_handle, kid, false)
@@ -136,6 +136,7 @@ fn test_execute_read_with_signer_trust_saves_approval_before_execute() {
         },
         ReadSignerTrustReviewPlan {
             trust_outcome: &outcome,
+            recipient_trust_outcome: &RecipientTrustOutcome::Accepted,
             labels: SignerTrustLabels {
                 context: "decrypt signer",
                 subject: "signer",
@@ -145,6 +146,7 @@ fn test_execute_read_with_signer_trust_saves_approval_before_execute() {
         |_warnings| {},
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(false),
+        |candidates, _context_label| Ok(candidates.to_vec()),
         || {
             executed = true;
             Ok(())
@@ -155,6 +157,150 @@ fn test_execute_read_with_signer_trust_saves_approval_before_execute() {
     assert!(error
         .format_user_message()
         .contains("must not be stored in known_keys"));
+    assert!(!executed);
+}
+
+#[test]
+fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
+    let signer_outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone());
+    let recipient_outcome = RecipientTrustOutcome::NeedsManualApproval(vec![candidate.clone()]);
+    let mut reviewed_count = 0usize;
+
+    execute_read_with_signer_trust(
+        TrustExecutionContext {
+            options: &options,
+            execution: &execution_context,
+            warnings: &[],
+        },
+        ReadSignerTrustReviewPlan {
+            trust_outcome: &signer_outcome,
+            recipient_trust_outcome: &recipient_outcome,
+            labels: SignerTrustLabels {
+                context: "decrypt keys",
+                subject: "key",
+            },
+            allow_non_member: true,
+        },
+        |_warnings| {},
+        |_candidate, _context_label| panic!("signer-specific approval should not be used"),
+        |_candidate, _context_label, _recipients| Ok(false),
+        |candidates, _context_label| {
+            reviewed_count = candidates.len();
+            Ok(candidates.to_vec())
+        },
+        || Ok(()),
+    )
+    .unwrap();
+
+    assert_eq!(reviewed_count, 1);
+}
+
+#[test]
+fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_acceptance() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let signer = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
+    let recipient = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
+    let signer_outcome = SignerTrustOutcome::NeedsNonMemberAcceptance {
+        candidate: signer,
+        current_recipients: vec!["alice@example.com".to_string()],
+    };
+    let recipient_outcome = RecipientTrustOutcome::NeedsManualApproval(vec![recipient.clone()]);
+    let mut accepted_non_member = false;
+    let mut reviewed_recipient = None;
+    let mut executed = false;
+
+    execute_read_with_signer_trust(
+        TrustExecutionContext {
+            options: &options,
+            execution: &execution_context,
+            warnings: &[],
+        },
+        ReadSignerTrustReviewPlan {
+            trust_outcome: &signer_outcome,
+            recipient_trust_outcome: &recipient_outcome,
+            labels: SignerTrustLabels {
+                context: "decrypt keys",
+                subject: "key",
+            },
+            allow_non_member: true,
+        },
+        |_warnings| {},
+        |_candidate, _context_label| panic!("known-key signer approval should not be used"),
+        |_candidate, _context_label, _recipients| {
+            accepted_non_member = true;
+            Ok(true)
+        },
+        |candidates, _context_label| {
+            reviewed_recipient = Some((
+                candidates[0].member_handle.clone(),
+                candidates[0].kid.clone(),
+            ));
+            Ok(candidates.to_vec())
+        },
+        || {
+            executed = true;
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    assert!(accepted_non_member);
+    assert_eq!(
+        reviewed_recipient,
+        Some((recipient.member_handle.clone(), recipient.kid.clone()))
+    );
+    assert!(executed);
+}
+
+#[test]
+fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_member_acceptance() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let signer = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
+    let recipient = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
+    let signer_outcome = SignerTrustOutcome::NeedsNonMemberAcceptance {
+        candidate: signer,
+        current_recipients: vec!["alice@example.com".to_string()],
+    };
+    let recipient_outcome = RecipientTrustOutcome::NeedsManualApproval(vec![recipient]);
+    let mut executed = false;
+
+    let result = execute_read_with_signer_trust(
+        TrustExecutionContext {
+            options: &options,
+            execution: &execution_context,
+            warnings: &[],
+        },
+        ReadSignerTrustReviewPlan {
+            trust_outcome: &signer_outcome,
+            recipient_trust_outcome: &recipient_outcome,
+            labels: SignerTrustLabels {
+                context: "decrypt keys",
+                subject: "key",
+            },
+            allow_non_member: true,
+        },
+        |_warnings| {},
+        |_candidate, _context_label| panic!("known-key signer approval should not be used"),
+        |_candidate, _context_label, _recipients| Ok(true),
+        |_candidates, _context_label| Ok(Vec::new()),
+        || {
+            executed = true;
+            Ok(())
+        },
+    );
+
+    let error = result.unwrap_err();
+    assert!(error
+        .format_user_message()
+        .contains("one or more recipients"));
     assert!(!executed);
 }
 
@@ -387,66 +533,64 @@ fn test_review_recipient_trust_with_confirmation_collects_all_approved_candidate
 }
 
 #[test]
-fn test_review_rewrap_signer_requirements_with_confirmation_prompts_non_member_per_artifact() {
+fn test_review_rewrap_input_trust_requirements_with_confirmation_prompts_non_member_per_artifact() {
     let candidate = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
     let requirements = vec![
-        RewrapSignerRequirement {
+        RewrapInputTrustRequirement {
             file_path: PathBuf::from("secrets/one.json"),
-            outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
+            signer_outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
                 candidate: candidate.clone(),
                 current_recipients: vec!["alice@example.com".to_string()],
             },
+            recipient_outcome: RecipientTrustOutcome::Accepted,
         },
-        RewrapSignerRequirement {
+        RewrapInputTrustRequirement {
             file_path: PathBuf::from("secrets/two.json"),
-            outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
+            signer_outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
                 candidate,
                 current_recipients: vec!["alice@example.com".to_string()],
             },
+            recipient_outcome: RecipientTrustOutcome::Accepted,
         },
     ];
-    let mut prompted_paths = Vec::new();
+    let mut prompt_count = 0usize;
 
-    let approvals = review_rewrap_signer_requirements_with_confirmation(
+    let approvals = review_rewrap_input_trust_requirements_with_confirmation(
         &requirements,
         "rewrap signer",
         "signer trust",
-        |_candidate, _context_label, _path: &Path| Ok(true),
-        |_candidate, _context_label, _recipients, path: &Path| {
-            prompted_paths.push(path.to_path_buf());
+        |_candidate, _context_label| Ok(true),
+        |_candidate, _context_label, _recipients| {
+            prompt_count += 1;
             Ok(true)
         },
+        |_candidates, _context_label| Ok(Vec::new()),
     )
     .unwrap();
 
     assert!(approvals.is_empty());
-    assert_eq!(
-        prompted_paths,
-        vec![
-            PathBuf::from("secrets/one.json"),
-            PathBuf::from("secrets/two.json"),
-        ]
-    );
+    assert_eq!(prompt_count, 2);
 }
 
 #[test]
-fn test_review_rewrap_signer_requirements_with_confirmation_allows_non_member_after_failed_online_verification(
+fn test_review_rewrap_input_trust_requirements_with_confirmation_allows_non_member_after_failed_online_verification(
 ) {
     let candidate = build_candidate_with_binding(
         "mallory@example.com",
         "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0",
         true,
     );
-    let requirements = vec![RewrapSignerRequirement {
+    let requirements = vec![RewrapInputTrustRequirement {
         file_path: PathBuf::from("secrets/one.json"),
-        outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
+        signer_outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
             candidate: candidate.clone(),
             current_recipients: vec!["alice@example.com".to_string()],
         },
+        recipient_outcome: RecipientTrustOutcome::Accepted,
     }];
     let mut warned = None;
 
-    let approvals = review_rewrap_signer_requirements_with_confirmation_verifier(
+    let approvals = review_rewrap_input_trust_requirements_with_confirmation_verifier(
         &requirements,
         "rewrap signer",
         "signer trust",
@@ -456,11 +600,12 @@ fn test_review_rewrap_signer_requirements_with_confirmation_allows_non_member_af
                 "online verification failed",
             ))
         },
-        |_candidate, _context_label, _path: &Path| Ok(true),
-        |candidate, _context_label, _recipients, _path: &Path| {
+        |_candidate, _context_label| Ok(true),
+        |candidate, _context_label, _recipients| {
             warned = candidate.online_verification_message.clone();
             Ok(true)
         },
+        |_candidates, _context_label| Ok(Vec::new()),
     )
     .unwrap();
 
@@ -469,35 +614,38 @@ fn test_review_rewrap_signer_requirements_with_confirmation_allows_non_member_af
 }
 
 #[test]
-fn test_review_rewrap_signer_requirements_with_confirmation_dedupes_known_key_approvals() {
+fn test_review_rewrap_input_trust_requirements_with_confirmation_dedupes_known_key_approvals() {
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let requirements = vec![
-        RewrapSignerRequirement {
+        RewrapInputTrustRequirement {
             file_path: PathBuf::from("secrets/one.json"),
-            outcome: SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
+            signer_outcome: SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
+            recipient_outcome: RecipientTrustOutcome::Accepted,
         },
-        RewrapSignerRequirement {
+        RewrapInputTrustRequirement {
             file_path: PathBuf::from("secrets/two.json"),
-            outcome: SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
+            signer_outcome: SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
+            recipient_outcome: RecipientTrustOutcome::Accepted,
         },
     ];
-    let mut prompted_paths = Vec::new();
+    let mut prompt_count = 0usize;
 
-    let approvals = review_rewrap_signer_requirements_with_confirmation(
+    let approvals = review_rewrap_input_trust_requirements_with_confirmation(
         &requirements,
         "rewrap signer",
         "signer trust",
-        |_candidate, _context_label, path: &Path| {
-            prompted_paths.push(path.to_path_buf());
+        |_candidate, _context_label| {
+            prompt_count += 1;
             Ok(true)
         },
-        |_candidate, _context_label, _recipients, _path: &Path| Ok(false),
+        |_candidate, _context_label, _recipients| Ok(false),
+        |_candidates, _context_label| Ok(Vec::new()),
     )
     .unwrap();
 
     assert_eq!(approvals.len(), 1);
     assert_manual_review_approval(&approvals[0], &candidate.member_handle, &candidate.kid);
-    assert_eq!(prompted_paths, vec![PathBuf::from("secrets/one.json")]);
+    assert_eq!(prompt_count, 1);
 }
 
 #[test]

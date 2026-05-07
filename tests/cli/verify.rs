@@ -6,7 +6,10 @@
 //! Verifies that the inspect command correctly displays signature verification
 //! results for file-enc and kv-enc formats, and properly detects tampered files.
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, encrypt_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
+    TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -21,19 +24,14 @@ fn test_verify_file_enc_valid_signature() {
 
     let encrypted_file = home_dir.path().join("verify_test.bin.encrypted");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     assert!(encrypted_file.exists(), "Encrypted file should exist");
 
@@ -56,18 +54,15 @@ fn test_verify_kv_enc_valid_signature() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     // Set a KV value to create an encrypted KV file
-    cmd()
-        .arg("set")
-        .arg("VERIFY_KEY")
-        .arg("verify_value")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "VERIFY_KEY",
+        "verify_value",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
 
     let encrypted_kv = workspace_dir.path().join("secrets").join("default.kvenc");
     assert!(encrypted_kv.exists(), "Encrypted KV file should exist");
@@ -96,19 +91,14 @@ fn test_verify_file_enc_tampered_fails() {
 
     let encrypted_file = home_dir.path().join("tamper_test.bin.encrypted");
 
-    cmd()
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(encrypted_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
 
     // Read the encrypted file, parse JSON, tamper with the signature
     let content = fs::read_to_string(&encrypted_file).unwrap();

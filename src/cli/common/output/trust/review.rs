@@ -3,8 +3,6 @@
 
 //! Shared trust review formatters.
 
-use console::Style;
-
 use crate::app::rewrap::promotion::PromotionReviewFailure;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning_line;
@@ -13,47 +11,15 @@ use crate::support::kid::format_kid_display;
 pub(crate) fn format_candidate_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
     let kid_display =
         format_kid_display(&candidate.kid).unwrap_or_else(|_| candidate.kid.to_string());
-    let mut lines = vec![format!("  kid: {}", kid_display)];
-    if let Some(fingerprint) = &candidate.fingerprint {
-        lines.push(format!("  attestation fingerprint: {}", fingerprint));
-    }
-    if let Some(id) = candidate.github_id {
-        let mut line = format!("  GitHub account id: {}", id);
-        if let Some(login) = &candidate.github_login {
-            line.push_str(&format!(" ({})", login));
-        }
-        if candidate.verified_github.is_some() {
-            let verified_mark = Style::new().green().apply_to("\u{2713} verified");
-            line.push_str(&format!(" {}", verified_mark));
-        }
-        lines.push(line);
-    } else if candidate.github_binding_configured {
-        let warning = if candidate.online_verification_attempted {
-            format!(
-                "  Warning: GitHub binding claim is present, but online verification did not succeed: {}",
-                candidate
-                    .online_verification_message
-                    .as_deref()
-                    .unwrap_or("online verification failed")
-            )
-        } else {
-            "  Warning: GitHub binding claim is present, but this command did not verify it online."
-                .to_string()
-        };
-        lines.push(warning);
-    } else {
-        lines.push(
-            "  Warning: No GitHub binding configured; online verification could not be performed."
-                .to_string(),
-        );
-    }
-    if candidate.requires_out_of_band_verification {
-        lines.push(
-            "  Warning: This key is not yet trusted. Verify the above details with the key owner through a separate channel before approving."
-                .to_string(),
-        );
-    }
-    lines
+    vec![
+        format!("  member handle      {}", candidate.member_handle),
+        format!("  key id             {}", kid_display),
+        format!(
+            "  SSH fingerprint    {}",
+            candidate.fingerprint.as_deref().unwrap_or("unknown")
+        ),
+        format!("  GitHub account     {}", format_github_account(candidate)),
+    ]
 }
 
 pub(crate) fn print_candidate_review(candidate: &TrustApprovalCandidate) {
@@ -77,6 +43,32 @@ pub(crate) fn print_failed_promotion_reviews(failed_candidates: &[PromotionRevie
 
 fn is_warning_line(line: &str) -> bool {
     line.trim_start().starts_with("Warning:")
+}
+
+fn format_github_account(candidate: &TrustApprovalCandidate) -> String {
+    if candidate.verified_github.is_some() {
+        return format_verified_github_account(candidate);
+    }
+    if candidate.github_binding_configured {
+        return format!(
+            "not verified ({})",
+            candidate
+                .online_verification_message
+                .as_deref()
+                .unwrap_or("online verification was not completed")
+        );
+    }
+    "not configured".to_string()
+}
+
+fn format_verified_github_account(candidate: &TrustApprovalCandidate) -> String {
+    let Some(id) = candidate.github_id else {
+        return "verified".to_string();
+    };
+    match &candidate.github_login {
+        Some(login) => format!("{} (id: {}, verified)", login, id),
+        None => format!("id: {} (verified)", id),
+    }
 }
 
 #[cfg(test)]

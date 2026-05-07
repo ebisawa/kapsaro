@@ -61,6 +61,33 @@ mod unix_tests {
     }
 
     #[test]
+    fn test_load_private_key_rejects_insecure_secret_home_permissions() {
+        let temp_dir = TempDir::new().unwrap();
+        let keystore_root = temp_dir.path().join("keys");
+        let member_handle = "test@example.com";
+        let kid = "01ABCDEFGHIJKLMNOPQRSTUVWX";
+        let key_dir = keystore_root.join(member_handle).join(kid);
+        fs::create_dir_all(&key_dir).unwrap();
+        fs::set_permissions(temp_dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&keystore_root, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::set_permissions(
+            keystore_root.join(member_handle),
+            fs::Permissions::from_mode(0o700),
+        )
+        .unwrap();
+        fs::set_permissions(&key_dir, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let private_path = key_dir.join("private.json");
+        fs::write(&private_path, r#"{"dummy": true}"#).unwrap();
+        fs::set_permissions(&private_path, fs::Permissions::from_mode(0o600)).unwrap();
+
+        let err = load_private_key(&keystore_root, member_handle, kid).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Insecure permissions"));
+        assert!(msg.contains("expected 0700"));
+    }
+
+    #[test]
     fn test_load_private_key_accepts_secure_permissions() {
         let temp_dir = TempDir::new().unwrap();
         let member_handle = "test@example.com";

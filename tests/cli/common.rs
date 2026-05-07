@@ -19,7 +19,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::{Command as StdCommand, ExitStatus, Stdio};
 #[cfg(unix)]
@@ -53,6 +53,13 @@ pub fn secretenv_bin() -> PathBuf {
         std::env::var_os("CARGO_BIN_EXE_secretenv")
             .expect("CARGO_BIN_EXE_secretenv must be set for integration tests"),
     )
+}
+
+#[cfg(unix)]
+pub fn secretenv_std_cmd() -> StdCommand {
+    let mut command = StdCommand::new(secretenv_bin());
+    command.env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
+    command
 }
 
 #[cfg(unix)]
@@ -100,6 +107,271 @@ pub fn run_command_with_pty(
     }
 }
 
+#[cfg(unix)]
+fn run_command_with_optional_prompt_pty(
+    command: &mut StdCommand,
+    prompt: &str,
+    input: &[u8],
+) -> PtyCommandResult {
+    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
+    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
+
+    let stdin = slave
+        .try_clone()
+        .expect("PTY slave stdin clone must succeed");
+    let stdout = slave
+        .try_clone()
+        .expect("PTY slave stdout clone must succeed");
+    command.stdin(Stdio::from(stdin));
+    command.stdout(Stdio::from(stdout));
+    command.stderr(Stdio::from(slave));
+
+    let mut child = command.spawn().expect("interactive CLI child must spawn");
+    let mut transcript = Vec::new();
+
+    if let Some(status) = wait_for_prompt_or_exit(
+        &mut child,
+        &mut master,
+        &mut transcript,
+        prompt,
+        Duration::from_secs(10),
+    ) {
+        load_available(&mut master, &mut transcript);
+        return PtyCommandResult {
+            status,
+            output: String::from_utf8_lossy(&transcript).into_owned(),
+        };
+    }
+    master
+        .write_all(input)
+        .expect("PTY input write must succeed");
+
+    let status = wait_for_exit(
+        &mut child,
+        &mut master,
+        &mut transcript,
+        Duration::from_secs(10),
+    );
+    PtyCommandResult {
+        status,
+        output: String::from_utf8_lossy(&transcript).into_owned(),
+    }
+}
+
+fn run_command_with_optional_prompt_pty_after_input(
+    command: &mut StdCommand,
+    initial_input: &[u8],
+    prompt: &str,
+    prompt_input: &[u8],
+) -> PtyCommandResult {
+    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
+    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
+
+    let stdin = slave
+        .try_clone()
+        .expect("PTY slave stdin clone must succeed");
+    let stdout = slave
+        .try_clone()
+        .expect("PTY slave stdout clone must succeed");
+    command.stdin(Stdio::from(stdin));
+    command.stdout(Stdio::from(stdout));
+    command.stderr(Stdio::from(slave));
+
+    let mut child = command.spawn().expect("interactive CLI child must spawn");
+    let mut transcript = Vec::new();
+
+    master
+        .write_all(initial_input)
+        .expect("PTY initial input write must succeed");
+    if let Some(status) = wait_for_prompt_or_exit(
+        &mut child,
+        &mut master,
+        &mut transcript,
+        prompt,
+        Duration::from_secs(10),
+    ) {
+        load_available(&mut master, &mut transcript);
+        return PtyCommandResult {
+            status,
+            output: String::from_utf8_lossy(&transcript).into_owned(),
+        };
+    }
+    master
+        .write_all(prompt_input)
+        .expect("PTY prompt input write must succeed");
+
+    let status = wait_for_exit(
+        &mut child,
+        &mut master,
+        &mut transcript,
+        Duration::from_secs(10),
+    );
+    PtyCommandResult {
+        status,
+        output: String::from_utf8_lossy(&transcript).into_owned(),
+    }
+}
+
+#[cfg(unix)]
+pub fn assert_member_set_review_success(command: &mut StdCommand) -> String {
+    let result = run_command_with_optional_prompt_pty(command, "member set", b"y\r");
+    assert!(
+        result.status.success(),
+        "command failed while accepting or skipping member set review:\n{}",
+        result.output
+    );
+    result.output
+}
+
+#[cfg(unix)]
+pub fn assert_stdin_member_set_review_success(
+    command: &mut StdCommand,
+    stdin_content: &[u8],
+) -> String {
+    let mut input = stdin_content.to_vec();
+    input.push(b'\n');
+    input.push(0x04);
+    let result =
+        run_command_with_optional_prompt_pty_after_input(command, &input, "member set", b"y\r");
+    assert!(
+        result.status.success(),
+        "command failed while accepting or skipping stdin member set review:\n{}",
+        result.output
+    );
+    result.output
+}
+
+#[cfg(unix)]
+pub fn set_value_with_member_set_review(
+    workspace: &Path,
+    home: &Path,
+    ssh_identity: &Path,
+    key: &str,
+    value: &str,
+    member_handle: Option<&str>,
+    name: Option<&str>,
+) {
+    let mut command = secretenv_std_cmd();
+    command
+        .arg("set")
+        .arg(key)
+        .arg(value)
+        .arg("--workspace")
+        .arg(workspace)
+        .env("SECRETENV_HOME", home)
+        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+    if let Some(member_handle) = member_handle {
+        command.arg("--member-handle").arg(member_handle);
+    }
+    if let Some(name) = name {
+        command.arg("--name").arg(name);
+    }
+    assert_member_set_review_success(&mut command);
+}
+
+#[cfg(unix)]
+pub fn set_stdin_with_member_set_review(
+    workspace: &Path,
+    home: &Path,
+    ssh_identity: &Path,
+    key: &str,
+    value: &[u8],
+    member_handle: Option<&str>,
+    name: Option<&str>,
+) {
+    let mut command = secretenv_std_cmd();
+    command
+        .arg("set")
+        .arg(key)
+        .arg("--stdin")
+        .arg("--workspace")
+        .arg(workspace)
+        .env("SECRETENV_HOME", home)
+        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+    if let Some(member_handle) = member_handle {
+        command.arg("--member-handle").arg(member_handle);
+    }
+    if let Some(name) = name {
+        command.arg("--name").arg(name);
+    }
+    assert_stdin_member_set_review_success(&mut command, value);
+}
+
+#[cfg(unix)]
+pub fn encrypt_file_with_member_set_review(
+    workspace: &Path,
+    home: &Path,
+    ssh_identity: &Path,
+    input: &Path,
+    output: &Path,
+    member_handle: &str,
+) -> String {
+    let mut command = secretenv_std_cmd();
+    command
+        .arg("encrypt")
+        .arg(input)
+        .arg("--out")
+        .arg(output)
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--workspace")
+        .arg(workspace)
+        .env("SECRETENV_HOME", home)
+        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+    assert_member_set_review_success(&mut command)
+}
+
+#[cfg(unix)]
+pub fn encrypt_stdin_with_member_set_review(
+    workspace: &Path,
+    home: &Path,
+    ssh_identity: &Path,
+    input: &[u8],
+    output: Option<&Path>,
+    stdout: bool,
+    member_handle: &str,
+) -> String {
+    let mut command = secretenv_std_cmd();
+    command
+        .arg("encrypt")
+        .arg("--stdin")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--workspace")
+        .arg(workspace)
+        .env("SECRETENV_HOME", home)
+        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+    if let Some(output) = output {
+        command.arg("--out").arg(output);
+    }
+    if stdout {
+        command.arg("--stdout");
+    }
+    assert_stdin_member_set_review_success(&mut command, input)
+}
+
+#[cfg(unix)]
+pub fn import_file_with_member_set_review(
+    workspace: &Path,
+    home: &Path,
+    ssh_identity: &Path,
+    input: &Path,
+    json: bool,
+) -> String {
+    let mut command = secretenv_std_cmd();
+    command
+        .arg("import")
+        .arg(input)
+        .arg("--workspace")
+        .arg(workspace)
+        .env("SECRETENV_HOME", home)
+        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+    if json {
+        command.arg("--json");
+    }
+    assert_member_set_review_success(&mut command)
+}
+
 // ============================================================================
 // Test Constants
 // ============================================================================
@@ -131,12 +403,28 @@ pub fn set_ssh_key_from_temp_dir(common_opts: &mut CommonOptions, temp_dir: &Tem
     common_opts.identity = Some(ssh_key_path);
 }
 
+pub fn make_secret_home() -> TempDir {
+    let home_dir = TempDir::new().unwrap();
+    set_secret_home_permissions(&home_dir);
+    home_dir
+}
+
+#[cfg(unix)]
+fn set_secret_home_permissions(home_dir: &TempDir) {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(home_dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+#[cfg(not(unix))]
+fn set_secret_home_permissions(_home_dir: &TempDir) {}
+
 /// Helper to create a workspace with initialized member.
 ///
 /// Returns: (workspace_dir, home_dir, ssh_temp, ssh_priv_path)
 pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     std::fs::create_dir_all(workspace_dir.path().join("members")).unwrap();
@@ -239,6 +527,36 @@ fn wait_for_prompt(
         if Instant::now() >= deadline {
             panic!(
                 "timed out waiting for prompt '{prompt}'\n{}",
+                String::from_utf8_lossy(transcript)
+            );
+        }
+
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(unix)]
+fn wait_for_prompt_or_exit(
+    child: &mut std::process::Child,
+    master: &mut File,
+    transcript: &mut Vec<u8>,
+    prompt: &str,
+    timeout: Duration,
+) -> Option<ExitStatus> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        load_available(master, transcript);
+        if String::from_utf8_lossy(transcript).contains(prompt) {
+            return None;
+        }
+
+        if let Some(status) = child.try_wait().expect("child status check must succeed") {
+            return Some(status);
+        }
+
+        if Instant::now() >= deadline {
+            panic!(
+                "timed out waiting for prompt '{prompt}' or command exit\n{}",
                 String::from_utf8_lossy(transcript)
             );
         }

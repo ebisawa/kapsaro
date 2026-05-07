@@ -23,7 +23,7 @@ use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, WriteTrustPol
 use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::ssh::resolve_ssh_context_optional;
 use crate::cli::common::trust::{
-    confirm_known_key_approval, confirm_non_member_acceptance, confirm_recipient_approvals,
+    confirm_non_member_acceptance, confirm_recipient_approvals, confirm_signer_key_approval,
 };
 use crate::cli::identity_prompt;
 use crate::cli::options::CommonOptions;
@@ -44,6 +44,7 @@ pub(crate) trait ReadCommandPlan {
     fn execution(&self) -> &ExecutionContext;
     fn warnings(&self) -> &[String];
     fn signer_trust(&self) -> &SignerTrustOutcome;
+    fn recipient_trust(&self) -> &RecipientTrustOutcome;
 }
 
 pub(crate) trait WriteCommandPlan {
@@ -137,6 +138,7 @@ where
         },
         ReadSignerTrustReviewPlan {
             trust_outcome: plan.signer_trust(),
+            recipient_trust_outcome: plan.recipient_trust(),
             labels: SignerTrustLabels {
                 context: labels.context,
                 subject: labels.subject,
@@ -144,8 +146,9 @@ where
             allow_non_member: labels.allow_non_member,
         },
         print_warnings,
-        confirm_known_key_approval,
+        confirm_signer_key_approval,
         confirm_non_member_acceptance,
+        confirm_recipient_approvals,
         execute,
     )
 }
@@ -175,7 +178,7 @@ where
             recipient_context_label: labels.recipient_context,
         },
         print_warnings,
-        confirm_known_key_approval,
+        confirm_signer_key_approval,
         confirm_non_member_acceptance,
         confirm_recipient_approvals,
         execute,
@@ -219,6 +222,10 @@ impl ReadCommandPlan for DecryptFileCommand {
     fn signer_trust(&self) -> &SignerTrustOutcome {
         &self.trust_outcome
     }
+
+    fn recipient_trust(&self) -> &RecipientTrustOutcome {
+        &self.recipient_trust_outcome
+    }
 }
 
 impl ReadCommandPlan for KvReadCommand {
@@ -232,6 +239,10 @@ impl ReadCommandPlan for KvReadCommand {
 
     fn signer_trust(&self) -> &SignerTrustOutcome {
         &self.trust_outcome
+    }
+
+    fn recipient_trust(&self) -> &RecipientTrustOutcome {
+        &self.recipient_trust_outcome
     }
 }
 

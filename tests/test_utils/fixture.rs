@@ -40,6 +40,12 @@ fn ensure_restricted_dir(path: &Path) {
     }
 }
 
+fn create_secret_home() -> TempDir {
+    let temp_dir = TempDir::new().unwrap();
+    ensure_restricted_dir(temp_dir.path());
+    temp_dir
+}
+
 fn build_shared_fixture() -> SharedFixture {
     let temp_dir = TempDir::new().expect("Failed to create temp dir for fixture generation");
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
@@ -151,7 +157,7 @@ fn install_fixture_member(
 
 /// Setup test keystore from shared fixture (no ssh-keygen calls)
 pub fn setup_test_keystore_from_fixtures(member_handle: &str) -> TempDir {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = create_secret_home();
     save_ssh_keys(&temp_dir);
 
     let keystore_root = temp_dir.path().join("keys");
@@ -176,7 +182,7 @@ pub fn setup_test_keystore_from_fixtures(member_handle: &str) -> TempDir {
 
 /// Setup test workspace from shared fixture (no ssh-keygen calls)
 pub fn setup_test_workspace_from_fixtures(member_handles: &[&str]) -> (TempDir, PathBuf) {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = create_secret_home();
     save_ssh_keys(&temp_dir);
 
     let workspace_dir = temp_dir.path().join("workspace");
@@ -254,7 +260,7 @@ pub fn generate_temp_ssh_keypair_in_dir(temp_dir: &TempDir) -> (PathBuf, PathBuf
 
 /// Setup test workspace with members directory and public keys
 pub fn setup_test_workspace(member_handles: &[&str]) -> (TempDir, PathBuf) {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = create_secret_home();
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let workspace_dir = temp_dir.path().join("workspace");
@@ -328,7 +334,7 @@ pub fn setup_test_workspace(member_handles: &[&str]) -> (TempDir, PathBuf) {
 
 /// Setup test environment with keystore and test keys
 pub fn setup_test_keystore(member_handle: &str) -> TempDir {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = create_secret_home();
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let keystore_root = temp_dir.path().join("keys");

@@ -5,12 +5,18 @@
 
 use std::collections::BTreeSet;
 
-use crate::app::trust::management::{execute_purge, list_purge_candidates};
+use crate::app::trust::management::{
+    execute_purge, execute_recipient_set_purge, list_purge_candidates,
+    list_recipient_set_purge_candidates,
+};
 use crate::cli::common::command::{
     resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
 };
 use crate::cli::common::output::text::trust::print_purge_cancelled;
-use crate::cli::common::output::trust::{print_trust_purge_outcome, print_trust_purge_preview};
+use crate::cli::common::output::trust::{
+    print_recipient_set_purge_outcome, print_recipient_set_purge_preview,
+    print_trust_purge_outcome, print_trust_purge_preview,
+};
 use crate::cli::common::prompt::prompt_yes_no;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::support::tty;
@@ -19,7 +25,7 @@ use time::OffsetDateTime;
 
 use super::PurgeArgs;
 
-pub(crate) fn run(args: PurgeArgs) -> Result<(), Error> {
+pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
     let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
     let options = resolve_options(&args.common);
     let member_handle = args.member_handle.clone();
@@ -52,6 +58,48 @@ pub(crate) fn run(args: PurgeArgs) -> Result<(), Error> {
         || execute_purge(&options, &execution, older_than_timestamp, options.verbose),
     )?;
     print_trust_purge_outcome(&result, &mut shown_warnings);
+    Ok(())
+}
+
+pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
+    let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
+    let options = resolve_options(&args.common);
+    let member_handle = args.member_handle.clone();
+    let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
+    let candidates = run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, member_handle.clone()),
+        || {
+            list_recipient_set_purge_candidates(
+                &options,
+                &execution.member_handle,
+                older_than_timestamp,
+            )
+        },
+    )?;
+    let mut shown_warnings = BTreeSet::new();
+    if !print_recipient_set_purge_preview(&candidates, &mut shown_warnings) {
+        return Ok(());
+    }
+
+    if !args.force {
+        if !tty::is_interactive() {
+            return Err(Error::InvalidOperation {
+                message: "Non-interactive mode requires --force flag for purge".to_string(),
+            });
+        }
+        if !confirm_purge()? {
+            print_purge_cancelled();
+            return Ok(());
+        }
+    }
+
+    let result = run_with_trust_store_reset_recovery(
+        &options,
+        || resolve_trust_store_owner_member(&options, member_handle.clone()),
+        || execute_recipient_set_purge(&options, &execution, older_than_timestamp, options.verbose),
+    )?;
+    print_recipient_set_purge_outcome(&result, &mut shown_warnings);
     Ok(())
 }
 

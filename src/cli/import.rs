@@ -5,14 +5,17 @@
 
 use clap::Args;
 
-use crate::app::kv::mutation::import_kv_command;
+use crate::app::kv::mutation::import_kv_command_with_recipient_set_confirmation;
 use crate::app::trust::ImportPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
     WriteCommandLabels,
 };
 use crate::cli::common::output::kv::print_kv_import_result;
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::common::output::text::print_warnings;
+use crate::cli::common::trust::{
+    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
+};
 use crate::cli::options::CommonOptions;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
@@ -56,11 +59,19 @@ pub fn run(args: ImportArgs) -> Result<()> {
                     signer_context: Some(("import input signer", "input signer")),
                     recipient_context: "import recipients",
                 },
-                |_, trust_plan| import_kv_command(trust_plan, &content, None),
+                |_, trust_plan| {
+                    import_kv_command_with_recipient_set_confirmation(
+                        trust_plan,
+                        &content,
+                        None,
+                        confirm_recipient_set_approval,
+                    )
+                },
             )
         },
     )?;
 
+    print_warnings(&outcome.warnings);
     print_kv_import_result(
         outcome.message.as_deref(),
         entry_count,

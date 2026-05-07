@@ -34,11 +34,6 @@ pub(crate) fn print_registration_next_steps(mode: RegistrationMode, is_new_works
         }
         RegistrationMode::Init | RegistrationMode::Join => {
             eprintln!("Ready! Create a PR to share your public key with the team.");
-            if mode == RegistrationMode::Join {
-                eprintln!(
-                    "An active member needs to run 'secretenv rewrap' to promote the incoming key and sync secrets."
-                );
-            }
         }
     }
 }

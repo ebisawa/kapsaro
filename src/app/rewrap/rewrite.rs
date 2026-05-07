@@ -18,14 +18,17 @@ pub(crate) struct RewrapRewriteContext<'a> {
     pub(crate) post_promotion_members: &'a VerifiedPostPromotionRecipients,
 }
 
-pub(crate) fn rewrite_captured_artifact(
-    captured: &ReviewedTextFile,
+pub(crate) fn build_rewritten_artifact(
     content: &EncContent,
     ctx: &RewrapRewriteContext<'_>,
-) -> Result<()> {
+) -> Result<String> {
     let rewrap_request = build_rewrap_request(ctx);
-    let rewritten = rewrap_feature_content(content, &rewrap_request)?;
-    captured.save_replacement(&rewritten)
+    rewrap_feature_content(content, &rewrap_request)
+}
+
+pub(crate) fn save_rewritten_artifact(captured: &ReviewedTextFile, rewritten: &str) -> Result<()> {
+    captured.save_replacement(rewritten)?;
+    Ok(())
 }
 
 fn build_rewrap_request<'a>(ctx: &'a RewrapRewriteContext<'a>) -> RewrapRequest<'a> {

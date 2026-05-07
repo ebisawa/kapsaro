@@ -3,7 +3,10 @@
 
 //! Integration tests for `get` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
+    TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -12,7 +15,7 @@ use tempfile::TempDir;
 /// Helper to create a workspace with initialized member and a key
 fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
@@ -32,16 +35,15 @@ fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, PathBuf) {
         .success();
 
     // Set a key
-    cmd()
-        .arg("set")
-        .arg("TEST_KEY")
-        .arg("test_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "TEST_KEY",
+        "test_value",
+        None,
+        None,
+    );
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
 }
@@ -119,7 +121,7 @@ fn test_get_with_json_output() {
 #[test]
 fn test_get_error_when_file_not_exists() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure

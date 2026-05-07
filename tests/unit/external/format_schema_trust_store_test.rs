@@ -8,7 +8,7 @@ use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtu
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::feature::trust::verification::verify_trust_store;
 use secretenv::format::schema::validator::load_embedded_trust_validator;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V3;
+use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use std::collections::BTreeMap;
 
@@ -17,7 +17,7 @@ fn test_trust_store_schema_valid_document() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -35,7 +35,8 @@ fn test_trust_store_schema_valid_document() {
                             "ssh_attestor_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
                         }
                     }
-                ]
+                ],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -55,11 +56,12 @@ fn test_trust_store_schema_rejects_signer_pub() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": []
+                "known_keys": [],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -86,7 +88,7 @@ fn test_trust_store_schema_accepts_github_account_without_login() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -102,7 +104,8 @@ fn test_trust_store_schema_accepts_github_account_without_login() {
                             }
                         }
                     }
-                ]
+                ],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -122,11 +125,12 @@ fn test_trust_store_schema_empty_known_keys() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": []
+                "known_keys": [],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -146,10 +150,11 @@ fn test_trust_store_schema_missing_required_field_fails() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
-                "known_keys": []
+                "known_keys": [],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -175,11 +180,12 @@ fn test_trust_store_schema_invalid_timestamp_fails() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29 12:34:56",
                 "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": []
+                "known_keys": [],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -206,11 +212,12 @@ fn test_trust_store_schema_non_utc_timestamp_fails() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56+09:00",
                 "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": []
+                "known_keys": [],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -237,7 +244,7 @@ fn test_trust_store_schema_known_key_allows_extra_fields() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -249,7 +256,8 @@ fn test_trust_store_schema_known_key_allows_extra_fields() {
                         "approved_via": "manual-review",
                         "future_metadata": { "key": "value" }
                     }
-                ]
+                ],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -269,11 +277,12 @@ fn test_trust_store_schema_rejects_extra_top_level_fields() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@3",
+                "format": "secretenv.trust.local@4",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": []
+                "known_keys": [],
+                "recipient_sets": []
             },
             "signature": {
                 "alg": "eddsa-ed25519",
@@ -294,7 +303,7 @@ fn test_verify_trust_store_rejects_semantically_invalid_timestamp() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V3.to_string(),
+        format: TRUST_LOCAL_V4.to_string(),
         owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
@@ -306,6 +315,7 @@ fn test_verify_trust_store_rejects_semantically_invalid_timestamp() {
             evidence: None,
             extra: BTreeMap::new(),
         }],
+        recipient_sets: Vec::new(),
     };
     let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
 

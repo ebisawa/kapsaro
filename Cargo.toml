@@ -1,6 +1,6 @@
 [package]
 name = "secretenv"
-version = "0.7.2-alpha"
+version = "0.8.1-alpha"
 edition = "2021"
 authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
 description = "Offline-first CLI for sharing encrypted .env files and other secrets through Git"
@@ -19,7 +19,7 @@ serde_json = "1"
 serde_jcs = "0.2"
 
 # JSON Schema validation
-jsonschema = "0.45"
+jsonschema = "0.46"
 
 # Encoding
 hex = "0.4"
@@ -40,8 +40,8 @@ hpke = "0.13"
 chacha20poly1305 = "0.10"
 
 # Cryptography - Key derivation
-hkdf = "0.12"
-sha2 = "0.10"
+hkdf = "0.13"
+sha2 = "0.11"
 
 # Cryptography - Ed25519 signatures
 ed25519-dalek = "2"

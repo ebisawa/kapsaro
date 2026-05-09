@@ -7,7 +7,7 @@
 
 use crate::crypto::types::data::{Ciphertext, Enc};
 use crate::model::identity::{Kid, MemberHandle};
-use crate::model::wire::hpke;
+use crate::model::wire::algorithm;
 use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::support::kid::format_kid_display_lossy;
 use crate::support::limits::validate_wrap_count;
@@ -46,12 +46,12 @@ pub enum WrapAlgorithm {
 impl WrapAlgorithm {
     pub fn parse(value: &str) -> Result<Self> {
         match value {
-            hpke::ALG_HPKE_32_1_3 => Ok(Self::Hpke32_1_3),
+            algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305 => Ok(Self::Hpke32_1_3),
             _ => Err(Error::Crypto {
                 message: format!(
                     "Unsupported HPKE algorithm: {} (expected: {})",
                     value,
-                    hpke::ALG_HPKE_32_1_3
+                    algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305
                 ),
                 source: None,
             }),
@@ -60,7 +60,7 @@ impl WrapAlgorithm {
 
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Hpke32_1_3 => hpke::ALG_HPKE_32_1_3,
+            Self::Hpke32_1_3 => algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
         }
     }
 }

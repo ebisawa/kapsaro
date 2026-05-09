@@ -5,12 +5,12 @@
 
 use secretenv::format::trust_store::build_trust_store_signature_bytes;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
-use secretenv::model::wire::format::TRUST_LOCAL_V4;
+use secretenv::model::wire::format::LOCAL_TRUST_V5;
 use std::collections::BTreeMap;
 
 fn build_test_protected() -> TrustStoreProtected {
     TrustStoreProtected {
-        format: TRUST_LOCAL_V4.to_string(),
+        format: LOCAL_TRUST_V5.to_string(),
         owner_handle: "alice@example.com".to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),

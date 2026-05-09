@@ -121,8 +121,8 @@ fn test_set_creates_default_file() {
     // Verify file has kv-enc format
     let encrypted_content = fs::read_to_string(&kv_file_path).unwrap();
     assert!(
-        encrypted_content.starts_with(kv::HEADER_LINE_V5),
-        "Should have kv-enc v5 header"
+        encrypted_content.starts_with(kv::HEADER_LINE_V6),
+        "Should have kv-enc v6 header"
     );
 
     // Verify both alice and bob are recipients (due to @all default)

@@ -27,7 +27,7 @@ use secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
 use secretenv::model::public_key::{Attestation, GithubAccount, Identity};
 use secretenv::model::ssh::SshDeterminismStatus;
-use secretenv::model::wire::jwk::{CRV_ED25519, CRV_X25519};
+use secretenv::model::wire::jwk::{CURVE_ED25519, CURVE_X25519};
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use tempfile::TempDir;
 use zeroize::ZeroizeOnDrop;
@@ -46,13 +46,13 @@ fn test_build_private_key_plaintext_fields() {
 
     // Verify KEM key fields
     assert_eq!(plaintext.keys.kem.kty, "OKP");
-    assert_eq!(plaintext.keys.kem.crv, CRV_X25519);
+    assert_eq!(plaintext.keys.kem.crv, CURVE_X25519);
     assert!(!plaintext.keys.kem.x.is_empty(), "kem.x must be non-empty");
     assert!(!plaintext.keys.kem.d.is_empty(), "kem.d must be non-empty");
 
     // Verify signing key fields
     assert_eq!(plaintext.keys.sig.kty, "OKP");
-    assert_eq!(plaintext.keys.sig.crv, CRV_ED25519);
+    assert_eq!(plaintext.keys.sig.crv, CURVE_ED25519);
     assert!(!plaintext.keys.sig.x.is_empty(), "sig.x must be non-empty");
     assert!(!plaintext.keys.sig.d.is_empty(), "sig.d must be non-empty");
 }
@@ -497,8 +497,8 @@ fn test_build_identity_keys() {
 
     let identity_keys = build_identity_keys(&kem_pk, &sig_pk).unwrap();
 
-    assert_eq!(identity_keys.kem.crv, CRV_X25519);
-    assert_eq!(identity_keys.sig.crv, CRV_ED25519);
+    assert_eq!(identity_keys.kem.crv, CURVE_X25519);
+    assert_eq!(identity_keys.sig.crv, CURVE_ED25519);
 }
 
 #[test]

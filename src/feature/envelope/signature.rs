@@ -14,7 +14,7 @@ use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
-use crate::model::wire::alg;
+use crate::model::wire::algorithm;
 use crate::support::kid::format_kid_display;
 use crate::Result;
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -91,7 +91,7 @@ pub fn sign_file_document(
         signing_key,
         signer_kid,
         signer_pub,
-        alg::SIGNATURE_ED25519,
+        algorithm::SIGNATURE_ED25519,
     )
 }
 
@@ -114,7 +114,7 @@ pub fn verify_file_signature(
         &canonical_bytes,
         verifying_key,
         signature,
-        alg::SIGNATURE_ED25519,
+        algorithm::SIGNATURE_ED25519,
     )
 }
 
@@ -156,7 +156,7 @@ pub(crate) fn append_kv_signature(
         signing_key,
         signer_kid,
         signer_pub,
-        alg::SIGNATURE_ED25519,
+        algorithm::SIGNATURE_ED25519,
     )?;
     let sig_token =
         TokenCodec::encode_debug(token_codec, &signature, debug, Some("SIG"), Some(caller))?;
@@ -182,7 +182,7 @@ pub fn verify_kv_signature(
         &canonical_bytes,
         verifying_key,
         signature,
-        alg::SIGNATURE_ED25519,
+        algorithm::SIGNATURE_ED25519,
     )
 }
 

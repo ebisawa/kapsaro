@@ -5,7 +5,7 @@
 //!
 //! Includes attested identity and verified public key types for functional domain modeling.
 
-use crate::model::wire::format::PUBLIC_KEY_V5;
+use crate::model::wire::format::PUBLIC_KEY_V6;
 use serde::{Deserialize, Serialize};
 
 pub use super::public_key_verified::{
@@ -13,7 +13,7 @@ pub use super::public_key_verified::{
     VerifiedPublicKeyAttested, VerifiedRecipientKey, VerifiedSigningPublicKey,
 };
 
-/// PublicKey v5 document (signed container)
+/// PublicKey v6 document (signed container)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKey {
@@ -28,7 +28,7 @@ pub struct PublicKey {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKeyProtected {
-    /// Format identifier: "secretenv.public.key@5"
+    /// Format identifier: "secretenv:format:public-key@6"
     pub format: String,
 
     /// Subject handle asserted by this key statement.
@@ -127,7 +127,7 @@ impl PublicKey {
         signature: String,
     ) -> Self {
         let protected = PublicKeyProtected {
-            format: PUBLIC_KEY_V5.to_string(),
+            format: PUBLIC_KEY_V6.to_string(),
             subject_handle,
             kid,
             identity,

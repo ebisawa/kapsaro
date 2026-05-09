@@ -15,7 +15,7 @@ use crate::model::file_enc::{
     FilePayloadCiphertext, FilePayloadHeader,
 };
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::model::wire::{alg, format};
+use crate::model::wire::{algorithm, format};
 use crate::support::time::generate_current_timestamp;
 use crate::Result;
 use uuid::Uuid;
@@ -74,10 +74,10 @@ fn encrypt_payload(
     caller: &str,
 ) -> Result<(FilePayloadHeader, FilePayloadCiphertext)> {
     let payload_protected = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V4.to_string(),
+        format: format::FILE_PAYLOAD_V5.to_string(),
         sid: *sid,
         alg: FileEncAlgorithm {
-            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+            aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
         },
     };
 
@@ -111,7 +111,7 @@ fn build_file_enc_document_protected(
     timestamp: String,
 ) -> FileEncDocumentProtected {
     FileEncDocumentProtected {
-        format: format::FILE_ENC_V4.to_string(),
+        format: format::FILE_ENC_V5.to_string(),
         sid,
         wrap,
         removed_recipients: None,
@@ -121,7 +121,7 @@ fn build_file_enc_document_protected(
     }
 }
 
-/// Encrypt file content to file-enc v4 format
+/// Encrypt file content to file-enc v5 format
 ///
 /// # Arguments
 /// * `content` - File content bytes to encrypt

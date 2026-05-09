@@ -4,7 +4,7 @@
 use super::*;
 use crate::crypto::types::keys::MasterKey;
 use crate::model::kv_enc::entry::KvEntryValue;
-use crate::model::wire::alg;
+use crate::model::wire::algorithm;
 use uuid::Uuid;
 
 #[test]
@@ -46,7 +46,7 @@ fn decrypt_entry_accepts_supported_header_aead_until_entry_decoding() {
     let result = decrypt_entry(
         &entry,
         "DATABASE_URL",
-        alg::AEAD_XCHACHA20_POLY1305,
+        algorithm::AEAD_XCHACHA20_POLY1305,
         &master_key,
         &sid,
         false,

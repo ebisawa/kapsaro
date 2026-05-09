@@ -12,7 +12,7 @@ use secretenv::crypto::types::primitives::XChaChaNonce;
 fn test_xchacha20_encrypt_decrypt_roundtrip() {
     let key = XChaChaKey::new([0x42u8; 32]);
     let nonce = XChaChaNonce::new([0x01u8; NONCE_SIZE]);
-    let aad = Aad::from(b"secretenv:kv:payload@5|kid|key" as &[u8]);
+    let aad = Aad::from(b"secretenv:context:aad:kv-enc:entry-payload@6|kid|key" as &[u8]);
     let plaintext = Plaintext::from(b"DATABASE_URL=postgresql://localhost/db" as &[u8]);
 
     let ciphertext = encrypt(&key, &nonce, &aad, &plaintext).expect("encrypt should succeed");

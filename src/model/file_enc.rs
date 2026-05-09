@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! FileEncDocument v4 model
+//! FileEncDocument v5 model
 //!
-//! Format: secretenv.file@4
-//! Used for encrypting arbitrary files with v4 format
+//! Format: secretenv:format:file-enc@5
+//! Used for encrypting arbitrary files with v5 format
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use super::common::{RemovedRecipient, WrapItem};
 use super::signature::ArtifactSignature;
 use super::verification::SignatureVerificationProof;
 
-/// FileEncDocument v4 top-level structure
+/// FileEncDocument v5 top-level structure
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FileEncDocument {
@@ -27,7 +27,7 @@ pub struct FileEncDocument {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FileEncDocumentProtected {
-    /// Format identifier: "secretenv.file@4"
+    /// Format identifier: "secretenv:format:file-enc@5"
     pub format: String,
 
     /// Secret identifier (UUID)
@@ -74,7 +74,7 @@ pub struct FilePayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FilePayloadHeader {
-    /// Format identifier: "secretenv.file.payload@4"
+    /// Format identifier: "secretenv:format:file-enc:payload@5"
     pub format: String,
     /// Secret identifier (UUID). Must match the outer `protected.sid`
     pub sid: Uuid,

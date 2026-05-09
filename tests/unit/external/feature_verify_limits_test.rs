@@ -12,7 +12,7 @@ use secretenv::model::file_enc::{
 use secretenv::model::kv_enc::document::KvEncDocument;
 use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::wire::{alg, format, hpke};
+use secretenv::model::wire::{algorithm, format};
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ fn test_wrap_item() -> WrapItem {
     WrapItem {
         recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-        alg: hpke::ALG_HPKE_32_1_3.to_string(),
+        alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
         enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
     }
@@ -30,7 +30,7 @@ fn test_wrap_item_with(recipient_handle: &str, kid: &str) -> WrapItem {
     WrapItem {
         recipient_handle: recipient_handle.to_string(),
         kid: kid.to_string(),
-        alg: hpke::ALG_HPKE_32_1_3.to_string(),
+        alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
         enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
     }
@@ -38,7 +38,7 @@ fn test_wrap_item_with(recipient_handle: &str, kid: &str) -> WrapItem {
 
 fn test_signature() -> ArtifactSignature {
     ArtifactSignature {
-        alg: alg::SIGNATURE_ED25519.to_string(),
+        alg: algorithm::SIGNATURE_ED25519.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         sig: "invalid".to_string(),
@@ -50,16 +50,16 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
     let sid = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: format::FILE_ENC_V4.to_string(),
+            format: format::FILE_ENC_V5.to_string(),
             sid,
             wrap: vec![test_wrap_item(); MAX_WRAP_ITEMS + 1],
             removed_recipients: None,
             payload: FilePayload {
                 protected: FilePayloadHeader {
-                    format: format::FILE_PAYLOAD_V4.to_string(),
+                    format: format::FILE_PAYLOAD_V5.to_string(),
                     sid,
                     alg: FileEncAlgorithm {
-                        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                        aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
                     },
                 },
                 encrypted: FilePayloadCiphertext {
@@ -71,7 +71,7 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
             updated_at: "2026-01-14T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: alg::SIGNATURE_ED25519.to_string(),
+            alg: algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "invalid".to_string(),
@@ -86,12 +86,12 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
 #[test]
 fn test_verify_kv_document_rejects_wrap_count_over_limit() {
     let doc = KvEncDocument::new(
-        ":SECRETENV_KV 5\n".to_string(),
+        ":SECRETENV_KV 6\n".to_string(),
         Vec::new(),
         KvHeader {
             sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
             alg: KvFileAlgorithm {
-                aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
             },
             created_at: "2026-01-14T00:00:00Z".to_string(),
             updated_at: "2026-01-14T00:00:00Z".to_string(),
@@ -115,7 +115,7 @@ fn test_verify_file_document_rejects_duplicate_wrap_rh() {
     let sid = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: format::FILE_ENC_V4.to_string(),
+            format: format::FILE_ENC_V5.to_string(),
             sid,
             wrap: vec![
                 test_wrap_item_with("alice@example.com", "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
@@ -124,10 +124,10 @@ fn test_verify_file_document_rejects_duplicate_wrap_rh() {
             removed_recipients: None,
             payload: FilePayload {
                 protected: FilePayloadHeader {
-                    format: format::FILE_PAYLOAD_V4.to_string(),
+                    format: format::FILE_PAYLOAD_V5.to_string(),
                     sid,
                     alg: FileEncAlgorithm {
-                        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                        aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
                     },
                 },
                 encrypted: FilePayloadCiphertext {
@@ -139,7 +139,7 @@ fn test_verify_file_document_rejects_duplicate_wrap_rh() {
             updated_at: "2026-01-14T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: alg::SIGNATURE_ED25519.to_string(),
+            alg: algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "invalid".to_string(),
@@ -157,12 +157,12 @@ fn test_verify_file_document_rejects_duplicate_wrap_rh() {
 #[test]
 fn test_verify_kv_document_rejects_duplicate_wrap_rh() {
     let doc = KvEncDocument::new(
-        ":SECRETENV_KV 5\n".to_string(),
+        ":SECRETENV_KV 6\n".to_string(),
         Vec::new(),
         KvHeader {
             sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
             alg: KvFileAlgorithm {
-                aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
             },
             created_at: "2026-01-14T00:00:00Z".to_string(),
             updated_at: "2026-01-14T00:00:00Z".to_string(),

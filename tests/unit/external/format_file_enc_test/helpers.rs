@@ -71,19 +71,19 @@ pub(super) fn recipients_and_members(
 pub(super) fn build_test_public_key(member_handle: &str, kid: &str, kem_pub: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V5.to_string(),
+            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
                         x: kem_pub.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
                         x: "dummy_sig_pub".to_string(),
                     },
                 },
@@ -113,13 +113,13 @@ pub(super) fn build_test_private_key(
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
+                crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
                 x: pk_b64,
                 d: sk_b64,
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
+                crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
                 x: "dummy_sig_pub".to_string(),
                 d: "dummy_sig_priv".to_string(),
             },

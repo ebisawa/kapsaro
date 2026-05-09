@@ -86,8 +86,8 @@ fn test_key_export_explicit_kid() {
     );
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V5,
-        "Exported format should be v5"
+        format::PUBLIC_KEY_V6,
+        "Exported format should be v6"
     );
 
     // Keep temp directories alive
@@ -136,8 +136,8 @@ fn test_key_export_active() {
 
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V5,
-        "Exported format should be v5"
+        format::PUBLIC_KEY_V6,
+        "Exported format should be v6"
     );
 
     // Keep temp directories alive
@@ -361,7 +361,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         serde_json::from_slice(&json).expect("Should deserialize as PrivateKey");
 
     assert_eq!(private_key.protected.subject_handle, member_handle);
-    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V6);
+    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V7);
 
     drop(ssh_temp);
 }
@@ -409,7 +409,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         serde_json::from_slice(&json).expect("Should deserialize stdout as PrivateKey");
 
     assert_eq!(private_key.protected.subject_handle, member_handle);
-    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V6);
+    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V7);
 
     drop(ssh_temp);
 }

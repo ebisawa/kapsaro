@@ -59,7 +59,7 @@ impl GitHubVerificationApi for FakeGitHubApi {
 fn sample_public_key() -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@5".to_string(),
+            format: "secretenv:format:public-key@6".to_string(),
             subject_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             identity: Identity {

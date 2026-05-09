@@ -5,7 +5,7 @@
 
 use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::format::schema::validator::Validator;
-use secretenv::model::wire::hpke;
+use secretenv::model::wire::algorithm;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
 const B64URL_24: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -81,19 +81,19 @@ fn test_validate_public_key_basic() {
     // PublicKey requires: protected (format, subject_handle, kid, identity, attestation, expires_at), signature.
     let valid_public_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PUBLIC_KEY_V5,
+            "format": secretenv::model::wire::format::PUBLIC_KEY_V6,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "identity": {
                 "keys": {
                     "kem": {
                         "kty": "OKP",
-                        "crv": secretenv::model::wire::jwk::CRV_X25519,
+                        "crv": secretenv::model::wire::jwk::CURVE_X25519,
                         "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                     },
                     "sig": {
                         "kty": "OKP",
-                        "crv": secretenv::model::wire::jwk::CRV_ED25519,
+                        "crv": secretenv::model::wire::jwk::CURVE_ED25519,
                         "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                     }
                 },
@@ -217,19 +217,19 @@ fn set_json_path(value: &mut serde_json::Value, path: &[&str], replacement: &str
 fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
     serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PUBLIC_KEY_V5,
+            "format": secretenv::model::wire::format::PUBLIC_KEY_V6,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "identity": {
                 "keys": {
                     "kem": {
                         "kty": "OKP",
-                        "crv": secretenv::model::wire::jwk::CRV_X25519,
+                        "crv": secretenv::model::wire::jwk::CURVE_X25519,
                         "x": B64URL_32
                     },
                     "sig": {
                         "kty": "OKP",
-                        "crv": secretenv::model::wire::jwk::CRV_ED25519,
+                        "crv": secretenv::model::wire::jwk::CURVE_ED25519,
                         "x": B64URL_32
                     }
                 },
@@ -259,15 +259,15 @@ fn test_validate_private_key_basic() {
     // PrivateKey external format includes protected and encrypted sections.
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PRIVATE_KEY_V6,
+            "format": secretenv::model::wire::format::PRIVATE_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": secretenv::model::wire::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
+                "kdf": secretenv::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
                 "fpr": "SHA256:abcdef1234567890",
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -293,14 +293,14 @@ fn test_validate_private_key_argon2id_without_params() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PRIVATE_KEY_V6,
+            "format": secretenv::model::wire::format::PRIVATE_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": secretenv::model::wire::private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
+                "kdf": secretenv::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -326,17 +326,17 @@ fn test_validate_private_key_argon2id_rejects_legacy_params() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let invalid_private_key = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PRIVATE_KEY_V6,
+            "format": secretenv::model::wire::format::PRIVATE_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": secretenv::model::wire::private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
+                "kdf": secretenv::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
                 "m": 47104,
                 "t": 1,
                 "p": 1,
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -389,15 +389,15 @@ fn build_valid_private_key() -> serde_json::Value {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PRIVATE_KEY_V6,
+            "format": secretenv::model::wire::format::PRIVATE_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": secretenv::model::wire::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
+                "kdf": secretenv::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
                 "fpr": "SHA256:abcdef1234567890",
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -416,14 +416,14 @@ fn test_validate_file_enc_document_basic() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let valid_file_enc_doc = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::FILE_ENC_V4,
+            "format": secretenv::model::wire::format::FILE_ENC_V5,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V4,
+                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V5,
                     "sid": sid,
                     "alg": {
-                        "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                        "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
                     }
                 },
                 "encrypted": {
@@ -434,7 +434,7 @@ fn test_validate_file_enc_document_basic() {
             "wrap": [{
                 "rh": "alice@example.com",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": hpke::ALG_HPKE_32_1_3,
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }],
@@ -442,7 +442,7 @@ fn test_validate_file_enc_document_basic() {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": secretenv::model::wire::alg::SIGNATURE_ED25519,
+            "alg": secretenv::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
@@ -512,20 +512,20 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::FILE_ENC_V4,
+            "format": secretenv::model::wire::format::FILE_ENC_V5,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V4,
+                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V5,
                     "sid": sid,
-                    "alg": { "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305 }
+                    "alg": { "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": { "nonce": B64URL_24, "ct": B64URL_48 }
             },
             "wrap": [{
                 "rh": recipient_handle,
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": hpke::ALG_HPKE_32_1_3,
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
                 "enc": B64URL_32,
                 "ct": B64URL_48
             }],
@@ -533,7 +533,7 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": secretenv::model::wire::alg::SIGNATURE_ED25519,
+            "alg": secretenv::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "sig": B64URL_64
@@ -551,14 +551,14 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let valid_file_enc_doc = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::FILE_ENC_V4,
+            "format": secretenv::model::wire::format::FILE_ENC_V5,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V4,
+                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V5,
                     "sid": sid,
                     "alg": {
-                        "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                        "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
                     }
                 },
                 "encrypted": {
@@ -569,7 +569,7 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
             "wrap": [{
                 "rh": "ebisawa",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": hpke::ALG_HPKE_32_1_3,
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }],
@@ -577,7 +577,7 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": secretenv::model::wire::alg::SIGNATURE_ED25519,
+            "alg": secretenv::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"

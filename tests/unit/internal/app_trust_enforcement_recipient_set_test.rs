@@ -247,7 +247,7 @@ fn trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustContext {
 fn active_member(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@5".to_string(),
+            format: "secretenv:format:public-key@6".to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {

@@ -11,7 +11,7 @@ use secretenv::model::common::WrapItem;
 use secretenv::model::kv_enc::entry::KvEntryValue;
 use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::wire::{alg, format, hpke, private_key};
+use secretenv::model::wire::{algorithm, format, private_key};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
@@ -20,7 +20,7 @@ use uuid::Uuid;
 fn test_parse_public_key_str_with_schema() {
     let public_key = serde_json::json!({
         "protected": {
-            "format": format::PUBLIC_KEY_V5,
+            "format": format::PUBLIC_KEY_V6,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "identity": {
@@ -57,14 +57,14 @@ fn test_parse_private_key_bytes_rejects_legacy_argon2_fields_error() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let private_key = serde_json::json!({
         "protected": {
-            "format": format::PRIVATE_KEY_V6,
+            "format": format::PRIVATE_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": private_key::PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256,
+                "kdf": private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": alg::AEAD_XCHACHA20_POLY1305,
+                "aead": algorithm::AEAD_XCHACHA20_POLY1305,
                 "m": 47104
             },
             "created_at": "2026-01-14T00:00:00Z",
@@ -93,13 +93,13 @@ fn test_parse_file_enc_str_with_schema() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V4,
+            "format": format::FILE_ENC_V5,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V4,
+                    "format": format::FILE_PAYLOAD_V5,
                     "sid": sid,
-                    "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
+                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": {
                     "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -109,7 +109,7 @@ fn test_parse_file_enc_str_with_schema() {
             "wrap": [{
                 "rh": "alice@example.com",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": hpke::ALG_HPKE_32_1_3,
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
             }],
@@ -117,7 +117,7 @@ fn test_parse_file_enc_str_with_schema() {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": alg::SIGNATURE_ED25519,
+            "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
@@ -125,7 +125,7 @@ fn test_parse_file_enc_str_with_schema() {
     });
 
     let parsed = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
-    assert_eq!(parsed.protected.format, format::FILE_ENC_V4);
+    assert_eq!(parsed.protected.format, format::FILE_ENC_V5);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn test_parse_kv_tokens_with_schema() {
     let head = KvHeader {
         sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
         alg: KvFileAlgorithm {
-            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+            aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: "2026-01-14T00:00:00Z".to_string(),
         updated_at: "2026-01-14T00:00:00Z".to_string(),
@@ -143,7 +143,7 @@ fn test_parse_kv_tokens_with_schema() {
         wrap: vec![WrapItem {
             recipient_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            alg: hpke::ALG_HPKE_32_1_3.to_string(),
+            alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
             enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         }],
@@ -156,7 +156,7 @@ fn test_parse_kv_tokens_with_schema() {
         disclosed: false,
     };
     let signature = ArtifactSignature {
-        alg: alg::SIGNATURE_ED25519.to_string(),
+        alg: algorithm::SIGNATURE_ED25519.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         sig:
@@ -212,7 +212,7 @@ fn test_parse_kv_entry_token_rejects_key_and_aead_fields() {
     let entry = serde_json::json!({
         "salt": encode_base64url_nopad(&[0u8; 32]),
         "k": "DATABASE_URL",
-        "aead": alg::AEAD_XCHACHA20_POLY1305,
+        "aead": algorithm::AEAD_XCHACHA20_POLY1305,
         "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
     });
@@ -228,7 +228,7 @@ fn test_parse_kv_signature_token_rejects_unknown_field_error() {
     let invalid_token = TokenCodec::encode(
         TokenCodec::JsonJcs,
         &serde_json::json!({
-            "alg": alg::SIGNATURE_ED25519,
+            "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ",
             "unexpected": true
@@ -251,7 +251,7 @@ fn test_parse_kv_signature_token_requires_signer_pub_error() {
     let invalid_token = TokenCodec::encode(
         TokenCodec::JsonJcs,
         &serde_json::json!({
-            "alg": alg::SIGNATURE_ED25519,
+            "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }),
@@ -273,20 +273,20 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
     let wrap_item = serde_json::json!({
         "rh": "alice@example.com",
         "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "alg": hpke::ALG_HPKE_32_1_3,
+        "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
         "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     });
     let wrap: Vec<_> = (0..=MAX_WRAP_ITEMS).map(|_| wrap_item.clone()).collect();
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V4,
+            "format": format::FILE_ENC_V5,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V4,
+                    "format": format::FILE_PAYLOAD_V5,
                     "sid": sid,
-                    "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
+                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": {
                     "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -298,7 +298,7 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": alg::SIGNATURE_ED25519,
+            "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
@@ -316,7 +316,7 @@ fn test_parse_kv_wrap_token_rejects_wrap_count_over_limit() {
     let wrap_item = WrapItem {
         recipient_handle: "alice@example.com".to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-        alg: hpke::ALG_HPKE_32_1_3.to_string(),
+        alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
         enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
     };
@@ -337,13 +337,13 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V4,
+            "format": format::FILE_ENC_V5,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V4,
+                    "format": format::FILE_PAYLOAD_V5,
                     "sid": sid,
-                    "alg": { "aead": alg::AEAD_XCHACHA20_POLY1305 }
+                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": {
                     "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -354,14 +354,14 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
                 {
                     "rh": "alice@example.com",
                     "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                    "alg": hpke::ALG_HPKE_32_1_3,
+                    "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 },
                 {
                     "rh": "alice@example.com",
                     "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                    "alg": hpke::ALG_HPKE_32_1_3,
+                    "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 }
@@ -370,7 +370,7 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": alg::SIGNATURE_ED25519,
+            "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
@@ -392,14 +392,14 @@ fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rh() {
             WrapItem {
                 recipient_handle: "alice@example.com".to_string(),
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             },
             WrapItem {
                 recipient_handle: "alice@example.com".to_string(),
                 kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
-                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                 enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             },

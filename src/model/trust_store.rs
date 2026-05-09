@@ -3,7 +3,7 @@
 
 //! Local Trust Store document model
 //!
-//! Format: secretenv.trust.local@4
+//! Format: secretenv:format:local-trust@5
 //! A signed JSON container holding local approval caches.
 
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,7 @@ pub struct TrustStoreSignature {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TrustStoreProtected {
-    /// Format identifier: "secretenv.trust.local@4"
+    /// Format identifier: "secretenv:format:local-trust@5"
     pub format: String,
 
     /// Owner handle for this local trust store.

@@ -21,7 +21,7 @@ fn wrap_line() -> KvEncLine {
 
 fn header_line() -> KvEncLine {
     KvEncLine::Header {
-        version: KvEncVersion::V5,
+        version: KvEncVersion::V6,
     }
 }
 

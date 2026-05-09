@@ -51,7 +51,7 @@ fn test_inspect_file_enc_shows_metadata() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("File-Enc v4 Metadata"))
+        .stdout(predicate::str::contains("File-Enc v5 Metadata"))
         .stdout(predicate::str::contains("Format:"))
         .stdout(predicate::str::contains("SID:"))
         .stdout(predicate::str::contains("Recipients"))

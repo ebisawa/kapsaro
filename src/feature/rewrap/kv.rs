@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for kv-enc v5 format.
+//! Rewrap operations for kv-enc v6 format.
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::document::KvDocumentDraft;
@@ -176,7 +176,7 @@ impl RewrapDocumentAdapter for KvRewrapAdapter {
     }
 }
 
-/// Rewrap kv-enc v5 content.
+/// Rewrap kv-enc v6 content.
 pub fn rewrap_kv_document(
     options: &RewrapOptions,
     content: &KvEncContent,

@@ -19,8 +19,8 @@ use secretenv::model::private_key::{
     PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use secretenv::model::wire::{
-    alg,
-    context::{SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6},
+    algorithm,
+    context::{HKDF_INFO_PRIVATE_KEY_SSHSIG_V7, SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7},
     format,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
@@ -38,13 +38,13 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
+                crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
                 x: b64(&[2u8; 32]),
                 d: b64(&[1u8; 32]),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
+                crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
                 x: b64(&[4u8; 32]),
                 d: b64(&[3u8; 32]),
             },
@@ -54,7 +54,7 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
 
 fn derive_enc_key(raw_sig: &[u8], salt: &HkdfSalt, kid: &str) -> secretenv::Result<XChaChaKey> {
     let ikm = Ikm::from(raw_sig);
-    let info = Info::from_string(&format!("{}:{}", SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6, kid));
+    let info = Info::from_string(&format!("{}:{}", HKDF_INFO_PRIVATE_KEY_SSHSIG_V7, kid));
     let cek = expand_to_array(&ikm, Some(salt), &info)?;
     XChaChaKey::from_slice(cek.as_bytes())
 }
@@ -71,14 +71,14 @@ fn build_ssh_private_key_with_plaintext_json(plaintext_json: &[u8]) -> PrivateKe
     let ikm_salt = PrivateKeyIkmSalt::new([9u8; 32]);
     let hkdf_salt = HkdfSalt::new([10u8; 32]);
     let protected = PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V6.to_string(),
+        format: format::PRIVATE_KEY_V7.to_string(),
         subject_handle: "alice".to_string(),
         kid: kid.to_string(),
         alg: PrivateKeyAlgorithm::SshSig {
             fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
             ikm_salt: encode_base64url_nopad(ikm_salt.as_bytes()),
             hkdf_salt: encode_base64url_nopad(hkdf_salt.as_bytes()),
-            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+            aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
@@ -103,7 +103,10 @@ fn test_build_sign_message() {
 
     let message = build_sign_message(ikm_salt);
 
-    assert!(message.starts_with(&format!("{}\n", SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6)));
+    assert!(message.starts_with(&format!(
+        "{}\n",
+        SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7
+    )));
     assert!(message.ends_with(ikm_salt));
 }
 
@@ -115,7 +118,7 @@ fn test_build_sign_message_format() {
 
     let expected = format!(
         "{}\n{}",
-        SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6, ikm_salt
+        SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7, ikm_salt
     );
 
     assert_eq!(message, expected);
@@ -261,7 +264,7 @@ fn test_encrypt_private_key_protected_algorithm_shape() {
     );
     assert_eq!(object["kdf"], "sshsig-ed25519-hkdf-sha256");
     assert_eq!(object["fpr"], ssh_fpr);
-    assert_eq!(object["aead"], alg::AEAD_XCHACHA20_POLY1305);
+    assert_eq!(object["aead"], algorithm::AEAD_XCHACHA20_POLY1305);
 }
 
 #[test]

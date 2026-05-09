@@ -10,7 +10,7 @@ use crate::crypto::kem::{
 use crate::crypto::rng::fill_secret_array;
 use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use crate::model::public_key::{IdentityKeys, JwkOkpPublicKey};
-use crate::model::wire::jwk::{self, CRV_ED25519, CRV_X25519};
+use crate::model::wire::jwk::{self, CURVE_ED25519, CURVE_X25519};
 use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::support::codec::base64_secret::{
     decode_base64url_nopad_secret_32, encode_base64url_nopad_secret_32,
@@ -54,12 +54,12 @@ pub fn build_identity_keys(
     Ok(IdentityKeys {
         kem: JwkOkpPublicKey {
             kty: "OKP".to_string(),
-            crv: CRV_X25519.to_string(),
+            crv: CURVE_X25519.to_string(),
             x: encode_base64url_nopad(kem_pk.as_bytes()),
         },
         sig: JwkOkpPublicKey {
             kty: "OKP".to_string(),
-            crv: CRV_ED25519.to_string(),
+            crv: CURVE_ED25519.to_string(),
             x: encode_base64url_nopad(sig_pk.as_bytes()),
         },
     })
@@ -76,14 +76,14 @@ pub fn build_private_key_plaintext(
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: jwk::CRV_X25519.to_string(),
+                crv: jwk::CURVE_X25519.to_string(),
                 x: encode_base64url_nopad(kem_pk.as_bytes()),
                 d: encode_base64url_nopad_secret_32(&SecretArray::new(*kem_sk.as_bytes()))
                     .into_plain_string_for_output(),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: jwk::CRV_ED25519.to_string(),
+                crv: jwk::CURVE_ED25519.to_string(),
                 x: encode_base64url_nopad(sig_pk.as_bytes()),
                 d: encode_base64url_nopad_secret_32(&SecretArray::new(*sig_sk.as_bytes()))
                     .into_plain_string_for_output(),
@@ -160,12 +160,18 @@ pub fn validate_x25519_consistency(
 pub(crate) fn validate_private_key_material(plaintext: &PrivateKeyPlaintext) -> Result<()> {
     let kem = &plaintext.keys.kem;
     let (kem_d_bytes, kem_x_bytes) =
-        validate_okp_key(&kem.kty, &kem.crv, jwk::CRV_X25519, &kem.d, &kem.x, "KEM")?;
+        validate_okp_key(&kem.kty, &kem.crv, jwk::CURVE_X25519, &kem.d, &kem.x, "KEM")?;
     validate_x25519_consistency(&kem_d_bytes, &kem_x_bytes)?;
 
     let sig = &plaintext.keys.sig;
-    let (sig_d_bytes, sig_x_bytes) =
-        validate_okp_key(&sig.kty, &sig.crv, jwk::CRV_ED25519, &sig.d, &sig.x, "Sig")?;
+    let (sig_d_bytes, sig_x_bytes) = validate_okp_key(
+        &sig.kty,
+        &sig.crv,
+        jwk::CURVE_ED25519,
+        &sig.d,
+        &sig.x,
+        "Sig",
+    )?;
     validate_ed25519_consistency(&sig_d_bytes, &sig_x_bytes)?;
 
     Ok(())

@@ -6,7 +6,7 @@
 use ed25519_dalek::SigningKey;
 use secretenv::crypto::sign::{sign_trust_store_bytes, verify_trust_store_bytes};
 use secretenv::model::trust_store::TrustStoreSignature;
-use secretenv::model::wire::alg::SIGNATURE_ED25519;
+use secretenv::model::wire::algorithm::SIGNATURE_ED25519;
 
 #[test]
 fn test_sign_trust_store_bytes_returns_valid_structure() {
@@ -124,7 +124,7 @@ fn test_sign_kv_returns_valid_structure() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
 
-    let canonical_bytes = b":SECRETENV_KV 5\n:WRAP {...}\nKEY {...}\n";
+    let canonical_bytes = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {...}\n";
 
     let sig = sign_trust_store_bytes(
         canonical_bytes,
@@ -145,7 +145,7 @@ fn test_verify_kv_accepts_valid_signature() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let canonical_bytes = b":SECRETENV_KV 5\n:WRAP {...}\nKEY {...}\n";
+    let canonical_bytes = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {...}\n";
 
     let sig = sign_trust_store_bytes(
         canonical_bytes,
@@ -163,8 +163,8 @@ fn test_verify_kv_rejects_tampered_content() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let original = b":SECRETENV_KV 5\n:WRAP {...}\nKEY {...}\n";
-    let tampered = b":SECRETENV_KV 5\n:WRAP {...}\nKEY {!!!}\n";
+    let original = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {...}\n";
+    let tampered = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {!!!}\n";
 
     let sig = sign_trust_store_bytes(
         original,
@@ -210,8 +210,8 @@ fn test_kv_lf_normalization_matters() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let lf_version = b":SECRETENV_KV 5\nKEY {...}\n";
-    let crlf_version = b":SECRETENV_KV 5\r\nKEY {...}\r\n";
+    let lf_version = b":SECRETENV_KV 6\nKEY {...}\n";
+    let crlf_version = b":SECRETENV_KV 6\r\nKEY {...}\r\n";
 
     // Sign LF version
     let sig = sign_trust_store_bytes(

@@ -13,7 +13,7 @@ use secretenv::feature::key::protection::password_key_derivation::derive_key_fro
 use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use secretenv::model::wire::{alg, format};
+use secretenv::model::wire::{algorithm, format};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::secret::SecretString;
 use std::collections::BTreeSet;
@@ -41,13 +41,13 @@ fn build_password_private_key_with_plaintext_json(
     let ikm_salt = PrivateKeyIkmSalt::new([7u8; 32]);
     let hkdf_salt = HkdfSalt::new([8u8; 32]);
     let protected = PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V6.to_string(),
+        format: format::PRIVATE_KEY_V7.to_string(),
         subject_handle: "alice@example.com".to_string(),
         kid: TEST_KID.to_string(),
         alg: PrivateKeyAlgorithm::Argon2id {
             ikm_salt: encode_base64url_nopad(ikm_salt.as_bytes()),
             hkdf_salt: encode_base64url_nopad(hkdf_salt.as_bytes()),
-            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+            aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
         },
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
@@ -182,7 +182,7 @@ fn test_password_encrypt_preserves_metadata() {
     assert_eq!(encrypted.protected.kid, kid);
     assert_eq!(encrypted.protected.created_at, created_at);
     assert_eq!(encrypted.protected.expires_at, expires_at);
-    assert_eq!(encrypted.protected.format, format::PRIVATE_KEY_V6);
+    assert_eq!(encrypted.protected.format, format::PRIVATE_KEY_V7);
 }
 
 #[test]
@@ -209,14 +209,14 @@ fn test_password_encrypt_protected_algorithm_shape() {
         BTreeSet::from(["aead", "hkdf_salt", "ikm_salt", "kdf"])
     );
     assert_eq!(object["kdf"], "argon2id-m64t3p4-hkdf-sha256");
-    assert_eq!(object["aead"], alg::AEAD_XCHACHA20_POLY1305);
+    assert_eq!(object["aead"], algorithm::AEAD_XCHACHA20_POLY1305);
 }
 
 #[test]
 fn test_password_decrypt_rejects_sshsig_key() {
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: format::PRIVATE_KEY_V6.to_string(),
+            format: format::PRIVATE_KEY_V7.to_string(),
             subject_handle: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {

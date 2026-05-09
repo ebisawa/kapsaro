@@ -13,7 +13,7 @@ use crate::cli::common::{
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use predicates::prelude::*;
 use secretenv::io::keystore::member::find_active_key_document;
-use secretenv::model::wire::private_key::PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256;
+use secretenv::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::fs;
 use tempfile::TempDir;
@@ -34,7 +34,7 @@ fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> st
     let private_json = format!(
         r#"{{
     "protected": {{
-        "format": "secretenv.private.key@6",
+        "format": "secretenv:format:private-key@7",
         "subject_handle": "{}",
         "kid": "{}",
         "alg": {{
@@ -52,23 +52,23 @@ fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> st
         "ct": "dGVzdA"
     }}
 }}"#,
-        member_handle, kid, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256, ikm_salt, hkdf_salt
+        member_handle, kid, PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256, ikm_salt, hkdf_salt
     );
     fs::write(kid_dir.join("private.json"), private_json).unwrap();
 
     keystore_root
 }
 
-/// Create a minimal test file-enc v4 file
+/// Create a minimal test file-enc v5 file
 fn save_test_encrypted_file(path: &std::path::Path) {
     let content = r#"{
   "protected": {
-    "format": "secretenv.file@4",
+    "format": "secretenv:format:file-enc@5",
     "sid": "550e8400-e29b-41d4-a716-446655440000",
     "wrap": [],
     "payload": {
       "protected": {
-        "format": "secretenv.file.payload@4",
+        "format": "secretenv:format:file-enc:payload@5",
         "sid": "550e8400-e29b-41d4-a716-446655440000",
         "alg": {
           "aead": "xchacha20-poly1305"
@@ -359,7 +359,7 @@ fn test_decrypt_rejects_kv_enc_format() {
     let test_dir = temp_dir.path();
 
     let encrypted_path = test_dir.join("test.kv");
-    let content = r#":SECRETENV_KV 5
+    let content = r#":SECRETENV_KV 6
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
@@ -387,11 +387,11 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 
 #[test]
 fn test_decrypt_detects_file_enc_format_version3() {
-    // Test that decrypt detects file-enc v4 format
+    // Test that decrypt detects file-enc v5 format
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    // Create a minimal file-enc v4 file
+    // Create a minimal file-enc v5 file
     let encrypted_path = test_dir.join("test.json");
     save_test_encrypted_file(&encrypted_path);
 
@@ -778,7 +778,7 @@ fn test_decrypt_rejects_input_and_stdin_together() {
 #[test]
 fn test_decrypt_stdin_rejects_kv_enc_format() {
     let temp_dir = TempDir::new().unwrap();
-    let content = r#":SECRETENV_KV 5
+    let content = r#":SECRETENV_KV 6
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0

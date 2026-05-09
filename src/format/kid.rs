@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 const CROCKFORD_BASE32_ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
-/// Derive a deterministic `kid` from `PublicKey@4.protected_without_kid`.
+/// Derive a deterministic `kid` from `PublicKey@6.protected_without_kid`.
 pub fn derive_public_key_kid(protected_without_kid: &Value) -> Result<String> {
     let canonical_bytes = normalize_to_bytes(protected_without_kid)?;
     let digest = Sha256::digest(&canonical_bytes);

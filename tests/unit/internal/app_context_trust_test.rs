@@ -26,7 +26,7 @@ use crate::model::public_key::{
 };
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
-use crate::model::wire::format::TRUST_LOCAL_V4;
+use crate::model::wire::format::LOCAL_TRUST_V5;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
     kid, member_handle, save_active_public_key_to_workspace, save_public_key,
@@ -64,7 +64,7 @@ fn build_public_key(member_handle: &str, kid: &str, sig_x: &str) -> PublicKey {
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@5".to_string(),
+            format: "secretenv:format:public-key@6".to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
@@ -772,7 +772,7 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
     let owner_handle = "alice@example.com";
     let key_ctx = crate::test_utils::setup_member_key_context(&dir, owner_handle, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V4.to_string(),
+        format: LOCAL_TRUST_V5.to_string(),
         owner_handle: owner_handle.to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-01-01T00:00:00Z".to_string(),

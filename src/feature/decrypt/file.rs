@@ -13,7 +13,7 @@ use crate::feature::envelope::unwrap::{
 };
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verified::VerifiedPrivateKey;
-use crate::model::wire::{alg, format};
+use crate::model::wire::{algorithm, format};
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext,
 };
@@ -21,14 +21,14 @@ use crate::{Error, Result};
 use tracing::debug;
 use zeroize::Zeroizing;
 
-/// Validate file-enc v4 format structure.
+/// Validate file-enc v5 format structure.
 fn validate_file_enc_document_format(verified_doc: &VerifiedFileEncDocument) -> Result<()> {
     let doc = verified_doc.document();
-    if doc.protected.format != format::FILE_ENC_V4 {
+    if doc.protected.format != format::FILE_ENC_V5 {
         return Err(Error::Parse {
             message: format!(
                 "Invalid format: expected '{}', got '{}'",
-                format::FILE_ENC_V4,
+                format::FILE_ENC_V5,
                 doc.protected.format
             ),
             source: None,
@@ -38,21 +38,21 @@ fn validate_file_enc_document_format(verified_doc: &VerifiedFileEncDocument) -> 
     Ok(())
 }
 
-/// Validate file-enc v4 payload structure and algorithm.
+/// Validate file-enc v5 payload structure and algorithm.
 fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) -> Result<()> {
     let doc = verified_doc.document();
-    if doc.protected.payload.protected.format != format::FILE_PAYLOAD_V4 {
+    if doc.protected.payload.protected.format != format::FILE_PAYLOAD_V5 {
         return Err(Error::Parse {
             message: format!(
                 "Invalid payload format: expected '{}', got '{}'",
-                format::FILE_PAYLOAD_V4,
+                format::FILE_PAYLOAD_V5,
                 doc.protected.payload.protected.format
             ),
             source: None,
         });
     }
 
-    if doc.protected.payload.protected.alg.aead != alg::AEAD_XCHACHA20_POLY1305 {
+    if doc.protected.payload.protected.alg.aead != algorithm::AEAD_XCHACHA20_POLY1305 {
         return Err(Error::Crypto {
             message: format!(
                 "Unsupported AEAD algorithm: {}",
@@ -65,7 +65,7 @@ fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) ->
     Ok(())
 }
 
-/// Decrypt file-enc v4 payload content.
+/// Decrypt file-enc v5 payload content.
 pub(crate) fn decrypt_file_payload(
     verified_doc: &VerifiedFileEncDocument,
     content_key: &MasterKey,
@@ -96,7 +96,7 @@ pub(crate) fn decrypt_file_payload(
     Ok(plaintext.to_zeroizing_vec())
 }
 
-/// Decrypt file-enc v4 format (value-based)
+/// Decrypt file-enc v5 format (value-based)
 ///
 /// This function requires a VerifiedFileEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.

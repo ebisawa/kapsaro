@@ -28,7 +28,7 @@ fn validate_recipient_key_count(
     Ok(())
 }
 
-/// Encrypt binary content to file-enc v4 format and return JSON string.
+/// Encrypt binary content to file-enc v5 format and return JSON string.
 pub fn encrypt_file_content(
     content: &[u8],
     recipients: &[String],

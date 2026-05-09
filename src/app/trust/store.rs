@@ -15,7 +15,7 @@ use crate::io::trust::store::{
     load_trust_store, save_trust_store, TrustStoreLoadResult as IoTrustStoreLoadResult,
 };
 use crate::model::trust_store::TrustStoreProtected;
-use crate::model::wire::format::TRUST_LOCAL_V4;
+use crate::model::wire::format::LOCAL_TRUST_V5;
 use crate::support::fs::lock;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
@@ -61,7 +61,7 @@ pub(crate) fn load_or_build_trust_store(
             let now = build_now_timestamp()?;
             Ok(TrustStoreState {
                 protected: TrustStoreProtected {
-                    format: TRUST_LOCAL_V4.to_string(),
+                    format: LOCAL_TRUST_V5.to_string(),
                     owner_handle: owner_handle.to_string(),
                     created_at: now.clone(),
                     updated_at: now,

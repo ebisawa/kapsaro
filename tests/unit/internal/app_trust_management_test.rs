@@ -12,7 +12,7 @@ use crate::feature::trust::verification::verify_trust_store;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::{load_trust_store, save_trust_store};
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
-use crate::model::wire::format::TRUST_LOCAL_V4;
+use crate::model::wire::format::LOCAL_TRUST_V5;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use tempfile::TempDir;
 use time::format_description::well_known::Rfc3339;
@@ -41,7 +41,7 @@ fn parse_timestamp(ts: &str) -> OffsetDateTime {
 fn save_signed_trust_store(home: &TempDir) {
     let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V4.to_string(),
+        format: LOCAL_TRUST_V5.to_string(),
         owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),

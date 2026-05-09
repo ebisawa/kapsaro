@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use secretenv::model::common::{WrapAlgorithm, WrapItem, WrapSet};
-use secretenv::model::wire::hpke;
+use secretenv::model::wire::algorithm;
 
 const ALICE: &str = "alice@example.com";
 const BOB: &str = "bob@example.com";
@@ -15,7 +15,7 @@ fn wrap_item(recipient_handle: &str, kid: &str) -> WrapItem {
     WrapItem {
         recipient_handle: recipient_handle.to_string(),
         kid: kid.to_string(),
-        alg: hpke::ALG_HPKE_32_1_3.to_string(),
+        alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
         enc: ENC_32.to_string(),
         ct: CT_48.to_string(),
     }
@@ -29,7 +29,10 @@ fn test_wrap_set_parse_validates_domain_fields() {
     assert_eq!(item.recipient_handle().as_str(), ALICE);
     assert_eq!(item.kid().as_str(), ALICE_KID);
     assert_eq!(item.alg(), WrapAlgorithm::Hpke32_1_3);
-    assert_eq!(item.alg().as_str(), hpke::ALG_HPKE_32_1_3);
+    assert_eq!(
+        item.alg().as_str(),
+        algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305
+    );
     assert_eq!(item.enc().as_bytes().len(), 32);
     assert_eq!(item.ciphertext().as_bytes().len(), 48);
 }

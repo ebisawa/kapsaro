@@ -124,7 +124,7 @@ pub fn decrypt_kv_single_entry_with_context(
     })
 }
 
-/// Decrypt kv-enc v5 format to KV map
+/// Decrypt kv-enc v6 format to KV map
 ///
 /// This function requires a VerifiedKvEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.

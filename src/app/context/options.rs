@@ -13,6 +13,7 @@ use crate::Result;
 pub(crate) struct CommonCommandOptions {
     pub home: Option<PathBuf>,
     pub identity: Option<PathBuf>,
+    pub debug: bool,
     pub verbose: bool,
     pub workspace: Option<PathBuf>,
     pub ssh_signing_method: Option<SshSigningMethod>,

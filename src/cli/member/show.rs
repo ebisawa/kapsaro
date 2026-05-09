@@ -11,5 +11,5 @@ use super::ShowArgs;
 pub(crate) fn run(args: ShowArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
     let result = load_member_show_result(&options, &args.member_handle)?;
-    print_member_show(args.common.json, &result)
+    print_member_show(args.common.json.json, &result)
 }

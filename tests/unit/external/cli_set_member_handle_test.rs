@@ -19,7 +19,7 @@ fn test_cli_set_parses_member_handle_option() {
 
     match cli.command {
         Commands::Set(args) => {
-            assert_eq!(args.member_handle.as_deref(), Some("ebisawa"));
+            assert_eq!(args.member.member_handle.as_deref(), Some("ebisawa"));
         }
         _ => panic!("expected set command"),
     }

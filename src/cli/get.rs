@@ -13,26 +13,24 @@ use crate::cli::common::command::{
 };
 use crate::cli::common::output::kv::print_kv_read_result;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningOutputOptions};
 use crate::Result;
 
 #[derive(Args)]
 pub struct GetArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOutputOptions,
 
     /// Output all entries
     #[arg(long, short = 'a')]
     pub all: bool,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
-    /// Secret store name; defaults to "default"
-    #[arg(long, short = 'n')]
-    pub name: Option<String>,
+    #[command(flatten)]
+    pub store: KvStoreNameOption,
 
     /// Output in KEY="VALUE" format
     #[arg(long, short = 'k')]
@@ -64,13 +62,14 @@ pub fn run(args: GetArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let kv_map = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let (_, ssh_ctx) =
+                resolve_command_input(&args.common, args.member.member_handle.clone())?;
             let command = resolve_kv_read_command::<GetPolicy>(
                 &options,
-                args.member_handle.clone(),
-                args.name.as_deref(),
+                args.member.member_handle.clone(),
+                args.store.name.as_deref(),
                 ssh_ctx,
             )?;
             run_read_command_with_trust(
@@ -81,7 +80,7 @@ pub fn run(args: GetArgs) -> Result<()> {
                     subject: "signer",
                     allow_non_member: true,
                 },
-                || execute_kv_read_command(&command, read_mode, args.common.verbose),
+                || execute_kv_read_command(&command, read_mode, args.common.debug.debug),
             )
         },
     )?;
@@ -89,7 +88,7 @@ pub fn run(args: GetArgs) -> Result<()> {
     print_kv_read_result(
         &kv_map,
         if args.all { None } else { args.key.as_deref() },
-        args.common.json,
+        args.common.json.json,
         args.with_key,
     )
 }

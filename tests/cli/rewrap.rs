@@ -32,8 +32,10 @@ mod roundtrip;
 /// Build a default RewrapArgs for testing.
 fn default_rewrap_args(common_opts: CommonOptions, member_handle: &str) -> RewrapArgs {
     RewrapArgs {
-        common: common_opts,
-        member_handle: Some(member_handle.to_string()),
+        common: common_opts.into(),
+        member: secretenv::cli::options::MemberHandleOption {
+            member_handle: Some(member_handle.to_string()),
+        },
         rotate_key: false,
         clear_disclosure_history: false,
         targets: Vec::new(),
@@ -114,10 +116,13 @@ fn save_kv_file(
             continue;
         }
         let set_args = set::SetArgs {
-            common: common_opts.clone(),
-
-            member_handle: Some(member_handle.to_string()),
-            name: Some(name.to_string()),
+            common: common_opts.clone().into(),
+            member: secretenv::cli::options::MemberHandleOption {
+                member_handle: Some(member_handle.to_string()),
+            },
+            store: secretenv::cli::options::KvStoreNameOption {
+                name: Some(name.to_string()),
+            },
             stdin: false,
             key: key.to_string(),
             value: Some(value.to_string()),

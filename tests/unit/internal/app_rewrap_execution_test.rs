@@ -116,7 +116,7 @@ fn build_empty_plan(
         workspace_dir,
         &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-        options.verbose,
+        options.debug,
     )
     .unwrap()
     .trust_context()
@@ -288,8 +288,9 @@ fn test_execute_reviewed_rewrap_artifacts_rejects_unreviewed_output_member_set_n
         accepted_promotions: Vec::new(),
     };
     let post_members = load_active_member_files(&workspace_dir).unwrap();
-    let (fixed_members, post_promotion_trust) =
+    let (fixed_members, mut post_promotion_trust) =
         build_verified_post_promotion_state(&plan, post_members);
+    post_promotion_trust.is_interactive = false;
 
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
@@ -475,7 +476,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &workspace_dir,
             &execution.member_handle,
             Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-            options.verbose,
+            options.debug,
         )
         .unwrap()
         .trust_context()

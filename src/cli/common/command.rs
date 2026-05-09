@@ -26,7 +26,7 @@ use crate::cli::common::trust::{
     confirm_non_member_acceptance, confirm_recipient_approvals, confirm_signer_key_approval,
 };
 use crate::cli::identity_prompt;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::ToCommonOptions;
 use crate::Result;
 
 pub(crate) struct ReadCommandLabels<'a> {
@@ -55,7 +55,7 @@ pub(crate) trait WriteCommandPlan {
 }
 
 pub(crate) fn resolve_command_input(
-    common: &CommonOptions,
+    common: &impl ToCommonOptions,
     member_handle: Option<String>,
 ) -> Result<(CommonCommandOptions, Option<SshSigningContextResolution>)> {
     let options = resolve_options(common);
@@ -63,8 +63,8 @@ pub(crate) fn resolve_command_input(
     Ok((options, ssh_ctx))
 }
 
-pub(crate) fn resolve_options(common: &CommonOptions) -> CommonCommandOptions {
-    CommonCommandOptions::from(common)
+pub(crate) fn resolve_options(common: &impl ToCommonOptions) -> CommonCommandOptions {
+    CommonCommandOptions::from(&common.to_common_options())
 }
 
 pub(crate) fn resolve_required_member_handle(
@@ -99,7 +99,7 @@ where
 }
 
 pub(crate) fn resolve_execution_input(
-    common: &CommonOptions,
+    common: &impl ToCommonOptions,
     member_handle: Option<String>,
 ) -> Result<(CommonCommandOptions, ExecutionContext)> {
     let (options, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
@@ -186,7 +186,7 @@ where
 }
 
 pub(crate) fn run_kv_write_command_with_trust<P, T, Execute>(
-    common: &CommonOptions,
+    common: &impl ToCommonOptions,
     member_handle: Option<String>,
     file_name: Option<&str>,
     allow_missing: bool,

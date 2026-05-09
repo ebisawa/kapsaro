@@ -12,7 +12,9 @@
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{
+    ForceOption, MemberHandleOption, SigningOutputOptions, WorkspaceOptions, WorkspaceOutputOptions,
+};
 use crate::Error;
 
 mod add;
@@ -50,28 +52,27 @@ pub enum MemberCommands {
 pub struct AddArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: WorkspaceOptions,
 
     /// Path to PublicKey JSON file
     pub filename: PathBuf,
 
-    /// Force overwrite if member already exists in incoming
-    #[arg(long, short = 'f')]
-    pub force: bool,
+    #[command(flatten)]
+    pub force: ForceOption,
 }
 
 #[derive(Args)]
 pub struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: WorkspaceOutputOptions,
 }
 
 #[derive(Args)]
 pub struct ShowArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: WorkspaceOutputOptions,
 
     /// Member handle to show
     #[arg(value_name = "MEMBER_HANDLE")]
@@ -82,26 +83,24 @@ pub struct ShowArgs {
 pub struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: WorkspaceOptions,
 
     /// Member handle to remove
     #[arg(value_name = "MEMBER_HANDLE")]
     pub member_handle: String,
 
-    /// Force removal without confirmation
-    #[arg(long, short = 'f')]
-    pub force: bool,
+    #[command(flatten)]
+    pub force: ForceOption,
 }
 
 #[derive(Args)]
 pub struct VerifyArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOutputOptions,
 
-    /// Member handle to use for trust store owner resolution
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Approve verified members and add to local trust store
     #[arg(long)]

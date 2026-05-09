@@ -249,7 +249,7 @@ fn load_rewrap_signer_trust_context(
         &plan.workspace_root,
         &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-        request.options.verbose,
+        request.options.debug,
     )?
     .trust_ctx;
     trust_ctx.active_members_by_kid = plan.pre_promotion_trust.active_members_by_kid.clone();

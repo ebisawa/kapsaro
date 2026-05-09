@@ -21,12 +21,12 @@ pub fn list_members(options: &CommonCommandOptions) -> Result<MemberListResult> 
     Ok(MemberListResult {
         active: collect_member_entries(
             &list_active_member_paths(&workspace.root_path)?,
-            options.verbose,
+            options.debug,
             &mut warnings,
         )?,
         incoming: collect_member_entries(
             &list_incoming_member_paths(&workspace.root_path)?,
-            options.verbose,
+            options.debug,
             &mut warnings,
         )?,
         warnings,
@@ -49,7 +49,7 @@ pub fn load_member_show_result(
             message: format!("Member '{}' not found in workspace", member_handle),
         });
     };
-    let verified = verify_member_file(&member_path, Some(member_handle), options.verbose)?;
+    let verified = verify_member_file(&member_path, Some(member_handle), options.debug)?;
     Ok(MemberShowResult {
         member: build_member_document_view(verified.public_key, verified.warnings)?,
         status: MembershipStatus::from(status),

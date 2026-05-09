@@ -5,6 +5,7 @@
 
 use console::Style;
 
+pub(crate) mod doctor;
 pub(crate) mod inspect;
 pub(crate) mod key;
 pub(crate) mod kv;

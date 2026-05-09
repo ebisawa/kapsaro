@@ -55,8 +55,10 @@ fn test_encrypt_no_active_members_error() {
     set_ssh_key_from_temp_dir(&mut common_opts, &keystore_tmp);
 
     let args = encrypt::EncryptArgs {
-        common: common_opts,
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        common: common_opts.into(),
+        member: secretenv::cli::options::MemberHandleOption {
+            member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        },
         out: Some(workspace_dir.join("output.encrypted")),
         stdout: false,
         stdin: false,

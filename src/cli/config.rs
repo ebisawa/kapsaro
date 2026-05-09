@@ -10,7 +10,7 @@ use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::config::{
     print_config_list, print_config_set_result, print_config_unset_result, print_config_value,
 };
-use crate::cli::options::CommonOptions;
+use crate::cli::options::LocalOptions;
 use crate::Error;
 
 #[derive(Args)]
@@ -39,7 +39,7 @@ pub enum ConfigCommands {
 pub struct GetArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOptions,
 
     /// Configuration key
     pub key: String,
@@ -49,7 +49,7 @@ pub struct GetArgs {
 pub struct SetArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOptions,
 
     /// Configuration key
     pub key: String,
@@ -62,7 +62,7 @@ pub struct SetArgs {
 pub struct UnsetArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOptions,
 
     /// Configuration key
     pub key: String,
@@ -72,7 +72,7 @@ pub struct UnsetArgs {
 pub struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOptions,
 }
 
 pub fn run(args: ConfigArgs) -> Result<(), Error> {

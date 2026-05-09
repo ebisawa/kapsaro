@@ -22,7 +22,7 @@ use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
 use crate::support::fs::load_bytes;
 use crate::{Error, Result};
 
@@ -33,11 +33,10 @@ use crate::{Error, Result};
 pub struct EncryptArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningQuietOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Output file path
     #[arg(long, short = 'o', conflicts_with = "stdout")]
@@ -67,12 +66,13 @@ pub fn run(args: EncryptArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let (encrypted, approval_warnings) = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let (_, ssh_ctx) =
+                resolve_command_input(&args.common, args.member.member_handle.clone())?;
             let command = resolve_encrypt_file_command(
                 &options,
-                args.member_handle.clone(),
+                args.member.member_handle.clone(),
                 input_bytes.clone(),
                 ssh_ctx,
             )?;
@@ -87,7 +87,7 @@ pub fn run(args: EncryptArgs) -> Result<()> {
                     execute_encrypt_file_command_with_recipient_set_confirmation(
                         &options,
                         &command,
-                        options.verbose,
+                        options.debug,
                         confirm_recipient_set_approval,
                     )
                 },
@@ -96,7 +96,7 @@ pub fn run(args: EncryptArgs) -> Result<()> {
     )?;
 
     print_warnings(&approval_warnings);
-    save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet)?;
+    save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet.quiet)?;
     Ok(())
 }
 

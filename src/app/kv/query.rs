@@ -52,7 +52,7 @@ where
     let command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
     let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?;
-    let verified_doc = verify_kv_content(&file.kv_content(), options.verbose)?;
+    let verified_doc = verify_kv_content(&file.kv_content(), options.debug)?;
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
     let trust_plan = evaluate_read_artifact_trust::<P>(
         options,

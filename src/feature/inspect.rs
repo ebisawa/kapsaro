@@ -18,7 +18,7 @@ pub struct InspectSection {
     pub lines: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct InspectOutput {
     pub title: String,
     pub sections: Vec<InspectSection>,

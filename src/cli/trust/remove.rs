@@ -18,13 +18,13 @@ use super::{RecipientRemoveArgs, RemoveArgs};
 
 pub(crate) fn run_key(args: RemoveArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_handle = args.member_handle.clone();
+    let member_handle = args.member.member_handle.clone();
     let result = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
             let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
-            remove_known_key_command(&options, &execution, &args.kid, options.verbose)
+            remove_known_key_command(&options, &execution, &args.kid, options.debug)
         },
     )?;
     text::print_warnings(&result.warnings);
@@ -34,13 +34,13 @@ pub(crate) fn run_key(args: RemoveArgs) -> Result<(), Error> {
 
 pub(crate) fn run_recipient(args: RecipientRemoveArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_handle = args.member_handle.clone();
+    let member_handle = args.member.member_handle.clone();
     let result = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
             let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
-            remove_recipient_set_command(&options, &execution, &args.sid, options.verbose)
+            remove_recipient_set_command(&options, &execution, &args.sid, options.debug)
         },
     )?;
     text::print_warnings(&result.warnings);

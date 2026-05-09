@@ -15,12 +15,12 @@ use crate::app::registration::{
 use crate::cli::common::command::{resolve_options, resolve_required_member_handle};
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::ToCommonOptions;
 use crate::Error;
 use output::{print_init_noop_message, print_missing_key_notice, print_registration_outcome};
 
 pub(crate) fn run_registration_command(
-    common: CommonOptions,
+    common: impl ToCommonOptions,
     force: bool,
     github_user: Option<String>,
     member_handle: Option<String>,

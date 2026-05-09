@@ -57,7 +57,7 @@ fn build_ssh_signing_params(options: &CommonCommandOptions) -> SshSigningParams 
         ssh_key: options.identity.clone(),
         signing_method: options.ssh_signing_method,
         base_dir: options.home.clone(),
-        verbose: options.verbose,
+        verbose: options.debug,
         check_determinism: false,
     }
 }

@@ -11,12 +11,13 @@
 7. [Joining as a New Member](#7-joining-as-a-new-member)
 8. [Daily Usage (KV Store)](#8-daily-usage-kv-store)
 9. [File Encryption and Decryption](#9-file-encryption-and-decryption)
-10. [Member Management](#10-member-management)
-11. [Key Management and Rotation](#11-key-management-and-rotation)
-12. [CI/CD Integration](#12-cicd-integration)
-13. [FAQ](#13-faq)
-14. [Command Reference](#14-command-reference)
-15. [Configuration Reference](#15-configuration-reference)
+10. [Workspace Health Checks](#10-workspace-health-checks)
+11. [Member Management](#11-member-management)
+12. [Key Management and Rotation](#12-key-management-and-rotation)
+13. [CI/CD Integration](#13-cicd-integration)
+14. [FAQ](#14-faq)
+15. [Command Reference](#15-command-reference)
+16. [Configuration Reference](#16-configuration-reference)
 
 ---
 
@@ -295,7 +296,7 @@ git commit -m "Initialize secretenv workspace"
 
 Once the Workspace is ready, direct other members to the steps in [Chapter 7](#7-joining-as-a-new-member).
 
-When a member submits a PR, approve it following the [member addition workflow in Chapter 10](#member-addition-git-workflow).
+When a member submits a PR, approve it following the [member addition workflow in Chapter 11](#member-addition-git-workflow).
 
 ---
 
@@ -526,7 +527,34 @@ Information displayed:
 
 ---
 
-## 10. Member Management
+## 10. Workspace Health Checks
+
+Run `secretenv doctor` when preparing a workspace for onboarding, CI/CD setup, release work, or troubleshooting trust and recipient warnings.
+
+```bash
+secretenv doctor
+secretenv doctor --verbose
+secretenv doctor --workspace .secretenv --home ~/.config/secretenv
+```
+
+The command performs read-only checks for:
+
+- Workspace structure and Git binding
+- Active and incoming member files, key expiry, duplicate `kid` values, and GitHub binding or verification state
+- Local keystore availability and active private key readiness
+- Local trust store approvals for active members
+- Encrypted artifacts under `.secretenv/secrets/`
+- CI environment-key readiness when `SECRETENV_PRIVATE_KEY` is set
+
+Artifact checks verify metadata, signatures, recipients, and disclosure history while secret payloads remain encrypted.
+
+The output is grouped into summary, next actions, findings, healthy areas, and details. Use `--verbose` to include check ids and lower-level reasons. The command exits with status 1 only when a FAIL finding exists. WARN and SKIP findings exit with status 0 so operators can review them without breaking local troubleshooting flows.
+
+`secretenv doctor` does not prompt for approval. If it recommends trusting a key, approving a recipient set, or running `rewrap`, run the command shown in the next-action line after reviewing the finding.
+
+---
+
+## 11. Member Management
 
 ### Member Addition Git Workflow
 
@@ -670,7 +698,7 @@ In practice, member removal is not complete until you have handled the **secret 
 
 ---
 
-## 11. Key Management and Rotation
+## 12. Key Management and Rotation
 
 This chapter is about keeping your own keys usable and safe over time. You will mostly come here when a key is nearing expiration, when compromise is suspected, or when you want to clean up old keys.
 
@@ -789,7 +817,7 @@ As a guideline, retain old keys for 1–3 months after rewrap completion.
 
 ---
 
-## 12. CI/CD Integration
+## 13. CI/CD Integration
 
 secretenv supports CI/CD environments through portable private key export and environment variable-based key loading, **but only in trusted CI contexts**. This eliminates the need for SSH keys, `ssh-agent`, or a local keystore in CI runners.
 
@@ -946,7 +974,7 @@ All other commands remain unavailable when loading keys via environment variable
 
 ---
 
-## 13. FAQ
+## 14. FAQ
 
 ### General
 
@@ -1055,11 +1083,11 @@ To eliminate the risk of exposure after removal, always rotate the values (API k
 
 ### Q: Is key rotation supported?
 
-Yes. `secretenv rewrap --rotate-key` regenerates encryption keys and re-encrypts everything. This supports both member changes and periodic rotation. See [Chapter 11](#11-key-management-and-rotation).
+Yes. `secretenv rewrap --rotate-key` regenerates encryption keys and re-encrypts everything. This supports both member changes and periodic rotation. See [Chapter 12](#12-key-management-and-rotation).
 
 ### Q: Does it work in CI/CD environments?
 
-Yes. `secretenv run` and `secretenv get` work non-interactively via environment variable-based key loading. See [Chapter 12](#12-cicd-integration) for setup details, allowed contexts, and security considerations.
+Yes. `secretenv run` and `secretenv get` work non-interactively via environment variable-based key loading. See [Chapter 13](#13-cicd-integration) for setup details, allowed contexts, and security considerations.
 
 ### Troubleshooting
 
@@ -1069,7 +1097,7 @@ Run `ssh-add -l` to check. If empty, add your key with `ssh-add ~/.ssh/id_ed2551
 
 ### Q: "Key expired" warnings or errors
 
-Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 11](#11-key-management-and-rotation): generate a new key with `secretenv key new`, stage it with `secretenv join`, then run `secretenv rewrap` after the PR is merged.
+Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 12](#12-key-management-and-rotation): generate a new key with `secretenv key new`, stage it with `secretenv join`, then run `secretenv rewrap` after the PR is merged.
 
 ### Q: Unexpected approval prompts when decrypting
 
@@ -1081,7 +1109,7 @@ This means your SSH key produced different signatures for the same input on two 
 
 ---
 
-## 14. Command Reference
+## 15. Command Reference
 
 ### Common Options (Available for All Commands)
 
@@ -1094,7 +1122,8 @@ This means your SSH key produced different signatures for the same input on two 
 | `--ssh-keygen` | Use ssh-keygen command |
 | `--json` | Output in JSON format |
 | `-q` / `--quiet` | Minimal output |
-| `-v` / `--verbose` | Verbose logging |
+| `-v` / `--verbose` | Show command-specific verbose output |
+| `--debug` | Show internal debug trace logs |
 
 ### Initialization and Joining
 
@@ -1126,6 +1155,12 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv decrypt <file> (--out <path> \| --stdout)` | Decrypt a file |
 | `secretenv decrypt --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
 | `secretenv inspect <file>` | Display encrypted file metadata (no decryption needed) |
+
+### Diagnostics
+
+| Command | Description |
+|---------|-------------|
+| `secretenv doctor [--workspace <path>] [--home <path>] [--member-handle <id>] [--verbose] [--debug]` | Run read-only health checks for workspace structure, members, local trust state, encrypted artifacts, and CI environment-key readiness |
 
 ### Member Management
 
@@ -1174,7 +1209,7 @@ Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` /
 
 ---
 
-## 15. Configuration Reference
+## 16. Configuration Reference
 
 ### Common Optional Configuration
 
@@ -1255,7 +1290,7 @@ If the config file does not exist, secretenv falls back to environment variables
 
 **Notes:**
 
-- `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 12](#12-cicd-integration) for details.
+- `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 13](#13-cicd-integration) for details.
 - `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
 - `SECRETENV_WORKSPACE` overrides automatic workspace detection. Useful when running commands outside the Git repository tree or when using a workspace outside the current directory.
 

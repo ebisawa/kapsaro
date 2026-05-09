@@ -227,7 +227,7 @@ where
         &command.target.workspace_root.root_path,
         &command.execution.member_handle,
         Some(derive_self_sig_x(&command.execution.key_ctx.signing_key)),
-        options.verbose,
+        options.debug,
     )?;
     let review = MutationReviewSnapshot::build(
         command.target,
@@ -237,7 +237,7 @@ where
     let signer_trust = evaluate_signer_trust(
         review.existing_content(),
         recipient_review.trust_context(),
-        options.verbose,
+        options.debug,
         P::CAPABILITY,
     )?;
     let mut warnings = command.warnings;
@@ -251,7 +251,7 @@ where
         trust_context: recipient_review.trust_context().clone(),
         warnings,
         review,
-        verbose: options.verbose,
+        verbose: options.debug,
         _policy: PhantomData,
     })
 }

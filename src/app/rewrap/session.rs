@@ -41,7 +41,7 @@ where
         &input.explicit_targets,
     )?;
     let accepted_promotions =
-        collect_accepted_promotions(&plan, request.options.verbose, confirm_promotions)?;
+        collect_accepted_promotions(&plan, request.options.debug, confirm_promotions)?;
     let request = RewrapBatchRequest {
         accepted_promotions,
         ..request
@@ -49,7 +49,7 @@ where
     let trust_plan = super::trust::build_rewrap_trust(
         &plan,
         &request.accepted_promotions,
-        request.options.verbose,
+        request.options.debug,
     )?;
     let approvals = review_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
     let post_promotion_trust = super::trust::build_post_promotion_trust_context(

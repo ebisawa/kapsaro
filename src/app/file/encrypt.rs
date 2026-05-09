@@ -48,7 +48,7 @@ pub(crate) fn resolve_encrypt_file_command(
         &workspace_root.root_path,
         &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-        options.verbose,
+        options.debug,
     )?;
     let workspace_members = trust_plan.workspace_members();
     let mut warnings = build_write_execution_warnings(&execution)?;

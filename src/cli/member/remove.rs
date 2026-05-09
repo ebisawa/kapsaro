@@ -21,7 +21,7 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
     let preview = evaluate_member_removal(&options, &args.member_handle)?;
     print_member_remove_preview(&preview);
-    confirm_member_remove(args.force, &args.member_handle)?;
+    confirm_member_remove(args.force.force, &args.member_handle)?;
     let result = remove_member(&options, &args.member_handle)?;
     print_member_remove_summary(&result.member_handle);
 

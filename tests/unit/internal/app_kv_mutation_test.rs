@@ -105,7 +105,8 @@ fn test_execute_set_rejects_unreviewed_output_member_set_non_interactive() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let reviewed = evaluate_set_plan(&options, None);
+        let mut reviewed = evaluate_set_plan(&options, None);
+        reviewed.trust_context.is_interactive = false;
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,

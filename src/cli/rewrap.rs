@@ -5,7 +5,7 @@
 
 use crate::cli::common::command::{resolve_options, resolve_trust_store_owner_member};
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{MemberHandleOption, SigningQuietOutputOptions};
 use crate::Result;
 use clap::Args;
 use std::path::PathBuf;
@@ -17,15 +17,14 @@ mod promotion;
 pub struct RewrapArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningQuietOutputOptions,
 
     /// Clear removed_recipients history
     #[arg(long)]
     pub clear_disclosure_history: bool,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Rotate content key (full re-encryption)
     #[arg(long)]
@@ -40,7 +39,7 @@ pub fn run(args: RewrapArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || batch::run_batch_rewrap(&args),
     )
 }

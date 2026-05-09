@@ -28,7 +28,7 @@ use super::PurgeArgs;
 pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
     let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
     let options = resolve_options(&args.common);
-    let member_handle = args.member_handle.clone();
+    let member_handle = args.member.member_handle.clone();
     let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
     let candidates = run_with_trust_store_reset_recovery(
         &options,
@@ -40,7 +40,7 @@ pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
         return Ok(());
     }
 
-    if !args.force {
+    if !args.force.force {
         if !tty::is_interactive() {
             return Err(Error::InvalidOperation {
                 message: "Non-interactive mode requires --force flag for purge".to_string(),
@@ -55,7 +55,7 @@ pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
     let result = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
-        || execute_purge(&options, &execution, older_than_timestamp, options.verbose),
+        || execute_purge(&options, &execution, older_than_timestamp, options.debug),
     )?;
     print_trust_purge_outcome(&result, &mut shown_warnings);
     Ok(())
@@ -64,7 +64,7 @@ pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
 pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
     let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
     let options = resolve_options(&args.common);
-    let member_handle = args.member_handle.clone();
+    let member_handle = args.member.member_handle.clone();
     let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
     let candidates = run_with_trust_store_reset_recovery(
         &options,
@@ -82,7 +82,7 @@ pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
         return Ok(());
     }
 
-    if !args.force {
+    if !args.force.force {
         if !tty::is_interactive() {
             return Err(Error::InvalidOperation {
                 message: "Non-interactive mode requires --force flag for purge".to_string(),
@@ -97,7 +97,7 @@ pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
     let result = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
-        || execute_recipient_set_purge(&options, &execution, older_than_timestamp, options.verbose),
+        || execute_recipient_set_purge(&options, &execution, older_than_timestamp, options.debug),
     )?;
     print_recipient_set_purge_outcome(&result, &mut shown_warnings);
     Ok(())

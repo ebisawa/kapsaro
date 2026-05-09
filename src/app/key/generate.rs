@@ -16,11 +16,11 @@ fn generate_key_with_github_user(
     mut options: KeyGenerationOptions,
     github_user: Option<String>,
 ) -> Result<KeyGenerationResult> {
-    let github_account = resolve_github_account(github_user, options.verbose)?;
+    let github_account = resolve_github_account(github_user, options.debug)?;
     options.github_account = github_account.clone();
 
     let github_verification = if let Some(account) = github_account.as_ref() {
-        verify_preflight_github_binding(&options.ssh_binding.public_key, account, options.verbose)?
+        verify_preflight_github_binding(&options.ssh_binding.public_key, account, options.debug)?
             .into()
     } else {
         OnlineVerificationStatus::NotConfigured
@@ -51,7 +51,7 @@ pub fn generate_key_command(
             created_at,
             expires_at,
             no_activate,
-            debug: options.verbose,
+            debug: options.debug,
             github_account: None,
             verbose: options.verbose,
             ssh_binding: ssh_ctx.into_ssh_binding(),

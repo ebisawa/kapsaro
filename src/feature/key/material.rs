@@ -8,9 +8,9 @@ use crate::crypto::kem::{
     X25519SecretKey,
 };
 use crate::crypto::rng::fill_secret_array;
-use crate::model::identifiers::jwk::{self, CRV_ED25519, CRV_X25519};
 use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use crate::model::public_key::{IdentityKeys, JwkOkpPublicKey};
+use crate::model::wire::jwk::{self, CRV_ED25519, CRV_X25519};
 use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::support::codec::base64_secret::{
     decode_base64url_nopad_secret_32, encode_base64url_nopad_secret_32,

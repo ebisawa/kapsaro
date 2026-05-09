@@ -8,8 +8,8 @@ use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtu
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::feature::trust::verification::verify_trust_store;
 use secretenv::format::schema::validator::load_embedded_trust_validator;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use secretenv::model::wire::format::TRUST_LOCAL_V4;
 use std::collections::BTreeMap;
 
 #[test]

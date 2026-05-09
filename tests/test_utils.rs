@@ -74,8 +74,8 @@ pub fn setup_trust_store_for_workspace(
     use secretenv::io::trust::paths::get_trust_store_file_path;
     use secretenv::io::trust::store::save_trust_store;
     use secretenv::io::workspace::members::load_active_member_files;
-    use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
     use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+    use secretenv::model::wire::format::TRUST_LOCAL_V4;
     use std::collections::BTreeMap;
 
     let active_members = load_active_member_files(workspace_path).unwrap();

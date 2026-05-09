@@ -11,7 +11,7 @@ use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
-use crate::model::identifiers::context;
+use crate::model::wire::context;
 use crate::support::kid::format_kid_display_lossy;
 use crate::Result;
 use tracing::debug;

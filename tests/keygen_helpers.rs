@@ -77,7 +77,7 @@ fn generate_kem_keypair() -> (JwkOkpPrivateKey, String) {
     let pub_key = b64(pk.as_bytes());
     let keypair = JwkOkpPrivateKey {
         kty: "OKP".to_string(),
-        crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
         x: pub_key.clone(),
         d: encode_base64url_nopad_secret_32(&SecretArray::new(*sk.as_bytes()))
             .into_plain_string_for_output(),
@@ -95,7 +95,7 @@ fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
     let pub_key = b64(&pk.to_bytes());
     let keypair = JwkOkpPrivateKey {
         kty: "OKP".to_string(),
-        crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
         x: pub_key.clone(),
         d: encode_base64url_nopad_secret_32(&SecretArray::new(sk.to_bytes()))
             .into_plain_string_for_output(),
@@ -143,12 +143,12 @@ pub fn keygen_test(
     let identity_keys = IdentityKeys {
         kem: JwkOkpPublicKey {
             kty: "OKP".to_string(),
-            crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+            crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
             x: kem_pub,
         },
         sig: JwkOkpPublicKey {
             kty: "OKP".to_string(),
-            crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+            crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
             x: sig_pub,
         },
     };

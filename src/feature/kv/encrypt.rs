@@ -10,8 +10,9 @@ use crate::feature::envelope::signature::SigningContext;
 use crate::feature::envelope::wrap::{build_wraps_for_recipients, WrapFormat};
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
-use crate::model::kv_enc::header::{KvHeader, KvWrap};
+use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use crate::model::public_key::VerifiedRecipientKey;
+use crate::model::wire::alg;
 use crate::Result;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -45,6 +46,9 @@ pub(crate) fn build_kv_encryption(
     // Create HEAD token
     let head_data = KvHeader {
         sid: *sid,
+        alg: KvFileAlgorithm {
+            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
         created_at: timestamp.to_string(),
         updated_at: timestamp.to_string(),
     };
@@ -93,7 +97,7 @@ where
     Ok(entries)
 }
 
-/// Encrypt KV map to kv-enc v4 format
+/// Encrypt KV map to kv-enc v5 format
 ///
 /// # Arguments
 /// * `kv_map` - Key-value map to encrypt
@@ -103,7 +107,7 @@ where
 /// * `token_codec` - Token codec to use (JSON/JCS or CBOR)
 ///
 /// # Returns
-/// kv-enc v4 format string with SIG line
+/// kv-enc v5 format string with SIG line
 pub fn encrypt_kv_document<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
@@ -116,7 +120,7 @@ where
     encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
 
-/// Encrypt KV map to kv-enc v4 format with disclosed flag control
+/// Encrypt KV map to kv-enc v5 format with disclosed flag control
 pub(crate) fn encrypt_kv_document_with_disclosed<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],

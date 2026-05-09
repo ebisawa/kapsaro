@@ -49,10 +49,7 @@ fn test_encrypt_recipients_are_all_active_members() {
     let wrap = parsed["protected"]["wrap"].as_array().unwrap();
     assert_eq!(wrap.len(), 3, "All 3 active members should be recipients");
 
-    let recipient_handles: Vec<&str> = wrap
-        .iter()
-        .map(|w| w["recipient_handle"].as_str().unwrap())
-        .collect();
+    let recipient_handles: Vec<&str> = wrap.iter().map(|w| w["rh"].as_str().unwrap()).collect();
     assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE));
     assert!(recipient_handles.contains(&BOB_MEMBER_HANDLE));
     assert!(recipient_handles.contains(&CAROL_MEMBER_HANDLE));

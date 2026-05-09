@@ -7,7 +7,7 @@ use crate::format::schema::document::parse_kv_entry_token;
 use crate::format::token::TokenCodec;
 use crate::model::common::WrapItem;
 use crate::model::kv_enc::entry::KvEntryValue;
-use crate::model::kv_enc::header::{KvHeader, KvWrap};
+use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use crate::model::kv_enc::line::{KvEncLine, KvEncVersion};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::collections::HashMap;
@@ -16,6 +16,9 @@ use uuid::Uuid;
 fn sample_head() -> KvHeader {
     KvHeader {
         sid: Uuid::nil(),
+        alg: KvFileAlgorithm {
+            aead: "xchacha20-poly1305".to_string(),
+        },
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-01-01T00:00:00Z".to_string(),
     }
@@ -38,11 +41,9 @@ fn encode_wrap_token(wrap: &KvWrap) -> String {
     TokenCodec::encode(TokenCodec::JsonJcs, wrap).unwrap()
 }
 
-fn sample_entry_value(key: &str, disclosed: bool) -> KvEntryValue {
+fn sample_entry_value(_key: &str, disclosed: bool) -> KvEntryValue {
     KvEntryValue {
         salt: encode_base64url_nopad(&[0u8; 32]),
-        k: key.to_string(),
-        aead: "xchacha20-poly1305".to_string(),
         nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         disclosed,
@@ -114,7 +115,7 @@ fn test_builder_from_lines_with_some_wrap() {
     let entry = sample_entry_value("A", false);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V4,
+            version: KvEncVersion::V5,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -146,7 +147,7 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
     let entry = sample_entry_value("B", false);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V4,
+            version: KvEncVersion::V5,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -245,7 +246,7 @@ fn test_unsigned_doc_wrap_mut_promotes() {
     let wrap_tok = encode_wrap_token(&wrap);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V4,
+            version: KvEncVersion::V5,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -276,7 +277,7 @@ fn test_serialize_unsigned_format() {
         .build();
 
     let s = doc.serialize_unsigned().unwrap();
-    assert!(s.starts_with(":SECRETENV_KV 4\n"));
+    assert!(s.starts_with(":SECRETENV_KV 5\n"));
     assert!(s.contains(":HEAD "));
     assert!(s.contains(":WRAP "));
     assert!(s.contains("A "));
@@ -290,7 +291,7 @@ fn test_serialize_unsigned_raw_wrap_passthrough() {
     let wrap_tok = encode_wrap_token(&wrap);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V4,
+            version: KvEncVersion::V5,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -317,7 +318,7 @@ fn test_clear_disclosed_flags_clears_disclosed_true() {
 
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V4,
+            version: KvEncVersion::V5,
         },
         KvEncLine::Head {
             token: "ht".to_string(),
@@ -361,7 +362,7 @@ fn test_clear_disclosed_flags_noop_when_all_false() {
     let tok = encode_entry(&val);
     let lines = vec![
         KvEncLine::Header {
-            version: KvEncVersion::V4,
+            version: KvEncVersion::V5,
         },
         KvEncLine::Head {
             token: "ht".to_string(),

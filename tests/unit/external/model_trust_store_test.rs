@@ -3,11 +3,11 @@
 
 //! Unit tests for TrustStoreDocument model
 
-use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
+use secretenv::model::wire::format::TRUST_LOCAL_V4;
 use std::collections::BTreeMap;
 
 fn build_test_known_key(kid: &str, member_handle: &str) -> KnownKey {

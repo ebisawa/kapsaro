@@ -4,7 +4,7 @@
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv::feature::envelope::binding;
 use secretenv::feature::key::protection::binding as private_key_binding;
-use secretenv::model::identifiers::{alg, context as wire_context, format};
+use secretenv::model::wire::{alg, context as wire_context, format};
 use uuid::Uuid;
 
 /// Test HPKE info for kv-file (WRAP line) - v3 format
@@ -22,7 +22,7 @@ fn test_hpke_info_kv_file() {
     let parsed: serde_json::Value = serde_json::from_str(info_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::HPKE_WRAP_KV_FILE_V4);
+    assert_eq!(parsed["p"], wire_context::HPKE_WRAP_KV_FILE_V5);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
     // Should NOT have "rd" field (removed in Rev29)
@@ -71,7 +71,7 @@ fn test_aad_payload_kv() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::PAYLOAD_KV_V4);
+    assert_eq!(parsed["p"], wire_context::PAYLOAD_KV_V5);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["k"], key);
     // salt is NOT in AAD (used in HKDF salt parameter instead)

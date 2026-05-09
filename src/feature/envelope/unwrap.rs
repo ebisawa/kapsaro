@@ -84,7 +84,7 @@ pub fn unwrap_master_key(
 /// This is useful for rewrap operations where you need to get the content key
 /// without decrypting the entire payload.
 ///
-/// **Note**: This function selects wrap_item by `kid` (key ID) rather than `recipient_handle` (recipient ID),
+/// **Note**: This function selects wrap_item by `kid` rather than the recipient handle label,
 /// then validates that the located wrap_item carries the expected `member_handle`.
 /// This preserves the cryptographic binding on `kid` (HPKE info includes `kid`) while
 /// rejecting inconsistent recipient metadata.

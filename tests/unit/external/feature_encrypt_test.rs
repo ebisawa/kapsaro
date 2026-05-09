@@ -18,7 +18,7 @@ use secretenv::feature::verify::kv::signature::verify_kv_document;
 use secretenv::format::kv::document::parse_kv_document;
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::model::file_enc::FileEncDocument;
-use secretenv::model::identifiers::format::FILE_ENC_V4;
+use secretenv::model::wire::format::FILE_ENC_V4;
 
 /// Generate Ed25519 signing key from seed for tests
 fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
@@ -146,7 +146,7 @@ fn test_encrypt_kv_document_via_inner_api() {
         encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 4\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 5\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));

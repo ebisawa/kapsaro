@@ -8,7 +8,7 @@ use crate::crypto::rng::fill_random_array;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
-use crate::model::identifiers::context;
+use crate::model::wire::context;
 use crate::support::kid::format_kid_display_lossy;
 use crate::support::secret::SecretString;
 use crate::Result;

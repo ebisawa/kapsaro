@@ -277,7 +277,7 @@ fn test_inspect_kv_enc_shows_wrap_data() {
 }
 
 #[test]
-fn test_inspect_kv_enc_entries_contain_k_field() {
+fn test_inspect_kv_enc_shows_header_aead_not_entry_k() {
     let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
 
     let encrypted = EncContent::detect(content).unwrap();
@@ -289,9 +289,19 @@ fn test_inspect_kv_enc_entries_contain_k_field() {
         .find(|s| s.title.starts_with("Entries"))
         .expect("Should have Entries section");
     assert!(
-        entries.lines.iter().any(|l| l.contains("K:")),
-        "Entries should contain K field. Lines: {:?}",
+        !entries.lines.iter().any(|l| l.contains("K:")),
+        "Entries should not contain K field. Lines: {:?}",
         entries.lines
+    );
+    let header = output
+        .sections
+        .iter()
+        .find(|s| s.title == "Header")
+        .expect("Should have Header section");
+    assert!(
+        header.lines.iter().any(|l| l.contains("AEAD:")),
+        "Header should contain AEAD field. Lines: {:?}",
+        header.lines
     );
 }
 

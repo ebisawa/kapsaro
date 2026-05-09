@@ -9,10 +9,10 @@ use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
-use crate::model::identifiers::alg;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, PublicKey,
 };
+use crate::model::wire::alg;
 use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::support::kid::format_kid_display;
 use crate::Result;
@@ -53,7 +53,7 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
             github_account: Some(github_account),
         });
     let protected_without_kid = PublicKeyProtectedWithoutKid {
-        format: crate::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+        format: crate::model::wire::format::PUBLIC_KEY_V5.to_string(),
         subject_handle: params.member_handle.to_string(),
         identity: params.identity.clone(),
         binding_claims: binding_claims.clone(),

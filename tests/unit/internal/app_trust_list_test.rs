@@ -8,8 +8,8 @@ use crate::app_test_utils::build_test_command_options;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
-use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use crate::model::wire::format::TRUST_LOCAL_V4;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use tempfile::TempDir;
 

@@ -667,7 +667,7 @@ file-enc is a JSON-based signed container. The elements that matter most for rev
 | `payload.encrypted` | Nonce and ciphertext | Holds the file body protected by the DEK |
 | `signature` | `signature_v4` signature | Protects the integrity of the full `protected` object, including wrap and payload |
 
-`wrap[].recipient_handle` is informational and helpful for review, but it is not the cryptographic lookup key. Recipient binding is keyed by `kid`.
+`wrap[].rh` is the informational recipient handle label used for review, but it is not the cryptographic lookup key. Recipient binding is keyed by `kid`.
 
 The full document layout is as follows.
 
@@ -678,7 +678,7 @@ The full document layout is as follows.
     "sid": "<UUID>",
     "wrap": [
       {
-        "recipient_handle": "<member_handle>",
+        "rh": "<member_handle>",
         "kid": "<canonical kid>",
         "alg": "hpke-32-1-3",
         "enc": "<b64url>",
@@ -687,7 +687,7 @@ The full document layout is as follows.
     ],
     "removed_recipients": [
       {
-        "recipient_handle": "<member_handle>",
+        "rh": "<member_handle>",
         "kid": "<canonical kid>",
         "removed_at": "<RFC3339>"
       }
@@ -805,10 +805,10 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 | Line type | Content | Security role |
 | --- | --- | --- |
-| `:SECRETENV_KV 4` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
-| `:HEAD` | File context such as `sid` and timestamps | Binds wraps and entries to a single file context |
+| `:SECRETENV_KV 5` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
+| `:HEAD` | File context such as `sid`, AEAD, and timestamps | Binds wraps and entries to a single file context |
 | `:WRAP` | HPKE-wrapped MK and removal history | Represents recipient state and key-distribution state |
-| `KEY` lines | Per-entry ciphertext | Self-contained encrypted units carrying salt, nonce, and AEAD metadata |
+| `KEY` lines | Per-entry ciphertext | Encrypted units made from the line key plus token salt, nonce, and ciphertext |
 | `:SIG` | Document signature | Protects the integrity of the entire body except the signature line itself |
 
 Each token is represented as a JCS-canonicalized JSON object encoded in base64url.
@@ -816,7 +816,7 @@ Each token is represented as a JCS-canonicalized JSON object encoded in base64ur
 The full document layout is as follows.
 
 ```text
-:SECRETENV_KV 4
+:SECRETENV_KV 5
 :HEAD <token>
 :WRAP <token>
 <KEY> <token>
@@ -825,7 +825,7 @@ The full document layout is as follows.
 :SIG <token>
 ```
 
-`:HEAD` carries the file `sid` and timestamps. `:WRAP` carries the MK wrap set and removal history. Each KEY-line token is a self-contained encrypted unit containing `salt`, `k`, `aead`, `nonce`, and `ct`. The signature covers the entire body except `:SIG`, and the canonical signed form is the LF-terminated concatenation of the data lines.
+`:HEAD` carries the file `sid`, VALUE AEAD, and timestamps. `:WRAP` carries the MK wrap set and removal history. Each KEY-line token contains `salt`, `nonce`, and `ct`; the KEY comes from the line prefix. The signature covers the entire body except `:SIG`, and the canonical signed form is the LF-terminated concatenation of the data lines.
 
 ### 7.2 Design Rationale for Two-Layer Key Structure
 
@@ -901,26 +901,26 @@ graph TB
 
 On encryption, SecretEnv first generates the MK and HPKE-wraps it to each recipient. It then generates a salt for each entry, derives a CEK using HKDF with `sid` in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
 
-On decryption, it verifies the signature first, applies the trust policy from §10, unwraps the MK, and derives CEKs only for the entries that need to be read. Each entry is then decrypted with AAD that includes `k`, `sid`, and `p`.
+On decryption, it verifies the signature first, applies the trust policy from §10, unwraps the MK, and derives CEKs only for the entries that need to be read. Each entry is then decrypted with AAD that includes the KEY line prefix, `sid`, and `p`.
 
 As with file-enc, signature verification always precedes decryption.
 
 ### 7.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:kv:cek@4` and `sid`.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:kv:cek@5` and `sid`.
 - The salt is independently generated for each entry.
 - Including `sid` in the derivation context ensures that copying an entry to a different file does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
-- Entry AAD includes the dotenv key name `k`, the file identifier `sid`, and the protocol identifier `p = secretenv:kv:payload@4`.
-- Including `k` prevents entry swapping within the same kv-enc document.
+- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:kv:payload@5`.
+- Including the KEY line prefix prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - `salt` is already consumed by HKDF, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 7.5 HPKE wrap (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:kv:hpke-wrap@4`.
+- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:kv:hpke-wrap@5`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into unwrap failure.
 
@@ -1018,7 +1018,7 @@ In cryptographic terms, one of these may appear sufficient in isolation, but als
 
 ### 8.5 Design Decision to Exclude recipients from Payload AAD
 
-Recipients, meaning the list of recipient_handles in the wrap array, are not included in payload AAD.
+Recipients, meaning the list of `rh` values in the wrap array, are not included in payload AAD.
 
 Reason: This allows `rewrap` to replace only the wraps while keeping the payload fixed. If recipients were included in AAD, every recipient change would require re-encrypting the entire payload.
 

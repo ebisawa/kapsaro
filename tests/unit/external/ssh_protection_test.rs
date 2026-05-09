@@ -14,14 +14,14 @@ use secretenv::feature::key::protection::key_derivation::build_sign_message;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::model::identifiers::{
-    alg,
-    context::{SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6},
-    format,
-};
 use secretenv::model::private_key::{
     IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData,
     PrivateKeyPlaintext, PrivateKeyProtected,
+};
+use secretenv::model::wire::{
+    alg,
+    context::{SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6, SSH_PRIVATE_KEY_ENC_INFO_PREFIX_V6},
+    format,
 };
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use std::cell::Cell;
@@ -38,13 +38,13 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                 x: b64(&[2u8; 32]),
                 d: b64(&[1u8; 32]),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                 x: b64(&[4u8; 32]),
                 d: b64(&[3u8; 32]),
             },

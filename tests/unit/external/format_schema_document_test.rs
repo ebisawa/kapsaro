@@ -8,10 +8,10 @@ use secretenv::format::schema::document::{
 };
 use secretenv::format::token::TokenCodec;
 use secretenv::model::common::WrapItem;
-use secretenv::model::identifiers::{alg, format, hpke, private_key};
 use secretenv::model::kv_enc::entry::KvEntryValue;
-use secretenv::model::kv_enc::header::{KvHeader, KvWrap};
+use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use secretenv::model::signature::ArtifactSignature;
+use secretenv::model::wire::{alg, format, hpke, private_key};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
@@ -107,7 +107,7 @@ fn test_parse_file_enc_str_with_schema() {
                 }
             },
             "wrap": [{
-                "recipient_handle": "alice@example.com",
+                "rh": "alice@example.com",
                 "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "alg": hpke::ALG_HPKE_32_1_3,
                 "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -133,6 +133,9 @@ fn test_parse_kv_tokens_with_schema() {
     let kv_salt = encode_base64url_nopad(&[0u8; 32]);
     let head = KvHeader {
         sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+        alg: KvFileAlgorithm {
+            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
         created_at: "2026-01-14T00:00:00Z".to_string(),
         updated_at: "2026-01-14T00:00:00Z".to_string(),
     };
@@ -148,8 +151,6 @@ fn test_parse_kv_tokens_with_schema() {
     };
     let entry = KvEntryValue {
         salt: kv_salt,
-        k: "DATABASE_URL".to_string(),
-        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         disclosed: false,
@@ -175,6 +176,51 @@ fn test_parse_kv_tokens_with_schema() {
         parse_kv_signature_token(&signature_token).unwrap(),
         signature
     );
+}
+
+#[test]
+fn test_parse_kv_head_token_requires_aead_algorithm() {
+    let head = serde_json::json!({
+        "sid": "123e4567-e89b-12d3-a456-426614174000",
+        "created_at": "2026-01-14T00:00:00Z",
+        "updated_at": "2026-01-14T00:00:00Z"
+    });
+    let head_token = TokenCodec::encode(TokenCodec::JsonJcs, &head).unwrap();
+
+    let err = parse_kv_head_token(&head_token).unwrap_err();
+
+    assert!(err.to_string().contains("Invalid secretenv document"));
+}
+
+#[test]
+fn test_parse_kv_head_token_rejects_unsupported_aead_algorithm() {
+    let head = serde_json::json!({
+        "sid": "123e4567-e89b-12d3-a456-426614174000",
+        "alg": { "aead": "aes-256-gcm" },
+        "created_at": "2026-01-14T00:00:00Z",
+        "updated_at": "2026-01-14T00:00:00Z"
+    });
+    let head_token = TokenCodec::encode(TokenCodec::JsonJcs, &head).unwrap();
+
+    let err = parse_kv_head_token(&head_token).unwrap_err();
+
+    assert!(err.to_string().contains("Invalid secretenv document"));
+}
+
+#[test]
+fn test_parse_kv_entry_token_rejects_key_and_aead_fields() {
+    let entry = serde_json::json!({
+        "salt": encode_base64url_nopad(&[0u8; 32]),
+        "k": "DATABASE_URL",
+        "aead": alg::AEAD_XCHACHA20_POLY1305,
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    });
+    let entry_token = TokenCodec::encode(TokenCodec::JsonJcs, &entry).unwrap();
+
+    let err = parse_kv_entry_token(&entry_token).unwrap_err();
+
+    assert!(err.to_string().contains("Invalid secretenv document"));
 }
 
 #[test]
@@ -225,7 +271,7 @@ fn test_parse_kv_signature_token_requires_signer_pub_error() {
 fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let wrap_item = serde_json::json!({
-        "recipient_handle": "alice@example.com",
+        "rh": "alice@example.com",
         "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "alg": hpke::ALG_HPKE_32_1_3,
         "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -287,7 +333,7 @@ fn test_parse_kv_wrap_token_rejects_wrap_count_over_limit() {
 }
 
 #[test]
-fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
+fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
@@ -306,14 +352,14 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
             },
             "wrap": [
                 {
-                    "recipient_handle": "alice@example.com",
+                    "rh": "alice@example.com",
                     "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                     "alg": hpke::ALG_HPKE_32_1_3,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 },
                 {
-                    "recipient_handle": "alice@example.com",
+                    "rh": "alice@example.com",
                     "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
                     "alg": hpke::ALG_HPKE_32_1_3,
                     "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -340,7 +386,7 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rid() {
 }
 
 #[test]
-fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rid() {
+fn test_parse_kv_wrap_token_rejects_duplicate_wrap_rh() {
     let wrap = KvWrap {
         wrap: vec![
             WrapItem {

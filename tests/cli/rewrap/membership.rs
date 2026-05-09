@@ -504,10 +504,7 @@ fn test_rewrap_removes_member_file_enc() {
     let content = fs::read_to_string(&encrypted_path).unwrap();
     let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
     let wrap = doc["protected"]["wrap"].as_array().unwrap();
-    let recipient_handles: Vec<&str> = wrap
-        .iter()
-        .filter_map(|w| w["recipient_handle"].as_str())
-        .collect();
+    let recipient_handles: Vec<&str> = wrap.iter().filter_map(|w| w["rh"].as_str()).collect();
     assert!(
         recipient_handles.contains(&ALICE_MEMBER_HANDLE),
         "ALICE should still be in wrap"
@@ -522,7 +519,7 @@ fn test_rewrap_removes_member_file_enc() {
     let removed_recipient_handles: Vec<&str> = removed
         .unwrap()
         .iter()
-        .filter_map(|r| r["recipient_handle"].as_str())
+        .filter_map(|r| r["rh"].as_str())
         .collect();
     assert!(
         removed_recipient_handles.contains(&BOB_MEMBER_HANDLE),

@@ -5,7 +5,7 @@
 //!
 //! Tests error cases and edge cases in decrypt/unwrap operations.
 //! The happy path is covered by usecase_decrypt_test.rs; this file focuses on
-//! error paths such as wrong kid, empty entries, and recipient_handle mismatch scenarios.
+//! error paths such as wrong kid, empty entries, and recipient handle mismatch scenarios.
 
 use crate::keygen_helpers::{
     build_verified_private_key, build_verified_recipient_key, build_verified_recipient_keys,
@@ -36,9 +36,9 @@ use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
-use secretenv::model::identifiers::jwk::{CRV_ED25519, CRV_X25519};
 use secretenv::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use secretenv::model::wire::jwk::{CRV_ED25519, CRV_X25519};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -178,13 +178,13 @@ fn test_decrypt_file_reports_missing_wrap_kid() {
     );
 }
 
-/// Test that kid matches but recipient_handle doesn't match member_handle -- decryption fails.
+/// Test that kid matches but the recipient handle label doesn't match member_handle.
 #[test]
 fn test_decrypt_file_rejects_recipient_handle_mismatch() {
     let (verified_doc, key_ctx, kid, _temp_dir) =
-        encrypt_file_for_test(b"recipient_handle mismatch test");
+        encrypt_file_for_test(b"recipient handle mismatch test");
 
-    // Use a different member_handle (not matching recipient_handle in wrap item) but correct kid and private key.
+    // Use a different member_handle with the correct kid and private key.
     let different_member_handle = "different@example.com";
     let result = decrypt_file_document(
         &verified_doc,
@@ -196,12 +196,12 @@ fn test_decrypt_file_rejects_recipient_handle_mismatch() {
 
     assert!(
         result.is_err(),
-        "Decryption should fail when member_handle doesn't match recipient_handle"
+        "Decryption should fail when member_handle doesn't match rh"
     );
     let err_msg = format!("{}", result.unwrap_err());
     assert!(
         err_msg.contains("does not match member_handle"),
-        "Error should mention recipient_handle mismatch, got: {}",
+        "Error should mention rh mismatch, got: {}",
         err_msg
     );
     assert!(
@@ -263,9 +263,9 @@ fn test_decrypt_kv_document_roundtrip() {
     );
 }
 
-/// Test that kv decryption fails when the located wrap's recipient_handle does not match member_handle.
+/// Test that kv decryption fails when the located wrap's rh does not match member_handle.
 #[test]
-fn test_decrypt_kv_document_rid_mismatch_fails() {
+fn test_decrypt_kv_document_rh_mismatch_fails() {
     let dotenv = "SECRET_KEY=my-secret-value\n";
     let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_kv_for_test(dotenv);
 
@@ -280,12 +280,12 @@ fn test_decrypt_kv_document_rid_mismatch_fails() {
 
     assert!(
         result.is_err(),
-        "KV decryption should fail when member_handle doesn't match recipient_handle"
+        "KV decryption should fail when member_handle doesn't match rh"
     );
     let err_msg = format!("{}", result.unwrap_err());
     assert!(
         err_msg.contains("does not match member_handle"),
-        "Error should mention recipient_handle mismatch, got: {}",
+        "Error should mention rh mismatch, got: {}",
         err_msg
     );
     assert!(

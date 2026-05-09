@@ -11,7 +11,7 @@ use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
 use secretenv::feature::verify::public_key::verify_public_key_with_attestation;
 use secretenv::format::jcs;
 use secretenv::io::keystore::storage::load_public_key;
-use secretenv::model::identifiers::alg;
+use secretenv::model::wire::alg;
 use secretenv::support::codec::base64_public::decode_base64url_nopad_array;
 use serial_test::serial;
 use tempfile::TempDir;

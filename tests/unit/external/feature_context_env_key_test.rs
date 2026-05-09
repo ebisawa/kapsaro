@@ -4,10 +4,10 @@
 use secretenv::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
 use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
 use secretenv::feature::key::portable_export::export_private_key_portable;
-use secretenv::model::identifiers::format;
 use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
+use secretenv::model::wire::format;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::secret::SecretString;
 

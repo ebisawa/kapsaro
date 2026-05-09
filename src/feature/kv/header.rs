@@ -9,6 +9,7 @@ use crate::Result;
 pub(crate) fn build_updated_header(doc: &KvEncDocument) -> Result<KvHeader> {
     Ok(KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: generate_current_timestamp()?,
     })

@@ -11,7 +11,7 @@ use secretenv::model::file_enc::{
     FileEncAlgorithm, FileEncDocumentProtected, FilePayload, FilePayloadCiphertext,
     FilePayloadHeader,
 };
-use secretenv::model::identifiers::hpke;
+use secretenv::model::wire::hpke;
 use uuid::Uuid;
 
 use crate::keygen_helpers::build_dummy_public_key;
@@ -19,7 +19,7 @@ use crate::keygen_helpers::build_dummy_public_key;
 fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
-        format: secretenv::model::identifiers::format::FILE_ENC_V4.to_string(),
+        format: secretenv::model::wire::format::FILE_ENC_V4.to_string(),
         sid,
         wrap: vec![WrapItem {
             recipient_handle: "alice@example.com".to_string(),
@@ -31,10 +31,10 @@ fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
         removed_recipients: None,
         payload: FilePayload {
             protected: FilePayloadHeader {
-                format: secretenv::model::identifiers::format::FILE_PAYLOAD_V4.to_string(),
+                format: secretenv::model::wire::format::FILE_PAYLOAD_V4.to_string(),
                 sid,
                 alg: FileEncAlgorithm {
-                    aead: secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                    aead: secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305.to_string(),
                 },
             },
             encrypted: FilePayloadCiphertext {
@@ -74,10 +74,7 @@ fn test_sign_file_document_returns_valid_structure() {
     )
     .unwrap();
 
-    assert_eq!(
-        sig.alg,
-        secretenv::model::identifiers::alg::SIGNATURE_ED25519
-    );
+    assert_eq!(sig.alg, secretenv::model::wire::alg::SIGNATURE_ED25519);
     assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(sig.signer_pub.protected.subject_handle, "signer@test");
     assert!(!sig.sig.is_empty());

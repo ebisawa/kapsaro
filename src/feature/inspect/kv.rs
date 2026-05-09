@@ -34,6 +34,7 @@ fn build_kv_enc_header_section(data: &KvEncInspectionData) -> Option<InspectSect
             "Header",
             vec![
                 format!("  SID:         {}", head.sid),
+                format!("  AEAD:        {}", head.alg.aead),
                 format!("  Created:     {}", head.created_at),
                 format!("  Updated:     {}", head.updated_at),
             ],
@@ -69,9 +70,7 @@ fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
         format_section_lines(|out| {
             for (i, (key, entry, _token)) in data.entries.iter().enumerate() {
                 append_line(out, format!("  [{}] Key: {}", i, key));
-                append_line(out, format!("      AEAD:    {}", entry.aead));
                 append_line(out, format!("      Salt:    {}", entry.salt));
-                append_line(out, format!("      K:       {}", entry.k));
                 append_line(out, format!("      Nonce:   {}", entry.nonce));
                 append_line(
                     out,

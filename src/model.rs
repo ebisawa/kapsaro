@@ -12,7 +12,6 @@
 
 pub mod common;
 pub mod file_enc;
-pub mod identifiers;
 pub mod identity;
 pub mod kv_enc;
 pub mod private_key;
@@ -24,3 +23,4 @@ pub mod trust_store;
 pub mod trust_store_verified;
 pub mod verification;
 pub mod verified;
+pub mod wire;

@@ -43,7 +43,7 @@ fn test_encrypt_file() {
     .unwrap();
     assert_eq!(
         file_enc_doc.protected.format,
-        secretenv::model::identifiers::format::FILE_ENC_V4
+        secretenv::model::wire::format::FILE_ENC_V4
     );
 
     let verified_doc = VerifiedFileEncDocument::new(

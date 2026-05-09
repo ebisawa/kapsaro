@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for kv-enc v4 encryption/decryption operations
+//! Unit tests for kv-enc v5 encryption/decryption operations
 
 use crate::keygen_helpers::{
     build_test_private_key, build_verified_private_key, build_verified_recipient_keys,
@@ -137,7 +137,7 @@ fn test_encrypt_and_decrypt_kv() {
     .unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 4\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 5\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));
@@ -180,7 +180,6 @@ fn test_parse_kv_document_keeps_validated_entries_and_signature() {
 
     let keys: Vec<&str> = doc.entries().iter().map(|entry| entry.key()).collect();
     assert_eq!(keys, vec!["A", "B"]);
-    assert_eq!(doc.entries()[0].key(), doc.entries()[0].value().k);
     assert!(!doc.entries()[0].token().is_empty());
     assert!(!doc.signature_token().is_empty());
     assert_eq!(doc.signature().kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
@@ -197,13 +196,13 @@ fn test_parse_kv_document_rejects_duplicate_key_before_token_reparse() {
 }
 
 #[test]
-fn test_parse_kv_document_rejects_line_key_token_key_mismatch() {
+fn test_parse_kv_document_uses_line_key_as_entry_identity() {
     let encrypted = encrypt_kv_document_for_parse_test("A=one\n");
-    let mismatched = replace_line_key(&encrypted, "A", "B");
+    let renamed = replace_line_key(&encrypted, "A", "B");
 
-    let err = parse_kv_document(&mismatched).unwrap_err();
+    let doc = parse_kv_document(&renamed).unwrap();
 
-    assert!(err.to_string().contains("E_KEY_MISMATCH"));
+    assert_eq!(doc.entries()[0].key(), "B");
 }
 
 #[test]
@@ -236,7 +235,7 @@ fn test_encrypt_empty_input() {
     .unwrap();
 
     // Should have header, HEAD line, WRAP line, and SIG line (v3 requires signature)
-    assert!(encrypted.starts_with(":SECRETENV_KV 4\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 5\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains(":SIG "));

@@ -5,7 +5,7 @@
 
 use secretenv::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
 use secretenv::crypto::sign::{sign_trust_store_bytes, verify_trust_store_bytes};
-use secretenv::model::identifiers::alg::SIGNATURE_ED25519;
+use secretenv::model::wire::alg::SIGNATURE_ED25519;
 use serde::{Deserialize, Serialize};
 
 // Test helper to generate X25519 keypair from seed

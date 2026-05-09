@@ -21,7 +21,7 @@ use uuid::Uuid;
 /// - salt: base64url-encoded 32 bytes random value, used for key derivation
 /// - sid: file identifier (UUID) from HEAD line
 ///
-/// cek = HKDF-SHA256(ikm=mk, salt=base64url_decode(salt), info=jcs({p:"secretenv:kv:cek@4", sid}), length=32)
+/// cek = HKDF-SHA256(ikm=mk, salt=base64url_decode(salt), info=jcs({p:"secretenv:kv:cek@5", sid}), length=32)
 pub fn derive_cek(mk: &MasterKey, salt_b64: &str, sid: &Uuid, debug: bool) -> Result<Cek> {
     if debug {
         debug!("[CRYPTO] HKDF-SHA256: expand");

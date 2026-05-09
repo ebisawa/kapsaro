@@ -92,6 +92,12 @@ secretenv get DATABASE_URL
 secretenv run -- ./my-app
 ```
 
+メンバー追加、CI 設定、リリース準備の前に workspace の状態を確認します。
+
+```bash
+secretenv doctor
+```
+
 詳しい導入・運用手順は [User Guide](guides/user_guide_ja.md) を参照してください。
 
 ## 関連ドキュメント

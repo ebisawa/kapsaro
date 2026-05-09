@@ -92,6 +92,12 @@ secretenv get DATABASE_URL
 secretenv run -- ./my-app
 ```
 
+Check workspace health before onboarding, CI setup, or release work:
+
+```bash
+secretenv doctor
+```
+
 For detailed setup and operational guidance, see the [User Guide](guides/user_guide_en.md).
 
 ## Read More

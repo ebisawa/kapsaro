@@ -11,6 +11,7 @@ pub mod options;
 
 // Active v3 commands
 mod decrypt;
+mod doctor;
 pub mod encrypt;
 mod get;
 mod import;
@@ -31,6 +32,7 @@ mod config;
 
 pub use config::ConfigArgs;
 pub use decrypt::DecryptArgs;
+pub use doctor::DoctorArgs;
 pub use get::GetArgs;
 pub use import::ImportArgs;
 pub use init::InitArgs;
@@ -65,6 +67,9 @@ pub enum Commands {
 
     /// Decrypt a file
     Decrypt(DecryptArgs),
+
+    /// Diagnose workspace and local state
+    Doctor(DoctorArgs),
 
     /// Encrypt a file
     Encrypt(encrypt::EncryptArgs),
@@ -116,6 +121,7 @@ pub fn run() -> Result<(), Error> {
     match cli.command {
         Commands::Config(args) => config::run(args),
         Commands::Decrypt(args) => decrypt::run(args),
+        Commands::Doctor(args) => doctor::run(args),
         Commands::Encrypt(args) => encrypt::run(args),
         Commands::Get(args) => get::run(args),
         Commands::Import(args) => import::run(args),
@@ -137,6 +143,7 @@ fn command_capability(command: &Commands) -> CommandCapability {
     match command {
         Commands::Config(_) => CommandCapability::Config,
         Commands::Decrypt(_) => CommandCapability::Decrypt,
+        Commands::Doctor(_) => CommandCapability::Doctor,
         Commands::Encrypt(_) => CommandCapability::Encrypt,
         Commands::Get(_) => CommandCapability::Get,
         Commands::Import(_) => CommandCapability::Import,

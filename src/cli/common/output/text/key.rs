@@ -9,6 +9,8 @@ use crate::cli::common::output::key::{KeyInfoView, KeyListView};
 use crate::support::kid::format_kid_display;
 use crate::support::path::format_path_relative_to_cwd;
 
+const KEY_INFO_LABEL_WIDTH: usize = "Member Handle".len();
+
 pub(crate) fn print_empty_key_list() {
     println!("No members found in keystore");
 }
@@ -100,12 +102,17 @@ pub(crate) fn print_private_key_export_stdout_summary(member_handle: &str, kid: 
 fn print_key_info(key_info: &KeyInfoView<'_>, verbose: bool) {
     let active_marker = if key_info.active { " (ACTIVE)" } else { "" };
     let kid_display = format_kid_display(key_info.kid).unwrap_or_else(|_| key_info.kid.to_string());
-    println!("  Kid:        {}{}", kid_display, active_marker);
+    print_key_info_field("Kid", format_args!("{}{}", kid_display, active_marker));
     if verbose {
-        println!("  Format:     {}", key_info.format);
-        println!("  Member Handle: {}", key_info.member_handle);
-        println!("  Created:    {}", key_info.created_at);
+        print_key_info_field("Format", format_args!("{}", key_info.format));
+        print_key_info_field("Member Handle", format_args!("{}", key_info.member_handle));
+        print_key_info_field("Created", format_args!("{}", key_info.created_at));
     }
-    println!("  Expires:    {}", key_info.expires_at);
+    print_key_info_field("Expires", format_args!("{}", key_info.expires_at));
     println!();
+}
+
+fn print_key_info_field(label: &str, value: std::fmt::Arguments<'_>) {
+    let padding = KEY_INFO_LABEL_WIDTH.saturating_sub(label.len()) + 1;
+    println!("  {label}:{:padding$}{value}", "");
 }

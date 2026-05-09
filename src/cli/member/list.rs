@@ -11,5 +11,5 @@ use super::ListArgs;
 pub(crate) fn run(args: ListArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
     let result = list_members(&options)?;
-    print_member_list(args.common.json, &result)
+    print_member_list(args.common.json.json, &result)
 }

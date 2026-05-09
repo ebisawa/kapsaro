@@ -116,7 +116,7 @@ fn build_empty_plan(
         workspace_dir,
         &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-        options.verbose,
+        options.debug,
     )
     .unwrap()
     .trust_context()
@@ -475,7 +475,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &workspace_dir,
             &execution.member_handle,
             Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-            options.verbose,
+            options.debug,
         )
         .unwrap()
         .trust_context()

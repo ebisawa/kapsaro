@@ -126,6 +126,52 @@ fn test_key_list_json_output() {
 }
 
 #[test]
+fn test_key_list_verbose_aligns_field_values() {
+    let temp_dir = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+
+    let member_handle = TEST_MEMBER_HANDLE;
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("-i")
+        .arg(ssh_priv.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+
+    let output = cmd()
+        .arg("key")
+        .arg("list")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--verbose")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    for prefix in [
+        "  Kid:           ",
+        "  Format:        ",
+        "  Member Handle: ",
+        "  Created:       ",
+        "  Expires:       ",
+    ] {
+        assert!(
+            stdout.lines().any(|line| line.starts_with(prefix)),
+            "expected verbose key list output to contain aligned field prefix '{prefix}', got:\n{stdout}"
+        );
+    }
+
+    drop(ssh_temp);
+}
+
+#[test]
 fn test_key_list_empty() {
     let temp_dir = make_secret_home();
 

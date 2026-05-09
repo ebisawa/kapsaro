@@ -17,7 +17,7 @@ use super::NewArgs;
 pub fn run(args: NewArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let member_handle =
-        resolve_required_member_handle(&options, args.member_handle.clone(), false)?;
+        resolve_required_member_handle(&options, args.member.member_handle.clone(), false)?;
     let github_user = resolve_key_generation_github_user(
         true,
         args.github_user.clone(),

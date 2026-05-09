@@ -11,17 +11,18 @@ use std::path::PathBuf;
 
 use crate::app::file::inspect::execute_inspect_file_command;
 use crate::cli::common::command::resolve_options;
+use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::text::inspect::{
     format_inspect_command_output, print_inspect_banner,
 };
-use crate::cli::options::CommonOptions;
+use crate::cli::options::WorkspaceOutputOptions;
 use crate::Result;
 
 #[derive(Args)]
 pub struct InspectArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: WorkspaceOutputOptions,
 
     /// Input file path
     pub input: PathBuf,
@@ -31,7 +32,11 @@ pub fn run(args: InspectArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let prepared = execute_inspect_file_command(&options, &args.input)?;
 
-    print_inspect_banner(&prepared.input_display);
-    print!("{}", format_inspect_command_output(&prepared));
+    if args.common.json.json {
+        print_json_output(&prepared.output)?;
+    } else {
+        print_inspect_banner(&prepared.input_display);
+        print!("{}", format_inspect_command_output(&prepared));
+    }
     Ok(())
 }

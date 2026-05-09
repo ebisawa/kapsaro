@@ -7,6 +7,7 @@
 pub(crate) enum CommandCapability {
     Config,
     Decrypt,
+    Doctor,
     Encrypt,
     Get,
     Import,
@@ -28,6 +29,7 @@ impl CommandCapability {
         match self {
             Self::Config => "config",
             Self::Decrypt => "decrypt",
+            Self::Doctor => "doctor",
             Self::Encrypt => "encrypt",
             Self::Get => "get",
             Self::Import => "import",
@@ -46,7 +48,10 @@ impl CommandCapability {
     }
 
     pub(crate) fn allows_env_key_mode(self) -> bool {
-        matches!(self, Self::Decrypt | Self::Get | Self::List | Self::Run)
+        matches!(
+            self,
+            Self::Decrypt | Self::Doctor | Self::Get | Self::List | Self::Run
+        )
     }
 
     pub(crate) fn allows_non_member_acceptance(self) -> bool {

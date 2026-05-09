@@ -34,7 +34,26 @@ fn test_init_generates_key_if_missing() {
 }
 
 #[test]
-fn test_init_with_verbose_option() {
+fn test_init_with_debug_option_logs_crypto_trace() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
+
+    cmd()
+        .arg("init")
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-handle")
+        .arg("debug@example.com")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[CRYPTO] SSH: sign_sshsig"));
+}
+
+#[test]
+fn test_init_with_verbose_option_does_not_log_crypto_trace() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
     cmd()
@@ -49,7 +68,7 @@ fn test_init_with_verbose_option() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("[CRYPTO] SSH: sign_sshsig"));
+        .stdout(predicate::str::contains("[CRYPTO] SSH: sign_sshsig").not());
 }
 
 #[test]

@@ -393,6 +393,7 @@ pub fn default_common_options() -> CommonOptions {
         ssh_keygen: true,
         json: false,
         quiet: false,
+        debug: false,
         verbose: false,
     }
 }

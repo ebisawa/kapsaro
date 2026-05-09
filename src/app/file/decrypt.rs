@@ -23,7 +23,7 @@ pub(crate) struct DecryptFileCommand {
     pub trust_outcome: SignerTrustOutcome,
     pub recipient_trust_outcome: RecipientTrustOutcome,
     pub warnings: Vec<String>,
-    verbose: bool,
+    debug: bool,
 }
 
 pub(crate) fn resolve_decrypt_file_command(
@@ -36,7 +36,7 @@ pub(crate) fn resolve_decrypt_file_command(
     let execution = resolve_read_execution(options, member_handle, kid, ssh_ctx)?;
     let mut warnings = build_read_execution_warnings(&execution)?;
 
-    let verified_doc = verify_file_content(&content, options.verbose)?;
+    let verified_doc = verify_file_content(&content, options.debug)?;
     let recipient_evidence = file_recipient_evidence(&verified_doc.document)?;
 
     let trust_plan = evaluate_read_artifact_trust::<DecryptPolicy>(
@@ -54,7 +54,7 @@ pub(crate) fn resolve_decrypt_file_command(
         trust_outcome: trust_plan.signer_outcome,
         recipient_trust_outcome: trust_plan.recipient_outcome,
         warnings,
-        verbose: options.verbose,
+        debug: options.debug,
     })
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn execute_decrypt_file_command(
         &command.verified_doc,
         &command.execution.member_handle,
         &command.execution.key_ctx,
-        command.verbose,
+        command.debug,
     )
     .map(|result| result.value)
 }

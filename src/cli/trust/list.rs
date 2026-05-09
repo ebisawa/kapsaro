@@ -14,22 +14,22 @@ use super::ListArgs;
 
 pub(crate) fn run_keys(args: ListArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_handle = resolve_required_member(&options, args.member_handle.clone())?;
+    let member_handle = resolve_required_member(&options, args.member.member_handle.clone())?;
     let result = run_with_trust_store_reset_recovery(
         &options,
         || Ok(member_handle.clone()),
         || list_known_keys(&options, &member_handle),
     )?;
-    print_trust_list(args.common.json, &result)
+    print_trust_list(args.common.json.json, &result)
 }
 
 pub(crate) fn run_recipients(args: ListArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_handle = resolve_required_member(&options, args.member_handle.clone())?;
+    let member_handle = resolve_required_member(&options, args.member.member_handle.clone())?;
     let result = run_with_trust_store_reset_recovery(
         &options,
         || Ok(member_handle.clone()),
         || list_recipient_sets(&options, &member_handle),
     )?;
-    print_recipient_set_list(args.common.json, &result)
+    print_recipient_set_list(args.common.json.json, &result)
 }

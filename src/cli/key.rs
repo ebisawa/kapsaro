@@ -13,7 +13,9 @@
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{
+    ForceOption, LocalOptions, LocalOutputOptions, MemberHandleOption, SigningOptions,
+};
 use crate::Result;
 
 // Submodule declarations
@@ -47,7 +49,7 @@ pub enum KeyCommand {
 pub struct NewArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
     /// Expiration date (RFC3339 format)
     #[arg(long, conflicts_with = "valid_for")]
@@ -57,9 +59,8 @@ pub struct NewArgs {
     #[arg(long)]
     pub github_user: Option<String>,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Do not activate the generated key
     #[arg(long)]
@@ -74,22 +75,20 @@ pub struct NewArgs {
 pub struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOutputOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 }
 
 #[derive(Args)]
 pub struct ActivateArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Key ID to activate [default: newest valid key]
     pub kid: Option<String>,
@@ -99,15 +98,13 @@ pub struct ActivateArgs {
 pub struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOptions,
 
-    /// Force removal of active key
-    #[arg(long, short = 'f')]
-    pub force: bool,
+    #[command(flatten)]
+    pub force: ForceOption,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Key ID to remove
     pub kid: String,
@@ -120,11 +117,10 @@ secretenv key export [OPTIONS] -o <OUT> [KID]
 pub struct ExportArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Key ID to export [default: active key]
     pub kid: Option<String>,

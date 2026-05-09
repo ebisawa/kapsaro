@@ -21,22 +21,20 @@ use crate::cli::common::command::{
     run_read_command_with_trust, ReadCommandLabels,
 };
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningOptions};
 use crate::Result;
 
 #[derive(Args)]
 pub struct RunArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
-    /// Secret store name; defaults to "default"
-    #[arg(long, short = 'n')]
-    pub name: Option<String>,
+    #[command(flatten)]
+    pub store: KvStoreNameOption,
 
     /// Command to execute (after --)
     #[arg(required = true, last = true)]
@@ -47,13 +45,14 @@ pub fn run(args: RunArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let exit_code = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let (_, ssh_ctx) =
+                resolve_command_input(&args.common, args.member.member_handle.clone())?;
             let command = resolve_kv_read_command::<RunPolicy>(
                 &options,
-                args.member_handle.clone(),
-                args.name.as_deref(),
+                args.member.member_handle.clone(),
+                args.store.name.as_deref(),
                 ssh_ctx,
             )?;
             run_read_command_with_trust(

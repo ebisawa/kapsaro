@@ -13,7 +13,7 @@
 use clap::Args;
 
 use crate::app::registration::types::RegistrationMode;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{MemberHandleOption, SigningOptions};
 use crate::cli::registration::run_registration_command;
 use crate::Error;
 
@@ -21,15 +21,14 @@ use crate::Error;
 pub struct InitArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
     /// GitHub user (login name, used only when generating a new key)
     #[arg(long)]
     pub github_user: Option<String>,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 }
 
 /// Initialize workspace structure and register member
@@ -38,7 +37,7 @@ pub fn run(args: InitArgs) -> Result<(), Error> {
         args.common,
         false,
         args.github_user,
-        args.member_handle,
+        args.member.member_handle,
         RegistrationMode::Init,
     )
 }

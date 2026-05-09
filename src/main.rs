@@ -9,8 +9,11 @@ use secretenv::cli;
 use tracing_subscriber::{fmt, EnvFilter};
 
 fn main() {
-    let verbose = std::env::args().any(|arg| arg == "--verbose" || arg == "-v");
-    let filter = if verbose {
+    let debug = std::env::args()
+        .skip(1)
+        .take_while(|arg| arg != "--")
+        .any(|arg| arg == "--debug");
+    let filter = if debug {
         EnvFilter::new("debug")
     } else {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))

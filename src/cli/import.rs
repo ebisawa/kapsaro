@@ -16,7 +16,7 @@ use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningQuietOutputOptions};
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
 use crate::Result;
@@ -25,15 +25,13 @@ use crate::Result;
 pub struct ImportArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningQuietOutputOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
-    /// Secret store name; defaults to "default"
-    #[arg(long, short = 'n')]
-    pub name: Option<String>,
+    #[command(flatten)]
+    pub store: KvStoreNameOption,
 
     /// File to import (.env format)
     pub filename: String,
@@ -48,12 +46,12 @@ pub fn run(args: ImportArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let (outcome, entry_count) = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
             run_kv_write_command_with_trust::<ImportPolicy, _, _>(
                 &args.common,
-                args.member_handle.clone(),
-                args.name.as_deref(),
+                args.member.member_handle.clone(),
+                args.store.name.as_deref(),
                 true,
                 WriteCommandLabels {
                     signer_context: Some(("import input signer", "input signer")),
@@ -75,8 +73,8 @@ pub fn run(args: ImportArgs) -> Result<()> {
     print_kv_import_result(
         outcome.message.as_deref(),
         entry_count,
-        args.name.as_deref().unwrap_or("default"),
-        args.common.json,
-        args.common.quiet,
+        args.store.name.as_deref().unwrap_or("default"),
+        args.common.json.json,
+        args.common.quiet.quiet,
     )
 }

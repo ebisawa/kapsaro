@@ -14,7 +14,7 @@ use crate::cli::common::command::{
 };
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
 use crate::format::content::FileEncContent;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
@@ -28,15 +28,14 @@ use crate::{Error, Result};
 pub struct DecryptArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningQuietOptions,
 
     /// Key ID to use [default: auto-select]
     #[arg(long, short = 'k')]
     pub kid: Option<String>,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Output file path
     #[arg(long, short = 'o', conflicts_with = "stdout")]
@@ -69,12 +68,13 @@ pub fn run(args: DecryptArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let plaintext_bytes = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, ssh_ctx) = resolve_command_input(&args.common, args.member_handle.clone())?;
+            let (_, ssh_ctx) =
+                resolve_command_input(&args.common, args.member.member_handle.clone())?;
             let command = resolve_decrypt_file_command(
                 &options,
-                args.member_handle.clone(),
+                args.member.member_handle.clone(),
                 args.kid.as_deref(),
                 content.clone(),
                 ssh_ctx,
@@ -95,7 +95,7 @@ pub fn run(args: DecryptArgs) -> Result<()> {
     save_decrypted_output(
         output_path.as_deref(),
         plaintext_bytes.as_ref(),
-        args.common.quiet,
+        args.common.quiet.quiet,
     )?;
     Ok(())
 }

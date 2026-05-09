@@ -32,7 +32,7 @@ pub(crate) fn execute_inspect_file_command(
 ) -> Result<InspectCommand> {
     let content = load_inspect_content(input_path)?;
     let mut inspect_output = build_inspect_view(&content)?;
-    let signature_report = build_signature_report(&content, options.verbose)?;
+    let signature_report = build_signature_report(&content, options.debug)?;
     inspect_output
         .sections
         .push(build_signature_verification_section(&signature_report));
@@ -92,7 +92,7 @@ fn build_online_section(
         }
     };
 
-    let result = match block_on_result(verify_github_account(public_key, options.verbose, None)) {
+    let result = match block_on_result(verify_github_account(public_key, options.debug, None)) {
         Ok(result) => result,
         Err(err) => OnlineVerificationResult::failed(
             &public_key.protected.subject_handle,

@@ -6,6 +6,7 @@
 use crate::{Error, Result};
 use serde::Serialize;
 
+pub(crate) mod doctor;
 pub(crate) mod key;
 pub(crate) mod kv;
 pub(crate) mod member;

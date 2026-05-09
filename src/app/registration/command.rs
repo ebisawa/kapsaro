@@ -147,9 +147,9 @@ fn resolve_generated_member_setup(
     github_user: Option<String>,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberSetupResult> {
-    let github_account = resolve_github_account(github_user, common.verbose)?;
+    let github_account = resolve_github_account(github_user, common.debug)?;
     let github_verification =
-        resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref(), common.verbose)?;
+        resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref(), common.debug)?;
     let mut key_result =
         generate_member_key_result(common, member_handle, github_account, ssh_ctx)?;
     key_result.github_verification = github_verification;
@@ -218,7 +218,7 @@ fn generate_member_key_result(
         created_at,
         expires_at,
         no_activate: false,
-        debug: common.verbose,
+        debug: common.debug,
         github_account,
         verbose: common.verbose,
         ssh_binding: ssh_ctx.into_ssh_binding(),

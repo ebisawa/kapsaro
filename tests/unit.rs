@@ -16,6 +16,10 @@ pub mod test_utils;
 // Key generation helpers (re-exported from test_utils to avoid duplicate module)
 pub use test_utils::keygen_helpers;
 
+#[path = "unit/external/cli_doctor_args_test.rs"]
+pub mod cli_doctor_args_test;
+#[path = "unit/external/cli_option_surface_test.rs"]
+pub mod cli_option_surface_test;
 #[path = "unit/external/cli_rewrap_args_test.rs"]
 pub mod cli_rewrap_args_test;
 #[path = "unit/external/cli_set_member_handle_test.rs"]

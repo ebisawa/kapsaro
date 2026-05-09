@@ -6,6 +6,7 @@
 pub(crate) mod artifact;
 pub(crate) mod config;
 pub(crate) mod context;
+pub(crate) mod doctor;
 pub(crate) mod errors;
 pub(crate) mod file;
 pub(crate) mod key;

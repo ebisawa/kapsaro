@@ -43,10 +43,10 @@ pub(crate) fn build_rewrap_batch_plan(
         &workspace.root_path,
         &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-        options.verbose,
+        options.debug,
     )?
     .trust_ctx;
-    let incoming_report = build_incoming_report(&incoming_index, options.verbose)?;
+    let incoming_report = build_incoming_report(&incoming_index, options.debug)?;
     if artifact_paths.is_empty() {
         return Err(Error::NotFound {
             message:

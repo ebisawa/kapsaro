@@ -35,7 +35,7 @@ impl ExecutionContext {
             explicit_kid,
             Some(&resolved.paths.keystore_root),
             workspace_root.as_ref().map(|w| w.root_path.clone()),
-            options.verbose,
+            options.debug,
         )?;
 
         Ok(Self {
@@ -56,7 +56,7 @@ impl ExecutionContext {
                 .to_string(),
         })?;
         let key_ctx =
-            load_crypto_context_from_env(workspace_root.root_path.clone(), options.verbose)?;
+            load_crypto_context_from_env(workspace_root.root_path.clone(), options.debug)?;
         let member_handle = key_ctx.member_handle.clone();
 
         Ok(Self {

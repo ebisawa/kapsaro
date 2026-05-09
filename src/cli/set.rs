@@ -19,7 +19,7 @@ use crate::cli::common::output::text::{print_optional_status, print_warnings};
 use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningQuietOptions};
 use crate::support::secret::SecretString;
 use crate::{Error, Result};
 
@@ -27,15 +27,13 @@ use crate::{Error, Result};
 pub struct SetArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningQuietOptions,
 
-    /// Member handle to use
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
-    /// Secret store name; defaults to "default"
-    #[arg(long, short = 'n')]
-    pub name: Option<String>,
+    #[command(flatten)]
+    pub store: KvStoreNameOption,
 
     /// Read VALUE from stdin (avoids shell history exposure)
     #[arg(long, conflicts_with = "value")]
@@ -72,12 +70,12 @@ pub fn run(args: SetArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let outcome = run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
             run_kv_write_command_with_trust::<SetPolicy, _, _>(
                 &args.common,
-                args.member_handle.clone(),
-                args.name.as_deref(),
+                args.member.member_handle.clone(),
+                args.store.name.as_deref(),
                 true,
                 WriteCommandLabels {
                     signer_context: Some(("set input signer", "input signer")),
@@ -87,7 +85,7 @@ pub fn run(args: SetArgs) -> Result<()> {
                     let success_message = format!(
                         "Set key '{}' in '{}'",
                         args.key,
-                        args.name.as_deref().unwrap_or("default")
+                        args.store.name.as_deref().unwrap_or("default")
                     );
                     set_kv_command_with_recipient_set_confirmation(
                         trust_plan,
@@ -103,6 +101,6 @@ pub fn run(args: SetArgs) -> Result<()> {
         },
     )?;
     print_warnings(&outcome.warnings);
-    print_optional_status(outcome.message.as_deref(), args.common.quiet);
+    print_optional_status(outcome.message.as_deref(), args.common.quiet.quiet);
     Ok(())
 }

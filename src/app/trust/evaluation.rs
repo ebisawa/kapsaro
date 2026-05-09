@@ -49,7 +49,7 @@ where
         &workspace.root_path,
         &execution.member_handle,
         Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
-        options.verbose,
+        options.debug,
     )?;
     let trust_ctx = &loaded.trust_ctx;
     let signer_outcome =

@@ -61,7 +61,7 @@ where
             context_label: trust_plan.labels.context,
             approval_subject: trust_plan.labels.subject,
         },
-        execution.options.verbose,
+        execution.options.debug,
         confirm_known,
         confirm_non_member,
         confirm_recipients,
@@ -239,7 +239,7 @@ where
             |candidate| {
                 super::online_verification::verify_trust_candidate_online(
                     candidate,
-                    execution.options.verbose,
+                    execution.options.debug,
                 )
             },
             confirm_known,
@@ -253,7 +253,7 @@ where
         |candidate| {
             super::online_verification::verify_trust_candidate_online(
                 candidate,
-                execution.options.verbose,
+                execution.options.debug,
             )
         },
         confirm_recipients,

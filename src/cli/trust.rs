@@ -5,7 +5,7 @@
 
 use clap::{Args, Subcommand};
 
-use crate::cli::options::CommonOptions;
+use crate::cli::options::{ForceOption, LocalOutputOptions, MemberHandleOption, SigningOptions};
 use crate::Error;
 
 mod list;
@@ -68,22 +68,20 @@ pub enum RecipientTrustCommands {
 pub struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: LocalOutputOptions,
 
-    /// Member handle (owner of the trust store to list)
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 }
 
 #[derive(Args)]
 pub struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
-    /// Member handle (owner of the trust store to update)
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Key ID to remove
     pub kid: String,
@@ -93,30 +91,27 @@ pub struct RemoveArgs {
 pub struct PurgeArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
-    /// Member handle (owner of the trust store to update)
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Remove entries older than this duration (e.g. "180d")
     #[arg(long)]
     pub older_than: String,
 
-    /// Skip confirmation prompt (required for non-interactive)
-    #[arg(long, short = 'f')]
-    pub force: bool,
+    #[command(flatten)]
+    pub force: ForceOption,
 }
 
 #[derive(Args)]
 pub struct RecipientRemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: CommonOptions,
+    pub common: SigningOptions,
 
-    /// Member handle (owner of the trust store to update)
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     /// Secret identifier to remove
     pub sid: String,

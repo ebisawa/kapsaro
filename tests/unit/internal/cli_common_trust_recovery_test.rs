@@ -12,6 +12,7 @@ fn build_options(home: &std::path::Path) -> CommonCommandOptions {
     CommonCommandOptions {
         home: Some(home.to_path_buf()),
         identity: None,
+        debug: false,
         verbose: false,
         workspace: None,
         ssh_signing_method: None,

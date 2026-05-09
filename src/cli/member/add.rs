@@ -10,7 +10,7 @@ use super::AddArgs;
 
 pub(crate) fn run(args: AddArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let member_handle = add_member(&options, &args.filename, args.force)?;
+    let member_handle = add_member(&options, &args.filename, args.force.force)?;
     print_member_add_summary(&member_handle);
     Ok(())
 }

@@ -26,17 +26,18 @@ pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
 
 fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let results = verify_members(&options, &args.member_handles, args.common.verbose)?;
-    print_member_verification_results(args.common.json, &results)
+    let results = verify_members(&options, &args.member_handles, args.common.debug.debug)?;
+    print_member_verification_results(args.common.json.json, &results)
 }
 
 fn run_approve(args: VerifyArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
     run_with_trust_store_reset_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member_handle.clone()),
+        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, execution) = resolve_execution_input(&args.common, args.member_handle.clone())?;
+            let (_, execution) =
+                resolve_execution_input(&args.common, args.member.member_handle.clone())?;
 
             let evaluation = evaluate_members_for_approval(
                 &options,
@@ -47,7 +48,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
             let mut results = evaluation.results;
 
             if results.is_empty() {
-                return print_member_approval_results(args.common.json, &results);
+                return print_member_approval_results(args.common.json.json, &results);
             }
 
             review_approval_candidates(&mut results)?;
@@ -58,7 +59,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
                 text::print_warnings(&commit_result.warnings);
             }
 
-            print_member_approval_results(args.common.json, &results)
+            print_member_approval_results(args.common.json.json, &results)
         },
     )
 }

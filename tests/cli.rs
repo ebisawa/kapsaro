@@ -8,6 +8,7 @@
 pub mod common;
 pub mod config;
 pub mod decrypt;
+pub mod doctor;
 pub mod encrypt;
 pub mod env_key_mode;
 pub mod help;

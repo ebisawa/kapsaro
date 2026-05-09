@@ -82,7 +82,7 @@ pub fn export_private_key_command(
         kid,
         ssh_ctx.backend.as_ref(),
         &ssh_ctx.public_key,
-        options.verbose,
+        options.debug,
     )?;
 
     let encoded_key = export_private_key_portable(
@@ -92,7 +92,7 @@ pub fn export_private_key_command(
         &loaded.created_at,
         &loaded.expires_at,
         password,
-        options.verbose,
+        options.debug,
     )?;
 
     Ok(crate::feature::key::portable_export::PortableExportOutput {

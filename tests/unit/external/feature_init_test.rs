@@ -11,6 +11,7 @@ use secretenv::io::keystore::resolver::KeystoreResolver;
 use secretenv::io::keystore::storage::load_public_key;
 use secretenv::io::workspace::detection::resolve_workspace_creation_path;
 use secretenv::io::workspace::setup::save_member_document;
+use serial_test::serial;
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,7 @@ fn test_resolve_workspace_creation_path_explicit() {
 }
 
 #[test]
+#[serial]
 fn test_resolve_workspace_creation_path_defaults_to_git_root_dot_secretenv() {
     let tmp = TempDir::new().unwrap();
     std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
@@ -119,6 +121,36 @@ fn test_resolve_workspace_creation_path_defaults_to_git_root_dot_secretenv() {
         result,
         tmp.path().canonicalize().unwrap().join(".secretenv")
     );
+}
+
+#[test]
+#[serial]
+fn test_resolve_workspace_creation_path_uses_current_dot_secretenv_without_git() {
+    let tmp = TempDir::new().unwrap();
+    let workspace_path = tmp.path().join(".secretenv");
+    std::fs::create_dir_all(&workspace_path).unwrap();
+
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(tmp.path()).unwrap();
+
+    let result = resolve_workspace_creation_path(None).unwrap();
+
+    std::env::set_current_dir(original_dir).unwrap();
+    assert_eq!(result, workspace_path.canonicalize().unwrap());
+}
+
+#[test]
+#[serial]
+fn test_resolve_workspace_creation_path_errors_without_git_or_current_dot_secretenv() {
+    let tmp = TempDir::new().unwrap();
+
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(tmp.path()).unwrap();
+
+    let result = resolve_workspace_creation_path(None);
+
+    std::env::set_current_dir(original_dir).unwrap();
+    assert!(result.is_err());
 }
 
 // ---------------------------------------------------------------------------

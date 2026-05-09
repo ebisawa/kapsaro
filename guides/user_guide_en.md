@@ -112,7 +112,7 @@ For operations, see [Chapter 8](#8-daily-usage-kv-store) and [Chapter 9](#9-file
 
 ### Workspace
 
-The workspace is the `.secretenv/` directory in a Git repository. When you run secretenv inside a Git repository, it usually finds the workspace automatically. Outside a Git repository, specify it explicitly with `-w` / `--workspace`.
+The workspace is the `.secretenv/` directory. When you run secretenv inside a Git repository, it usually finds the workspace automatically. In a layout without `.git`, it also auto-detects `.secretenv/` directly under the current directory. If the workspace is elsewhere, specify it explicitly with `-w` / `--workspace`.
 
 ### `active` / `incoming`
 
@@ -233,7 +233,7 @@ Follow these steps when introducing secretenv to your team for the first time.
 
 ### Step 1: Prepare a repository
 
-Workspace auto-detection works inside a Git repository. Start by navigating to your Git repository directory.
+Workspace auto-detection works inside a Git repository. In a layout without `.git`, it auto-detects only `.secretenv/` directly under the current directory. Start by navigating to the directory that contains the workspace.
 
 ```bash
 # Start with an existing repository
@@ -1248,7 +1248,7 @@ If the config file does not exist, secretenv falls back to environment variables
 | `SECRETENV_SSH_IDENTITY` | Path to SSH private key file (Ed25519) | `~/.ssh/id_ed25519` |
 | `SECRETENV_SSH_SIGNING_METHOD` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
 | `SECRETENV_GITHUB_USER` | Default GitHub login name for `key new` | (none) |
-| `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected from git root) |
+| `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected) |
 | `SECRETENV_STRICT_KEY_CHECKING` | Whether to check local approval history during read operations: `yes`, `no` | `yes` |
 | `SECRETENV_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
 | `SECRETENV_KEY_PASSWORD` | Password for `SECRETENV_PRIVATE_KEY` (CI/CD) | (none) |
@@ -1257,7 +1257,7 @@ If the config file does not exist, secretenv falls back to environment variables
 
 - `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 12](#12-cicd-integration) for details.
 - `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
-- `SECRETENV_WORKSPACE` overrides the automatic workspace detection from the git repository root. Useful when running commands outside the repository tree.
+- `SECRETENV_WORKSPACE` overrides automatic workspace detection. Useful when running commands outside the Git repository tree or when using a workspace outside the current directory.
 
 ---
 

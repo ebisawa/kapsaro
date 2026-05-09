@@ -53,13 +53,9 @@ pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
     let mut current = start_path.canonicalize().map_err(|e| {
         Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)
     })?;
-    let git_root = find_git_root(&current).ok_or_else(|| Error::NotFound {
-        message: format!(
-            "No git repository found from '{}'. \
-                 Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE.",
-            format_path_relative_to_cwd(start_path)
-        ),
-    })?;
+    let Some(git_root) = find_git_root(&current) else {
+        return detect_current_workspace_without_git(start_path, &current);
+    };
 
     loop {
         if let Some(workspace) = check_workspace(&current) {
@@ -103,6 +99,31 @@ pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
             }
         }
     }
+}
+
+fn detect_current_workspace_without_git(
+    start_path: &Path,
+    current: &Path,
+) -> Result<WorkspaceRoot> {
+    if let Some(workspace) = check_workspace(current) {
+        return Ok(workspace);
+    }
+
+    if current.join(".secretenv").exists() {
+        return Err(Error::NotFound {
+            message: format!(
+                "Found .secretenv at '{}' but missing members/ or secrets/ directories",
+                format_path_relative_to_cwd(current)
+            ),
+        });
+    }
+
+    Err(Error::NotFound {
+        message: format!(
+            "No workspace found from '{}'. Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE.",
+            format_path_relative_to_cwd(start_path)
+        ),
+    })
 }
 
 pub(super) fn find_git_root(start: &Path) -> Option<PathBuf> {

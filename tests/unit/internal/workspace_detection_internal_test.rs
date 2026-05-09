@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use serial_test::serial;
 use std::fs;
 
 #[test]
@@ -108,6 +109,7 @@ fn resolve_workspace_explicit_option_takes_priority_over_config() {
 }
 
 #[test]
+#[serial]
 fn resolve_optional_workspace_returns_none_when_nothing_is_configured() {
     let original_dir = std::env::current_dir().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
@@ -121,6 +123,30 @@ fn resolve_optional_workspace_returns_none_when_nothing_is_configured() {
         || {
             let result = resolve_optional_workspace(None).unwrap();
             assert!(result.is_none());
+        },
+    );
+
+    std::env::set_current_dir(original_dir).unwrap();
+}
+
+#[test]
+#[serial]
+fn resolve_workspace_detects_current_dot_secretenv_without_git() {
+    let original_dir = std::env::current_dir().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_path = temp_dir.path().join(".secretenv");
+    fs::create_dir_all(workspace_path.join("members/active")).unwrap();
+    fs::create_dir_all(workspace_path.join("secrets")).unwrap();
+    std::env::set_current_dir(temp_dir.path()).unwrap();
+
+    temp_env::with_vars(
+        [
+            ("SECRETENV_HOME", None::<&str>),
+            ("SECRETENV_WORKSPACE", None::<&str>),
+        ],
+        || {
+            let result = resolve_workspace(None).unwrap();
+            assert_eq!(result.root_path, workspace_path.canonicalize().unwrap());
         },
     );
 

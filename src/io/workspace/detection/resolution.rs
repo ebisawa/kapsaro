@@ -5,6 +5,7 @@ use super::search::{detect_workspace_root, find_git_root, validate_workspace_pat
 use crate::config::resolution::workspace::{
     resolve_workspace_from_config, resolve_workspace_from_config_base,
 };
+use crate::support::fs::policy::is_real_dir;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::env;
@@ -108,9 +109,20 @@ pub fn resolve_workspace_creation_path(workspace_opt: Option<PathBuf>) -> Result
         Error::build_io_error_with_source(format!("Failed to get current directory: {}", e), e)
     })?;
 
-    find_git_root(&current_dir).map(|root| root.join(".secretenv")).ok_or_else(|| Error::Config {
+    if let Some(root) = find_git_root(&current_dir) {
+        return Ok(root.join(".secretenv"));
+    }
+
+    let current_workspace = current_dir.join(".secretenv");
+    if is_real_dir(&current_workspace) {
+        return current_workspace.canonicalize().map_err(|e| {
+            Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)
+        });
+    }
+
+    Err(Error::Config {
         message:
-            "No git repository found. Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE."
+            "No git repository or current .secretenv directory found. Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE."
                 .to_string(),
     })
 }

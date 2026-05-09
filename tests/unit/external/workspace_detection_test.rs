@@ -5,6 +5,7 @@
 
 use crate::test_utils::EnvGuard;
 use secretenv::io::workspace::detection::{detect_workspace_root, resolve_workspace};
+use serial_test::serial;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -46,6 +47,34 @@ fn test_detect_workspace_in_parent_directory() {
     assert!(result.is_ok());
     let workspace = result.unwrap();
     assert_eq!(workspace.root_path, workspace_root);
+}
+
+#[test]
+fn test_detect_workspace_without_git_uses_current_dot_secretenv() {
+    let temp = TempDir::new().unwrap();
+    let root_path = temp.path().canonicalize().unwrap();
+    let workspace_root = root_path.join(".secretenv");
+    fs::create_dir_all(workspace_root.join("members/active")).unwrap();
+    fs::create_dir_all(workspace_root.join("secrets")).unwrap();
+
+    let result = detect_workspace_root(&root_path);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().root_path, workspace_root);
+}
+
+#[test]
+fn test_detect_workspace_without_git_does_not_search_parent() {
+    let temp = TempDir::new().unwrap();
+    let root_path = temp.path().canonicalize().unwrap();
+    let workspace_root = root_path.join(".secretenv");
+    fs::create_dir_all(workspace_root.join("members/active")).unwrap();
+    fs::create_dir_all(workspace_root.join("secrets")).unwrap();
+
+    let sub_dir = root_path.join("subdir");
+    fs::create_dir(&sub_dir).unwrap();
+
+    let result = detect_workspace_root(&sub_dir);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -221,6 +250,7 @@ fn test_resolve_workspace_env_var_not_workspace() {
 }
 
 #[test]
+#[serial]
 fn test_resolve_workspace_fallback_to_search() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
 
@@ -249,6 +279,7 @@ fn test_resolve_workspace_fallback_to_search() {
 }
 
 #[test]
+#[serial]
 fn test_resolve_workspace_priority_order() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
 

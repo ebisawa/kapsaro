@@ -112,7 +112,7 @@ secretenv では、各ユーザーが自分の鍵ペアを持ちます。
 
 ### Workspace
 
-workspace は Git リポジトリ内の `.secretenv/` ディレクトリです。secretenv は通常、Git リポジトリ内で実行すると workspace を自動検出します。Git リポジトリ外で使う場合は `-w` / `--workspace` で明示してください。
+workspace は `.secretenv/` ディレクトリです。secretenv は通常、Git リポジトリ内で実行すると workspace を自動検出します。`.git` がない配置でも、カレントディレクトリ直下に `.secretenv/` があれば自動検出します。別の場所にある workspace を使う場合は `-w` / `--workspace` で明示してください。
 
 ### `active` / `incoming`
 
@@ -234,7 +234,7 @@ ssh-keygen -t ed25519 -C "your@email.com"
 
 ### ステップ 1: リポジトリを用意する
 
-secretenv の workspace 自動検出は Git リポジトリ内で機能します。まず Git リポジトリのディレクトリに移動してください。
+secretenv の workspace 自動検出は Git リポジトリ内で機能します。`.git` がない配置では、カレントディレクトリ直下の `.secretenv/` だけを自動検出します。まず workspace を置くディレクトリに移動してください。
 
 ```bash
 # 既存のリポジトリで始める場合
@@ -1249,7 +1249,7 @@ github_user = "alice-gh"
 | `SECRETENV_SSH_IDENTITY` | SSH 秘密鍵ファイル（Ed25519）のパス | `~/.ssh/id_ed25519` |
 | `SECRETENV_SSH_SIGNING_METHOD` | SSH 署名方式: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
 | `SECRETENV_GITHUB_USER` | `key new` 実行時のデフォルト GitHub ログイン名 | （なし） |
-| `SECRETENV_WORKSPACE` | ワークスペースディレクトリのパス（自動検出をオーバーライド） | （git ルートから自動検出） |
+| `SECRETENV_WORKSPACE` | ワークスペースディレクトリのパス（自動検出をオーバーライド） | （自動検出） |
 | `SECRETENV_STRICT_KEY_CHECKING` | 読み取り時にローカル承認履歴の確認を行うか: `yes`, `no` | `yes` |
 | `SECRETENV_PRIVATE_KEY` | Base64url エンコードされたポータブル秘密鍵ドキュメント（CI/CD 用） | （なし） |
 | `SECRETENV_KEY_PASSWORD` | `SECRETENV_PRIVATE_KEY` の復号パスワード（CI/CD 用） | （なし） |
@@ -1258,7 +1258,7 @@ github_user = "alice-gh"
 
 - `SECRETENV_PRIVATE_KEY` と `SECRETENV_KEY_PASSWORD` は、ローカル keystore が利用できない CI/CD 環境で使用します。`SECRETENV_PRIVATE_KEY` を設定する場合、`SECRETENV_KEY_PASSWORD` も必須です。詳細は [12章](#12-cicd-連携) を参照してください。
 - `SECRETENV_STRICT_KEY_CHECKING=no` は、read-path のローカル鍵承認確認だけを省略します。読み取り操作（decrypt, get, run, list）に限り許可され、書き込み操作では出力 artifact member set review を含む厳格チェックが常に適用されます。
-- `SECRETENV_WORKSPACE` は git リポジトリルートからのワークスペース自動検出をオーバーライドします。リポジトリツリー外からコマンドを実行する場合に便利です。
+- `SECRETENV_WORKSPACE` は workspace 自動検出をオーバーライドします。Git リポジトリ外からコマンドを実行する場合や、カレントディレクトリ直下以外の workspace を使う場合に便利です。
 
 ---
 

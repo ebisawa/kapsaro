@@ -952,7 +952,9 @@ At the same time, `removed_recipients` and `disclosed` are updated so operators 
 
 For recipient addition, both formats maintain the content key and add new wrap entries.
 
-For recipient removal, the behavior differs by format. In file-enc, the removed recipient's wrap entry is deleted and a removal history is recorded, but the DEK is unchanged. In kv-enc, the MK is always regenerated and all entries are re-encrypted. This is because the MK is a long-lived key from which per-entry CEKs are derived (§7.3) — if a removed member retains knowledge of the old MK (e.g., from a prior decryption session), they could derive CEKs for entries added after their removal. Regenerating the MK eliminates this risk.
+For recipient removal, the behavior differs by format. In file-enc, the removed recipient's wrap entry is deleted and a removal history is recorded, but the DEK is unchanged. file-enc encrypts one complete payload, and by the time a recipient is removed, that content has already been disclosed to previously authorized recipients. Automatically regenerating only the DEK for unchanged content does not affect what a removed member already saw, remembers, or copied as plaintext. Therefore normal file-enc rewrap focuses on removing the old wrap from the current artifact and retaining removal history. If the previously disclosed file content must be invalidated, `--rotate-key` alone is not enough; the certificate or secret value itself must be revoked or reissued in the external system.
+
+In kv-enc, the MK is always regenerated and all entries are re-encrypted. This is because the MK is a long-lived key from which per-entry CEKs are derived (§7.3) — if a removed member retains knowledge of the old MK (e.g., from a prior decryption session), they could derive CEKs for entries added after their removal. Regenerating the MK eliminates this risk.
 
 `--rotate-key` forces full re-encryption in both formats regardless of recipient changes, and is intended as a post-compromise damage-limitation measure.
 

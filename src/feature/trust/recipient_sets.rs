@@ -9,7 +9,7 @@ use crate::model::common::WrapItem;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord};
-use crate::model::wire::context::ARTIFACT_RECIPIENT_SET_HASH_V1;
+use crate::model::wire::context::HASH_DOMAIN_RECIPIENT_SET_V2;
 use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::{Error, Result};
 use serde::Serialize;
@@ -136,7 +136,7 @@ pub fn normalize_recipient_kids(recipient_kids: Vec<String>) -> Result<Vec<Strin
 
 pub fn compute_recipient_set_hash(recipient_kids: &[String]) -> Result<String> {
     let canonical = jcs::normalize(&RecipientSetHashPayload {
-        domain: ARTIFACT_RECIPIENT_SET_HASH_V1,
+        domain: HASH_DOMAIN_RECIPIENT_SET_V2,
         recipient_kids,
     })?;
     let digest = Sha256::digest(&canonical);

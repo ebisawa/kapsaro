@@ -9,17 +9,17 @@ use secretenv::model::file_enc::{
     FilePayloadCiphertext, FilePayloadHeader,
 };
 use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::wire::hpke;
+use secretenv::model::wire::algorithm;
 use uuid::Uuid;
 
 fn build_test_payload_envelope() -> FilePayload {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FilePayload {
         protected: FilePayloadHeader {
-            format: secretenv::model::wire::format::FILE_PAYLOAD_V4.to_string(),
+            format: secretenv::model::wire::format::FILE_PAYLOAD_V5.to_string(),
             sid,
             alg: FileEncAlgorithm {
-                aead: secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
             },
         },
         encrypted: FilePayloadCiphertext {
@@ -34,12 +34,12 @@ fn test_file_enc_document_basic() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv::model::wire::format::FILE_ENC_V4.to_string(),
+            format: secretenv::model::wire::format::FILE_ENC_V5.to_string(),
             sid,
             wrap: vec![secretenv::model::common::WrapItem {
                 recipient_handle: "alice@example.com".to_string(),
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                 enc: "enc_base64url".to_string(),
                 ct: "ct_base64url".to_string(),
             }],
@@ -49,7 +49,7 @@ fn test_file_enc_document_basic() {
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: secretenv::model::wire::alg::SIGNATURE_ED25519.to_string(),
+            alg: secretenv::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "signature_base64url".to_string(),
@@ -66,20 +66,20 @@ fn test_recipients_derived_from_wrap() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv::model::wire::format::FILE_ENC_V4.to_string(),
+            format: secretenv::model::wire::format::FILE_ENC_V5.to_string(),
             sid,
             wrap: vec![
                 secretenv::model::common::WrapItem {
                     recipient_handle: "alice@example.com".to_string(),
                     kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-                    alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                    alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                     enc: "enc1".to_string(),
                     ct: "ct1".to_string(),
                 },
                 secretenv::model::common::WrapItem {
                     recipient_handle: "bob@example.com".to_string(),
                     kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GH".to_string(),
-                    alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                    alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                     enc: "enc2".to_string(),
                     ct: "ct2".to_string(),
                 },
@@ -90,7 +90,7 @@ fn test_recipients_derived_from_wrap() {
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: secretenv::model::wire::alg::SIGNATURE_ED25519.to_string(),
+            alg: secretenv::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "sig".to_string(),
@@ -109,7 +109,7 @@ fn test_payload_serialization() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv::model::wire::format::FILE_ENC_V4.to_string(),
+            format: secretenv::model::wire::format::FILE_ENC_V5.to_string(),
             sid,
             wrap: vec![],
             removed_recipients: None,
@@ -118,7 +118,7 @@ fn test_payload_serialization() {
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: secretenv::model::wire::alg::SIGNATURE_ED25519.to_string(),
+            alg: secretenv::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             sig: "sig".to_string(),
@@ -140,7 +140,7 @@ fn test_payload_serialization() {
     // Verify payload.protected has format and alg
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["format"],
-        "secretenv.file.payload@4"
+        "secretenv:format:file-enc:payload@5"
     );
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],
@@ -152,15 +152,15 @@ fn test_payload_serialization() {
 fn test_file_enc_document_signature_requires_signer_pub() {
     let json = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::FILE_ENC_V4,
+            "format": secretenv::model::wire::format::FILE_ENC_V5,
             "sid": "01234567-89ab-cdef-0123-456789abcdef",
             "wrap": [],
             "payload": {
                 "protected": {
-                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V4,
+                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V5,
                     "sid": "01234567-89ab-cdef-0123-456789abcdef",
                     "alg": {
-                        "aead": secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+                        "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
                     }
                 },
                 "encrypted": {
@@ -172,7 +172,7 @@ fn test_file_enc_document_signature_requires_signer_pub() {
             "updated_at": "2025-01-01T00:00:00Z"
         },
         "signature": {
-            "alg": secretenv::model::wire::alg::SIGNATURE_ED25519,
+            "alg": secretenv::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "sig": "signature_base64url"
         }

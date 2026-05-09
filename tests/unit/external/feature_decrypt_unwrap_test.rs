@@ -38,7 +38,7 @@ use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
 use secretenv::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
-use secretenv::model::wire::jwk::{CRV_ED25519, CRV_X25519};
+use secretenv::model::wire::jwk::{CURVE_ED25519, CURVE_X25519};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -535,13 +535,13 @@ fn test_unwrap_master_key_for_file_wrong_member() {
             keys: IdentityKeysPrivate {
                 kem: JwkOkpPrivateKey {
                     kty: "OKP".to_string(),
-                    crv: CRV_X25519.to_string(),
+                    crv: CURVE_X25519.to_string(),
                     x: "dummy".to_string(),
                     d: "dummy".to_string(),
                 },
                 sig: JwkOkpPrivateKey {
                     kty: "OKP".to_string(),
-                    crv: CRV_ED25519.to_string(),
+                    crv: CURVE_ED25519.to_string(),
                     x: "dummy".to_string(),
                     d: "dummy".to_string(),
                 },

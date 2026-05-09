@@ -39,7 +39,7 @@ fn build_dummy_signer_pub(
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@5".to_string(),
+            format: "secretenv:format:public-key@6".to_string(),
             subject_handle: "test@example.com".to_string(),
             kid: kid.to_string(),
             identity: Identity {
@@ -88,7 +88,7 @@ fn build_verified_recipient_key_for_test(
 
     let test_pk = PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv.public.key@5".to_string(),
+            format: "secretenv:format:public-key@6".to_string(),
             subject_handle: "test@example.com".to_string(),
             kid: kid.to_string(),
             identity: Identity {

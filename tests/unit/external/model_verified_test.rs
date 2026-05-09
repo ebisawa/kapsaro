@@ -12,13 +12,13 @@ use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySou
 fn test_verified_new() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv::model::file_enc::FileEncDocumentProtected {
-            format: "secretenv.file@4".to_string(),
+            format: "secretenv:format:file-enc@5".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv::model::file_enc::FilePayload {
                 protected: secretenv::model::file_enc::FilePayloadHeader {
-                    format: "secretenv.file.payload@4".to_string(),
+                    format: "secretenv:format:file-enc:payload@5".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv::model::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),
@@ -57,13 +57,13 @@ fn test_verified_new() {
 fn test_verified_map() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv::model::file_enc::FileEncDocumentProtected {
-            format: "secretenv.file@4".to_string(),
+            format: "secretenv:format:file-enc@5".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv::model::file_enc::FilePayload {
                 protected: secretenv::model::file_enc::FilePayloadHeader {
-                    format: "secretenv.file.payload@4".to_string(),
+                    format: "secretenv:format:file-enc:payload@5".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv::model::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),
@@ -104,13 +104,13 @@ fn test_verified_map() {
 fn test_verified_into_inner() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv::model::file_enc::FileEncDocumentProtected {
-            format: "secretenv.file@4".to_string(),
+            format: "secretenv:format:file-enc@5".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv::model::file_enc::FilePayload {
                 protected: secretenv::model::file_enc::FilePayloadHeader {
-                    format: "secretenv.file.payload@4".to_string(),
+                    format: "secretenv:format:file-enc:payload@5".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv::model::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),

@@ -12,7 +12,7 @@ use crate::io::ssh::SshError;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, PublicKey,
 };
-use crate::model::wire::alg;
+use crate::model::wire::algorithm;
 use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::support::kid::format_kid_display;
 use crate::Result;
@@ -53,7 +53,7 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
             github_account: Some(github_account),
         });
     let protected_without_kid = PublicKeyProtectedWithoutKid {
-        format: crate::model::wire::format::PUBLIC_KEY_V5.to_string(),
+        format: crate::model::wire::format::PUBLIC_KEY_V6.to_string(),
         subject_handle: params.member_handle.to_string(),
         identity: params.identity.clone(),
         binding_claims: binding_claims.clone(),
@@ -82,7 +82,8 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
             kid_display
         );
     }
-    let signature = sign_detached_bytes(&protected_jcs, params.sig_sk, alg::SIGNATURE_ED25519)?;
+    let signature =
+        sign_detached_bytes(&protected_jcs, params.sig_sk, algorithm::SIGNATURE_ED25519)?;
 
     Ok(PublicKey {
         protected,

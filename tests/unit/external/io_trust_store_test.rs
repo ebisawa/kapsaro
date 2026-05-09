@@ -8,7 +8,7 @@ use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
-use secretenv::model::wire::format::TRUST_LOCAL_V4;
+use secretenv::model::wire::format::LOCAL_TRUST_V5;
 use secretenv::support::limits::MAX_JSON_DEPTH;
 use std::collections::BTreeMap;
 #[cfg(unix)]
@@ -18,7 +18,7 @@ use tempfile::TempDir;
 fn build_test_document(owner: &str) -> TrustStoreDocument {
     TrustStoreDocument {
         protected: TrustStoreProtected {
-            format: TRUST_LOCAL_V4.to_string(),
+            format: LOCAL_TRUST_V5.to_string(),
             owner_handle: owner.to_string(),
             created_at: "2026-03-29T12:34:56Z".to_string(),
             updated_at: "2026-03-29T12:34:56Z".to_string(),

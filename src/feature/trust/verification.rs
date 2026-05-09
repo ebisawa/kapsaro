@@ -14,8 +14,8 @@ use crate::io::keystore::storage::load_public_key;
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
 use crate::model::trust_store::TrustStoreDocument;
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
-use crate::model::wire::alg::SIGNATURE_ED25519;
-use crate::model::wire::format::TRUST_LOCAL_V4;
+use crate::model::wire::algorithm::SIGNATURE_ED25519;
+use crate::model::wire::format::LOCAL_TRUST_V5;
 use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
 use std::collections::HashSet;
@@ -28,7 +28,7 @@ use time::OffsetDateTime;
 /// Checks the trust store signature, signer key, owner, and known key integrity.
 /// 1. JSON Schema validity
 /// 2. signer public key is loaded from local keystore by owner_handle + kid
-/// 3. format == TRUST_LOCAL_V4
+/// 3. format == LOCAL_TRUST_V5
 /// 4. signer public key is a valid PublicKey
 /// 5. Cryptographic signature verification
 /// 6. signature.kid == signer_public_key.protected.kid
@@ -68,12 +68,12 @@ fn validate_schema(doc: &TrustStoreDocument) -> Result<()> {
 }
 
 fn validate_format(doc: &TrustStoreDocument) -> Result<()> {
-    if doc.protected.format != TRUST_LOCAL_V4 {
+    if doc.protected.format != LOCAL_TRUST_V5 {
         return Err(Error::Verify {
             rule: "E_TRUST_FORMAT_MISMATCH".to_string(),
             message: format!(
                 "Expected format '{}', got '{}'",
-                TRUST_LOCAL_V4, doc.protected.format
+                LOCAL_TRUST_V5, doc.protected.format
             ),
         });
     }

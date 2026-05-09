@@ -533,7 +533,7 @@ SecretEnv does not provide a cryptographic revocation list in the CRL sense. To 
 
 #### 4.4.1 Immutability of Key Statement ID (kid)
 
-Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens. It is derived by taking the `PublicKey@5.protected` JSON object with the `kid` field removed (`protected_without_kid`), canonicalizing it to bytes with JCS (§3.6), hashing with SHA-256, taking the first 20 bytes of the digest, and encoding those bytes as unpadded Crockford Base32 (32 characters). In symbols: `kid = Encode_CrockfordBase32(SHA256(jcs(protected_without_kid))[0..20])`. The stored `protected.kid` must match this recomputed value.
+Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens. It is derived by taking the `PublicKey@6.protected` JSON object with the `kid` field removed (`protected_without_kid`), canonicalizing it to bytes with JCS (§3.6), hashing with SHA-256, taking the first 20 bytes of the digest, and encoding those bytes as unpadded Crockford Base32 (32 characters). In symbols: `kid = Encode_CrockfordBase32(SHA256(jcs(protected_without_kid))[0..20])`. The stored `protected.kid` must match this recomputed value.
 
 Crockford Base32 avoids visually confusable characters (such as I, L, O, and U in typical Base32), which reduces manual transcription errors and keeps canonical strings usable without hyphens in URLs and JSON.
 
@@ -566,7 +566,7 @@ file-enc and kv-enc artifact signatures share the same `signature_v4` structure 
 - Use `kid` to state which key statement performed the signing
 - Treat validation of the signer key and verification of the artifact signature as one continuous chain (§5.4)
 
-The local trust store (`secretenv.trust.local@4`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
+The local trust store (`secretenv:format:local-trust@5`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
 
 The main fields of `signature_v4` (artifact signature) are as follows.
 
@@ -574,7 +574,7 @@ The main fields of `signature_v4` (artifact signature) are as follows.
 | --- | --- | --- | --- |
 | `alg` | string | Always `eddsa-ed25519` (PureEdDSA) | Unambiguous identification of the signature algorithm |
 | `kid` | Crockford Base32 (32 characters) | Signer's key statement ID | Binds the signing context of the artifact to the `signer_pub` generation (§4.4.1, §8) |
-| `signer_pub` | `PublicKey@5` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
+| `signer_pub` | `PublicKey@6` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
 | `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact (signed payload differs by format; §5.1–§5.3) |
 
 file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. That is a premise of self-contained verification. SecretEnv does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §12.1 invariant on where the signing key is resolved.
@@ -611,7 +611,7 @@ For file-enc and kv-enc, the Ed25519 verification key is always taken from the e
 
 Cryptographic verification of an artifact can be organized into three layers (Layer A → Layer B → Layer C).
 
-- Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey@5` document and has not been tampered with
+- Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey@6` document and has not been tampered with
   - Structure and schema validation — Required fields and format constraints
   - Self-signature verification — §5.5; detects tampering with the public-key document
   - SSH attestation verification — §5.6; checks binding between the SecretEnv key and the SSH key
@@ -626,7 +626,7 @@ Local trust store exception: trust store documents have no embedded `signer_pub`
 
 ### 5.5 PublicKey Self-Signature
 
-`PublicKey@5` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
+`PublicKey@6` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
 
 What this establishes is key consistency in §1.6: evidence that the party who created this public-key document held the corresponding SecretEnv signing private key. It is not a cryptographic proof of identity (that the key belongs to a particular person or organization). An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
 
@@ -674,7 +674,7 @@ The full document layout is as follows.
 ```json
 {
   "protected": {
-    "format": "secretenv.file@4",
+    "format": "secretenv:format:file-enc@5",
     "sid": "<UUID>",
     "wrap": [
       {
@@ -694,7 +694,7 @@ The full document layout is as follows.
     ],
     "payload": {
       "protected": {
-        "format": "secretenv.file.payload@4",
+        "format": "secretenv:format:file-enc:payload@5",
         "sid": "<UUID>",
         "alg": { "aead": "xchacha20-poly1305" }
       },
@@ -771,13 +771,13 @@ This order keeps key delivery, payload binding, and document integrity as distin
 ### 6.4 HPKE wrap
 
 - The HPKE suite is `hpke-32-1-3`; the relevant parameters are described in §3.1 and §3.2.
-- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:file:hpke-wrap@4`, and the file identifier `sid`.
+- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:context:hpke-info:file-enc:wrap@5`, and the file identifier `sid`.
 - HPKE `info` and `AAD` use the same JCS-canonicalized context bytes. This keeps the key-schedule path and AEAD-verification path aligned and makes implementation drift surface early as unwrap failure.
 - The recipient member handle remains operationally important, but cryptographic wrap binding is keyed by `kid`.
 
 ### 6.5 Payload Encryption
 
-- The payload header carries `format = secretenv.file.payload@4`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
+- The payload header carries `format = secretenv:format:file-enc:payload@5`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
 - `jcs(payload.protected)` is used as AAD, with a random 24-byte nonce for XChaCha20-Poly1305.
 - Keeping `sid` at the payload layer binds the payload to the file context independently of the outer signature.
 
@@ -805,7 +805,7 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 | Line type | Content | Security role |
 | --- | --- | --- |
-| `:SECRETENV_KV 5` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
+| `:SECRETENV_KV 6` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
 | `:HEAD` | File context such as `sid`, AEAD, and timestamps | Binds wraps and entries to a single file context |
 | `:WRAP` | HPKE-wrapped MK and removal history | Represents recipient state and key-distribution state |
 | `KEY` lines | Per-entry ciphertext | Encrypted units made from the line key plus token salt, nonce, and ciphertext |
@@ -816,7 +816,7 @@ Each token is represented as a JCS-canonicalized JSON object encoded in base64ur
 The full document layout is as follows.
 
 ```text
-:SECRETENV_KV 5
+:SECRETENV_KV 6
 :HEAD <token>
 :WRAP <token>
 <KEY> <token>
@@ -907,20 +907,20 @@ As with file-enc, signature verification always precedes decryption.
 
 ### 7.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:kv:cek@5` and `sid`.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:context:hkdf-info:kv-enc:cek@6` and `sid`.
 - The salt is independently generated for each entry.
 - Including `sid` in the derivation context ensures that copying an entry to a different file does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
-- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:kv:payload@5`.
+- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:context:aad:kv-enc:entry-payload@6`.
 - Including the KEY line prefix prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - `salt` is already consumed by HKDF, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 7.5 HPKE wrap (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:kv:hpke-wrap@5`.
+- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:context:hpke-info:kv-enc:wrap@6`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into unwrap failure.
 
@@ -995,7 +995,7 @@ These inputs are not aliases for the same parameter inside one primitive. HPKE `
 In file-enc / kv-enc wrap, the same bytes are used for HPKE info and AAD. Example for file-enc:
 
 ```
-info_bytes = jcs({"kid": ..., "p": "secretenv:file:hpke-wrap@4", "sid": ...})
+info_bytes = jcs({"kid": ..., "p": "secretenv:context:hpke-info:file-enc:wrap@5", "sid": ...})
 aad_bytes  = info_bytes
 ```
 
@@ -1111,8 +1111,8 @@ The protection path is a three-stage pipeline.
 
 | Stage | Input | Output | Security role |
 | --- | --- | --- | --- |
-| SSHSIG signing | Sign message (`secretenv:key-protection-ikm@6` and `ikm_salt`), namespace `secretenv-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
-| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `secretenv:sshsig-private-key-enc@6:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
+| SSHSIG signing | Sign message (`secretenv:context:sshsig-message:private-key:protection@7` and `ikm_salt`), namespace `secretenv-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
+| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `secretenv:context:hkdf-info:private-key:sshsig@7:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
 | XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Encrypts the private key material and makes tampering in the `protected` header fail at decryption time |
 
 The following diagram visualizes this derivation path.
@@ -1176,7 +1176,7 @@ Many CI platforms provide "secret variables" that are stored securely and expose
 
 ### 9.3.2 Key Derivation Pipeline
 
-In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `secretenv:password-private-key-enc@6:{kid}`, which is intentionally distinct from the SSH-based path (`secretenv:sshsig-private-key-enc@6:{kid}`) for domain separation.
+In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `secretenv:context:hkdf-info:private-key:password@7:{kid}`, which is intentionally distinct from the SSH-based path (`secretenv:context:hkdf-info:private-key:sshsig@7:{kid}`) for domain separation.
 
 `ikm_salt` is reserved for Argon2id and `hkdf_salt` for HKDF so that the two derivation steps remain clearly separated.
 
@@ -1528,11 +1528,11 @@ graph TB
     end
 
     subgraph public_key["PublicKey (workspace)"]
-        PK_DOC["secretenv.public.key@5<br/>self-signature + SSH attestation"]
+        PK_DOC["secretenv:format:public-key@6<br/>self-signature + SSH attestation"]
     end
 
     subgraph private_key["PrivateKey (local keystore)"]
-        PK_ENC["secretenv.private.key@6<br/>SSH signature-based encryption"]
+        PK_ENC["secretenv:format:private-key@7<br/>SSH signature-based encryption"]
     end
 
     subgraph file_enc["file-enc"]

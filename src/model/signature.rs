@@ -33,7 +33,7 @@ use crate::model::public_key::PublicKey;
 /// {
 ///   "alg": "eddsa-ed25519",
 ///   "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-///   "signer_pub": { /* PublicKey: secretenv.public.key@5 */ },
+///   "signer_pub": { /* PublicKey: secretenv:format:public-key@6 */ },
 ///   "sig": "SGVsbG8gV29ybGQ..."
 /// }
 /// ```

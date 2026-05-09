@@ -48,7 +48,7 @@ fn minimal_public_key_json(kid: &str, member_handle: &str) -> String {
     format!(
         r#"{{
         "protected": {{
-            "format": "secretenv.public.key@5",
+            "format": "secretenv:format:public-key@6",
             "subject_handle": "{}",
             "kid": "{}",
             "identity": {{

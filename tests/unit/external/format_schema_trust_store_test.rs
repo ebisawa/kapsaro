@@ -9,7 +9,7 @@ use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::feature::trust::verification::verify_trust_store;
 use secretenv::format::schema::validator::load_embedded_trust_validator;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
-use secretenv::model::wire::format::TRUST_LOCAL_V4;
+use secretenv::model::wire::format::LOCAL_TRUST_V5;
 use std::collections::BTreeMap;
 
 #[test]
@@ -17,7 +17,7 @@ fn test_trust_store_schema_valid_document() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -56,7 +56,7 @@ fn test_trust_store_schema_rejects_signer_pub() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -88,7 +88,7 @@ fn test_trust_store_schema_accepts_github_account_without_login() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -125,7 +125,7 @@ fn test_trust_store_schema_empty_known_keys() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -150,7 +150,7 @@ fn test_trust_store_schema_missing_required_field_fails() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "known_keys": [],
@@ -180,7 +180,7 @@ fn test_trust_store_schema_invalid_timestamp_fails() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29 12:34:56",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -212,7 +212,7 @@ fn test_trust_store_schema_non_utc_timestamp_fails() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56+09:00",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -244,7 +244,7 @@ fn test_trust_store_schema_known_key_allows_extra_fields() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -277,7 +277,7 @@ fn test_trust_store_schema_rejects_extra_top_level_fields() {
     let doc: serde_json::Value = serde_json::from_str(
         r#"{
             "protected": {
-                "format": "secretenv.trust.local@4",
+                "format": "secretenv:format:local-trust@5",
                 "owner_handle": "alice@example.com",
                 "created_at": "2026-03-29T12:34:56Z",
                 "updated_at": "2026-03-29T12:34:56Z",
@@ -303,7 +303,7 @@ fn test_verify_trust_store_rejects_semantically_invalid_timestamp() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: TRUST_LOCAL_V4.to_string(),
+        format: LOCAL_TRUST_V5.to_string(),
         owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),

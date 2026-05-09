@@ -46,7 +46,7 @@ fn test_encrypt_file_basic() {
 
     assert_eq!(
         file_enc_doc.protected.format,
-        secretenv::model::wire::format::FILE_ENC_V4
+        secretenv::model::wire::format::FILE_ENC_V5
     );
     assert_eq!(
         file_enc_doc.recipients(),
@@ -57,11 +57,11 @@ fn test_encrypt_file_basic() {
         serde_json::from_str(&serde_json::to_string(&file_enc_doc).unwrap()).unwrap();
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["format"],
-        secretenv::model::wire::format::FILE_PAYLOAD_V4
+        secretenv::model::wire::format::FILE_PAYLOAD_V5
     );
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],
-        secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
+        secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
     );
     let wrap = parsed["protected"]["wrap"].as_array().unwrap();
     assert_eq!(wrap.len(), 1);
@@ -69,7 +69,7 @@ fn test_encrypt_file_basic() {
     assert_eq!(wrap[0]["kid"], signer_kid);
     assert_eq!(
         parsed["signature"]["alg"],
-        secretenv::model::wire::alg::SIGNATURE_ED25519
+        secretenv::model::wire::algorithm::SIGNATURE_ED25519
     );
     assert_eq!(parsed["signature"]["kid"], signer_kid);
     assert!(parsed["signature"]["sig"].is_string());
@@ -419,7 +419,7 @@ fn test_encrypt_file_signature_included() {
     assert!(signature.is_object());
     assert_eq!(
         signature["alg"],
-        secretenv::model::wire::alg::SIGNATURE_ED25519
+        secretenv::model::wire::algorithm::SIGNATURE_ED25519
     );
     assert_eq!(signature["kid"], "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert!(!signature["sig"].as_str().unwrap().is_empty());

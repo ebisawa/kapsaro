@@ -30,7 +30,7 @@ fn test_encrypt_always_produces_file_enc_for_binary() {
 
     let content = fs::read_to_string(&output_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V4);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V5);
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn test_encrypt_always_produces_file_enc_for_dotenv() {
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert_eq!(
         parsed["protected"]["format"],
-        format::FILE_ENC_V4,
+        format::FILE_ENC_V5,
         "dotenv content should also be encrypted as file-enc"
     );
 }

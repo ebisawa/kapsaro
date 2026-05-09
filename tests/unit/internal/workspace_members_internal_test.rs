@@ -406,7 +406,7 @@ fn build_public_key_json(member_handle: &str, kid: &str) -> String {
     format!(
         r#"{{
   "protected": {{
-    "format": "secretenv.public.key@5",
+    "format": "secretenv:format:public-key@6",
     "subject_handle": "{member_handle}",
     "kid": "{kid}",
     "identity": {{

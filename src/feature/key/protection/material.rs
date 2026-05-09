@@ -12,7 +12,7 @@ use crate::feature::key::protection::binding::build_private_key_aad;
 use crate::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use crate::model::wire::{alg, format};
+use crate::model::wire::{algorithm, format};
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
 };
@@ -73,7 +73,7 @@ pub(super) fn build_private_key_protected(
     alg: PrivateKeyAlgorithm,
 ) -> PrivateKeyProtected {
     PrivateKeyProtected {
-        format: format::PRIVATE_KEY_V6.to_string(),
+        format: format::PRIVATE_KEY_V7.to_string(),
         subject_handle: metadata.member_handle.to_string(),
         kid: metadata.kid.to_string(),
         alg,
@@ -90,7 +90,7 @@ pub(super) fn build_sshsig_algorithm(
         fpr: ssh_fpr.to_string(),
         ikm_salt: material.ikm_salt_b64().to_string(),
         hkdf_salt: material.hkdf_salt_b64().to_string(),
-        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
     }
 }
 
@@ -100,19 +100,19 @@ pub(super) fn build_argon2id_algorithm(
     PrivateKeyAlgorithm::Argon2id {
         ikm_salt: material.ikm_salt_b64().to_string(),
         hkdf_salt: material.hkdf_salt_b64().to_string(),
-        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
     }
 }
 
 pub(super) fn validate_aead_algorithm(aead: &str) -> Result<()> {
-    if aead == alg::AEAD_XCHACHA20_POLY1305 {
+    if aead == algorithm::AEAD_XCHACHA20_POLY1305 {
         return Ok(());
     }
     Err(Error::Crypto {
         message: format!(
             "Unsupported AEAD algorithm '{}', expected '{}'",
             aead,
-            alg::AEAD_XCHACHA20_POLY1305
+            algorithm::AEAD_XCHACHA20_POLY1305
         ),
         source: None,
     })

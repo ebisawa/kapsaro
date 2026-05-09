@@ -6,8 +6,8 @@
 //! Tests for:
 //! - Automatic input type detection
 //! - kv-plain detection (60% KEY=VALUE rule)
-//! - kv-enc detection (:SECRETENV_KV 5 header)
-//! - file-enc detection (JSON with "format": "secretenv.file@4")
+//! - kv-enc detection (:SECRETENV_KV 6 header)
+//! - file-enc detection (JSON with "format": "secretenv:format:file-enc@5")
 
 use secretenv::format::detection::{detect_format, InputFormat};
 use secretenv::support::limits::MAX_JSON_DEPTH;
@@ -25,8 +25,8 @@ fn deeply_nested_json(depth: usize) -> String {
 }
 
 #[test]
-fn test_detect_kv_enc_v5() {
-    let content = ":SECRETENV_KV 5\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n:WRAP eyJrZXkiOiJ2YWx1ZSJ9\nDATABASE_URL eyJrZXkiOiJ2YWx1ZSJ9\n";
+fn test_detect_kv_enc_v6() {
+    let content = ":SECRETENV_KV 6\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n:WRAP eyJrZXkiOiJ2YWx1ZSJ9\nDATABASE_URL eyJrZXkiOiJ2YWx1ZSJ9\n";
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::KvEnc);
 }
@@ -48,8 +48,8 @@ fn test_detect_kv_enc_old_format_rejected() {
 }
 
 #[test]
-fn test_detect_file_enc_v4() {
-    let content = r#"{"protected": {"format": "secretenv.file@4", "sid": "550e8400-e29b-41d4-a716-446655440000", "wrap": [], "payload": {"protected": {"format": "secretenv.file.payload@4", "sid": "550e8400-e29b-41d4-a716-446655440000", "alg": {"aead": "xchacha20-poly1305"}}, "encrypted": {"nonce": "...", "ct": "..."}}, "created_at": "2026-01-19T10:00:00Z", "updated_at": "2026-01-19T10:00:00Z"}, "signature": {"alg": "eddsa-ed25519", "kid": "...", "sig": "..."}}"#;
+fn test_detect_file_enc_v5() {
+    let content = r#"{"protected": {"format": "secretenv:format:file-enc@5", "sid": "550e8400-e29b-41d4-a716-446655440000", "wrap": [], "payload": {"protected": {"format": "secretenv:format:file-enc:payload@5", "sid": "550e8400-e29b-41d4-a716-446655440000", "alg": {"aead": "xchacha20-poly1305"}}, "encrypted": {"nonce": "...", "ct": "..."}}, "created_at": "2026-01-19T10:00:00Z", "updated_at": "2026-01-19T10:00:00Z"}, "signature": {"alg": "eddsa-ed25519", "kid": "...", "sig": "..."}}"#;
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::FileEnc);
 }
@@ -64,7 +64,7 @@ fn test_detect_file_enc_v2_rejected() {
 
 #[test]
 fn test_detect_file_enc_top_level_format_rejected() {
-    let content = r#"{"format":"secretenv.file@4","protected":{"sid":"550e8400-e29b-41d4-a716-446655440000","wrap":[],"payload":{"protected":{"format":"secretenv.file.payload@4","sid":"550e8400-e29b-41d4-a716-446655440000","alg":{"aead":"xchacha20-poly1305"}},"encrypted":{"nonce":"...","ct":"..."}},"created_at":"2026-01-19T10:00:00Z","updated_at":"2026-01-19T10:00:00Z"},"signature":{"alg":"eddsa-ed25519","kid":"...","sig":"..."}}"#;
+    let content = r#"{"format":"secretenv:format:file-enc@5","protected":{"sid":"550e8400-e29b-41d4-a716-446655440000","wrap":[],"payload":{"protected":{"format":"secretenv:format:file-enc:payload@5","sid":"550e8400-e29b-41d4-a716-446655440000","alg":{"aead":"xchacha20-poly1305"}},"encrypted":{"nonce":"...","ct":"..."}},"created_at":"2026-01-19T10:00:00Z","updated_at":"2026-01-19T10:00:00Z"},"signature":{"alg":"eddsa-ed25519","kid":"...","sig":"..."}}"#;
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::Unknown);
 }

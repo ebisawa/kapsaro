@@ -63,7 +63,7 @@ pub fn derive_key_from_password(
     }
     let info = Info::from_string(&format!(
         "{}:{}",
-        context::PASSWORD_PRIVATE_KEY_ENC_INFO_PREFIX_V6,
+        context::HKDF_INFO_PRIVATE_KEY_PASSWORD_V7,
         kid
     ));
     let cek = kdf::expand_to_array(&Ikm::from(ikm.as_ref()), Some(hkdf_salt), &info)?;

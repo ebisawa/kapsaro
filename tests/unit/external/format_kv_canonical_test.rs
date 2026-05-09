@@ -7,18 +7,18 @@ use secretenv::format::kv::enc::canonical::{build_canonical_bytes, extract_recip
 use secretenv::format::kv::enc::parser::KvEncParser;
 use secretenv::model::common::WrapItem;
 use secretenv::model::kv_enc::header::KvWrap;
-use secretenv::model::wire::hpke;
+use secretenv::model::wire::algorithm;
 
 #[test]
 fn test_build_canonical_bytes() {
     let content =
-        ":SECRETENV_KV 5\n:HEAD token0\n:WRAP token1\nKEY1 value1\nKEY2 value2\n:SIG sig_token\n";
+        ":SECRETENV_KV 6\n:HEAD token0\n:WRAP token1\nKEY1 value1\nKEY2 value2\n:SIG sig_token\n";
     let parser = KvEncParser::new(content);
     let lines = parser.parse_all().unwrap();
 
     let canonical = build_canonical_bytes(&lines);
     let canonical = std::str::from_utf8(&canonical).unwrap();
-    assert!(canonical.contains(":SECRETENV_KV 5"));
+    assert!(canonical.contains(":SECRETENV_KV 6"));
     assert!(canonical.contains(":HEAD token0"));
     assert!(canonical.contains(":WRAP token1"));
     assert!(canonical.contains("KEY1 value1"));
@@ -28,7 +28,7 @@ fn test_build_canonical_bytes() {
 
 #[test]
 fn test_build_canonical_bytes_excludes_sig() {
-    let content = ":SECRETENV_KV 5\n:HEAD token0\n:WRAP token1\nKEY1 value1\n:SIG sig_token\n";
+    let content = ":SECRETENV_KV 6\n:HEAD token0\n:WRAP token1\nKEY1 value1\n:SIG sig_token\n";
     let parser = KvEncParser::new(content);
     let lines = parser.parse_all().unwrap();
 
@@ -44,14 +44,14 @@ fn test_extract_recipients_from_wrap() {
             WrapItem {
                 recipient_handle: "alice@example.com".to_string(),
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                 enc: "dummy".to_string(),
                 ct: "dummy".to_string(),
             },
             WrapItem {
                 recipient_handle: "bob@example.com".to_string(),
                 kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GH".to_string(),
-                alg: hpke::ALG_HPKE_32_1_3.to_string(),
+                alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                 enc: "dummy".to_string(),
                 ct: "dummy".to_string(),
             },

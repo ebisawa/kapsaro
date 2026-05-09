@@ -389,8 +389,8 @@ fn test_rewrap_file_preserves_payload() {
         serde_json::from_str(&rewrapped).unwrap();
 
     assert_eq!(
-        doc.protected.format, "secretenv.file@4",
-        "format field must be preserved as secretenv.file@4"
+        doc.protected.format, "secretenv:format:file-enc@5",
+        "format field must be preserved as secretenv:format:file-enc@5"
     );
 }
 

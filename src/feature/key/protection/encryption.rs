@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSH Key Protection for PrivateKey v5
+//! SSH Key Protection for PrivateKey v7
 //!
-//! PrivateKey v5 must be encrypted with an SSH Ed25519 key.
+//! PrivateKey v7 must be encrypted with an SSH Ed25519 key.
 //! This module implements the encryption and decryption process.
 
 use super::key_derivation;

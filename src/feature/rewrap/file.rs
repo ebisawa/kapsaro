@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for file-enc v4 format.
+//! Rewrap operations for file-enc v5 format.
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::signature::sign_file_document;
@@ -98,7 +98,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             signature,
         };
         serde_json::to_string_pretty(&doc).map_err(|e| Error::Parse {
-            message: format!("Failed to serialize file-enc v4: {}", e),
+            message: format!("Failed to serialize file-enc v5: {}", e),
             source: Some(Box::new(e)),
         })
     }
@@ -140,7 +140,7 @@ impl RewrapDocumentAdapter for FileRewrapAdapter {
     }
 }
 
-/// Rewrap file-enc v4 content.
+/// Rewrap file-enc v5 content.
 pub fn rewrap_file_document(
     options: &RewrapOptions,
     content: &FileEncContent,

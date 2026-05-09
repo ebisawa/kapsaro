@@ -11,7 +11,7 @@ use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::crypto::types::primitives::XChaChaNonce;
 use crate::feature::envelope::binding::build_kv_entry_aad;
 use crate::model::kv_enc::entry::KvEntryValue;
-use crate::model::wire::alg;
+use crate::model::wire::algorithm;
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
 };
@@ -90,7 +90,7 @@ pub(crate) fn decrypt_entry(
 }
 
 fn validate_kv_entry_aead(aead: &str) -> Result<()> {
-    if aead != alg::AEAD_XCHACHA20_POLY1305 {
+    if aead != algorithm::AEAD_XCHACHA20_POLY1305 {
         return Err(crate::Error::Crypto {
             message: format!("Unsupported AEAD algorithm: {}", aead),
             source: None,

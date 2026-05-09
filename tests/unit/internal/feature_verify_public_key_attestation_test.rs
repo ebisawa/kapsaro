@@ -11,7 +11,7 @@ use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
 use secretenv::feature::verify::public_key::verify_public_key_with_attestation;
 use secretenv::format::jcs;
 use secretenv::io::keystore::storage::load_public_key;
-use secretenv::model::wire::alg;
+use secretenv::model::wire::algorithm;
 use secretenv::support::codec::base64_public::decode_base64url_nopad_array;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -87,7 +87,7 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
     public_key.protected.kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string();
     let protected_jcs = jcs::normalize(&public_key.protected).unwrap();
     public_key.signature =
-        sign_detached_bytes(&protected_jcs, &signing_key, alg::SIGNATURE_ED25519).unwrap();
+        sign_detached_bytes(&protected_jcs, &signing_key, algorithm::SIGNATURE_ED25519).unwrap();
 
     let error = verify_public_key_with_attestation(&public_key, false)
         .unwrap_err()

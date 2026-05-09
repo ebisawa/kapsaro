@@ -5,7 +5,7 @@ use crate::feature::context::ssh::params::SshSigningParams;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::model::ssh::SshDeterminismStatus;
-use crate::model::wire::context::SSH_DETERMINISM_CHECK_MESSAGE;
+use crate::model::wire::context::SSHSIG_MESSAGE_DETERMINISM_CHECK_V1;
 use crate::{Error, Result};
 use tracing::debug;
 
@@ -24,7 +24,7 @@ pub(crate) fn check_ssh_signature_determinism(
     let determinism = match backend.check_sshsig_determinism(
         ssh::KEY_PROTECTION_NAMESPACE,
         ssh_pub,
-        SSH_DETERMINISM_CHECK_MESSAGE,
+        SSHSIG_MESSAGE_DETERMINISM_CHECK_V1,
     ) {
         Ok(()) => Ok(SshDeterminismStatus::Verified),
         Err(error) if is_non_deterministic_signature_error(&error) => {

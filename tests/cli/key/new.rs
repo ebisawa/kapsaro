@@ -7,7 +7,7 @@ use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
 use secretenv::io::ssh::protocol::constants as ssh_constants;
-use secretenv::model::wire::{alg, format};
+use secretenv::model::wire::{algorithm, format};
 use secretenv::model::{private_key::PrivateKey, public_key::PublicKey};
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use std::fs;
@@ -81,8 +81,8 @@ fn test_key_new_generates_private_key() {
     // Verify fields
     assert_eq!(
         private_key.protected.format,
-        format::PRIVATE_KEY_V6,
-        "Format should be secretenv.private.key@6"
+        format::PRIVATE_KEY_V7,
+        "Format should be secretenv:format:private-key@7"
     );
     assert_eq!(
         private_key.protected.subject_handle, member_handle,
@@ -168,7 +168,7 @@ fn test_key_new_ssh_protection() {
 
             assert_eq!(
                 aead,
-                alg::AEAD_XCHACHA20_POLY1305,
+                algorithm::AEAD_XCHACHA20_POLY1305,
                 "protected.alg.aead should be xchacha20-poly1305"
             );
         }

@@ -187,7 +187,7 @@ fn test_env_key_rejects_sshsig_algorithm() {
     // Build a PrivateKey with SshSig algorithm and encode it
     let sshsig_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: format::PRIVATE_KEY_V6.to_string(),
+            format: format::PRIVATE_KEY_V7.to_string(),
             subject_handle: "alice@example.com".to_string(),
             kid: TEST_KID.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {

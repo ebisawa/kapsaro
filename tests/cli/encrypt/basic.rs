@@ -9,7 +9,7 @@ use crate::cli::common::{
 };
 use crate::test_utils::{setup_test_keystore, setup_test_workspace};
 use secretenv::cli::encrypt;
-use secretenv::model::identifiers::format;
+use secretenv::model::wire::format;
 use std::fs;
 
 #[test]

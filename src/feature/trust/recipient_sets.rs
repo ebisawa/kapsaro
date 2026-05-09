@@ -6,10 +6,10 @@
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::format::jcs;
 use crate::model::common::WrapItem;
-use crate::model::identifiers::context::ARTIFACT_RECIPIENT_SET_HASH_V1;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord};
+use crate::model::wire::context::ARTIFACT_RECIPIENT_SET_HASH_V1;
 use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::{Error, Result};
 use serde::Serialize;

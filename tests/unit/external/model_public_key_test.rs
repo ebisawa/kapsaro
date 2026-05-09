@@ -40,14 +40,14 @@ fn test_public_key_deserialization() {
 
     assert_eq!(
         pk.protected.format,
-        secretenv::model::identifiers::format::PUBLIC_KEY_V5
+        secretenv::model::wire::format::PUBLIC_KEY_V5
     );
     assert_eq!(pk.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(pk.protected.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(pk.protected.identity.keys.kem.kty, "OKP");
     assert_eq!(
         pk.protected.identity.keys.kem.crv,
-        secretenv::model::identifiers::jwk::CRV_X25519
+        secretenv::model::wire::jwk::CRV_X25519
     );
     assert_eq!(
         pk.protected.identity.attestation.method,
@@ -59,19 +59,19 @@ fn test_public_key_deserialization() {
 fn test_public_key_serialization() {
     let pk = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            format: secretenv::model::wire::format::PUBLIC_KEY_V5.to_string(),
             subject_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                         x: "dGVzdGtleQ".to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                         x: "dGVzdGtleQ".to_string(),
                     },
                 },
@@ -93,7 +93,7 @@ fn test_public_key_serialization() {
 
     assert_eq!(
         json_value["protected"]["format"],
-        secretenv::model::identifiers::format::PUBLIC_KEY_V5
+        secretenv::model::wire::format::PUBLIC_KEY_V5
     );
     assert_eq!(json_value["protected"]["subject_handle"], BOB_MEMBER_HANDLE);
     assert_eq!(
@@ -106,19 +106,19 @@ fn test_public_key_serialization() {
 fn test_public_key_roundtrip() {
     let original = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            format: secretenv::model::wire::format::PUBLIC_KEY_V5.to_string(),
             subject_handle: TEST_MEMBER_HANDLE.to_string(),
             kid: "2C7R5M9K8D1XV4PH6T3NB2QJ9F7AK5WE".to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                         x: "a2VtcHVi".to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                         x: "c2lncHVi".to_string(),
                     },
                 },
@@ -165,12 +165,12 @@ fn test_public_key_new_preserves_binding_claims() {
             keys: IdentityKeys {
                 kem: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                    crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                     x: "a2VtcHVi".to_string(),
                 },
                 sig: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                    crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                     x: "c2lncHVi".to_string(),
                 },
             },

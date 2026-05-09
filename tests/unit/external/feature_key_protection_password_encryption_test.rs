@@ -10,10 +10,10 @@ use secretenv::feature::key::protection::password_encryption::{
     decrypt_private_key_with_password, encrypt_private_key_with_password,
 };
 use secretenv::feature::key::protection::password_key_derivation::derive_key_from_password;
-use secretenv::model::identifiers::{alg, format};
 use secretenv::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
+use secretenv::model::wire::{alg, format};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::secret::SecretString;
 use std::collections::BTreeSet;

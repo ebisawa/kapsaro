@@ -6,8 +6,8 @@
 //! Shared structures used by file-enc and kv-enc formats
 
 use crate::crypto::types::data::{Ciphertext, Enc};
-use crate::model::identifiers::hpke;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::model::wire::hpke;
 use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::support::kid::format_kid_display_lossy;
 use crate::support::limits::validate_wrap_count;
@@ -22,6 +22,7 @@ use std::collections::HashSet;
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct WrapItem {
     /// Recipient handle.
+    #[serde(rename = "rh")]
     pub recipient_handle: String,
 
     /// Recipient key statement ID in canonical Crockford Base32 form
@@ -128,7 +129,7 @@ impl WrapSet {
                 return Err(Error::Verify {
                     rule: "E_DUPLICATE_RECIPIENT_HANDLE".to_string(),
                     message: format!(
-                        "{} contains duplicate recipient_handle '{}' in wrap",
+                        "{} contains duplicate rh '{}' in wrap",
                         context, item.recipient_handle
                     ),
                 });
@@ -160,7 +161,7 @@ impl WrapSet {
         if wrap_item.recipient_handle.as_str() != member_handle {
             return Err(Error::Crypto {
                 message: format!(
-                    "wrap_item.recipient_handle '{}' does not match member_handle '{}' for kid '{}'",
+                    "wrap_item.rh '{}' does not match member_handle '{}' for kid '{}'",
                     wrap_item.recipient_handle,
                     member_handle,
                     format_kid_display_lossy(kid)
@@ -191,6 +192,7 @@ impl WrapSet {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RemovedRecipient {
     /// Recipient handle that was removed.
+    #[serde(rename = "rh")]
     pub recipient_handle: String,
 
     /// Recipient key statement ID copied from `wrap_item.kid`

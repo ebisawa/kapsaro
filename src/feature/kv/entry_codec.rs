@@ -25,7 +25,7 @@ pub(crate) fn encode_kv_entries_to_tokens(
         .iter()
         .map(|(key, entry)| {
             let token =
-                TokenCodec::encode_debug(token_codec, entry, debug, Some(&entry.k), Some(caller))?;
+                TokenCodec::encode_debug(token_codec, entry, debug, Some(key), Some(caller))?;
             Ok(KvEncodedEntry {
                 key: key.clone(),
                 token,

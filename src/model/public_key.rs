@@ -5,7 +5,7 @@
 //!
 //! Includes attested identity and verified public key types for functional domain modeling.
 
-use crate::model::identifiers::format::PUBLIC_KEY_V5;
+use crate::model::wire::format::PUBLIC_KEY_V5;
 use serde::{Deserialize, Serialize};
 
 pub use super::public_key_verified::{

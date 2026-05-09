@@ -46,7 +46,7 @@ fn test_encrypt_file_basic() {
 
     assert_eq!(
         file_enc_doc.protected.format,
-        secretenv::model::identifiers::format::FILE_ENC_V4
+        secretenv::model::wire::format::FILE_ENC_V4
     );
     assert_eq!(
         file_enc_doc.recipients(),
@@ -57,19 +57,19 @@ fn test_encrypt_file_basic() {
         serde_json::from_str(&serde_json::to_string(&file_enc_doc).unwrap()).unwrap();
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["format"],
-        secretenv::model::identifiers::format::FILE_PAYLOAD_V4
+        secretenv::model::wire::format::FILE_PAYLOAD_V4
     );
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],
-        secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305
+        secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305
     );
     let wrap = parsed["protected"]["wrap"].as_array().unwrap();
     assert_eq!(wrap.len(), 1);
-    assert_eq!(wrap[0]["recipient_handle"], ALICE_MEMBER_HANDLE);
+    assert_eq!(wrap[0]["rh"], ALICE_MEMBER_HANDLE);
     assert_eq!(wrap[0]["kid"], signer_kid);
     assert_eq!(
         parsed["signature"]["alg"],
-        secretenv::model::identifiers::alg::SIGNATURE_ED25519
+        secretenv::model::wire::alg::SIGNATURE_ED25519
     );
     assert_eq!(parsed["signature"]["kid"], signer_kid);
     assert!(parsed["signature"]["sig"].is_string());
@@ -136,13 +136,13 @@ fn test_encrypt_file_multiple_recipients() {
     assert_eq!(wrap.len(), 2);
     assert_eq!(
         wrap.iter()
-            .find(|item| item["recipient_handle"] == ALICE_MEMBER_HANDLE)
+            .find(|item| item["rh"] == ALICE_MEMBER_HANDLE)
             .unwrap()["kid"],
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"
     );
     assert_eq!(
         wrap.iter()
-            .find(|item| item["recipient_handle"] == BOB_MEMBER_HANDLE)
+            .find(|item| item["rh"] == BOB_MEMBER_HANDLE)
             .unwrap()["kid"],
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GH"
     );
@@ -419,7 +419,7 @@ fn test_encrypt_file_signature_included() {
     assert!(signature.is_object());
     assert_eq!(
         signature["alg"],
-        secretenv::model::identifiers::alg::SIGNATURE_ED25519
+        secretenv::model::wire::alg::SIGNATURE_ED25519
     );
     assert_eq!(signature["kid"], "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert!(!signature["sig"].as_str().unwrap().is_empty());

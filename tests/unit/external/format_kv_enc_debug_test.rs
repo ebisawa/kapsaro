@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Debug test for kv-enc v4 HPKE issue
+//! Debug test for kv-enc v5 HPKE issue
 
 use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_keys};
 use crate::test_utils::ALICE_MEMBER_HANDLE;
@@ -64,7 +64,7 @@ fn test_debug_hpke_single_recipient() {
     )
     .unwrap();
 
-    println!("\nEncrypted kv-enc v4:");
+    println!("\nEncrypted kv-enc v5:");
     for (i, line) in encrypted.lines().enumerate() {
         if line.len() > 100 {
             println!("  Line {}: {}... ({} bytes)", i, &line[..100], line.len());

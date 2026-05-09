@@ -32,7 +32,7 @@ fn test_init_registers_member() {
     assert_eq!(public_key.protected.subject_handle, TEST_MEMBER_HANDLE);
     assert_eq!(
         public_key.protected.format,
-        secretenv::model::identifiers::format::PUBLIC_KEY_V5
+        secretenv::model::wire::format::PUBLIC_KEY_V5
     );
 }
 

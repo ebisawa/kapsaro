@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
-//! On-wire identifiers and other shared string literals
+//! Wire-format constants and protocol string literals.
 //!
-//! Centralizing these reduces typo risk and makes future changes safer.
-//! This module intentionally contains only pure identifiers/constant data
-//! used across the wire formats and crypto contexts.
+//! Centralizing these reduces typo risk and makes future changes safer. This
+//! module intentionally contains only pure constant data used across wire
+//! formats and crypto contexts.
 
 /// On-wire `format` identifiers.
 pub mod format {
@@ -39,12 +39,12 @@ pub mod jwk {
 /// AAD / HPKE / KDF context identifiers.
 pub mod context {
     /// AAD/Context discriminator for KV payload encryption.
-    pub const PAYLOAD_KV_V4: &str = "secretenv:kv:payload@4";
+    pub const PAYLOAD_KV_V5: &str = "secretenv:kv:payload@5";
     /// AAD/Context discriminator for `PrivateKey@6` encryption.
     pub const PRIVATE_KEY_V6: &str = "secretenv:private-key@6";
 
     /// HPKE info discriminator for kv-file WRAP.
-    pub const HPKE_WRAP_KV_FILE_V4: &str = "secretenv:kv:hpke-wrap@4";
+    pub const HPKE_WRAP_KV_FILE_V5: &str = "secretenv:kv:hpke-wrap@5";
     /// HPKE info discriminator for file WRAP.
     pub const HPKE_WRAP_FILE_V4: &str = "secretenv:file:hpke-wrap@4";
 
@@ -59,7 +59,7 @@ pub mod context {
     /// Sign message header for SSH `PrivateKey@6` protection.
     pub const SSH_KEY_PROTECTION_SIGN_MESSAGE_PREFIX_V6: &str = "secretenv:key-protection-ikm@6";
     /// HKDF info prefix for kv-enc entry CEK derivation.
-    pub const KV_CEK_INFO_PREFIX_V4: &str = "secretenv:kv:cek@4";
+    pub const KV_CEK_INFO_PREFIX_V5: &str = "secretenv:kv:cek@5";
     /// Hash domain separator for artifact recipient set approval records.
     pub const ARTIFACT_RECIPIENT_SET_HASH_V1: &str = "secretenv:artifact-recipient-set@1";
 }

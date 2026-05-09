@@ -7,7 +7,7 @@ use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
 use secretenv::io::ssh::protocol::constants as ssh_constants;
-use secretenv::model::identifiers::{alg, format};
+use secretenv::model::wire::{alg, format};
 use secretenv::model::{private_key::PrivateKey, public_key::PublicKey};
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use std::fs;

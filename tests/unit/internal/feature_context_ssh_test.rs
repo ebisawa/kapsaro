@@ -64,7 +64,7 @@ fn test_check_determinism_via_context() {
     let result = backend.check_sshsig_determinism(
         KEY_PROTECTION_NAMESPACE,
         &ssh_pub,
-        secretenv::model::identifiers::context::SSH_DETERMINISM_CHECK_MESSAGE,
+        secretenv::model::wire::context::SSH_DETERMINISM_CHECK_MESSAGE,
     );
     // Result may be ok or err depending on backend implementation
     let _ = result;

@@ -4,11 +4,11 @@
 //! Unit tests for trust store file I/O
 
 use secretenv::io::trust::store::{load_trust_store, save_trust_store};
-use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
+use secretenv::model::wire::format::TRUST_LOCAL_V4;
 use secretenv::support::limits::MAX_JSON_DEPTH;
 use std::collections::BTreeMap;
 #[cfg(unix)]

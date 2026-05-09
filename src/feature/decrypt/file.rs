@@ -12,8 +12,8 @@ use crate::feature::envelope::unwrap::{
     unwrap_master_key_for_file, unwrap_master_key_for_file_with_context,
 };
 use crate::model::file_enc::VerifiedFileEncDocument;
-use crate::model::identifiers::{alg, format};
 use crate::model::verified::VerifiedPrivateKey;
+use crate::model::wire::{alg, format};
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext,
 };

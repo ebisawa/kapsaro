@@ -6,7 +6,7 @@
 //! Tests for:
 //! - Automatic input type detection
 //! - kv-plain detection (60% KEY=VALUE rule)
-//! - kv-enc detection (:SECRETENV_KV 4 header)
+//! - kv-enc detection (:SECRETENV_KV 5 header)
 //! - file-enc detection (JSON with "format": "secretenv.file@4")
 
 use secretenv::format::detection::{detect_format, InputFormat};
@@ -25,8 +25,8 @@ fn deeply_nested_json(depth: usize) -> String {
 }
 
 #[test]
-fn test_detect_kv_enc_v4() {
-    let content = ":SECRETENV_KV 4\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n:WRAP eyJrZXkiOiJ2YWx1ZSJ9\nDATABASE_URL eyJrZXkiOiJ2YWx1ZSJ9\n";
+fn test_detect_kv_enc_v5() {
+    let content = ":SECRETENV_KV 5\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n:WRAP eyJrZXkiOiJ2YWx1ZSJ9\nDATABASE_URL eyJrZXkiOiJ2YWx1ZSJ9\n";
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::KvEnc);
 }

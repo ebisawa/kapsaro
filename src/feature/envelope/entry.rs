@@ -10,8 +10,8 @@ use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::crypto::types::primitives::XChaChaNonce;
 use crate::feature::envelope::binding::build_kv_entry_aad;
-use crate::model::identifiers::alg;
 use crate::model::kv_enc::entry::KvEntryValue;
+use crate::model::wire::alg;
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
 };
@@ -50,8 +50,6 @@ pub(crate) fn encrypt_entry(
 
     Ok(KvEntryValue {
         salt,
-        k: key.to_string(),
-        aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
         nonce: encode_base64url_nopad(nonce.as_bytes()),
         ct: encode_base64url_nopad(ciphertext.as_bytes()),
         disclosed,
@@ -64,17 +62,20 @@ pub(crate) fn encrypt_entry(
 /// Callers should convert to String only when necessary (e.g., for display/output).
 pub(crate) fn decrypt_entry(
     entry: &KvEntryValue,
+    key: &str,
+    aead: &str,
     master_key: &MasterKey,
     sid: &Uuid,
     debug: bool,
     caller: &str,
 ) -> Result<Zeroizing<Vec<u8>>> {
+    validate_kv_entry_aead(aead)?;
     let cek = derive_cek(master_key, &entry.salt, sid, debug)?;
     let cek_key = XChaChaKey::from_slice(cek.as_bytes())?;
     let nonce_bytes: [u8; 24] = decode_base64url_nopad_array(&entry.nonce, "nonce")?;
     let nonce = XChaChaNonce::new(nonce_bytes);
     let ciphertext = decode_base64url_nopad_ciphertext(&entry.ct, "ct")?;
-    let aad = build_kv_entry_aad(sid, &entry.k)?;
+    let aad = build_kv_entry_aad(sid, key)?;
 
     if debug {
         debug!(
@@ -87,3 +88,17 @@ pub(crate) fn decrypt_entry(
     // Convert Zeroizing<Plaintext> to Zeroizing<Vec<u8>>
     Ok(plaintext.to_zeroizing_vec())
 }
+
+fn validate_kv_entry_aead(aead: &str) -> Result<()> {
+    if aead != alg::AEAD_XCHACHA20_POLY1305 {
+        return Err(crate::Error::Crypto {
+            message: format!("Unsupported AEAD algorithm: {}", aead),
+            source: None,
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_envelope_entry_test.rs"]
+mod tests;

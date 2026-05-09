@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use secretenv::model::common::{WrapAlgorithm, WrapItem, WrapSet};
-use secretenv::model::identifiers::hpke;
+use secretenv::model::wire::hpke;
 
 const ALICE: &str = "alice@example.com";
 const BOB: &str = "bob@example.com";

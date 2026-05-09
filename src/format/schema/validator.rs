@@ -3,7 +3,7 @@
 
 //! JSON Schema validator.
 
-use crate::model::identifiers::format::{FILE_ENC_V4, PRIVATE_KEY_V6, PUBLIC_KEY_V5};
+use crate::model::wire::format::{FILE_ENC_V4, PRIVATE_KEY_V6, PUBLIC_KEY_V5};
 use crate::support::fs::load_text;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};

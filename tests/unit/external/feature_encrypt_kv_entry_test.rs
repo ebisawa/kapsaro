@@ -250,6 +250,7 @@ fn test_build_kv_set_entry_adds_new_key() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -274,6 +275,7 @@ fn test_build_kv_set_entry_replaces_existing_key() {
     let new_token = "newtoken456";
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -298,6 +300,7 @@ fn test_build_kv_set_entry_preserves_wrap_token() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -320,6 +323,7 @@ fn test_build_kv_set_entry_preserves_sid_and_created_at() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-03-15T12:00:00Z".to_string(),
     };
@@ -351,6 +355,7 @@ fn test_build_kv_unset_entry_removes_target_key() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -374,6 +379,7 @@ fn test_build_kv_unset_entry_preserves_wrap_token() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -396,6 +402,7 @@ fn test_build_kv_unset_entry_last_entry() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -421,6 +428,7 @@ fn test_build_kv_unset_entry_preserves_sid_and_created_at() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-03-15T12:00:00Z".to_string(),
     };
@@ -446,6 +454,7 @@ fn test_build_kv_set_entries_updates_and_adds_multiple_keys() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -487,6 +496,7 @@ fn test_build_kv_set_entries_preserves_existing_keys_not_in_map() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };
@@ -518,6 +528,7 @@ fn test_build_kv_set_entries_new_keys_sorted_deterministically() {
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
+        alg: doc.head.alg.clone(),
         created_at: doc.head.created_at.clone(),
         updated_at: "2026-01-02T00:00:00Z".to_string(),
     };

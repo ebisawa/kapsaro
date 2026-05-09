@@ -11,11 +11,11 @@ use crate::feature::verify::public_key::{
 use crate::format::schema::validator::load_embedded_trust_validator;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
-use crate::model::identifiers::alg::SIGNATURE_ED25519;
-use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
 use crate::model::trust_store::TrustStoreDocument;
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
+use crate::model::wire::alg::SIGNATURE_ED25519;
+use crate::model::wire::format::TRUST_LOCAL_V4;
 use crate::{Error, Result};
 use ed25519_dalek::VerifyingKey;
 use std::collections::HashSet;

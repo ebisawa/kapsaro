@@ -5,8 +5,8 @@
 
 use crate::crypto::sign::sign_trust_store_bytes;
 use crate::format::trust_store::build_trust_store_signature_bytes;
-use crate::model::identifiers::alg::SIGNATURE_ED25519;
 use crate::model::trust_store::{TrustStoreDocument, TrustStoreProtected};
+use crate::model::wire::alg::SIGNATURE_ED25519;
 use crate::Result;
 use ed25519_dalek::SigningKey;
 

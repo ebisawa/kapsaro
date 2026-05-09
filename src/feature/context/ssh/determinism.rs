@@ -4,8 +4,8 @@
 use crate::feature::context::ssh::params::SshSigningParams;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
-use crate::model::identifiers::context::SSH_DETERMINISM_CHECK_MESSAGE;
 use crate::model::ssh::SshDeterminismStatus;
+use crate::model::wire::context::SSH_DETERMINISM_CHECK_MESSAGE;
 use crate::{Error, Result};
 use tracing::debug;
 

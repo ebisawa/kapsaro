@@ -20,13 +20,13 @@ use crate::feature::trust::signature::sign_trust_store;
 use crate::io::keystore::member::find_active_key_document;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
-use crate::model::identifiers::format::TRUST_LOCAL_V4;
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
 };
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::model::wire::format::TRUST_LOCAL_V4;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
     kid, member_handle, save_active_public_key_to_workspace, save_public_key,

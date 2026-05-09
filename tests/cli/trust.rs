@@ -17,8 +17,8 @@ use predicates::prelude::*;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::io::trust::paths::get_trust_store_file_path;
 use secretenv::io::trust::store::save_trust_store;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use secretenv::model::wire::format::TRUST_LOCAL_V4;
 use serde_json::Value;
 use tempfile::TempDir;
 

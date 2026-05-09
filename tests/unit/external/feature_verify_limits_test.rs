@@ -9,10 +9,10 @@ use secretenv::model::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
 };
-use secretenv::model::identifiers::{alg, format, hpke};
 use secretenv::model::kv_enc::document::KvEncDocument;
-use secretenv::model::kv_enc::header::{KvHeader, KvWrap};
+use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use secretenv::model::signature::ArtifactSignature;
+use secretenv::model::wire::{alg, format, hpke};
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
 
@@ -86,10 +86,13 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
 #[test]
 fn test_verify_kv_document_rejects_wrap_count_over_limit() {
     let doc = KvEncDocument::new(
-        ":SECRETENV_KV 4\n".to_string(),
+        ":SECRETENV_KV 5\n".to_string(),
         Vec::new(),
         KvHeader {
             sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            alg: KvFileAlgorithm {
+                aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+            },
             created_at: "2026-01-14T00:00:00Z".to_string(),
             updated_at: "2026-01-14T00:00:00Z".to_string(),
         },
@@ -108,7 +111,7 @@ fn test_verify_kv_document_rejects_wrap_count_over_limit() {
 }
 
 #[test]
-fn test_verify_file_document_rejects_duplicate_wrap_rid() {
+fn test_verify_file_document_rejects_duplicate_wrap_rh() {
     let sid = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
@@ -152,12 +155,15 @@ fn test_verify_file_document_rejects_duplicate_wrap_rid() {
 }
 
 #[test]
-fn test_verify_kv_document_rejects_duplicate_wrap_rid() {
+fn test_verify_kv_document_rejects_duplicate_wrap_rh() {
     let doc = KvEncDocument::new(
-        ":SECRETENV_KV 4\n".to_string(),
+        ":SECRETENV_KV 5\n".to_string(),
         Vec::new(),
         KvHeader {
             sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+            alg: KvFileAlgorithm {
+                aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+            },
             created_at: "2026-01-14T00:00:00Z".to_string(),
             updated_at: "2026-01-14T00:00:00Z".to_string(),
         },

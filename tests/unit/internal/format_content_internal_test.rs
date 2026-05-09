@@ -4,8 +4,8 @@
 use super::*;
 use secretenv::format::token::TokenCodec;
 use secretenv::model::common::WrapItem;
-use secretenv::model::identifiers::{alg, hpke};
-use secretenv::model::kv_enc::header::KvHeader;
+use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader};
+use secretenv::model::wire::{alg, hpke};
 use secretenv::support::limits::MAX_JSON_DEPTH;
 use uuid::Uuid;
 
@@ -90,6 +90,9 @@ fn file_enc_schema_error_includes_source_name() {
 fn kv_enc_schema_error_includes_source_name_and_token_context() {
     let head = KvHeader {
         sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
+        alg: KvFileAlgorithm {
+            aead: alg::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
         created_at: "2026-01-14T00:00:00Z".to_string(),
         updated_at: "2026-01-14T00:00:00Z".to_string(),
     };
@@ -117,7 +120,7 @@ fn kv_enc_schema_error_includes_source_name_and_token_context() {
     )
     .unwrap();
     let content = format!(
-        ":SECRETENV_KV 4\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
+        ":SECRETENV_KV 5\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
     );
     let kv = KvEncContent::new_unchecked_with_source(content, ".secretenv/secrets/default.kvenc");
 

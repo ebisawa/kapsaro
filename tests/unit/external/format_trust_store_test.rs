@@ -4,8 +4,8 @@
 //! Unit tests for Trust Store format canonicalization
 
 use secretenv::format::trust_store::build_trust_store_signature_bytes;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use secretenv::model::wire::format::TRUST_LOCAL_V4;
 use std::collections::BTreeMap;
 
 fn build_test_protected() -> TrustStoreProtected {

@@ -6,8 +6,8 @@
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use secretenv::feature::key::material::generate_keypairs;
 use secretenv::feature::trust::signature::sign_trust_store;
-use secretenv::model::identifiers::format::TRUST_LOCAL_V4;
 use secretenv::model::trust_store::TrustStoreProtected;
+use secretenv::model::wire::format::TRUST_LOCAL_V4;
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 
 /// Build a minimal PublicKey JSON that passes schema + self-signature verification.
@@ -19,8 +19,8 @@ fn build_self_signed_public_key(
     signing_key: &SigningKey,
 ) -> (secretenv::model::public_key::PublicKey, String) {
     use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
-    use secretenv::model::identifiers::jwk;
     use secretenv::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey};
+    use secretenv::model::wire::jwk;
 
     let verifying_key: VerifyingKey = signing_key.into();
     let sig_x = encode_base64url_nopad(&verifying_key.to_bytes());

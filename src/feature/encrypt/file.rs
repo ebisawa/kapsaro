@@ -14,8 +14,8 @@ use crate::model::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
 };
-use crate::model::identifiers::{alg, format};
 use crate::model::public_key::VerifiedRecipientKey;
+use crate::model::wire::{alg, format};
 use crate::support::time::generate_current_timestamp;
 use crate::Result;
 use uuid::Uuid;

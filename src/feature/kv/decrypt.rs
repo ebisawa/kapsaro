@@ -31,11 +31,20 @@ pub(crate) fn decrypt_kv_entries(
     entries: &[KvEncEntry],
     master_key: &MasterKey,
     sid: &Uuid,
+    aead: &str,
     debug: bool,
 ) -> Result<HashMap<String, Zeroizing<Vec<u8>>>> {
     let mut kv_map = HashMap::new();
     for entry in entries {
-        let value = decrypt_entry(entry.value(), master_key, sid, debug, "decrypt_kv_entries")?;
+        let value = decrypt_entry(
+            entry.value(),
+            entry.key(),
+            aead,
+            master_key,
+            sid,
+            debug,
+            "decrypt_kv_entries",
+        )?;
         kv_map.insert(entry.key().to_string(), value);
     }
     Ok(kv_map)
@@ -69,6 +78,8 @@ pub fn decrypt_kv_single_entry(
         })?;
     decrypt_entry(
         entry.value(),
+        entry.key(),
+        &doc.head().alg.aead,
         &master_key,
         &sid,
         debug,
@@ -100,6 +111,8 @@ pub fn decrypt_kv_single_entry_with_context(
         })?;
     let value = decrypt_entry(
         entry.value(),
+        entry.key(),
+        &doc.head().alg.aead,
         &master_key.value,
         &sid,
         debug,
@@ -111,7 +124,7 @@ pub fn decrypt_kv_single_entry_with_context(
     })
 }
 
-/// Decrypt kv-enc v4 format to KV map
+/// Decrypt kv-enc v5 format to KV map
 ///
 /// This function requires a VerifiedKvEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.
@@ -144,7 +157,13 @@ pub fn decrypt_kv_document(
         debug,
     )?;
 
-    decrypt_kv_entries(doc.entries(), &master_key, &sid, debug)
+    decrypt_kv_entries(
+        doc.entries(),
+        &master_key,
+        &sid,
+        &doc.head().alg.aead,
+        debug,
+    )
 }
 
 pub fn decrypt_kv_document_with_context(
@@ -162,7 +181,13 @@ pub fn decrypt_kv_document_with_context(
         key_ctx,
         debug,
     )?;
-    let kv_map = decrypt_kv_entries(doc.entries(), &master_key.value, &sid, debug)?;
+    let kv_map = decrypt_kv_entries(
+        doc.entries(),
+        &master_key.value,
+        &sid,
+        &doc.head().alg.aead,
+        debug,
+    )?;
     Ok(DecryptionResult {
         value: kv_map,
         key_info: master_key.key_info,

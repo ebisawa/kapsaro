@@ -33,7 +33,7 @@ pub(crate) fn append_wrap_item(index: usize, wrap: &WrapItem, out: &mut String) 
     let kid_display = format_kid_display(&wrap.kid).unwrap_or_else(|_| wrap.kid.clone());
     append_line(
         out,
-        format!("    [{}] RID:   {}", index, wrap.recipient_handle),
+        format!("    [{}] RH:    {}", index, wrap.recipient_handle),
     );
     append_line(out, format!("        Kid:   {}", kid_display));
     append_line(out, format!("        Alg:   {}", wrap.alg));

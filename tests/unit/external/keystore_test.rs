@@ -34,14 +34,14 @@ fn test_save_and_load_private_key() {
 
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V6.to_string(),
+            format: secretenv::model::wire::format::PRIVATE_KEY_V6.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TEST123".to_string(),
                 ikm_salt: B64URL_32.to_string(),
                 hkdf_salt: B64URL_32.to_string(),
-                aead: secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305.to_string(),
+                aead: secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305.to_string(),
             },
             created_at: "2024-01-01T00:00:00Z".to_string(),
             expires_at: "2025-01-01T00:00:00Z".to_string(),
@@ -54,19 +54,19 @@ fn test_save_and_load_private_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            format: secretenv::model::wire::format::PUBLIC_KEY_V5.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },
@@ -117,19 +117,19 @@ fn test_save_and_load_public_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            format: secretenv::model::wire::format::PUBLIC_KEY_V5.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },

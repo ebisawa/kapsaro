@@ -7,7 +7,7 @@
 
 use crate::cli::common::{encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE};
 use crate::test_utils::setup_test_workspace;
-use secretenv::model::identifiers::format;
+use secretenv::model::wire::format;
 use std::fs;
 
 #[test]

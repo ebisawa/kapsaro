@@ -11,8 +11,6 @@ fn is_false(value: &bool) -> bool {
 #[serde(deny_unknown_fields)]
 pub struct KvEntryValue {
     pub salt: String,
-    pub k: String,
-    pub aead: String,
     pub nonce: String,
     #[serde(rename = "ct")]
     pub ct: String,

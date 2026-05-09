@@ -4,7 +4,7 @@
 use super::*;
 use crate::crypto::types::keys::XChaChaKey;
 use crate::model::file_enc::{FileEncAlgorithm, FilePayloadHeader};
-use crate::model::identifiers::{alg, format};
+use crate::model::wire::{alg, format};
 use crate::support::codec::base64_public::decode_base64url_nopad;
 use uuid::Uuid;
 

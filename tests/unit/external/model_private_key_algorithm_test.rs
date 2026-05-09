@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::model::identifiers::alg::AEAD_XCHACHA20_POLY1305;
-use secretenv::model::identifiers::private_key::{
+use secretenv::model::private_key::*;
+use secretenv::model::wire::alg::AEAD_XCHACHA20_POLY1305;
+use secretenv::model::wire::private_key::{
     PROTECTION_METHOD_ARGON2ID_M64T3P4_HKDF_SHA256, PROTECTION_METHOD_SSHSIG_ED25519_HKDF_SHA256,
 };
-use secretenv::model::private_key::*;
 
 #[test]
 fn test_sshsig_variant_roundtrip() {
@@ -90,7 +90,7 @@ fn test_unknown_kdf_fails() {
 fn test_existing_private_key_document_roundtrip() {
     let doc = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::identifiers::format::PRIVATE_KEY_V6.to_string(),
+            format: secretenv::model::wire::format::PRIVATE_KEY_V6.to_string(),
             subject_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {

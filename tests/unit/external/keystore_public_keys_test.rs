@@ -18,19 +18,19 @@ const B64URL_64: &str =
 fn build_test_public_key(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::identifiers::format::PUBLIC_KEY_V5.to_string(),
+            format: secretenv::model::wire::format::PUBLIC_KEY_V5.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_X25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_X25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::identifiers::jwk::CRV_ED25519.to_string(),
+                        crv: secretenv::model::wire::jwk::CRV_ED25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },

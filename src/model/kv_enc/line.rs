@@ -7,14 +7,14 @@ use std::fmt;
 pub struct KvEncVersion(u32);
 
 impl KvEncVersion {
-    pub const V4: KvEncVersion = KvEncVersion(4);
+    pub const V5: KvEncVersion = KvEncVersion(5);
 
     pub fn as_u32(self) -> u32 {
         self.0
     }
 
     pub fn from_u32(value: u32) -> Option<Self> {
-        (value == 4).then_some(KvEncVersion::V4)
+        (value == 5).then_some(KvEncVersion::V5)
     }
 }
 

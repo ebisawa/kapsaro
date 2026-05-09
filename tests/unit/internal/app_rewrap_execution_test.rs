@@ -288,8 +288,9 @@ fn test_execute_reviewed_rewrap_artifacts_rejects_unreviewed_output_member_set_n
         accepted_promotions: Vec::new(),
     };
     let post_members = load_active_member_files(&workspace_dir).unwrap();
-    let (fixed_members, post_promotion_trust) =
+    let (fixed_members, mut post_promotion_trust) =
         build_verified_post_promotion_state(&plan, post_members);
+    post_promotion_trust.is_interactive = false;
 
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,

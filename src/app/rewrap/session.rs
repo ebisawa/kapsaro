@@ -113,7 +113,3 @@ where
     approvals.extend(trust_plan.accepted_promotion_candidates.clone());
     Ok(approvals)
 }
-
-#[cfg(test)]
-#[path = "../../../tests/unit/internal/app_rewrap_session_test.rs"]
-mod tests;

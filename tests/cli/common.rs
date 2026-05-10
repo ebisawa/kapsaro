@@ -8,11 +8,13 @@
 
 use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 pub use crate::test_utils::{
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
-    EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use assert_cmd::{cargo, Command};
 use secretenv::cli::options::CommonOptions;
+use secretenv::format::schema::document::parse_kv_signature_token;
+use secretenv::format::token::TokenCodec;
+use secretenv::support::codec::base64_public::encode_base64url_nopad;
 #[cfg(unix)]
 use std::fs::File;
 #[cfg(unix)]
@@ -39,6 +41,27 @@ pub fn cmd() -> Command {
     let mut c = cargo::cargo_bin_cmd!("secretenv");
     c.env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
     c
+}
+
+pub fn tamper_kv_signature(path: &Path) {
+    let content = std::fs::read_to_string(path).expect("kv-enc file must be readable");
+    let mut lines = Vec::new();
+    let mut tampered = false;
+    for line in content.lines() {
+        if let Some(token) = line.strip_prefix(":SIG ") {
+            let mut signature =
+                parse_kv_signature_token(token).expect("kv-enc signature token must parse");
+            signature.sig = encode_base64url_nopad(&[0u8; 64]);
+            let token = TokenCodec::encode(TokenCodec::JsonJcs, &signature)
+                .expect("tampered signature token must encode");
+            lines.push(format!(":SIG {token}"));
+            tampered = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    assert!(tampered, "kv-enc file must contain a SIG line");
+    std::fs::write(path, format!("{}\n", lines.join("\n"))).expect("kv-enc file must be writable");
 }
 
 #[cfg(unix)]
@@ -94,6 +117,53 @@ pub fn run_command_with_pty(
     master
         .write_all(input)
         .expect("PTY input write must succeed");
+
+    let status = wait_for_exit(
+        &mut child,
+        &mut master,
+        &mut transcript,
+        Duration::from_secs(10),
+    );
+    PtyCommandResult {
+        status,
+        output: String::from_utf8_lossy(&transcript).into_owned(),
+    }
+}
+
+#[cfg(unix)]
+pub fn run_command_with_pty_script(
+    command: &mut StdCommand,
+    prompts: &[(&str, &[u8])],
+) -> PtyCommandResult {
+    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
+    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
+
+    let stdin = slave
+        .try_clone()
+        .expect("PTY slave stdin clone must succeed");
+    let stdout = slave
+        .try_clone()
+        .expect("PTY slave stdout clone must succeed");
+    command.stdin(Stdio::from(stdin));
+    command.stdout(Stdio::from(stdout));
+    command.stderr(Stdio::from(slave));
+
+    let mut child = command.spawn().expect("interactive CLI child must spawn");
+    let mut transcript = Vec::new();
+
+    for (prompt, input) in prompts {
+        wait_for_prompt(
+            &mut child,
+            &mut master,
+            &mut transcript,
+            prompt,
+            Duration::from_secs(10),
+        );
+        thread::sleep(Duration::from_millis(25));
+        master
+            .write_all(input)
+            .expect("PTY input write must succeed");
+    }
 
     let status = wait_for_exit(
         &mut child,

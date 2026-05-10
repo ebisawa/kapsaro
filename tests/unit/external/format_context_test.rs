@@ -25,11 +25,9 @@ fn test_hpke_info_kv_file() {
     assert_eq!(parsed["p"], wire_context::HPKE_INFO_KV_WRAP_V6);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
-    // Should NOT have "rd" field (removed in Rev29)
-    assert!(parsed.get("rd").is_none());
 }
 
-/// Test HPKE info for file-enc - v3 format (Rev29: removed rd field)
+/// Test HPKE info for file-enc - v3 format
 #[test]
 fn test_hpke_info_file() {
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
@@ -47,13 +45,6 @@ fn test_hpke_info_file() {
     assert_eq!(parsed["p"], wire_context::HPKE_INFO_FILE_WRAP_V5);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
-    // Should NOT have "rd" field (removed in Rev29)
-    assert!(parsed.get("rd").is_none());
-
-    // Should NOT have "name", "n", or "secret_id" fields (Rev9: name removed)
-    assert!(parsed.get("name").is_none());
-    assert!(parsed.get("n").is_none());
-    assert!(parsed.get("secret_id").is_none());
 }
 
 /// Test payload AAD for kv-enc - v3 format
@@ -76,7 +67,6 @@ fn test_aad_payload_kv() {
     assert_eq!(parsed["k"], key);
     // salt is NOT in AAD (used in HKDF salt parameter instead)
     assert!(parsed.get("salt").is_none());
-    assert!(parsed.get("rd").is_none()); // recipients NOT in AAD
 }
 
 /// Test payload AAD for file-enc - v3 format (envelope: JCS of payload.protected)

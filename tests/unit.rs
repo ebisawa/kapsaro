@@ -22,8 +22,6 @@ pub mod cli_doctor_args_test;
 pub mod cli_option_surface_test;
 #[path = "unit/external/cli_rewrap_args_test.rs"]
 pub mod cli_rewrap_args_test;
-#[path = "unit/external/cli_set_member_handle_test.rs"]
-pub mod cli_set_member_handle_test;
 #[path = "unit/external/config_types_test.rs"]
 pub mod config_types_test;
 #[path = "unit/external/crypto_kdf_test.rs"]
@@ -32,6 +30,8 @@ pub mod crypto_kdf_test;
 pub mod crypto_sign_ed25519_test;
 #[path = "unit/external/crypto_test.rs"]
 pub mod crypto_test;
+#[path = "unit/external/crypto_types_test.rs"]
+pub mod crypto_types_test;
 #[path = "unit/external/crypto_xchacha20_poly1305_test.rs"]
 pub mod crypto_xchacha20_poly1305_test;
 #[path = "unit/external/error_display_test.rs"]
@@ -116,8 +116,6 @@ pub mod format_dotenv_test;
 pub mod format_file_enc_test;
 #[path = "unit/external/format_kv_canonical_test.rs"]
 pub mod format_kv_canonical_test;
-#[path = "unit/external/format_kv_enc_debug_test.rs"]
-pub mod format_kv_enc_debug_test;
 #[path = "unit/external/format_kv_enc_ops_test.rs"]
 pub mod format_kv_enc_ops_test;
 #[path = "unit/external/format_kv_enc_structure_test.rs"]
@@ -150,8 +148,6 @@ pub mod io_keystore_public_key_source_test;
 pub mod io_keystore_resolver_test;
 #[path = "unit/external/io_keystore_storage_permission_test.rs"]
 pub mod io_keystore_storage_permission_test;
-#[path = "unit/external/io_keystore_test.rs"]
-pub mod io_keystore_test;
 #[path = "unit/external/io_process_env_test.rs"]
 pub mod io_process_env_test;
 #[path = "unit/external/io_ssh_backend_test.rs"]
@@ -194,6 +190,8 @@ pub mod model_private_key_test;
 pub mod model_public_key_test;
 #[path = "unit/external/model_signature_test.rs"]
 pub mod model_signature_test;
+#[path = "unit/external/model_ssh_test.rs"]
+pub mod model_ssh_test;
 #[path = "unit/external/model_trust_store_test.rs"]
 pub mod model_trust_store_test;
 #[path = "unit/external/model_verified_test.rs"]
@@ -208,10 +206,6 @@ pub mod ssh_agent_validation_test;
 pub mod ssh_external_env_test;
 #[path = "unit/external/ssh_external_pubkey_test.rs"]
 pub mod ssh_external_pubkey_test;
-#[path = "unit/external/ssh_fingerprint_test.rs"]
-pub mod ssh_fingerprint_test;
-#[path = "unit/external/ssh_helpers_test.rs"]
-pub mod ssh_helpers_test;
 #[path = "unit/external/ssh_openssh_config_integration_test.rs"]
 pub mod ssh_openssh_config_integration_test;
 #[path = "unit/external/ssh_openssh_config_test.rs"]

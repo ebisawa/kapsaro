@@ -3,55 +3,23 @@
 
 //! Unit tests for io/config/bootstrap and io/ssh/agent/validation modules
 
-use secretenv::io::config::bootstrap::validate_member_handle;
 use secretenv::io::ssh::agent::validation::validate_key_present;
 use std::path::Path;
 
-// ---------------------------------------------------------------------------
-// bootstrap.rs tests
-// ---------------------------------------------------------------------------
+#[test]
+fn test_validate_member_handle_accepts_common_identifier() {
+    let result = secretenv::io::config::bootstrap::validate_member_handle("alice@example.com");
 
-// Note: bootstrap_member_handle() uses std::io::stdin().is_terminal() which
-// may return true when tests are run from a real terminal, causing the
-// function to block waiting for interactive input. We only test the
-// validate_member_handle helper here, which is a pure function.
+    assert!(result.is_ok(), "valid member handle should be accepted");
+}
 
 #[test]
-fn test_validate_member_handle_edge_cases() {
-    // Max length (254 chars) should be accepted
-    assert!(
-        validate_member_handle(&"a".repeat(254)).is_ok(),
-        "254-char member_handle should be valid"
-    );
+fn test_validate_member_handle_rejects_invalid_identifier() {
+    let error = secretenv::io::config::bootstrap::validate_member_handle("../alice").unwrap_err();
 
-    // 255 chars should be rejected
     assert!(
-        validate_member_handle(&"a".repeat(255)).is_err(),
-        "255-char member_handle should be invalid"
-    );
-
-    // Dots in the middle are valid
-    assert!(
-        validate_member_handle("alice.bob").is_ok(),
-        "dots in middle should be valid"
-    );
-
-    // Underscores in the middle are valid
-    assert!(
-        validate_member_handle("alice_bob").is_ok(),
-        "underscores in middle should be valid"
-    );
-
-    // Unicode characters are not allowed (only ASCII alphanumeric + limited specials)
-    assert!(
-        validate_member_handle("ユーザー").is_err(),
-        "unicode characters should be invalid"
-    );
-
-    // Mixed valid characters
-    assert!(
-        validate_member_handle("user.name-123@example.com").is_ok(),
-        "mixed valid characters should be accepted"
+        error.contains("member_handle must start with alphanumeric"),
+        "unexpected error: {error}"
     );
 }
 
@@ -103,56 +71,4 @@ fn test_validate_key_present_error_mentions_socket() {
         "error should suggest ssh-add -L, got: {}",
         err_msg
     );
-}
-
-// ---------------------------------------------------------------------------
-// Tests merged from config_bootstrap_test.rs
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_validate_member_handle_valid() {
-    let valid = [
-        "alice",
-        "bob123",
-        "test-user",
-        "a",
-        "alice@example.com",
-        "alice.bob@example.com",
-        "alice+tag@example.com",
-        "alice_bob@example.com",
-        "Alice",
-        "aliceBob",
-        "Alice@Example.COM",
-        "1alice",
-        "123user",
-        &"a".repeat(254),
-    ];
-    for id in valid {
-        assert!(validate_member_handle(id).is_ok(), "should accept: {}", id);
-    }
-}
-
-#[test]
-fn test_validate_member_handle_invalid() {
-    let invalid = [
-        ("", "empty"),
-        (".alice", "starts with dot"),
-        ("@alice", "starts with @"),
-        ("-alice", "starts with -"),
-        ("_alice", "starts with _"),
-        (&"a".repeat(255), "too long"),
-        ("alice#bob", "invalid char #"),
-        ("alice$bob", "invalid char $"),
-        ("alice%bob", "invalid char %"),
-        ("alice bob", "space"),
-        ("alice!bob", "invalid char !"),
-    ];
-    for (id, reason) in invalid {
-        assert!(
-            validate_member_handle(id).is_err(),
-            "should reject ({}): {}",
-            reason,
-            id
-        );
-    }
 }

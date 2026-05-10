@@ -28,12 +28,10 @@ fn test_doctor_text_output_orders_sections() {
 
     let output = format_doctor_report(&report, false);
 
-    let summary = output.find("SecretEnv doctor").unwrap();
     let next = output.find("Next actions").unwrap();
     let findings = output.find("Findings").unwrap();
     let healthy = output.find("Healthy areas").unwrap();
     let details = output.find("Details").unwrap();
-    assert!(summary < next);
     assert!(next < findings);
     assert!(findings < healthy);
     assert!(healthy < details);

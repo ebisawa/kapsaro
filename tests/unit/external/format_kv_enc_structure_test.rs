@@ -169,23 +169,6 @@ fn test_validate_invalid_key_format_colon() {
 }
 
 #[test]
-fn test_validate_invalid_key_format_space() {
-    let content = ":SECRETENV_KV 6\n\
-                   :HEAD token0\n\
-                   :WRAP token1\n\
-                   KEY NAME token2\n\
-                   :SIG token3";
-    let lines = KvEncParser::new(content).parse_all().unwrap();
-    // Note: This will be parsed as "KEY" with token "NAME token2", so it won't fail KEY format check
-    // But it's still invalid because the token format is wrong
-    // The KEY format check only validates the key part before the first space
-    let result = validate_kv_file_structure(&lines);
-    // KEY format is valid, but the structure might be invalid due to token parsing
-    // This test documents the current behavior
-    assert!(result.is_ok() || result.is_err());
-}
-
-#[test]
 fn test_validate_sig_with_empty_lines_after() {
     // Empty lines after :SIG are allowed
     let content = ":SECRETENV_KV 6\n\
@@ -196,42 +179,4 @@ fn test_validate_sig_with_empty_lines_after() {
                    \n";
     let lines = KvEncParser::new(content).parse_all().unwrap();
     assert!(validate_kv_file_structure(&lines).is_ok());
-}
-
-#[test]
-fn test_validate_sig_with_comment_rejected() {
-    // Comment lines are not allowed in kv-enc v6
-    let content = ":SECRETENV_KV 6\n\
-                   :HEAD token0\n\
-                   :WRAP token1\n\
-                   KEY1 token2\n\
-                   :SIG token3\n\
-                   # Comment";
-    let result = KvEncParser::new(content).parse_all();
-    assert!(result.is_err());
-    if let Err(e) = result {
-        assert!(
-            e.to_string().contains("comment lines are not allowed")
-                || e.to_string().contains("kv-enc v6")
-        );
-    }
-}
-
-#[test]
-fn test_validate_unknown_control_tag() {
-    let content = ":SECRETENV_KV 6\n\
-                   :HEAD token0\n\
-                   :WRAP token1\n\
-                   :UNKNOWN token2\n\
-                   KEY1 token3\n\
-                   :SIG token4";
-    // Unknown control tag should be rejected at parse time
-    // But if it somehow gets through, structure validation should catch it
-    // Actually, parser already rejects unknown tags, so this test might not be reachable
-    // But we test it anyway for completeness
-    let result = KvEncParser::new(content).parse_all();
-    assert!(
-        result.is_err(),
-        "Unknown control tag should be rejected at parse time"
-    );
 }

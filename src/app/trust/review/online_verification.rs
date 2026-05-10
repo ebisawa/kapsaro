@@ -108,3 +108,7 @@ fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) 
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/app_trust_review_online_verification_test.rs"]
+mod tests;

@@ -12,7 +12,6 @@ use crate::cli::common::{
 };
 use predicates::prelude::*;
 use std::fs;
-use tempfile::TempDir;
 
 #[test]
 fn test_verify_file_enc_valid_signature() {
@@ -131,16 +130,4 @@ fn test_verify_file_enc_tampered_fails() {
         .assert()
         .success()
         .stdout(predicate::str::contains("FAILED"));
-}
-
-#[test]
-fn test_verify_nonexistent_file_fails() {
-    let temp_dir = TempDir::new().unwrap();
-    let nonexistent = temp_dir.path().join("nonexistent.encrypted");
-
-    cmd()
-        .arg("inspect")
-        .arg(nonexistent.to_str().unwrap())
-        .assert()
-        .failure();
 }

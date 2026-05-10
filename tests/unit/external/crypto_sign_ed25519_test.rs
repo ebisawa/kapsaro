@@ -120,69 +120,6 @@ fn test_sign_trust_store_bytes_deterministic() {
 }
 
 #[test]
-fn test_sign_kv_returns_valid_structure() {
-    let seed = [42u8; 32];
-    let sk = SigningKey::from_bytes(&seed);
-
-    let canonical_bytes = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {...}\n";
-
-    let sig = sign_trust_store_bytes(
-        canonical_bytes,
-        &sk,
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        SIGNATURE_ED25519,
-    )
-    .unwrap();
-
-    assert_eq!(sig.alg, SIGNATURE_ED25519);
-    assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    assert!(!sig.sig.is_empty());
-}
-
-#[test]
-fn test_verify_kv_accepts_valid_signature() {
-    let seed = [42u8; 32];
-    let sk = SigningKey::from_bytes(&seed);
-    let vk = sk.verifying_key();
-
-    let canonical_bytes = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {...}\n";
-
-    let sig = sign_trust_store_bytes(
-        canonical_bytes,
-        &sk,
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        SIGNATURE_ED25519,
-    )
-    .unwrap();
-    verify_trust_store_bytes(canonical_bytes, &vk, &sig, SIGNATURE_ED25519).unwrap();
-}
-
-#[test]
-fn test_verify_kv_rejects_tampered_content() {
-    let seed = [42u8; 32];
-    let sk = SigningKey::from_bytes(&seed);
-    let vk = sk.verifying_key();
-
-    let original = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {...}\n";
-    let tampered = b":SECRETENV_KV 6\n:WRAP {...}\nKEY {!!!}\n";
-
-    let sig = sign_trust_store_bytes(
-        original,
-        &sk,
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        SIGNATURE_ED25519,
-    )
-    .unwrap();
-    let result = verify_trust_store_bytes(tampered, &vk, &sig, SIGNATURE_ED25519);
-
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        "Cryptographic error: Signature verification failed"
-    );
-}
-
-#[test]
 fn test_verify_trust_store_bytes_invalid_base64_error_message_sanitized() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);

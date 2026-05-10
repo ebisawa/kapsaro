@@ -2,28 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::setup_init_env;
-use crate::cli::common::{cmd, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-
-#[test]
-fn test_init_with_member_handle() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
-
-    cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    assert!(workspace_dir
-        .path()
-        .join(format!("members/active/{}.json", ALICE_MEMBER_HANDLE))
-        .exists());
-}
+use crate::cli::common::{cmd, BOB_MEMBER_HANDLE};
 
 #[test]
 fn test_init_with_env_member_handle() {

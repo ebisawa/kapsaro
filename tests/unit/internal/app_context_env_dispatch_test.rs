@@ -7,9 +7,7 @@
 //! environment variable key loading when ssh_ctx is None, and handles
 //! workspace / env var requirements.
 
-use crate::app::context::execution::{
-    resolve_read_execution, resolve_write_execution, ExecutionContext,
-};
+use crate::app::context::execution::{resolve_read_execution, ExecutionContext};
 use crate::app::context::member::{resolve_key_owner, resolve_required_member};
 use crate::app::context::paths::CommandPathResolution;
 use crate::app_test_utils::build_test_command_options;
@@ -148,30 +146,6 @@ fn test_resolved_command_paths_loads_base_dir_and_keystore_root() {
             .as_ref()
             .map(|w| w.root_path.file_name()),
         Some(workspace.path().file_name())
-    );
-}
-
-#[test]
-fn test_resolve_write_execution_rejects_member_handle_in_env_mode() {
-    let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD, ENV_WORKSPACE, ENV_HOME]);
-    std::env::remove_var(ENV_WORKSPACE);
-
-    let home = TempDir::new().unwrap();
-
-    let options = build_test_command_options(home.path(), None);
-
-    std::env::set_var(ENV_PRIVATE_KEY, "dummy");
-    std::env::set_var(ENV_KEY_PASSWORD, "dummy");
-
-    let err = expect_err(resolve_write_execution(
-        &options,
-        Some("alice@example.com".to_string()),
-        None,
-    ));
-    assert!(
-        err.contains("--member-handle cannot be used"),
-        "Expected --member-handle rejection error, got: {}",
-        err
     );
 }
 

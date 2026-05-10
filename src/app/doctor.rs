@@ -73,3 +73,7 @@ pub(crate) fn run_doctor(request: DoctorRequest) -> Result<DoctorReport> {
 #[cfg(test)]
 #[path = "../../tests/unit/internal/app_doctor_workspace_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/app_doctor_diagnostics_test.rs"]
+mod diagnostics_tests;

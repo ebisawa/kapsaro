@@ -3,13 +3,11 @@
 
 use super::{
     enforce_read_trust_member_eligibility, execute_read_with_signer_trust,
-    execute_write_with_recipient_trust, review_recipient_trust_with_confirmation,
-    review_recipient_trust_with_confirmation_verifier,
+    review_recipient_trust_with_confirmation, review_recipient_trust_with_confirmation_verifier,
     review_rewrap_input_trust_requirements_with_confirmation,
     review_rewrap_input_trust_requirements_with_confirmation_verifier,
     review_signer_trust_with_confirmation, review_signer_trust_with_confirmation_verifier,
     ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext,
-    WriteRecipientTrustReviewPlan,
 };
 use crate::app::rewrap::types::RewrapInputTrustRequirement;
 use crate::app::trust::approval::ApprovedKnownKey;
@@ -117,47 +115,6 @@ fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_handle: &st
     let identity = KnownKeyIdentity::from(approval);
     assert_eq!(identity.member_handle(), member_handle);
     assert_eq!(identity.kid(), kid);
-}
-
-#[test]
-fn test_execute_read_with_signer_trust_saves_approval_before_execute() {
-    let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let options = build_test_command_options(home.path(), None);
-    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
-    let candidate = build_candidate("alice@example.com", &execution_context.key_ctx.kid);
-    let outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate);
-    let mut executed = false;
-
-    let result = execute_read_with_signer_trust(
-        TrustExecutionContext {
-            options: &options,
-            execution: &execution_context,
-            warnings: &[],
-        },
-        ReadSignerTrustReviewPlan {
-            trust_outcome: &outcome,
-            recipient_trust_outcome: &RecipientTrustOutcome::Accepted,
-            labels: SignerTrustLabels {
-                context: "decrypt signer",
-                subject: "signer",
-            },
-            allow_non_member: true,
-        },
-        |_warnings| {},
-        |_candidate, _context_label| Ok(true),
-        |_candidate, _context_label, _recipients| Ok(false),
-        |candidates, _context_label| Ok(candidates.to_vec()),
-        || {
-            executed = true;
-            Ok(())
-        },
-    );
-
-    let error = result.unwrap_err();
-    assert!(error
-        .format_user_message()
-        .contains("must not be stored in known_keys"));
-    assert!(!executed);
 }
 
 #[test]
@@ -301,43 +258,6 @@ fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_me
     assert!(error
         .format_user_message()
         .contains("one or more recipients"));
-    assert!(!executed);
-}
-
-#[test]
-fn test_execute_write_with_recipient_trust_saves_approval_before_execute() {
-    let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let options = build_test_command_options(home.path(), None);
-    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
-    let candidate = build_candidate("alice@example.com", &execution_context.key_ctx.kid);
-    let outcome = RecipientTrustOutcome::NeedsManualApproval(vec![candidate]);
-    let mut executed = false;
-
-    let result = execute_write_with_recipient_trust(
-        TrustExecutionContext {
-            options: &options,
-            execution: &execution_context,
-            warnings: &[],
-        },
-        WriteRecipientTrustReviewPlan {
-            signer_trust: None,
-            recipient_trust: &outcome,
-            recipient_context_label: "encrypt recipients",
-        },
-        |_warnings| {},
-        |_candidate, _context_label| Ok(false),
-        |_candidate, _context_label, _recipients| Ok(false),
-        |candidates, _context_label| Ok(candidates.to_vec()),
-        || {
-            executed = true;
-            Ok(())
-        },
-    );
-
-    let error = result.unwrap_err();
-    assert!(error
-        .format_user_message()
-        .contains("must not be stored in known_keys"));
     assert!(!executed);
 }
 

@@ -56,13 +56,6 @@ fn generate_real_ssh_attested_public_key(
 }
 
 #[test]
-fn generated_public_key_verifies_with_attestation() {
-    let temp_dir = TempDir::new().unwrap();
-    let public_key = generate_real_ssh_attested_public_key(&temp_dir);
-    verify_public_key_with_attestation(&public_key, false).unwrap();
-}
-
-#[test]
 #[serial]
 fn generated_public_key_verifies_with_attestation_repeatedly() {
     for _ in 0..5 {

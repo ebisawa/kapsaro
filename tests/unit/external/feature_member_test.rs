@@ -73,16 +73,6 @@ fn test_member_remove() {
 }
 
 #[tokio::test]
-async fn test_verify_member() {
-    let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-
-    let result = verify_member(&workspace_dir, &[ALICE_MEMBER_HANDLE.to_string()], false).await;
-
-    // The result may be Ok or Err depending on network/GitHub API availability
-    let _ = result;
-}
-
-#[tokio::test]
 async fn test_verify_member_all() {
     let (_temp_dir, workspace_dir) =
         setup_test_workspace(&[ALICE_MEMBER_HANDLE, "bob@example.com"]);

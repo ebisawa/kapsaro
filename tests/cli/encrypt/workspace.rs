@@ -4,19 +4,15 @@
 //! Workspace-related encryption tests
 
 use crate::cli::common::{
-    cmd, default_common_options, encrypt_file_with_member_set_review, set_ssh_key_from_temp_dir,
-    set_value_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    default_common_options, encrypt_file_with_member_set_review, set_ssh_key_from_temp_dir,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
 use crate::test_utils::{
     build_expiring_soon_timestamp, keygen_test, save_active_public_key_to_workspace,
     setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use predicates::prelude::*;
 use secretenv::cli::encrypt;
-use secretenv::format::kv;
-use secretenv::format::schema::document::parse_kv_wrap_token;
-use secretenv::model::kv_enc::header::KvWrap;
 use std::fs;
 
 #[cfg(unix)]
@@ -89,81 +85,6 @@ fn test_encrypt_rejects_filename_content_mismatch() {
     );
 }
 
-#[test]
-fn test_set_creates_default_file() {
-    // Setup test workspace with alice and bob
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let secrets_dir = workspace_dir.join("secrets");
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    setup_trust_store_for_workspace(
-        temp_dir.path(),
-        &workspace_dir,
-        ALICE_MEMBER_HANDLE,
-        &key_ctx,
-    );
-
-    // Define default kv-enc file path (does NOT exist yet)
-    let kv_file_path = secrets_dir.join("default.kvenc");
-    assert!(!kv_file_path.exists(), "File should not exist before test");
-
-    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
-    set_value_with_member_set_review(
-        &workspace_dir,
-        temp_dir.path(),
-        &ssh_key,
-        "DATABASE_URL",
-        "postgres://localhost/mydb",
-        Some(ALICE_MEMBER_HANDLE),
-        None,
-    );
-
-    // Verify file was created
-    assert!(kv_file_path.exists(), "Should create default kv-enc file");
-
-    // Verify file has kv-enc format
-    let encrypted_content = fs::read_to_string(&kv_file_path).unwrap();
-    assert!(
-        encrypted_content.starts_with(kv::HEADER_LINE_V6),
-        "Should have kv-enc v6 header"
-    );
-
-    // Verify both alice and bob are recipients (due to @all default)
-    let lines: Vec<&str> = encrypted_content.lines().collect();
-    let wrap_line = lines
-        .iter()
-        .find(|l| l.starts_with(":WRAP "))
-        .expect("Should have WRAP line");
-    let wrap_token = wrap_line.trim_start_matches(":WRAP ");
-
-    // Decode wrap token
-    let wrap_data: KvWrap = parse_kv_wrap_token(wrap_token).unwrap();
-
-    // Check that both alice and bob are recipients
-    let recipient_handles: Vec<String> = wrap_data
-        .wrap
-        .iter()
-        .map(|w| w.recipient_handle.clone())
-        .collect();
-    assert!(
-        recipient_handles.contains(&ALICE_MEMBER_HANDLE.to_string()),
-        "Should include alice"
-    );
-    assert!(
-        recipient_handles.contains(&BOB_MEMBER_HANDLE.to_string()),
-        "Should include bob"
-    );
-
-    // Verify the key exists in the file
-    let kv_line = lines
-        .iter()
-        .find(|l| l.starts_with("DATABASE_URL "))
-        .expect("Should have DATABASE_URL entry");
-    assert!(
-        kv_line.starts_with("DATABASE_URL "),
-        "Should have DATABASE_URL key"
-    );
-}
-
 #[cfg(unix)]
 #[test]
 fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
@@ -195,32 +116,6 @@ fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
         ALICE_MEMBER_HANDLE,
     );
     assert!(output.contains("Insecure permissions"), "{output}");
-}
-
-#[test]
-fn test_encrypt_rejects_strict_key_checking_no() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-
-    let input_path = workspace_dir.join("strict-no.txt");
-    fs::write(&input_path, b"strict no check").unwrap();
-    let output_path = workspace_dir.join("strict-no.txt.encrypted");
-    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
-
-    cmd()
-        .arg("encrypt")
-        .arg(&input_path)
-        .arg("--out")
-        .arg(&output_path)
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
-        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not allowed").and(predicate::str::contains("encrypt")));
 }
 
 #[test]

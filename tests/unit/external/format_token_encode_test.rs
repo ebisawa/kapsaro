@@ -29,25 +29,6 @@ fn test_token_encode() {
 }
 
 #[test]
-fn test_token_encode_debug() {
-    let data = TestData {
-        message: "test".to_string(),
-        count: 42,
-    };
-
-    let token = TokenCodec::encode_debug(
-        TokenCodec::JsonJcs,
-        &data,
-        true,
-        Some("test"),
-        Some("test_token_encode_debug"),
-    )
-    .unwrap();
-
-    assert!(!token.is_empty());
-}
-
-#[test]
 fn test_token_encode_large_data() {
     let data = TestData {
         message: "A".repeat(1000),

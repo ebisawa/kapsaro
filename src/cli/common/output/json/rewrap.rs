@@ -22,7 +22,12 @@ struct RewrapBatchFailureOutput {
 }
 
 pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) -> Result<()> {
-    let output = RewrapBatchResultOutput {
+    let output = build_rewrap_batch_result_output(outcome);
+    print_json_output(&output)
+}
+
+fn build_rewrap_batch_result_output(outcome: &RewrapBatchView) -> RewrapBatchResultOutput {
+    RewrapBatchResultOutput {
         success: outcome.failed_files.is_empty(),
         processed_files: outcome.processed_files.clone(),
         failed_files: outcome
@@ -33,6 +38,9 @@ pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) -> Result<()
                 error: file.error.clone(),
             })
             .collect(),
-    };
-    print_json_output(&output)
+    }
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/unit/internal/cli_common_output_json_rewrap_test.rs"]
+mod tests;

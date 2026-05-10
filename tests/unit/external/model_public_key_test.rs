@@ -103,56 +103,6 @@ fn test_public_key_serialization() {
 }
 
 #[test]
-fn test_public_key_roundtrip() {
-    let original = PublicKey {
-        protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
-            subject_handle: TEST_MEMBER_HANDLE.to_string(),
-            kid: "2C7R5M9K8D1XV4PH6T3NB2QJ9F7AK5WE".to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
-                        x: "a2VtcHVi".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
-                        x: "c2lncHVi".to_string(),
-                    },
-                },
-                attestation: Attestation {
-                    method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
-                    pub_: "ssh-ed25519 AAAAC3...".to_string(),
-                    sig: "YXR0ZXN0c2ln".to_string(),
-                },
-            },
-            binding_claims: None,
-            expires_at: "2025-12-31T23:59:59Z".to_string(),
-            created_at: Some("2024-01-01T00:00:00Z".to_string()),
-        },
-        signature: "c2VsZnNpZ25hdHVyZQ".to_string(),
-    };
-
-    // Serialize
-    let json_str = serde_json::to_string(&original).expect("serialization failed");
-
-    // Deserialize
-    let deserialized: PublicKey = serde_json::from_str(&json_str).expect("deserialization failed");
-
-    // Compare
-    assert_eq!(original.protected.format, deserialized.protected.format);
-    assert_eq!(
-        original.protected.subject_handle,
-        deserialized.protected.subject_handle
-    );
-    assert_eq!(original.protected.kid, deserialized.protected.kid);
-    assert_eq!(original.signature, deserialized.signature);
-}
-
-#[test]
 fn test_public_key_new_preserves_binding_claims() {
     let github_account = GithubAccount {
         id: 42,
@@ -197,21 +147,4 @@ fn test_public_key_new_preserves_binding_claims() {
             .and_then(|claims| claims.github_account.as_ref()),
         Some(&github_account)
     );
-}
-
-#[test]
-fn test_canonical_kid_format_validation() {
-    // Valid canonical kid (32 chars, Crockford Base32)
-    let valid_kids = vec![
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N",
-        "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
-    ];
-
-    for kid in valid_kids {
-        assert_eq!(kid.len(), 32);
-        assert!(kid
-            .chars()
-            .all(|c| "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c)));
-    }
 }

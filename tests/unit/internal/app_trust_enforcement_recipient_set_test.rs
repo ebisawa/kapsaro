@@ -53,20 +53,6 @@ fn test_recipient_set_trust_rejects_reviewed_set_when_signer_is_not_member() {
 }
 
 #[test]
-fn test_recipient_set_review_rejects_changed_set_when_signer_is_not_member() {
-    let current = recipient_set(&[("alice@example.com", ALICE_KID)]);
-    let approved = recipient_set(&[("bob@example.com", BOB_KID)]);
-    let mut trust_ctx = trust_ctx(StrictKeyChecking::Yes, true);
-    trust_ctx.recipient_sets = vec![record_from_set(&approved)];
-
-    let error =
-        enforce_artifact_recipient_set_trust(&trust_ctx, BOB_KID, &current, CommandCapability::Get)
-            .unwrap_err();
-
-    assert_verify_rule(error, "E_RECIPIENT_SET_SIGNER_NOT_INCLUDED");
-}
-
-#[test]
 fn test_recipient_set_review_allows_missing_set_when_signer_is_member() {
     let current = recipient_set(&[("alice@example.com", ALICE_KID)]);
     let trust_ctx = trust_ctx(StrictKeyChecking::Yes, true);

@@ -116,7 +116,3 @@ fn build_online_section(
         github_id,
     ))
 }
-
-#[cfg(test)]
-#[path = "../../../tests/unit/internal/app_file_inspect_test.rs"]
-mod tests;

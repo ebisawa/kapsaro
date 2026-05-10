@@ -200,4 +200,101 @@ mod tests {
 
         assert_eq!(parsed.as_bytes(), &signature);
     }
+
+    #[test]
+    fn test_parse_identities_response_rejects_agent_failure() {
+        let error = parse_identities_response(&[5]).unwrap_err();
+
+        assert!(error.to_string().contains("rejected identities request"));
+    }
+
+    #[test]
+    fn test_parse_identities_response_rejects_unknown_type() {
+        let error = parse_identities_response(&[99]).unwrap_err();
+
+        assert!(error.to_string().contains("unexpected response type 99"));
+    }
+
+    #[test]
+    fn test_parse_identities_response_rejects_empty_packet() {
+        let error = parse_identities_response(&[]).unwrap_err();
+
+        assert!(error.to_string().contains("empty response"));
+    }
+
+    #[test]
+    fn test_parse_identities_response_rejects_trailing_data() {
+        let mut packet = vec![12];
+        packet.extend_from_slice(&0u32.to_be_bytes());
+        packet.push(1);
+
+        let error = parse_identities_response(&packet).unwrap_err();
+
+        assert!(error.to_string().contains("unexpected trailing data"));
+    }
+
+    #[test]
+    fn test_parse_identities_response_rejects_invalid_utf8_comment() {
+        let key_blob = decode_ssh_public_key_blob(TEST_AGENT_PUBLIC_KEY).unwrap();
+        let mut packet = vec![12];
+        packet.extend_from_slice(&1u32.to_be_bytes());
+        packet.extend_from_slice(&encode_ssh_string(&key_blob));
+        packet.extend_from_slice(&encode_ssh_string(&[0xff]));
+
+        let error = parse_identities_response(&packet).unwrap_err();
+
+        assert!(error.to_string().contains("invalid UTF-8"));
+    }
+
+    #[test]
+    fn test_parse_sign_response_rejects_agent_failure() {
+        let error = parse_sign_response(&[5]).unwrap_err();
+
+        assert!(error.to_string().contains("sign failed"));
+    }
+
+    #[test]
+    fn test_parse_sign_response_rejects_unsupported_signature_algorithm() {
+        let signature = [7u8; 64];
+        let mut signature_blob = Vec::new();
+        signature_blob.extend_from_slice(&encode_ssh_string(b"rsa-sha2-512"));
+        signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+        let mut packet = vec![14];
+        packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+
+        let error = parse_sign_response(&packet).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("unsupported signature algorithm"));
+    }
+
+    #[test]
+    fn test_parse_sign_response_rejects_invalid_signature_length() {
+        let signature = [7u8; 63];
+        let mut signature_blob = Vec::new();
+        signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
+        signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+        let mut packet = vec![14];
+        packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+
+        let error = parse_sign_response(&packet).unwrap_err();
+
+        assert!(error.to_string().contains("64"));
+    }
+
+    #[test]
+    fn test_parse_sign_response_rejects_signature_blob_trailing_data() {
+        let signature = [7u8; 64];
+        let mut signature_blob = Vec::new();
+        signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
+        signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+        signature_blob.push(1);
+        let mut packet = vec![14];
+        packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+
+        let error = parse_sign_response(&packet).unwrap_err();
+
+        assert!(error.to_string().contains("unexpected trailing data"));
+    }
 }

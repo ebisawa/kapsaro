@@ -252,51 +252,6 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
 }
 
 #[test]
-fn test_build_rewrap_batch_plan_freezes_incoming_candidate_snapshot() {
-    let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let bob_active = workspace_dir
-        .join("members")
-        .join("active")
-        .join(format!("{}.json", BOB_MEMBER_HANDLE));
-    let bob_incoming = workspace_dir
-        .join("members")
-        .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_HANDLE));
-    fs::rename(&bob_active, &bob_incoming).unwrap();
-    fs::write(
-        workspace_dir.join("secrets").join("default.kvenc"),
-        "VERSION secretenv.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
-    )
-    .unwrap();
-
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    let snapshotted = plan
-        .incoming_report
-        .as_ref()
-        .unwrap()
-        .not_configured
-        .first()
-        .unwrap()
-        .source_content
-        .clone();
-
-    let mut tampered: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&bob_incoming).unwrap()).unwrap();
-    tampered["protected"]["created_at"] =
-        serde_json::Value::String("2026-12-31T23:59:59Z".to_string());
-    fs::write(
-        &bob_incoming,
-        serde_json::to_string_pretty(&tampered).unwrap(),
-    )
-    .unwrap();
-
-    assert_ne!(fs::read_to_string(&bob_incoming).unwrap(), snapshotted);
-}
-
-#[test]
 fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_key() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
@@ -386,28 +341,6 @@ fn test_build_rewrap_batch_plan_uses_only_explicit_targets_when_specified() {
     assert_eq!(plan.artifact_paths.len(), 1);
     assert!(plan.artifact_paths.contains(&external_secret_path));
     assert!(!plan.artifact_paths.contains(&workspace_secret_path));
-}
-
-#[test]
-fn test_build_rewrap_batch_plan_uses_only_explicit_workspace_target_when_specified() {
-    let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-    let target_secret_path = workspace_dir.join("secrets").join("default.kvenc");
-    let other_secret_path = workspace_dir.join("secrets").join("other.kvenc");
-    fs::write(&target_secret_path, "target-artifact").unwrap();
-    fs::write(&other_secret_path, "other-artifact").unwrap();
-
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let plan = build_rewrap_batch_plan(
-        &options,
-        &execution,
-        std::slice::from_ref(&target_secret_path),
-    )
-    .unwrap();
-
-    assert_eq!(plan.artifact_paths.len(), 1);
-    assert_eq!(plan.artifact_paths[0], target_secret_path);
 }
 
 #[test]

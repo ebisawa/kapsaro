@@ -632,40 +632,6 @@ fn test_jcs_numbers_format() {
 // Bytes Output Tests (for hashing/signing)
 // =============================================================================
 
-#[test]
-fn test_jcs_output_is_valid_utf8() {
-    let input = json!({
-        "unicode": "\u{1F600}\u{1F601}\u{1F602}",
-        "text": "Hello, World!"
-    });
-
-    let result = normalize_to_bytes(&input).unwrap();
-
-    // Result should be valid UTF-8
-    assert!(std::str::from_utf8(&result).is_ok());
-}
-
-#[test]
-fn test_jcs_sha256_hash_determinism() {
-    use sha2::{Digest, Sha256};
-
-    let input = json!({
-        "policy_id": "550e8400-e29b-41d4-a716-446655440000",
-        "epoch": 1,
-        "name": "test"
-    });
-
-    let result = normalize_to_bytes(&input).unwrap();
-    let hash1 = Sha256::digest(&result);
-
-    // Re-canonicalize and hash again
-    let result2 = normalize_to_bytes(&input).unwrap();
-    let hash2 = Sha256::digest(&result2);
-
-    // Hashes must be identical
-    assert_eq!(hash1, hash2);
-}
-
 // =============================================================================
 // Generic normalize function tests (for arbitrary Serialize types)
 // =============================================================================

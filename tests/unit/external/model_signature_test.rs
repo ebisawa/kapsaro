@@ -63,18 +63,3 @@ fn test_signature_deserialization() {
     assert_eq!(sig.sig, "YWJjZGVmZ2hp");
     assert_eq!(sig.signer_pub.protected.subject_handle, "alice@example.com");
 }
-
-#[test]
-fn test_signature_roundtrip() {
-    let original = ArtifactSignature {
-        alg: secretenv::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
-        kid: "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N".to_string(),
-        signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        sig: "dGVzdHNpZ25hdHVyZQ".to_string(),
-    };
-
-    let json = serde_json::to_string(&original).unwrap();
-    let deserialized: ArtifactSignature = serde_json::from_str(&json).unwrap();
-
-    assert_eq!(original, deserialized);
-}

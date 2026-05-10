@@ -175,25 +175,3 @@ fn test_trust_store_protected_rejects_unknown_fields() {
     let result = serde_json::from_str::<TrustStoreDocument>(json);
     assert!(result.is_err());
 }
-
-#[test]
-fn test_trust_store_signature_rejects_signer_pub() {
-    let json = r#"{
-        "protected": {
-            "format": "secretenv:format:local-trust@5",
-            "owner_handle": "alice@example.com",
-            "created_at": "2026-03-29T12:34:56Z",
-            "updated_at": "2026-03-29T12:34:56Z",
-            "known_keys": []
-        },
-        "signature": {
-            "alg": "eddsa-ed25519",
-            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-            "signer_pub": {},
-            "sig": "test"
-        }
-    }"#;
-
-    let result = serde_json::from_str::<TrustStoreDocument>(json);
-    assert!(result.is_err());
-}

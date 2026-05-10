@@ -265,3 +265,7 @@ impl DoctorReport {
             .len()
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_doctor_types_test.rs"]
+mod tests;

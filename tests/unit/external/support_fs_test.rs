@@ -5,8 +5,8 @@
 
 use secretenv::support::fs::{
     check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted,
-    ensure_text_file_matches_snapshot_with_limit, list_dir, load_bytes_with_limit, load_text,
-    load_text_with_limit,
+    ensure_text_file_matches_snapshot, ensure_text_file_matches_snapshot_with_limit, list_dir,
+    load_bytes_with_limit, load_text, load_text_with_limit,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -327,6 +327,50 @@ fn test_ensure_text_file_matches_snapshot_with_limit_accepts_matching_content() 
     );
 
     assert!(result.is_ok(), "expected snapshot match to succeed");
+}
+
+#[test]
+fn test_ensure_text_file_matches_snapshot_accepts_missing_file_without_reviewed_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("missing.txt");
+
+    let result = ensure_text_file_matches_snapshot(&file_path, None, "Reviewed file");
+
+    assert!(
+        result.is_ok(),
+        "expected missing unreviewed file to succeed"
+    );
+}
+
+#[test]
+fn test_ensure_text_file_matches_snapshot_rejects_existing_file_without_reviewed_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&file_path, "created after review").unwrap();
+
+    let error = ensure_text_file_matches_snapshot(&file_path, None, "Reviewed file").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("Reviewed file changed since review"),
+        "unexpected error: {message}"
+    );
+}
+
+#[test]
+fn test_ensure_text_file_matches_snapshot_rejects_changed_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&file_path, "changed content").unwrap();
+
+    let error = ensure_text_file_matches_snapshot(&file_path, Some("old content"), "Reviewed file")
+        .unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("Reviewed file changed since review"),
+        "unexpected error: {message}"
+    );
 }
 
 #[test]

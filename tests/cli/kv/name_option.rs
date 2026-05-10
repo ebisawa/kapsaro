@@ -40,29 +40,6 @@ fn test_set_with_name_option_creates_named_file() {
     );
 }
 
-/// Test: `set` without `-n` defaults to `default.kvenc`
-#[test]
-fn test_set_without_name_option_defaults_to_default() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    let default_file = workspace_dir.path().join("secrets").join("default.kvenc");
-
-    set_value_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        "MY_KEY",
-        "my_value",
-        None,
-        None,
-    );
-
-    assert!(
-        default_file.exists(),
-        "default.kvenc should be created when -n is omitted"
-    );
-}
-
 // ============================================================================
 // set + get -n roundtrip test
 // ============================================================================

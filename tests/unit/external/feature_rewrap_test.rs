@@ -14,26 +14,6 @@ use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
 use secretenv::format::content::{EncContent, FileEncContent};
 use secretenv::io::keystore::storage::{list_kids, load_public_key};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
-use std::fs;
-use tempfile::TempDir;
-
-/// Create workspace members directory with the member's public key file.
-///
-/// The rewrap operation calls `list_active_member_handles(workspace_root)` to determine target recipients,
-/// so the workspace must have a `members/active/<member_handle>.json` file.
-fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
-    let keystore_root = temp_dir.path().join("keys");
-    let public_key = load_public_key(&keystore_root, member_handle, kid).unwrap();
-    let members_dir = temp_dir.path().join("members/active");
-    fs::create_dir_all(&members_dir).unwrap();
-    fs::create_dir_all(temp_dir.path().join("members/incoming")).unwrap();
-    let member_file = members_dir.join(format!("{}.json", member_handle));
-    fs::write(
-        &member_file,
-        serde_json::to_string_pretty(&public_key).unwrap(),
-    )
-    .unwrap();
-}
 
 fn single_rewrap_request<'a>(
     key_ctx: &'a secretenv::feature::context::crypto::CryptoContext,
@@ -97,44 +77,5 @@ fn test_rewrap_file_operation_rejects_invalid_signature() {
     assert!(
         result.is_err(),
         "rewrap_file_document must fail on invalid signature"
-    );
-}
-
-#[test]
-fn test_rewrap_file_operation_succeeds_with_valid_signature() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let keystore_root = temp_dir.path().join("keys");
-
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
-    let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
-
-    let content = b"secret";
-    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
-    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
-
-    let file_enc_doc = encrypt_file_document(
-        content,
-        &recipient_handles,
-        &members,
-        &SigningContext {
-            signing_key: &key_ctx.signing_key,
-            signer_kid: kid,
-            signer_pub: public_key,
-            debug: false,
-        },
-    )
-    .unwrap();
-
-    let json = serde_json::to_string_pretty(&file_enc_doc).unwrap();
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false);
-    let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
-
-    assert!(
-        result.is_ok(),
-        "rewrap_file_document must succeed with valid signature: {:?}",
-        result.err()
     );
 }

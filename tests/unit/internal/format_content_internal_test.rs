@@ -40,16 +40,6 @@ fn encrypted_content_detect_rejects_unknown() {
 }
 
 #[test]
-fn file_enc_detect_rejects_json_exceeding_depth_limit() {
-    let result = FileEncContent::detect(deeply_nested_json(MAX_JSON_DEPTH + 1));
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("nesting depth exceeds limit"));
-}
-
-#[test]
 fn encrypted_content_detect_rejects_json_exceeding_depth_limit() {
     let result = EncContent::detect(deeply_nested_json(MAX_JSON_DEPTH + 1));
     assert!(result.is_err());

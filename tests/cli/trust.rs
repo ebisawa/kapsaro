@@ -14,10 +14,13 @@ use assert_cmd::cargo;
 #[cfg(unix)]
 use console::strip_ansi_codes;
 use predicates::prelude::*;
+use secretenv::feature::trust::recipient_sets::compute_recipient_set_hash;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::io::trust::paths::get_trust_store_file_path;
 use secretenv::io::trust::store::save_trust_store;
-use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use secretenv::model::trust_store::{
+    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
+};
 use secretenv::model::wire::format::LOCAL_TRUST_V5;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -27,6 +30,8 @@ const KID_CHARLIE: &str = "C4AR1E00C4AR1E00C4AR1E00C4AR1E00";
 const DISPLAY_KID_BOB: &str = "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0";
 const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 const CHARLIE_MEMBER_HANDLE: &str = "charlie@example.com";
+const SID_OLD: &str = "00000000-0000-4000-8000-000000000201";
+const SID_NEW: &str = "00000000-0000-4000-8000-000000000202";
 
 fn build_known_key(kid: &str, member_handle: &str, approved_at: &str) -> KnownKey {
     KnownKey {
@@ -39,7 +44,33 @@ fn build_known_key(kid: &str, member_handle: &str, approved_at: &str) -> KnownKe
     }
 }
 
+fn build_recipient_set(
+    sid: &str,
+    recipient_kids: &[&str],
+    approved_at: &str,
+) -> RecipientSetRecord {
+    let recipient_kids = recipient_kids
+        .iter()
+        .map(|kid| (*kid).to_string())
+        .collect::<Vec<_>>();
+    RecipientSetRecord {
+        sid: sid.to_string(),
+        recipient_set_hash: compute_recipient_set_hash(&recipient_kids).unwrap(),
+        recipient_kids,
+        approved_at: approved_at.to_string(),
+        approved_via: RecipientSetApprovalVia::ManualReview,
+        recipient_handle_hints: None,
+    }
+}
+
 fn save_signed_trust_store(home: &TempDir) {
+    save_signed_trust_store_with_recipient_sets(home, Vec::new());
+}
+
+fn save_signed_trust_store_with_recipient_sets(
+    home: &TempDir,
+    recipient_sets: Vec<RecipientSetRecord>,
+) {
     let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
         format: LOCAL_TRUST_V5.to_string(),
@@ -50,11 +81,21 @@ fn save_signed_trust_store(home: &TempDir) {
             build_known_key(KID_BOB, BOB_MEMBER_HANDLE, "2026-03-29T12:40:00Z"),
             build_known_key(KID_CHARLIE, CHARLIE_MEMBER_HANDLE, "2026-03-29T12:41:00Z"),
         ],
-        recipient_sets: Vec::new(),
+        recipient_sets,
     };
     let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
     let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     save_trust_store(&path, &document).unwrap();
+}
+
+fn save_signed_trust_store_with_default_recipient_sets(home: &TempDir) {
+    save_signed_trust_store_with_recipient_sets(
+        home,
+        vec![
+            build_recipient_set(SID_OLD, &[KID_BOB], "2026-01-01T00:00:00Z"),
+            build_recipient_set(SID_NEW, &[KID_BOB, KID_CHARLIE], "2026-06-01T00:00:00Z"),
+        ],
+    );
 }
 
 fn install_secondary_member_fixture(home: &TempDir, member_handle: &str) {
@@ -118,21 +159,6 @@ fn test_trust_list_succeeds_without_ssh_agent() {
 }
 
 #[test]
-fn test_trust_flat_list_is_not_supported() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
-
-    cmd()
-        .arg("trust")
-        .arg("list")
-        .arg("--home")
-        .arg(home.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("unrecognized subcommand 'list'"));
-}
-
-#[test]
 fn test_trust_list_json_keeps_canonical_kid() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
@@ -158,6 +184,111 @@ fn test_trust_list_json_keeps_canonical_kid() {
         .expect("bob entry should exist");
 
     assert_eq!(bob["kid"], KID_BOB);
+}
+
+#[test]
+fn test_trust_recipients_list_text_shows_sid_hash_and_kids() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store_with_default_recipient_sets(&home);
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains(SID_OLD),
+        "expected old sid, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(SID_NEW),
+        "expected new sid, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("hash:"),
+        "expected hash line, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(DISPLAY_KID_BOB),
+        "expected display kid, got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn test_trust_recipients_list_json_keeps_canonical_fields() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store_with_default_recipient_sets(&home);
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("list")
+        .arg("--json")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let output: Value = serde_json::from_str(&stdout).expect("Output should be valid JSON");
+    let recipient_sets = output["recipient_sets"]
+        .as_array()
+        .expect("recipient_sets should be an array");
+    let old_record = recipient_sets
+        .iter()
+        .find(|entry| entry["sid"] == SID_OLD)
+        .expect("old recipient set should exist");
+
+    assert_eq!(old_record["recipient_kids"][0], KID_BOB);
+    assert!(old_record["recipient_set_hash"].as_str().unwrap().len() > 20);
+}
+
+#[test]
+fn test_trust_recipients_remove_deletes_requested_sid() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store_with_default_recipient_sets(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("remove")
+        .arg(SID_OLD)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Removed recipient set"));
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        !stderr.contains(SID_OLD),
+        "removed sid should disappear, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(SID_NEW),
+        "remaining sid should stay, got: {}",
+        stderr
+    );
 }
 
 #[cfg(unix)]
@@ -315,26 +446,6 @@ fn test_trust_remove_accepts_unique_prefix_kid() {
 
 #[cfg(unix)]
 #[test]
-fn test_trust_remove_old_identity_option_fails() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
-
-    cmd()
-        .arg("trust")
-        .arg("keys")
-        .arg("remove")
-        .arg(KID_BOB)
-        .arg("--home")
-        .arg(home.path())
-        .arg("--identity")
-        .arg(home.path().join(".ssh").join("test_ed25519"))
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("--ssh-identity"));
-}
-
-#[cfg(unix)]
-#[test]
 fn test_trust_list_prints_warning_after_known_key_output() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
@@ -416,27 +527,6 @@ fn test_trust_purge_accepts_member_handle_when_keystore_is_ambiguous() {
 }
 
 #[test]
-fn test_trust_purge_with_force_short_option() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
-
-    cmd()
-        .arg("trust")
-        .arg("keys")
-        .arg("purge")
-        .arg("--older-than")
-        .arg("1d")
-        .arg("-f")
-        .arg("--home")
-        .arg(home.path())
-        .arg("--ssh-identity")
-        .arg(home.path().join(".ssh").join("test_ed25519"))
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Purged 2 entry(ies)"));
-}
-
-#[test]
 fn test_trust_purge_without_force_in_non_interactive_mode_error() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
@@ -459,22 +549,84 @@ fn test_trust_purge_without_force_in_non_interactive_mode_error() {
 }
 
 #[test]
-fn test_trust_purge_yes_option_error() {
+fn test_trust_recipients_purge_with_force_removes_only_old_records() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
+    save_signed_trust_store_with_default_recipient_sets(&home);
 
     cmd()
         .arg("trust")
-        .arg("keys")
+        .arg("recipients")
         .arg("purge")
         .arg("--older-than")
         .arg("1d")
-        .arg("--yes")
+        .arg("--force")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Purged 1 recipient set(s)"));
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        !stderr.contains(SID_OLD),
+        "purged sid should disappear, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(SID_NEW),
+        "new sid should remain, got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn test_trust_recipients_purge_without_force_in_non_interactive_mode_error() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store_with_default_recipient_sets(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("purge")
+        .arg("--older-than")
+        .arg("1d")
         .arg("--home")
         .arg(home.path())
         .arg("--ssh-identity")
         .arg(home.path().join(".ssh").join("test_ed25519"))
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unexpected argument '--yes'"));
+        .stderr(predicate::str::contains(
+            "Non-interactive mode requires --force flag for purge",
+        ));
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains(SID_OLD),
+        "non-interactive error should not mutate store, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(SID_NEW),
+        "non-interactive error should keep all records, got: {}",
+        stderr
+    );
 }

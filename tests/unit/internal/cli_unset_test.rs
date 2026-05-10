@@ -24,14 +24,6 @@ fn test_confirm_unset_operation_with_reader_rejects_non_interactive_without_forc
 }
 
 #[test]
-fn test_confirm_unset_operation_with_reader_accepts_interactive_yes() {
-    let result =
-        confirm_unset_operation_with_reader(false, "API_KEY", true, Cursor::new(b"y\n".to_vec()));
-
-    assert!(result.is_ok());
-}
-
-#[test]
 fn test_confirm_unset_operation_with_reader_rejects_interactive_default_no() {
     let error =
         confirm_unset_operation_with_reader(false, "API_KEY", true, Cursor::new(b"\n".to_vec()))

@@ -70,19 +70,6 @@ fn test_judge_known_key_reports_new_entry() {
 }
 
 #[test]
-fn test_add_known_key_reports_new_then_existing_duplicate() {
-    let mut keys = Vec::new();
-    let key = build_known_key("KJD9AAAA1111BBBB2222CCCC3333DDDD", "bob");
-
-    let first = add_known_key(&mut keys, key.clone()).unwrap();
-    let second = add_known_key(&mut keys, key).unwrap();
-
-    assert!(first);
-    assert!(!second);
-    assert_eq!(keys.len(), 1);
-}
-
-#[test]
 fn test_add_known_key_same_kid_different_member_fails() {
     let mut keys = vec![build_known_key("KJD1AAAA1111BBBB2222CCCC3333DDDD", "bob")];
     let result = add_known_key(

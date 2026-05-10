@@ -7,10 +7,14 @@ use std::env;
 use std::fs;
 
 use crate::app::context::ssh::SshKeyCandidateView;
-use crate::cli::identity_prompt::{resolve_key_generation_github_user_with_prompt, select_ssh_key};
 use crate::test_utils::EnvGuard;
 use serial_test::serial;
 use tempfile::TempDir;
+
+use super::{
+    format_candidate, is_prompt_available, resolve_key_generation_github_user_with_prompt,
+    select_ssh_key,
+};
 
 #[test]
 fn test_select_ssh_key_empty_candidates_fails() {
@@ -33,6 +37,37 @@ fn test_select_ssh_key_single_candidate_returns_zero() {
     }];
     let result = select_ssh_key(&candidates);
     assert_eq!(result.unwrap(), 0);
+}
+
+#[test]
+fn test_format_candidate_with_comment() {
+    let candidate = SshKeyCandidateView {
+        public_key: "ssh-ed25519 AAAA test@host".to_string(),
+        fingerprint: "SHA256:abc123".to_string(),
+        comment: "test@host".to_string(),
+    };
+
+    assert_eq!(format_candidate(&candidate), "SHA256:abc123 (test@host)");
+}
+
+#[test]
+fn test_format_candidate_without_comment() {
+    let candidate = SshKeyCandidateView {
+        public_key: "ssh-ed25519 AAAA".to_string(),
+        fingerprint: "SHA256:abc123".to_string(),
+        comment: String::new(),
+    };
+
+    assert_eq!(format_candidate(&candidate), "SHA256:abc123");
+}
+
+#[test]
+#[serial]
+fn test_is_prompt_available_rejects_ci_environment() {
+    let _guard = EnvGuard::new(&["CI"]);
+    env::set_var("CI", "true");
+
+    assert!(!is_prompt_available());
 }
 
 #[test]

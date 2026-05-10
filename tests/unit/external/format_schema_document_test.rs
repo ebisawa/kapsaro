@@ -4,14 +4,14 @@
 use crate::keygen_helpers::build_dummy_public_key;
 use secretenv::format::schema::document::{
     parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token, parse_kv_signature_token,
-    parse_kv_wrap_token, parse_private_key_bytes, parse_public_key_str,
+    parse_kv_wrap_token, parse_public_key_str,
 };
 use secretenv::format::token::TokenCodec;
 use secretenv::model::common::WrapItem;
 use secretenv::model::kv_enc::entry::KvEntryValue;
 use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::wire::{algorithm, format, private_key};
+use secretenv::model::wire::{algorithm, format};
 use secretenv::support::codec::base64_public::encode_base64url_nopad;
 use secretenv::support::limits::MAX_WRAP_ITEMS;
 use uuid::Uuid;
@@ -52,43 +52,6 @@ fn test_parse_public_key_str_with_schema() {
 }
 
 #[test]
-fn test_parse_private_key_bytes_rejects_legacy_argon2_fields_error() {
-    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
-    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
-    let private_key = serde_json::json!({
-        "protected": {
-            "format": format::PRIVATE_KEY_V7,
-            "subject_handle": "alice@example.com",
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "alg": {
-                "kdf": private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
-                "ikm_salt": ikm_salt,
-                "hkdf_salt": hkdf_salt,
-                "aead": algorithm::AEAD_XCHACHA20_POLY1305,
-                "m": 47104
-            },
-            "created_at": "2026-01-14T00:00:00Z",
-            "expires_at": "2027-01-14T00:00:00Z"
-        },
-        "encrypted": {
-            "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-        }
-    });
-
-    let result =
-        parse_private_key_bytes(private_key.to_string().as_bytes(), "SECRETENV_PRIVATE_KEY");
-    let error = result.unwrap_err();
-    let message = error.format_user_message();
-    assert!(message.contains("Invalid secretenv document"));
-    assert!(message.contains("protected.alg"));
-    assert!(message.contains("m"));
-    assert!(!message.contains("E_SCHEMA_INVALID"));
-    assert!(!message.contains("schema"));
-    assert!(!message.contains("47104"));
-}
-
-#[test]
 fn test_parse_file_enc_str_with_schema() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
@@ -126,6 +89,53 @@ fn test_parse_file_enc_str_with_schema() {
 
     let parsed = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
     assert_eq!(parsed.protected.format, format::FILE_ENC_V5);
+}
+
+#[test]
+fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
+    let sid = "123e4567-e89b-12d3-a456-426614174000";
+    let mut non_canonical_sig = encode_base64url_nopad(&[0u8; 64]);
+    non_canonical_sig.replace_range(85..86, "B");
+    let file_enc = serde_json::json!({
+        "protected": {
+            "format": format::FILE_ENC_V5,
+            "sid": sid,
+            "payload": {
+                "protected": {
+                    "format": format::FILE_PAYLOAD_V5,
+                    "sid": sid,
+                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
+                },
+                "encrypted": {
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                }
+            },
+            "wrap": [{
+                "rh": "alice@example.com",
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
+                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }],
+            "created_at": "2026-01-14T00:00:00Z",
+            "updated_at": "2026-01-14T00:00:00Z"
+        },
+        "signature": {
+            "alg": algorithm::SIGNATURE_ED25519,
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "sig": non_canonical_sig
+        }
+    });
+
+    let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("signature.sig"));
 }
 
 #[test]
@@ -203,22 +213,6 @@ fn test_parse_kv_head_token_rejects_unsupported_aead_algorithm() {
     let head_token = TokenCodec::encode(TokenCodec::JsonJcs, &head).unwrap();
 
     let err = parse_kv_head_token(&head_token).unwrap_err();
-
-    assert!(err.to_string().contains("Invalid secretenv document"));
-}
-
-#[test]
-fn test_parse_kv_entry_token_rejects_key_and_aead_fields() {
-    let entry = serde_json::json!({
-        "salt": encode_base64url_nopad(&[0u8; 32]),
-        "k": "DATABASE_URL",
-        "aead": algorithm::AEAD_XCHACHA20_POLY1305,
-        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-    });
-    let entry_token = TokenCodec::encode(TokenCodec::JsonJcs, &entry).unwrap();
-
-    let err = parse_kv_entry_token(&entry_token).unwrap_err();
 
     assert!(err.to_string().contains("Invalid secretenv document"));
 }

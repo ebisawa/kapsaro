@@ -25,6 +25,16 @@ fn setup_env_dump_script() -> (TempDir, String) {
     (temp_dir, script_path.to_string_lossy().into_owned())
 }
 
+fn setup_ssh_wrapper_script(name: &str, body: &str) -> (TempDir, String) {
+    let temp_dir = TempDir::new().unwrap();
+    let script_path = temp_dir.path().join(name);
+    fs::write(&script_path, body).unwrap();
+    let mut perms = fs::metadata(&script_path).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&script_path, perms).unwrap();
+    (temp_dir, script_path.to_string_lossy().into_owned())
+}
+
 fn build_test_sshsig_armored(raw_sig: [u8; 64], ssh_pubkey: &str) -> String {
     let mut sshsig_blob = Vec::new();
     sshsig_blob.extend_from_slice(b"SSHSIG");
@@ -97,6 +107,68 @@ fn test_default_ssh_add_sets_resolved_socket_without_inheriting_secret_env() {
     assert!(output.contains("SSH_AUTH_SOCK=/tmp/agent.sock"));
     assert!(output.contains("CUSTOM_PARENT_ENV=parent-value"));
     assert!(!output.contains("SECRETENV_PRIVATE_KEY=sensitive"));
+}
+
+#[test]
+fn test_default_ssh_add_reports_nonzero_stderr() {
+    let _guard = EnvGuard::new(&["HOME", "PATH", "SSH_AUTH_SOCK"]);
+    let fake_home = TempDir::new().unwrap();
+    std::env::set_var("HOME", fake_home.path());
+    std::env::set_var("PATH", "/usr/bin");
+    std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
+
+    let (_script_dir, script_path) = setup_ssh_wrapper_script(
+        "ssh-add-wrapper.sh",
+        "#!/bin/sh\n\
+echo 'agent down sentinel' >&2\n\
+exit 42\n",
+    );
+
+    let err = DefaultSshAdd::new(script_path)
+        .list_keys()
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("ssh-add -L failed"));
+    assert!(err.contains("agent down sentinel"));
+}
+
+#[test]
+fn test_default_ssh_add_reports_invalid_utf8_stdout() {
+    let _guard = EnvGuard::new(&["HOME", "PATH", "SSH_AUTH_SOCK"]);
+    let fake_home = TempDir::new().unwrap();
+    std::env::set_var("HOME", fake_home.path());
+    std::env::set_var("PATH", "/usr/bin");
+    std::env::set_var("SSH_AUTH_SOCK", "/tmp/agent.sock");
+
+    let (_script_dir, script_path) = setup_ssh_wrapper_script(
+        "ssh-add-wrapper.sh",
+        "#!/bin/sh\n\
+printf '\\377'\n",
+    );
+
+    let err = DefaultSshAdd::new(script_path)
+        .list_keys()
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("Invalid UTF-8 in ssh-add output"));
+}
+
+#[test]
+fn test_default_ssh_add_requires_resolved_agent_socket() {
+    let _guard = EnvGuard::new(&["HOME", "PATH", "SSH_AUTH_SOCK"]);
+    let fake_home = TempDir::new().unwrap();
+    std::env::set_var("HOME", fake_home.path());
+    std::env::set_var("PATH", "/usr/bin");
+    std::env::remove_var("SSH_AUTH_SOCK");
+
+    let err = DefaultSshAdd::new("/should/not/run")
+        .list_keys()
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("SSH_AUTH_SOCK") || err.contains("IdentityAgent"));
 }
 
 #[test]

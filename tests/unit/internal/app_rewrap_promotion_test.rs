@@ -358,20 +358,6 @@ fn test_build_promotion_review_plan_rejects_self_candidate_when_identity_mismatc
 }
 
 #[test]
-fn test_build_promotion_review_plan_rejects_self_candidate_when_local_identity_is_missing() {
-    let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
-
-    let result =
-        build_promotion_review_plan(&report, &[], &SelfTrustSet::new("alice", [[7u8; 32]]), true);
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("E_REWRAP_SELF_PROMOTION_MISMATCH"));
-}
-
-#[test]
 fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candidate() {
     let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {

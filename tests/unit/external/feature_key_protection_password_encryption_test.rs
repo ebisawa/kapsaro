@@ -133,33 +133,6 @@ fn test_password_decrypt_sanitizes_plaintext_deserialize_error() {
 }
 
 #[test]
-fn test_password_encrypt_alg_kdf_is_argon2id() {
-    let plaintext = build_test_plaintext();
-
-    let encrypted = encrypt_private_key_with_password(
-        &plaintext,
-        "alice@example.com",
-        TEST_KID,
-        "2026-01-01T00:00:00Z",
-        "2027-01-01T00:00:00Z",
-        &secret("test-password"),
-        false,
-    )
-    .expect("encryption should succeed");
-
-    match &encrypted.protected.alg {
-        PrivateKeyAlgorithm::Argon2id { aead, .. } => {
-            assert_eq!(aead, "xchacha20-poly1305");
-        }
-        _ => panic!("expected Argon2id algorithm variant"),
-    }
-
-    // Verify kdf tag serializes correctly
-    let json = serde_json::to_value(&encrypted.protected.alg).unwrap();
-    assert_eq!(json["kdf"], "argon2id-m64t3p4-hkdf-sha256");
-}
-
-#[test]
 fn test_password_encrypt_preserves_metadata() {
     let plaintext = build_test_plaintext();
     let member_handle = "bob@example.com";

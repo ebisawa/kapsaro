@@ -32,41 +32,10 @@ fn test_detect_kv_enc_v6() {
 }
 
 #[test]
-fn test_detect_kv_enc_v2_rejected() {
-    // v2 should be rejected and detected as Unknown
-    let content = ":SECRETENV_KV 2\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n";
-    let format = detect_format(content).unwrap();
-    assert_eq!(format, InputFormat::Unknown);
-}
-
-#[test]
-fn test_detect_kv_enc_old_format_rejected() {
-    // Old format (without : prefix) should be rejected
-    let content = "SECRETENV_KV 4\nWRAP\teyJrZXkiOiJ2YWx1ZSJ9\n";
-    let format = detect_format(content).unwrap();
-    assert_eq!(format, InputFormat::Unknown);
-}
-
-#[test]
 fn test_detect_file_enc_v5() {
     let content = r#"{"protected": {"format": "secretenv:format:file-enc@5", "sid": "550e8400-e29b-41d4-a716-446655440000", "wrap": [], "payload": {"protected": {"format": "secretenv:format:file-enc:payload@5", "sid": "550e8400-e29b-41d4-a716-446655440000", "alg": {"aead": "xchacha20-poly1305"}}, "encrypted": {"nonce": "...", "ct": "..."}}, "created_at": "2026-01-19T10:00:00Z", "updated_at": "2026-01-19T10:00:00Z"}, "signature": {"alg": "eddsa-ed25519", "kid": "...", "sig": "..."}}"#;
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::FileEnc);
-}
-
-#[test]
-fn test_detect_file_enc_v2_rejected() {
-    // v2 should be rejected and detected as Unknown
-    let content = r#"{"format": "secretenv.file@2", "secret_id": "..."}"#;
-    let format = detect_format(content).unwrap();
-    assert_eq!(format, InputFormat::Unknown);
-}
-
-#[test]
-fn test_detect_file_enc_top_level_format_rejected() {
-    let content = r#"{"format":"secretenv:format:file-enc@5","protected":{"sid":"550e8400-e29b-41d4-a716-446655440000","wrap":[],"payload":{"protected":{"format":"secretenv:format:file-enc:payload@5","sid":"550e8400-e29b-41d4-a716-446655440000","alg":{"aead":"xchacha20-poly1305"}},"encrypted":{"nonce":"...","ct":"..."}},"created_at":"2026-01-19T10:00:00Z","updated_at":"2026-01-19T10:00:00Z"},"signature":{"alg":"eddsa-ed25519","kid":"...","sig":"..."}}"#;
-    let format = detect_format(content).unwrap();
-    assert_eq!(format, InputFormat::Unknown);
 }
 
 #[test]

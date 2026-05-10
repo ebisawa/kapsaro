@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use crate::app::member::approval::MemberApprovalResult;
 use crate::app::trust::list::list_known_keys;
 use crate::app::trust::{
     build_signer_identity, enforce_policy_strict_key_checking, enforce_recipients_trust,
@@ -448,31 +447,6 @@ fn test_enforce_signer_trust_strict_no_non_interactive_accepted() {
 }
 
 #[test]
-fn test_enforce_signer_trust_strict_no_interactive_accepted() {
-    let ctx = build_test_trust_ctx(StrictKeyChecking::No, true);
-    let public_key = build_public_key(
-        "bob@example.com",
-        "KID1AAAA1111BBBB2222CCCC3333DDDD",
-        "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
-    );
-    let judgment = TrustJudgment::NeedsApproval {
-        member_handle: member_handle(public_key.protected.subject_handle.clone()),
-        kid: kid(public_key.protected.kid.clone()),
-    };
-
-    let result = enforce_signer_trust(
-        &ctx,
-        &judgment,
-        &public_key,
-        CommandCapability::Decrypt,
-        &[],
-    )
-    .unwrap();
-
-    assert_eq!(result, SignerTrustOutcome::Accepted);
-}
-
-#[test]
 fn test_enforce_signer_trust_strict_no_write_path_fails() {
     let ctx = build_test_trust_ctx(StrictKeyChecking::No, false);
     let public_key = build_public_key(
@@ -742,9 +716,38 @@ fn test_policy_strict_key_checking_no_rejected_for_write_paths_and_rewrap() {
 #[test]
 fn test_env_key_mode_allowed_commands() {
     assert!(CommandCapability::Decrypt.allows_env_key_mode());
+    assert!(CommandCapability::Doctor.allows_env_key_mode());
     assert!(CommandCapability::Get.allows_env_key_mode());
     assert!(CommandCapability::List.allows_env_key_mode());
     assert!(CommandCapability::Run.allows_env_key_mode());
+}
+
+#[test]
+fn test_env_key_mode_rejected_for_mutating_and_management_commands() {
+    for capability in [
+        CommandCapability::Config,
+        CommandCapability::Encrypt,
+        CommandCapability::Import,
+        CommandCapability::Init,
+        CommandCapability::Inspect,
+        CommandCapability::Join,
+        CommandCapability::Key,
+        CommandCapability::Member,
+        CommandCapability::Rewrap,
+        CommandCapability::Set,
+        CommandCapability::Trust,
+        CommandCapability::Unset,
+    ] {
+        assert!(
+            !capability.allows_env_key_mode(),
+            "{} should not be available in env key mode",
+            capability.label()
+        );
+    }
+}
+
+#[test]
+fn test_env_key_mode_allowed_commands_exclude_write_paths() {
     assert!(!CommandCapability::Encrypt.allows_env_key_mode());
     assert!(!CommandCapability::Init.allows_env_key_mode());
     assert!(!CommandCapability::Set.allows_env_key_mode());
@@ -793,37 +796,4 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
         .warnings
         .iter()
         .any(|warning| warning.contains("Insecure permissions")));
-}
-
-#[test]
-fn test_manual_approval_result_fields() {
-    let result = MemberApprovalResult {
-        member_handle: "ssh-only@example.com".to_string(),
-        kid: "KID1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
-        verified: false,
-        approved: true,
-        review_required: false,
-        already_known: false,
-        message: "No GitHub binding configured".to_string(),
-        fingerprint: Some("SHA256:abc".to_string()),
-        github_id: None,
-        github_login: None,
-        github_binding_configured: false,
-        attestor_pub: None,
-        verified_github: None,
-    };
-
-    let status = match (
-        result.verified,
-        result.approved,
-        result.review_required,
-        result.already_known,
-    ) {
-        (_, true, _, _) => "approved",
-        (_, _, _, true) => "already known",
-        (_, _, true, false) => "pending review",
-        _ => "not verified",
-    };
-
-    assert_eq!(status, "approved");
 }

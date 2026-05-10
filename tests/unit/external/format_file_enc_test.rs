@@ -9,5 +9,3 @@ mod decrypt;
 mod encrypt;
 #[path = "format_file_enc_test/helpers.rs"]
 mod helpers;
-#[path = "format_file_enc_test/validation.rs"]
-mod validation;

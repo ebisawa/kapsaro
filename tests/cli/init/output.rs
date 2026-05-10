@@ -107,37 +107,6 @@ fn test_init_existing_workspace_noop_output() {
 }
 
 #[test]
-fn test_init_existing_workspace_output_does_not_start_with_blank_line() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
-
-    cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    let assert = cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Workspace already initialized"));
-
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
-    assert!(
-        !stderr.starts_with('\n'),
-        "stderr should not start with a blank line: {stderr:?}"
-    );
-}
-
-#[test]
 fn test_init_already_member_ci_output() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 

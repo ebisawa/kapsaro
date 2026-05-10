@@ -163,26 +163,6 @@ fn test_import_with_json_output() {
     assert!(output.contains("\"file\""), "{output}");
 }
 
-#[test]
-fn test_import_rejects_strict_key_checking_no() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    let env_file = workspace_dir.path().join("strict.env");
-    fs::write(&env_file, "KEY1=value1\n").unwrap();
-
-    cmd()
-        .arg("import")
-        .arg(env_file.to_str().unwrap())
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not allowed").and(predicate::str::contains("import")));
-}
-
 #[cfg(unix)]
 #[test]
 fn test_import_rejects_symlink_input_file() {

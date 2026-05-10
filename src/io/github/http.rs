@@ -11,6 +11,8 @@ use crate::support::validation;
 use crate::{Error, Result};
 use serde::Deserialize;
 
+const GITHUB_API_BASE_URL: &str = "https://api.github.com";
+
 /// SSH key metadata fetched from GitHub.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubKeyRecord {
@@ -48,9 +50,16 @@ fn build_github_request(client: &reqwest::Client, url: &str) -> reqwest::Request
 }
 
 fn build_github_api_url(path_segments: &[&str]) -> Result<reqwest::Url> {
-    let mut url = reqwest::Url::parse("https://api.github.com").map_err(|e| Error::Config {
+    let url = reqwest::Url::parse(GITHUB_API_BASE_URL).map_err(|e| Error::Config {
         message: format!("Failed to parse GitHub API base URL: {}", e),
     })?;
+    build_github_api_url_from_base(url, path_segments)
+}
+
+fn build_github_api_url_from_base(
+    mut url: reqwest::Url,
+    path_segments: &[&str],
+) -> Result<reqwest::Url> {
     url.path_segments_mut()
         .map_err(|_| Error::Config {
             message: "Failed to build GitHub API URL".to_string(),
@@ -88,6 +97,17 @@ where
             message: format!("Failed to fetch GitHub user: {}", e),
         })?;
 
+    parse_github_user_response(response, context_label, transform).await
+}
+
+async fn parse_github_user_response<T, F>(
+    response: reqwest::Response,
+    context_label: &str,
+    transform: F,
+) -> Result<T>
+where
+    F: FnOnce(GitHubUser) -> T,
+{
     let status = response.status();
     if !status.is_success() {
         return Err(Error::Verify {
@@ -112,8 +132,20 @@ pub(crate) async fn fetch_github_user_by_id(
     client: &reqwest::Client,
     account_id: u64,
 ) -> Result<(u64, String)> {
+    let url = build_github_user_by_id_url(account_id)?;
+    fetch_github_user_by_id_with_url(client, account_id, url).await
+}
+
+fn build_github_user_by_id_url(account_id: u64) -> Result<reqwest::Url> {
     let account_id_segment = account_id.to_string();
-    let url = build_github_api_url(&["user", &account_id_segment])?;
+    build_github_api_url(&["user", &account_id_segment])
+}
+
+async fn fetch_github_user_by_id_with_url(
+    client: &reqwest::Client,
+    account_id: u64,
+    url: reqwest::Url,
+) -> Result<(u64, String)> {
     let label = format!("account id '{}'", account_id);
     fetch_github_user_api(client, url, &label, |u| (u.id, u.login)).await
 }
@@ -124,7 +156,19 @@ pub(crate) async fn fetch_github_user_by_login(
     login: &str,
 ) -> Result<GithubAccount> {
     validation::validate_github_login(login)?;
-    let url = build_github_api_url(&["users", login])?;
+    let url = build_github_user_by_login_url(login)?;
+    fetch_github_user_by_login_with_url(client, login, url).await
+}
+
+fn build_github_user_by_login_url(login: &str) -> Result<reqwest::Url> {
+    build_github_api_url(&["users", login])
+}
+
+async fn fetch_github_user_by_login_with_url(
+    client: &reqwest::Client,
+    login: &str,
+    url: reqwest::Url,
+) -> Result<GithubAccount> {
     let label = format!("login '{}'", login);
     fetch_github_user_api(client, url, &label, |u| GithubAccount {
         id: u.id,
@@ -139,7 +183,18 @@ pub(crate) async fn fetch_github_keys(
     login: &str,
 ) -> Result<Vec<GitHubKeyRecord>> {
     validation::validate_github_login(login)?;
-    let url = build_github_api_url(&["users", login, "keys"])?;
+    let url = build_github_keys_url(login)?;
+    fetch_github_keys_with_url(client, url).await
+}
+
+fn build_github_keys_url(login: &str) -> Result<reqwest::Url> {
+    build_github_api_url(&["users", login, "keys"])
+}
+
+async fn fetch_github_keys_with_url(
+    client: &reqwest::Client,
+    url: reqwest::Url,
+) -> Result<Vec<GitHubKeyRecord>> {
     let response = build_github_request(client, url.as_str())
         .send()
         .await
@@ -171,3 +226,7 @@ async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyR
         })
         .collect())
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_github_http_test.rs"]
+mod tests;

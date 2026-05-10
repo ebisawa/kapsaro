@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
+use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
 use secretenv::model::private_key::*;
 use secretenv::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
 
@@ -118,44 +118,6 @@ fn test_private_key_plaintext_serialization() {
 }
 
 #[test]
-fn test_private_key_roundtrip() {
-    let original = PrivateKey {
-        protected: PrivateKeyProtected {
-            format: secretenv::model::wire::format::PRIVATE_KEY_V7.to_string(),
-            subject_handle: TEST_MEMBER_HANDLE.to_string(),
-            kid: "2C7R5M9K8D1XV4PH6T3NB2QJ9F7AK5WE".to_string(),
-            alg: PrivateKeyAlgorithm::SshSig {
-                fpr: "SHA256:FPR123456".to_string(),
-                ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
-                aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
-            },
-            created_at: "2024-01-01T00:00:00Z".to_string(),
-            expires_at: "2025-12-31T23:59:59Z".to_string(),
-        },
-        encrypted: PrivateKeyEncData {
-            nonce: "bm9uY2Vub25jZQ".to_string(),
-            ct: "Y3RjdGN0".to_string(),
-        },
-    };
-
-    // Serialize
-    let json_str = serde_json::to_string(&original).expect("serialization failed");
-
-    // Deserialize
-    let deserialized: PrivateKey = serde_json::from_str(&json_str).expect("deserialization failed");
-
-    // Compare
-    assert_eq!(original.protected.format, deserialized.protected.format);
-    assert_eq!(
-        original.protected.subject_handle,
-        deserialized.protected.subject_handle
-    );
-    assert_eq!(original.protected.kid, deserialized.protected.kid);
-    assert_eq!(original.protected.alg, deserialized.protected.alg);
-}
-
-#[test]
 fn test_private_key_plaintext_debug_redacts_secret_material() {
     let plaintext = PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {
@@ -192,4 +154,71 @@ fn test_private_key_plaintext_debug_redacts_secret_material() {
         debug.contains("REDACTED"),
         "private key plaintext debug output should indicate redaction"
     );
+}
+
+#[test]
+fn test_jwk_okp_private_key_debug_redacts_secret_component() {
+    let key = JwkOkpPrivateKey {
+        kty: "OKP".to_string(),
+        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+        x: "public-key".to_string(),
+        d: "private-key".to_string(),
+    };
+
+    let debug = format!("{:?}", key);
+
+    assert!(debug.contains("public-key"));
+    assert!(!debug.contains("private-key"));
+    assert!(debug.contains("REDACTED"));
+}
+
+#[test]
+fn test_identity_keys_private_debug_redacts_nested_keys() {
+    let keys = IdentityKeysPrivate {
+        kem: JwkOkpPrivateKey {
+            kty: "OKP".to_string(),
+            crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+            x: "public-kem".to_string(),
+            d: "private-kem".to_string(),
+        },
+        sig: JwkOkpPrivateKey {
+            kty: "OKP".to_string(),
+            crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+            x: "public-sig".to_string(),
+            d: "private-sig".to_string(),
+        },
+    };
+
+    let debug = format!("{:?}", keys);
+
+    assert!(!debug.contains("public-kem"));
+    assert!(!debug.contains("private-kem"));
+    assert!(!debug.contains("public-sig"));
+    assert!(!debug.contains("private-sig"));
+    assert!(debug.contains("REDACTED"));
+}
+
+#[test]
+fn test_private_key_new_preserves_parts() {
+    let protected = PrivateKeyProtected {
+        format: secretenv::model::wire::format::PRIVATE_KEY_V7.to_string(),
+        subject_handle: ALICE_MEMBER_HANDLE.to_string(),
+        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+        alg: PrivateKeyAlgorithm::Argon2id {
+            ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
+            aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
+        created_at: "2024-01-15T00:00:00Z".to_string(),
+        expires_at: "2025-01-15T00:00:00Z".to_string(),
+    };
+    let encrypted = PrivateKeyEncData {
+        nonce: "bm9uY2U".to_string(),
+        ct: "Y3Q".to_string(),
+    };
+
+    let key = PrivateKey::new(protected.clone(), encrypted.clone());
+
+    assert_eq!(key.protected, protected);
+    assert_eq!(key.encrypted, encrypted);
 }

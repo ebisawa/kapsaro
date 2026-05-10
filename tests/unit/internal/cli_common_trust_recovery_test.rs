@@ -47,7 +47,7 @@ fn test_recover_invalid_trust_store_with_reader_deletes_file_on_confirmation() {
 }
 
 #[test]
-fn test_recover_invalid_trust_store_with_reader_noninteractive_fails_without_deleting() {
+fn test_recover_invalid_trust_store_with_reader_keeps_file_when_declined() {
     let temp_dir = TempDir::new().unwrap();
     let options = build_options(temp_dir.path());
     let trust_path = get_trust_store_file_path(temp_dir.path(), "alice@example.com");
@@ -58,11 +58,16 @@ fn test_recover_invalid_trust_store_with_reader_noninteractive_fails_without_del
         &options,
         "alice@example.com",
         build_reset_required_error(),
-        Cursor::new(Vec::<u8>::new()),
-        false,
+        Cursor::new(b"no\n".to_vec()),
+        true,
     )
     .unwrap_err();
 
-    assert!(error.to_string().contains("non-interactive"));
     assert!(trust_path.exists());
+    assert!(
+        error
+            .to_string()
+            .contains("Local trust store reset was declined"),
+        "unexpected error: {error}"
+    );
 }

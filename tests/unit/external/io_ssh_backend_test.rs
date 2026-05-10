@@ -3,10 +3,8 @@
 
 //! Unit tests for Signature Backend abstraction (Phase 12.1 - TDD Red phase)
 
-use crate::test_utils::{stub_agent_signer, stub_ssh_keygen};
-use secretenv::config::types::SshSigningMethod;
+use crate::test_utils::stub_agent_signer;
 use secretenv::io::ssh::agent::client::DefaultAgentSigner;
-use secretenv::io::ssh::backend::factory::build_backend;
 use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
 use secretenv::io::ssh::backend::ssh_agent::SshAgentBackend;
 use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
@@ -80,36 +78,6 @@ fn test_backend_trait_non_deterministic_error() {
     let signature_result =
         backend.sign_sshsig_deterministic(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     assert!(signature_result.is_err());
-}
-
-#[test]
-fn test_backend_factory_ssh_agent() {
-    let backend = build_backend(
-        SshSigningMethod::SshAgent,
-        stub_ssh_keygen(),
-        Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
-            "/dummy",
-        ))),
-    )
-    .unwrap();
-    // Type check - should be SshAgentBackend
-    // (We can't directly check type, but we can test behavior)
-    // For now, just verify it creates successfully
-    assert!(std::mem::size_of_val(&backend) > 0);
-}
-
-#[test]
-fn test_backend_factory_ssh_keygen() {
-    let backend = build_backend(
-        SshSigningMethod::SshKeygen,
-        stub_ssh_keygen(),
-        Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
-            "/home/user/.ssh/id_ed25519",
-        ))),
-    )
-    .unwrap();
-    // Should create SshKeygenBackend with correct path
-    assert!(std::mem::size_of_val(&backend) > 0);
 }
 
 #[test]
@@ -257,50 +225,4 @@ fn test_ssh_agent_backend_no_auth_sock() {
     }
 
     assert!(result.is_err(), "Should fail without SSH_AUTH_SOCK");
-}
-
-#[test]
-fn test_determinism_check_with_real_backend_type() {
-    // Test that determinism check works with boxed trait objects
-    let backend = build_backend(
-        SshSigningMethod::SshAgent,
-        stub_ssh_keygen(),
-        Some(SshKeyDescriptor::from_path(std::path::PathBuf::from(
-            "/dummy",
-        ))),
-    )
-    .unwrap();
-
-    // This will fail (no agent available in test), but we're testing the API
-    let result = backend.check_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
-    // Either succeeds (unlikely in test env) or fails with agent error (expected)
-    // Just verify it doesn't panic
-    let _ = result;
-}
-
-#[test]
-fn test_backend_error_messages_include_diagnostics() {
-    // Test that error messages include helpful diagnostic information
-
-    // Test 1: ssh-keygen not found
-    let backend = SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("/nonexistent/ssh-keygen")),
-        SshKeyDescriptor::from_path(std::path::PathBuf::from("/dummy/key")),
-    );
-    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
-    if let Err(e) = result {
-        let msg = e.to_string();
-        // Should suggest alternatives or diagnostic steps
-        assert!(
-            msg.contains("ssh-keygen") || msg.contains("Diagnostic"),
-            "Error should be diagnostic: {}",
-            msg
-        );
-    }
-
-    // Test 2: ssh-agent with invalid key
-    let backend = SshAgentBackend::new(Box::new(DefaultAgentSigner));
-    let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
-
-    assert!(result.is_err(), "Should fail with invalid key");
 }

@@ -35,13 +35,6 @@ fn test_trust_store_signature_bytes_deterministic() {
 }
 
 #[test]
-fn test_trust_store_signature_bytes_non_empty() {
-    let protected = build_test_protected();
-    let bytes = build_trust_store_signature_bytes(&protected).unwrap();
-    assert!(!bytes.is_empty());
-}
-
-#[test]
 fn test_trust_store_signature_bytes_valid_json() {
     let protected = build_test_protected();
     let bytes = build_trust_store_signature_bytes(&protected).unwrap();

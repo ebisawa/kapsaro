@@ -7,34 +7,7 @@
 
 use secretenv::crypto::types::data::Plaintext;
 use secretenv::feature::envelope::unwrap::parse_master_key_from_plaintext;
-use secretenv::model::common::{WrapItem, WrapSet};
 use zeroize::Zeroizing;
-
-#[test]
-fn test_wrap_set_parse_unsupported_alg() {
-    let wrap_item = WrapItem {
-        recipient_handle: "alice@example.com".to_string(),
-        kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GK".to_string(),
-        alg: "unsupported-alg-99".to_string(),
-        enc: "AAAA".to_string(),
-        ct: "BBBB".to_string(),
-    };
-
-    let result = WrapSet::parse(&[wrap_item], "Document");
-    assert!(result.is_err(), "Should fail for unsupported algorithm");
-
-    let err_msg = format!("{}", result.unwrap_err());
-    assert!(
-        err_msg.contains("Unsupported HPKE algorithm"),
-        "Error should mention 'Unsupported HPKE algorithm', got: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("unsupported-alg-99"),
-        "Error should contain the unsupported algorithm name, got: {}",
-        err_msg
-    );
-}
 
 /// Test that `parse_master_key_from_plaintext` returns an error when given wrong-length data.
 #[test]

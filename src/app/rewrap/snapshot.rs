@@ -51,7 +51,3 @@ fn ensure_post_promotion_members_match(expected: &[PublicKey], actual: &[PublicK
         "Rewrap post-promotion active members changed and must be reviewed again.",
     )
 }
-
-#[cfg(test)]
-#[path = "../../../tests/unit/internal/app_rewrap_snapshot_test.rs"]
-mod tests;

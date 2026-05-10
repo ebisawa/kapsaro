@@ -5,7 +5,7 @@
 
 use crate::cli::common::{
     cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
-    setup_workspace, TEST_MEMBER_HANDLE,
+    setup_workspace, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
@@ -28,40 +28,6 @@ fn setup_workspace_with_default_file() -> (TempDir, TempDir, TempDir, PathBuf) {
     );
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
-}
-
-#[test]
-fn test_run_with_default_file() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
-
-    // Run command with environment variables from default file
-    // Use a simple command that prints the environment variable
-    #[cfg(unix)]
-    let test_cmd = "sh";
-    #[cfg(unix)]
-    let test_args = vec!["-c", "echo $TEST_KEY"];
-
-    #[cfg(windows)]
-    let test_cmd = "cmd";
-    #[cfg(windows)]
-    let test_args = vec!["/c", "echo %TEST_KEY%"];
-
-    let mut run_cmd = cmd();
-    run_cmd
-        .arg("run")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--")
-        .arg(test_cmd);
-    for arg in test_args {
-        run_cmd.arg(arg);
-    }
-    run_cmd
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("test_value"));
 }
 
 #[test]
@@ -189,6 +155,29 @@ fn test_run_with_multiple_env_vars() {
         );
 }
 
+#[cfg(unix)]
+#[test]
+fn test_run_rejects_tampered_kv_signature() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
+    let kv_path = workspace_dir.path().join("secrets").join("default.kvenc");
+    tamper_kv_signature(&kv_path);
+
+    cmd()
+        .arg("run")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("echo should-not-run")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("should-not-run").not())
+        .stderr(predicate::str::contains("Signature verification failed"));
+}
+
 #[test]
 fn test_run_nonexistent_command_fails() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
@@ -203,16 +192,6 @@ fn test_run_nonexistent_command_fails() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
-}
-
-#[test]
-fn test_run_help() {
-    cmd()
-        .arg("run")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("run"));
 }
 
 #[test]

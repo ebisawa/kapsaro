@@ -72,6 +72,48 @@ fn test_inspect_file_enc_shows_metadata() {
 }
 
 #[test]
+fn test_inspect_file_enc_json_output_has_sections() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let input_file = home_dir.path().join("json_secret.txt");
+    fs::write(&input_file, b"json inspect data").unwrap();
+    let encrypted_file = home_dir.path().join("json_secret.txt.encrypted");
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
+
+    let assert = cmd()
+        .arg("inspect")
+        .arg(&encrypted_file)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--json")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("inspect --json should output valid JSON");
+
+    assert_eq!(parsed["title"], "File-Enc v5 Metadata");
+    let sections = parsed["sections"]
+        .as_array()
+        .expect("sections should be an array");
+    assert!(sections
+        .iter()
+        .any(|section| section["title"] == "Wrap Data"));
+    assert!(sections
+        .iter()
+        .any(|section| section["title"] == "Signature Verification"));
+}
+
+#[test]
 fn test_inspect_kv_enc_shows_metadata() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 

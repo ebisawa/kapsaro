@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
-use secretenv::feature::key::portable_export::export_private_key_portable;
+use secretenv::feature::key::portable_export::{
+    build_password_strength_warning, export_private_key_portable,
+};
 use secretenv::feature::key::protection::password_encryption::decrypt_private_key_with_password;
-use secretenv::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
+use secretenv::model::private_key::{PrivateKey, PrivateKeyPlaintext};
 use secretenv::support::codec::base64_public::decode_base64url_nopad;
 use secretenv::support::secret::SecretString;
 
@@ -119,48 +121,6 @@ fn test_export_preserves_metadata() {
 }
 
 #[test]
-fn test_export_uses_argon2id_kdf() {
-    let plaintext = build_test_plaintext();
-
-    let exported = export_private_key_portable(
-        &plaintext,
-        "alice@example.com",
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "2026-01-01T00:00:00Z",
-        "2027-01-01T00:00:00Z",
-        &secret("strong-password-42"),
-        false,
-    )
-    .expect("export should succeed");
-
-    let json_bytes = decode_base64url_nopad(exported.as_str(), "portable export")
-        .expect("should be valid base64url");
-    let private_key: PrivateKey =
-        serde_json::from_slice(&json_bytes).expect("should be valid JSON");
-
-    // Verify kdf tag serializes to argon2id-m64t3p4-hkdf-sha256
-    let json = serde_json::to_value(&private_key.protected.alg).unwrap();
-    assert_eq!(json["kdf"], "argon2id-m64t3p4-hkdf-sha256");
-    assert!(
-        json.get("m").is_none(),
-        "argon2 memory cost must not be serialized"
-    );
-    assert!(
-        json.get("t").is_none(),
-        "argon2 time cost must not be serialized"
-    );
-    assert!(
-        json.get("p").is_none(),
-        "argon2 parallelism must not be serialized"
-    );
-
-    match &private_key.protected.alg {
-        PrivateKeyAlgorithm::Argon2id { .. } => {}
-        _ => panic!("expected Argon2id algorithm variant"),
-    }
-}
-
-#[test]
 fn test_export_password_too_short_fails() {
     let plaintext = build_test_plaintext();
 
@@ -215,4 +175,46 @@ fn test_export_password_8_chars_succeeds() {
     );
 
     assert!(result.is_ok(), "8-char password should succeed");
+}
+
+#[test]
+fn test_export_password_7_utf8_bytes_fails() {
+    let plaintext = build_test_plaintext();
+
+    let result = export_private_key_portable(
+        &plaintext,
+        "alice@example.com",
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        "2026-01-01T00:00:00Z",
+        "2027-01-01T00:00:00Z",
+        &secret("あいa"),
+        false,
+    );
+
+    assert!(result.is_err(), "7 UTF-8 bytes should fail");
+}
+
+#[test]
+fn test_export_password_9_utf8_bytes_succeeds() {
+    let plaintext = build_test_plaintext();
+
+    let result = export_private_key_portable(
+        &plaintext,
+        "alice@example.com",
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        "2026-01-01T00:00:00Z",
+        "2027-01-01T00:00:00Z",
+        &secret("あいう"),
+        false,
+    );
+
+    assert!(result.is_ok(), "9 UTF-8 bytes should succeed");
+}
+
+#[test]
+fn test_password_strength_warning_uses_utf8_byte_length() {
+    assert!(build_password_strength_warning("1234567").is_none());
+    assert!(build_password_strength_warning("12345678").is_some());
+    assert!(build_password_strength_warning("あいう").is_some());
+    assert!(build_password_strength_warning("12345678901234567890").is_none());
 }

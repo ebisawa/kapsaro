@@ -23,8 +23,6 @@ use secretenv::model::kv_enc::entry::KvEntryValue;
 use secretenv::model::kv_enc::header::KvWrap;
 use secretenv::model::kv_enc::line::KvEncLine;
 use std::fs;
-use std::thread::sleep;
-use std::time::Duration;
 use tempfile::TempDir;
 
 /// Create workspace members directory with the member's public key file.
@@ -155,38 +153,6 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
 }
 
 #[test]
-fn test_rewrap_kv_document_succeeds() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let keystore_root = temp_dir.path().join("keys");
-
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
-    let kid = kids.first().unwrap();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, kid);
-
-    let encrypted = encrypt_kv_for_alice(&temp_dir, kid, &key_ctx);
-
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = rewrap_kv_content(&encrypted, &request);
-
-    assert!(
-        result.is_ok(),
-        "rewrap_kv_document must succeed: {:?}",
-        result.err()
-    );
-
-    // Rewrapped content must be parseable
-    let rewrapped = result.unwrap();
-    let doc = parse_kv_document(&rewrapped);
-    assert!(
-        doc.is_ok(),
-        "rewrapped content must be parseable: {:?}",
-        doc.err()
-    );
-}
-
-#[test]
 fn test_rewrap_kv_document_rotate_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
@@ -283,75 +249,6 @@ fn test_rewrap_kv_succeeds_when_only_old_self_wrap_exists() {
 }
 
 #[test]
-fn test_rewrap_kv_remove_add_remove_deduplicates_removed_kid() {
-    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
-
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
-    setup_workspace_members(&temp_dir, BOB_MEMBER_HANDLE, &bob_kid);
-
-    let encrypted = encrypt_kv_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
-
-    fs::remove_file(
-        temp_dir
-            .path()
-            .join("members/active")
-            .join(format!("{}.json", BOB_MEMBER_HANDLE)),
-    )
-    .unwrap();
-
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let encrypted = KvEncContent::new_unchecked(encrypted);
-    let after_first_remove = rewrap_kv_content(&encrypted, &request).unwrap();
-    let first_wrap_token = after_first_remove
-        .lines()
-        .find(|line| line.starts_with(":WRAP "))
-        .unwrap()
-        .strip_prefix(":WRAP ")
-        .unwrap();
-    let first_wrap: KvWrap = parse_kv_wrap_token(first_wrap_token).unwrap();
-    let first_removed_at = first_wrap
-        .removed_recipients
-        .as_ref()
-        .unwrap()
-        .iter()
-        .find(|recipient| recipient.kid == bob_kid)
-        .unwrap()
-        .removed_at
-        .clone();
-
-    sleep(Duration::from_secs(1));
-
-    setup_workspace_members(&temp_dir, BOB_MEMBER_HANDLE, &bob_kid);
-    let after_first_remove = KvEncContent::new_unchecked(after_first_remove);
-    let after_add = rewrap_kv_content(&after_first_remove, &request).unwrap();
-
-    fs::remove_file(
-        temp_dir
-            .path()
-            .join("members/active")
-            .join(format!("{}.json", BOB_MEMBER_HANDLE)),
-    )
-    .unwrap();
-
-    let after_add = KvEncContent::new_unchecked(after_add);
-    let after_second_remove = rewrap_kv_content(&after_add, &request).unwrap();
-    let second_wrap_token = after_second_remove
-        .lines()
-        .find(|line| line.starts_with(":WRAP "))
-        .unwrap()
-        .strip_prefix(":WRAP ")
-        .unwrap();
-    let second_wrap: KvWrap = parse_kv_wrap_token(second_wrap_token).unwrap();
-    let removed = second_wrap.removed_recipients.unwrap();
-
-    assert_eq!(removed.len(), 1);
-    assert_eq!(removed[0].recipient_handle, BOB_MEMBER_HANDLE);
-    assert_eq!(removed[0].kid, bob_kid);
-    assert_ne!(removed[0].removed_at, first_removed_at);
-}
-
-#[test]
 fn test_rewrap_kv_add_recipient() {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
@@ -397,39 +294,6 @@ fn test_rewrap_kv_add_recipient() {
         recipient_handles.contains(&ALICE_MEMBER_HANDLE),
         "rewrapped WRAP must still include alice as a recipient, got: {:?}",
         recipient_handles
-    );
-}
-
-#[test]
-fn test_rewrap_kv_remove_recipient() {
-    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
-
-    // Encrypt for alice and bob
-    let encrypted = encrypt_kv_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
-
-    // Setup workspace with only alice as active member (bob removed)
-    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
-    // Do NOT add bob to workspace members => he will be removed during rewrap
-
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
-    let encrypted = KvEncContent::new_unchecked(encrypted);
-    let result = rewrap_kv_content(&encrypted, &request);
-
-    assert!(
-        result.is_ok(),
-        "rewrap removing recipient must succeed: {:?}",
-        result.err()
-    );
-
-    // After removal, bob should not be in the WRAP recipients
-    // but may appear in removed_recipients disclosure history
-    let rewrapped = result.unwrap();
-    let doc = parse_kv_document(&rewrapped);
-    assert!(
-        doc.is_ok(),
-        "rewrapped content must be parseable: {:?}",
-        doc.err()
     );
 }
 

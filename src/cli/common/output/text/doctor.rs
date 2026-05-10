@@ -18,7 +18,6 @@ pub(crate) fn format_doctor_report(report: &DoctorReport, verbose: bool) -> Stri
 }
 
 fn push_summary(out: &mut String, report: &DoctorReport) {
-    out.push_str("SecretEnv doctor\n");
     out.push_str(&format!("Status: {}\n", report.overall_status().as_str()));
     out.push_str(&format!("Workspace: {}\n", report.workspace_display()));
     out.push_str(&format!(

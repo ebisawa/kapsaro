@@ -100,6 +100,7 @@ serial_test = "3"
 
 # Environment variable manipulation for tests
 temp-env = "0.3"
+http = "1"
 
 [[test]]
 name = "cli_integration"

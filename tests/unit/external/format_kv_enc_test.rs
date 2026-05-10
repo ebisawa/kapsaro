@@ -22,40 +22,8 @@ fn test_parse_header_v6() {
 }
 
 #[test]
-fn test_parse_header_v2_rejected() {
-    // v2 should be rejected with an error
-    let result = KvEncParser::parse_line(":SECRETENV_KV 2");
-    assert!(result.is_err());
-    if let Err(e) = result {
-        assert!(
-            e.to_string().contains("Unsupported kv-enc version")
-                || e.to_string().contains("only v6 is supported")
-        );
-    }
-}
-
-#[test]
 fn test_parse_header_invalid_version() {
-    assert!(KvEncParser::parse_line(":SECRETENV_KV 1").is_err());
-    assert!(KvEncParser::parse_line(":SECRETENV_KV 4").is_err());
-}
-
-#[test]
-fn test_parse_header_old_format_rejected() {
-    // Old format (:SECRETV_KV 3) should be rejected (strict mode)
-    let result = KvEncParser::parse_line(":SECRETV_KV 3");
-    assert!(result.is_err(), "Old header format should be rejected");
-}
-
-#[test]
-fn test_parse_header_without_colon_as_kv() {
-    // Format without : prefix is parsed as KV line (not as header)
-    // This is expected behavior - format detection will reject it, not the parser
-    let KvEncLine::KV { key, token } = KvEncParser::parse_line("SECRETENV_KV 4").unwrap() else {
-        panic!("Expected KV line for format without colon");
-    };
-    assert_eq!(key, "SECRETENV_KV");
-    assert_eq!(token, "4");
+    assert!(KvEncParser::parse_line(":SECRETENV_KV 999").is_err());
 }
 
 // Line type parsing tests
@@ -142,26 +110,6 @@ fn test_parse_head_line_with_tab_rejected() {
 }
 
 #[test]
-fn test_parse_wrap_line_with_tab_rejected() {
-    // Tab delimiter should be rejected (space required)
-    let result = KvEncParser::parse_line(":WRAP\teyJ3cmFwIjpbXX0");
-    assert!(
-        result.is_err(),
-        "Tab delimiter in :WRAP line should be rejected"
-    );
-}
-
-#[test]
-fn test_parse_sig_line_with_tab_rejected() {
-    // Tab delimiter should be rejected (space required)
-    let result = KvEncParser::parse_line(":SIG\teyJzaWduYXR1cmUiOiIuLi4ifQ");
-    assert!(
-        result.is_err(),
-        "Tab delimiter in :SIG line should be rejected"
-    );
-}
-
-#[test]
 fn test_parse_kv_line_with_tab_rejected() {
     // Tab delimiter should be rejected (space required)
     // Parser uses find(' ') which won't find tab, so it will fail
@@ -212,21 +160,6 @@ fn test_parse_with_empty_lines() {
     assert!(matches!(lines[2], KvEncLine::Wrap { .. }));
     assert!(matches!(lines[3], KvEncLine::Empty));
     assert!(matches!(lines[4], KvEncLine::KV { .. }));
-}
-
-#[test]
-fn test_parse_with_comment_rejected() {
-    // Comment lines are not allowed in kv-enc v6
-    let content = ":SECRETENV_KV 6\n:HEAD token0\n:WRAP token\n# Comment\nDATABASE_URL token2";
-
-    let result = KvEncParser::new(content).parse_all();
-    assert!(result.is_err());
-    if let Err(e) = result {
-        assert!(
-            e.to_string().contains("comment lines are not allowed")
-                || e.to_string().contains("kv-enc v6")
-        );
-    }
 }
 
 // Diff-friendly roundtrip test

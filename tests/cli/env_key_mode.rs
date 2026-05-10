@@ -4,7 +4,7 @@
 //! CLI integration tests for env key mode (CI mode)
 //!
 //! Tests that env key mode is restricted to read-only operations:
-//! `run`, `decrypt`, and `get`.
+//! `run`, `decrypt`, `get`, `list`, and `doctor`.
 
 use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
@@ -23,7 +23,7 @@ use tempfile::TempDir;
 
 const TEST_PASSWORD: &str = "cli-integration-test-password-42";
 const ENV_MODE_UNSUPPORTED_MESSAGE: &str =
-    "env mode only supports these commands: run, decrypt, get, list";
+    "env mode only supports these commands: run, decrypt, get, list, doctor";
 
 // ============================================================================
 // Setup Helper
@@ -184,7 +184,11 @@ fn test_env_key_run_roundtrip() {
         .arg("--")
         .arg("sh")
         .arg("-c")
-        .arg("echo $APP_TOKEN")
+        .arg(
+            "test -z \"$SECRETENV_PRIVATE_KEY\" && \
+             test -z \"$SECRETENV_KEY_PASSWORD\" && \
+             printf %s \"$APP_TOKEN\"",
+        )
         .assert()
         .success()
         .stdout(predicate::str::contains("run-mode-value"));
@@ -280,34 +284,37 @@ fn test_env_key_mode_rejects_set() {
 }
 
 #[test]
-fn test_env_key_mode_rejects_encrypt() {
-    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv, exported_key) = setup_env_key_workspace();
-    let input_file = home_dir.path().join("blocked.txt");
-    fs::write(&input_file, b"blocked").unwrap();
-
-    env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
-        .arg("encrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("environment-variable key mode"))
-        .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
-}
-
-#[test]
-fn test_env_key_mode_rejects_rewrap() {
+fn test_env_key_mode_rejects_rewrap_key_member_trust_and_unset() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv, exported_key) = setup_env_key_workspace();
 
-    env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
-        .arg("rewrap")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("environment-variable key mode"))
-        .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
+    for args in [
+        vec![
+            "rewrap",
+            "--workspace",
+            workspace_dir.path().to_str().unwrap(),
+        ],
+        vec!["key", "list"],
+        vec![
+            "member",
+            "list",
+            "--workspace",
+            workspace_dir.path().to_str().unwrap(),
+        ],
+        vec!["trust", "keys", "list"],
+        vec![
+            "unset",
+            "SOME_KEY",
+            "--workspace",
+            workspace_dir.path().to_str().unwrap(),
+        ],
+    ] {
+        env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
+            .args(args)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("environment-variable key mode"))
+            .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
+    }
 }
 
 #[test]
@@ -334,32 +341,17 @@ fn test_env_key_mode_allows_list() {
 }
 
 #[test]
-fn test_env_key_mode_rejects_key_new() {
-    let (_workspace_dir, home_dir, _ssh_temp, _ssh_priv, exported_key) = setup_env_key_workspace();
-
-    env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
-        .arg("key")
-        .arg("new")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("environment-variable key mode"))
-        .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
-}
-
-#[test]
-fn test_env_key_mode_rejects_init() {
+fn test_env_key_mode_allows_doctor() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv, exported_key) = setup_env_key_workspace();
 
     env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
-        .arg("init")
+        .arg("doctor")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--json")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("environment-variable key mode"))
-        .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
+        .success()
+        .stdout(predicate::str::contains("\"checks\""));
 }

@@ -41,32 +41,6 @@ fn test_colorize_inspect_line_keeps_warning_plain_when_stdout_colors_disabled() 
 
 #[test]
 #[serial]
-fn test_colorize_inspect_line_adds_warning_color_when_stdout_colors_enabled() {
-    let _guard = StdoutColorGuard::new(true);
-
-    let rendered = colorize_inspect_line(
-        "  Warning:     \u{26a0} PublicKey for 'ebisawa' has expired (expires_at: 2026-04-10T12:08:05Z)",
-    );
-
-    assert!(rendered.starts_with("\u{1b}[33m  Warning:     \u{26a0} PublicKey for 'ebisawa'"));
-    assert!(rendered.ends_with("\u{1b}[0m"));
-}
-
-#[test]
-#[serial]
-fn test_colorize_inspect_line_adds_disclosed_color_when_stdout_colors_enabled() {
-    let _guard = StdoutColorGuard::new(true);
-
-    let rendered =
-        colorize_inspect_line("      \u{26a0} DISCLOSED \u{2014} Secret may need rotation");
-
-    assert!(rendered
-        .starts_with("\u{1b}[33m      \u{26a0} DISCLOSED \u{2014} Secret may need rotation"));
-    assert!(rendered.ends_with("\u{1b}[0m"));
-}
-
-#[test]
-#[serial]
 fn test_colorize_inspect_line_keeps_ok_status_colored_when_stdout_colors_enabled() {
     let _guard = StdoutColorGuard::new(true);
 

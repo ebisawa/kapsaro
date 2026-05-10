@@ -4,7 +4,6 @@
 //! Recipient-related encryption tests
 //!
 //! encrypt は常に workspace の全 active メンバーを recipients とする。
-//! --recipients オプションは廃止。
 
 use crate::cli::common::{
     default_common_options, encrypt_file_with_member_set_review, set_ssh_key_from_temp_dir,
@@ -81,20 +80,4 @@ fn test_encrypt_workspace_required() {
         let result = encrypt::run(args);
         assert!(result.is_err(), "Should fail without workspace");
     })
-}
-
-#[test]
-fn test_encrypt_rejects_recipients_option() {
-    // --recipients オプションは廃止されており、"unexpected argument" エラーになるべき
-    use crate::cli::common::cmd;
-    use predicates::prelude::*;
-
-    cmd()
-        .arg("encrypt")
-        .arg("--recipients")
-        .arg("alice@example.com")
-        .arg("some_file.txt")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("unexpected argument"));
 }

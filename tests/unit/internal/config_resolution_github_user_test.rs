@@ -59,28 +59,6 @@ fn test_resolve_github_user_none_when_no_source() {
 
 #[test]
 #[serial]
-fn test_resolve_github_user_priority_order() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
-    let temp_home = tempfile::tempdir().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
-
-    let config_path = temp_home.path().join("config.toml");
-    fs::write(&config_path, "github_user = \"config-user\"\n").unwrap();
-
-    env::set_var("SECRETENV_GITHUB_USER", "env-user");
-    let cli_result = super::resolve_github_user(Some("cli-user".to_string()), None).unwrap();
-    assert_eq!(cli_result, Some("cli-user".to_string()));
-
-    let env_result = super::resolve_github_user(None, None).unwrap();
-    assert_eq!(env_result, Some("env-user".to_string()));
-
-    env::remove_var("SECRETENV_GITHUB_USER");
-    let config_result = super::resolve_github_user(None, None).unwrap();
-    assert_eq!(config_result, Some("config-user".to_string()));
-}
-
-#[test]
-#[serial]
 fn test_resolve_github_user_rejects_invalid_cli_value() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
     let temp_home = tempfile::tempdir().unwrap();

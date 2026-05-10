@@ -5,12 +5,44 @@
 
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use secretenv::feature::trust::recipient_sets::compute_recipient_set_hash;
 use secretenv::feature::trust::signature::sign_trust_store;
 use secretenv::feature::trust::verification::verify_trust_store;
 use secretenv::format::schema::validator::load_embedded_trust_validator;
-use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use secretenv::model::trust_store::{
+    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
+};
 use secretenv::model::wire::format::LOCAL_TRUST_V5;
 use std::collections::BTreeMap;
+
+const BOB_KID: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";
+const CAROL_KID: &str = "KCD3AAAA1111BBBB2222CCCC3333DDDD";
+
+fn known_key(kid: &str, subject_handle: &str) -> KnownKey {
+    KnownKey {
+        kid: kid.to_string(),
+        subject_handle: subject_handle.to_string(),
+        approved_at: "2026-03-29T12:40:00Z".to_string(),
+        approved_via: KnownKeyApprovalVia::ManualReview,
+        evidence: None,
+        extra: BTreeMap::new(),
+    }
+}
+
+fn recipient_set_record(sid: &str, kids: &[&str]) -> RecipientSetRecord {
+    let recipient_kids = kids
+        .iter()
+        .map(|kid| (*kid).to_string())
+        .collect::<Vec<_>>();
+    RecipientSetRecord {
+        sid: sid.to_string(),
+        recipient_set_hash: compute_recipient_set_hash(&recipient_kids).unwrap(),
+        recipient_kids,
+        approved_at: "2026-03-29T12:40:00Z".to_string(),
+        approved_via: RecipientSetApprovalVia::ManualReview,
+        recipient_handle_hints: None,
+    }
+}
 
 #[test]
 fn test_trust_store_schema_valid_document() {
@@ -322,4 +354,53 @@ fn test_verify_trust_store_rejects_semantically_invalid_timestamp() {
     let result = verify_trust_store(&doc, &home.path().join("keys"));
 
     assert!(result.is_err());
+}
+
+#[test]
+fn test_verify_trust_store_rejects_duplicate_known_key_kid() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let protected = TrustStoreProtected {
+        format: LOCAL_TRUST_V5.to_string(),
+        owner_handle: ALICE_MEMBER_HANDLE.to_string(),
+        created_at: "2026-03-29T12:34:56Z".to_string(),
+        updated_at: "2026-03-29T12:34:56Z".to_string(),
+        known_keys: vec![
+            known_key(BOB_KID, "bob@example.com"),
+            known_key(BOB_KID, "bob-alt@example.com"),
+        ],
+        recipient_sets: Vec::new(),
+    };
+    let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+
+    let result = verify_trust_store(&doc, &home.path().join("keys"));
+
+    assert!(
+        matches!(result, Err(secretenv::Error::Verify { rule, .. }) if rule == "E_TRUST_DUPLICATE_KID")
+    );
+}
+
+#[test]
+fn test_verify_trust_store_rejects_duplicate_recipient_set_sid() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let sid = "00000000-0000-0000-0000-000000000001";
+    let protected = TrustStoreProtected {
+        format: LOCAL_TRUST_V5.to_string(),
+        owner_handle: ALICE_MEMBER_HANDLE.to_string(),
+        created_at: "2026-03-29T12:34:56Z".to_string(),
+        updated_at: "2026-03-29T12:34:56Z".to_string(),
+        known_keys: Vec::new(),
+        recipient_sets: vec![
+            recipient_set_record(sid, &[BOB_KID]),
+            recipient_set_record(sid, &[CAROL_KID]),
+        ],
+    };
+    let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+
+    let result = verify_trust_store(&doc, &home.path().join("keys"));
+
+    assert!(
+        matches!(result, Err(secretenv::Error::Verify { rule, .. }) if rule == "E_RECIPIENT_SET_DUPLICATE_SID")
+    );
 }

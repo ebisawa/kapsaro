@@ -128,6 +128,30 @@ fn test_member_list_empty_workspace() {
 }
 
 #[test]
+fn test_member_list_json_empty_workspace_outputs_empty_arrays() {
+    let workspace_dir = TempDir::new().unwrap();
+    let home_dir = TempDir::new().unwrap();
+    fs::create_dir_all(workspace_dir.path().join("members").join("active")).unwrap();
+    fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
+
+    let assert = cmd()
+        .arg("member")
+        .arg("list")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--json")
+        .env("SECRETENV_HOME", home_dir.path())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let parsed: Value = serde_json::from_str(&stdout).expect("member list JSON should parse");
+
+    assert_eq!(parsed["active"].as_array().unwrap().len(), 0);
+    assert_eq!(parsed["incoming"].as_array().unwrap().len(), 0);
+}
+
+#[test]
 fn test_member_list_json_skips_invalid_member_file() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
     let incoming_dir = workspace_dir.path().join("members").join("incoming");

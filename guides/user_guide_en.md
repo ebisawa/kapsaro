@@ -285,14 +285,24 @@ secretenv set API_KEY "sk-your-api-key"
 secretenv import .env
 ```
 
-### Step 4: Commit to Git
+### Step 4: Verify the added secrets
+
+```bash
+secretenv list
+secretenv get DATABASE_URL
+secretenv run -- env | grep DATABASE_URL
+```
+
+At this point, confirm that the key name is listed, the value can be read, and the value can be injected into a child process as an environment variable. See [Chapter 8](#8-daily-usage-kv-store) for the full `list`, `get`, and `run` usage.
+
+### Step 5: Commit to Git
 
 ```bash
 git add .secretenv/
 git commit -m "Initialize secretenv workspace"
 ```
 
-### Step 5: Have team members join
+### Step 6: Have team members join
 
 Once the Workspace is ready, direct other members to the steps in [Chapter 7](#7-joining-as-a-new-member).
 
@@ -529,7 +539,7 @@ Information displayed:
 
 ## 10. Workspace Health Checks
 
-Run `secretenv doctor` when preparing a workspace for onboarding, CI/CD setup, release work, or troubleshooting trust and recipient warnings.
+`secretenv doctor` is a read-only command for checking whether the current workspace and local state are ready to use safely. Start with the default output for the overall status, then use `--verbose` when you need lower-level reasons.
 
 ```bash
 secretenv doctor
@@ -537,7 +547,16 @@ secretenv doctor --verbose
 secretenv doctor --workspace .secretenv --home ~/.config/secretenv
 ```
 
-The command performs read-only checks for:
+Run it before or after work such as:
+
+- Reviewing a new member join request
+- Running `rewrap` or completing key rotation
+- Configuring `SECRETENV_PRIVATE_KEY` for CI/CD
+- Release preparation or periodic workspace audits
+- Investigating trust, recipient, signature, key-expiry, or GitHub verification warnings
+- Moving to another workstation, importing keys, or recovering local state
+
+`doctor` checks:
 
 - Workspace structure and Git binding
 - Active and incoming member files, key expiry, duplicate `kid` values, and GitHub binding or verification state
@@ -548,7 +567,29 @@ The command performs read-only checks for:
 
 Artifact checks verify metadata, signatures, recipients, and disclosure history while secret payloads remain encrypted.
 
-The output is grouped into summary, next actions, findings, healthy areas, and details. Use `--verbose` to include check ids and lower-level reasons. The command exits with status 1 only when a FAIL finding exists. WARN and SKIP findings exit with status 0 so operators can review them without breaking local troubleshooting flows.
+Read the result from top to bottom.
+
+1. Summary
+   Check `Status`, the target workspace, the OK / WARN / FAIL / SKIP counts, and the number of checked artifacts. Use this section first to understand the overall state.
+2. Next actions
+   Shows the next work to perform when action is needed. When multiple findings recommend the same action, this section deduplicates it.
+3. Findings
+   Shows details for WARN, FAIL, and SKIP checks. `Target` is the affected item, `Reason` explains why it was reported, and `Next` shows the recommended follow-up.
+4. Healthy areas
+   Summarizes categories that did not report problems. You do not need to read every individual OK check.
+5. Details
+   Shows supplemental information such as the target workspace and check count. With `--verbose`, it also includes check ids and lower-level reasons.
+
+Interpret `Status` as follows.
+
+| Status | How to read it |
+|--------|----------------|
+| OK | Ready to use without follow-up action |
+| WARN | Operation can usually continue, but review, approval, rotation, or configuration confirmation is needed |
+| FAIL | Do not continue using the workspace as-is. Follow `Next` in `Findings`, then run `doctor` again |
+| SKIP | The check could not run because of missing setup, offline conditions, or unmet prerequisites. If the skipped check matters, satisfy the prerequisite and run it again |
+
+The command exits with status 1 only when a FAIL finding exists. WARN and SKIP findings exit with status 0 so local troubleshooting flows can continue while you review the details. In CI, use `--json` and inspect `status`, `next_actions`, and `checks` if the workflow needs its own policy for allowing WARN or SKIP results.
 
 `secretenv doctor` does not prompt for approval. If it recommends trusting a key, approving a recipient set, or running `rewrap`, run the command shown in the next-action line after reviewing the finding.
 
@@ -594,6 +635,22 @@ secretenv member verify --approve
 When incoming members exist, `rewrap` asks for interactive approval. Review the displayed key information and approve it only after deciding that the public key really belongs to that person. If there are no incoming members, `rewrap` usually runs non-interactively because it only needs to synchronize recipient data.
 
 Also note that `rewrap` is not supported when CI/CD uses environment variable-based key loading. Run `rewrap` on a developer machine.
+
+### Adding a Public Key File Directly
+
+Use `member add` when an administrator needs to add a public key file that was received outside the normal `join` PR flow. Before using the file, confirm whose key it is and which GitHub account or SSH fingerprint it is supposed to represent.
+
+```bash
+# Add the public key file to incoming
+secretenv member add bob.public.json
+
+# Send the added incoming member file for review
+git add .secretenv/members/incoming/bob@example.com.json
+git commit -m "Add bob to secretenv (incoming)"
+git push
+```
+
+`member add` only places the public key under `members/incoming/`. The new member still cannot read secrets at that point. After PR review, an existing member runs `rewrap` to promote the incoming key to active and add it as a recipient in encrypted files. Use `member verify --approve` afterward the same way you would for the normal member addition flow.
 
 ### Listing Members
 
@@ -730,6 +787,35 @@ secretenv key list
 Use `key list` when you want to check which key is currently active, whether old keys are still present, or whether an expiration date is approaching. It is a good first step before rotation or cleanup.
 
 The CLI may show kids with hyphens, but commands such as `key activate`, `key remove`, and `key export` accept both hyphenated and non-hyphenated input.
+
+### Key Backup and Workstation Migration
+
+Your local secretenv private keys are stored under `<SECRETENV_HOME>/keys/`. By default, that is `~/.config/secretenv/keys/`. When moving to a new workstation, restore this `keys/` directory from a protected backup to the same location on the new machine.
+
+The new machine must also be able to use the same SSH Ed25519 key that protected the secretenv private key on the old machine. If you use multiple SSH keys, specify the same key with the `-i` option or the `ssh_identity` configuration.
+
+On Unix-like systems, check the restored local directory and file permissions.
+
+```bash
+chmod 700 ~/.config/secretenv ~/.config/secretenv/keys
+find ~/.config/secretenv/keys -type d -exec chmod 700 {} \;
+find ~/.config/secretenv/keys -type f -exec chmod 600 {} \;
+```
+
+First verify that the restored local keys are visible.
+
+```bash
+secretenv key list
+```
+
+If you have already checked out an existing workspace, also confirm that you can read and inject a secret.
+
+```bash
+secretenv get DATABASE_URL
+secretenv run -- env | grep DATABASE_URL
+```
+
+If a workstation was lost, an SSH key may have leaked, or the backup storage may have been exposed, do not continue operating only from the restored backup. Follow the rotation procedure below to switch to a new key, and rotate actual secret values in their issuing systems when needed.
 
 ### Regular Rotation
 
@@ -1111,90 +1197,96 @@ This means your SSH key produced different signatures for the same input on two 
 
 ## 15. Command Reference
 
-### Common Options (Available for All Commands)
+### Common Option Groups
+
+Accepted options differ by command. These options are shared by multiple commands.
 
 | Option | Description |
 |--------|-------------|
-| `--home <path>` | Specify base directory (default: `~/.config/secretenv/`) |
+| `--home <path>` | Specify the local secretenv state directory (default: `~/.config/secretenv/`) |
 | `-w` / `--workspace <path>` | Specify Workspace Root |
-| `-i` / `--ssh-identity <path>` | Specify SSH key file path (also used for key selection with ssh-agent) |
-| `--ssh-agent` | Use SSH agent |
-| `--ssh-keygen` | Use ssh-keygen command |
-| `--json` | Output in JSON format |
-| `-q` / `--quiet` | Minimal output |
+| `-m` / `--member-handle <handle>` | Specify the member handle to use |
+| `-i` / `--ssh-identity <path>` | Specify SSH key file path. Also used for key selection with ssh-agent |
+| `--ssh-agent` | Use ssh-agent for SSH signing |
+| `--ssh-keygen` | Use the ssh-keygen command for SSH signing |
+| `--json` | Output JSON for commands that support it |
+| `-q` / `--quiet` | Suppress success and status messages for commands that support it |
 | `-v` / `--verbose` | Show command-specific verbose output |
 | `--debug` | Show internal debug trace logs |
+| `-n` / `--name <name>` | Select a KV store name (default: `default`) |
+| `-f` / `--force` | Skip confirmation for commands that support it |
 
 ### Initialization and Joining
 
 | Command | Description |
 |---------|-------------|
-| `secretenv init [--member-handle <id>]` | Bootstrap a new Workspace and register the first member in active |
-| `secretenv join [--member-handle <id>] [--force]` | Request to join an existing Workspace or stage a rotated key (added to incoming) |
+| `secretenv init [-m <handle>] [-w <path>] [--github-user <login>]` | Bootstrap a new Workspace and register the first member in active |
+| `secretenv join [-m <handle>] [-w <path>] [--github-user <login>] [--force]` | Request to join an existing Workspace or stage a rotated key in incoming |
 
 ### KV Operations
 
 | Command | Description |
 |---------|-------------|
-| `secretenv set [-n <name>] <KEY> <VALUE>` | Add or update an entry |
-| `secretenv set [-n <name>] <KEY> --stdin` | Read value from stdin and set it |
-| `secretenv get [-n <name>] <KEY>` | Retrieve and display a specific key's value |
-| `secretenv get [-n <name>] --all` | Retrieve and display all entries |
+| `secretenv set [-n <name>] [-m <handle>] <KEY> <VALUE>` | Add or update an entry |
+| `secretenv set [-n <name>] [-m <handle>] <KEY> --stdin` | Read value from stdin and set it |
+| `secretenv get [-n <name>] [-m <handle>] <KEY>` | Retrieve and display a specific key's value |
+| `secretenv get [-n <name>] [-m <handle>] --all` | Retrieve and display all entries |
 | `secretenv get [-n <name>] [--all] --with-key` | Output in `KEY="VALUE"` format |
-| `secretenv unset [-n <name>] <KEY>` | Remove an entry |
-| `secretenv list [-n <name>]` | List key names (values not displayed) |
-| `secretenv import [-n <name>] <file>` | Bulk import a `.env` file |
-| `secretenv run [-n <name>] -- <command>` | Run a command with secrets injected as environment variables |
+| `secretenv unset [-n <name>] [-m <handle>] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
+| `secretenv list [-n <name>] [--json]` | List key names (values not displayed) |
+| `secretenv import [-n <name>] [-m <handle>] <file> [--json]` | Bulk import a `.env` file |
+| `secretenv run [-n <name>] [-m <handle>] -- <command> [args...]` | Run a command with secrets injected as environment variables |
 
 ### File Operations
 
 | Command | Description |
 |---------|-------------|
-| `secretenv encrypt <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
-| `secretenv encrypt --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
-| `secretenv decrypt <file> (--out <path> \| --stdout)` | Decrypt a file |
-| `secretenv decrypt --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
-| `secretenv inspect <file>` | Display encrypted file metadata (no decryption needed) |
+| `secretenv encrypt [-m <handle>] <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
+| `secretenv encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] <file> (--out <path> \| --stdout)` | Decrypt a file |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
+| `secretenv inspect <file> [--json] [--verbose]` | Display encrypted file metadata (no decryption needed) |
 
 ### Diagnostics
 
 | Command | Description |
 |---------|-------------|
-| `secretenv doctor [--workspace <path>] [--home <path>] [--member-handle <id>] [--verbose] [--debug]` | Run read-only health checks for workspace structure, members, local trust state, encrypted artifacts, and CI environment-key readiness |
+| `secretenv doctor [-w <path>] [--home <path>] [-m <handle>] [--json] [--verbose] [--debug]` | Run read-only health checks for workspace structure, members, local trust state, encrypted artifacts, and CI environment-key readiness |
 
 ### Member Management
 
 | Command | Description |
 |---------|-------------|
-| `secretenv member list` | List all members and each `kid` |
-| `secretenv member show <member_handle>` | Show details for a specific member |
-| `secretenv member verify [<member_handle>...]` | Verify active member public keys (with online verification) |
-| `secretenv member verify --approve [<member_handle>...]` | Review active member keys and save the approval result in the local trust store |
-| `secretenv member add <file>` | Add a member's public key file to incoming |
-| `secretenv member remove <member_handle>` | Remove a member from the Workspace |
-| `secretenv rewrap [--rotate-key] [--clear-disclosure-history] [--target <path>...]` | Activate pending members and update recipient information in all workspace encrypted files when `--target` is omitted, or only the specified target files when it is provided |
+| `secretenv member list [--json] [--verbose]` | List all members and each `kid` |
+| `secretenv member show <member_handle> [--json] [--verbose]` | Show details for a specific member |
+| `secretenv member verify [-m <handle>] [--approve] [<member_handle>...] [--json]` | Verify active member public keys and optionally save approvals in the local trust store |
+| `secretenv member add <file> [--force]` | Add a member's public key file to incoming |
+| `secretenv member remove <member_handle> [--force]` | Remove a member from the Workspace. Non-interactive use requires `--force` |
+| `secretenv rewrap [-m <handle>] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
+
+When `--target` is omitted, `rewrap` processes all encrypted files in the workspace. When `--target` is provided, only the specified files are processed.
 
 ### Local Trust Store
 
 | Command | Description |
 |---------|-------------|
-| `secretenv trust keys list` | List approved keys saved in the local trust store |
-| `secretenv trust keys remove <kid>` | Remove the approval record for a specific key from the local trust store |
-| `secretenv trust keys purge --older-than <duration> [-f, --force]` | Remove key approval records older than the given duration |
-| `secretenv trust recipients list` | List reviewed artifact member sets saved in the local trust store |
-| `secretenv trust recipients remove <sid>` | Remove the review record for a specific artifact member set |
-| `secretenv trust recipients purge --older-than <duration> [-f, --force]` | Remove artifact member set review records older than the given duration |
+| `secretenv trust keys list [-m <handle>] [--json] [--verbose]` | List approved keys saved in the local trust store |
+| `secretenv trust keys remove [-m <handle>] <kid>` | Remove the approval record for a specific key from the local trust store |
+| `secretenv trust keys purge [-m <handle>] --older-than <duration> [--force]` | Remove key approval records older than the given duration |
+| `secretenv trust recipients list [-m <handle>] [--json] [--verbose]` | List reviewed artifact member sets saved in the local trust store |
+| `secretenv trust recipients remove [-m <handle>] <sid>` | Remove the review record for a specific artifact member set |
+| `secretenv trust recipients purge [-m <handle>] --older-than <duration> [--force]` | Remove artifact member set review records older than the given duration |
 
 ### Key Management
 
 | Command | Description |
 |---------|-------------|
-| `secretenv key new [--expires-at <datetime>] [--valid-for <duration>]` | Generate a new key (automatically activated) |
-| `secretenv key list` | List keys |
-| `secretenv key activate <kid>` | Activate a specific key |
-| `secretenv key remove <kid>` | Remove a key |
-| `secretenv key export [<kid>] [--member-handle <id>] --out <path>` | Export public key |
-| `secretenv key export --private [<kid>] [--member-handle <id>] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
+| `secretenv key new [-m <handle>] [--github-user <login>] [--no-activate] [--expires-at <datetime> \| --valid-for <duration>]` | Generate a new key. The generated key becomes active by default |
+| `secretenv key list [-m <handle>] [--json] [--verbose]` | List keys |
+| `secretenv key activate [-m <handle>] [<kid>]` | Activate a specific key. If `kid` is omitted, the newest valid key is selected |
+| `secretenv key remove [-m <handle>] <kid> [--force]` | Remove a key. Removing the active key requires `--force` |
+| `secretenv key export [-m <handle>] [<kid>] --out <path>` | Export public key |
+| `secretenv key export --private [-m <handle>] [<kid>] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
 
 ### Configuration
 
@@ -1204,6 +1296,8 @@ This means your SSH key produced different signatures for the same input on two 
 | `secretenv config get <key>` | Get a configuration value |
 | `secretenv config list` | List all configuration values |
 | `secretenv config unset <key>` | Remove a configuration value |
+
+Configuration commands do not require a workspace. They operate on the global config file.
 
 Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `ssh_keygen_command`, `ssh_add_command`, `github_user`
 

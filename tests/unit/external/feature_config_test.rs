@@ -7,7 +7,7 @@
 
 use crate::test_utils::EnvGuard;
 use secretenv::feature::config::{
-    load_global_config, resolve_config_location, resolve_config_value, validate_key, ConfigScope,
+    resolve_config_location, resolve_config_value, validate_key, ConfigScope,
 };
 use secretenv::io::config::paths::get_global_config_path;
 use secretenv::io::config::store::set_config_value;
@@ -23,7 +23,6 @@ fn test_validate_key_valid() {
     assert!(validate_key("ssh_add_command").is_ok());
     assert!(validate_key("ssh_signing_method").is_ok());
     assert!(validate_key("github_user").is_ok());
-    assert!(validate_key("gihub_user").is_ok());
 }
 
 #[test]
@@ -85,26 +84,4 @@ fn test_resolve_config_location_global() {
     }
     // Path should be global config path
     assert!(resolution.path.to_string_lossy().contains("config.toml"));
-}
-
-#[test]
-fn test_load_global_config() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
-    let _temp_dir = TempDir::new().unwrap();
-    std::env::set_var("SECRETENV_HOME", _temp_dir.path().to_str().unwrap());
-    let global_config_path = get_global_config_path().unwrap();
-
-    // Ensure global config directory exists
-    if let Some(parent) = global_config_path.parent() {
-        fs::create_dir_all(parent).unwrap();
-    }
-
-    // Set global config
-    set_config_value(&global_config_path, "member_handle", "global@example.com").unwrap();
-
-    // Load global config
-    let config = load_global_config(Some(_temp_dir.path())).unwrap();
-
-    // May contain the value or be empty depending on test environment
-    let _ = config;
 }

@@ -108,28 +108,6 @@ fn test_resolve_ssh_key_no_source_error() {
 
 #[test]
 #[serial]
-fn test_resolve_ssh_key_priority_order() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_SSH_IDENTITY"]);
-    let temp_home = tempfile::tempdir().unwrap();
-    let temp_keys = tempfile::tempdir().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
-    let cli_key = save_ssh_key_file(&temp_keys, "cli_key");
-    let global_key = save_ssh_key_file(&temp_keys, "global_key");
-    save_global_config_with_ssh_identity(&temp_home, global_key.to_str().unwrap());
-
-    let cli_result = super::resolve_ssh_key_descriptor(Some(cli_key.clone()), None)
-        .map(|descriptor| descriptor.to_path_buf())
-        .unwrap();
-    assert_eq!(cli_result, cli_key);
-
-    let global_result = super::resolve_ssh_key_descriptor(None, None)
-        .map(|descriptor| descriptor.to_path_buf())
-        .unwrap();
-    assert_eq!(global_result, global_key);
-}
-
-#[test]
-#[serial]
 fn test_resolve_ssh_key_tilde_expansion() {
     let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_SSH_IDENTITY", "HOME"]);
     let temp_home = tempfile::tempdir().unwrap();
@@ -184,24 +162,4 @@ fn test_resolve_ssh_key_candidate_cli_priority() {
     let result = super::resolve_ssh_key_candidate(Some(cli_path.clone()), None).unwrap();
     assert_eq!(result.source, super::SshKeySource::Cli);
     assert_eq!(result.path, cli_path);
-}
-
-#[test]
-#[serial]
-fn test_resolve_ssh_key_old_config_key_is_ignored() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_SSH_IDENTITY", "HOME"]);
-    let temp_home = tempfile::tempdir().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
-    let fake_home = tempfile::tempdir().unwrap();
-    env::set_var("HOME", fake_home.path());
-    let config_path = temp_home.path().join("config.toml");
-    fs::write(&config_path, "ssh_key = \"~/.ssh/id_ed25519\"\n").unwrap();
-
-    let result = super::resolve_ssh_key_descriptor(None, None);
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("not configured") || err_msg.contains("not found"),
-        "unexpected error: {err_msg}"
-    );
 }

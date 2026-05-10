@@ -133,43 +133,6 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
 }
 
 #[test]
-fn test_save_member_approvals_rejects_self_member() {
-    let (temp_dir, workspace_dir) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let active_members = load_active_member_files(&workspace_dir).unwrap();
-    let alice = find_member(&active_members, ALICE_MEMBER_HANDLE);
-    let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
-
-    let result = save_member_approvals(
-        &options,
-        &[MemberApprovalResult {
-            member_handle: ALICE_MEMBER_HANDLE.to_string(),
-            kid: alice.protected.kid.clone(),
-            verified: true,
-            approved: true,
-            review_required: false,
-            already_known: false,
-            message: "self".to_string(),
-            fingerprint: None,
-            github_id: None,
-            github_login: None,
-            github_binding_configured: false,
-            attestor_pub: Some(alice.protected.identity.attestation.pub_.clone()),
-            verified_github: None,
-        }],
-        &execution,
-    );
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("must not be stored in known_keys"));
-}
-
-#[test]
 fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);

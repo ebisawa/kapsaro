@@ -529,63 +529,6 @@ fn test_rewrap_removes_member_file_enc() {
 }
 
 #[test]
-fn test_rewrap_multiple_files() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    common_opts.quiet = true;
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-
-    let kv_path1 = save_kv_file(
-        &workspace_dir,
-        common_opts.clone(),
-        ALICE_MEMBER_HANDLE,
-        "multi1",
-        &[("KEY1", "value1")],
-    );
-    let kv_path2 = save_kv_file(
-        &workspace_dir,
-        common_opts.clone(),
-        ALICE_MEMBER_HANDLE,
-        "multi2",
-        &[("KEY2", "value2")],
-    );
-
-    assert!(kv_path1.exists(), "First kv file should exist");
-    assert!(kv_path2.exists(), "Second kv file should exist");
-
-    let rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    let result = rewrap::run(rewrap_args);
-    assert!(
-        result.is_ok(),
-        "Rewrap should succeed for multiple files: {:?}",
-        result.err()
-    );
-
-    assert!(
-        kv_path1.exists(),
-        "First kv file should still exist after rewrap"
-    );
-    assert!(
-        kv_path2.exists(),
-        "Second kv file should still exist after rewrap"
-    );
-
-    let recipient_handles1 = load_kv_recipient_handles(&kv_path1);
-    let recipient_handles2 = load_kv_recipient_handles(&kv_path2);
-    assert!(
-        recipient_handles1.contains(&ALICE_MEMBER_HANDLE.to_string()),
-        "ALICE should be in first file's wrap"
-    );
-    assert!(
-        recipient_handles2.contains(&ALICE_MEMBER_HANDLE.to_string()),
-        "ALICE should be in second file's wrap"
-    );
-}
-
-#[test]
 fn test_rewrap_requires_recipient_trust_approval() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);

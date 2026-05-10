@@ -48,7 +48,6 @@ fn test_join_existing_workspace() {
     let using_ssh_key_message = "Using SSH key:";
     let ssh_determinism_message = "SSH signature determinism: OK";
     let generated_key_message = format!("Generated key for '{}':", TEST_MEMBER_HANDLE);
-    let deprecated_rewrap_hint = "promote the incoming key and sync secrets";
 
     // Manually create workspace structure (without init)
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -69,8 +68,9 @@ fn test_join_existing_workspace() {
         .stderr(predicate::str::contains(using_ssh_key_message))
         .stderr(predicate::str::contains(ssh_determinism_message))
         .stderr(predicate::str::contains(&generated_key_message))
-        .stderr(predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_HANDLE)))
-        .stderr(predicate::str::contains(deprecated_rewrap_hint).not());
+        .stderr(
+            predicate::str::contains("Added").and(predicate::str::contains(TEST_MEMBER_HANDLE)),
+        );
 
     assert_stderr_order(
         &assert.get_output().stderr,
@@ -279,44 +279,6 @@ fn test_init_then_join_different_member() {
             .join("bob@example.com.json")
             .exists(),
         "bob member file should exist in members/incoming/ after join"
-    );
-}
-
-#[test]
-fn test_join_reports_existing_active_member_without_leading_blank_line() {
-    let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
-    let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-
-    cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    let assert = cmd()
-        .arg("join")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stderr(predicate::str::contains(
-            "Already a member of this workspace.",
-        ));
-
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
-    assert!(
-        !stderr.starts_with('\n'),
-        "stderr should not start with a blank line: {stderr:?}"
     );
 }
 

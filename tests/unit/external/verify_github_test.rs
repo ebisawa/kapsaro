@@ -7,15 +7,16 @@ use secretenv::io::github::http::GitHubKeyRecord;
 use secretenv::io::verify_online::github::{
     verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
 };
-use secretenv::io::verify_online::VerifiedGithubIdentity;
+use secretenv::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
 use secretenv::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
 };
 use secretenv::{Error, Result};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
-const TEST_SSH_PUBKEY: &str =
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
+const TEST_SSH_PUBKEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
 
 struct FakeGitHubApi {
     user_by_id_result: Result<(u64, String)>,
@@ -41,6 +42,78 @@ impl GitHubVerificationApi for FakeGitHubApi {
 
     fn fetch_keys<'a>(&'a self, _login: &'a str) -> GitHubApiFuture<'a, Vec<GitHubKeyRecord>> {
         Box::pin(async move {
+            match &self.keys_result {
+                Ok(keys) => Ok(keys.clone()),
+                Err(Error::Verify { rule, message }) => Err(Error::Verify {
+                    rule: rule.clone(),
+                    message: message.clone(),
+                }),
+                Err(other) => Err(Error::Verify {
+                    rule: "V-GITHUB-API".to_string(),
+                    message: other.to_string(),
+                }),
+            }
+        })
+    }
+}
+
+struct RecordingGitHubApi {
+    user_by_id_result: Result<(u64, String)>,
+    keys_result: Result<Vec<GitHubKeyRecord>>,
+    user_calls: Arc<AtomicUsize>,
+    key_calls: Arc<AtomicUsize>,
+    last_keys_login: Arc<Mutex<Option<String>>>,
+}
+
+impl RecordingGitHubApi {
+    fn new(
+        user_by_id_result: Result<(u64, String)>,
+        keys_result: Result<Vec<GitHubKeyRecord>>,
+    ) -> Self {
+        Self {
+            user_by_id_result,
+            keys_result,
+            user_calls: Arc::new(AtomicUsize::new(0)),
+            key_calls: Arc::new(AtomicUsize::new(0)),
+            last_keys_login: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn user_call_count(&self) -> usize {
+        self.user_calls.load(Ordering::SeqCst)
+    }
+
+    fn key_call_count(&self) -> usize {
+        self.key_calls.load(Ordering::SeqCst)
+    }
+
+    fn last_keys_login(&self) -> Option<String> {
+        self.last_keys_login.lock().unwrap().clone()
+    }
+}
+
+impl GitHubVerificationApi for RecordingGitHubApi {
+    fn fetch_user_by_id<'a>(&'a self, _account_id: u64) -> GitHubApiFuture<'a, (u64, String)> {
+        Box::pin(async move {
+            self.user_calls.fetch_add(1, Ordering::SeqCst);
+            match &self.user_by_id_result {
+                Ok((id, login)) => Ok((*id, login.clone())),
+                Err(Error::Verify { rule, message }) => Err(Error::Verify {
+                    rule: rule.clone(),
+                    message: message.clone(),
+                }),
+                Err(other) => Err(Error::Verify {
+                    rule: "V-GITHUB-API".to_string(),
+                    message: other.to_string(),
+                }),
+            }
+        })
+    }
+
+    fn fetch_keys<'a>(&'a self, login: &'a str) -> GitHubApiFuture<'a, Vec<GitHubKeyRecord>> {
+        Box::pin(async move {
+            self.key_calls.fetch_add(1, Ordering::SeqCst);
+            *self.last_keys_login.lock().unwrap() = Some(login.to_string());
             match &self.keys_result {
                 Ok(keys) => Ok(keys.clone()),
                 Err(Error::Verify { rule, message }) => Err(Error::Verify {
@@ -131,7 +204,138 @@ async fn test_verify_github_account_rejects_id_mismatch() {
 
     let result = verify_github_account_with_api(&public_key, false, None, &api).await;
 
-    assert!(matches!(result, Err(Error::Verify { .. })));
+    match result {
+        Err(Error::Verify { rule, message }) => {
+            assert_eq!(rule, "V-GITHUB-API");
+            assert!(
+                message.contains("document id 42 vs API id 7"),
+                "unexpected: {message}"
+            );
+        }
+        other => panic!("expected verify error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_verify_github_account_rejects_known_account_id_mismatch() {
+    let public_key = sample_public_key();
+    let api = FakeGitHubApi {
+        user_by_id_result: Err(Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: "user lookup should be skipped".to_string(),
+        }),
+        keys_result: Err(Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: "key lookup should be skipped".to_string(),
+        }),
+    };
+
+    let result =
+        verify_github_account_with_api(&public_key, false, Some((7, "alice".to_string())), &api)
+            .await;
+
+    match result {
+        Err(Error::Verify { rule, message }) => {
+            assert_eq!(rule, "V-GITHUB-API");
+            assert!(
+                message.contains("document id 42 vs provided id 7"),
+                "unexpected: {message}"
+            );
+        }
+        other => panic!("expected verify error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_verify_github_account_reports_empty_github_keys() {
+    let public_key = sample_public_key();
+    let api = FakeGitHubApi {
+        user_by_id_result: Ok((42, "alice".to_string())),
+        keys_result: Ok(Vec::new()),
+    };
+
+    let result = verify_github_account_with_api(&public_key, false, None, &api)
+        .await
+        .unwrap();
+
+    assert_eq!(result.status, VerificationStatus::Failed);
+    assert_eq!(result.message, "No SSH keys found for GitHub user id 42");
+    assert_eq!(result.matched_key_id, None);
+    assert!(result.verified_github.is_none());
+}
+
+#[tokio::test]
+async fn test_verify_github_account_propagates_keys_api_error() {
+    let public_key = sample_public_key();
+    let api = FakeGitHubApi {
+        user_by_id_result: Ok((42, "alice".to_string())),
+        keys_result: Err(Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: "keys endpoint failed".to_string(),
+        }),
+    };
+
+    let result = verify_github_account_with_api(&public_key, false, None, &api).await;
+
+    match result {
+        Err(Error::Verify { rule, message }) => {
+            assert_eq!(rule, "V-GITHUB-API");
+            assert_eq!(message, "keys endpoint failed");
+        }
+        other => panic!("expected verify error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_verify_github_account_skips_malformed_key_records_before_match() {
+    let public_key = sample_public_key();
+    let api = FakeGitHubApi {
+        user_by_id_result: Ok((42, "alice".to_string())),
+        keys_result: Ok(vec![
+            GitHubKeyRecord {
+                id: 99,
+                key: "not an ssh key".to_string(),
+            },
+            GitHubKeyRecord {
+                id: 100,
+                key: TEST_SSH_PUBKEY.to_string(),
+            },
+        ]),
+    };
+
+    let result = verify_github_account_with_api(&public_key, false, None, &api)
+        .await
+        .unwrap();
+
+    assert!(result.is_verified());
+    assert_eq!(result.matched_key_id, Some(100));
+}
+
+#[tokio::test]
+async fn test_verify_github_account_reports_missing_key_when_all_records_are_malformed() {
+    let public_key = sample_public_key();
+    let api = FakeGitHubApi {
+        user_by_id_result: Ok((42, "alice".to_string())),
+        keys_result: Ok(vec![
+            GitHubKeyRecord {
+                id: 99,
+                key: "not an ssh key".to_string(),
+            },
+            GitHubKeyRecord {
+                id: 100,
+                key: "also not an ssh key".to_string(),
+            },
+        ]),
+    };
+
+    let result = verify_github_account_with_api(&public_key, false, None, &api)
+        .await
+        .unwrap();
+
+    assert_eq!(result.status, VerificationStatus::Failed);
+    assert_eq!(result.matched_key_id, None);
+    assert!(result.message.contains("SSH key not found on GitHub"));
+    assert!(result.verified_github.is_none());
 }
 
 #[tokio::test]
@@ -157,23 +361,41 @@ async fn test_verify_github_account_reports_missing_matching_key() {
 async fn test_verify_github_account_reports_not_configured_without_binding_claims() {
     let mut public_key = sample_public_key();
     public_key.protected.binding_claims = None;
-    let api = FakeGitHubApi {
-        user_by_id_result: Ok((42, "alice".to_string())),
-        keys_result: Ok(Vec::new()),
-    };
+    let api = RecordingGitHubApi::new(Ok((42, "alice".to_string())), Ok(Vec::new()));
 
     let result = verify_github_account_with_api(&public_key, false, None, &api)
         .await
         .unwrap();
 
-    assert_eq!(
-        result.status,
-        secretenv::io::verify_online::VerificationStatus::NotConfigured
-    );
+    assert_eq!(result.status, VerificationStatus::NotConfigured);
     assert_eq!(
         result.message,
         "No binding_claims.github_account configured"
     );
+    assert_eq!(api.user_call_count(), 0);
+    assert_eq!(api.key_call_count(), 0);
+}
+
+#[tokio::test]
+async fn test_verify_github_account_reports_not_configured_without_github_account_claim() {
+    let mut public_key = sample_public_key();
+    public_key.protected.binding_claims = Some(BindingClaims {
+        github_account: None,
+    });
+    let api = RecordingGitHubApi::new(Ok((42, "alice".to_string())), Ok(Vec::new()));
+
+    let result = verify_github_account_with_api(&public_key, false, None, &api)
+        .await
+        .unwrap();
+
+    assert_eq!(result.status, VerificationStatus::NotConfigured);
+    assert!(!result.github_claim_present);
+    assert_eq!(
+        result.message,
+        "No binding_claims.github_account configured"
+    );
+    assert_eq!(api.user_call_count(), 0);
+    assert_eq!(api.key_call_count(), 0);
 }
 
 #[tokio::test]
@@ -189,10 +411,7 @@ async fn test_verify_github_account_reports_not_configured_for_invalid_attestati
         .await
         .unwrap();
 
-    assert_eq!(
-        result.status,
-        secretenv::io::verify_online::VerificationStatus::Failed
-    );
+    assert_eq!(result.status, VerificationStatus::Failed);
     assert_eq!(
         result.message,
         "Invalid attestation.pub (cannot compute fingerprint)"
@@ -234,13 +453,13 @@ async fn test_verify_github_account_uses_document_id_and_current_login() {
         .as_mut()
         .unwrap()
         .login = "stale-login".to_string();
-    let api = FakeGitHubApi {
-        user_by_id_result: Ok((42, "alice-current".to_string())),
-        keys_result: Ok(vec![GitHubKeyRecord {
+    let api = RecordingGitHubApi::new(
+        Ok((42, "alice-current".to_string())),
+        Ok(vec![GitHubKeyRecord {
             id: 100,
             key: TEST_SSH_PUBKEY.to_string(),
         }]),
-    };
+    );
 
     let result = verify_github_account_with_api(&public_key, false, None, &api)
         .await
@@ -253,6 +472,7 @@ async fn test_verify_github_account_uses_document_id_and_current_login() {
         result.message,
         "SSH key verified on GitHub (id=42, login=alice-current)"
     );
+    assert_eq!(api.last_keys_login().as_deref(), Some("alice-current"));
 }
 
 #[test]

@@ -73,3 +73,29 @@ fn test_ssh_options_are_limited_to_signing_commands() {
         Cli::try_parse_from(args).expect("command should accept SSH signing options");
     }
 }
+
+#[test]
+fn test_trust_purge_accepts_force_short_option() {
+    for args in [
+        &[
+            "secretenv",
+            "trust",
+            "keys",
+            "purge",
+            "--older-than",
+            "1d",
+            "-f",
+        ][..],
+        &[
+            "secretenv",
+            "trust",
+            "recipients",
+            "purge",
+            "--older-than",
+            "1d",
+            "-f",
+        ][..],
+    ] {
+        Cli::try_parse_from(args).expect("trust purge should accept -f");
+    }
+}

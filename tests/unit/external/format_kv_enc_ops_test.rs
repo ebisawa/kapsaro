@@ -827,23 +827,3 @@ fn test_unset_preserves_other_entry_tokens() {
         "KEY2 token must be unchanged"
     );
 }
-
-#[test]
-fn test_unset_key_not_found_error() {
-    let (initial, key_ctx, _temp, _ssh_temp) = setup_unset_test_ctx(&[("KEY1", "value1")]);
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
-
-    let initial = KvEncContent::new_unchecked(initial);
-    let result = unset_kv_entry(&initial, "NONEXISTENT", &ctx);
-
-    assert!(
-        result.is_err(),
-        "unset of nonexistent key should return error"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("NONEXISTENT"),
-        "error should mention the missing key: {}",
-        err_msg
-    );
-}

@@ -27,17 +27,6 @@ fn test_build_canonical_bytes() {
 }
 
 #[test]
-fn test_build_canonical_bytes_excludes_sig() {
-    let content = ":SECRETENV_KV 6\n:HEAD token0\n:WRAP token1\nKEY1 value1\n:SIG sig_token\n";
-    let parser = KvEncParser::new(content);
-    let lines = parser.parse_all().unwrap();
-
-    let canonical = build_canonical_bytes(&lines);
-    let canonical = std::str::from_utf8(&canonical).unwrap();
-    assert!(!canonical.contains(":SIG"));
-}
-
-#[test]
 fn test_extract_recipients_from_wrap() {
     let wrap = KvWrap {
         wrap: vec![

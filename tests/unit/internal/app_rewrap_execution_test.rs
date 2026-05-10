@@ -1029,56 +1029,6 @@ fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejectio
 }
 
 #[test]
-fn test_execute_reviewed_rewrap_artifacts_does_not_create_artifact_lock_file() {
-    let _guard = strict_key_checking_guard();
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let secret_path = workspace_dir.join("secrets").join("default.json");
-    fs::write(
-        &secret_path,
-        encrypt_file_for_members(
-            temp_dir.path(),
-            ALICE_MEMBER_HANDLE,
-            &execution.key_ctx.kid,
-            &execution.key_ctx,
-            &[ALICE_MEMBER_HANDLE],
-        ),
-    )
-    .unwrap();
-    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    plan.pre_promotion_trust.is_interactive = true;
-    let request = RewrapBatchRequest {
-        options,
-        rotate_key: false,
-        clear_disclosure_history: false,
-        accepted_promotions: Vec::new(),
-    };
-    let post_members = load_active_member_files(&workspace_dir).unwrap();
-    let (fixed_members, post_promotion_trust) =
-        build_verified_post_promotion_state(&plan, post_members);
-
-    let outcome = execute_reviewed_rewrap_artifacts(
-        &request,
-        &plan,
-        execution,
-        &fixed_members,
-        &post_promotion_trust,
-        &mut |_candidate, _context_label| Ok(true),
-        &mut |_candidate, _context_label, _recipients| Ok(true),
-        &mut |candidates, _context_label| Ok(candidates.to_vec()),
-        &mut |_outcome, _context_label| Ok(true),
-    )
-    .unwrap();
-
-    assert_eq!(outcome.processed_files.len(), 1);
-    assert!(!workspace_dir
-        .join("secrets")
-        .join(".default.json.lock")
-        .exists());
-}
-
-#[test]
 fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_review() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);

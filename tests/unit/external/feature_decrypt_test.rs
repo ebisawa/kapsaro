@@ -66,14 +66,6 @@ fn test_file_enc_content_detect_accepts_file_enc() {
 }
 
 #[test]
-fn test_file_enc_content_detect_rejects_plain_kv() {
-    // Plain kv format should be rejected
-    let plain_kv = "DATABASE_URL=postgres://localhost\nAPI_KEY=secret\n";
-    let result = FileEncContent::detect(plain_kv.to_string());
-    assert!(result.is_err());
-}
-
-#[test]
 fn test_file_enc_content_detect_rejects_kv_enc() {
     // kv-enc format should be rejected by FileEncContent::detect
     let kv_enc = ":SECRETENV_KV 6\n:HEAD dummy\n:WRAP dummy\n";

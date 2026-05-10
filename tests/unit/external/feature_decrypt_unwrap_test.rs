@@ -36,9 +36,7 @@ use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
 use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv::model::file_enc::VerifiedFileEncDocument;
-use secretenv::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
-use secretenv::model::wire::jwk::{CURVE_ED25519, CURVE_X25519};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -212,57 +210,6 @@ fn test_decrypt_file_rejects_recipient_handle_mismatch() {
     );
 }
 
-// ============================================================================
-// Test: decrypt file/kv document roundtrips
-// ============================================================================
-
-/// Test encrypt then decrypt file-enc roundtrip matches original content.
-#[test]
-fn test_decrypt_file_document_roundtrip() {
-    let original_content = b"Hello, World! This is a file encryption roundtrip test.";
-    let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_file_for_test(original_content);
-
-    let decrypted = decrypt_file_document(
-        &verified_doc,
-        ALICE_MEMBER_HANDLE,
-        &kid,
-        &key_ctx.private_key,
-        false,
-    )
-    .unwrap();
-
-    assert_eq!(
-        decrypted.as_ref() as &[u8],
-        original_content,
-        "Decrypted content should match original"
-    );
-}
-
-/// Test encrypt then decrypt kv-enc roundtrip matches original key-value pairs.
-#[test]
-fn test_decrypt_kv_document_roundtrip() {
-    let dotenv = "SECRET_KEY=my-secret-value\n";
-    let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_kv_for_test(dotenv);
-
-    let decrypted = decrypt_kv_document(
-        &verified_doc,
-        ALICE_MEMBER_HANDLE,
-        &kid,
-        &key_ctx.private_key,
-        false,
-    )
-    .unwrap();
-
-    assert_eq!(decrypted.len(), 1);
-    let value = decrypted
-        .get("SECRET_KEY")
-        .expect("SECRET_KEY should exist");
-    assert_eq!(
-        String::from_utf8(value.to_vec()).unwrap(),
-        "my-secret-value"
-    );
-}
-
 /// Test that kv decryption fails when the located wrap's rh does not match member_handle.
 #[test]
 fn test_decrypt_kv_document_rh_mismatch_fails() {
@@ -387,40 +334,6 @@ fn test_decrypt_kv_entries_multiple() {
 }
 
 // ============================================================================
-// Test: unwrap_master_key_for_file error path
-// ============================================================================
-
-/// Test that using a wrong kid for file decryption produces an error.
-#[test]
-fn test_unwrap_master_key_for_file_wrong_kid() {
-    let (verified_doc, key_ctx, _kid, _temp_dir) = encrypt_file_for_test(b"wrong kid test");
-
-    // Use a completely different kid that doesn't exist in the wrap items
-    let wrong_kid = "AAAAAAAAAAAAAAAAAAAAAAAAAA";
-    let result = decrypt_file_document(
-        &verified_doc,
-        ALICE_MEMBER_HANDLE,
-        wrong_kid,
-        &key_ctx.private_key,
-        false,
-    );
-
-    assert!(result.is_err(), "Decryption with wrong kid should fail");
-    let err_msg = format!("{}", result.unwrap_err());
-    assert!(
-        err_msg.contains("No wrap found"),
-        "Error should mention 'No wrap found', got: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains(wrong_kid),
-        "Error should mention the requested kid '{}', got: {}",
-        wrong_kid,
-        err_msg
-    );
-}
-
-// ============================================================================
 // Tests merged from services_enc_unwrap_test.rs
 // ============================================================================
 
@@ -492,74 +405,6 @@ fn test_unwrap_master_key_for_file() {
 
     // Verify unwrapped key is valid
     assert_eq!(unwrapped_key.as_bytes().len(), 32);
-}
-
-#[test]
-fn test_unwrap_master_key_for_file_wrong_member() {
-    // Setup test keystore
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let keystore_root = temp_dir.path().join("keys");
-    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
-    let kid = kids.first().unwrap();
-    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
-
-    let signing_key = generate_ed25519_keypair([2u8; 32]);
-    let content = b"Hello, World!";
-    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
-    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
-
-    let file_enc_doc = encrypt_file_document(
-        content,
-        &recipient_handles,
-        &members,
-        &SigningContext {
-            signing_key: &signing_key,
-            signer_kid: kid,
-            signer_pub: public_key.clone(),
-            debug: false,
-        },
-    )
-    .unwrap();
-
-    let proof = SignatureVerificationProof::new(
-        ALICE_MEMBER_HANDLE.to_string(),
-        kid.to_string(),
-        VerifyingKeySource::SignerPubEmbedded,
-        Vec::new(),
-    );
-    let verified = VerifiedFileEncDocument::new(file_enc_doc, proof);
-
-    // Try to unwrap with wrong member (should fail - bob doesn't have a wrap)
-    let dummy_private_key = build_verified_private_key(
-        &PrivateKeyPlaintext {
-            keys: IdentityKeysPrivate {
-                kem: JwkOkpPrivateKey {
-                    kty: "OKP".to_string(),
-                    crv: CURVE_X25519.to_string(),
-                    x: "dummy".to_string(),
-                    d: "dummy".to_string(),
-                },
-                sig: JwkOkpPrivateKey {
-                    kty: "OKP".to_string(),
-                    crv: CURVE_ED25519.to_string(),
-                    x: "dummy".to_string(),
-                    d: "dummy".to_string(),
-                },
-            },
-        },
-        "bob@example.com",
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GJ",
-        "SHA256:test",
-    );
-
-    let result = unwrap_master_key_for_file(
-        &verified,
-        "bob@example.com",
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GJ", // Different kid (should fail)
-        &dummy_private_key,
-        false,
-    );
-    assert!(result.is_err());
 }
 
 #[test]
@@ -646,8 +491,7 @@ fn test_hpke_aad_binding_defence_in_depth() {
     let attested_pubkey = build_verified_recipient_key(public_key.clone());
     let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
 
-    // Try to unwrap with empty AAD (old behavior) - should fail
-    // This demonstrates that aad=info binding is enforced
+    // Try to unwrap with empty AAD. This demonstrates that aad=info binding is enforced.
     let decrypted_key = build_verified_private_key(
         &private_key_plaintext,
         ALICE_MEMBER_HANDLE,

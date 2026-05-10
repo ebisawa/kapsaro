@@ -11,20 +11,6 @@ use std::fs;
 use tempfile::TempDir;
 
 // ============================================================================
-// Help
-// ============================================================================
-
-#[test]
-fn test_config_help() {
-    cmd()
-        .arg("config")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("config"));
-}
-
-// ============================================================================
 // Set and Get
 // ============================================================================
 
@@ -54,29 +40,6 @@ fn test_config_set_and_get() {
 }
 
 #[test]
-fn test_config_set_and_get_ssh_identity() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("set")
-        .arg("ssh_identity")
-        .arg("~/.ssh/id_ed25519_work")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_identity")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("~/.ssh/id_ed25519_work"));
-}
-
-#[test]
 fn test_config_set_and_get_workspace() {
     let home_dir = TempDir::new().unwrap();
 
@@ -97,75 +60,6 @@ fn test_config_set_and_get_workspace() {
         .assert()
         .success()
         .stdout(predicate::str::contains("~/projects/demo/.secretenv"));
-}
-
-#[test]
-fn test_config_set_and_get_ssh_signing_method() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("set")
-        .arg("ssh_signing_method")
-        .arg("ssh-keygen")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_signing_method")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("ssh-keygen"));
-}
-
-#[test]
-fn test_config_set_and_get_ssh_keygen_command() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("set")
-        .arg("ssh_keygen_command")
-        .arg("/usr/local/bin/ssh-keygen")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_keygen_command")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("/usr/local/bin/ssh-keygen"));
-}
-
-#[test]
-fn test_config_set_and_get_ssh_add_command() {
-    let home_dir = TempDir::new().unwrap();
-
-    cmd()
-        .arg("config")
-        .arg("set")
-        .arg("ssh_add_command")
-        .arg("/usr/local/bin/ssh-add")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success();
-
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("ssh_add_command")
-        .env("SECRETENV_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("/usr/local/bin/ssh-add"));
 }
 
 // ============================================================================

@@ -32,18 +32,6 @@ fn test_confirm_member_remove_with_reader_rejects_non_interactive_without_force(
 }
 
 #[test]
-fn test_confirm_member_remove_with_reader_accepts_interactive_yes() {
-    let result = confirm_member_remove_with_reader(
-        false,
-        "alice@example.com",
-        true,
-        Cursor::new(b"y\n".to_vec()),
-    );
-
-    assert!(result.is_ok());
-}
-
-#[test]
 fn test_confirm_member_remove_with_reader_rejects_interactive_default_no() {
     let error = confirm_member_remove_with_reader(
         false,

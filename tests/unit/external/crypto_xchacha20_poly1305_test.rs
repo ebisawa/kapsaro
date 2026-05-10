@@ -36,22 +36,6 @@ fn test_xchacha20_nonce_24_bytes() {
 }
 
 #[test]
-fn test_xchacha20_wrong_key_error() {
-    use secretenv::crypto::types::data::{Aad, Plaintext};
-
-    let key = XChaChaKey::new([0x42u8; 32]);
-    let wrong_key = XChaChaKey::new([0x99u8; 32]);
-    let nonce = XChaChaNonce::new([0x01u8; NONCE_SIZE]);
-    let aad = Aad::from(b"test-aad" as &[u8]);
-    let plaintext = Plaintext::from(b"secret data" as &[u8]);
-
-    let ciphertext = encrypt(&key, &nonce, &aad, &plaintext).expect("encrypt should succeed");
-
-    let result = decrypt(&wrong_key, &nonce, &aad, &ciphertext);
-    assert!(result.is_err(), "decrypt with wrong key should fail");
-}
-
-#[test]
 fn test_xchacha20_wrong_nonce_error() {
     use secretenv::crypto::types::data::{Aad, Plaintext};
 

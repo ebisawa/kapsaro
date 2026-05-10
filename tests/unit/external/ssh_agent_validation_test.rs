@@ -3,7 +3,9 @@
 
 //! Unit tests for SSH agent validation - key matching logic
 
-use secretenv::io::ssh::agent::validation::{find_key_in_agent, AgentIdentity};
+use secretenv::io::ssh::agent::validation::{
+    find_key_in_agent, validate_agent_has_keys, AgentIdentity,
+};
 use secretenv::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 
 const ED25519_KEY_NO_COMMENT: &str =
@@ -54,4 +56,28 @@ fn test_find_key_empty_identities() {
     let identities: Vec<AgentIdentity> = vec![];
     let result = find_key_in_agent(&identities, &target_key).unwrap();
     assert!(!result);
+}
+
+#[test]
+fn test_validate_agent_has_keys_accepts_loaded_identity() {
+    let key = decode_ssh_public_key_blob(ED25519_KEY_WITH_COMMENT).unwrap();
+    let identities = vec![AgentIdentity::new(key, "test-key-1".to_string())];
+
+    let result = validate_agent_has_keys(&identities, std::path::Path::new("/tmp/agent.sock"));
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_validate_agent_has_keys_reports_empty_agent_with_socket_hint() {
+    let identities: Vec<AgentIdentity> = vec![];
+
+    let err = validate_agent_has_keys(&identities, std::path::Path::new("/tmp/agent.sock"))
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("ssh-agent is reachable but has no keys loaded"));
+    assert!(err.contains("Agent socket: /tmp/agent.sock"));
+    assert!(err.contains("ssh-add -l"));
+    assert!(err.contains("1Password"));
 }

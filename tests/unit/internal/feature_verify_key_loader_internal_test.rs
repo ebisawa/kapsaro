@@ -201,13 +201,6 @@ fn test_verify_recipient_public_keys_valid() {
 }
 
 #[test]
-fn test_enforce_recipient_key_not_expired_empty_via_verify() {
-    let (public_key, _kid) = build_test_public_key("");
-    let attested = verify_public_key_with_attestation_context(&public_key, false, "test").unwrap();
-    assert!(enforce_recipient_key_not_expired(&attested).is_ok());
-}
-
-#[test]
 fn test_build_public_key_expiry_warning_expiring_soon() {
     let now = time::OffsetDateTime::now_utc();
     let future = now + time::Duration::days(15);

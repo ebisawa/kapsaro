@@ -76,3 +76,26 @@ async fn test_resolve_github_account_by_login_rejects_invalid_login_before_api_c
     assert!(result.is_err());
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn test_resolve_github_account_by_login_propagates_api_error() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let api = FakeGitHubAccountLookupApi {
+        user_by_login_result: Err(Error::Verify {
+            rule: "V-GITHUB-API".to_string(),
+            message: "lookup failed".to_string(),
+        }),
+        calls: Arc::clone(&calls),
+    };
+
+    let result = resolve_github_account_by_login_with_api("alice", false, &api).await;
+
+    match result {
+        Err(Error::Verify { rule, message }) => {
+            assert_eq!(rule, "V-GITHUB-API");
+            assert_eq!(message, "lookup failed");
+        }
+        other => panic!("expected verify error, got {other:?}"),
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}

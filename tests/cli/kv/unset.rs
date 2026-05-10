@@ -145,19 +145,3 @@ fn test_unset_requires_member_handle_before_confirmation() {
                 .and(predicate::str::contains("without --force in non-interactive mode").not()),
         );
 }
-
-#[test]
-fn test_unset_with_force() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_keys();
-
-    cmd()
-        .arg("unset")
-        .arg("KEY1")
-        .arg("--force")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-}

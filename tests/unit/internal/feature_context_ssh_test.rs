@@ -6,12 +6,8 @@
 use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
-use crate::test_utils::{setup_test_keystore, stub_ssh_keygen};
+use crate::test_utils::setup_test_keystore;
 use secretenv::config::types::SshSigningMethod;
-use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
-use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
-use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv::model::ssh::SshDeterminismStatus;
 
 #[test]
@@ -31,43 +27,6 @@ fn test_resolve_and_build_ssh_signing_context_default() {
 
     assert!(!ctx.public_key.is_empty());
     assert!(!ctx.fingerprint.is_empty());
-}
-
-#[test]
-fn test_resolve_and_build_ssh_signing_context_verbose() {
-    let temp_dir = setup_test_keystore("test@example.com");
-    let ssh_key_path = temp_dir.path().join(".ssh").join("test_ed25519");
-
-    let params = SshSigningParams {
-        ssh_key: Some(ssh_key_path),
-        signing_method: Some(SshSigningMethod::SshKeygen),
-        base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: true,
-        check_determinism: true,
-    };
-    let candidates = resolve_ssh_key_candidates_with_params(&params).unwrap();
-    let ctx = build_ssh_signing_context_with_params(&params, &candidates[0].public_key).unwrap();
-
-    assert!(!ctx.public_key.is_empty());
-}
-
-#[test]
-fn test_check_determinism_via_context() {
-    let temp_dir = setup_test_keystore("test@example.com");
-    let ssh_pub =
-        std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub")).unwrap();
-    let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
-        stub_ssh_keygen(),
-        SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
-    ));
-
-    let result = backend.check_sshsig_determinism(
-        KEY_PROTECTION_NAMESPACE,
-        &ssh_pub,
-        secretenv::model::wire::context::SSHSIG_MESSAGE_DETERMINISM_CHECK_V1,
-    );
-    // Result may be ok or err depending on backend implementation
-    let _ = result;
 }
 
 #[test]

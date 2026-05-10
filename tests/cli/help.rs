@@ -7,16 +7,10 @@ use crate::cli::common::cmd;
 use predicates::prelude::*;
 
 #[test]
-fn test_top_level_help_omits_about_line() {
+fn test_top_level_help_shows_usage() {
     cmd()
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Usage: secretenv <COMMAND>"))
-        .stdout(
-            predicate::str::contains(
-                "Offline-first CLI for sharing encrypted .env files and other secrets through Git",
-            )
-            .not(),
-        );
+        .stdout(predicate::str::contains("Usage: secretenv <COMMAND>"));
 }

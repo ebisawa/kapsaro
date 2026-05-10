@@ -9,7 +9,3 @@ pub(crate) mod github;
 pub(crate) mod manage;
 pub(crate) mod timestamp;
 pub(crate) mod types;
-
-#[cfg(test)]
-#[path = "../../tests/unit/internal/app_key_github_test.rs"]
-mod tests;

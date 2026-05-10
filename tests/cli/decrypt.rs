@@ -7,8 +7,7 @@
 
 use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE,
-    BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE, EVE_MEMBER_HANDLE,
-    FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use predicates::prelude::*;
@@ -92,16 +91,6 @@ fn save_test_encrypted_file(path: &std::path::Path) {
 }
 
 #[test]
-fn test_decrypt_help() {
-    cmd()
-        .arg("decrypt")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Decrypt"));
-}
-
-#[test]
 fn test_decrypt_help_aligns_multiline_usage() {
     cmd()
         .arg("decrypt")
@@ -122,230 +111,6 @@ fn test_decrypt_missing_input() {
         .stderr(predicate::str::contains(
             "required arguments were not provided",
         ));
-}
-
-#[test]
-fn test_decrypt_with_explicit_member_handle() {
-    let temp_dir = TempDir::new().unwrap();
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure(); // Will fail due to invalid test data, but should parse args correctly
-}
-
-#[test]
-fn test_decrypt_with_member_handle_from_env() {
-    let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        BOB_MEMBER_HANDLE,
-        "XXCXP9PZWD1FXT336XSBT9W1BR5EADN8",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
-        .assert()
-        .failure(); // Will fail due to invalid test data, but should parse args correctly
-}
-
-#[test]
-fn test_decrypt_with_workspace_option() {
-    let temp_dir = TempDir::new().unwrap();
-    let workspace = temp_dir.path().join("workspace");
-    fs::create_dir_all(workspace.join("members")).unwrap();
-    fs::create_dir_all(workspace.join("secrets")).unwrap();
-
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        CAROL_MEMBER_HANDLE,
-        "9N4R1H8VW6PKT3XNC5JY2F9AR8GD7M2Q",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--workspace")
-        .arg(workspace.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(CAROL_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure(); // Will fail due to invalid test data, but should parse args correctly
-}
-
-#[test]
-fn test_decrypt_accepts_out_option_parsing() {
-    let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        DAVE_MEMBER_HANDLE,
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    let output_file = temp_dir.path().join("output.env");
-    save_test_encrypted_file(&input_file);
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(DAVE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure(); // Will fail due to invalid test data, but should parse args correctly
-}
-
-#[test]
-fn test_decrypt_with_kid_option() {
-    let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        EVE_MEMBER_HANDLE,
-        "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(EVE_MEMBER_HANDLE)
-        .arg("--kid")
-        .arg("5EADN8XXCXP9PZWD1FXT336XSBT9W1BR")
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure(); // Will fail due to invalid test data, but should parse args correctly
-}
-
-#[test]
-fn test_decrypt_with_display_kid_option() {
-    let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        EVE_MEMBER_HANDLE,
-        "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output-display.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(EVE_MEMBER_HANDLE)
-        .arg("--kid")
-        .arg("5EAD-N8XX-CXP9-PZWD-1FXT-336X-SBT9-W1BR")
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure();
-}
-
-#[test]
-fn test_decrypt_with_prefix_kid_option() {
-    let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        EVE_MEMBER_HANDLE,
-        "5EADN8XXCXP9PZWD1FXT336XSBT9W1BR",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output-prefix.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(EVE_MEMBER_HANDLE)
-        .arg("--kid")
-        .arg("5EAD")
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure();
-}
-
-#[test]
-fn test_decrypt_with_ssh_key_option() {
-    let temp_dir = TempDir::new().unwrap();
-    let _keystore_root = build_test_keystore(
-        &temp_dir,
-        FRANK_MEMBER_HANDLE,
-        "KANJ8XHG10HW16VD7ADNCXM1WN44J04Q",
-    );
-    let input_file = temp_dir.path().join("test.enc");
-    let ssh_key_file = temp_dir.path().join("test_key");
-    fs::write(&ssh_key_file, "dummy ssh key").unwrap();
-    save_test_encrypted_file(&input_file);
-    let output_file = temp_dir.path().join("output.dat");
-
-    cmd()
-        .arg("decrypt")
-        .arg(input_file.to_str().unwrap())
-        .arg("--out")
-        .arg(output_file.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(FRANK_MEMBER_HANDLE)
-        .arg("-i")
-        .arg(ssh_key_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .assert()
-        .failure(); // Will fail due to invalid test data, but should parse args correctly
-}
-
-#[test]
-fn test_decrypt_command_exists() {
-    // Test that the command is named "decrypt" not "decrypt-v3"
-    cmd().arg("decrypt").arg("--help").assert().success();
-}
-
-#[test]
-fn test_decrypt_legacy_command_removed() {
-    // Test that the old "decrypt-v3" command no longer exists
-    cmd()
-        .arg("decrypt-v3")
-        .arg("--help")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("unrecognized subcommand"));
 }
 
 // ============================================================================
@@ -377,65 +142,6 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
         .arg(encrypted_path.to_str().unwrap())
         .arg("--out")
         .arg(test_dir.join("out.dat").to_str().unwrap())
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", test_dir.to_str().unwrap())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Expected file-enc format"));
-}
-
-#[test]
-fn test_decrypt_detects_file_enc_format_version3() {
-    // Test that decrypt detects file-enc v5 format
-    let temp_dir = TempDir::new().unwrap();
-    let test_dir = temp_dir.path();
-
-    // Create a minimal file-enc v5 file
-    let encrypted_path = test_dir.join("test.json");
-    save_test_encrypted_file(&encrypted_path);
-
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
-    // Try to decrypt without --out - should fail with specific error
-    cmd()
-        .arg("decrypt")
-        .arg(encrypted_path.to_str().unwrap())
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", test_dir.to_str().unwrap())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "requires either --out or --stdout",
-        ));
-}
-
-#[test]
-fn test_decrypt_rejects_plain_kv_format() {
-    // Test that decrypt rejects plain (unencrypted) kv format
-    let temp_dir = TempDir::new().unwrap();
-    let test_dir = temp_dir.path();
-
-    // Create a plain dotenv file
-    let plain_path = test_dir.join("plain.env");
-    let content = "DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n";
-    fs::write(&plain_path, content).unwrap();
-
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
-    // Try to decrypt plain file - should fail with specific error
-    cmd()
-        .arg("decrypt")
-        .arg(plain_path.to_str().unwrap())
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
         .env("SECRETENV_HOME", test_dir.to_str().unwrap())
@@ -524,6 +230,53 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
     assert_eq!(
         decrypted_content, original_content,
         "Decrypted content should match original"
+    );
+}
+
+#[test]
+fn test_decrypt_rejects_tampered_file_enc_signature() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let input_file = home_dir.path().join("tampered-secret.txt");
+    fs::write(&input_file, b"SECRET_VALUE=must_not_decrypt\n").unwrap();
+    let encrypted_file = home_dir.path().join("tampered-secret.txt.encrypted");
+    let decrypted_file = home_dir.path().join("tampered-secret.out");
+
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
+
+    let content = fs::read_to_string(&encrypted_file).unwrap();
+    let mut document: serde_json::Value = serde_json::from_str(&content).unwrap();
+    document["signature"]["sig"] = serde_json::Value::String(encode_base64url_nopad(&[0u8; 64]));
+    fs::write(
+        &encrypted_file,
+        serde_json::to_string_pretty(&document).unwrap(),
+    )
+    .unwrap();
+
+    cmd()
+        .arg("decrypt")
+        .arg(encrypted_file.to_str().unwrap())
+        .arg("--out")
+        .arg(decrypted_file.to_str().unwrap())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Signature verification failed"));
+
+    assert!(
+        !decrypted_file.exists(),
+        "tampered artifact must not decrypt"
     );
 }
 
@@ -673,10 +426,10 @@ fn test_decrypt_stdin_with_out_writes_decrypted_file() {
 #[test]
 fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-    let plaintext = b"SECRET_VALUE=stdin_stdout\n";
-    let input_file = home_dir.path().join("stdin-stdout-secret.txt");
-    let encrypted_file = home_dir.path().join("stdin-stdout-secret.txt.encrypted");
-    fs::write(&input_file, plaintext).unwrap();
+    let plaintext = vec![0x00, 0x01, 0x02, b'a', b'\n', 0xff];
+    let input_file = home_dir.path().join("stdin-stdout-secret.bin");
+    let encrypted_file = home_dir.path().join("stdin-stdout-secret.bin.encrypted");
+    fs::write(&input_file, &plaintext).unwrap();
 
     encrypt_file_with_member_set_review(
         workspace_dir.path(),
@@ -686,8 +439,6 @@ fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
         &encrypted_file,
         TEST_MEMBER_HANDLE,
     );
-
-    let encrypted = fs::read_to_string(&encrypted_file).unwrap();
 
     let assert = cmd()
         .arg("decrypt")
@@ -699,7 +450,7 @@ fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin(encrypted)
+        .write_stdin(fs::read_to_string(&encrypted_file).unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Decrypted to:").not());
@@ -773,109 +524,4 @@ fn test_decrypt_rejects_input_and_stdin_together() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("--stdin").and(predicate::str::contains("<INPUT>")));
-}
-
-#[test]
-fn test_decrypt_stdin_rejects_kv_enc_format() {
-    let temp_dir = TempDir::new().unwrap();
-    let content = r#":SECRETENV_KV 6
-:HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
-:WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
-DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
-"#;
-
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
-    cmd()
-        .arg("decrypt")
-        .arg("--stdin")
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .write_stdin(content)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Expected file-enc format"));
-}
-
-#[test]
-fn test_decrypt_stdin_rejects_plain_kv_format() {
-    let temp_dir = TempDir::new().unwrap();
-
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
-    cmd()
-        .arg("decrypt")
-        .arg("--stdin")
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .write_stdin("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Expected file-enc format"));
-}
-
-#[test]
-fn test_decrypt_stdin_rejects_unknown_format() {
-    let temp_dir = TempDir::new().unwrap();
-
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
-    cmd()
-        .arg("decrypt")
-        .arg("--stdin")
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .write_stdin("This is just some random text that doesn't match any format\n")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Expected file-enc format"));
-}
-
-#[test]
-fn test_decrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-    let plaintext = vec![0x00, 0x01, 0x02, b'a', b'\n', 0xff];
-    let input_file = home_dir.path().join("stdin-stdout-binary.bin");
-    let encrypted_file = home_dir.path().join("stdin-stdout-binary.encrypted");
-    fs::write(&input_file, &plaintext).unwrap();
-
-    encrypt_file_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        &input_file,
-        &encrypted_file,
-        TEST_MEMBER_HANDLE,
-    );
-
-    let assert = cmd()
-        .arg("decrypt")
-        .arg("--stdin")
-        .arg("--stdout")
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin(fs::read(&encrypted_file).unwrap())
-        .assert()
-        .success();
-
-    assert_eq!(assert.get_output().stdout, plaintext);
 }

@@ -6,7 +6,6 @@
 //! Tests the encrypt command with CommonOptions, format detection, recipients, etc.
 
 pub mod basic;
-pub mod format_detection;
 pub mod help;
 pub mod output_path;
 pub mod recipients;

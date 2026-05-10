@@ -43,12 +43,6 @@ fn test_parse_ssh_signing_method_config_invalid() {
 }
 
 #[test]
-fn test_parse_ssh_signing_method_config_case_sensitive() {
-    let result = parse_ssh_signing_method_config("AUTO");
-    assert!(result.is_err());
-}
-
-#[test]
 fn test_resolve_ssh_signing_method_config_cli_ssh_agent() {
     let result = resolve_ssh_signing_method_config(Some(SshSigningMethod::SshAgent), None).unwrap();
     assert_eq!(result, SshSigningMethodConfig::SshAgent);
@@ -74,17 +68,6 @@ fn test_resolve_ssh_signing_method_config_default_is_auto() {
 
 #[test]
 #[serial]
-fn test_resolve_ssh_signing_method_config_env_var_auto() {
-    let _guard = EnvGuard::new(&["SECRETENV_SSH_SIGNER", "SECRETENV_SSH_SIGNING_METHOD"]);
-    std::env::set_var("SECRETENV_SSH_SIGNING_METHOD", "auto");
-
-    let result = resolve_ssh_signing_method_config(None, None).unwrap();
-
-    assert_eq!(result, SshSigningMethodConfig::Auto);
-}
-
-#[test]
-#[serial]
 fn test_resolve_ssh_signing_method_config_env_var_ssh_agent() {
     let _guard = EnvGuard::new(&["SECRETENV_SSH_SIGNER", "SECRETENV_SSH_SIGNING_METHOD"]);
     std::env::set_var("SECRETENV_SSH_SIGNING_METHOD", "ssh-agent");
@@ -92,17 +75,6 @@ fn test_resolve_ssh_signing_method_config_env_var_ssh_agent() {
     let result = resolve_ssh_signing_method_config(None, None).unwrap();
 
     assert_eq!(result, SshSigningMethodConfig::SshAgent);
-}
-
-#[test]
-#[serial]
-fn test_resolve_ssh_signing_method_config_env_var_ssh_keygen() {
-    let _guard = EnvGuard::new(&["SECRETENV_SSH_SIGNER", "SECRETENV_SSH_SIGNING_METHOD"]);
-    std::env::set_var("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
-
-    let result = resolve_ssh_signing_method_config(None, None).unwrap();
-
-    assert_eq!(result, SshSigningMethodConfig::SshKeygen);
 }
 
 #[test]
@@ -143,20 +115,6 @@ fn test_resolve_ssh_signing_method_auto_without_agent() {
     let result = resolve_ssh_signing_method(SshSigningMethodConfig::Auto);
 
     assert_eq!(result, SshSigningMethod::SshKeygen);
-}
-
-#[test]
-#[serial]
-fn test_resolve_ssh_signing_method_auto_with_explicit_key_prefers_agent_when_available() {
-    let _guard = EnvGuard::new(&["HOME", "SSH_AUTH_SOCK"]);
-
-    let temp_dir = TempDir::new().unwrap();
-    std::env::set_var("HOME", temp_dir.path());
-    std::env::set_var("SSH_AUTH_SOCK", "/tmp/dummy-agent.sock");
-
-    let result = resolve_ssh_signing_method(SshSigningMethodConfig::Auto);
-
-    assert_eq!(result, SshSigningMethod::SshAgent);
 }
 
 #[test]

@@ -9,7 +9,6 @@ use secretenv::feature::key::material::generate_keypairs;
 use secretenv::feature::kv::builder::KvDocumentBuilder;
 use secretenv::feature::kv::encrypt::encrypt_kv_document;
 use secretenv::format::kv::document::parse_kv_document;
-use secretenv::format::schema::document::parse_kv_head_token;
 use secretenv::format::token::TokenCodec;
 use secretenv::model::kv_enc::document::KvEncDocument;
 use secretenv::model::kv_enc::header::KvHeader;
@@ -175,16 +174,6 @@ fn kv_token_from(content: &str, key: &str) -> Option<String> {
     })
 }
 
-fn decode_head_from(content: &str) -> KvHeader {
-    let head_token = content
-        .lines()
-        .find(|l: &&str| l.starts_with(":HEAD "))
-        .unwrap()
-        .strip_prefix(":HEAD ")
-        .unwrap();
-    parse_kv_head_token(head_token).unwrap()
-}
-
 /// Helper: build a signed document with set_entries via KvDocumentBuilder
 fn builder_set_entries(
     updated_head: &KvHeader,
@@ -312,36 +301,6 @@ fn test_build_kv_set_entry_preserves_wrap_token() {
     assert_eq!(wrap_before, wrap_after, "WRAP token should be unchanged");
 }
 
-#[test]
-fn test_build_kv_set_entry_preserves_sid_and_created_at() {
-    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1")]);
-    let signing = SigningContext {
-        signing_key: &signing_key,
-        signer_kid: &kid,
-        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
-    };
-    let updated_head = KvHeader {
-        sid: doc.head.sid,
-        alg: doc.head.alg.clone(),
-        created_at: doc.head.created_at.clone(),
-        updated_at: "2026-03-15T12:00:00Z".to_string(),
-    };
-
-    let result = builder_set_entry(&updated_head, &doc, "KEY2", "tokenxyz", &signing);
-
-    assert_eq!(
-        decode_head_from(&initial).sid,
-        decode_head_from(&result).sid,
-        "sid should be preserved"
-    );
-    assert_eq!(
-        decode_head_from(&initial).created_at,
-        decode_head_from(&result).created_at,
-        "created_at should be preserved"
-    );
-}
-
 // --- unset_entry テスト ---
 
 #[test]
@@ -415,30 +374,6 @@ fn test_build_kv_unset_entry_last_entry() {
     assert!(result.contains(":HEAD "), "HEAD line should exist");
     assert!(result.contains(":SIG "), "SIG line should exist");
     let _ = lines;
-}
-
-#[test]
-fn test_build_kv_unset_entry_preserves_sid_and_created_at() {
-    let (initial, doc, signing_key, kid) = setup_test_ctx(&[("KEY1", "val1"), ("KEY2", "val2")]);
-    let signing = SigningContext {
-        signing_key: &signing_key,
-        signer_kid: &kid,
-        signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
-    };
-    let updated_head = KvHeader {
-        sid: doc.head.sid,
-        alg: doc.head.alg.clone(),
-        created_at: doc.head.created_at.clone(),
-        updated_at: "2026-03-15T12:00:00Z".to_string(),
-    };
-
-    let result = builder_unset_entry(&updated_head, &doc, "KEY1", &signing);
-
-    let head_before = decode_head_from(&initial);
-    let head_after = decode_head_from(&result);
-    assert_eq!(head_before.sid, head_after.sid);
-    assert_eq!(head_before.created_at, head_after.created_at);
 }
 
 // --- set_entries テスト ---

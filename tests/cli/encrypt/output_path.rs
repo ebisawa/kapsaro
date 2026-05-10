@@ -49,30 +49,6 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
 }
 
 #[test]
-fn test_encrypt_explicit_out_option() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-
-    let input_path = workspace_dir.join("test.bin");
-    fs::write(&input_path, b"data").unwrap();
-    let explicit_output = workspace_dir.join("custom_output.encrypted");
-
-    let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
-    encrypt_file_with_member_set_review(
-        &workspace_dir,
-        temp_dir.path(),
-        &ssh_identity,
-        &input_path,
-        &explicit_output,
-        ALICE_MEMBER_HANDLE,
-    );
-
-    assert!(
-        explicit_output.exists(),
-        "File should be at explicit --out path"
-    );
-}
-
-#[test]
 fn test_encrypt_explicit_out_option_reports_output_path() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
     let input_file = home_dir.path().join("data.txt");
@@ -238,4 +214,51 @@ fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .clone();
 
     assert_eq!(decrypted_output, plaintext);
+}
+
+#[test]
+fn test_encrypt_rejects_control_character_input_filename_for_default_output() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let input_file = home_dir.path().join("bad\nname.txt");
+    fs::write(&input_file, b"secret").unwrap();
+
+    cmd()
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("E_NAME_INVALID"));
+}
+
+#[test]
+fn test_encrypt_quiet_suppresses_output_path_notice() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let input_file = home_dir.path().join("quiet.txt");
+    let output_file = home_dir.path().join("quiet.txt.encrypted");
+    fs::write(&input_file, b"quiet secret").unwrap();
+
+    let mut command = crate::cli::common::secretenv_std_cmd();
+    command
+        .arg("encrypt")
+        .arg(&input_file)
+        .arg("--out")
+        .arg(&output_file)
+        .arg("--quiet")
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", &ssh_priv);
+
+    let output = crate::cli::common::assert_member_set_review_success(&mut command);
+
+    assert!(output_file.exists());
+    assert!(!output.contains("Encrypted to:"), "{output}");
 }

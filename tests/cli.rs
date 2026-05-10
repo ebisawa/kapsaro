@@ -21,4 +21,5 @@ pub mod member;
 pub mod rewrap;
 pub mod run;
 pub mod trust;
+pub mod user_safe_operations;
 pub mod verify;

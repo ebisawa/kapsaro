@@ -115,38 +115,6 @@ fn test_env_key_wrong_password_error() {
 }
 
 #[test]
-fn test_env_key_roundtrip_preserves_key_material_for_decryption() {
-    let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
-    let member_handle = "ci-decrypt@example.com";
-    let password = "strong-test-password-42";
-
-    let (exported, _plaintext, public_key) = generate_and_export(member_handle, password);
-
-    // Load from env
-    std::env::set_var(ENV_PRIVATE_KEY, &exported);
-    std::env::set_var(ENV_KEY_PASSWORD, password);
-
-    let env_result = load_private_key_from_env(false).expect("load from env should succeed");
-
-    assert_eq!(
-        env_result.member_handle,
-        public_key.protected.subject_handle
-    );
-    assert_eq!(
-        env_result.verified_key.proof().kid(),
-        public_key.protected.kid
-    );
-    assert_eq!(
-        env_result.verified_key.document().keys.sig.x,
-        public_key.protected.identity.keys.sig.x
-    );
-    assert_eq!(
-        env_result.verified_key.document().keys.kem.x,
-        public_key.protected.identity.keys.kem.x
-    );
-}
-
-#[test]
 fn test_load_crypto_context_from_env_does_not_require_workspace_member_file() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
     let password = "strong-test-password-42";

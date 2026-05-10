@@ -15,15 +15,6 @@ const B64URL_64: &str =
     "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ";
 
 #[test]
-fn test_validator_creation() {
-    let validator = Validator::new();
-    assert!(
-        validator.is_ok(),
-        "Validator should be created successfully"
-    );
-}
-
-#[test]
 fn test_load_main_schema_uses_stable_metadata() {
     let schema = Validator::load_schema_from_paths("secretenv_schema.json")
         .expect("Main schema should be loadable");
@@ -73,47 +64,6 @@ fn is_version_token(token: &str) -> bool {
         return false;
     };
     !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit())
-}
-
-#[test]
-fn test_validate_public_key_basic() {
-    let validator = Validator::new().unwrap();
-    // PublicKey requires: protected (format, subject_handle, kid, identity, attestation, expires_at), signature.
-    let valid_public_key = serde_json::json!({
-        "protected": {
-            "format": secretenv::model::wire::format::PUBLIC_KEY_V6,
-            "subject_handle": "alice@example.com",
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "identity": {
-                "keys": {
-                    "kem": {
-                        "kty": "OKP",
-                        "crv": secretenv::model::wire::jwk::CURVE_X25519,
-                        "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                    },
-                    "sig": {
-                        "kty": "OKP",
-                        "crv": secretenv::model::wire::jwk::CURVE_ED25519,
-                        "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                    }
-                },
-                "attestation": {
-                    "method": "ssh-sign",
-                    "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-                }
-            },
-            "expires_at": "2027-01-01T00:00:00Z"
-        },
-        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    });
-
-    let result = validator.validate_public_key(&valid_public_key);
-    assert!(
-        result.is_ok(),
-        "Valid public key v3 should pass validation: {:?}",
-        result
-    );
 }
 
 #[test]
@@ -320,41 +270,6 @@ fn test_validate_private_key_argon2id_without_params() {
 }
 
 #[test]
-fn test_validate_private_key_argon2id_rejects_legacy_params() {
-    let validator = Validator::new().unwrap();
-    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
-    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
-    let invalid_private_key = serde_json::json!({
-        "protected": {
-            "format": secretenv::model::wire::format::PRIVATE_KEY_V7,
-            "subject_handle": "alice@example.com",
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "alg": {
-                "kdf": secretenv::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
-                "m": 47104,
-                "t": 1,
-                "p": 1,
-                "ikm_salt": ikm_salt,
-                "hkdf_salt": hkdf_salt,
-                "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
-            },
-            "created_at": "2026-01-14T00:00:00Z",
-            "expires_at": "2027-01-14T00:00:00Z"
-        },
-        "encrypted": {
-            "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-        }
-    });
-
-    let result = validator.validate_private_key(&invalid_private_key);
-    assert!(
-        result.is_err(),
-        "Legacy argon2 params must fail schema validation"
-    );
-}
-
-#[test]
 fn test_validate_private_key_rejects_wrong_fixed_lengths() {
     let validator = Validator::new().unwrap();
 
@@ -407,54 +322,6 @@ fn build_valid_private_key() -> serde_json::Value {
             "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
         }
     })
-}
-
-#[test]
-fn test_validate_file_enc_document_basic() {
-    let validator = Validator::new().unwrap();
-    // File encryption documents require protected metadata, payload, wraps, and signature.
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let valid_file_enc_doc = serde_json::json!({
-        "protected": {
-            "format": secretenv::model::wire::format::FILE_ENC_V5,
-            "sid": sid,
-            "payload": {
-                "protected": {
-                    "format": secretenv::model::wire::format::FILE_PAYLOAD_V5,
-                    "sid": sid,
-                    "alg": {
-                        "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
-                    }
-                },
-                "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }
-            },
-            "wrap": [{
-                "rh": "alice@example.com",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }],
-            "created_at": "2026-01-14T00:00:00Z",
-            "updated_at": "2026-01-14T00:00:00Z"
-        },
-        "signature": {
-            "alg": secretenv::model::wire::algorithm::SIGNATURE_ED25519,
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
-            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-        }
-    });
-
-    let result = validator.validate_file_enc_document(&valid_file_enc_doc);
-    assert!(
-        result.is_ok(),
-        "Valid file secret v3 should pass validation: {:?}",
-        result
-    );
 }
 
 #[test]

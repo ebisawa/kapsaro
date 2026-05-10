@@ -5,7 +5,7 @@
 
 use crate::cli::common::{
     cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
-    TEST_MEMBER_HANDLE,
+    tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
@@ -80,6 +80,24 @@ fn test_get_existing_key() {
         .assert()
         .success()
         .stdout(predicate::str::contains("test_value"));
+}
+
+#[test]
+fn test_get_rejects_tampered_kv_signature() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_key();
+    let kv_path = workspace_dir.path().join("secrets").join("default.kvenc");
+    tamper_kv_signature(&kv_path);
+
+    cmd()
+        .arg("get")
+        .arg("TEST_KEY")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Signature verification failed"));
 }
 
 #[test]

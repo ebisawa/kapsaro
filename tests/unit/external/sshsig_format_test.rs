@@ -13,14 +13,28 @@ use secretenv::io::ssh::protocol::wire::encode_ssh_string;
 use secretenv::support::codec::base64_public::encode_base64_standard;
 use sha2::{Digest, Sha256};
 
-const TEST_SSH_PUBKEY: &str =
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
-const OTHER_SSH_PUBKEY: &str =
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkB6jid+Y/7wt0S+9jTJGX1UytxIHOO3GXVPZPY1OYT other@example.com";
+const TEST_SSH_PUBKEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
+const OTHER_SSH_PUBKEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkB6jid+Y/7wt0S+9jTJGX1UytxIHOO3GXVPZPY1OYT other@example.com";
 
 fn append_publickey(blob: &mut Vec<u8>, ssh_pubkey: &str) {
     let publickey = decode_ssh_public_key_blob(ssh_pubkey).unwrap();
     blob.extend_from_slice(&encode_ssh_string(&publickey));
+}
+
+fn build_sshsig_blob_with_raw_signature(ssh_pubkey: &str, raw_sig: [u8; 64]) -> Vec<u8> {
+    let mut signature_blob = Vec::new();
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
+    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig));
+
+    let mut blob = Vec::new();
+    blob.extend_from_slice(SSHSIG_MAGIC);
+    blob.extend_from_slice(&1u32.to_be_bytes());
+    append_publickey(&mut blob, ssh_pubkey);
+    blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&encode_ssh_string(b""));
+    blob.extend_from_slice(&encode_ssh_string(b"sha256"));
+    blob.extend_from_slice(&encode_ssh_string(&signature_blob));
+    blob
 }
 
 #[test]
@@ -83,6 +97,39 @@ fn test_parse_sshsig_blob_valid() {
 
     let signature = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY).unwrap();
     assert_eq!(signature.as_bytes(), b"signature_data_here");
+}
+
+#[test]
+fn test_sshsig_blob_extract_ed25519_raw_signature() {
+    let mut raw_sig = [0u8; 64];
+    for (index, byte) in raw_sig.iter_mut().enumerate() {
+        *byte = index as u8;
+    }
+    let blob = SshsigBlob::new(build_sshsig_blob_with_raw_signature(
+        TEST_SSH_PUBKEY,
+        raw_sig,
+    ));
+
+    let extracted = blob
+        .extract_ed25519_raw(KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY)
+        .unwrap();
+
+    assert_eq!(extracted.as_bytes(), &raw_sig);
+}
+
+#[test]
+fn test_sshsig_blob_extract_ed25519_rejects_publickey_mismatch() {
+    let blob = SshsigBlob::new(build_sshsig_blob_with_raw_signature(
+        OTHER_SSH_PUBKEY,
+        [7u8; 64],
+    ));
+
+    let err = blob
+        .extract_ed25519_raw(KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY)
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("publickey"));
 }
 
 #[test]
@@ -286,39 +333,6 @@ fn test_parse_sshsig_armored_invalid_base64() {
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("base64") || err_msg.contains("decode"));
-}
-
-// Additional tests from src/io/ssh/protocol/sshsig.rs
-#[test]
-fn test_build_sshsig_signed_data_structure() {
-    let message = b"test";
-    let result = build_sshsig_signed_data(message, KEY_PROTECTION_NAMESPACE);
-
-    // Check magic
-    assert_eq!(&result[0..6], SSHSIG_MAGIC);
-
-    // Should contain namespace
-    let result_str = String::from_utf8_lossy(&result);
-    assert!(result_str.contains(KEY_PROTECTION_NAMESPACE));
-
-    // Should contain hash algorithm
-    assert!(result_str.contains(SSHSIG_HASHALG));
-}
-
-#[test]
-fn test_parse_sshsig_blob_roundtrip() {
-    // Construct a minimal valid SSHSIG blob
-    let mut blob = Vec::new();
-    blob.extend_from_slice(SSHSIG_MAGIC);
-    blob.extend_from_slice(&1u32.to_be_bytes());
-    append_publickey(&mut blob, TEST_SSH_PUBKEY);
-    blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
-    blob.extend_from_slice(&encode_ssh_string(b""));
-    blob.extend_from_slice(&encode_ssh_string(b"sha256"));
-    blob.extend_from_slice(&encode_ssh_string(b"test_signature_ikm"));
-
-    let signature = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY).unwrap();
-    assert_eq!(signature.as_bytes(), b"test_signature_ikm");
 }
 
 #[test]

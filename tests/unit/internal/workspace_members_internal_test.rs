@@ -120,8 +120,8 @@ fn test_promote_specified_rejects_duplicate_kids_within_batch() {
 #[test]
 fn test_promote_specified_rejects_kid_conflict_with_incoming_member_during_rotation() {
     // alice has a staged new key in incoming with KID_1
-    // bob also has KID_1 in incoming — this conflict must be detected even though
-    // incoming members were not checked by the old implementation
+    // bob also has KID_1 in incoming, so promotion must reject the conflict
+    // before moving any staged member file.
     let tmp = TempDir::new().unwrap();
     let active_dir = tmp.path().join("members/active");
     let incoming_dir = tmp.path().join("members/incoming");

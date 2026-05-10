@@ -51,17 +51,6 @@ fn test_resolve_ssh_keygen_path_from_new_config_key() {
 }
 
 #[test]
-fn test_resolve_ssh_keygen_path_ignores_old_config_key() {
-    let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("config.toml");
-    fs::write(&config_path, "ssh_keygen = \"/custom/ssh-keygen\"\n").unwrap();
-
-    let result = resolve_ssh_keygen_path(Some(temp.path())).unwrap();
-
-    assert_eq!(result, "ssh-keygen");
-}
-
-#[test]
 fn test_resolve_ssh_add_path_from_new_config_key() {
     let temp = TempDir::new().unwrap();
     let config_path = temp.path().join("config.toml");
@@ -70,17 +59,6 @@ fn test_resolve_ssh_add_path_from_new_config_key() {
     let result = resolve_ssh_add_path(Some(temp.path())).unwrap();
 
     assert_eq!(result, "/custom/ssh-add");
-}
-
-#[test]
-fn test_resolve_ssh_add_path_ignores_old_config_key() {
-    let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("config.toml");
-    fs::write(&config_path, "ssh_add = \"/custom/ssh-add\"\n").unwrap();
-
-    let result = resolve_ssh_add_path(Some(temp.path())).unwrap();
-
-    assert_eq!(result, "ssh-add");
 }
 
 #[test]

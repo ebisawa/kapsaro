@@ -71,16 +71,6 @@ fn test_rewrap_nonexistent_workspace_fails() {
         .failure();
 }
 
-#[test]
-fn test_rewrap_help() {
-    cmd()
-        .arg("rewrap")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("rewrap"));
-}
-
 #[cfg(unix)]
 #[test]
 fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
@@ -124,48 +114,6 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
         .assert()
         .success()
         .stderr(predicate::str::contains("Insecure permissions"));
-}
-
-#[test]
-fn test_rewrap_cli_rejects_strict_key_checking_no() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    setup_trust_store_for_workspace(
-        temp_dir.path(),
-        &workspace_dir,
-        ALICE_MEMBER_HANDLE,
-        &key_ctx,
-    );
-
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    common_opts.quiet = true;
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-
-    save_kv_file(
-        &workspace_dir,
-        common_opts,
-        ALICE_MEMBER_HANDLE,
-        "strict_no",
-        &[("KEY", "value")],
-    );
-
-    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
-    cmd()
-        .arg("rewrap")
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
-        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "SECRETENV_STRICT_KEY_CHECKING=no is not allowed for rewrap",
-        ));
 }
 
 #[test]

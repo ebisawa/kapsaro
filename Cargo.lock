@@ -2285,6 +2285,7 @@ dependencies = [
  "hex",
  "hkdf 0.13.0",
  "hpke",
+ "http",
  "jsonschema",
  "libc",
  "predicates",

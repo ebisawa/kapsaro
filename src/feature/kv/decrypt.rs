@@ -26,7 +26,7 @@ use zeroize::Zeroizing;
 /// * `debug` - Enable debug logging
 ///
 /// # Returns
-/// Decrypted key-value map with values wrapped in Zeroizing<Vec<u8>>
+/// Decrypted key-value map with values wrapped in `Zeroizing<Vec<u8>>`
 pub(crate) fn decrypt_kv_entries(
     entries: &[KvEncEntry],
     master_key: &MasterKey,
@@ -137,7 +137,7 @@ pub fn decrypt_kv_single_entry_with_context(
 /// * `debug` - Enable debug logging
 ///
 /// # Returns
-/// Decrypted key-value map with values wrapped in Zeroizing<Vec<u8>>
+/// Decrypted key-value map with values wrapped in `Zeroizing<Vec<u8>>`
 pub fn decrypt_kv_document(
     verified_doc: &VerifiedKvEncDocument,
     member_handle: &str,

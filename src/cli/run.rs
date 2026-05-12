@@ -6,7 +6,7 @@
 //! Executes a command with decrypted environment variables.
 //!
 //! Features:
-//! - Uses default kv-enc file (<workspace>/secrets/default.kvenc)
+//! - Uses default kv-enc file (`<workspace>/secrets/default.kvenc`)
 //! - Automatic verify --strict before decryption (MUST - cannot be skipped)
 //! - Child process execution with decrypted environment
 //! - Exit code forwarding

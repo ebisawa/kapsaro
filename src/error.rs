@@ -69,7 +69,7 @@ pub enum Error {
     InvalidOperation { message: String },
 }
 
-/// A convenient Result type alias using [`Error`].
+/// A convenient Result type alias using [`enum@Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Error {

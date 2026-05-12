@@ -2,32 +2,56 @@
 
 [日本語版 README はこちら](README_ja.md)
 
-Want to stop sending `.env` files over Slack or DMs?
-But also do not want to rely on a dedicated server or an always-on secret management service?
+`secretenv` is an offline-first CLI for development teams that want to share API tokens, database passwords, certificates, `.env` values, and other development secrets without passing them around in plaintext.
 
-`secretenv` is an offline-first CLI for sharing encrypted files for teams in that situation.
-It lets you manage `.env` files, certificates, key files, and other secrets in a Git repository without storing them in plaintext, while also fitting member changes and key updates into the normal Git review workflow.
+It fits teams that already use Git and pull-request review as their daily workflow. Secrets, member changes, removals, and key rotation are represented as encrypted repository changes, so the team can review secret-sharing decisions through the same process they already use for code.
 
-Good fit for teams that want to:
+No dedicated cloud service, SaaS secret platform, or always-on server is required. Encryption, decryption, verification, and recipient updates work locally and offline, while Git remains the shared transport and review layer.
 
-- share `.env` files safely across a team
-- manage certificates and config files with the same workflow
-- use the same secret workflow in both local development and CI
-- avoid depending on SaaS or dedicated infrastructure
+This project is currently in alpha. Feedback from trials, design reviews, and realistic team workflows is welcome before production adoption.
 
-The goal of this project is not only to avoid distributing secrets in plaintext.
-It is also to make it easier to reason about who a secret is shared with, whether it has been tampered with, and how membership changes or key updates should be applied, in a way that fits naturally with Git.
+## What You Can Do First
+
+SecretEnv lets you move these workflows into Git review:
+
+- encrypt an existing `.env` file and share it without committing plaintext
+- decrypt encrypted secrets just in time to run normal development commands
+- sync future recipients after a member is removed
+
+```bash
+# Encrypt an existing .env file into Git-managed storage
+secretenv init --member-handle alice@example.com
+secretenv import .env
+
+# Run the app without distributing a plaintext .env file
+secretenv run -- npm start
+
+# Remove a member from future sharing
+secretenv member remove old-member@example.com
+secretenv rewrap
+```
+
+## What Encryption Alone Does Not Solve
+
+Even if secret files are encrypted, teams still need to decide:
+
+- when a new member should receive each secret
+- whether a removed member has been excluded from future sharing
+- whether values a removed member could previously read need to be updated
+
+SecretEnv records removed-member history and shows entry-level signals that help teams decide which `.env` values may need updates. Secret updates and membership changes are stored as files, so teams can review them in normal pull requests. For the broader positioning, see the [Product Brief](guides/product_brief_en.md).
 
 ## Security Highlights
 
-`secretenv` encrypts values that should stay private, such as access tokens, API keys, and certificates. By storing the encrypted results in Git, teams can manage those secrets in a shared repository without committing plaintext `.env` files or key files.
+`secretenv` encrypts values that should stay private, such as access tokens, API keys, and certificates, so each member uses their own key material to decrypt. Teams do not need to distribute one shared encryption key; only members included as recipients can read the encrypted content.
 
-The design is built around four ideas:
+The design is built around five ideas:
 
 - encrypt secrets before they are stored in the repository, so a repository shared by many members can still carry sensitive values safely
-- use public-key encryption with a public/private key pair for each member, avoiding the need to distribute and protect one shared team encryption key
+- use public-key encryption to share the information needed for decryption separately with each recipient
+- use proven, standards-based cryptographic schemes including HPKE, Ed25519 signatures, XChaCha20-Poly1305, and HKDF-SHA256
 - require no dedicated server or SaaS; encryption, decryption, verification, and recipient updates are designed to work offline, even without network access
-- represent secret updates and recipient changes as Git file changes, so teams can review and merge them through their existing PR workflow
+- verify signatures and recipient information before decrypting or updating encrypted artifacts
 
 ## Install
 

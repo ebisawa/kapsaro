@@ -4,9 +4,35 @@ How does your team share `.env` files, certificates, and private key files today
 
 SecretEnv is an offline-first CLI for sharing secrets through a Git repository without storing them in plaintext. It works for both `.env`-style key-value files and arbitrary files such as certificates or config files, and it lets you manage membership and key updates through the same Git review flow your team already uses.
 
+## Adoption Snapshot
+
+SecretEnv is a lightweight encrypted sharing model for small and mid-sized teams that already use Git and PR review and want to reduce plaintext secret handoffs.
+
+Good fit for teams that:
+
+- already use Git and PR review as their main workflow
+- want to share `.env` files or certificates safely in a small team
+- do not want to depend on a SaaS or always-on secret platform
+- need the same workflow to work offline, in local development, and in CI/CD
+
+What you can expect:
+
+- reduce plaintext `.env` and certificate handoffs through chat
+- review secret additions, updates, and membership changes as Git diffs
+- encrypt separately for each recipient with standards-based schemes such as HPKE
+- sync future encrypted-file recipients after a member is removed
+- keep past disclosure visible enough to decide which values need rotation
+
+Not a good fit if you need to:
+
+- enforce fine-grained access policies from a central system
+- recover secrets after they were already disclosed
+- prevent legitimate recipients from copying plaintext after decryption
+- centrally control runtime secret injection across an entire cloud platform
+
 ## Common Problems
 
-### Sending `.env` Files Through Slack or DMs
+### Sharing `.env` Files Through Chat or Manual Handoffs
 
 - Plaintext secrets remain in message history and on local machines
 - It becomes unclear who has the latest version
@@ -26,11 +52,11 @@ SecretEnv is an offline-first CLI for sharing secrets through a Git repository w
 - The setup cost may be too high for small or mid-sized teams
 - Secret changes do not fit naturally into Git-based PR review
 
-### Existing Encryption Tools Often Do Not Match the Workflow
+### Encryption Still Leaves Team Workflow Decisions
 
-- GPG or PGP key distribution and rotation are cumbersome
-- Updating a single `.env` value tends to create poor diffs
-- It is hard to track who had access in the past after a member is removed
+- It is hard to review who changed keys or recipients
+- It is hard to decide which values may have been visible to removed members
+- CI access often needs to be managed differently from normal team access
 
 ## What SecretEnv Provides
 
@@ -73,7 +99,7 @@ secretenv get DATABASE_URL
 
 `run` decrypts the encrypted `.env` content on the fly, injects the values as environment variables, and starts the target process. Teams can move away from distributing plaintext `.env` files without changing how they normally launch their applications.
 
-The child process inherits the parent process's environment by default; only environment variables whose names start with `SECRETENV_` are stripped before launch, so values you set in your shell (for example `PATH` or `RUST_LOG`) still reach the application.
+The child process inherits the parent process's environment by default; only environment variables whose names start with `SECRETENV_` are stripped before launch, so values you set in your shell, for example `PATH` or `RUST_LOG`, still reach the application.
 
 Separate environments are managed with the `-n` option:
 
@@ -99,7 +125,7 @@ A new member is added in a pending state first, then an existing member runs `re
 ### 5. Offboarding and Key Updates Are Mechanical
 
 ```bash
-secretenv member remove alice@example.com
+secretenv member remove old-member@example.com
 secretenv rewrap
 ```
 
@@ -140,22 +166,6 @@ secretenv trust recipients list
 
 SecretEnv can confirm that an encrypted file was created by a particular key, but a person still needs to check whether that key belongs to the claimed member. `member verify --approve` cross-checks member public keys against GitHub accounts and saves approved key records in the local trust store. Use it as an extra check that makes key substitution easier to notice.
 
-## Safety Signals and Assumptions
-
-SecretEnv helps teams follow three practical rules: do not put plaintext secrets in Git, make secret changes reviewable, and stop sharing future secrets with removed members. It still assumes that workstations, private keys, PR review, and CI secrets are handled carefully.
-
-
-| Concern                                                          | What SecretEnv does                                                                                              | What the team must handle                                              |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `.env` content is read from the repository, a clone, or a backup | Stores secrets encrypted so only intended recipients can decrypt them                                            | Keep recipient membership accurate                                     |
-| An encrypted file or its metadata is modified                    | Verifies signatures and structure before decryption, and stops on broken or unexpected content                   | Use PR review and protected branches to catch suspicious changes       |
-| A new member key may not belong to the claimed person            | Uses `member verify --approve` to check GitHub account evidence and saves approved keys in the local trust store | Treat first approval as a real identity check                          |
-| A former teammate keeps access to future secrets                 | Uses `member remove` and `rewrap` to remove that member from future sharing                                      | Rotate already disclosed values in the external services that use them |
-| CI needs to run without SSH keys or an agent                     | Lets CI load an exported SecretEnv private key from secret variables                                             | Restrict use to trusted workflows, runners, and refs                   |
-
-
-Core operations are offline-first. Encryption, decryption, verification, and `rewrap` work locally. GitHub integration is optional and mainly helps when you want an additional identity check between a public key and an account. The Security Design document covers the cryptographic details and threat model.
-
 ## Typical Adoption Flow
 
 ### What You Need
@@ -163,58 +173,54 @@ Core operations are offline-first. Encryption, decryption, verification, and `re
 - An Ed25519 SSH key
 - A Git repository
 - A GitHub account
-Optional. Useful if you want to verify the link between a public key and an account.
+  Optional. Useful if you want to verify the link between a public key and an account.
 - Git practices such as PR review and protected branches for member changes
 - For CI/CD use, an environment where CI secret variables are managed safely
-
-### Installation
-
-```bash
-brew tap ebisawa/secretenv
-brew install secretenv
-```
 
 ### Add It to an Existing Project
 
 Run the following commands inside a Git repository directory. SecretEnv auto-detects the workspace within a Git repository.
 
 ```bash
-# Navigate to your Git repository
-cd /path/to/your-repo
+# Install
+brew tap ebisawa/secretenv
+brew install secretenv
 
-# 1. Create the workspace
+# Create the workspace
 secretenv init --member-handle alice@example.com
 
-# 2. Import the existing .env file
+# Import the existing .env file
 secretenv import .env
+
+# Daily usage
+secretenv set API_KEY "sk-..."
+secretenv get API_KEY
+secretenv run -- npm start
+
+# Membership changes
+secretenv join --member-handle bob@example.com
+secretenv rewrap
+secretenv member remove old-member@example.com
+secretenv rewrap
 ```
 
 After that, keep `.secretenv/` in Git and use `set`, `get`, `run`, `encrypt`, `decrypt`, and `rewrap` to manage secrets.
 
-## Where SecretEnv Fits
+## How to Compare Alternatives
 
 SecretEnv is not a centralized access-control system. It is a lightweight and practical model for sharing team secrets safely in a way that fits naturally with Git.
 
-What you can expect:
+When comparing tools, the useful question is not which tool is better in general. It is which workflow the tool fits.
 
-- reduce plaintext `.env` and certificate handoffs through chat
-- review secret additions, updates, and membership changes as Git diffs
-- sync future encrypted-file recipients after a member is removed
-- keep past disclosure visible enough to decide which values need rotation
+| What you need | Usually a better fit |
+| --- | --- |
+| Start quickly with `.env` encryption and runtime injection | SecretEnv, or a tool focused on encrypted `.env` runtime injection |
+| File encryption combined with existing key management or external key management | A tool focused on file encryption and external key management |
+| Central policy, SSO, SCIM, or fine-grained ACLs | A centralized secret management platform |
+| Put secret and membership changes through Git and PR review | SecretEnv |
+| Share `.env`, certificates, CI read access, rewrap, and disclosure history through one workflow in a small or mid-sized team | SecretEnv |
 
-Good fit for teams that:
-
-- already use Git and PR review as their main workflow
-- want to share `.env` files or certificates safely in a small team
-- do not want to depend on a SaaS or always-on secret platform
-- need the same workflow to work offline, in local development, and in CI/CD
-
-Not a good fit if you need to:
-
-- enforce fine-grained access policies from a central system
-- recover secrets after they were already disclosed
-- prevent legitimate recipients from copying plaintext after decryption
-- centrally control runtime secret injection across an entire cloud platform
+SecretEnv is worth considering when your team wants to reduce plaintext secret handoffs while keeping Git review at the center of the workflow. If you need central policy enforcement or organization-wide runtime secret injection controls, do not try to make SecretEnv satisfy that requirement by itself; evaluate a centralized secret management platform.
 
 ## Learn More
 

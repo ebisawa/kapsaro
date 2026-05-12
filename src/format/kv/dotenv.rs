@@ -14,7 +14,7 @@ use std::collections::HashMap;
 // Dotenv Parsing
 // ============================================================================
 
-/// Check if a key name is valid: [A-Za-z_][A-Za-z0-9_]*
+/// Check if a key name is valid: `[A-Za-z_][A-Za-z0-9_]*`
 pub fn is_valid_key_name(key: &str) -> bool {
     let mut chars = key.chars();
     chars

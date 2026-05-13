@@ -5,7 +5,9 @@ use std::path::PathBuf;
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::io::workspace::detection::{resolve_optional_workspace_with_base, WorkspaceRoot};
+use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
+use tracing::debug;
 
 /// Resolve the workspace if one is explicitly configured or auto-detectable.
 pub(crate) fn load_optional_workspace(
@@ -33,11 +35,13 @@ pub(crate) struct CommandPathResolution {
 
 impl CommandPathResolution {
     pub(crate) fn load(options: &CommonCommandOptions) -> Result<Self> {
-        Ok(Self {
+        let paths = Self {
             base_dir: options.resolve_base_dir()?,
             keystore_root: options.resolve_keystore_root()?,
             workspace_root: load_optional_workspace(options)?,
-        })
+        };
+        log_path_resolution(options, &paths);
+        Ok(paths)
     }
 
     pub(crate) fn require_workspace(options: &CommonCommandOptions, purpose: &str) -> Result<Self> {
@@ -49,4 +53,21 @@ impl CommandPathResolution {
         }
         Ok(paths)
     }
+}
+
+fn log_path_resolution(options: &CommonCommandOptions, paths: &CommandPathResolution) {
+    if !options.debug {
+        return;
+    }
+    let workspace = paths
+        .workspace_root
+        .as_ref()
+        .map(|root| format_path_relative_to_cwd(&root.root_path))
+        .unwrap_or_else(|| "(none)".to_string());
+    debug!(
+        "[CTX] paths: base_dir={}, keystore_root={}, workspace_root={}",
+        format_path_relative_to_cwd(&paths.base_dir),
+        format_path_relative_to_cwd(&paths.keystore_root),
+        workspace
+    );
 }

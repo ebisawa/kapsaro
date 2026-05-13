@@ -83,6 +83,37 @@ fn test_set_updates_existing_key() {
 }
 
 #[test]
+fn test_set_debug_does_not_log_secret_value() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "BOOTSTRAP_KEY",
+        "bootstrap_value",
+        None,
+        None,
+    );
+
+    cmd()
+        .arg("set")
+        .arg("API_TOKEN")
+        .arg("do-not-log-this-token")
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[CLI] command=set"))
+        .stdout(predicate::str::contains("[TRUST] write gate:"))
+        .stdout(predicate::str::contains("do-not-log-this-token").not());
+}
+
+#[test]
 fn test_set_multiple_keys() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 

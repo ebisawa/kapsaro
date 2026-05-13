@@ -11,7 +11,7 @@ use crate::model::common::WrapItem;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::model::wire::algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305;
 use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
-use crate::support::kid::format_kid_display_lossy;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::limits::validate_wrap_count;
 use crate::Result;
 use tracing::debug;
@@ -55,7 +55,7 @@ pub fn build_wrap_item(
         debug!(
             "[CRYPTO] HPKE: {}: seal_base (kid: {})",
             caller,
-            format_kid_display_lossy(&public_key.protected.kid)
+            format_kid_half_display_lossy(&public_key.protected.kid)
         );
     }
 

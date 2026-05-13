@@ -9,6 +9,7 @@ use crate::app::context::paths::CommandPathResolution;
 use crate::io::keystore::storage;
 use crate::model::identity::MemberHandle;
 use crate::Result;
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub(crate) struct CommandMemberResolution {
@@ -26,6 +27,9 @@ pub(crate) fn resolve_command_member(
         Some(paths.base_dir.as_path()),
         false,
     )?)?;
+    if options.debug {
+        debug!("[CTX] member_handle={}", member_handle);
+    }
     Ok(CommandMemberResolution {
         member_handle,
         paths,

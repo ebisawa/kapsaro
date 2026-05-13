@@ -13,7 +13,9 @@ use crate::app::trust::evaluation::enforce_policy_strict_key_checking;
 use crate::app::trust::policy::{TrustPolicy, WriteTrustPolicy};
 use crate::app::trust::store::load_optional_trust_store_for_member;
 use crate::config::resolution::strict_key_checking::resolve_strict_key_checking;
-use crate::config::types::StrictKeyCheckingResolution;
+use crate::config::types::{
+    StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
+};
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
 use crate::feature::trust::judgment::{
     build_active_members_by_kid, ActiveMemberSnapshot, SelfTrustSet,
@@ -26,6 +28,7 @@ use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
 use crate::model::trust_store::{KnownKey, RecipientSetRecord};
 use crate::support::tty;
 use crate::Result;
+use tracing::debug;
 
 /// Immutable trust state snapshot for a single command execution.
 #[derive(Debug, Clone)]
@@ -66,6 +69,12 @@ impl WorkspaceMemberSnapshot {
     }
 
     pub(crate) fn from_active_members(active_members: Vec<PublicKey>, debug: bool) -> Result<Self> {
+        if debug {
+            debug!(
+                "[TRUST] active member files loaded: count={}",
+                active_members.len()
+            );
+        }
         let mut member_handles = active_members
             .iter()
             .map(|member| member.protected.subject_handle.clone())
@@ -278,6 +287,17 @@ fn load_trust_context(
     };
     let self_trust = load_self_trust(options, self_member_handle, derive_self_sig_x)?;
 
+    if options.debug {
+        debug!(
+            "[TRUST] context: strict_key_checking={}, interactive={}, active_members={}, known_keys={}, recipient_sets={}",
+            format_strict_key_checking(strict_key_checking),
+            is_interactive,
+            active_members_by_kid.len(),
+            known_keys.len(),
+            recipient_sets.len()
+        );
+    }
+
     Ok(TrustContext {
         known_keys,
         recipient_sets,
@@ -287,6 +307,15 @@ fn load_trust_context(
         is_interactive,
         permission_warnings,
     })
+}
+
+fn format_strict_key_checking(resolution: StrictKeyCheckingResolution) -> &'static str {
+    match (resolution.mode, resolution.source) {
+        (StrictKeyChecking::Yes, StrictKeyCheckingSource::Default) => "yes/default",
+        (StrictKeyChecking::Yes, StrictKeyCheckingSource::ExplicitEnv) => "yes/env",
+        (StrictKeyChecking::No, StrictKeyCheckingSource::ExplicitEnv) => "no/env",
+        (StrictKeyChecking::No, StrictKeyCheckingSource::Default) => "no/default",
+    }
 }
 
 struct VerifiedActiveMemberIndex {

@@ -15,7 +15,7 @@ use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
 use crate::model::wire::algorithm;
-use crate::support::kid::format_kid_display;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::Result;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use std::ops::Deref;
@@ -79,10 +79,9 @@ pub fn sign_file_document(
     debug: bool,
 ) -> Result<ArtifactSignature> {
     if debug {
-        let kid_display = format_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
         debug!(
             "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
-            kid_display
+            format_kid_half_display_lossy(signer_kid)
         );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
@@ -102,11 +101,9 @@ pub fn verify_file_signature(
     debug: bool,
 ) -> Result<()> {
     if debug {
-        let kid_display =
-            format_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
         debug!(
             "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
-            kid_display
+            format_kid_half_display_lossy(&signature.kid)
         );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
@@ -145,10 +142,9 @@ pub(crate) fn append_kv_signature(
     caller: &str,
 ) -> Result<String> {
     if debug {
-        let kid_display = format_kid_display(signer_kid).unwrap_or_else(|_| signer_kid.to_string());
         debug!(
             "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
-            kid_display
+            format_kid_half_display_lossy(signer_kid)
         );
     }
     let signature = sign_artifact_bytes(
@@ -170,11 +166,9 @@ pub fn verify_kv_signature(
     debug: bool,
 ) -> Result<()> {
     if debug {
-        let kid_display =
-            format_kid_display(&signature.kid).unwrap_or_else(|_| signature.kid.clone());
         debug!(
             "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
-            kid_display
+            format_kid_half_display_lossy(&signature.kid)
         );
     }
     let canonical_bytes = build_canonical_bytes(document.lines());

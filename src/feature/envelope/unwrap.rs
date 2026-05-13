@@ -11,7 +11,7 @@ use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info
 use crate::model::common::{RecipientWrap, WrapItem, WrapSet};
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::kid::format_kid_display_lossy;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
 use uuid::Uuid;
@@ -65,7 +65,7 @@ pub fn unwrap_master_key(
         debug!(
             "[CRYPTO] HPKE: {}: open_base (kid: {})",
             caller,
-            format_kid_display_lossy(wrap_item.kid().as_str())
+            format_kid_half_display_lossy(wrap_item.kid().as_str())
         );
     }
 

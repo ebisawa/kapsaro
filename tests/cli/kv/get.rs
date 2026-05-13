@@ -8,6 +8,8 @@ use crate::cli::common::{
     tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
+use secretenv::io::keystore::storage::list_kids;
+use secretenv::support::kid::{format_kid_display, format_kid_half_display};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -63,6 +65,14 @@ fn setup_workspace_with_multiple_keys() -> (TempDir, TempDir, TempDir, PathBuf) 
         .success();
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
+}
+
+fn active_test_kid(home_dir: &TempDir) -> String {
+    list_kids(&home_dir.path().join("keys"), TEST_MEMBER_HANDLE)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap()
 }
 
 #[test]
@@ -205,10 +215,69 @@ fn test_get_all_debug_logs_public_key_verification_contexts() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
+        .stdout(predicate::str::contains("[CLI] command=get"))
+        .stdout(predicate::str::contains("[CTX] paths:"))
+        .stdout(predicate::str::contains("[TRUST] read gate:"))
         .stdout(predicate::str::contains("(keystore sibling public.json, "))
         .stdout(predicate::str::contains("(embedded signer_pub, "))
         .stdout(predicate::str::contains("(active member/read trust, "))
         .stdout(predicate::str::contains("(workspace active member recipient validation, ").not());
+}
+
+#[test]
+fn test_get_all_debug_uses_half_kid_for_high_frequency_traces() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_key();
+    let kid = active_test_kid(&home_dir);
+    let kid_full = format_kid_display(&kid).unwrap();
+    let kid_half = format_kid_half_display(&kid).unwrap();
+
+    cmd()
+        .arg("get")
+        .arg("--all")
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "[CRYPTO] load_crypto_context: resolved kid={kid_full}"
+        )))
+        .stdout(predicate::str::contains(format!(
+            "[VERIFY] Ed25519: verify_artifact_bytes (kid: {kid_half})"
+        )))
+        .stdout(
+            predicate::str::contains(format!(
+                "[VERIFY] Ed25519: verify_artifact_bytes (kid: {kid_full})"
+            ))
+            .not(),
+        )
+        .stdout(predicate::str::contains(format!(
+            "[CRYPTO] HPKE: unwrap_master_key_from_item: open_base (kid: {kid_half})"
+        )))
+        .stdout(
+            predicate::str::contains(format!(
+                "[CRYPTO] HPKE: unwrap_master_key_from_item: open_base (kid: {kid_full})"
+            ))
+            .not(),
+        )
+        .stdout(predicate::str::contains(format!(
+            "[CRYPTO] SSH: sign_sshsig (kid: {kid_half})"
+        )))
+        .stdout(
+            predicate::str::contains(format!("[CRYPTO] SSH: sign_sshsig (kid: {kid_full})")).not(),
+        )
+        .stdout(predicate::str::contains(format!(
+            "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {kid_half})"
+        )))
+        .stdout(
+            predicate::str::contains(format!(
+                "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {kid_full})"
+            ))
+            .not(),
+        );
 }
 
 #[test]
@@ -226,6 +295,9 @@ fn test_get_all_verbose_does_not_log_public_key_verification_contexts() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
+        .stdout(predicate::str::contains("[CLI] command=get").not())
+        .stdout(predicate::str::contains("[CTX] paths:").not())
+        .stdout(predicate::str::contains("[TRUST] read gate:").not())
         .stdout(predicate::str::contains("(keystore sibling public.json, ").not())
         .stdout(predicate::str::contains("(embedded signer_pub, ").not())
         .stdout(predicate::str::contains("(active member/read trust, ").not());

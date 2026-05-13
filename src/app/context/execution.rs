@@ -10,6 +10,7 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::expiry::{build_key_expiry_warning, build_signing_key_expiry_warning};
 use crate::model::identity::MemberHandle;
 use crate::{Error, Result};
+use tracing::debug;
 
 /// Fully resolved command execution context.
 pub(crate) struct ExecutionContext {
@@ -26,6 +27,9 @@ impl ExecutionContext {
         explicit_kid: Option<&str>,
         ssh_ctx: SshSigningContextResolution,
     ) -> Result<Self> {
+        if options.debug {
+            debug!("[CTX] execution mode=ssh-backed");
+        }
         let resolved = resolve_command_member(options, member_handle)?;
         let workspace_root = resolved.paths.workspace_root.clone();
         let key_ctx = load_crypto_context(
@@ -47,6 +51,9 @@ impl ExecutionContext {
 
     /// Load execution context from environment variables (CI mode).
     pub(crate) fn load_from_env(options: &CommonCommandOptions) -> Result<Self> {
+        if options.debug {
+            debug!("[CTX] execution mode=env-key");
+        }
         let resolved = CommandPathResolution::require_workspace(
             options,
             "environment variable key loading (CI mode)",

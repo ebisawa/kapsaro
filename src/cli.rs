@@ -50,6 +50,7 @@ use clap::{Parser, Subcommand};
 use crate::app::trust::CommandCapability;
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
 use crate::Error;
+use tracing::debug;
 
 #[derive(Parser)]
 #[command(name = "secretenv")]
@@ -116,7 +117,9 @@ pub enum Commands {
 
 pub fn run() -> Result<(), Error> {
     let cli = Cli::parse();
-    ensure_env_mode_command_allowed(command_capability(&cli.command))?;
+    let capability = command_capability(&cli.command);
+    debug!("[CLI] command={}", capability.label());
+    ensure_env_mode_command_allowed(capability)?;
 
     match cli.command {
         Commands::Config(args) => config::run(args),

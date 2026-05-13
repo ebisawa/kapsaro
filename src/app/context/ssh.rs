@@ -17,6 +17,7 @@ use crate::model::private_key::PrivateKey;
 use crate::model::private_key::PrivateKeyAlgorithm;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::{Error, Result};
+use tracing::debug;
 
 pub(crate) struct SshSigningContextResolution {
     pub(crate) public_key: String,
@@ -80,6 +81,9 @@ pub(crate) fn resolve_ssh_key_candidates_with_params(
         check_determinism: params.check_determinism,
     };
     let candidates = feature_resolve_ssh_key_candidates(&params)?;
+    if params.verbose {
+        debug!("[SSH] candidate count={}", candidates.len());
+    }
     Ok(build_ssh_candidate_views(candidates))
 }
 
@@ -105,6 +109,13 @@ pub(crate) fn build_ssh_signing_context_with_params(
         check_determinism: params.check_determinism,
     };
     let ssh_signing_context = feature_build_ssh_signing_context(&params, selected_pubkey)?;
+    if params.verbose {
+        debug!(
+            "[SSH] signing context: fingerprint={}, determinism={}",
+            ssh_signing_context.fingerprint,
+            format_determinism(&ssh_signing_context.determinism)
+        );
+    }
     Ok(SshSigningContextResolution {
         public_key: ssh_signing_context.public_key,
         fingerprint: ssh_signing_context.fingerprint,
@@ -155,6 +166,9 @@ fn resolve_ssh_context_for_fingerprint(
 ) -> Result<SshSigningContextResolution> {
     let candidates = resolve_ssh_key_candidates(options)?;
     let matched = find_ssh_candidate_by_fingerprint(&candidates, fingerprint)?;
+    if options.debug {
+        debug!("[SSH] matched active key fingerprint={}", fingerprint);
+    }
     build_ssh_signing_context(options, &matched.public_key, false)
 }
 
@@ -165,6 +179,14 @@ fn resolve_active_key_ssh_fingerprint(
     let kid = load_active_kid_for_ssh_context(member_handle, keystore_root)?;
     let private_key = load_private_key(keystore_root, member_handle, &kid)?;
     Ok(resolve_ssh_fingerprint_from_private_key(&private_key)?.to_string())
+}
+
+fn format_determinism(status: &SshDeterminismStatus) -> &str {
+    match status {
+        SshDeterminismStatus::Verified => "verified",
+        SshDeterminismStatus::Skipped => "skipped",
+        SshDeterminismStatus::Failed { .. } => "failed",
+    }
 }
 
 fn load_active_kid_for_ssh_context(

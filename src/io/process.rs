@@ -8,6 +8,7 @@ use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::process::Command;
+use tracing::debug;
 
 /// Execute a command with environment variables and return its exit code.
 pub fn execute_command_with_env(
@@ -15,6 +16,11 @@ pub fn execute_command_with_env(
     cmd_args: &[String],
     env_vars: &SecretEnvMap,
 ) -> Result<i32> {
+    debug!(
+        "[IO] child process: command={}, secret_env_count={}",
+        cmd,
+        env_vars.len()
+    );
     let mut command = Command::new(cmd);
     command.args(cmd_args);
     set_child_env_secret(&mut command, env_vars);
@@ -23,7 +29,9 @@ pub fn execute_command_with_env(
         Error::build_io_error_with_source(format!("Failed to execute command '{}': {}", cmd, e), e)
     })?;
 
-    Ok(status.code().unwrap_or(1))
+    let code = status.code().unwrap_or(1);
+    debug!("[IO] child process exited: command={}, code={}", cmd, code);
+    Ok(code)
 }
 
 pub(crate) fn set_child_env_secret(command: &mut Command, env_vars: &SecretEnvMap) {

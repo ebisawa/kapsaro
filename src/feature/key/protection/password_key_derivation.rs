@@ -9,7 +9,7 @@ use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
 use crate::model::wire::context;
-use crate::support::kid::format_kid_display_lossy;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::secret::SecretString;
 use crate::Result;
 use argon2::Argon2;
@@ -47,7 +47,7 @@ pub fn derive_key_from_password(
     if debug_enabled {
         debug!(
             "[CRYPTO] Argon2id: password hash (kid: {}, m: {}, t: {}, p: {})",
-            format_kid_display_lossy(kid),
+            format_kid_half_display_lossy(kid),
             ARGON2_MEMORY_COST_KIB,
             ARGON2_TIME_COST,
             ARGON2_PARALLELISM
@@ -58,7 +58,7 @@ pub fn derive_key_from_password(
     if debug_enabled {
         debug!(
             "[CRYPTO] HKDF-SHA256: password key derivation (kid: {})",
-            format_kid_display_lossy(kid)
+            format_kid_half_display_lossy(kid)
         );
     }
     let info = Info::from_string(&format!(

@@ -16,7 +16,7 @@ use crate::model::wire::{algorithm, format};
 use crate::support::codec::base64_public::{
     decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
 };
-use crate::support::kid::format_kid_display_lossy;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
 
@@ -147,7 +147,7 @@ pub(super) fn encrypt_private_key_plaintext(
         debug!(
             "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (kid: {})",
             caller,
-            format_kid_display_lossy(&protected.kid)
+            format_kid_half_display_lossy(&protected.kid)
         );
     }
     let (ct, nonce) = xchacha::encrypt_with_nonce(enc_key, &plaintext, &aad)?;
@@ -180,7 +180,7 @@ pub(super) fn decrypt_private_key_plaintext(
         debug!(
             "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (kid: {})",
             caller,
-            format_kid_display_lossy(kid)
+            format_kid_half_display_lossy(kid)
         );
     }
     let plaintext_json = xchacha::decrypt(enc_key, &params.nonce, &params.aad, &params.ct)?;

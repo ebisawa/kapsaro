@@ -12,7 +12,7 @@ use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::model::wire::context;
-use crate::support::kid::format_kid_display_lossy;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::Result;
 use tracing::debug;
 
@@ -84,7 +84,7 @@ pub(super) fn enforce_private_key_use_signature_determinism(
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_sshsig retry diagnosis (kid: {})",
-            format_kid_display_lossy(kid)
+            format_kid_half_display_lossy(kid)
         );
     }
     let retry_sig = backend.sign_sshsig(
@@ -108,7 +108,7 @@ fn sign_for_private_key_encryption(
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_sshsig x2 determinism check (kid: {})",
-            format_kid_display_lossy(kid)
+            format_kid_half_display_lossy(kid)
         );
     }
     backend
@@ -126,7 +126,7 @@ fn sign_for_private_key_use(
     if debug {
         debug!(
             "[CRYPTO] SSH: sign_sshsig (kid: {})",
-            format_kid_display_lossy(kid)
+            format_kid_half_display_lossy(kid)
         );
     }
     backend.sign_sshsig(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
@@ -141,7 +141,7 @@ fn derive_key_from_raw_signature(
     if debug {
         debug!(
             "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {})",
-            format_kid_display_lossy(kid)
+            format_kid_half_display_lossy(kid)
         );
     }
     let ikm = Ikm::from(&raw_sig.as_bytes()[..]);

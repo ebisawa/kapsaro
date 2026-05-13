@@ -19,6 +19,7 @@ use crate::model::wire::format::LOCAL_TRUST_V5;
 use crate::support::fs::lock;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
+use tracing::debug;
 
 pub(crate) struct TrustStoreState {
     pub(crate) protected: TrustStoreProtected,
@@ -41,6 +42,11 @@ pub(crate) fn load_existing_trust_store(
     keystore_root: &Path,
     owner_handle: &str,
 ) -> Result<TrustStoreState> {
+    debug!(
+        "[TRUST] load trust store: owner={}, path={}",
+        owner_handle,
+        path.display()
+    );
     let loaded = load_trust_store(path, base_dir)
         .map_err(|e| build_invalid_trust_store_error(path, e))?
         .ok_or_else(|| Error::NotFound {
@@ -55,6 +61,11 @@ pub(crate) fn load_or_build_trust_store(
     keystore_root: &Path,
     owner_handle: &str,
 ) -> Result<TrustStoreState> {
+    debug!(
+        "[TRUST] load or build trust store: owner={}, path={}",
+        owner_handle,
+        path.display()
+    );
     match load_trust_store(path, base_dir).map_err(|e| build_invalid_trust_store_error(path, e))? {
         Some(loaded) => verify_loaded_trust_store(path, keystore_root, loaded),
         None => {
@@ -194,9 +205,11 @@ fn save_changed_trust_store(
     changed: bool,
 ) -> Result<()> {
     if !changed {
+        debug!("[TRUST] trust store unchanged: path={}", path.display());
         return Ok(());
     }
     protected.updated_at = build_now_timestamp()?;
+    debug!("[TRUST] save trust store: path={}", path.display());
     save_signed_trust_store(path, protected, signing)
 }
 

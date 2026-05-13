@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::Result;
+use tracing::debug;
 
 use self::types::DoctorReport;
 
@@ -41,33 +42,73 @@ impl DoctorRequest {
 
 pub(crate) fn run_doctor(request: DoctorRequest) -> Result<DoctorReport> {
     let options = request.common_options();
+    if options.debug {
+        debug!(
+            "[DOCTOR] start: workspace={}, home={}, member_handle={}",
+            request
+                .workspace
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "(auto)".to_string()),
+            request
+                .home
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "(default)".to_string()),
+            request.member_handle.as_deref().unwrap_or("(auto)")
+        );
+    }
     let workspace_state = workspace::diagnose_workspace(&options)?;
     let mut report = DoctorReport::new(workspace_state.workspace_display());
     report.extend(workspace_state.checks);
+    log_doctor_count(&options, "workspace", report.checks().len());
     let local_state =
         local_state::diagnose_local_state(&options, request.member_handle.as_deref())?;
+    let local_count = local_state.checks.len();
     report.extend(local_state.checks);
+    log_doctor_count(&options, "local_state", local_count);
 
     if let Some(workspace_root) = workspace_state
         .workspace_root
         .as_ref()
         .filter(|_| workspace_state.structure_ok)
     {
-        report.extend(members::diagnose_members(workspace_root, options.debug)?);
-        report.extend(local_state::diagnose_trust_store(
+        let checks = members::diagnose_members(workspace_root, options.debug)?;
+        log_doctor_count(&options, "members", checks.len());
+        report.extend(checks);
+        let checks = local_state::diagnose_trust_store(
             &options,
             request.member_handle.as_deref(),
             workspace_root,
-        )?);
-        report.extend(artifacts::diagnose_artifacts(
+        )?;
+        log_doctor_count(&options, "trust_store", checks.len());
+        report.extend(checks);
+        let checks = artifacts::diagnose_artifacts(
             &options,
             request.member_handle.as_deref(),
             workspace_root,
-        )?);
+        )?;
+        log_doctor_count(&options, "artifacts", checks.len());
+        report.extend(checks);
     }
 
-    report.extend(ci::diagnose_ci_readiness(&options));
+    let checks = ci::diagnose_ci_readiness(&options);
+    log_doctor_count(&options, "ci_readiness", checks.len());
+    report.extend(checks);
+    if options.debug {
+        debug!(
+            "[DOCTOR] complete: overall={}, checks={}",
+            report.overall_status().as_str(),
+            report.checks().len()
+        );
+    }
     Ok(report)
+}
+
+fn log_doctor_count(options: &CommonCommandOptions, category: &str, count: usize) {
+    if options.debug {
+        debug!("[DOCTOR] category={} checks={}", category, count);
+    }
 }
 
 #[cfg(test)]

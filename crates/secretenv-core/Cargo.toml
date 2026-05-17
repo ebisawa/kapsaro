@@ -47,4 +47,3 @@ online = ["dep:reqwest", "dep:tokio"]
 http = "1"
 serial_test = "3"
 temp-env = "0.3"
-trybuild = "1"

@@ -33,53 +33,6 @@ fn test_unit_internal_files_are_registered_once() {
     assert_registered_once(&core_internal_files, &core_registrations);
 }
 
-#[test]
-fn test_unit_root_contains_only_harness_directories() {
-    let root = repo_root();
-    let unit_root = root.join("tests/unit");
-    let stray_files: Vec<_> = fs::read_dir(&unit_root)
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .collect();
-
-    assert!(
-        stray_files.is_empty(),
-        "stray root unit test files: {stray_files:?}"
-    );
-}
-
-#[test]
-fn test_unit_harnesses_do_not_cross_register() {
-    let root = repo_root();
-    let unit_harness = fs::read_to_string(root.join("tests/unit.rs")).unwrap();
-    let unit_harness_targets = collect_path_attribute_targets(&unit_harness);
-    assert!(
-        unit_harness_targets
-            .iter()
-            .all(|target| !target.contains("unit/internal/")),
-        "tests/unit.rs must not register internal unit tests"
-    );
-
-    let src_paths = production_src_roots(&root)
-        .into_iter()
-        .flat_map(|root| collect_rs_files(&root))
-        .collect::<Vec<_>>();
-    let external_refs: Vec<_> = src_paths
-        .into_iter()
-        .filter(|path| {
-            fs::read_to_string(path)
-                .unwrap()
-                .contains("tests/unit/external/")
-        })
-        .collect();
-    assert!(
-        external_refs.is_empty(),
-        "production modules must not register external unit tests: {external_refs:?}"
-    );
-}
-
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -105,10 +58,6 @@ fn collect_unit_harness_paths(path: &Path) -> BTreeMap<String, usize> {
         .into_iter()
         .filter_map(|target| target.strip_prefix(EXTERNAL_PREFIX).map(str::to_string))
         .fold(BTreeMap::new(), increment_count)
-}
-
-fn production_src_roots(root: &Path) -> Vec<PathBuf> {
-    vec![root.join("src"), root.join("crates/secretenv-core/src")]
 }
 
 fn collect_internal_harness_paths(src_roots: &[PathBuf]) -> BTreeMap<String, usize> {

@@ -3,23 +3,6 @@
 
 //! Shared CLI command runners for trust-gated commands.
 
-use crate::app::context::env_key::is_env_key_mode;
-use crate::app::context::execution::{resolve_write_execution, ExecutionContext};
-use crate::app::context::identity::{
-    build_missing_member_handle_error, resolve_member_handle_input,
-};
-use crate::app::context::member::resolve_required_member;
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::SshSigningContextResolution;
-use crate::app::file::decrypt::DecryptFileCommand;
-use crate::app::file::encrypt::EncryptFileCommand;
-use crate::app::kv::mutation::{resolve_mutation_write_plan, MutationWriteTrustPlan};
-use crate::app::kv::query::KvReadCommand;
-use crate::app::trust::review::{
-    execute_read_with_signer_trust, execute_write_with_recipient_trust, ReadSignerTrustReviewPlan,
-    SignerTrustLabels, TrustExecutionContext, WriteRecipientTrustReviewPlan,
-};
-use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, WriteTrustPolicy};
 use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::ssh::resolve_ssh_context_optional;
 use crate::cli::common::trust::{
@@ -27,7 +10,28 @@ use crate::cli::common::trust::{
 };
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
-use crate::Result;
+use secretenv_core::cli_api::app::context::env_key::is_env_key_mode;
+use secretenv_core::cli_api::app::context::execution::{resolve_write_execution, ExecutionContext};
+use secretenv_core::cli_api::app::context::identity::{
+    build_missing_member_handle_error, resolve_member_handle_input,
+};
+use secretenv_core::cli_api::app::context::member::resolve_required_member;
+use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use secretenv_core::cli_api::app::context::ssh::SshSigningContextResolution;
+use secretenv_core::cli_api::app::file::decrypt::DecryptFileCommand;
+use secretenv_core::cli_api::app::file::encrypt::EncryptFileCommand;
+use secretenv_core::cli_api::app::kv::mutation::{
+    resolve_mutation_write_plan, MutationWriteTrustPlan,
+};
+use secretenv_core::cli_api::app::kv::query::KvReadCommand;
+use secretenv_core::cli_api::app::trust::review::{
+    execute_read_with_signer_trust, execute_write_with_recipient_trust, ReadSignerTrustReviewPlan,
+    SignerTrustLabels, TrustExecutionContext, WriteRecipientTrustReviewPlan,
+};
+use secretenv_core::cli_api::app::trust::{
+    RecipientTrustOutcome, SignerTrustOutcome, WriteTrustPolicy,
+};
+use secretenv_core::Result;
 use tracing::debug;
 
 pub(crate) struct ReadCommandLabels<'a> {

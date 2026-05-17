@@ -8,7 +8,7 @@
 //! - Phase 4.2: agent (ssh-agent signature + determinism check)
 //! - Phase 4.3: verify (SSHSIG verification via ssh-keygen)
 
-use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
 
 // ============================================================================
 // Phase 4.1: SSH Fingerprint Tests

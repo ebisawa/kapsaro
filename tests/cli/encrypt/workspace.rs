@@ -16,7 +16,7 @@ use secretenv::cli::encrypt;
 use std::fs;
 
 #[cfg(unix)]
-use secretenv::io::trust::paths::get_trust_store_file_path;
+use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_encrypt_rejects_filename_content_mismatch() {

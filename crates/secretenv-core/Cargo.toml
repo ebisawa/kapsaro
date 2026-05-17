@@ -1,0 +1,49 @@
+[package]
+name = "secretenv-core"
+version = "0.8.1-alpha"
+edition = "2021"
+authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
+description = "Core library APIs for SecretEnv encrypted artifacts and local state"
+license = "Apache-2.0"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_jcs = "0.2"
+jsonschema = { version = "0.46", default-features = false }
+hex = "0.4"
+uuid = { version = "1", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+rand = "0.9"
+hpke = "0.13"
+chacha20poly1305 = "0.10"
+hkdf = "0.13"
+sha2 = "0.11"
+ed25519-dalek = "2"
+argon2 = { version = "0.5", features = ["alloc"] }
+zeroize = { version = "1", features = ["zeroize_derive"] }
+subtle = "2"
+dotenvy = "0.15"
+toml = "1.0"
+shellexpand = "3"
+tempfile = "3"
+fd-lock = "4.0"
+tracing = "0.1"
+thiserror = "2"
+regex = "1"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = []
+cli-internal = []
+cli-test-support = ["cli-internal"]
+online = ["dep:reqwest", "dep:tokio"]
+
+[dev-dependencies]
+http = "1"
+serial_test = "3"
+temp-env = "0.3"

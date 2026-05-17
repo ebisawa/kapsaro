@@ -16,7 +16,9 @@
 //! Reference: <https://www.rfc-editor.org/rfc/rfc8785>
 //! Reference: <https://www.rfc-editor.org/rfc/rfc8785>
 
-use secretenv::format::jcs::{normalize, normalize_to_bytes, normalize_to_string};
+use secretenv_core::cli_api::test_support::wire::jcs::{
+    normalize, normalize_to_bytes, normalize_to_string,
+};
 use serde_json::json;
 
 // =============================================================================

@@ -1,12 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::member::approval::MemberApprovalResult;
-use crate::app::member::types::{MemberListEntry, MemberListResult};
-use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::member::view::{
     build_member_approval_results_view, build_member_list_view,
 };
+use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
+use secretenv_core::cli_api::app::member::types::{MemberListEntry, MemberListResult};
+use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
 
 #[test]
 fn test_build_member_list_view_preserves_kid() {

@@ -5,7 +5,7 @@
 //!
 //! Tests for keystore resolver.
 
-use secretenv::io::keystore::resolver::KeystoreResolver;
+use secretenv_core::cli_api::test_support::storage::keystore::resolver::KeystoreResolver;
 use tempfile::TempDir;
 
 #[test]

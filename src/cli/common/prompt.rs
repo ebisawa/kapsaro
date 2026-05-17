@@ -3,9 +3,9 @@
 
 //! Shared interactive prompts for CLI commands.
 
-use crate::support::tty;
-use crate::{Error, Result};
 use dialoguer::Confirm;
+use secretenv_core::cli_api::presentation::tty;
+use secretenv_core::{Error, Result};
 #[cfg(test)]
 use std::io::BufRead;
 

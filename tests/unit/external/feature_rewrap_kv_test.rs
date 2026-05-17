@@ -9,19 +9,23 @@ use crate::test_utils::{
     setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncContent, KvEncContent};
-use secretenv::format::kv::document::parse_kv_document;
-use secretenv::format::kv::dotenv::parse_dotenv;
-use secretenv::format::schema::document::{parse_kv_entry_token, parse_kv_wrap_token};
-use secretenv::format::token::TokenCodec;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::kv_enc::entry::KvEntryValue;
-use secretenv::model::kv_enc::header::KvWrap;
-use secretenv::model::kv_enc::line::KvEncLine;
+use secretenv_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
+use secretenv_core::cli_api::test_support::domain::kv_enc::header::KvWrap;
+use secretenv_core::cli_api::test_support::domain::kv_enc::line::KvEncLine;
+use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::content::{EncContent, KvEncContent};
+use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
+use secretenv_core::cli_api::test_support::wire::kv::dotenv::parse_dotenv;
+use secretenv_core::cli_api::test_support::wire::schema::document::{
+    parse_kv_entry_token, parse_kv_wrap_token,
+};
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use std::fs;
 use tempfile::TempDir;
 
@@ -62,7 +66,7 @@ fn single_rewrap_request<'a>(
 fn rewrap_kv_content(
     content: &KvEncContent,
     request: &RewrapRequest<'_>,
-) -> secretenv::Result<String> {
+) -> secretenv_core::Result<String> {
     rewrap_content(&EncContent::KvEnc(content.clone()), request)
 }
 
@@ -140,7 +144,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    secretenv::io::keystore::storage::save_key_pair_atomic(
+    secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,
@@ -278,7 +282,7 @@ fn test_rewrap_kv_add_recipient() {
         .unwrap()
         .strip_prefix(":WRAP ")
         .unwrap();
-    let wrap_data: secretenv::model::kv_enc::header::KvWrap =
+    let wrap_data: secretenv_core::cli_api::test_support::domain::kv_enc::header::KvWrap =
         parse_kv_wrap_token(wrap_token).unwrap();
     let recipient_handles: Vec<&str> = wrap_data
         .wrap

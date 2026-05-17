@@ -7,10 +7,12 @@
 
 use crate::test_utils::setup_test_workspace_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv::feature::verify::key_loader::load_verifying_key_from_signature;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::verification::VerifyingKeySource;
+use secretenv_core::cli_api::test_support::domain::signature::ArtifactSignature;
+use secretenv_core::cli_api::test_support::domain::verification::VerifyingKeySource;
+use secretenv_core::cli_api::test_support::operations::verify::key_loader::load_verifying_key_from_signature;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
 use std::fs;
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
@@ -25,7 +27,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
         .join("members/active")
         .join(format!("{}.json", ALICE_MEMBER_HANDLE));
     let content = fs::read_to_string(&member_file).unwrap();
-    let public_key: secretenv::model::public_key::PublicKey =
+    let public_key: secretenv_core::cli_api::test_support::domain::public_key::PublicKey =
         serde_json::from_str(&content).unwrap();
     let kid = public_key.protected.kid.clone();
 
@@ -115,7 +117,7 @@ fn test_load_verifying_key_from_signature_kid_mismatch() {
         .join("members/active")
         .join(format!("{}.json", ALICE_MEMBER_HANDLE));
     let content = fs::read_to_string(&member_file).unwrap();
-    let public_key: secretenv::model::public_key::PublicKey =
+    let public_key: secretenv_core::cli_api::test_support::domain::public_key::PublicKey =
         serde_json::from_str(&content).unwrap();
 
     // Create a signature with a different kid than what's in the embedded public key

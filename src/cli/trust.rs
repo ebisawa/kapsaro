@@ -6,7 +6,7 @@
 use clap::{Args, Subcommand};
 
 use crate::cli::options::{ForceOption, LocalOutputOptions, MemberHandleOption, SigningOptions};
-use crate::Error;
+use secretenv_core::Error;
 
 mod list;
 mod purge;

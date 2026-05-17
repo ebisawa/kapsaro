@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::keygen_helpers::build_dummy_public_key;
-use secretenv::feature::verify::file::verify_file_document;
-use secretenv::feature::verify::kv::signature::verify_kv_document;
-use secretenv::model::common::WrapItem;
-use secretenv::model::file_enc::{
+use secretenv_core::cli_api::test_support::domain::common::WrapItem;
+use secretenv_core::cli_api::test_support::domain::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
 };
-use secretenv::model::kv_enc::document::KvEncDocument;
-use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
-use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::wire::{algorithm, format};
-use secretenv::support::limits::MAX_WRAP_ITEMS;
+use secretenv_core::cli_api::test_support::domain::kv_enc::document::KvEncDocument;
+use secretenv_core::cli_api::test_support::domain::kv_enc::header::{
+    KvFileAlgorithm, KvHeader, KvWrap,
+};
+use secretenv_core::cli_api::test_support::domain::signature::ArtifactSignature;
+use secretenv_core::cli_api::test_support::domain::wire::{algorithm, format};
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_WRAP_ITEMS;
+use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
+use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
 use uuid::Uuid;
 
 fn test_wrap_item() -> WrapItem {

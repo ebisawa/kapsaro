@@ -3,10 +3,6 @@
 
 //! Key operations (activate, remove, export) implementation
 
-use crate::app::key::manage::{
-    activate_key_command, export_key_command, export_private_key_command, remove_key_command,
-    validate_kid,
-};
 use crate::cli::common::command::{resolve_options, resolve_required_member_handle};
 use crate::cli::common::output::text::key::{
     print_key_activate_summary, print_key_export_summary, print_key_remove_summary,
@@ -14,9 +10,13 @@ use crate::cli::common::output::text::key::{
 };
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::ssh::resolve_ssh_context_for_active_key;
-use crate::support::fs::atomic;
-use crate::support::secret::SecretString;
-use crate::Result;
+use secretenv_core::cli_api::app::key::manage::{
+    activate_key_command, export_key_command, export_private_key_command, remove_key_command,
+    validate_kid,
+};
+use secretenv_core::cli_api::presentation::fs::save_text;
+use secretenv_core::cli_api::presentation::secret::SecretString;
+use secretenv_core::Result;
 use std::io::IsTerminal;
 use std::io::{self, BufRead};
 use zeroize::Zeroizing;
@@ -50,12 +50,11 @@ pub fn run_remove(args: RemoveArgs) -> Result<()> {
 
 /// Main entry point for public key export
 pub fn run_export(args: ExportArgs) -> Result<()> {
-    let out = args
-        .out
-        .as_ref()
-        .ok_or_else(|| crate::Error::InvalidArgument {
-            message: "--out is required for public key export".to_string(),
-        })?;
+    let out = args.out.as_ref().ok_or_else(|| {
+        secretenv_core::Error::build_invalid_argument_error(
+            "--out is required for public key export".to_string(),
+        )
+    })?;
     let options = resolve_options(&args.common);
     let result = export_key_command(
         &options,
@@ -71,9 +70,9 @@ pub fn run_export(args: ExportArgs) -> Result<()> {
 /// Main entry point for private key export (password-protected portable format)
 pub fn run_export_private(args: ExportArgs) -> Result<()> {
     if args.out.is_none() && !args.stdout {
-        return Err(crate::Error::InvalidArgument {
-            message: "--private export requires either --out or --stdout".to_string(),
-        });
+        return Err(secretenv_core::Error::build_invalid_argument_error(
+            "--private export requires either --out or --stdout".to_string(),
+        ));
     }
 
     let options = resolve_options(&args.common);
@@ -96,7 +95,7 @@ pub fn run_export_private(args: ExportArgs) -> Result<()> {
     }
 
     if let Some(out) = args.out.as_ref() {
-        atomic::save_text(out, result.encoded_key.as_str())?;
+        save_text(out, result.encoded_key.as_str())?;
         print_private_key_export_file_summary(&result.member_handle, &result.kid, out);
     } else if args.stdout {
         eprintln!();
@@ -113,7 +112,9 @@ fn prompt_export_password() -> Result<SecretString> {
             .with_prompt("Enter password for key export")
             .with_confirmation("Confirm password", "Passwords do not match")
             .interact()
-            .map_err(|e| crate::Error::build_io_error(format!("Failed to read password: {}", e)))?;
+            .map_err(|e| {
+                secretenv_core::Error::build_io_error(format!("Failed to read password: {}", e))
+            })?;
         return Ok(SecretString::new(password));
     }
 
@@ -122,20 +123,23 @@ fn prompt_export_password() -> Result<SecretString> {
     let mut password = Zeroizing::new(String::new());
     let mut confirmation = Zeroizing::new(String::new());
 
-    reader
-        .read_line(&mut password)
-        .map_err(|e| crate::Error::build_io_error(format!("Failed to read password: {}", e)))?;
+    reader.read_line(&mut password).map_err(|e| {
+        secretenv_core::Error::build_io_error(format!("Failed to read password: {}", e))
+    })?;
     reader.read_line(&mut confirmation).map_err(|e| {
-        crate::Error::build_io_error(format!("Failed to read password confirmation: {}", e))
+        secretenv_core::Error::build_io_error(format!(
+            "Failed to read password confirmation: {}",
+            e
+        ))
     })?;
 
     normalize_line_ending(&mut password);
     normalize_line_ending(&mut confirmation);
 
     if password.as_str() != confirmation.as_str() {
-        return Err(crate::Error::InvalidArgument {
-            message: "Passwords do not match".to_string(),
-        });
+        return Err(secretenv_core::Error::build_invalid_argument_error(
+            "Passwords do not match".to_string(),
+        ));
     }
 
     Ok(SecretString::from_zeroizing(password))

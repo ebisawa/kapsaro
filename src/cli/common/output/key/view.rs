@@ -3,7 +3,7 @@
 
 //! View builders for key command output.
 
-use crate::app::key::types::KeyListResult;
+use secretenv_core::cli_api::app::key::types::KeyListResult;
 
 pub(crate) struct KeyInfoView<'a> {
     pub(crate) kid: &'a str,

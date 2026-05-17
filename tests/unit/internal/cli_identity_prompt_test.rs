@@ -6,8 +6,8 @@
 use std::env;
 use std::fs;
 
-use crate::app::context::ssh::SshKeyCandidateView;
 use crate::test_utils::EnvGuard;
+use secretenv_core::cli_api::app::context::ssh::SshKeyCandidateView;
 use serial_test::serial;
 use tempfile::TempDir;
 

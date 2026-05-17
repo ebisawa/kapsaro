@@ -9,16 +9,18 @@
 use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::decrypt::file::decrypt_file_document;
-use secretenv::feature::encrypt::file::encrypt_file_document;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::feature::verify::file::verify_file_document;
-use secretenv::format::content::{EncContent, FileEncContent};
-use secretenv::io::keystore::storage::save_key_pair_atomic;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::file_enc::FileEncDocument;
+use secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument;
+use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
+use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::content::{EncContent, FileEncContent};
 use std::fs;
 use tempfile::TempDir;
 
@@ -63,7 +65,7 @@ fn single_rewrap_request<'a>(
 fn rewrap_file_content(
     content: &FileEncContent,
     request: &RewrapRequest<'_>,
-) -> secretenv::Result<String> {
+) -> secretenv_core::Result<String> {
     rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 

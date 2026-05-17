@@ -5,11 +5,11 @@
 
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use crate::test_utils::generate_temp_ssh_keypair_in_dir;
-use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
-use secretenv::io::ssh::backend::SignatureBackend;
-use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
-use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use tempfile::TempDir;
 
 #[test]

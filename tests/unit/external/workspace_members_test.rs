@@ -6,7 +6,7 @@
 use crate::test_utils::{
     keygen_test, setup_test_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
-use secretenv::io::workspace::members::{
+use secretenv_core::cli_api::test_support::storage::workspace::members::{
     list_active_member_handles, load_active_member_files, load_member_file,
     load_verified_member_file_from_path,
 };

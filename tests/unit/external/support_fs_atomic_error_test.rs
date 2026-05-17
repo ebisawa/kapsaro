@@ -6,8 +6,10 @@
 //! Complements support_fs_atomic_test.rs (happy paths) by exercising
 //! failure branches of save_bytes / save_json / save_text.
 
-use secretenv::support::fs::atomic::{save_bytes, save_json, save_text, save_text_restricted};
-use secretenv::Error;
+use secretenv_core::cli_api::test_support::helpers::fs::atomic::{
+    save_bytes, save_json, save_text, save_text_restricted,
+};
+use secretenv_core::ErrorKind;
 use serde::{Serialize, Serializer};
 use std::fs;
 use tempfile::TempDir;
@@ -34,16 +36,13 @@ fn test_save_bytes_parent_is_file_fails() {
     let target = file_as_parent.join("child.bin");
     let err = save_bytes(&target, b"payload").expect_err("parent is a file, expected error");
 
-    match err {
-        Error::Io { message, .. } => {
-            assert!(
-                message.contains("Failed to create temp file"),
-                "unexpected message: {}",
-                message
-            );
-        }
-        other => panic!("expected Error::Io, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Io);
+    assert!(
+        err.format_user_message()
+            .contains("Failed to create temp file"),
+        "unexpected message: {}",
+        err.format_user_message()
+    );
 }
 
 #[test]
@@ -53,7 +52,7 @@ fn test_save_bytes_parent_missing_fails() {
     let target = missing_parent.join("child.bin");
 
     let err = save_bytes(&target, b"payload").expect_err("missing parent, expected error");
-    assert!(matches!(err, Error::Io { .. }));
+    assert_eq!(err.kind(), ErrorKind::Io);
 }
 
 #[test]
@@ -65,16 +64,13 @@ fn test_save_text_parent_is_file_fails() {
     let target = file_as_parent.join("child.txt");
     let err = save_text(&target, "payload").expect_err("parent is a file, expected error");
 
-    match err {
-        Error::Io { message, .. } => {
-            assert!(
-                message.contains("Failed to create directory"),
-                "unexpected message: {}",
-                message
-            );
-        }
-        other => panic!("expected Error::Io, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Io);
+    assert!(
+        err.format_user_message()
+            .contains("Failed to create directory"),
+        "unexpected message: {}",
+        err.format_user_message()
+    );
 }
 
 #[test]
@@ -86,7 +82,7 @@ fn test_save_text_restricted_parent_is_file_fails() {
     let target = file_as_parent.join("child.txt");
     let err =
         save_text_restricted(&target, "payload").expect_err("parent is a file, expected error");
-    assert!(matches!(err, Error::Io { .. }));
+    assert_eq!(err.kind(), ErrorKind::Io);
 }
 
 #[test]
@@ -95,21 +91,19 @@ fn test_save_json_serialization_failure_maps_to_parse_error() {
     let target = temp_dir.path().join("bad.json");
 
     let err = save_json(&target, &AlwaysFailSerialize).expect_err("custom Serialize always fails");
-    match err {
-        Error::Parse { message, .. } => {
-            assert!(
-                message.contains("JSON serialization failed"),
-                "unexpected message: {}",
-                message
-            );
-            assert!(
-                message.contains("forced serialization failure"),
-                "error message should surface the underlying reason: {}",
-                message
-            );
-        }
-        other => panic!("expected Error::Parse, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Parse);
+    assert!(
+        err.format_user_message()
+            .contains("JSON serialization failed"),
+        "unexpected message: {}",
+        err.format_user_message()
+    );
+    assert!(
+        err.format_user_message()
+            .contains("forced serialization failure"),
+        "error message should surface the underlying reason: {}",
+        err.format_user_message()
+    );
     assert!(
         !target.exists(),
         "target file must not be created on serialization failure"

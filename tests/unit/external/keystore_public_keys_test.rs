@@ -4,11 +4,11 @@
 //! Unit tests for keystore public keys
 
 use crate::test_utils::save_public_key;
-use secretenv::io::keystore::active::set_active_kid;
-use secretenv::io::keystore::public_keys::load_public_keys_for_member_handles;
-use secretenv::model::public_key::{
+use secretenv_core::cli_api::test_support::domain::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
+use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::public_keys::load_public_keys_for_member_handles;
 use tempfile::TempDir;
 
 const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -18,25 +18,26 @@ const B64URL_64: &str =
 fn build_test_public_key(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },
                 attestation: Attestation {
-                    method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
+                    method:
+                        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                            .to_string(),
                     pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
                     sig: B64URL_64.to_string(),
                 },

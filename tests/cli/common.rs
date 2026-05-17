@@ -12,9 +12,9 @@ pub use crate::test_utils::{
 };
 use assert_cmd::{cargo, Command};
 use secretenv::cli::options::CommonOptions;
-use secretenv::format::schema::document::parse_kv_signature_token;
-use secretenv::format::token::TokenCodec;
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 #[cfg(unix)]
 use std::fs::File;
 #[cfg(unix)]

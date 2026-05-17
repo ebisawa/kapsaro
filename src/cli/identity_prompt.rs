@@ -7,11 +7,11 @@ use dialoguer::{Input, Select};
 use std::io::IsTerminal;
 use std::path::Path;
 
-use crate::app::context::identity::resolve_github_user_input;
-use crate::app::context::ssh::SshKeyCandidateView;
 use crate::cli::common::prompt::prompt_yes_no;
-use crate::support::validation;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::context::identity::resolve_github_user_input;
+use secretenv_core::cli_api::app::context::ssh::SshKeyCandidateView;
+use secretenv_core::cli_api::presentation::validation;
+use secretenv_core::{Error, Result};
 
 pub(crate) fn confirm_member_overwrite(member_handle: &str) -> Result<bool> {
     prompt_yes_no(
@@ -29,12 +29,12 @@ pub(crate) fn confirm_member_overwrite(member_handle: &str) -> Result<bool> {
 /// n candidates → TTY: interactive dialoguer::Select / non-TTY: error
 pub(crate) fn select_ssh_key(candidates: &[SshKeyCandidateView]) -> Result<usize> {
     if candidates.is_empty() {
-        return Err(Error::Config {
-            message: "No ssh-ed25519 key found in ssh-agent.\n\
+        return Err(Error::build_config_error(
+            "No ssh-ed25519 key found in ssh-agent.\n\
                       Check available keys: ssh-add -L\n\
                       Ensure your SSH agent (e.g., 1Password) has an Ed25519 key available."
                 .to_string(),
-        });
+        ));
     }
 
     if candidates.len() == 1 {
@@ -42,12 +42,12 @@ pub(crate) fn select_ssh_key(candidates: &[SshKeyCandidateView]) -> Result<usize
     }
 
     if !is_prompt_available() {
-        return Err(Error::Config {
-            message: "Multiple Ed25519 keys found in ssh-agent.\n\
+        return Err(Error::build_config_error(
+            "Multiple Ed25519 keys found in ssh-agent.\n\
                       Specify which key to use with -i <path>, --ssh-identity <path>, or \
                       SECRETENV_SSH_IDENTITY environment variable."
                 .to_string(),
-        });
+        ));
     }
 
     let items: Vec<String> = candidates.iter().map(format_candidate).collect();
@@ -57,9 +57,7 @@ pub(crate) fn select_ssh_key(candidates: &[SshKeyCandidateView]) -> Result<usize
         .items(&items)
         .default(0)
         .interact()
-        .map_err(|e| Error::Config {
-            message: format!("Failed to read selection: {e}"),
-        })
+        .map_err(|e| Error::build_config_error(format!("Failed to read selection: {e}")))
 }
 
 /// Format a candidate for display in the interactive selector.
@@ -84,9 +82,7 @@ pub(crate) fn prompt_member_handle() -> Result<String> {
                 .map_err(|e| e.to_string())
         })
         .interact_text()
-        .map_err(|e| Error::Config {
-            message: format!("Failed to read input: {}", e),
-        })
+        .map_err(|e| Error::build_config_error(format!("Failed to read input: {}", e)))
 }
 
 pub(crate) fn prompt_github_user() -> Result<Option<String>> {
@@ -103,9 +99,7 @@ pub(crate) fn prompt_github_user() -> Result<Option<String>> {
                 .map_err(|e| e.to_string())
         })
         .interact_text()
-        .map_err(|e| Error::Config {
-            message: format!("Failed to read input: {}", e),
-        })?;
+        .map_err(|e| Error::build_config_error(format!("Failed to read input: {}", e)))?;
 
     let trimmed = input.trim().to_string();
     if trimmed.is_empty() {

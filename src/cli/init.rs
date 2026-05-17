@@ -12,10 +12,10 @@
 
 use clap::Args;
 
-use crate::app::registration::types::RegistrationMode;
 use crate::cli::options::{MemberHandleOption, SigningOptions};
 use crate::cli::registration::run_registration_command;
-use crate::Error;
+use secretenv_core::cli_api::app::registration::types::RegistrationMode;
+use secretenv_core::Error;
 
 #[derive(Args)]
 pub struct InitArgs {

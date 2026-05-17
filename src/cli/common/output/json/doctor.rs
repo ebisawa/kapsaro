@@ -3,9 +3,11 @@
 
 use serde::Serialize;
 
-use crate::app::doctor::types::{DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus};
 use crate::cli::common::output::json::print_json_output;
-use crate::Result;
+use secretenv_core::cli_api::app::doctor::types::{
+    DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus,
+};
+use secretenv_core::Result;
 
 #[derive(Serialize)]
 struct DoctorReportOutput<'a> {

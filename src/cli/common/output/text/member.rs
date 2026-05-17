@@ -10,7 +10,7 @@ use crate::cli::common::output::member::{
     MemberVerificationResultsView,
 };
 use crate::cli::common::output::trust::review::print_candidate_review;
-use crate::support::kid::format_kid_display_lossy;
+use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
 const MEMBER_SHOW_BULLET: &str = "\u{25CF}";

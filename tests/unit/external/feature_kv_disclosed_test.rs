@@ -6,22 +6,26 @@
 use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::kv::mutate::{
+use secretenv_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
+use secretenv_core::cli_api::test_support::domain::kv_enc::line::KvEncLine;
+use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::kv::mutate::{
     set_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult, KvWriteContext,
 };
-use secretenv::feature::kv::types::KvInputEntry;
-use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncContent, KvEncContent};
-use secretenv::format::kv::document::parse_kv_document;
-use secretenv::format::schema::document::parse_kv_entry_token;
-use secretenv::format::token::TokenCodec;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::io::workspace::members::{list_active_member_handles, load_member_files};
-use secretenv::model::kv_enc::entry::KvEntryValue;
-use secretenv::model::kv_enc::line::KvEncLine;
+use secretenv_core::cli_api::test_support::operations::kv::types::KvInputEntry;
+use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::storage::workspace::members::{
+    list_active_member_handles, load_member_files,
+};
+use secretenv_core::cli_api::test_support::wire::content::{EncContent, KvEncContent};
+use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
+use secretenv_core::cli_api::test_support::wire::schema::document::parse_kv_entry_token;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use std::fs;
 use tempfile::TempDir;
 
@@ -50,7 +54,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    secretenv::io::keystore::storage::save_key_pair_atomic(
+    secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,
@@ -94,7 +98,7 @@ fn extract_disclosed_flags(content: &str) -> Vec<(String, bool)> {
 fn rewrap_kv_content(
     content: &KvEncContent,
     request: &RewrapRequest<'_>,
-) -> secretenv::Result<String> {
+) -> secretenv_core::Result<String> {
     rewrap_content(&EncContent::KvEnc(content.clone()), request)
 }
 
@@ -158,11 +162,14 @@ fn remove_bob_recipient(
 
 fn build_recipient_snapshot(
     workspace_root: &std::path::Path,
-) -> secretenv::Result<KvRecipientSnapshot> {
+) -> secretenv_core::Result<KvRecipientSnapshot> {
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+        secretenv_core::cli_api::test_support::operations::verify::public_key::verify_recipient_public_keys(
+            &public_keys,
+            false,
+        )?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -174,7 +181,7 @@ fn set_kv_entry(
     entries: &[(String, String)],
     workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
-) -> secretenv::Result<KvSetResult> {
+) -> secretenv_core::Result<KvSetResult> {
     let recipients = build_recipient_snapshot(workspace_root)?;
     let entries = entries
         .iter()

@@ -3,14 +3,14 @@
 
 //! TOFU confirmation and promotion output for rewrap.
 
-use crate::app::rewrap::promotion::{PromotionReviewPrompt, PromotionReviewView};
 use crate::cli::common::output::trust::review::{
     print_candidate_review, print_failed_promotion_reviews,
 };
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use crate::Result;
+use secretenv_core::cli_api::app::rewrap::promotion::{PromotionReviewPrompt, PromotionReviewView};
+use secretenv_core::Result;
 #[cfg(test)]
 use std::io::BufRead;
 

@@ -3,8 +3,10 @@
 
 //! Unit tests for feature/disclosure module.
 
-use secretenv::feature::disclosure::{add_to_removed_history, merge_removed_history};
-use secretenv::model::common::RemovedRecipient;
+use secretenv_core::cli_api::test_support::domain::common::RemovedRecipient;
+use secretenv_core::cli_api::test_support::operations::disclosure::{
+    add_to_removed_history, merge_removed_history,
+};
 
 #[test]
 fn test_add_to_removed_history() {

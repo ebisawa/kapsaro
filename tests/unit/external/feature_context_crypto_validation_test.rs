@@ -6,12 +6,14 @@
 //! Tests for private key material validation helpers.
 
 use ed25519_dalek::SigningKey;
-use secretenv::crypto::kem::{derive_public_key_from_secret, generate_keypair, X25519SecretKey};
-use secretenv::feature::key::material::{
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretArray;
+use secretenv_core::cli_api::test_support::operations::key::material::{
     validate_ed25519_consistency, validate_okp_key, validate_x25519_consistency,
 };
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
-use secretenv::support::secret::SecretArray;
+use secretenv_core::cli_api::test_support::primitives::kem::{
+    derive_public_key_from_secret, generate_keypair, X25519SecretKey,
+};
 
 // ============================================================================
 // validate_okp_key tests

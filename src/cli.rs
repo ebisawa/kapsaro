@@ -47,9 +47,9 @@ pub use unset::UnsetArgs;
 
 use clap::{Parser, Subcommand};
 
-use crate::app::trust::CommandCapability;
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
-use crate::Error;
+use secretenv_core::cli_api::app::trust::CommandCapability;
+use secretenv_core::Error;
 use tracing::debug;
 
 #[derive(Parser)]

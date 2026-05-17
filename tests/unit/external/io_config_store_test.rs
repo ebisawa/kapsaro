@@ -5,8 +5,10 @@
 //!
 //! Tests for load_config_file, set_config_value, and unset_config_value functions.
 
-use secretenv::io::config::store::{load_config_file, set_config_value, unset_config_value};
-use secretenv::support::limits::MAX_CONFIG_FILE_SIZE;
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_CONFIG_FILE_SIZE;
+use secretenv_core::cli_api::test_support::storage::config::store::{
+    load_config_file, set_config_value, unset_config_value,
+};
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

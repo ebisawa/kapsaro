@@ -3,9 +3,9 @@
 
 //! Guards for commands that are unavailable in environment-variable key mode.
 
-use crate::app::context::env_key::is_env_key_mode;
-use crate::app::trust::CommandCapability;
-use crate::Result;
+use secretenv_core::cli_api::app::context::env_key::is_env_key_mode;
+use secretenv_core::cli_api::app::trust::CommandCapability;
+use secretenv_core::Result;
 use tracing::debug;
 
 pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> Result<()> {
@@ -20,9 +20,11 @@ pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> 
     }
 
     debug!("[CLI] env-key mode rejected for {}", capability.label());
-    Err(crate::Error::build_invalid_operation_error(format!(
-        "'{}' is unavailable in environment-variable key mode; env mode only supports \
+    Err(secretenv_core::Error::build_invalid_operation_error(
+        format!(
+            "'{}' is unavailable in environment-variable key mode; env mode only supports \
          these commands: run, decrypt, get, list, doctor.",
-        capability.label()
-    )))
+            capability.label()
+        ),
+    ))
 }

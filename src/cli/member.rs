@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use crate::cli::options::{
     ForceOption, MemberHandleOption, SigningOutputOptions, WorkspaceOptions, WorkspaceOutputOptions,
 };
-use crate::Error;
+use secretenv_core::Error;
 
 mod add;
 mod list;

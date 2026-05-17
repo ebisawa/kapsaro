@@ -3,12 +3,14 @@
 
 //! Unit tests for pre-flight SSH key verification against GitHub.
 
-use secretenv::io::github::http::GitHubKeyRecord;
-use secretenv::io::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
-use secretenv::io::verify_online::github::{GitHubApiFuture, GitHubVerificationApi};
-use secretenv::io::verify_online::VerificationStatus;
-use secretenv::model::public_key::GithubAccount;
-use secretenv::{Error, Result};
+use secretenv_core::cli_api::test_support::domain::public_key::GithubAccount;
+use secretenv_core::cli_api::test_support::storage::github::http::GitHubKeyRecord;
+use secretenv_core::cli_api::test_support::storage::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
+use secretenv_core::cli_api::test_support::storage::verify_online::github::{
+    GitHubApiFuture, GitHubVerificationApi,
+};
+use secretenv_core::cli_api::test_support::storage::verify_online::VerificationStatus;
+use secretenv_core::{Error, ErrorKind, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -42,14 +44,16 @@ impl GitHubVerificationApi for FakeGitHubApi {
             self.calls.fetch_add(1, Ordering::SeqCst);
             match &self.keys_result {
                 Ok(keys) => Ok(keys.clone()),
-                Err(Error::Verify { rule, message }) => Err(Error::Verify {
-                    rule: rule.clone(),
-                    message: message.clone(),
-                }),
-                Err(other) => Err(Error::Verify {
-                    rule: "V-GITHUB-API".to_string(),
-                    message: other.to_string(),
-                }),
+                Err(error) if error.kind() == ErrorKind::Verify => {
+                    Err(Error::build_verification_error(
+                        error.verification_rule().expect("verification rule"),
+                        error.format_user_message(),
+                    ))
+                }
+                Err(other) => Err(Error::build_verification_error(
+                    "V-GITHUB-API".to_string(),
+                    other.to_string(),
+                )),
             }
         })
     }
@@ -88,7 +92,8 @@ async fn test_verify_ssh_key_on_github_no_matching_key() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(matches!(err, Error::Verify { rule, .. } if rule == "V-GITHUB-KEY-NEW"));
+    assert_eq!(err.kind(), ErrorKind::Verify);
+    assert_eq!(err.verification_rule(), Some("V-GITHUB-KEY-NEW"));
 }
 
 #[tokio::test]
@@ -100,7 +105,8 @@ async fn test_verify_ssh_key_on_github_no_keys_on_github() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(matches!(err, Error::Verify { rule, .. } if rule == "V-GITHUB-KEY-NEW"));
+    assert_eq!(err.kind(), ErrorKind::Verify);
+    assert_eq!(err.verification_rule(), Some("V-GITHUB-KEY-NEW"));
 }
 
 #[tokio::test]
@@ -129,20 +135,17 @@ async fn test_verify_ssh_key_on_github_rejects_invalid_key_before_api_call() {
 
 #[tokio::test]
 async fn test_verify_ssh_key_on_github_propagates_keys_api_error() {
-    let api = FakeGitHubApi::new(Err(Error::Verify {
-        rule: "V-GITHUB-API".to_string(),
-        message: "keys endpoint failed".to_string(),
-    }));
+    let api = FakeGitHubApi::new(Err(Error::build_verification_error(
+        "V-GITHUB-API".to_string(),
+        "keys endpoint failed".to_string(),
+    )));
 
     let result =
         verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), false, &api).await;
 
-    match result {
-        Err(Error::Verify { rule, message }) => {
-            assert_eq!(rule, "V-GITHUB-API");
-            assert_eq!(message, "keys endpoint failed");
-        }
-        other => panic!("expected verify error, got {other:?}"),
-    }
+    let error = result.expect_err("expected verify error");
+    assert_eq!(error.kind(), ErrorKind::Verify);
+    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.format_user_message(), "keys endpoint failed");
     assert_eq!(api.call_count(), 1);
 }

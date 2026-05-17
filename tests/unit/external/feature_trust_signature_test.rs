@@ -4,11 +4,11 @@
 //! Unit tests for trust store signing
 
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use secretenv::feature::key::material::generate_keypairs;
-use secretenv::feature::trust::signature::sign_trust_store;
-use secretenv::model::trust_store::TrustStoreProtected;
-use secretenv::model::wire::format::LOCAL_TRUST_V5;
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::domain::trust_store::TrustStoreProtected;
+use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::key::material::generate_keypairs;
+use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
 
 /// Build a minimal PublicKey JSON that passes schema + self-signature verification.
 ///
@@ -17,10 +17,17 @@ use secretenv::support::codec::base64_public::encode_base64url_nopad;
 fn build_self_signed_public_key(
     member_handle: &str,
     signing_key: &SigningKey,
-) -> (secretenv::model::public_key::PublicKey, String) {
-    use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
-    use secretenv::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey};
-    use secretenv::model::wire::jwk;
+) -> (
+    secretenv_core::cli_api::test_support::domain::public_key::PublicKey,
+    String,
+) {
+    use secretenv_core::cli_api::test_support::domain::public_key::{
+        Attestation, Identity, IdentityKeys, JwkOkpPublicKey,
+    };
+    use secretenv_core::cli_api::test_support::domain::wire::jwk;
+    use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
+        build_public_key, PublicKeyDocumentParams,
+    };
 
     let verifying_key: VerifyingKey = signing_key.into();
     let sig_x = encode_base64url_nopad(&verifying_key.to_bytes());
@@ -57,10 +64,14 @@ fn build_self_signed_public_key(
     };
 
     let now = time::OffsetDateTime::now_utc();
-    let created_at = secretenv::support::time::format_timestamp_rfc3339(now).unwrap();
-    let expires_at =
-        secretenv::support::time::format_timestamp_rfc3339(now + time::Duration::days(365))
+    let created_at =
+        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)
             .unwrap();
+    let expires_at =
+        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+            now + time::Duration::days(365),
+        )
+        .unwrap();
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle,

@@ -3,14 +3,14 @@
 
 //! Shared SSH signing context resolution for CLI commands.
 
-use crate::app::context::env_key::is_env_key_mode;
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::{
+use crate::cli::identity_prompt::select_ssh_key;
+use secretenv_core::cli_api::app::context::env_key::is_env_key_mode;
+use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use secretenv_core::cli_api::app::context::ssh::{
     build_ssh_signing_context, resolve_ssh_context_by_active_key, resolve_ssh_key_candidates,
     SshSigningContextResolution,
 };
-use crate::cli::identity_prompt::select_ssh_key;
-use crate::Result;
+use secretenv_core::Result;
 use tracing::debug;
 
 /// Run the 3-phase SSH signing context resolution for key generation.

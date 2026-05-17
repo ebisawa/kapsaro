@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
-use secretenv::model::public_key::*;
+use secretenv_core::cli_api::test_support::domain::public_key::*;
 
 #[test]
 fn test_public_key_deserialization() {
@@ -40,18 +40,18 @@ fn test_public_key_deserialization() {
 
     assert_eq!(
         pk.protected.format,
-        secretenv::model::wire::format::PUBLIC_KEY_V6
+        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6
     );
     assert_eq!(pk.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(pk.protected.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(pk.protected.identity.keys.kem.kty, "OKP");
     assert_eq!(
         pk.protected.identity.keys.kem.crv,
-        secretenv::model::wire::jwk::CURVE_X25519
+        secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
     );
     assert_eq!(
         pk.protected.identity.attestation.method,
-        secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
     );
 }
 
@@ -59,25 +59,26 @@ fn test_public_key_deserialization() {
 fn test_public_key_serialization() {
     let pk = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
             subject_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
                         x: "dGVzdGtleQ".to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
                         x: "dGVzdGtleQ".to_string(),
                     },
                 },
                 attestation: Attestation {
-                    method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
+                    method:
+                        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                            .to_string(),
                     pub_: "ssh-ed25519 AAAAC3...".to_string(),
                     sig: "c2lnbmF0dXJl".to_string(),
                 },
@@ -93,7 +94,7 @@ fn test_public_key_serialization() {
 
     assert_eq!(
         json_value["protected"]["format"],
-        secretenv::model::wire::format::PUBLIC_KEY_V6
+        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6
     );
     assert_eq!(json_value["protected"]["subject_handle"], BOB_MEMBER_HANDLE);
     assert_eq!(
@@ -115,17 +116,17 @@ fn test_public_key_new_preserves_binding_claims() {
             keys: IdentityKeys {
                 kem: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
                     x: "a2VtcHVi".to_string(),
                 },
                 sig: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
                     x: "c2lncHVi".to_string(),
                 },
             },
             attestation: Attestation {
-                method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                method: secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
                     .to_string(),
                 pub_: "ssh-ed25519 AAAAC3...".to_string(),
                 sig: "YXR0ZXN0c2ln".to_string(),

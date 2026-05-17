@@ -4,8 +4,8 @@
 //! Unit tests for feature/member_add module
 
 use crate::test_utils::setup_test_workspace;
-use secretenv::feature::member::add::add_member_from_file;
-use secretenv::io::workspace::members::load_incoming_member_files;
+use secretenv_core::cli_api::test_support::operations::member::add::add_member_from_file;
+use secretenv_core::cli_api::test_support::storage::workspace::members::load_incoming_member_files;
 use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;

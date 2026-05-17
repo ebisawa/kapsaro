@@ -3,13 +3,15 @@
 
 //! Unit tests for trust store file I/O
 
-use secretenv::io::trust::store::{load_trust_store, save_trust_store};
-use secretenv::model::trust_store::{
+use secretenv_core::cli_api::test_support::domain::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
-use secretenv::model::wire::format::LOCAL_TRUST_V5;
-use secretenv::support::limits::MAX_JSON_DEPTH;
+use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_JSON_DEPTH;
+use secretenv_core::cli_api::test_support::storage::trust::store::{
+    load_trust_store, save_trust_store,
+};
 use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -173,7 +175,7 @@ fn test_load_trust_store_warns_on_insecure_parent_directory_permissions() {
 
 #[test]
 fn test_load_trust_store_rejects_oversized_document_before_parse() {
-    use secretenv::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+    use secretenv_core::cli_api::test_support::helpers::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 
     let dir = TempDir::new().unwrap();
     let base_dir = dir.path().join("secretenv");

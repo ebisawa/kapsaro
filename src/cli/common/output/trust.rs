@@ -8,8 +8,6 @@ pub(crate) mod view;
 
 use std::collections::BTreeSet;
 
-use crate::app::trust::list::{RecipientSetListResult, TrustListResult};
-use crate::app::trust::management::{PurgeKnownKeysResult, PurgeRecipientSetsResult};
 use crate::cli::common::output::json::trust::print_known_key_list as print_known_key_list_json;
 use crate::cli::common::output::json::trust::print_recipient_set_list as print_recipient_set_list_json;
 use crate::cli::common::output::print_empty_or_json_or_text_with_warnings;
@@ -21,7 +19,11 @@ use crate::cli::common::output::text::trust::{
     print_recipient_set_purge_candidates, print_recipient_set_purge_summary,
     print_trust_purge_candidates, print_trust_purge_summary,
 };
-use crate::Result;
+use secretenv_core::cli_api::app::trust::list::{RecipientSetListResult, TrustListResult};
+use secretenv_core::cli_api::app::trust::management::{
+    PurgeKnownKeysResult, PurgeRecipientSetsResult,
+};
+use secretenv_core::Result;
 pub(crate) use view::{RecipientSetListItemView, TrustListItemView};
 
 pub(crate) fn print_trust_list(json_output: bool, result: &TrustListResult) -> Result<()> {

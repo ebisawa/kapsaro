@@ -4,14 +4,14 @@
 //! Unit tests for Signature Backend abstraction (Phase 12.1 - TDD Red phase)
 
 use crate::test_utils::stub_agent_signer;
-use secretenv::io::ssh::agent::client::DefaultAgentSigner;
-use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
-use secretenv::io::ssh::backend::ssh_agent::SshAgentBackend;
-use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
-use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
-use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
+use secretenv_core::cli_api::test_support::storage::ssh::agent::client::DefaultAgentSigner;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::signature_backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_agent::SshAgentBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 
 #[test]
 fn test_backend_trait_determinism_check() {
@@ -23,7 +23,7 @@ fn test_backend_trait_determinism_check() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             let mut bytes = [0u8; 64];
             bytes[0] = 1;
             bytes[1] = 2;
@@ -55,7 +55,7 @@ fn test_backend_trait_non_deterministic_error() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             let val = self.counter.get();
             self.counter.set(val + 1);
             let mut bytes = [0u8; 64];

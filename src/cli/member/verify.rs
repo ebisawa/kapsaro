@@ -1,9 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::member::approval::{evaluate_members_for_approval, save_member_approvals};
-use crate::app::member::verification::verify_members;
-use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::command::{
     resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
 };
@@ -11,8 +8,13 @@ use crate::cli::common::output::member::print_member_approval_results;
 use crate::cli::common::output::member::print_member_verification_results;
 use crate::cli::common::output::text;
 use crate::cli::common::trust::{confirm_member_key_approval, run_with_trust_store_reset_recovery};
-use crate::support::tty;
-use crate::Error;
+use secretenv_core::cli_api::app::member::approval::{
+    evaluate_members_for_approval, save_member_approvals,
+};
+use secretenv_core::cli_api::app::member::verification::verify_members;
+use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use secretenv_core::cli_api::presentation::tty;
+use secretenv_core::Error;
 
 use super::VerifyArgs;
 
@@ -65,16 +67,16 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
 }
 
 fn review_approval_candidates(
-    results: &mut [crate::app::member::approval::MemberApprovalResult],
+    results: &mut [secretenv_core::cli_api::app::member::approval::MemberApprovalResult],
 ) -> Result<(), Error> {
     let requires_review = results.iter().any(|r| r.review_required);
     if !requires_review {
         return Ok(());
     }
     if !tty::is_interactive() {
-        return Err(Error::InvalidOperation {
-            message: "member verify --approve requires interactive confirmation".to_string(),
-        });
+        return Err(Error::build_invalid_operation_error(
+            "member verify --approve requires interactive confirmation".to_string(),
+        ));
     }
 
     for result in results.iter_mut().filter(|r| r.review_required) {

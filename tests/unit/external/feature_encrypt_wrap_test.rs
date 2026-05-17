@@ -8,10 +8,12 @@
 use crate::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
-use secretenv::crypto::types::keys::MasterKey;
-use secretenv::feature::envelope::wrap::WrapFormat;
-use secretenv::feature::envelope::wrap::{build_wrap_item_for_kv, build_wraps_for_recipients};
-use secretenv::support::limits::MAX_WRAP_ITEMS;
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_WRAP_ITEMS;
+use secretenv_core::cli_api::test_support::operations::envelope::wrap::WrapFormat;
+use secretenv_core::cli_api::test_support::operations::envelope::wrap::{
+    build_wrap_item_for_kv, build_wraps_for_recipients,
+};
+use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
 use tempfile::TempDir;
 use uuid::Uuid;
 

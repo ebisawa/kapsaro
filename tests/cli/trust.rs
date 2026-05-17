@@ -14,14 +14,14 @@ use assert_cmd::cargo;
 #[cfg(unix)]
 use console::strip_ansi_codes;
 use predicates::prelude::*;
-use secretenv::feature::trust::recipient_sets::compute_recipient_set_hash;
-use secretenv::feature::trust::signature::sign_trust_store;
-use secretenv::io::trust::paths::get_trust_store_file_path;
-use secretenv::io::trust::store::save_trust_store;
-use secretenv::model::trust_store::{
+use secretenv_core::cli_api::test_support::domain::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
-use secretenv::model::wire::format::LOCAL_TRUST_V5;
+use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
+use secretenv_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
+use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
+use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use secretenv_core::cli_api::test_support::storage::trust::store::save_trust_store;
 use serde_json::Value;
 use tempfile::TempDir;
 

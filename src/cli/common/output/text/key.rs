@@ -6,8 +6,8 @@
 use std::path::Path;
 
 use crate::cli::common::output::key::{KeyInfoView, KeyListView};
-use crate::support::kid::format_kid_display;
-use crate::support::path::format_path_relative_to_cwd;
+use secretenv_core::cli_api::presentation::kid::format_kid_display;
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
 
 const KEY_INFO_LABEL_WIDTH: usize = "Member Handle".len();
 

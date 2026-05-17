@@ -7,7 +7,6 @@ use clap::Args;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use crate::app::file::decrypt::{execute_decrypt_file_command, resolve_decrypt_file_command};
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_read_command_with_trust, ReadCommandLabels,
@@ -15,11 +14,14 @@ use crate::cli::common::command::{
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
-use crate::format::content::FileEncContent;
-use crate::support::fs::load_text_with_limit;
-use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::support::path::format_path_relative_to_cwd;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::file::decrypt::{
+    execute_decrypt_file_command, resolve_decrypt_file_command,
+};
+use secretenv_core::cli_api::presentation::file_content::detect_file_enc_content_with_source;
+use secretenv_core::cli_api::presentation::fs::load_text_with_limit;
+use secretenv_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use secretenv_core::{Error, Result};
 
 #[derive(Args)]
 #[command(
@@ -60,7 +62,7 @@ pub struct DecryptArgs {
 
 pub fn run(args: DecryptArgs) -> Result<()> {
     let source_name = resolve_decrypt_input_source(args.input.as_ref(), args.stdin);
-    let content = FileEncContent::detect_with_source(
+    let content = detect_file_enc_content_with_source(
         resolve_decrypt_input_content(args.input.as_ref(), args.stdin)?,
         source_name,
     )?;
@@ -130,18 +132,14 @@ fn load_decrypt_input_from_stdin() -> Result<String> {
     reader.read_to_end(&mut bytes)?;
 
     if bytes.len() > max_bytes {
-        return Err(Error::Parse {
-            message: format!(
-                "file-enc input exceeds maximum size limit ({} bytes > {} bytes): stdin",
-                bytes.len(),
-                max_bytes
-            ),
-            source: None,
-        });
+        return Err(Error::build_parse_error(format!(
+            "file-enc input exceeds maximum size limit ({} bytes > {} bytes): stdin",
+            bytes.len(),
+            max_bytes
+        )));
     }
 
-    String::from_utf8(bytes).map_err(|e| Error::Parse {
-        message: format!("Failed to read stdin as UTF-8: {}", e),
-        source: Some(Box::new(e)),
+    String::from_utf8(bytes).map_err(|e| {
+        Error::build_parse_error_with_source(format!("Failed to read stdin as UTF-8: {}", e), e)
     })
 }

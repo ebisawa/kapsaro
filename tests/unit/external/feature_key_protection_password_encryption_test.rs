@@ -1,21 +1,25 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::crypto::aead::xchacha;
-use secretenv::crypto::types::data::Plaintext;
-use secretenv::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
-use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
-use secretenv::feature::key::protection::binding::build_private_key_aad;
-use secretenv::feature::key::protection::password_encryption::{
-    decrypt_private_key_with_password, encrypt_private_key_with_password,
-};
-use secretenv::feature::key::protection::password_key_derivation::derive_key_from_password;
-use secretenv::model::private_key::{
+use secretenv_core::cli_api::test_support::domain::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use secretenv::model::wire::{algorithm, format};
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
-use secretenv::support::secret::SecretString;
+use secretenv_core::cli_api::test_support::domain::wire::{algorithm, format};
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
+use secretenv_core::cli_api::test_support::operations::key::material::{
+    build_private_key_plaintext, generate_keypairs,
+};
+use secretenv_core::cli_api::test_support::operations::key::protection::binding::build_private_key_aad;
+use secretenv_core::cli_api::test_support::operations::key::protection::password_encryption::{
+    decrypt_private_key_with_password, encrypt_private_key_with_password,
+};
+use secretenv_core::cli_api::test_support::operations::key::protection::password_key_derivation::derive_key_from_password;
+use secretenv_core::cli_api::test_support::primitives::aead::xchacha;
+use secretenv_core::cli_api::test_support::primitives::types::data::Plaintext;
+use secretenv_core::cli_api::test_support::primitives::types::primitives::{
+    HkdfSalt, PrivateKeyIkmSalt,
+};
 use std::collections::BTreeSet;
 
 const TEST_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";

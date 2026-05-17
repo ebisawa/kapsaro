@@ -9,12 +9,14 @@ use crate::test_utils::{
     setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::encrypt::file::encrypt_file_document;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncContent, FileEncContent};
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
+use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::content::{EncContent, FileEncContent};
 use std::fs;
 use tempfile::TempDir;
 
@@ -55,7 +57,7 @@ fn single_rewrap_request<'a>(
 fn rewrap_file_content(
     content: &FileEncContent,
     request: &RewrapRequest<'_>,
-) -> secretenv::Result<String> {
+) -> secretenv_core::Result<String> {
     rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 
@@ -142,7 +144,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    secretenv::io::keystore::storage::save_key_pair_atomic(
+    secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,
@@ -187,7 +189,7 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
     );
 
     let rewrapped = result.unwrap();
-    let doc: secretenv::model::file_enc::FileEncDocument =
+    let doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument =
         serde_json::from_str(&rewrapped).unwrap();
     let alice_wrap = doc
         .protected
@@ -216,7 +218,7 @@ fn test_rewrap_file_clear_disclosure_history() {
         rewrap_file_content(&FileEncContent::new_unchecked(json), &remove_request).unwrap();
 
     // Verify disclosure history exists after removal
-    let after_remove_doc: secretenv::model::file_enc::FileEncDocument =
+    let after_remove_doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument =
         serde_json::from_str(&after_remove).unwrap();
     assert!(
         after_remove_doc.protected.removed_recipients.is_some(),
@@ -235,7 +237,7 @@ fn test_rewrap_file_clear_disclosure_history() {
 
     // After clearing, removed_recipients should be None
     let cleared = result.unwrap();
-    let cleared_doc: secretenv::model::file_enc::FileEncDocument =
+    let cleared_doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument =
         serde_json::from_str(&cleared).unwrap();
     assert!(
         cleared_doc.protected.removed_recipients.is_none(),

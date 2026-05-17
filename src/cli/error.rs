@@ -3,7 +3,7 @@
 
 //! Top-level CLI error presentation.
 
-use crate::Error;
+use secretenv_core::Error;
 
 pub fn print_error(error: &Error) {
     eprintln!("Error: {}", error.format_user_message());

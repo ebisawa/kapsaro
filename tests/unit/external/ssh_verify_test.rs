@@ -6,14 +6,18 @@
 //! Tests for verify_sshsig validation logic
 
 use ed25519_dalek::{Signer, SigningKey};
-use secretenv::io::ssh::external::traits::SshKeygen;
-use secretenv::io::ssh::protocol::constants::ATTESTATION_NAMESPACE;
-use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::io::ssh::protocol::wire::encode_ssh_string;
-use secretenv::io::ssh::verify::verify_sshsig;
-use secretenv::io::ssh::verify::{build_attestation_signed_data, verify_attestation};
-use secretenv::model::public_key::{IdentityKeys, JwkOkpPublicKey};
-use secretenv::support::codec::base64_public::{encode_base64_standard, encode_base64url_nopad};
+use secretenv_core::cli_api::test_support::domain::public_key::{IdentityKeys, JwkOkpPublicKey};
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::{
+    encode_base64_standard, encode_base64url_nopad,
+};
+use secretenv_core::cli_api::test_support::storage::ssh::external::traits::SshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_NAMESPACE;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
+use secretenv_core::cli_api::test_support::storage::ssh::verify::verify_sshsig;
+use secretenv_core::cli_api::test_support::storage::ssh::verify::{
+    build_attestation_signed_data, verify_attestation,
+};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -24,7 +28,7 @@ const ED25519_KEY: &str = "ssh-ed25519 AAAA... comment";
 struct StubSshKeygen;
 
 impl SshKeygen for StubSshKeygen {
-    fn derive_public_key(&self, _key_path: &Path) -> secretenv::Result<String> {
+    fn derive_public_key(&self, _key_path: &Path) -> secretenv_core::Result<String> {
         unimplemented!()
     }
     fn sign(
@@ -33,7 +37,7 @@ impl SshKeygen for StubSshKeygen {
         _namespace: &str,
         _ssh_pubkey: &str,
         _data: &[u8],
-    ) -> secretenv::Result<Ed25519RawSignature> {
+    ) -> secretenv_core::Result<Ed25519RawSignature> {
         unimplemented!()
     }
     fn verify(
@@ -42,7 +46,7 @@ impl SshKeygen for StubSshKeygen {
         _namespace: &str,
         _message: &[u8],
         _signature: &str,
-    ) -> secretenv::Result<()> {
+    ) -> secretenv_core::Result<()> {
         Ok(())
     }
 }
@@ -61,7 +65,7 @@ struct RecordingSshKeygen {
 }
 
 impl SshKeygen for RecordingSshKeygen {
-    fn derive_public_key(&self, _key_path: &Path) -> secretenv::Result<String> {
+    fn derive_public_key(&self, _key_path: &Path) -> secretenv_core::Result<String> {
         unimplemented!()
     }
 
@@ -71,7 +75,7 @@ impl SshKeygen for RecordingSshKeygen {
         _namespace: &str,
         _ssh_pubkey: &str,
         _data: &[u8],
-    ) -> secretenv::Result<Ed25519RawSignature> {
+    ) -> secretenv_core::Result<Ed25519RawSignature> {
         unimplemented!()
     }
 
@@ -81,7 +85,7 @@ impl SshKeygen for RecordingSshKeygen {
         namespace: &str,
         message: &[u8],
         signature: &str,
-    ) -> secretenv::Result<()> {
+    ) -> secretenv_core::Result<()> {
         *self.call.lock().unwrap() = Some(RecordedVerifyCall {
             ssh_pubkey: ssh_pubkey.to_string(),
             namespace: namespace.to_string(),
@@ -104,7 +108,9 @@ fn test_verify_sshsig_validation() {
     assert!(verify_sshsig(&keygen, "ssh-rsa AAAA...", b"msg", VALID_SIG)
         .unwrap_err()
         .to_string()
-        .contains(secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519));
+        .contains(
+            secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
+        ));
 
     assert!(verify_sshsig(&keygen, ED25519_KEY, b"msg", "")
         .unwrap_err()

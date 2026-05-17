@@ -3,7 +3,9 @@
 
 //! Unit tests for PublicKeySource trait implementations
 
-use secretenv::io::keystore::public_key_source::{PublicKeySource, WorkspacePublicKeySource};
+use secretenv_core::cli_api::test_support::storage::keystore::public_key_source::{
+    PublicKeySource, WorkspacePublicKeySource,
+};
 use std::fs;
 use tempfile::TempDir;
 

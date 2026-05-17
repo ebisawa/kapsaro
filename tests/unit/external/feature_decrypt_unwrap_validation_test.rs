@@ -5,8 +5,8 @@
 //!
 //! Tests validation logic in `WrapSet::parse` and `parse_master_key_from_plaintext`.
 
-use secretenv::crypto::types::data::Plaintext;
-use secretenv::feature::envelope::unwrap::parse_master_key_from_plaintext;
+use secretenv_core::cli_api::test_support::operations::envelope::unwrap::parse_master_key_from_plaintext;
+use secretenv_core::cli_api::test_support::primitives::types::data::Plaintext;
 use zeroize::Zeroizing;
 
 /// Test that `parse_master_key_from_plaintext` returns an error when given wrong-length data.

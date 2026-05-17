@@ -5,14 +5,14 @@
 
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use secretenv::feature::trust::recipient_sets::compute_recipient_set_hash;
-use secretenv::feature::trust::signature::sign_trust_store;
-use secretenv::feature::trust::verification::verify_trust_store;
-use secretenv::format::schema::validator::load_embedded_trust_validator;
-use secretenv::model::trust_store::{
+use secretenv_core::cli_api::test_support::domain::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
-use secretenv::model::wire::format::LOCAL_TRUST_V5;
+use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
+use secretenv_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
+use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
+use secretenv_core::cli_api::test_support::operations::trust::verification::verify_trust_store;
+use secretenv_core::cli_api::test_support::wire::schema::validator::load_embedded_trust_validator;
 use std::collections::BTreeMap;
 
 const BOB_KID: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";
@@ -375,9 +375,9 @@ fn test_verify_trust_store_rejects_duplicate_known_key_kid() {
 
     let result = verify_trust_store(&doc, &home.path().join("keys"));
 
-    assert!(
-        matches!(result, Err(secretenv::Error::Verify { rule, .. }) if rule == "E_TRUST_DUPLICATE_KID")
-    );
+    let error = result.expect_err("duplicate kid must fail");
+    assert_eq!(error.kind(), secretenv_core::ErrorKind::Verify);
+    assert_eq!(error.verification_rule(), Some("E_TRUST_DUPLICATE_KID"));
 }
 
 #[test]
@@ -400,7 +400,10 @@ fn test_verify_trust_store_rejects_duplicate_recipient_set_sid() {
 
     let result = verify_trust_store(&doc, &home.path().join("keys"));
 
-    assert!(
-        matches!(result, Err(secretenv::Error::Verify { rule, .. }) if rule == "E_RECIPIENT_SET_DUPLICATE_SID")
+    let error = result.expect_err("duplicate recipient set sid must fail");
+    assert_eq!(error.kind(), secretenv_core::ErrorKind::Verify);
+    assert_eq!(
+        error.verification_rule(),
+        Some("E_RECIPIENT_SET_DUPLICATE_SID")
     );
 }

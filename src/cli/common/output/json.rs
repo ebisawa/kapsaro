@@ -3,7 +3,7 @@
 
 //! JSON output utilities for CLI commands.
 
-use crate::{Error, Result};
+use secretenv_core::{Error, Result};
 use serde::Serialize;
 
 pub(crate) mod doctor;
@@ -21,9 +21,8 @@ pub(crate) mod trust;
 /// # Returns
 /// Result indicating success or failure
 pub(crate) fn print_json_output<T: Serialize>(value: &T) -> Result<()> {
-    let json = serde_json::to_string_pretty(value).map_err(|e| Error::Parse {
-        message: format!("Failed to serialize JSON: {}", e),
-        source: Some(Box::new(e)),
+    let json = serde_json::to_string_pretty(value).map_err(|e| {
+        Error::build_parse_error_with_source(format!("Failed to serialize JSON: {}", e), e)
     })?;
     println!("{}", json);
     Ok(())

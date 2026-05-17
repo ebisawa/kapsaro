@@ -5,7 +5,7 @@
 //!
 //! Tests for atomic file operations.
 
-use secretenv::support::fs::atomic::{
+use secretenv_core::cli_api::test_support::helpers::fs::atomic::{
     save_bytes, save_json, save_json_restricted, save_text, save_text_restricted,
 };
 use serde::{Deserialize, Serialize};

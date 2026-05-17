@@ -1,0 +1,14 @@
+// Copyright 2026 Satoshi Ebisawa
+// SPDX-License-Identifier: Apache-2.0
+
+//! Stable facade APIs for external applications.
+
+pub mod file;
+pub mod home;
+pub mod key;
+pub mod kv;
+pub mod online;
+pub mod operation;
+pub mod secret;
+pub mod ssh;
+pub mod trust;

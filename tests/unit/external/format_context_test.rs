@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv::feature::envelope::binding;
-use secretenv::feature::key::protection::binding as private_key_binding;
-use secretenv::model::wire::{algorithm, context as wire_context, format};
+use secretenv_core::cli_api::test_support::domain::wire::{
+    algorithm, context as wire_context, format,
+};
+use secretenv_core::cli_api::test_support::operations::envelope::binding;
+use secretenv_core::cli_api::test_support::operations::key::protection::binding as private_key_binding;
 use uuid::Uuid;
 
 /// Test HPKE info for kv-file (WRAP line) - v3 format
@@ -72,7 +74,9 @@ fn test_aad_payload_kv() {
 /// Test payload AAD for file-enc - v3 format (envelope: JCS of payload.protected)
 #[test]
 fn test_aad_file_payload() {
-    use secretenv::model::file_enc::{FileEncAlgorithm, FilePayloadHeader};
+    use secretenv_core::cli_api::test_support::domain::file_enc::{
+        FileEncAlgorithm, FilePayloadHeader,
+    };
 
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
     let payload_protected = FilePayloadHeader {
@@ -100,7 +104,9 @@ fn test_aad_file_payload() {
 /// Test AAD for PrivateKey encryption - v3 format (envelope: JCS of protected)
 #[test]
 fn test_aad_private_key() {
-    use secretenv::model::private_key::{PrivateKeyAlgorithm, PrivateKeyProtected};
+    use secretenv_core::cli_api::test_support::domain::private_key::{
+        PrivateKeyAlgorithm, PrivateKeyProtected,
+    };
 
     let protected = PrivateKeyProtected {
         format: format::PRIVATE_KEY_V7.to_string(),

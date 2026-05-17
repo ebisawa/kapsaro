@@ -3,11 +3,13 @@
 
 //! Unit tests for kv-enc canonical format
 
-use secretenv::format::kv::enc::canonical::{build_canonical_bytes, extract_recipients_from_wrap};
-use secretenv::format::kv::enc::parser::KvEncParser;
-use secretenv::model::common::WrapItem;
-use secretenv::model::kv_enc::header::KvWrap;
-use secretenv::model::wire::algorithm;
+use secretenv_core::cli_api::test_support::domain::common::WrapItem;
+use secretenv_core::cli_api::test_support::domain::kv_enc::header::KvWrap;
+use secretenv_core::cli_api::test_support::domain::wire::algorithm;
+use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::{
+    build_canonical_bytes, extract_recipients_from_wrap,
+};
+use secretenv_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
 
 #[test]
 fn test_build_canonical_bytes() {

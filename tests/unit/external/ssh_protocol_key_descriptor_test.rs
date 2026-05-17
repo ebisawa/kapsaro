@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 
 #[test]
 fn test_from_path_detects_public_key() {

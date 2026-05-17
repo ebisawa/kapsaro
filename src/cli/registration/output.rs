@@ -1,9 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::registration::types::{
-    MemberKeySetupResult, RegistrationOutcome, RegistrationResult, RegistrationTarget,
-};
 use crate::cli::common::output::text::key::{
     print_existing_key_summary, print_generated_key_summary,
 };
@@ -12,8 +9,11 @@ use crate::cli::common::output::text::registration::{
     print_created_workspace_summary, print_init_noop_summary, print_registration_next_steps,
 };
 use crate::cli::key::common::print_key_generation_binding_info;
-use crate::support::kid::format_kid_display;
-use crate::Error;
+use secretenv_core::cli_api::app::registration::types::{
+    MemberKeySetupResult, RegistrationOutcome, RegistrationResult, RegistrationTarget,
+};
+use secretenv_core::cli_api::presentation::kid::format_kid_display;
+use secretenv_core::Error;
 use std::path::Path;
 
 pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Result<(), Error> {
@@ -83,22 +83,16 @@ fn print_key_info(member_handle: &str, key_result: &MemberKeySetupResult) -> Res
 }
 
 fn print_generated_key_binding_info(key_result: &MemberKeySetupResult) -> Result<(), Error> {
-    let ssh_fingerprint =
-        key_result
-            .ssh_fingerprint
-            .as_deref()
-            .ok_or_else(|| Error::InvalidOperation {
-                message: "Registration output requires an SSH fingerprint for generated keys"
-                    .to_string(),
-            })?;
-    let ssh_determinism =
-        key_result
-            .ssh_determinism
-            .as_ref()
-            .ok_or_else(|| Error::InvalidOperation {
-                message: "Registration output requires SSH determinism for generated keys"
-                    .to_string(),
-            })?;
+    let ssh_fingerprint = key_result.ssh_fingerprint.as_deref().ok_or_else(|| {
+        Error::build_invalid_operation_error(
+            "Registration output requires an SSH fingerprint for generated keys".to_string(),
+        )
+    })?;
+    let ssh_determinism = key_result.ssh_determinism.as_ref().ok_or_else(|| {
+        Error::build_invalid_operation_error(
+            "Registration output requires SSH determinism for generated keys".to_string(),
+        )
+    })?;
 
     print_key_generation_binding_info(
         ssh_fingerprint,

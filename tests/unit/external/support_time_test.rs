@@ -5,7 +5,9 @@
 //!
 //! Tests for time-related helpers.
 
-use secretenv::support::time::{format_timestamp_rfc3339, generate_current_timestamp};
+use secretenv_core::cli_api::test_support::helpers::time::{
+    format_timestamp_rfc3339, generate_current_timestamp,
+};
 use time::OffsetDateTime;
 
 #[test]

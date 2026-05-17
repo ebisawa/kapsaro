@@ -8,8 +8,10 @@ use crate::cli::common::{
     tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
-use secretenv::io::keystore::storage::list_kids;
-use secretenv::support::kid::{format_kid_display, format_kid_half_display};
+use secretenv_core::cli_api::test_support::helpers::kid::{
+    format_kid_display, format_kid_half_display,
+};
+use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;

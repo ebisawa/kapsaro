@@ -3,7 +3,7 @@
 
 //! Unit tests for internal identity newtypes.
 
-use secretenv::model::identity::{Kid, MemberHandle};
+use secretenv_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
 
 #[test]
 fn test_member_handle_try_from_valid() {

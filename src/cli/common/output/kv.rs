@@ -5,7 +5,6 @@
 
 pub(crate) mod view;
 
-use crate::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use crate::cli::common::output::json::kv::{
     print_all_kv_values as print_all_kv_values_json,
     print_kv_import_result as print_kv_import_result_json,
@@ -18,7 +17,8 @@ use crate::cli::common::output::text::kv::{
     print_kv_key_list as print_kv_key_list_text,
     print_single_kv_value as print_single_kv_value_text,
 };
-use crate::Result;
+use secretenv_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
+use secretenv_core::Result;
 
 pub(crate) fn print_kv_key_list(keys: &[KvDisclosedEntry], json_output: bool) -> Result<()> {
     let key_views = view::build_kv_key_views(keys);

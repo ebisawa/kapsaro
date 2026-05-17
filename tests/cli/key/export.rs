@@ -7,11 +7,11 @@ use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_
 use crate::cli::key::find_kid_in_member_dir;
 use console::strip_ansi_codes;
 use predicates::prelude::*;
-use secretenv::model::private_key::PrivateKey;
-use secretenv::model::public_key::PublicKey;
-use secretenv::model::wire::format;
-use secretenv::support::codec::base64_public::decode_base64url_nopad;
-use secretenv::support::kid::format_kid_display;
+use secretenv_core::cli_api::test_support::domain::private_key::PrivateKey;
+use secretenv_core::cli_api::test_support::domain::public_key::PublicKey;
+use secretenv_core::cli_api::test_support::domain::wire::format;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
 use std::fs;
 use tempfile::TempDir;
 

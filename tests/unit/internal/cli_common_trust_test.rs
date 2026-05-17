@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::trust::review::format_candidate_review_lines;
-use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::test_utils::{kid, member_handle};
+use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use secretenv_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
 
 #[test]
 fn test_format_candidate_review_lines_includes_required_fields() {

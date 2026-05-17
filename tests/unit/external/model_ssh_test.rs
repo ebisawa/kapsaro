@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::model::ssh::SshDeterminismStatus;
+use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
 
 #[test]
 fn test_ssh_determinism_status_verified() {

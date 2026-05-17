@@ -3,9 +3,9 @@
 
 use std::io::Cursor;
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::cli::common::trust::recover_invalid_trust_store_with_reader;
-use crate::io::trust::paths::get_trust_store_file_path;
+use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 use tempfile::TempDir;
 
 fn build_options(home: &std::path::Path) -> CommonCommandOptions {
@@ -19,11 +19,11 @@ fn build_options(home: &std::path::Path) -> CommonCommandOptions {
     }
 }
 
-fn build_reset_required_error() -> crate::Error {
-    crate::Error::Verify {
-        rule: "E_TRUST_STORE_RESET_REQUIRED".to_string(),
-        message: "Local trust store is invalid".to_string(),
-    }
+fn build_reset_required_error() -> secretenv_core::Error {
+    secretenv_core::Error::build_verification_error(
+        "E_TRUST_STORE_RESET_REQUIRED".to_string(),
+        "Local trust store is invalid".to_string(),
+    )
 }
 
 #[test]

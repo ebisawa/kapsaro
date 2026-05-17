@@ -9,14 +9,14 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use crate::app::file::inspect::execute_inspect_file_command;
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::text::inspect::{
     format_inspect_command_output, print_inspect_banner,
 };
 use crate::cli::options::WorkspaceOutputOptions;
-use crate::Result;
+use secretenv_core::cli_api::app::file::inspect::execute_inspect_file_command;
+use secretenv_core::Result;
 
 #[derive(Args)]
 pub struct InspectArgs {

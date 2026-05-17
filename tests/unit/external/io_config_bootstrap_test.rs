@@ -3,19 +3,26 @@
 
 //! Unit tests for io/config/bootstrap and io/ssh/agent/validation modules
 
-use secretenv::io::ssh::agent::validation::validate_key_present;
+use secretenv_core::cli_api::test_support::storage::ssh::agent::validation::validate_key_present;
 use std::path::Path;
 
 #[test]
 fn test_validate_member_handle_accepts_common_identifier() {
-    let result = secretenv::io::config::bootstrap::validate_member_handle("alice@example.com");
+    let result =
+        secretenv_core::cli_api::test_support::storage::config::bootstrap::validate_member_handle(
+            "alice@example.com",
+        );
 
     assert!(result.is_ok(), "valid member handle should be accepted");
 }
 
 #[test]
 fn test_validate_member_handle_rejects_invalid_identifier() {
-    let error = secretenv::io::config::bootstrap::validate_member_handle("../alice").unwrap_err();
+    let error =
+        secretenv_core::cli_api::test_support::storage::config::bootstrap::validate_member_handle(
+            "../alice",
+        )
+        .unwrap_err();
 
     assert!(
         error.contains("member_handle must start with alphanumeric"),

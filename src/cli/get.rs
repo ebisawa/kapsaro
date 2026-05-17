@@ -5,8 +5,6 @@
 
 use clap::Args;
 
-use crate::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
-use crate::app::trust::GetPolicy;
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_read_command_with_trust, ReadCommandLabels,
@@ -14,7 +12,9 @@ use crate::cli::common::command::{
 use crate::cli::common::output::kv::print_kv_read_result;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningOutputOptions};
-use crate::Result;
+use secretenv_core::cli_api::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
+use secretenv_core::cli_api::app::trust::GetPolicy;
+use secretenv_core::Result;
 
 #[derive(Args)]
 pub struct GetArgs {
@@ -42,22 +42,24 @@ pub struct GetArgs {
 
 pub fn run(args: GetArgs) -> Result<()> {
     if args.all && args.key.is_some() {
-        return Err(crate::Error::InvalidOperation {
-            message: "--all and KEY argument cannot be used together".to_string(),
-        });
+        return Err(secretenv_core::Error::build_invalid_operation_error(
+            "--all and KEY argument cannot be used together".to_string(),
+        ));
     }
     if !args.all && args.key.is_none() {
-        return Err(crate::Error::InvalidOperation {
-            message: "KEY argument is required (or use --all to get all entries)".to_string(),
-        });
+        return Err(secretenv_core::Error::build_invalid_operation_error(
+            "KEY argument is required (or use --all to get all entries)".to_string(),
+        ));
     }
 
     let read_mode = if args.all {
-        crate::app::kv::types::KvReadMode::All
+        secretenv_core::cli_api::app::kv::types::KvReadMode::All
     } else {
-        crate::app::kv::types::KvReadMode::Single(args.key.as_deref().ok_or_else(|| {
-            crate::Error::build_invalid_operation_error("KEY argument is required")
-        })?)
+        secretenv_core::cli_api::app::kv::types::KvReadMode::Single(
+            args.key.as_deref().ok_or_else(|| {
+                secretenv_core::Error::build_invalid_operation_error("KEY argument is required")
+            })?,
+        )
     };
     let options = resolve_options(&args.common);
     let kv_map = run_with_trust_store_reset_recovery(

@@ -3,14 +3,16 @@
 
 //! Unit tests for SSHSIG format parsing (Phase 11.1 - TDD Red phase)
 
-use secretenv::io::ssh::protocol::constants::{ATTESTATION_NAMESPACE, KEY_PROTECTION_NAMESPACE};
-use secretenv::io::ssh::protocol::parse::decode_ssh_public_key_blob;
-use secretenv::io::ssh::protocol::sshsig::{
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64_standard;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::{
+    ATTESTATION_NAMESPACE, KEY_PROTECTION_NAMESPACE,
+};
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::parse::decode_ssh_public_key_blob;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::sshsig::{
     build_sshsig_signed_data, parse_sshsig_armored, parse_sshsig_blob, SSHSIG_HASHALG, SSHSIG_MAGIC,
 };
-use secretenv::io::ssh::protocol::types::SshsigBlob;
-use secretenv::io::ssh::protocol::wire::encode_ssh_string;
-use secretenv::support::codec::base64_public::encode_base64_standard;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::SshsigBlob;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
 use sha2::{Digest, Sha256};
 
 const TEST_SSH_PUBKEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";

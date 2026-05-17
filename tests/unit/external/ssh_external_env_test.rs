@@ -1,14 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::io::ssh::external::add::DefaultSshAdd;
-use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
-use secretenv::io::ssh::external::traits::SshAdd;
-use secretenv::io::ssh::external::traits::SshKeygen;
-use secretenv::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use secretenv::io::ssh::protocol::parse::decode_ssh_public_key_blob;
-use secretenv::io::ssh::protocol::wire::encode_ssh_string;
-use secretenv::support::codec::base64_public::encode_base64_standard;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64_standard;
+use secretenv_core::cli_api::test_support::storage::ssh::external::add::DefaultSshAdd;
+use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::external::traits::SshAdd;
+use secretenv_core::cli_api::test_support::storage::ssh::external::traits::SshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::parse::decode_ssh_public_key_blob;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;

@@ -5,14 +5,14 @@
 //!
 //! Tests for SSH public key retrieval utilities.
 
-use secretenv::io::ssh::external::pubkey::{
+use secretenv_core::cli_api::test_support::storage::ssh::external::pubkey::{
     collect_ed25519_keys_in_output, load_ed25519_keys_from_agent, load_ssh_public_key_file,
     load_ssh_public_key_with_descriptor_trait, SshKeyCandidate,
 };
-use secretenv::io::ssh::external::traits::{SshAdd, SshKeygen};
-use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::Result;
+use secretenv_core::cli_api::test_support::storage::ssh::external::traits::{SshAdd, SshKeygen};
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
+use secretenv_core::Result;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -43,8 +43,8 @@ impl MockSshAdd {
 
     fn err(message: &str) -> Self {
         Self {
-            output: Err(secretenv::Error::from(
-                secretenv::io::ssh::SshError::build_operation_failed_error(message),
+            output: Err(secretenv_core::Error::from(
+                secretenv_core::cli_api::test_support::storage::ssh::SshError::build_operation_failed_error(message),
             )),
         }
     }
@@ -54,8 +54,10 @@ impl SshAdd for MockSshAdd {
     fn list_keys(&self) -> Result<String> {
         match &self.output {
             Ok(s) => Ok(s.clone()),
-            Err(e) => Err(secretenv::Error::from(
-                secretenv::io::ssh::SshError::build_operation_failed_error(e.to_string()),
+            Err(e) => Err(secretenv_core::Error::from(
+                secretenv_core::cli_api::test_support::storage::ssh::SshError::build_operation_failed_error(
+                    e.to_string(),
+                ),
             )),
         }
     }
@@ -77,8 +79,10 @@ impl SshKeygen for MockSshKeygen {
     fn derive_public_key(&self, _key_path: &std::path::Path) -> Result<String> {
         match &self.derived_public_key {
             Ok(value) => Ok(value.clone()),
-            Err(error) => Err(secretenv::Error::from(
-                secretenv::io::ssh::SshError::build_operation_failed_error(error.to_string()),
+            Err(error) => Err(secretenv_core::Error::from(
+                secretenv_core::cli_api::test_support::storage::ssh::SshError::build_operation_failed_error(
+                    error.to_string(),
+                ),
             )),
         }
     }

@@ -5,11 +5,13 @@
 
 use crate::test_utils::{build_test_private_key, keygen_test, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::feature::key::manage::export::export_key;
-use secretenv::feature::key::manage::mutation::{activate_key, remove_key};
-use secretenv::feature::key::manage::query::list_keys;
-use secretenv::io::keystore::storage::save_key_pair_atomic;
-use secretenv::support::kid::format_kid_display;
+use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
+use secretenv_core::cli_api::test_support::operations::key::manage::export::export_key;
+use secretenv_core::cli_api::test_support::operations::key::manage::mutation::{
+    activate_key, remove_key,
+};
+use secretenv_core::cli_api::test_support::operations::key::manage::query::list_keys;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
 
 /// Helper: generate a second key pair, save it to the keystore, and return its kid.
 fn add_second_key(temp_dir: &tempfile::TempDir, member_handle: &str) -> String {
@@ -205,9 +207,12 @@ fn test_remove_key_active_without_force() {
 
     // Get the active kid
     let active_kid =
-        secretenv::io::keystore::active::load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
-            .unwrap()
-            .unwrap();
+        secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid(
+            ALICE_MEMBER_HANDLE,
+            &keystore_root,
+        )
+        .unwrap()
+        .unwrap();
 
     let home = Some(temp_dir.path().to_path_buf());
 
@@ -227,9 +232,12 @@ fn test_remove_key_active_with_force() {
     let keystore_root = temp_dir.path().join("keys");
 
     let active_kid =
-        secretenv::io::keystore::active::load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
-            .unwrap()
-            .unwrap();
+        secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid(
+            ALICE_MEMBER_HANDLE,
+            &keystore_root,
+        )
+        .unwrap()
+        .unwrap();
 
     let home = Some(temp_dir.path().to_path_buf());
 
@@ -246,8 +254,11 @@ fn test_remove_key_active_with_force() {
 
     // Verify the active kid has been cleared
     let current_active =
-        secretenv::io::keystore::active::load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
-            .unwrap();
+        secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid(
+            ALICE_MEMBER_HANDLE,
+            &keystore_root,
+        )
+        .unwrap();
     assert!(current_active.is_none());
 }
 
@@ -276,9 +287,12 @@ fn test_export_key_explicit_display_kid() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let active_kid =
-        secretenv::io::keystore::active::load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
-            .unwrap()
-            .unwrap();
+        secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid(
+            ALICE_MEMBER_HANDLE,
+            &keystore_root,
+        )
+        .unwrap()
+        .unwrap();
     let home = Some(temp_dir.path().to_path_buf());
 
     let result = export_key(

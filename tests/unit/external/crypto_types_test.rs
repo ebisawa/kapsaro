@@ -1,9 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::crypto::types::keys::{Cek, MasterKey, XChaChaKey};
-use secretenv::crypto::types::primitives::{HkdfSalt, KvSalt, PrivateKeyIkmSalt, XChaChaNonce};
-use secretenv::Error;
+use secretenv_core::cli_api::test_support::primitives::types::keys::{Cek, MasterKey, XChaChaKey};
+use secretenv_core::cli_api::test_support::primitives::types::primitives::{
+    HkdfSalt, KvSalt, PrivateKeyIkmSalt, XChaChaNonce,
+};
+use secretenv_core::Error;
 
 fn error_message<T>(result: Result<T, Error>) -> String {
     match result {

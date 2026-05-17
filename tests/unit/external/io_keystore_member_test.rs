@@ -3,7 +3,7 @@
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv::io::keystore::member::{
+use secretenv_core::cli_api::test_support::storage::keystore::member::{
     find_active_key_document, load_public_keys_for_member, load_single_member_handle_from_keystore,
 };
 use tempfile::TempDir;

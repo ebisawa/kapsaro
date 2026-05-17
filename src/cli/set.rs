@@ -8,9 +8,6 @@ use std::io::{self, Read};
 use clap::Args;
 use zeroize::Zeroizing;
 
-use crate::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
-use crate::app::kv::types::KvInputEntry;
-use crate::app::trust::SetPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
     WriteCommandLabels,
@@ -20,8 +17,11 @@ use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
 use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningQuietOptions};
-use crate::support::secret::SecretString;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
+use secretenv_core::cli_api::app::kv::types::KvInputEntry;
+use secretenv_core::cli_api::app::trust::SetPolicy;
+use secretenv_core::cli_api::presentation::secret::SecretString;
+use secretenv_core::{Error, Result};
 
 #[derive(Args)]
 pub struct SetArgs {

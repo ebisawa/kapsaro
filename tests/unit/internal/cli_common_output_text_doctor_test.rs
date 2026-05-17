@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::doctor::types::{
+use crate::cli::common::output::text::doctor::format_doctor_report;
+use secretenv_core::cli_api::app::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
 };
-use crate::cli::common::output::text::doctor::format_doctor_report;
 
 #[test]
 fn test_doctor_text_output_orders_sections() {

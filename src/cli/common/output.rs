@@ -4,7 +4,7 @@
 //! Output utilities for CLI commands.
 
 use self::text::print_warnings;
-use crate::Result;
+use secretenv_core::Result;
 
 pub(crate) mod config;
 pub(crate) mod file;

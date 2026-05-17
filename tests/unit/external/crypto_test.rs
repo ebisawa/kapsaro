@@ -3,9 +3,13 @@
 
 //! Unit tests for crypto module
 
-use secretenv::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
-use secretenv::crypto::sign::{sign_trust_store_bytes, verify_trust_store_bytes};
-use secretenv::model::wire::algorithm::SIGNATURE_ED25519;
+use secretenv_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519;
+use secretenv_core::cli_api::test_support::primitives::kem::{
+    derive_public_key_from_secret, X25519PublicKey, X25519SecretKey,
+};
+use secretenv_core::cli_api::test_support::primitives::sign::{
+    sign_trust_store_bytes, verify_trust_store_bytes,
+};
 use serde::{Deserialize, Serialize};
 
 // Test helper to generate X25519 keypair from seed
@@ -35,7 +39,7 @@ fn generate_ed25519_keypair(
 
 #[test]
 fn test_generate_keypair_public_key_matches_secret_key() {
-    use secretenv::crypto::kem::generate_keypair;
+    use secretenv_core::cli_api::test_support::primitives::kem::generate_keypair;
 
     let (secret_key, public_key) = generate_keypair().unwrap();
     let derived_public_key = derive_public_key_from_secret(&secret_key).unwrap();
@@ -47,8 +51,8 @@ fn test_generate_keypair_public_key_matches_secret_key() {
 
 #[test]
 fn test_hpke_enc_length() {
-    use secretenv::crypto::kem::seal_base;
-    use secretenv::crypto::types::data::{Aad, Info, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::kem::seal_base;
+    use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [1u8; 32];
     let (_, pk) = generate_x25519_keypair(member_seed);
@@ -63,8 +67,10 @@ fn test_hpke_enc_length() {
 
 #[test]
 fn test_hpke_different_aad_error() {
-    use secretenv::crypto::kem::{open_base, seal_base};
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{
+        Aad, Ciphertext, Enc, Info, Plaintext,
+    };
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -82,8 +88,10 @@ fn test_hpke_different_aad_error() {
 
 #[test]
 fn test_hpke_wrong_recipient_key_error() {
-    use secretenv::crypto::kem::{open_base, seal_base};
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{
+        Aad, Ciphertext, Enc, Info, Plaintext,
+    };
 
     let (_, alice_pk) = generate_x25519_keypair([1u8; 32]);
     let (bob_sk, _) = generate_x25519_keypair([2u8; 32]);
@@ -100,8 +108,8 @@ fn test_hpke_wrong_recipient_key_error() {
 
 #[test]
 fn test_hpke_ciphertext_length() {
-    use secretenv::crypto::kem::seal_base;
-    use secretenv::crypto::types::data::{Aad, Info, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::kem::seal_base;
+    use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (_, pk) = generate_x25519_keypair(member_seed);
@@ -116,8 +124,10 @@ fn test_hpke_ciphertext_length() {
 
 #[test]
 fn test_hpke_empty_plaintext() {
-    use secretenv::crypto::kem::{open_base, seal_base};
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{
+        Aad, Ciphertext, Enc, Info, Plaintext,
+    };
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -135,7 +145,7 @@ fn test_hpke_empty_plaintext() {
 
 #[test]
 fn test_plaintext_debug_redacts_contents() {
-    use secretenv::crypto::types::data::Plaintext;
+    use secretenv_core::cli_api::test_support::primitives::types::data::Plaintext;
 
     let plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
     let debug = format!("{:?}", plaintext);
@@ -160,7 +170,7 @@ fn test_plaintext_debug_redacts_contents() {
 
 #[test]
 fn test_plaintext_to_zeroizing_vec_clones_contents() {
-    use secretenv::crypto::types::data::Plaintext;
+    use secretenv_core::cli_api::test_support::primitives::types::data::Plaintext;
 
     let plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
     let bytes = plaintext.to_zeroizing_vec();
@@ -170,8 +180,10 @@ fn test_plaintext_to_zeroizing_vec_clones_contents() {
 
 #[test]
 fn test_hpke_open_error_message_sanitized() {
-    use secretenv::crypto::kem::{open_base, seal_base};
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{
+        Aad, Ciphertext, Enc, Info, Plaintext,
+    };
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -194,8 +206,10 @@ fn test_hpke_open_error_message_sanitized() {
 
 #[test]
 fn test_hpke_invalid_enc_error_message_sanitized() {
-    use secretenv::crypto::kem::{open_base, X25519PublicKey};
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Enc, Info};
+    use secretenv_core::cli_api::test_support::primitives::kem::{open_base, X25519PublicKey};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{
+        Aad, Ciphertext, Enc, Info,
+    };
 
     let (sk, _) = generate_x25519_keypair([7u8; 32]);
     let _unused_pk = X25519PublicKey::from_bytes([9u8; 32]);
@@ -231,7 +245,8 @@ fn test_ed25519_wrong_key_error() {
         version: 1,
     };
 
-    let canonical_bytes = secretenv::format::jcs::normalize(&doc).unwrap();
+    let canonical_bytes =
+        secretenv_core::cli_api::test_support::wire::jcs::normalize(&doc).unwrap();
     let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &alice_sk,

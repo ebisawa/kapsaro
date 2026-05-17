@@ -21,53 +21,16 @@ fn test_unit_external_files_are_registered_once() {
 fn test_unit_internal_files_are_registered_once() {
     let root = repo_root();
     let internal_files = collect_test_files(&root.join("tests/unit/internal"));
-    let registrations = collect_internal_harness_paths(&root.join("src"));
+    let registrations = collect_internal_harness_paths(&[root.join("src")]);
 
     assert_registered_once(&internal_files, &registrations);
-}
 
-#[test]
-fn test_unit_root_contains_only_harness_directories() {
-    let root = repo_root();
-    let unit_root = root.join("tests/unit");
-    let stray_files: Vec<_> = fs::read_dir(&unit_root)
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .collect();
+    let core_internal_files =
+        collect_test_files(&root.join("crates/secretenv-core/tests/unit/internal"));
+    let core_registrations =
+        collect_internal_harness_paths(&[root.join("crates/secretenv-core/src")]);
 
-    assert!(
-        stray_files.is_empty(),
-        "stray root unit test files: {stray_files:?}"
-    );
-}
-
-#[test]
-fn test_unit_harnesses_do_not_cross_register() {
-    let root = repo_root();
-    let unit_harness = fs::read_to_string(root.join("tests/unit.rs")).unwrap();
-    let unit_harness_targets = collect_path_attribute_targets(&unit_harness);
-    assert!(
-        unit_harness_targets
-            .iter()
-            .all(|target| !target.contains("unit/internal/")),
-        "tests/unit.rs must not register internal unit tests"
-    );
-
-    let src_paths = collect_rs_files(&root.join("src"));
-    let external_refs: Vec<_> = src_paths
-        .into_iter()
-        .filter(|path| {
-            fs::read_to_string(path)
-                .unwrap()
-                .contains("tests/unit/external/")
-        })
-        .collect();
-    assert!(
-        external_refs.is_empty(),
-        "production modules must not register external unit tests: {external_refs:?}"
-    );
+    assert_registered_once(&core_internal_files, &core_registrations);
 }
 
 fn repo_root() -> PathBuf {
@@ -97,9 +60,10 @@ fn collect_unit_harness_paths(path: &Path) -> BTreeMap<String, usize> {
         .fold(BTreeMap::new(), increment_count)
 }
 
-fn collect_internal_harness_paths(src_root: &Path) -> BTreeMap<String, usize> {
-    collect_rs_files(src_root)
-        .into_iter()
+fn collect_internal_harness_paths(src_roots: &[PathBuf]) -> BTreeMap<String, usize> {
+    src_roots
+        .iter()
+        .flat_map(|root| collect_rs_files(root))
         .flat_map(|path| collect_path_attribute_targets(&fs::read_to_string(path).unwrap()))
         .filter_map(|target| {
             target

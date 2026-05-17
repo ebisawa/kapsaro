@@ -6,11 +6,11 @@
 //! Tests for configuration use cases.
 
 use crate::test_utils::EnvGuard;
-use secretenv::feature::config::{
+use secretenv_core::cli_api::test_support::operations::config::{
     resolve_config_location, resolve_config_value, validate_key, ConfigScope,
 };
-use secretenv::io::config::paths::get_global_config_path;
-use secretenv::io::config::store::set_config_value;
+use secretenv_core::cli_api::test_support::storage::config::paths::get_global_config_path;
+use secretenv_core::cli_api::test_support::storage::config::store::set_config_value;
 use std::fs;
 use tempfile::TempDir;
 

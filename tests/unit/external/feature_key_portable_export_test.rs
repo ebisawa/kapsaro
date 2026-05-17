@@ -1,14 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
-use secretenv::feature::key::portable_export::{
+use secretenv_core::cli_api::test_support::domain::private_key::{PrivateKey, PrivateKeyPlaintext};
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
+use secretenv_core::cli_api::test_support::operations::key::material::{
+    build_private_key_plaintext, generate_keypairs,
+};
+use secretenv_core::cli_api::test_support::operations::key::portable_export::{
     build_password_strength_warning, export_private_key_portable,
 };
-use secretenv::feature::key::protection::password_encryption::decrypt_private_key_with_password;
-use secretenv::model::private_key::{PrivateKey, PrivateKeyPlaintext};
-use secretenv::support::codec::base64_public::decode_base64url_nopad;
-use secretenv::support::secret::SecretString;
+use secretenv_core::cli_api::test_support::operations::key::protection::password_encryption::decrypt_private_key_with_password;
 
 fn build_test_plaintext() -> PrivateKeyPlaintext {
     let keypairs = generate_keypairs().unwrap();

@@ -6,11 +6,11 @@
 //! Complements error_test.rs (format_user_message coverage) with table-driven
 //! Display output checks and From conversion checks.
 
-use secretenv::crypto::CryptoError;
-use secretenv::format::FormatError;
-use secretenv::io::ssh::SshError;
-use secretenv::support::codec::base64_public::decode_base64_standard;
-use secretenv::Error;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64_standard;
+use secretenv_core::cli_api::test_support::primitives::CryptoError;
+use secretenv_core::cli_api::test_support::storage::ssh::SshError;
+use secretenv_core::cli_api::test_support::wire::FormatError;
+use secretenv_core::{Error, ErrorKind};
 use std::error::Error as StdError;
 
 // --------------------------------------------------------------------
@@ -19,10 +19,9 @@ use std::error::Error as StdError;
 
 #[test]
 fn test_display_schema_variant() {
-    let err = Error::Schema {
-        message: "Invalid secretenv document\nReason: signature.signer_pub is missing".to_string(),
-        source: None,
-    };
+    let err = Error::build_schema_error(
+        "Invalid secretenv document\nReason: signature.signer_pub is missing".to_string(),
+    );
     let text = format!("{}", err);
     assert!(text.contains("Invalid secretenv document"));
     assert!(text.contains("signature.signer_pub is missing"));
@@ -113,51 +112,39 @@ fn test_display_invalid_operation_variant() {
 fn test_from_io_error_wraps_source() {
     let io_err = std::io::Error::other("disk full");
     let err: Error = io_err.into();
-    match err {
-        Error::Io { message, source } => {
-            assert!(message.contains("disk full"));
-            assert!(source.is_some(), "source must be preserved");
-        }
-        other => panic!("expected Error::Io, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Io);
+    assert!(err.format_user_message().contains("disk full"));
+    assert!(StdError::source(&err).is_some(), "source must be preserved");
 }
 
 #[test]
 fn test_from_serde_json_error_wraps_as_parse() {
     let json_err = serde_json::from_str::<serde_json::Value>("{ not valid").unwrap_err();
     let err: Error = json_err.into();
-    match err {
-        Error::Parse { message, source } => {
-            assert!(message.contains("JSON error:"));
-            assert!(source.is_some());
-        }
-        other => panic!("expected Error::Parse, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Parse);
+    assert!(err.format_user_message().contains("JSON error:"));
+    assert!(StdError::source(&err).is_some());
 }
 
 #[test]
 fn test_base64_decode_reports_parse_error() {
     let err = decode_base64_standard("!!!not-base64!!!", "field").unwrap_err();
-    match err {
-        Error::Parse { message, source } => {
-            assert!(message.contains("field"), "got: {message}");
-            assert!(source.is_none());
-        }
-        other => panic!("expected Error::Parse, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Parse);
+    assert!(
+        err.format_user_message().contains("field"),
+        "got: {}",
+        err.format_user_message()
+    );
+    assert!(StdError::source(&err).is_none());
 }
 
 #[test]
 fn test_from_crypto_error_invalid_key_maps_to_error_crypto() {
     let src = CryptoError::build_invalid_key_error("bad length");
     let err: Error = src.into();
-    match err {
-        Error::Crypto { message, source } => {
-            assert_eq!(message, "bad length");
-            assert!(source.is_none());
-        }
-        other => panic!("expected Error::Crypto, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Crypto);
+    assert_eq!(err.format_user_message(), "bad length");
+    assert!(StdError::source(&err).is_none());
 }
 
 #[test]
@@ -167,39 +154,27 @@ fn test_from_crypto_error_operation_failed_preserves_source() {
         std::io::Error::other("inner"),
     );
     let err: Error = src.into();
-    match err {
-        Error::Crypto { message, source } => {
-            assert_eq!(message, "AEAD seal failed");
-            assert!(source.is_some());
-        }
-        other => panic!("expected Error::Crypto, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Crypto);
+    assert_eq!(err.format_user_message(), "AEAD seal failed");
+    assert!(StdError::source(&err).is_some());
 }
 
 #[test]
 fn test_from_crypto_error_key_derivation_failed_maps_to_error_crypto() {
     let src = CryptoError::build_key_derivation_error("hkdf mismatch");
     let err: Error = src.into();
-    match err {
-        Error::Crypto { message, source } => {
-            assert_eq!(message, "hkdf mismatch");
-            assert!(source.is_none());
-        }
-        other => panic!("expected Error::Crypto, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Crypto);
+    assert_eq!(err.format_user_message(), "hkdf mismatch");
+    assert!(StdError::source(&err).is_none());
 }
 
 #[test]
 fn test_from_ssh_error_maps_to_error_ssh() {
     let src = SshError::build_operation_failed_error("ssh-agent not running");
     let err: Error = src.into();
-    match err {
-        Error::Ssh { message, source } => {
-            assert_eq!(message, "ssh-agent not running");
-            assert!(source.is_none());
-        }
-        other => panic!("expected Error::Ssh, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Ssh);
+    assert_eq!(err.format_user_message(), "ssh-agent not running");
+    assert!(StdError::source(&err).is_none());
 }
 
 #[test]
@@ -208,13 +183,12 @@ fn test_from_format_error_loses_source() {
     // and keeps only the rendered message.
     let src = FormatError::build_parse_error("unexpected EOF");
     let err: Error = src.into();
-    match err {
-        Error::Parse { message, source } => {
-            assert!(message.contains("unexpected EOF"));
-            assert!(source.is_none(), "FormatError source must not propagate");
-        }
-        other => panic!("expected Error::Parse, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Parse);
+    assert!(err.format_user_message().contains("unexpected EOF"));
+    assert!(
+        StdError::source(&err).is_none(),
+        "FormatError source must not propagate"
+    );
 }
 
 #[test]
@@ -227,13 +201,9 @@ fn test_from_hkdf_invalid_length_maps_to_crypto() {
     let mut out = vec![0u8; 255 * 32 + 1];
     let invalid = hk.expand(b"info", &mut out).unwrap_err();
     let err: Error = invalid.into();
-    match err {
-        Error::Crypto { message, source } => {
-            assert!(message.contains("HKDF"));
-            assert!(source.is_none());
-        }
-        other => panic!("expected Error::Crypto, got {:?}", other),
-    }
+    assert_eq!(err.kind(), ErrorKind::Crypto);
+    assert!(err.format_user_message().contains("HKDF"));
+    assert!(StdError::source(&err).is_none());
 }
 
 #[test]

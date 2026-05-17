@@ -7,11 +7,13 @@ use super::helpers::{
 };
 use crate::keygen_helpers::build_verified_private_key;
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::feature::decrypt::file::decrypt_file_document;
-use secretenv::feature::encrypt::file as file_enc;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::model::file_enc::VerifiedFileEncDocument;
-use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
+use secretenv_core::cli_api::test_support::domain::verification::{
+    SignatureVerificationProof, VerifyingKeySource,
+};
+use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::encrypt::file as file_enc;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 
 #[test]
 fn test_decrypt_file_roundtrip() {

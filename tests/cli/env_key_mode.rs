@@ -12,11 +12,11 @@ use crate::cli::common::{
 };
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
-use secretenv::feature::key::portable_export::export_private_key_portable;
-use secretenv::feature::key::protection::encryption::decrypt_private_key;
-use secretenv::io::keystore::active::load_active_kid;
-use secretenv::io::keystore::storage::load_private_key;
-use secretenv::support::secret::SecretString;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
+use secretenv_core::cli_api::test_support::operations::key::portable_export::export_private_key_portable;
+use secretenv_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
+use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::load_private_key;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;

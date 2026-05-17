@@ -10,13 +10,15 @@ use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
-use secretenv::io::keystore::active::set_active_kid;
-use secretenv::io::keystore::storage::list_kids;
-use secretenv::io::trust::paths::get_trust_store_file_path;
-use secretenv::io::workspace::members::load_member_file_from_path;
-use secretenv::model::public_key::GithubAccount;
-use secretenv::support::tty;
+use secretenv_core::cli_api::test_support::domain::public_key::GithubAccount;
+use secretenv_core::cli_api::test_support::helpers::tty;
+use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
+    build_public_key, PublicKeyDocumentParams,
+};
+use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use secretenv_core::cli_api::test_support::storage::workspace::members::load_member_file_from_path;
 #[cfg(unix)]
 use std::process::Command as StdCommand;
 

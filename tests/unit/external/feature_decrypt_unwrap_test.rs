@@ -13,30 +13,36 @@ use crate::keygen_helpers::{
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
-use secretenv::crypto::kem::decode_kem_secret_key;
-use secretenv::crypto::types::keys::MasterKey;
-use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::decrypt::file::decrypt_file_document;
-use secretenv::feature::encrypt::file::encrypt_file_document;
-use secretenv::feature::envelope::binding::build_file_wrap_info;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::envelope::unwrap::{unwrap_master_key, unwrap_master_key_for_file};
-use secretenv::feature::envelope::wrap::build_wrap_item_for_file;
-use secretenv::feature::key::protection::encryption::decrypt_private_key;
-use secretenv::feature::kv::decrypt::decrypt_kv_document;
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::verify::file::verify_file_document;
-use secretenv::feature::verify::kv::signature::verify_kv_document;
-use secretenv::format::kv::document::parse_kv_document;
-use secretenv::format::kv::dotenv::parse_dotenv;
-use secretenv::format::token::TokenCodec;
-use secretenv::io::keystore::storage::{list_kids, load_private_key, load_public_key};
-use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
-use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
-use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
-use secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use secretenv::model::file_enc::VerifiedFileEncDocument;
-use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
+use secretenv_core::cli_api::test_support::domain::verification::{
+    SignatureVerificationProof, VerifyingKeySource,
+};
+use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::envelope::binding::build_file_wrap_info;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::envelope::unwrap::{
+    unwrap_master_key, unwrap_master_key_for_file,
+};
+use secretenv_core::cli_api::test_support::operations::envelope::wrap::build_wrap_item_for_file;
+use secretenv_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
+use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
+use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
+use secretenv_core::cli_api::test_support::primitives::kem::decode_kem_secret_key;
+use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_private_key, load_public_key,
+};
+use secretenv_core::cli_api::test_support::storage::ssh::backend::signature_backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
+use secretenv_core::cli_api::test_support::wire::kv::dotenv::parse_dotenv;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -51,7 +57,7 @@ use uuid::Uuid;
 fn encrypt_file_for_test(
     content: &[u8],
 ) -> (
-    secretenv::model::file_enc::VerifiedFileEncDocument,
+    secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument,
     CryptoContext,
     String,
     TempDir,
@@ -93,7 +99,7 @@ fn encrypt_file_for_test(
 fn encrypt_kv_for_test(
     dotenv_content: &str,
 ) -> (
-    secretenv::model::kv_enc::verified::VerifiedKvEncDocument,
+    secretenv_core::cli_api::test_support::domain::kv_enc::verified::VerifiedKvEncDocument,
     CryptoContext,
     String,
     TempDir,
@@ -445,7 +451,11 @@ fn test_unwrap_master_key_from_wrap_item() {
         "SHA256:test",
     );
     let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
-    let wrap_set = secretenv::model::common::WrapSet::parse(&[wrap_item], "Document").unwrap();
+    let wrap_set = secretenv_core::cli_api::test_support::domain::common::WrapSet::parse(
+        &[wrap_item],
+        "Document",
+    )
+    .unwrap();
     let parsed_wrap_item = wrap_set
         .find_by_kid_for_member(&public_key.protected.kid, ALICE_MEMBER_HANDLE)
         .unwrap();
@@ -502,9 +512,9 @@ fn test_hpke_aad_binding_defence_in_depth() {
 
     // Attempt unwrap with wrong AAD (empty instead of info)
     // This should fail because the wrap was created with aad=info
-    use secretenv::crypto::kem::open_base;
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Enc};
-    use secretenv::support::codec::base64_public::decode_base64url_nopad;
+    use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
+    use secretenv_core::cli_api::test_support::primitives::kem::open_base;
+    use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Ciphertext, Enc};
 
     let enc_bytes = decode_base64url_nopad(&wrap_item.enc, "enc").unwrap();
     let enc = Enc::from(enc_bytes);

@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::keygen_helpers::build_dummy_public_key;
-use secretenv::format::schema::document::{
+use secretenv_core::cli_api::test_support::domain::common::WrapItem;
+use secretenv_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
+use secretenv_core::cli_api::test_support::domain::kv_enc::header::{
+    KvFileAlgorithm, KvHeader, KvWrap,
+};
+use secretenv_core::cli_api::test_support::domain::signature::ArtifactSignature;
+use secretenv_core::cli_api::test_support::domain::wire::{algorithm, format};
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_WRAP_ITEMS;
+use secretenv_core::cli_api::test_support::wire::schema::document::{
     parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token, parse_kv_signature_token,
     parse_kv_wrap_token, parse_public_key_str,
 };
-use secretenv::format::token::TokenCodec;
-use secretenv::model::common::WrapItem;
-use secretenv::model::kv_enc::entry::KvEntryValue;
-use secretenv::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
-use secretenv::model::signature::ArtifactSignature;
-use secretenv::model::wire::{algorithm, format};
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
-use secretenv::support::limits::MAX_WRAP_ITEMS;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use uuid::Uuid;
 
 #[test]

@@ -3,12 +3,12 @@
 
 //! Rewrap command output helpers.
 
-use crate::app::rewrap::types::RewrapBatchOutcome;
 use crate::cli::common::output::json::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_json;
 use crate::cli::common::output::print_json_or_text;
 use crate::cli::common::output::text::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_text;
-use crate::support::path::format_path_relative_to_cwd;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::rewrap::types::RewrapBatchOutcome;
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use secretenv_core::{Error, Result};
 
 pub(crate) struct RewrapFailureView {
     pub(crate) path: String,
@@ -51,12 +51,10 @@ pub(crate) fn print_rewrap_batch_outcome(
     )?;
 
     if !view.failed_files.is_empty() {
-        return Err(Error::Config {
-            message: format!(
-                "Failed to rewrap {} file(s). See errors above.",
-                view.failed_files.len()
-            ),
-        });
+        return Err(Error::build_config_error(format!(
+            "Failed to rewrap {} file(s). See errors above.",
+            view.failed_files.len()
+        )));
     }
 
     Ok(())

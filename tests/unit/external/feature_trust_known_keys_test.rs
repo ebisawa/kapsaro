@@ -3,11 +3,11 @@
 
 //! Unit tests for known_keys operations
 
-use secretenv::feature::trust::known_keys::{
+use secretenv_core::cli_api::test_support::domain::trust_store::{KnownKey, KnownKeyApprovalVia};
+use secretenv_core::cli_api::test_support::operations::trust::known_keys::{
     add_known_key, find_known_key, judge_known_key, purge_known_keys, remove_known_key,
     validate_kid_integrity, KnownKeyJudgment,
 };
-use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia};
 use std::collections::BTreeMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;

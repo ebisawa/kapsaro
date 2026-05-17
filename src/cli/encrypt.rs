@@ -10,9 +10,6 @@ use clap::Args;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use crate::app::file::encrypt::{
-    execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
-};
 use crate::cli::common::command::{
     resolve_command_input, resolve_options, resolve_trust_store_owner_member,
     run_write_command_with_trust, WriteCommandLabels,
@@ -23,8 +20,11 @@ use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
 use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
-use crate::support::fs::load_bytes;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::file::encrypt::{
+    execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
+};
+use secretenv_core::cli_api::presentation::fs::load_bytes;
+use secretenv_core::{Error, Result};
 
 #[derive(Args)]
 #[command(

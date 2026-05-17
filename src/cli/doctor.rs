@@ -7,10 +7,10 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use crate::app::doctor::{run_doctor, DoctorRequest};
 use crate::cli::common::output::json::doctor::print_doctor_report;
 use crate::cli::common::output::text::doctor::format_doctor_report;
-use crate::Result;
+use secretenv_core::cli_api::app::doctor::{run_doctor, DoctorRequest};
+use secretenv_core::Result;
 
 #[derive(Debug, Clone, Args)]
 pub struct DoctorArgs {

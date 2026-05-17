@@ -5,7 +5,9 @@
 
 #[cfg(unix)]
 mod unix_tests {
-    use secretenv::io::keystore::storage::{load_private_key, load_public_key};
+    use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+        load_private_key, load_public_key,
+    };
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;

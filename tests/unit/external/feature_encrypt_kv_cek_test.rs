@@ -3,9 +3,9 @@
 
 //! Unit tests for CEK derivation
 
-use secretenv::crypto::types::keys::MasterKey;
-use secretenv::feature::envelope::cek::derive_cek;
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::envelope::cek::derive_cek;
+use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
 use uuid::Uuid;
 
 fn test_sid() -> Uuid {

@@ -1,18 +1,20 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::trust::enforcement::ArtifactRecipientSetReview;
-use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::trust::{
     format_member_key_review_lines, format_non_member_signer_review_lines,
     format_recipient_set_review_lines, format_signer_key_review_lines, recipient_set_review_prompt,
 };
-use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
-use crate::io::verify_online::VerifiedGithubIdentity;
-use crate::model::common::WrapItem;
-use crate::model::trust_store::{RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord};
 use crate::test_utils::{kid as test_kid, member_handle};
 use console::{colors_enabled_stderr, set_colors_enabled_stderr, strip_ansi_codes};
+use secretenv_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
+use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use secretenv_core::cli_api::test_support::domain::common::WrapItem;
+use secretenv_core::cli_api::test_support::domain::trust_store::{
+    RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord,
+};
+use secretenv_core::cli_api::test_support::operations::trust::recipient_sets::ArtifactRecipientSet;
+use secretenv_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
 use serial_test::serial;
 use uuid::Uuid;
 

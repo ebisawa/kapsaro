@@ -5,8 +5,8 @@
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
-use secretenv::io::keystore::active::load_active_kid;
-use secretenv::support::kid::format_kid_display;
+use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
+use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use std::fs;
 use tempfile::TempDir;
 

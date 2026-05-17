@@ -7,7 +7,12 @@ description = "Offline-first CLI for sharing encrypted .env files and other secr
 license = "Apache-2.0"
 autotests = false
 
+[workspace]
+members = ["crates/secretenv-core"]
+
 [dependencies]
+secretenv-core = { version = "0.8.1-alpha", path = "crates/secretenv-core", features = ["cli-internal"] }
+
 # CLI framework
 clap = { version = "4", features = ["derive"] }
 console = "0.16"
@@ -16,91 +21,47 @@ dialoguer = "0.12"
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_jcs = "0.2"
-
-# JSON Schema validation
-jsonschema = "0.46"
-
-# Encoding
-hex = "0.4"
-
-# UUID generation
-uuid = { version = "1", features = ["v4", "serde"] }
 
 # Time handling
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 
-# Random number generation
-rand = "0.9"
-
-# Cryptography - HPKE (RFC9180)
-hpke = "0.13"
-
-# Cryptography - XChaCha20-Poly1305 (v2.0-alpha)
-chacha20poly1305 = "0.10"
-
-# Cryptography - Key derivation
-hkdf = "0.13"
-sha2 = "0.11"
-
 # Cryptography - Ed25519 signatures
 ed25519-dalek = "2"
 
-# Cryptography - Argon2id password hashing
-argon2 = { version = "0.5", features = ["alloc"] }
-
 # Secure memory handling
-zeroize = { version = "1", features = ["zeroize_derive"] }
-subtle = "2"
-
-# .env file parsing
-dotenvy = "0.15"
-
-# TOML parsing (for config.toml)
-toml = "1.0"
-shellexpand = "3"
-
-# Temporary file handling
-tempfile = "3"
-
-# File locking
-fd-lock = "4.0"
+zeroize = "1"
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Error handling
-thiserror = "2"
-
-# Regular expressions
-regex = "1"
-
-# HTTP client (for online verification)
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
-
-# Async runtime
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-
-# Unix syscall constants (O_NOFOLLOW)
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-
 [features]
-default = []
+default = ["online"]
+online = ["secretenv-core/online"]
 
 [dev-dependencies]
+secretenv-core = { version = "0.8.1-alpha", path = "crates/secretenv-core", features = ["cli-internal", "cli-test-support"] }
+
 # CLI testing
 assert_cmd = "2"
 predicates = "3"
 libc = "0.2"
+tempfile = "3"
 
 # Serial test execution
 serial_test = "3"
 
 # Environment variable manipulation for tests
 temp-env = "0.3"
+ed25519-dalek = "2"
+hex = "0.4"
+hkdf = "0.13"
 http = "1"
+rand = "0.9"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+sha2 = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 
 [[test]]
 name = "cli_integration"

@@ -8,15 +8,17 @@
 use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use secretenv::feature::encrypt::file::encrypt_file_document;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::rewrap::{rewrap_content, RewrapRequest};
-use secretenv::format::content::{EncContent, FileEncContent};
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::content::{EncContent, FileEncContent};
 
 fn single_rewrap_request<'a>(
-    key_ctx: &'a secretenv::feature::context::crypto::CryptoContext,
+    key_ctx: &'a secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext,
     workspace_root: Option<&'a std::path::Path>,
     debug: bool,
 ) -> RewrapRequest<'a> {
@@ -35,7 +37,7 @@ fn single_rewrap_request<'a>(
 fn rewrap_file_content(
     content: &FileEncContent,
     request: &RewrapRequest<'_>,
-) -> secretenv::Result<String> {
+) -> secretenv_core::Result<String> {
     rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 

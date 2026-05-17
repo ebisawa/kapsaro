@@ -5,10 +5,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::app::trust::management::{
-    execute_purge, execute_recipient_set_purge, list_purge_candidates,
-    list_recipient_set_purge_candidates,
-};
 use crate::cli::common::command::{
     resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
 };
@@ -19,8 +15,12 @@ use crate::cli::common::output::trust::{
 };
 use crate::cli::common::prompt::prompt_yes_no;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::support::tty;
-use crate::Error;
+use secretenv_core::cli_api::app::trust::management::{
+    execute_purge, execute_recipient_set_purge, list_purge_candidates,
+    list_recipient_set_purge_candidates,
+};
+use secretenv_core::cli_api::presentation::tty;
+use secretenv_core::Error;
 use time::OffsetDateTime;
 
 use super::PurgeArgs;
@@ -42,9 +42,9 @@ pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
 
     if !args.force.force {
         if !tty::is_interactive() {
-            return Err(Error::InvalidOperation {
-                message: "Non-interactive mode requires --force flag for purge".to_string(),
-            });
+            return Err(Error::build_invalid_operation_error(
+                "Non-interactive mode requires --force flag for purge".to_string(),
+            ));
         }
         if !confirm_purge()? {
             print_purge_cancelled();
@@ -84,9 +84,9 @@ pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
 
     if !args.force.force {
         if !tty::is_interactive() {
-            return Err(Error::InvalidOperation {
-                message: "Non-interactive mode requires --force flag for purge".to_string(),
-            });
+            return Err(Error::build_invalid_operation_error(
+                "Non-interactive mode requires --force flag for purge".to_string(),
+            ));
         }
         if !confirm_purge()? {
             print_purge_cancelled();
@@ -104,35 +104,32 @@ pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
 }
 
 /// Parse duration string (e.g. "180d") to a UTC threshold timestamp.
-fn parse_duration_to_threshold(duration: &str) -> crate::Result<OffsetDateTime> {
+fn parse_duration_to_threshold(duration: &str) -> secretenv_core::Result<OffsetDateTime> {
     let days = parse_days(duration)?;
     Ok(time::OffsetDateTime::now_utc() - time::Duration::days(days))
 }
 
-fn parse_days(duration: &str) -> crate::Result<i64> {
+fn parse_days(duration: &str) -> secretenv_core::Result<i64> {
     let s = duration.trim();
     if let Some(num_str) = s.strip_suffix('d') {
-        let days = num_str
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidOperation {
-                message: format!("Invalid duration: '{}'", duration),
-            })?;
+        let days = num_str.parse::<i64>().map_err(|_| {
+            Error::build_invalid_operation_error(format!("Invalid duration: '{}'", duration))
+        })?;
         if days <= 0 {
-            return Err(Error::InvalidOperation {
-                message: format!("Duration must be positive, got: '{}'", duration),
-            });
+            return Err(Error::build_invalid_operation_error(format!(
+                "Duration must be positive, got: '{}'",
+                duration
+            )));
         }
         Ok(days)
     } else {
-        Err(Error::InvalidOperation {
-            message: format!(
-                "Duration must be in days (e.g. '180d'), got: '{}'",
-                duration
-            ),
-        })
+        Err(Error::build_invalid_operation_error(format!(
+            "Duration must be in days (e.g. '180d'), got: '{}'",
+            duration
+        )))
     }
 }
 
-fn confirm_purge() -> crate::Result<bool> {
+fn confirm_purge() -> secretenv_core::Result<bool> {
     prompt_yes_no("Proceed?", false)
 }

@@ -5,11 +5,11 @@
 
 use clap::Args;
 
-use crate::app::kv::query::list_kv_command;
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::kv::print_kv_key_list;
 use crate::cli::options::{KvStoreNameOption, WorkspaceOutputOptions};
-use crate::Result;
+use secretenv_core::cli_api::app::kv::query::list_kv_command;
+use secretenv_core::Result;
 
 #[derive(Args)]
 pub struct ListArgs {

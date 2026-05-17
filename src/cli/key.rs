@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use crate::cli::options::{
     ForceOption, LocalOptions, LocalOutputOptions, MemberHandleOption, SigningOptions,
 };
-use crate::Result;
+use secretenv_core::Result;
 
 // Submodule declarations
 pub(crate) mod common;

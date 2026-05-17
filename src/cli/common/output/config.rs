@@ -3,7 +3,7 @@
 
 //! Config command output helpers.
 
-use crate::app::config::{ConfigScope, ConfigSetResult, ConfigUnsetResult};
+use secretenv_core::cli_api::app::config::{ConfigScope, ConfigSetResult, ConfigUnsetResult};
 use std::collections::BTreeMap;
 
 pub(crate) fn print_config_value(value: &str) {

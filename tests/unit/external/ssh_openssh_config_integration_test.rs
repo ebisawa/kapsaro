@@ -6,7 +6,7 @@
 //! These tests require file system operations and environment variable manipulation
 
 use crate::test_utils::EnvGuard;
-use secretenv::io::ssh::openssh_config::find_identity_agent;
+use secretenv_core::cli_api::test_support::storage::ssh::openssh_config::find_identity_agent;
 use std::env;
 use std::fs;
 use tempfile::TempDir;

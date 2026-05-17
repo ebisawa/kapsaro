@@ -9,28 +9,34 @@ use crate::keygen_helpers::{
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use ed25519_dalek::SigningKey;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::kv::decrypt::decrypt_kv_document;
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::kv::mutate::{
+use secretenv_core::cli_api::test_support::domain::kv_enc::verified::VerifiedKvEncDocument;
+use secretenv_core::cli_api::test_support::domain::public_key::PublicKey;
+use secretenv_core::cli_api::test_support::domain::verification::{
+    SignatureVerificationProof, VerifyingKeySource,
+};
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
     KvWriteContext,
 };
-use secretenv::feature::kv::types::KvInputEntry;
-use secretenv::format::content::KvEncContent;
-use secretenv::format::kv::document::parse_kv_document;
-use secretenv::format::kv::dotenv::{build_dotenv_string, parse_dotenv};
-use secretenv::format::kv::enc::canonical::parse_kv_wrap;
-use secretenv::format::schema::document::{parse_kv_head_token, parse_kv_wrap_token};
-use secretenv::format::token::TokenCodec;
-use secretenv::io::workspace::members::{list_active_member_handles, load_member_files};
-use secretenv::model::kv_enc::verified::VerifiedKvEncDocument;
-use secretenv::model::public_key::PublicKey;
-use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use secretenv_core::cli_api::test_support::operations::kv::types::KvInputEntry;
+use secretenv_core::cli_api::test_support::storage::workspace::members::{
+    list_active_member_handles, load_member_files,
+};
+use secretenv_core::cli_api::test_support::wire::content::KvEncContent;
+use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
+use secretenv_core::cli_api::test_support::wire::kv::dotenv::{build_dotenv_string, parse_dotenv};
+use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
+use secretenv_core::cli_api::test_support::wire::schema::document::{
+    parse_kv_head_token, parse_kv_wrap_token,
+};
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 
 fn create_secret_home() -> tempfile::TempDir {
     let temp = tempfile::TempDir::new().unwrap();
-    secretenv::support::fs::ensure_dir_restricted(temp.path()).unwrap();
+    secretenv_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(temp.path()).unwrap();
     temp
 }
 
@@ -44,7 +50,7 @@ fn decrypt_kv_document_for_test(
     encrypted: &str,
     member_handle: &str,
     kid: &str,
-    private: &secretenv::model::private_key::PrivateKeyPlaintext,
+    private: &secretenv_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
     signer_kid: &str,
 ) -> std::collections::HashMap<String, String> {
     let doc = parse_kv_document(encrypted).unwrap();
@@ -402,7 +408,7 @@ fn test_wrap_line_with_many_recipients() {
         .find(|l| l.starts_with(":WRAP "))
         .expect("WRAP line should exist");
     let wrap_token = wrap_line.strip_prefix(":WRAP ").unwrap();
-    let wrap_data: secretenv::model::kv_enc::header::KvWrap =
+    let wrap_data: secretenv_core::cli_api::test_support::domain::kv_enc::header::KvWrap =
         parse_kv_wrap_token(wrap_token).unwrap();
     let user_kid = wrap_data
         .wrap
@@ -426,9 +432,9 @@ fn test_wrap_line_with_many_recipients() {
 // ============================================================
 
 fn signing_key_from_private(
-    private_key: &secretenv::model::private_key::PrivateKeyPlaintext,
+    private_key: &secretenv_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
 ) -> ed25519_dalek::SigningKey {
-    use secretenv::support::codec::base64_public::decode_base64url_nopad_array;
+    use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad_array;
     let sig_d = decode_base64url_nopad_array(&private_key.keys.sig.d, "sig.d").unwrap();
     ed25519_dalek::SigningKey::from_bytes(&sig_d)
 }
@@ -437,20 +443,21 @@ fn setup_crypto_ctx_for_test(
     member_handle: &str,
     kid: &str,
     keystore_root: &std::path::Path,
-    private_key: &secretenv::model::private_key::PrivateKeyPlaintext,
-    public_key: &secretenv::model::public_key::PublicKey,
+    private_key: &secretenv_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
+    public_key: &secretenv_core::cli_api::test_support::domain::public_key::PublicKey,
     ssh_priv: &std::path::Path,
     ssh_pub_content: &str,
-) -> secretenv::feature::context::crypto::CryptoContext {
-    secretenv::support::fs::ensure_dir_restricted(keystore_root).unwrap();
+) -> secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext {
+    secretenv_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(keystore_root)
+        .unwrap();
     let workspace_path = Some(keystore_root.parent().unwrap().join("workspace"));
     let encrypted_private =
         build_test_private_key(private_key, member_handle, kid, ssh_priv, ssh_pub_content).unwrap();
     let member_dir = keystore_root.join(member_handle);
-    secretenv::support::fs::ensure_dir_restricted(&member_dir).unwrap();
+    secretenv_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(&member_dir).unwrap();
     let key_dir = keystore_root.join(member_handle).join(kid);
-    secretenv::support::fs::ensure_dir_restricted(&key_dir).unwrap();
-    secretenv::support::fs::atomic::save_json_restricted(
+    secretenv_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(&key_dir).unwrap();
+    secretenv_core::cli_api::test_support::helpers::fs::atomic::save_json_restricted(
         &key_dir.join("private.json"),
         &encrypted_private,
     )
@@ -458,7 +465,7 @@ fn setup_crypto_ctx_for_test(
     crate::test_utils::save_public_key(keystore_root, member_handle, kid, public_key).unwrap();
     let backend = crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(ssh_priv).unwrap();
 
-    secretenv::feature::context::crypto::load_crypto_context_from_keystore(
+    secretenv_core::cli_api::test_support::operations::context::crypto::load_crypto_context_from_keystore(
         keystore_root.to_path_buf(),
         member_handle,
         Some(kid),
@@ -474,8 +481,8 @@ fn encrypt_initial_kv_doc(
     member_handle: &str,
     kid: &str,
     keystore_root: &std::path::Path,
-    private_key: &secretenv::model::private_key::PrivateKeyPlaintext,
-    public_key: &secretenv::model::public_key::PublicKey,
+    private_key: &secretenv_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
+    public_key: &secretenv_core::cli_api::test_support::domain::public_key::PublicKey,
     entries: &[(&str, &str)],
 ) -> String {
     let signing_key = signing_key_from_private(private_key);
@@ -501,16 +508,16 @@ fn encrypt_initial_kv_doc(
         kv_map.insert(k.to_string(), v.to_string());
     }
 
-    secretenv::feature::kv::encrypt::encrypt_kv_document(
+    secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document(
         &kv_map,
         &verified_members,
-        &secretenv::feature::envelope::signature::SigningContext {
+        &secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
         },
-        secretenv::format::token::TokenCodec::JsonJcs,
+        secretenv_core::cli_api::test_support::wire::token::TokenCodec::JsonJcs,
     )
     .unwrap()
 }
@@ -524,7 +531,7 @@ fn kv_entry_token(content: &str, key: &str) -> Option<String> {
 }
 
 fn kv_head_field(content: &str, field: &str) -> String {
-    use secretenv::model::kv_enc::header::KvHeader;
+    use secretenv_core::cli_api::test_support::domain::kv_enc::header::KvHeader;
     let token = content
         .lines()
         .find(|l| l.starts_with(":HEAD "))
@@ -545,7 +552,7 @@ fn set_kv_entry(
     entries: &[(String, String)],
     workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
-) -> secretenv::Result<KvSetResult> {
+) -> secretenv_core::Result<KvSetResult> {
     let recipients = build_recipient_snapshot(workspace_root)?;
     let entries = entries
         .iter()
@@ -558,25 +565,26 @@ fn unset_kv_entry(
     content: &KvEncContent,
     key: &str,
     ctx: &KvWriteContext<'_>,
-) -> secretenv::Result<String> {
-    let workspace_root =
-        ctx.key_ctx
-            .workspace_path
-            .as_deref()
-            .ok_or_else(|| secretenv::Error::Config {
-                message: "Workspace is required for kv mutation".to_string(),
-            })?;
+) -> secretenv_core::Result<String> {
+    let workspace_root = ctx.key_ctx.workspace_path.as_deref().ok_or_else(|| {
+        secretenv_core::Error::build_config_error(
+            "Workspace is required for kv mutation".to_string(),
+        )
+    })?;
     let recipients = build_recipient_snapshot(workspace_root)?;
     unset_kv_entry_with_recipients(content, key, &recipients, ctx)
 }
 
 fn build_recipient_snapshot(
     workspace_root: &std::path::Path,
-) -> secretenv::Result<KvRecipientSnapshot> {
+) -> secretenv_core::Result<KvRecipientSnapshot> {
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+        secretenv_core::cli_api::test_support::operations::verify::public_key::verify_recipient_public_keys(
+            &public_keys,
+            false,
+        )?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -732,10 +740,10 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
 fn setup_unset_test_ctx(
     entries: &[(&str, &str)],
 ) -> (
-    String,                                             // initial content
-    secretenv::feature::context::crypto::CryptoContext, // key context
-    tempfile::TempDir,                                  // must be kept alive
-    tempfile::TempDir,                                  // SSH temp dir - must be kept alive
+    String, // initial content
+    secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext, // key context
+    tempfile::TempDir, // must be kept alive
+    tempfile::TempDir, // SSH temp dir - must be kept alive
 ) {
     let member_handle = "alice@example.com";
     let ssh_temp = tempfile::TempDir::new().unwrap();

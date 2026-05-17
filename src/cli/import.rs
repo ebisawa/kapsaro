@@ -5,8 +5,6 @@
 
 use clap::Args;
 
-use crate::app::kv::mutation::import_kv_command_with_recipient_set_confirmation;
-use crate::app::trust::ImportPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
     WriteCommandLabels,
@@ -17,9 +15,11 @@ use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
 use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningQuietOutputOptions};
-use crate::support::fs::load_text_with_limit;
-use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
-use crate::Result;
+use secretenv_core::cli_api::app::kv::mutation::import_kv_command_with_recipient_set_confirmation;
+use secretenv_core::cli_api::app::trust::ImportPolicy;
+use secretenv_core::cli_api::presentation::fs::load_text_with_limit;
+use secretenv_core::cli_api::presentation::limits::MAX_KV_ENC_FILE_SIZE;
+use secretenv_core::Result;
 
 #[derive(Args)]
 pub struct ImportArgs {

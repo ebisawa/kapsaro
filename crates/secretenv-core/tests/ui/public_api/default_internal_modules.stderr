@@ -1,0 +1,83 @@
+error[E0603]: module `config` is private
+ --> tests/ui/public_api/default_internal_modules.rs:1:21
+  |
+1 | use secretenv_core::config;
+  |                     ^^^^^^ private module
+  |
+note: the module `config` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod config;
+  | ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0603]: module `crypto` is private
+ --> tests/ui/public_api/default_internal_modules.rs:2:21
+  |
+2 | use secretenv_core::crypto;
+  |                     ^^^^^^ private module
+  |
+note: the module `crypto` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod crypto;
+  | ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0603]: module `feature` is private
+ --> tests/ui/public_api/default_internal_modules.rs:3:21
+  |
+3 | use secretenv_core::feature;
+  |                     ^^^^^^^ private module
+  |
+note: the module `feature` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod feature;
+  | ^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0603]: module `format` is private
+ --> tests/ui/public_api/default_internal_modules.rs:4:21
+  |
+4 | use secretenv_core::format;
+  |                     ^^^^^^ private module
+  |
+note: the module `format` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod format;
+  | ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0603]: module `io` is private
+ --> tests/ui/public_api/default_internal_modules.rs:5:21
+  |
+5 | use secretenv_core::io;
+  |                     ^^ private module
+  |
+note: the module `io` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod io;
+  | ^^^^^^^^^^^^^^^^^
+
+error[E0603]: module `model` is private
+ --> tests/ui/public_api/default_internal_modules.rs:6:21
+  |
+6 | use secretenv_core::model;
+  |                     ^^^^^ private module
+  |
+note: the module `model` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod model;
+  | ^^^^^^^^^^^^^^^^^^^^
+
+error[E0603]: module `support` is private
+ --> tests/ui/public_api/default_internal_modules.rs:7:21
+  |
+7 | use secretenv_core::support;
+  |                     ^^^^^^^ private module
+  |
+note: the module `support` is defined here
+ --> src/lib.rs
+  |
+  | pub(crate) mod support;
+  | ^^^^^^^^^^^^^^^^^^^^^^

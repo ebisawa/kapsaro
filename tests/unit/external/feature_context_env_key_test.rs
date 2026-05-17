@@ -1,15 +1,19 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
-use secretenv::feature::key::material::{build_private_key_plaintext, generate_keypairs};
-use secretenv::feature::key::portable_export::export_private_key_portable;
-use secretenv::model::private_key::{
+use secretenv_core::cli_api::test_support::domain::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use secretenv::model::wire::format;
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
-use secretenv::support::secret::SecretString;
+use secretenv_core::cli_api::test_support::domain::wire::format;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
+use secretenv_core::cli_api::test_support::operations::context::env_key::{
+    is_env_key_mode, load_private_key_from_env,
+};
+use secretenv_core::cli_api::test_support::operations::key::material::{
+    build_private_key_plaintext, generate_keypairs,
+};
+use secretenv_core::cli_api::test_support::operations::key::portable_export::export_private_key_portable;
 
 use crate::test_utils::EnvGuard;
 

@@ -3,7 +3,7 @@
 
 //! Unit tests for keystore path resolution
 
-use secretenv::io::keystore::paths::{
+use secretenv_core::cli_api::test_support::storage::keystore::paths::{
     get_active_file_path_from_root, get_key_path_from_root, get_keystore_root_from_base,
     get_member_keystore_path_from_root, get_private_key_file_path_from_root,
     get_public_key_file_path_from_root,

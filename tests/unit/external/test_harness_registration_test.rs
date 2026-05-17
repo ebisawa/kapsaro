@@ -21,9 +21,16 @@ fn test_unit_external_files_are_registered_once() {
 fn test_unit_internal_files_are_registered_once() {
     let root = repo_root();
     let internal_files = collect_test_files(&root.join("tests/unit/internal"));
-    let registrations = collect_internal_harness_paths(&root.join("src"));
+    let registrations = collect_internal_harness_paths(&[root.join("src")]);
 
     assert_registered_once(&internal_files, &registrations);
+
+    let core_internal_files =
+        collect_test_files(&root.join("crates/secretenv-core/tests/unit/internal"));
+    let core_registrations =
+        collect_internal_harness_paths(&[root.join("crates/secretenv-core/src")]);
+
+    assert_registered_once(&core_internal_files, &core_registrations);
 }
 
 #[test]
@@ -55,7 +62,10 @@ fn test_unit_harnesses_do_not_cross_register() {
         "tests/unit.rs must not register internal unit tests"
     );
 
-    let src_paths = collect_rs_files(&root.join("src"));
+    let src_paths = production_src_roots(&root)
+        .into_iter()
+        .flat_map(|root| collect_rs_files(&root))
+        .collect::<Vec<_>>();
     let external_refs: Vec<_> = src_paths
         .into_iter()
         .filter(|path| {
@@ -97,9 +107,14 @@ fn collect_unit_harness_paths(path: &Path) -> BTreeMap<String, usize> {
         .fold(BTreeMap::new(), increment_count)
 }
 
-fn collect_internal_harness_paths(src_root: &Path) -> BTreeMap<String, usize> {
-    collect_rs_files(src_root)
-        .into_iter()
+fn production_src_roots(root: &Path) -> Vec<PathBuf> {
+    vec![root.join("src"), root.join("crates/secretenv-core/src")]
+}
+
+fn collect_internal_harness_paths(src_roots: &[PathBuf]) -> BTreeMap<String, usize> {
+    src_roots
+        .iter()
+        .flat_map(|root| collect_rs_files(root))
         .flat_map(|path| collect_path_attribute_targets(&fs::read_to_string(path).unwrap()))
         .filter_map(|target| {
             target

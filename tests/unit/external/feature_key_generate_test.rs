@@ -12,23 +12,33 @@
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use secretenv::crypto::kem::{derive_public_key_from_secret, X25519SecretKey};
-use secretenv::feature::key::generate::KeyGenerationOptions;
-use secretenv::feature::key::material::{build_identity_keys, generate_keypairs, KeypairMaterial};
-use secretenv::feature::key::public_key_document::{build_public_key, PublicKeyDocumentParams};
-use secretenv::feature::key::ssh_binding::SshBindingContext;
-use secretenv::format::kid::derive_public_key_kid;
-use secretenv::io::keystore::active::load_active_kid;
-use secretenv::io::keystore::resolver::KeystoreResolver;
-use secretenv::io::keystore::signer::load_signer_public_key;
-use secretenv::io::keystore::storage::{list_kids, save_key_pair_atomic};
-use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
-use secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
-use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::model::public_key::{Attestation, GithubAccount, Identity};
-use secretenv::model::ssh::SshDeterminismStatus;
-use secretenv::model::wire::jwk::{CURVE_ED25519, CURVE_X25519};
-use secretenv::support::codec::base64_public::decode_base64url_nopad;
+use secretenv_core::cli_api::test_support::domain::public_key::{
+    Attestation, GithubAccount, Identity,
+};
+use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
+use secretenv_core::cli_api::test_support::domain::wire::jwk::{CURVE_ED25519, CURVE_X25519};
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::key::generate::KeyGenerationOptions;
+use secretenv_core::cli_api::test_support::operations::key::material::{
+    build_identity_keys, generate_keypairs, KeypairMaterial,
+};
+use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
+    build_public_key, PublicKeyDocumentParams,
+};
+use secretenv_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
+use secretenv_core::cli_api::test_support::primitives::kem::{
+    derive_public_key_from_secret, X25519SecretKey,
+};
+use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::resolver::KeystoreResolver;
+use secretenv_core::cli_api::test_support::storage::keystore::signer::load_signer_public_key;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, save_key_pair_atomic,
+};
+use secretenv_core::cli_api::test_support::storage::ssh::backend::signature_backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
+use secretenv_core::cli_api::test_support::wire::kid::derive_public_key_kid;
 use tempfile::TempDir;
 use zeroize::ZeroizeOnDrop;
 
@@ -109,7 +119,7 @@ fn test_build_private_key_plaintext_key_consistency() {
 // ============================================================================
 
 fn build_protected_without_kid_value(
-    public_key: &secretenv::model::public_key::PublicKey,
+    public_key: &secretenv_core::cli_api::test_support::domain::public_key::PublicKey,
 ) -> serde_json::Value {
     let mut value = serde_json::to_value(&public_key.protected).unwrap();
     value
@@ -260,22 +270,22 @@ fn test_derive_key_from_ssh_preserves_ssh_backend_errors() {
             _namespace: &str,
             _ssh_pubkey: &str,
             _challenge_bytes: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
-            Err(secretenv::Error::Ssh {
-                message: "ssh-keygen -Y sign failed: synthetic backend failure".to_string(),
-                source: None,
-            })
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
+            Err(secretenv_core::Error::build_ssh_error(
+                "ssh-keygen -Y sign failed: synthetic backend failure".to_string(),
+            ))
         }
     }
 
-    let result = secretenv::feature::key::protection::key_derivation::derive_key_from_ssh(
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        &secretenv::crypto::types::primitives::HkdfSalt::new([7u8; 32]),
-        &FailingBackend,
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
-        false,
-    );
+    let result =
+        secretenv_core::cli_api::test_support::operations::key::protection::key_derivation::derive_key_from_ssh(
+            "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            &secretenv_core::cli_api::test_support::primitives::types::primitives::HkdfSalt::new([7u8; 32]),
+            &FailingBackend,
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
+            false,
+        );
 
     let error = match result {
         Ok(_) => panic!("ssh backend errors must propagate"),
@@ -308,7 +318,7 @@ fn test_derive_key_from_ssh_maps_non_deterministic_error() {
             _namespace: &str,
             _ssh_pubkey: &str,
             _challenge_bytes: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             let mut bytes = [0u8; 64];
             bytes[0] = self.counter.get();
             self.counter.set(bytes[0] + 1);
@@ -316,16 +326,17 @@ fn test_derive_key_from_ssh_maps_non_deterministic_error() {
         }
     }
 
-    let result = secretenv::feature::key::protection::key_derivation::derive_key_from_ssh(
-        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        &secretenv::crypto::types::primitives::HkdfSalt::new([9u8; 32]),
-        &NonDeterministicBackend {
-            counter: Cell::new(0),
-        },
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
-        false,
-    );
+    let result =
+        secretenv_core::cli_api::test_support::operations::key::protection::key_derivation::derive_key_from_ssh(
+            "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            &secretenv_core::cli_api::test_support::primitives::types::primitives::HkdfSalt::new([9u8; 32]),
+            &NonDeterministicBackend {
+                counter: Cell::new(0),
+            },
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
+            false,
+        );
 
     let error = match result {
         Ok(_) => panic!("non-deterministic signatures must fail"),
@@ -375,8 +386,12 @@ fn test_save_and_activate_activates() {
     )
     .unwrap();
     // no_activate=false means we DO activate
-    secretenv::io::keystore::active::set_active_kid(ALICE_MEMBER_HANDLE, new_kid, &keystore_root)
-        .unwrap();
+    secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid(
+        ALICE_MEMBER_HANDLE,
+        new_kid,
+        &keystore_root,
+    )
+    .unwrap();
 
     let active = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root).unwrap();
     assert_eq!(
@@ -543,7 +558,9 @@ fn test_load_signer_public_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let pub_key_source =
-        secretenv::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
+        secretenv_core::cli_api::test_support::storage::keystore::public_key_source::KeystorePublicKeySource::new(
+            keystore_root,
+        );
 
     let result = load_signer_public_key(&pub_key_source, ALICE_MEMBER_HANDLE).unwrap();
 
@@ -558,17 +575,24 @@ fn test_generate_key_rejects_skipped_determinism() {
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
 
     let ssh_keygen =
-        secretenv::io::ssh::external::keygen::DefaultSshKeygen::new("ssh-keygen".to_string());
+        secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen::new(
+            "ssh-keygen".to_string(),
+        );
     let descriptor =
-        secretenv::io::ssh::protocol::key_descriptor::SshKeyDescriptor::from_path(ssh_priv);
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor::from_path(
+            ssh_priv,
+        );
     let backend: Box<dyn SignatureBackend> = Box::new(
-        secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend::new(
+        secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend::new(
             Box::new(ssh_keygen),
             descriptor,
         ),
     );
     let fingerprint =
-        secretenv::io::ssh::protocol::build_sha256_fingerprint(ssh_pub_content.trim()).unwrap();
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::build_sha256_fingerprint(
+            ssh_pub_content.trim(),
+        )
+        .unwrap();
 
     let ssh_binding = SshBindingContext {
         public_key: ssh_pub_content.trim().to_string(),
@@ -578,22 +602,28 @@ fn test_generate_key_rejects_skipped_determinism() {
     };
 
     let now = time::OffsetDateTime::now_utc();
-    let created_at = secretenv::support::time::format_timestamp_rfc3339(now).unwrap();
-    let expires_at =
-        secretenv::support::time::format_timestamp_rfc3339(now + time::Duration::days(365))
+    let created_at =
+        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)
             .unwrap();
+    let expires_at =
+        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+            now + time::Duration::days(365),
+        )
+        .unwrap();
 
-    let result = secretenv::feature::key::generate::generate_key(KeyGenerationOptions {
-        member_handle: ALICE_MEMBER_HANDLE.to_string(),
-        home: Some(temp_dir.path().to_path_buf()),
-        created_at,
-        expires_at,
-        no_activate: false,
-        debug: false,
-        github_account: None,
-        verbose: false,
-        ssh_binding,
-    });
+    let result = secretenv_core::cli_api::test_support::operations::key::generate::generate_key(
+        KeyGenerationOptions {
+            member_handle: ALICE_MEMBER_HANDLE.to_string(),
+            home: Some(temp_dir.path().to_path_buf()),
+            created_at,
+            expires_at,
+            no_activate: false,
+            debug: false,
+            github_account: None,
+            verbose: false,
+            ssh_binding,
+        },
+    );
 
     let err_msg = match result {
         Ok(_) => panic!("generate_key must reject Skipped determinism"),

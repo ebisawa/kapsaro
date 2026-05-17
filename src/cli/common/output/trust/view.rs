@@ -19,7 +19,7 @@ pub(crate) struct RecipientSetListItemView<'a> {
 }
 
 pub(crate) fn build_trust_list_views<'a>(
-    items: &'a [crate::app::trust::list::TrustListItem],
+    items: &'a [secretenv_core::cli_api::app::trust::list::TrustListItem],
 ) -> Vec<TrustListItemView<'a>> {
     items
         .iter()
@@ -33,7 +33,7 @@ pub(crate) fn build_trust_list_views<'a>(
 }
 
 pub(crate) fn build_recipient_set_list_views<'a>(
-    items: &'a [crate::app::trust::list::RecipientSetListItem],
+    items: &'a [secretenv_core::cli_api::app::trust::list::RecipientSetListItem],
 ) -> Vec<RecipientSetListItemView<'a>> {
     items
         .iter()

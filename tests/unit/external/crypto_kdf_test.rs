@@ -3,9 +3,9 @@
 
 //! Tests for HKDF type-safe salt interface
 
-use secretenv::crypto::kdf::{expand, expand_to_array};
-use secretenv::crypto::types::data::{Ikm, Info};
-use secretenv::crypto::types::primitives::{HkdfSalt, KvSalt};
+use secretenv_core::cli_api::test_support::primitives::kdf::{expand, expand_to_array};
+use secretenv_core::cli_api::test_support::primitives::types::data::{Ikm, Info};
+use secretenv_core::cli_api::test_support::primitives::types::primitives::{HkdfSalt, KvSalt};
 
 #[test]
 fn test_expand_to_array_accepts_hkdf_salt() {

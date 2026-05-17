@@ -5,7 +5,7 @@
 
 use console::Style;
 
-use crate::app::doctor::types::{DoctorCheck, DoctorReport, DoctorStatus};
+use secretenv_core::cli_api::app::doctor::types::{DoctorCheck, DoctorReport, DoctorStatus};
 
 pub(crate) fn format_doctor_report(report: &DoctorReport, verbose: bool) -> String {
     let mut out = String::new();

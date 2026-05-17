@@ -3,11 +3,13 @@
 
 //! Tests for password-based key derivation (Argon2id + HKDF-SHA256)
 
-use secretenv::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
-use secretenv::feature::key::protection::password_key_derivation::{
+use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
+use secretenv_core::cli_api::test_support::operations::key::protection::password_key_derivation::{
     derive_key_from_password, generate_hkdf_salt, generate_ikm_salt,
 };
-use secretenv::support::secret::SecretString;
+use secretenv_core::cli_api::test_support::primitives::types::primitives::{
+    HkdfSalt, PrivateKeyIkmSalt,
+};
 
 fn secret(value: &str) -> SecretString {
     SecretString::new(value.to_string())

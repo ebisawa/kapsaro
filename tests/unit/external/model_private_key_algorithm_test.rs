@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::model::private_key::*;
-use secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305;
-use secretenv::model::wire::private_key::{
+use secretenv_core::cli_api::test_support::domain::private_key::*;
+use secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305;
+use secretenv_core::cli_api::test_support::domain::wire::private_key::{
     PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256, PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
 };
 

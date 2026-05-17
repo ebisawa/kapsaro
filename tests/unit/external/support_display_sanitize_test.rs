@@ -1,8 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::support::display::{sanitize_display_field, sanitize_display_field_with_limit};
-use secretenv::support::kid::format_kid_display_lossy;
+use secretenv_core::cli_api::test_support::helpers::display::{
+    sanitize_display_field, sanitize_display_field_with_limit,
+};
+use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display_lossy;
 
 #[test]
 fn test_sanitize_display_field_escapes_newlines_and_controls() {

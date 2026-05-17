@@ -3,25 +3,29 @@
 
 use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_key};
 use ed25519_dalek::SigningKey;
-use secretenv::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
-use secretenv::feature::decrypt::file::decrypt_file_document;
-use secretenv::model::file_enc::VerifiedFileEncDocument;
-use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
-use secretenv::model::{
+use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
+use secretenv_core::cli_api::test_support::domain::verification::{
+    SignatureVerificationProof, VerifyingKeySource,
+};
+use secretenv_core::cli_api::test_support::domain::{
     private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext},
     public_key::{
         Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
         VerifiedRecipientKey,
     },
 };
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
+use secretenv_core::cli_api::test_support::primitives::kem::{
+    derive_public_key_from_secret, X25519PublicKey, X25519SecretKey,
+};
 
 pub(super) fn b64url(data: &[u8]) -> String {
     encode_base64url_nopad(data)
 }
 
 pub(super) fn decrypt_file_document_for_test(
-    file_enc_doc: &secretenv::model::file_enc::FileEncDocument,
+    file_enc_doc: &secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument,
     member_handle: &str,
     kid: &str,
     private_key: &PrivateKeyPlaintext,
@@ -71,25 +75,26 @@ pub(super) fn recipients_and_members(
 pub(super) fn build_test_public_key(member_handle: &str, kid: &str, kem_pub: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
                         x: kem_pub.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
                         x: "dummy_sig_pub".to_string(),
                     },
                 },
                 attestation: Attestation {
-                    method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
+                    method:
+                        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                            .to_string(),
                     pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
                     sig: "dummy".to_string(),
                 },
@@ -113,13 +118,15 @@ pub(super) fn build_test_private_key(
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
+                    .to_string(),
                 x: pk_b64,
                 d: sk_b64,
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                    .to_string(),
                 x: "dummy_sig_pub".to_string(),
                 d: "dummy_sig_priv".to_string(),
             },

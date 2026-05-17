@@ -11,17 +11,21 @@ use crate::test_utils::{setup_member_key_context, setup_test_keystore, EnvGuard}
 use crate::test_utils::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
 };
-use secretenv::feature::encrypt::encrypt_file_content;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::inspect::{build_inspect_view, InspectOutput};
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::verify::file::verify_file_document_report;
-use secretenv::feature::verify::kv::signature::verify_kv_document_report;
-use secretenv::format::content::EncContent;
-use secretenv::format::schema::document::parse_kv_signature_token;
-use secretenv::format::token::TokenCodec;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::verification::VerifyingKeySource;
+use secretenv_core::cli_api::test_support::domain::verification::VerifyingKeySource;
+use secretenv_core::cli_api::test_support::operations::encrypt::encrypt_file_content;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::inspect::{
+    build_inspect_view, InspectOutput,
+};
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document_report;
+use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document_report;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::content::EncContent;
+use secretenv_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
@@ -36,8 +40,8 @@ fn build_signing_context(
     temp_dir: &TempDir,
     member_handle: &str,
 ) -> (
-    secretenv::feature::context::crypto::CryptoContext,
-    secretenv::model::public_key::PublicKey,
+    secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext,
+    secretenv_core::cli_api::test_support::domain::public_key::PublicKey,
 ) {
     let keystore_root = temp_dir.path().join("keys");
     let kid = list_kids(&keystore_root, member_handle)
@@ -346,7 +350,7 @@ fn test_build_error_report() {
 fn test_build_success_report() {
     let (_temp_dir, content) = build_file_enc_content(DAVE_MEMBER_HANDLE);
 
-    let file_enc_doc: secretenv::model::file_enc::FileEncDocument =
+    let file_enc_doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument =
         serde_json::from_str(&content).unwrap();
 
     let report = verify_file_document_report(&file_enc_doc, false);
@@ -477,7 +481,7 @@ fn test_verify_kv_document_report() {
 fn test_verify_file_document_report() {
     let temp_dir = setup_test_keystore(CAROL_MEMBER_HANDLE);
     let encrypted_content = encrypt_file_fixture(&temp_dir, CAROL_MEMBER_HANDLE, b"test content");
-    let file_enc_doc: secretenv::model::file_enc::FileEncDocument =
+    let file_enc_doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_content).unwrap();
 
     // Verify signature

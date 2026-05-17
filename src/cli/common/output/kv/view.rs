@@ -3,8 +3,8 @@
 
 //! View builders for KV command output.
 
-use crate::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use crate::cli::common::output::text::print_warning_line;
+use secretenv_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use std::collections::BTreeMap;
 
 pub(crate) struct KvKeyView<'a> {

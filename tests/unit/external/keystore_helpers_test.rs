@@ -5,13 +5,13 @@
 
 use crate::test_utils::save_public_key;
 use crate::test_utils::EnvGuard;
-use secretenv::io::config::paths::get_base_dir;
-use secretenv::io::keystore::active::set_active_kid;
-use secretenv::io::keystore::helpers::resolve_kid;
-use secretenv::io::keystore::paths::get_keystore_root_from_base;
-use secretenv::model::public_key::{
+use secretenv_core::cli_api::test_support::domain::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
+use secretenv_core::cli_api::test_support::storage::config::paths::get_base_dir;
+use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::helpers::resolve_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::paths::get_keystore_root_from_base;
 use tempfile::TempDir;
 
 const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -21,19 +21,23 @@ const B64URL_64: &str =
 fn dummy_public_key(member_handle: &str, kid: &str, created_at: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6
+                .to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
+                            .to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                        crv:
+                            secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                                .to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },

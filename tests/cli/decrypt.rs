@@ -11,9 +11,9 @@ use crate::cli::common::{
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use predicates::prelude::*;
-use secretenv::io::keystore::member::find_active_key_document;
-use secretenv::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use std::fs;
 use tempfile::TempDir;
 

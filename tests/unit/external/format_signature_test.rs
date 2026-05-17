@@ -4,14 +4,16 @@
 //! Unit tests for file-enc canonicalization
 
 use ed25519_dalek::SigningKey;
-use secretenv::feature::envelope::signature::{sign_file_document, verify_file_signature};
-use secretenv::format::file::build_file_signature_bytes;
-use secretenv::model::common::WrapItem;
-use secretenv::model::file_enc::{
+use secretenv_core::cli_api::test_support::domain::common::WrapItem;
+use secretenv_core::cli_api::test_support::domain::file_enc::{
     FileEncAlgorithm, FileEncDocumentProtected, FilePayload, FilePayloadCiphertext,
     FilePayloadHeader,
 };
-use secretenv::model::wire::algorithm;
+use secretenv_core::cli_api::test_support::domain::wire::algorithm;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::{
+    sign_file_document, verify_file_signature,
+};
+use secretenv_core::cli_api::test_support::wire::file::build_file_signature_bytes;
 use uuid::Uuid;
 
 use crate::keygen_helpers::build_dummy_public_key;
@@ -19,7 +21,7 @@ use crate::keygen_helpers::build_dummy_public_key;
 fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
-        format: secretenv::model::wire::format::FILE_ENC_V5.to_string(),
+        format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5.to_string(),
         sid,
         wrap: vec![WrapItem {
             recipient_handle: "alice@example.com".to_string(),
@@ -31,10 +33,11 @@ fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
         removed_recipients: None,
         payload: FilePayload {
             protected: FilePayloadHeader {
-                format: secretenv::model::wire::format::FILE_PAYLOAD_V5.to_string(),
+                format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V5.to_string(),
                 sid,
                 alg: FileEncAlgorithm {
-                    aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
+                    aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                        .to_string(),
                 },
             },
             encrypted: FilePayloadCiphertext {
@@ -76,7 +79,7 @@ fn test_sign_file_document_returns_valid_structure() {
 
     assert_eq!(
         sig.alg,
-        secretenv::model::wire::algorithm::SIGNATURE_ED25519
+        secretenv_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
     );
     assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(sig.signer_pub.protected.subject_handle, "signer@test");

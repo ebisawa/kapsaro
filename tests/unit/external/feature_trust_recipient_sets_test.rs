@@ -1,11 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::feature::trust::recipient_sets::{
+use secretenv_core::cli_api::test_support::domain::common::WrapItem;
+use secretenv_core::cli_api::test_support::domain::trust_store::{
+    RecipientSetApprovalVia, RecipientSetRecord,
+};
+use secretenv_core::cli_api::test_support::operations::trust::recipient_sets::{
     compute_recipient_set_hash, judge_recipient_set, ArtifactRecipientSet, RecipientSetJudgment,
 };
-use secretenv::model::common::WrapItem;
-use secretenv::model::trust_store::{RecipientSetApprovalVia, RecipientSetRecord};
 use uuid::Uuid;
 
 #[test]
@@ -85,9 +87,11 @@ fn recipient_set_record(
     let recipient_handle_hints = hint_member_handle.map(|recipient_handle| {
         recipient_kids
             .iter()
-            .map(|kid| secretenv::model::trust_store::RecipientHandleHint {
-                kid: kid.clone(),
-                recipient_handle: recipient_handle.to_string(),
+            .map(|kid| {
+                secretenv_core::cli_api::test_support::domain::trust_store::RecipientHandleHint {
+                    kid: kid.clone(),
+                    recipient_handle: recipient_handle.to_string(),
+                }
             })
             .collect()
     });

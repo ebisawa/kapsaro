@@ -5,8 +5,8 @@
 //!
 //! Tests for line-oriented kv-enc format parsing.
 
-use secretenv::format::kv::enc::parser::KvEncParser;
-use secretenv::model::kv_enc::line::{KvEncLine, KvEncVersion};
+use secretenv_core::cli_api::test_support::domain::kv_enc::line::{KvEncLine, KvEncVersion};
+use secretenv_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
 
 // Header parsing tests
 

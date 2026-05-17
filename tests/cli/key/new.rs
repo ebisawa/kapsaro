@@ -6,8 +6,8 @@
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
-use secretenv::model::private_key::PrivateKey;
-use secretenv::model::wire::format;
+use secretenv_core::cli_api::test_support::domain::private_key::PrivateKey;
+use secretenv_core::cli_api::test_support::domain::wire::format;
 use std::fs;
 use tempfile::TempDir;
 
@@ -368,7 +368,7 @@ fn test_key_new_default_activate() {
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Verify active file is created
-    use secretenv::io::keystore::active::load_active_kid;
+    use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
     let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert_eq!(
         active_kid,

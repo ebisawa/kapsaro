@@ -1,15 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::crypto::CryptoError;
-use secretenv::Error;
+use secretenv_core::cli_api::test_support::primitives::CryptoError;
+use secretenv_core::{Error, ErrorKind};
 
 #[test]
 fn test_user_message_schema_returns_message_field() {
-    let error = Error::Schema {
-        message: "Invalid secretenv document\nReason: signature.signer_pub is missing".to_string(),
-        source: None,
-    };
+    let error = Error::build_schema_error(
+        "Invalid secretenv document\nReason: signature.signer_pub is missing".to_string(),
+    );
     assert_eq!(
         error.format_user_message(),
         "Invalid secretenv document\nReason: signature.signer_pub is missing"
@@ -57,10 +56,8 @@ fn test_from_crypto_error_preserves_source() {
     );
     let error = Error::from(crypto_err);
     assert_eq!(error.format_user_message(), "decryption failed");
-    match &error {
-        Error::Crypto { source, .. } => assert!(source.is_some()),
-        _ => panic!("expected Crypto variant"),
-    }
+    assert_eq!(error.kind(), ErrorKind::Crypto);
+    assert!(std::error::Error::source(&error).is_some());
 }
 
 #[test]

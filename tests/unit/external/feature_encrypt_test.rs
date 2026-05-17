@@ -9,16 +9,18 @@ use crate::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
-use secretenv::feature::decrypt::file::decrypt_file_document;
-use secretenv::feature::encrypt::encrypt_file_content;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::kv::decrypt::decrypt_kv_document;
-use secretenv::feature::verify::file::verify_file_document;
-use secretenv::feature::verify::kv::signature::verify_kv_document;
-use secretenv::format::kv::document::parse_kv_document;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::file_enc::FileEncDocument;
-use secretenv::model::wire::format::FILE_ENC_V5;
+use secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument;
+use secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5;
+use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::encrypt::encrypt_file_content;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
+use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
 
 /// Generate Ed25519 signing key from seed for tests
 fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
@@ -113,8 +115,8 @@ fn test_encrypt_file_document_recipient_count_mismatch() {
 
 #[test]
 fn test_encrypt_kv_document_via_inner_api() {
-    use secretenv::feature::kv::encrypt::encrypt_kv_document;
-    use secretenv::format::token::TokenCodec;
+    use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+    use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
     use std::collections::HashMap;
 
     // Use keys from fixture keystore
@@ -155,7 +157,11 @@ fn test_encrypt_kv_document_via_inner_api() {
     // Verify signer_pub is always embedded in output signature
     let doc = parse_kv_document(&encrypted).unwrap();
     let sig_token = &doc.signature_token;
-    let sig = secretenv::format::schema::document::parse_kv_signature_token(sig_token).unwrap();
+    let sig =
+        secretenv_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token(
+            sig_token,
+        )
+        .unwrap();
     assert_eq!(sig.signer_pub.protected.subject_handle, ALICE_MEMBER_HANDLE);
 
     // Decrypt and verify
@@ -168,7 +174,7 @@ fn test_encrypt_kv_document_via_inner_api() {
         false,
     )
     .unwrap();
-    use secretenv::format::kv::dotenv::build_dotenv_string;
+    use secretenv_core::cli_api::test_support::wire::kv::dotenv::build_dotenv_string;
     let decrypted_map: HashMap<String, String> = decrypted_map_zeroizing
         .into_iter()
         .map(|(k, v)| (k, String::from_utf8(v.to_vec()).unwrap()))

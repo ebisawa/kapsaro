@@ -10,20 +10,24 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures, setup_test_workspace_from_fixtures,
 };
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::kv::decrypt::decrypt_kv_single_entry;
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::feature::kv::mutate::{
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_single_entry;
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::operations::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
     KvWriteContext,
 };
-use secretenv::feature::kv::types::KvInputEntry;
-use secretenv::feature::verify::kv::signature::verify_kv_content;
-use secretenv::format::content::KvEncContent;
-use secretenv::format::kv::enc::canonical::parse_kv_wrap;
-use secretenv::format::token::TokenCodec;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::io::workspace::members::{list_active_member_handles, load_member_files};
+use secretenv_core::cli_api::test_support::operations::kv::types::KvInputEntry;
+use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_content;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::storage::workspace::members::{
+    list_active_member_handles, load_member_files,
+};
+use secretenv_core::cli_api::test_support::wire::content::KvEncContent;
+use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use tempfile::TempDir;
 
 fn build_test_kv_enc_content(
@@ -52,13 +56,16 @@ fn build_test_kv_enc_content(
     encrypt_kv_document(kv_map, &verified_members, &signing, TokenCodec::JsonJcs).unwrap()
 }
 
-fn list_kv_keys(content: &KvEncContent) -> secretenv::Result<Vec<String>> {
+fn list_kv_keys(content: &KvEncContent) -> secretenv_core::Result<Vec<String>> {
     let mut keys = content
         .parse()?
         .lines()
         .iter()
         .filter_map(|line| match line {
-            secretenv::model::kv_enc::line::KvEncLine::KV { key, .. } => Some(key.clone()),
+            secretenv_core::cli_api::test_support::domain::kv_enc::line::KvEncLine::KV {
+                key,
+                ..
+            } => Some(key.clone()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -69,9 +76,9 @@ fn list_kv_keys(content: &KvEncContent) -> secretenv::Result<Vec<String>> {
 fn decrypt_kv_value(
     content: &KvEncContent,
     member_handle: &str,
-    key_ctx: &secretenv::feature::context::crypto::CryptoContext,
+    key_ctx: &secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext,
     key: &str,
-) -> secretenv::Result<String> {
+) -> secretenv_core::Result<String> {
     let verified = verify_kv_content(content, false)?;
     let value = decrypt_kv_single_entry(
         &verified,
@@ -81,19 +88,24 @@ fn decrypt_kv_value(
         key,
         false,
     )?;
-    String::from_utf8(value.to_vec()).map_err(|e| secretenv::Error::Parse {
-        message: format!("Invalid UTF-8 in decrypted value: {}", e),
-        source: Some(Box::new(e)),
+    String::from_utf8(value.to_vec()).map_err(|e| {
+        secretenv_core::Error::build_parse_error_with_source(
+            format!("Invalid UTF-8 in decrypted value: {}", e),
+            e,
+        )
     })
 }
 
 fn build_recipient_snapshot(
     workspace_root: &std::path::Path,
-) -> secretenv::Result<KvRecipientSnapshot> {
+) -> secretenv_core::Result<KvRecipientSnapshot> {
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        secretenv::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+        secretenv_core::cli_api::test_support::operations::verify::public_key::verify_recipient_public_keys(
+            &public_keys,
+            false,
+        )?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -105,7 +117,7 @@ fn set_kv_entry(
     entries: &[(String, String)],
     workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
-) -> secretenv::Result<KvSetResult> {
+) -> secretenv_core::Result<KvSetResult> {
     let recipients = build_recipient_snapshot(workspace_root)?;
     let entries = entries
         .iter()
@@ -118,14 +130,12 @@ fn unset_kv_entry(
     content: &KvEncContent,
     key: &str,
     ctx: &KvWriteContext<'_>,
-) -> secretenv::Result<String> {
-    let workspace_root =
-        ctx.key_ctx
-            .workspace_path
-            .as_deref()
-            .ok_or_else(|| secretenv::Error::Config {
-                message: "Workspace is required for kv mutation".to_string(),
-            })?;
+) -> secretenv_core::Result<String> {
+    let workspace_root = ctx.key_ctx.workspace_path.as_deref().ok_or_else(|| {
+        secretenv_core::Error::build_config_error(
+            "Workspace is required for kv mutation".to_string(),
+        )
+    })?;
     let recipients = build_recipient_snapshot(workspace_root)?;
     unset_kv_entry_with_recipients(content, key, &recipients, ctx)
 }

@@ -4,8 +4,8 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::config::types::SshSigningMethod;
+use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use secretenv_core::cli_api::presentation::config::SshSigningMethod;
 
 #[derive(Debug, Clone, Default)]
 pub struct CommonOptions {

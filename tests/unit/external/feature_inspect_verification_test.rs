@@ -3,10 +3,12 @@
 
 //! Unit tests for inspect/verification online verification display.
 
-use secretenv::feature::inspect::verification::{
+use secretenv_core::cli_api::test_support::operations::inspect::verification::{
     build_online_verification_section, OnlineVerificationDisplay,
 };
-use secretenv::io::verify_online::{VerificationResult, VerificationStatus};
+use secretenv_core::cli_api::test_support::storage::verify_online::{
+    VerificationResult, VerificationStatus,
+};
 
 fn build_verified_result() -> VerificationResult {
     VerificationResult {

@@ -5,7 +5,7 @@
 //!
 //! Tests for token encoding.
 
-use secretenv::format::token::TokenCodec;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

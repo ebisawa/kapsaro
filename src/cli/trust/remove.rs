@@ -3,7 +3,6 @@
 
 //! trust remove CLI handler.
 
-use crate::app::trust::management::{remove_known_key_command, remove_recipient_set_command};
 use crate::cli::common::command::{
     resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
 };
@@ -12,7 +11,10 @@ use crate::cli::common::output::text::trust::{
     print_recipient_set_remove_summary, print_trust_remove_summary,
 };
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::Error;
+use secretenv_core::cli_api::app::trust::management::{
+    remove_known_key_command, remove_recipient_set_command,
+};
+use secretenv_core::Error;
 
 use super::{RecipientRemoveArgs, RemoveArgs};
 

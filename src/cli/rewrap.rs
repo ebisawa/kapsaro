@@ -6,8 +6,8 @@
 use crate::cli::common::command::{resolve_options, resolve_trust_store_owner_member};
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::{MemberHandleOption, SigningQuietOutputOptions};
-use crate::Result;
 use clap::Args;
+use secretenv_core::Result;
 use std::path::PathBuf;
 
 mod batch;

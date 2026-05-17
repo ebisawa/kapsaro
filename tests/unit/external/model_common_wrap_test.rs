@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::model::common::{WrapAlgorithm, WrapItem, WrapSet};
-use secretenv::model::wire::algorithm;
+use secretenv_core::cli_api::test_support::domain::common::{WrapAlgorithm, WrapItem, WrapSet};
+use secretenv_core::cli_api::test_support::domain::wire::algorithm;
 
 const ALICE: &str = "alice@example.com";
 const BOB: &str = "bob@example.com";

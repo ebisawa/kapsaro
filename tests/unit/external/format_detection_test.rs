@@ -9,8 +9,8 @@
 //! - kv-enc detection (:SECRETENV_KV 6 header)
 //! - file-enc detection (JSON with "format": "secretenv:format:file-enc@5")
 
-use secretenv::format::detection::{detect_format, InputFormat};
-use secretenv::support::limits::MAX_JSON_DEPTH;
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_JSON_DEPTH;
+use secretenv_core::cli_api::test_support::wire::detection::{detect_format, InputFormat};
 
 fn deeply_nested_json(depth: usize) -> String {
     let mut json = String::new();

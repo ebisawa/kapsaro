@@ -3,13 +3,13 @@
 
 use crate::test_utils::save_public_key;
 use crate::test_utils::TEST_MEMBER_HANDLE;
-use secretenv::io::keystore::storage::*;
-use secretenv::model::private_key::{
+use secretenv_core::cli_api::test_support::domain::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyProtected,
 };
-use secretenv::model::public_key::{
+use secretenv_core::cli_api::test_support::domain::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
+use secretenv_core::cli_api::test_support::storage::keystore::storage::*;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -34,14 +34,15 @@ fn test_save_and_load_private_key() {
 
     let private_key = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::wire::format::PRIVATE_KEY_V7.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V7.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TEST123".to_string(),
                 ikm_salt: B64URL_32.to_string(),
                 hkdf_salt: B64URL_32.to_string(),
-                aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
+                aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                    .to_string(),
             },
             created_at: "2024-01-01T00:00:00Z".to_string(),
             expires_at: "2025-01-01T00:00:00Z".to_string(),
@@ -54,25 +55,26 @@ fn test_save_and_load_private_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },
                 attestation: Attestation {
-                    method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
+                    method:
+                        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                            .to_string(),
                     pub_: "ssh-ed25519 AAAA...".to_string(),
                     sig: B64URL_64.to_string(),
                 },
@@ -117,25 +119,26 @@ fn test_save_and_load_public_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv::model::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             identity: Identity {
                 keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                     sig: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
-                        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
                         x: B64URL_32.to_string(),
                     },
                 },
                 attestation: Attestation {
-                    method: secretenv::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
+                    method:
+                        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                            .to_string(),
                     pub_: "ssh-ed25519 AAAA...".to_string(),
                     sig: B64URL_64.to_string(),
                 },

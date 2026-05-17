@@ -12,7 +12,7 @@ use crate::test_utils::{
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use predicates::prelude::*;
-use secretenv::support::kid::format_kid_display;
+use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
 use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;

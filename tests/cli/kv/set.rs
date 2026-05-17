@@ -11,9 +11,9 @@ use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
 };
 use predicates::prelude::*;
-use secretenv::format::kv::enc::canonical::parse_kv_wrap;
-use secretenv::io::keystore::active::set_active_kid;
-use secretenv::io::keystore::storage::list_kids;
+use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use std::fs;
 use tempfile::TempDir;
 

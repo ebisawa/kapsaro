@@ -4,15 +4,15 @@
 //! Unit tests for feature/encrypt/kv entry operations (set/unset) via KvDocumentBuilder
 
 use ed25519_dalek::SigningKey;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::key::material::generate_keypairs;
-use secretenv::feature::kv::builder::KvDocumentBuilder;
-use secretenv::feature::kv::encrypt::encrypt_kv_document;
-use secretenv::format::kv::document::parse_kv_document;
-use secretenv::format::token::TokenCodec;
-use secretenv::model::kv_enc::document::KvEncDocument;
-use secretenv::model::kv_enc::header::KvHeader;
-use secretenv::model::public_key::VerifiedRecipientKey;
+use secretenv_core::cli_api::test_support::domain::kv_enc::document::KvEncDocument;
+use secretenv_core::cli_api::test_support::domain::kv_enc::header::KvHeader;
+use secretenv_core::cli_api::test_support::domain::public_key::VerifiedRecipientKey;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::key::material::generate_keypairs;
+use secretenv_core::cli_api::test_support::operations::kv::builder::KvDocumentBuilder;
+use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
+use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use std::collections::HashMap;
 
 fn generate_signing_ctx_for_test() -> (SigningKey, String) {
@@ -25,11 +25,11 @@ fn generate_signing_ctx_for_test() -> (SigningKey, String) {
 fn build_dummy_signer_pub(
     signing_key: &SigningKey,
     kid: &str,
-) -> secretenv::model::public_key::PublicKey {
-    use secretenv::model::public_key::{
+) -> secretenv_core::cli_api::test_support::domain::public_key::PublicKey {
+    use secretenv_core::cli_api::test_support::domain::public_key::{
         Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
     };
-    use secretenv::support::codec::base64_public::encode_base64url_nopad;
+    use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 
     let vk = signing_key.verifying_key();
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
@@ -73,12 +73,14 @@ fn build_verified_recipient_key_for_test(
     kid: &str,
 ) -> VerifiedRecipientKey {
     use ed25519_dalek::Signer;
-    use secretenv::model::public_key::{
+    use secretenv_core::cli_api::test_support::domain::public_key::{
         Attestation, AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey,
         PublicKey, PublicKeyProtected, VerifiedPublicKeyAttested,
     };
-    use secretenv::model::verification::{ExpiryProof, SelfSignatureProof};
-    use secretenv::support::codec::base64_public::encode_base64url_nopad;
+    use secretenv_core::cli_api::test_support::domain::verification::{
+        ExpiryProof, SelfSignatureProof,
+    };
+    use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
     let keypairs = generate_keypairs().unwrap();
@@ -368,7 +370,7 @@ fn test_build_kv_unset_entry_last_entry() {
 
     let result = builder_unset_entry(&updated_head, &doc, "ONLY_KEY", &signing);
 
-    use secretenv::format::kv::enc::parser::KvEncParser;
+    use secretenv_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
     let lines = KvEncParser::new(&result).parse_all().unwrap();
     assert!(!result.contains("ONLY_KEY"), "ONLY_KEY should be removed");
     assert!(result.contains(":HEAD "), "HEAD line should exist");

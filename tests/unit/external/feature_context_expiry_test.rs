@@ -1,7 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
+use secretenv_core::cli_api::test_support::operations::context::expiry::{
+    check_key_expiry, KeyExpiryStatus,
+};
 use time::OffsetDateTime;
 
 fn rfc3339(dt: OffsetDateTime) -> String {

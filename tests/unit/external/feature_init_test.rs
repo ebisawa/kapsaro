@@ -5,12 +5,12 @@
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv::io::keystore::active::load_active_kid;
-use secretenv::io::keystore::member::load_single_member_handle_from_keystore;
-use secretenv::io::keystore::resolver::KeystoreResolver;
-use secretenv::io::keystore::storage::load_public_key;
-use secretenv::io::workspace::detection::resolve_workspace_creation_path;
-use secretenv::io::workspace::setup::save_member_document;
+use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::member::load_single_member_handle_from_keystore;
+use secretenv_core::cli_api::test_support::storage::keystore::resolver::KeystoreResolver;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::load_public_key;
+use secretenv_core::cli_api::test_support::storage::workspace::detection::resolve_workspace_creation_path;
+use secretenv_core::cli_api::test_support::storage::workspace::setup::save_member_document;
 use serial_test::serial;
 use tempfile::TempDir;
 

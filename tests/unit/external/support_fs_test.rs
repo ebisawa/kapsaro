@@ -3,7 +3,7 @@
 
 //! Unit tests for support/fs module.
 
-use secretenv::support::fs::{
+use secretenv_core::cli_api::test_support::helpers::fs::{
     check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted,
     ensure_text_file_matches_snapshot, ensure_text_file_matches_snapshot_with_limit, list_dir,
     load_bytes_with_limit, load_text, load_text_with_limit,

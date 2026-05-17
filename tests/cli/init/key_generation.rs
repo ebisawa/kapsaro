@@ -88,8 +88,12 @@ fn test_init_uses_existing_key() {
         .success();
 
     std::env::set_var("SECRETENV_HOME", home_dir.path().to_str().unwrap());
-    let base_dir = secretenv::io::config::paths::get_base_dir().unwrap();
-    let member_dir = secretenv::io::keystore::paths::get_keystore_root_from_base(&base_dir)
+    let base_dir =
+        secretenv_core::cli_api::test_support::storage::config::paths::get_base_dir().unwrap();
+    let member_dir =
+        secretenv_core::cli_api::test_support::storage::keystore::paths::get_keystore_root_from_base(
+            &base_dir,
+        )
         .join(TEST_MEMBER_HANDLE);
     let kids_before: Vec<_> = fs::read_dir(&member_dir)
         .unwrap()

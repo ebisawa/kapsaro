@@ -3,7 +3,7 @@
 
 //! Unit tests for dotenv format parsing and serialization
 
-use secretenv::format::kv::dotenv::{
+use secretenv_core::cli_api::test_support::wire::kv::dotenv::{
     build_dotenv_string, is_valid_key_name, parse_dotenv, parse_dotenv_value,
     validate_dotenv_strict,
 };

@@ -3,10 +3,10 @@
 
 //! Shared trust review formatters.
 
-use crate::app::rewrap::promotion::PromotionReviewFailure;
-use crate::app::trust::TrustApprovalCandidate;
 use crate::cli::common::output::text::print_warning_line;
-use crate::support::kid::format_kid_display;
+use secretenv_core::cli_api::app::rewrap::promotion::PromotionReviewFailure;
+use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use secretenv_core::cli_api::presentation::kid::format_kid_display;
 
 pub(crate) fn format_candidate_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
     let kid_display =

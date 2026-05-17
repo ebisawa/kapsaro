@@ -7,8 +7,8 @@
 
 use crate::test_utils::setup_test_workspace;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv::feature::member::verification::verify_member;
-use secretenv::io::workspace::members::{
+use secretenv_core::cli_api::test_support::operations::member::verification::verify_member;
+use secretenv_core::cli_api::test_support::storage::workspace::members::{
     load_active_member_files, load_member_file, remove_member,
 };
 use tempfile::TempDir;

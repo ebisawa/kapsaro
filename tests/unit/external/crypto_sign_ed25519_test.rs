@@ -4,9 +4,11 @@
 //! Tests for Ed25519 signature primitives
 
 use ed25519_dalek::SigningKey;
-use secretenv::crypto::sign::{sign_trust_store_bytes, verify_trust_store_bytes};
-use secretenv::model::trust_store::TrustStoreSignature;
-use secretenv::model::wire::algorithm::SIGNATURE_ED25519;
+use secretenv_core::cli_api::test_support::domain::trust_store::TrustStoreSignature;
+use secretenv_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519;
+use secretenv_core::cli_api::test_support::primitives::sign::{
+    sign_trust_store_bytes, verify_trust_store_bytes,
+};
 
 #[test]
 fn test_sign_trust_store_bytes_returns_valid_structure() {

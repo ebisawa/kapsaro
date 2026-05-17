@@ -4,16 +4,16 @@
 #[cfg(test)]
 use std::io::BufRead;
 
-use crate::app::member::mutation::{evaluate_member_removal, remove_member};
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::member::print_member_remove_summary;
 use crate::cli::common::output::text::{print_warning, print_warning_line};
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use crate::support::path::format_path_relative_to_cwd;
-use crate::support::tty;
-use crate::Error;
+use secretenv_core::cli_api::app::member::mutation::{evaluate_member_removal, remove_member};
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use secretenv_core::cli_api::presentation::tty;
+use secretenv_core::Error;
 
 use super::RemoveArgs;
 
@@ -28,7 +28,9 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     Ok(())
 }
 
-fn print_member_remove_preview(preview: &crate::app::member::types::MemberRemovalReport) {
+fn print_member_remove_preview(
+    preview: &secretenv_core::cli_api::app::member::types::MemberRemovalReport,
+) {
     for warning in &preview.warnings {
         print_warning(warning);
     }

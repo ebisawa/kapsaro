@@ -3,9 +3,9 @@
 
 //! Common utilities for key operations.
 
-use crate::app::verification::OnlineVerificationStatus;
-use crate::model::ssh::SshDeterminismStatus;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::verification::OnlineVerificationStatus;
+use secretenv_core::cli_api::presentation::ssh::SshDeterminismStatus;
+use secretenv_core::{Error, Result};
 
 pub(crate) fn print_key_generation_binding_info(
     ssh_fingerprint: &str,
@@ -17,10 +17,7 @@ pub(crate) fn print_key_generation_binding_info(
     if ssh_determinism.is_verified() {
         eprintln!("SSH signature determinism: OK");
     } else if let Some(message) = ssh_determinism.message() {
-        return Err(Error::Crypto {
-            message: message.to_string(),
-            source: None,
-        });
+        return Err(Error::build_crypto_error(message.to_string()));
     }
 
     if github_verification.is_verified() {

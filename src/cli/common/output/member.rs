@@ -9,8 +9,6 @@ pub(crate) use view::{
     MemberApprovalResultsView, MemberListView, MemberShowView, MemberVerificationResultsView,
 };
 
-use crate::app::member::approval::MemberApprovalResult;
-use crate::app::member::types::{MemberListResult, MemberShowResult, MemberVerificationResult};
 use crate::cli::common::output::json::member::{
     print_empty_member_list as print_empty_member_list_json,
     print_member_approval_results as print_member_approval_results_json,
@@ -29,7 +27,11 @@ use crate::cli::common::output::{
     print_empty_or_json_or_text, print_empty_or_json_or_text_with_warnings,
     print_json_or_text_with_warnings,
 };
-use crate::Result;
+use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
+use secretenv_core::cli_api::app::member::types::{
+    MemberListResult, MemberShowResult, MemberVerificationResult,
+};
+use secretenv_core::Result;
 
 pub(crate) fn print_member_verification_results(
     json_output: bool,

@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::io::process::execute_command_with_env;
-use secretenv::support::secret::SecretString;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
+use secretenv_core::cli_api::test_support::storage::process::execute_command_with_env;
 use std::collections::BTreeMap;
 
 use crate::test_utils::EnvGuard;

@@ -3,7 +3,9 @@
 
 use std::ffi::OsString;
 
-use secretenv::support::secret::{SecretArray, SecretBytes, SecretString};
+use secretenv_core::cli_api::test_support::helpers::secret::{
+    SecretArray, SecretBytes, SecretString,
+};
 use zeroize::Zeroizing;
 
 #[test]

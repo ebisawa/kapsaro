@@ -5,7 +5,7 @@
 //!
 //! Tests for file locking utilities.
 
-use secretenv::support::fs::lock::with_file_lock;
+use secretenv_core::cli_api::test_support::helpers::fs::lock::with_file_lock;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -33,7 +33,7 @@ fn test_with_file_lock_returns_value() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("test.txt");
 
-    let result = with_file_lock(&file_path, || Ok::<i32, secretenv::Error>(42));
+    let result = with_file_lock(&file_path, || Ok::<i32, secretenv_core::Error>(42));
 
     assert_eq!(result.unwrap(), 42);
 }
@@ -43,10 +43,10 @@ fn test_with_file_lock_propagates_error() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("test.txt");
 
-    let result: Result<(), secretenv::Error> = with_file_lock(&file_path, || {
-        Err(secretenv::Error::Config {
-            message: "Test error".to_string(),
-        })
+    let result: Result<(), secretenv_core::Error> = with_file_lock(&file_path, || {
+        Err(secretenv_core::Error::build_config_error(
+            "Test error".to_string(),
+        ))
     });
 
     assert!(result.is_err());
@@ -67,7 +67,7 @@ fn test_with_file_lock_creates_parent_dir() {
         // If with_file_lock doesn't create the parent directory, this write
         // will fail and the test will catch it.
         fs::write(&file_path, "locked content").unwrap();
-        Ok::<(), secretenv::Error>(())
+        Ok::<(), secretenv_core::Error>(())
     });
 
     assert!(result.is_ok());
@@ -105,7 +105,7 @@ fn test_with_file_lock_rejects_symlinked_lock_file() {
     fs::write(&victim_path, "original").unwrap();
     symlink(&victim_path, &lock_path).unwrap();
 
-    let error = with_file_lock(&file_path, || Ok::<(), secretenv::Error>(())).unwrap_err();
+    let error = with_file_lock(&file_path, || Ok::<(), secretenv_core::Error>(())).unwrap_err();
 
     let message = error.to_string();
     assert!(message.contains("symlink"), "unexpected error: {message}");
@@ -124,7 +124,7 @@ fn test_with_file_lock_rejects_symlinked_lock_parent() {
     symlink(&real_parent, &fake_parent).unwrap();
     let file_path = fake_parent.join("config.toml");
 
-    let error = with_file_lock(&file_path, || Ok::<(), secretenv::Error>(())).unwrap_err();
+    let error = with_file_lock(&file_path, || Ok::<(), secretenv_core::Error>(())).unwrap_err();
 
     let message = error.to_string();
     assert!(message.contains("symlink"), "unexpected error: {message}");
@@ -141,7 +141,7 @@ fn test_with_file_lock_accepts_relative_filename_in_current_directory() {
     with_temp_cwd(temp_dir.path(), || {
         let result = with_file_lock(Path::new("relative.txt"), || {
             fs::write("relative.txt", "locked content").unwrap();
-            Ok::<(), secretenv::Error>(())
+            Ok::<(), secretenv_core::Error>(())
         });
 
         assert!(result.is_ok());

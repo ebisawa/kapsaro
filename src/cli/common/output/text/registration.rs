@@ -5,8 +5,8 @@
 
 use std::path::Path;
 
-use crate::app::registration::types::RegistrationMode;
-use crate::support::path::format_path_relative_to_cwd;
+use secretenv_core::cli_api::app::registration::types::RegistrationMode;
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
 
 pub(crate) fn print_created_workspace_summary(workspace_path: &Path) {
     eprintln!(

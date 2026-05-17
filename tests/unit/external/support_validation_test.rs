@@ -5,7 +5,7 @@
 //!
 //! Tests for validation utilities (edge cases).
 
-use secretenv::support::validation::{
+use secretenv_core::cli_api::test_support::helpers::validation::{
     validate_github_login, validate_kv_file_basename, validate_member_handle,
 };
 

@@ -3,9 +3,9 @@
 
 use crate::test_utils::setup_test_keystore_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv::io::keystore::active::load_active_kid;
-use secretenv::io::keystore::storage::load_public_key;
-use secretenv::io::workspace::setup::{
+use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use secretenv_core::cli_api::test_support::storage::keystore::storage::load_public_key;
+use secretenv_core::cli_api::test_support::storage::workspace::setup::{
     check_workspace_has_active_members, ensure_workspace_structure, save_member_document,
     validate_workspace_exists,
 };

@@ -1,29 +1,31 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv::crypto::aead::xchacha;
-use secretenv::crypto::kdf::expand_to_array;
-use secretenv::crypto::types::data::{Ikm, Info, Plaintext};
-use secretenv::crypto::types::keys::XChaChaKey;
-use secretenv::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
-use secretenv::feature::key::protection::binding::build_private_key_aad;
-use secretenv::feature::key::protection::encryption::{
-    decrypt_private_key, encrypt_private_key, PrivateKeyEncryptionParams,
-};
-use secretenv::feature::key::protection::key_derivation::build_sign_message;
-use secretenv::io::ssh::backend::signature_backend::SignatureBackend;
-use secretenv::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
-use secretenv::io::ssh::protocol::types::Ed25519RawSignature;
-use secretenv::model::private_key::{
+use secretenv_core::cli_api::test_support::domain::private_key::{
     IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData,
     PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use secretenv::model::wire::{
+use secretenv_core::cli_api::test_support::domain::wire::{
     algorithm,
     context::{HKDF_INFO_PRIVATE_KEY_SSHSIG_V7, SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7},
     format,
 };
-use secretenv::support::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::key::protection::binding::build_private_key_aad;
+use secretenv_core::cli_api::test_support::operations::key::protection::encryption::{
+    decrypt_private_key, encrypt_private_key, PrivateKeyEncryptionParams,
+};
+use secretenv_core::cli_api::test_support::operations::key::protection::key_derivation::build_sign_message;
+use secretenv_core::cli_api::test_support::primitives::aead::xchacha;
+use secretenv_core::cli_api::test_support::primitives::kdf::expand_to_array;
+use secretenv_core::cli_api::test_support::primitives::types::data::{Ikm, Info, Plaintext};
+use secretenv_core::cli_api::test_support::primitives::types::keys::XChaChaKey;
+use secretenv_core::cli_api::test_support::primitives::types::primitives::{
+    HkdfSalt, PrivateKeyIkmSalt,
+};
+use secretenv_core::cli_api::test_support::storage::ssh::backend::signature_backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 use std::cell::Cell;
 use std::collections::BTreeSet;
 
@@ -37,13 +39,15 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
+                    .to_string(),
                 x: b64(&[2u8; 32]),
                 d: b64(&[1u8; 32]),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                    .to_string(),
                 x: b64(&[4u8; 32]),
                 d: b64(&[3u8; 32]),
             },
@@ -51,7 +55,11 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
     }
 }
 
-fn derive_enc_key(raw_sig: &[u8], salt: &HkdfSalt, kid: &str) -> secretenv::Result<XChaChaKey> {
+fn derive_enc_key(
+    raw_sig: &[u8],
+    salt: &HkdfSalt,
+    kid: &str,
+) -> secretenv_core::Result<XChaChaKey> {
     let ikm = Ikm::from(raw_sig);
     let info = Info::from_string(&format!("{}:{}", HKDF_INFO_PRIVATE_KEY_SSHSIG_V7, kid));
     let cek = expand_to_array(&ikm, Some(salt), &info)?;
@@ -180,7 +188,7 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             self.calls.set(self.calls.get() + 1);
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
@@ -233,7 +241,7 @@ fn test_encrypt_private_key_protected_algorithm_shape() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
     }
@@ -278,7 +286,7 @@ fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             self.calls.set(self.calls.get() + 1);
             Ok(Ed25519RawSignature::new([0xCD; 64]))
         }
@@ -339,7 +347,7 @@ fn test_decrypt_private_key_rejects_unsupported_aead_before_kdf() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             self.calls.set(self.calls.get() + 1);
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
@@ -399,7 +407,7 @@ fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
     }
@@ -441,7 +449,7 @@ fn test_decrypt_private_key_retries_signature_only_after_failure() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             self.calls.set(self.calls.get() + 1);
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
@@ -489,7 +497,7 @@ fn test_decrypt_private_key_sanitizes_plaintext_deserialize_error() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
     }
@@ -520,7 +528,7 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
     }
@@ -535,7 +543,7 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             self.calls.set(self.calls.get() + 1);
             let fill = if self.calls.get() == 1 { 0xAB } else { 0xAC };
             Ok(Ed25519RawSignature::new([fill; 64]))
@@ -583,7 +591,7 @@ fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             Ok(Ed25519RawSignature::new([0xAB; 64]))
         }
     }
@@ -598,12 +606,11 @@ fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
             _namespace: &str,
             _pubkey: &str,
             _challenge: &[u8],
-        ) -> secretenv::Result<Ed25519RawSignature> {
+        ) -> secretenv_core::Result<Ed25519RawSignature> {
             self.calls.set(self.calls.get() + 1);
-            Err(secretenv::Error::Ssh {
-                message: "synthetic decrypt ssh failure".to_string(),
-                source: None,
-            })
+            Err(secretenv_core::Error::build_ssh_error(
+                "synthetic decrypt ssh failure".to_string(),
+            ))
         }
     }
 

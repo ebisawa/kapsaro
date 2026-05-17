@@ -1,0 +1,14 @@
+error[E0432]: unresolved import `secretenv_core::cli_api`
+ --> tests/ui/public_api/default_cli_api.rs:1:5
+  |
+1 | use secretenv_core::cli_api;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^ no `cli_api` in the root
+  |
+note: found an item that was configured out
+ --> src/lib.rs
+  |
+  | #[cfg(any(feature = "cli-internal", test))]
+  |          -------------------------------- the item is gated here
+  | #[doc(hidden)]
+  | pub mod cli_api;
+  |         ^^^^^^^

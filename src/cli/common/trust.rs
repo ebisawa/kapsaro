@@ -7,24 +7,24 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 use std::io::BufRead;
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::enforcement::ArtifactRecipientSetReview;
-use crate::app::trust::recovery::{
-    execute_trust_store_reset, prepare_trust_store_reset_plan, requires_trust_store_reset,
-    TrustStoreResetPlan,
-};
-use crate::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::trust::review::format_candidate_review_lines;
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use crate::model::trust_store::RecipientHandleHint;
-use crate::support::kid::format_kid_display_lossy;
-use crate::support::path::format_path_relative_to_cwd;
-use crate::support::tty;
-use crate::{Error, Result};
 use console::Style;
+use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use secretenv_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
+use secretenv_core::cli_api::app::trust::recovery::{
+    build_trust_store_reset_plan, execute_trust_store_reset, requires_trust_store_reset,
+    TrustStoreResetPlan,
+};
+use secretenv_core::cli_api::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
+use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use secretenv_core::cli_api::presentation::trust_document::RecipientHandleHint;
+use secretenv_core::cli_api::presentation::tty;
+use secretenv_core::{Error, Result};
 
 pub(crate) fn confirm_signer_key_approval(
     candidate: &TrustApprovalCandidate,
@@ -449,7 +449,7 @@ fn recover_invalid_trust_store(
     owner_handle: &str,
     error: Error,
 ) -> Result<()> {
-    let plan = prepare_trust_store_reset_plan(options, owner_handle, error, tty::is_interactive())?;
+    let plan = build_trust_store_reset_plan(options, owner_handle, error, tty::is_interactive())?;
     recover_prepared_trust_store(&plan, confirm_trust_store_reset)
 }
 
@@ -459,9 +459,9 @@ fn recover_prepared_trust_store(
 ) -> Result<()> {
     print_warning(&plan.warning_message);
     if !confirm(&plan.path)? {
-        return Err(Error::InvalidOperation {
-            message: "Local trust store reset was declined".to_string(),
-        });
+        return Err(Error::build_invalid_operation_error(
+            "Local trust store reset was declined".to_string(),
+        ));
     }
 
     let outcome = execute_trust_store_reset(plan)?;
@@ -483,7 +483,7 @@ fn recover_invalid_trust_store_with_reader<R>(
 where
     R: BufRead,
 {
-    let plan = prepare_trust_store_reset_plan(options, owner_handle, error, is_interactive)?;
+    let plan = build_trust_store_reset_plan(options, owner_handle, error, is_interactive)?;
     recover_prepared_trust_store(&plan, |path| {
         confirm_trust_store_reset_with_reader(path, reader)
     })

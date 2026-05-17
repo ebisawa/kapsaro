@@ -4,7 +4,9 @@
 //! Unit tests for workspace detection (Phase 5.5 - TDD Red phase)
 
 use crate::test_utils::EnvGuard;
-use secretenv::io::workspace::detection::{detect_workspace_root, resolve_workspace};
+use secretenv_core::cli_api::test_support::storage::workspace::detection::{
+    detect_workspace_root, resolve_workspace,
+};
 use serial_test::serial;
 use std::env;
 use std::fs;

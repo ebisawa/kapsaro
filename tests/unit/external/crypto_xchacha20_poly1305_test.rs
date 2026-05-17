@@ -3,10 +3,12 @@
 
 //! XChaCha20-Poly1305 AEAD tests
 
-use secretenv::crypto::aead::xchacha::{decrypt, encrypt, NONCE_SIZE};
-use secretenv::crypto::types::data::{Aad, Plaintext};
-use secretenv::crypto::types::keys::XChaChaKey;
-use secretenv::crypto::types::primitives::XChaChaNonce;
+use secretenv_core::cli_api::test_support::primitives::aead::xchacha::{
+    decrypt, encrypt, NONCE_SIZE,
+};
+use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
+use secretenv_core::cli_api::test_support::primitives::types::keys::XChaChaKey;
+use secretenv_core::cli_api::test_support::primitives::types::primitives::XChaChaNonce;
 
 #[test]
 fn test_xchacha20_encrypt_decrypt_roundtrip() {
@@ -37,7 +39,7 @@ fn test_xchacha20_nonce_24_bytes() {
 
 #[test]
 fn test_xchacha20_wrong_nonce_error() {
-    use secretenv::crypto::types::data::{Aad, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let nonce = XChaChaNonce::new([0x01u8; NONCE_SIZE]);
@@ -53,7 +55,9 @@ fn test_xchacha20_wrong_nonce_error() {
 
 #[test]
 fn test_xchacha20_tampered_ciphertext_error() {
-    use secretenv::crypto::types::data::{Aad, Ciphertext, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{
+        Aad, Ciphertext, Plaintext,
+    };
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let nonce = XChaChaNonce::new([0x01u8; NONCE_SIZE]);
@@ -79,7 +83,7 @@ fn test_xchacha20_tampered_ciphertext_error() {
 
 #[test]
 fn test_xchacha20_aad_mismatch_error() {
-    use secretenv::crypto::types::data::{Aad, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let nonce = XChaChaNonce::new([0x01u8; NONCE_SIZE]);
@@ -112,7 +116,7 @@ fn test_xchacha20_wrong_key_error_message_sanitized() {
 
 #[test]
 fn test_xchacha20_empty_plaintext() {
-    use secretenv::crypto::types::data::{Aad, Plaintext};
+    use secretenv_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let nonce = XChaChaNonce::new([0x01u8; NONCE_SIZE]);

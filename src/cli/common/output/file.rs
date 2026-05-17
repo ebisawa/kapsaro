@@ -4,9 +4,9 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::support::fs::atomic;
-use crate::support::path::format_path_relative_to_cwd;
-use crate::{Error, Result};
+use secretenv_core::cli_api::presentation::fs::{save_bytes, save_text};
+use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use secretenv_core::{Error, Result};
 
 pub(crate) fn resolve_encrypted_output_path(
     explicit_out: Option<&PathBuf>,
@@ -35,17 +35,18 @@ pub(crate) fn resolve_encrypted_output_path(
     let input_filename = input_path
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| Error::InvalidArgument {
-            message: format!(
+        .ok_or_else(|| {
+            Error::build_invalid_argument_error(format!(
                 "Cannot derive filename from input path: {}",
                 format_path_relative_to_cwd(input_path)
-            ),
+            ))
         })?;
 
     if input_filename.chars().any(|c| c.is_control()) {
-        return Err(Error::InvalidArgument {
-            message: format!("E_NAME_INVALID: invalid input filename: {}", input_filename),
-        });
+        return Err(Error::build_invalid_argument_error(format!(
+            "E_NAME_INVALID: invalid input filename: {}",
+            input_filename
+        )));
     }
 
     let current_dir = std::env::current_dir().map_err(|e| {
@@ -63,7 +64,7 @@ pub(crate) fn save_encrypted_output(
 ) -> Result<()> {
     match output_path {
         Some(path) => {
-            atomic::save_text(path, content)?;
+            save_text(path, content)?;
             print_output_notice("Encrypted to", path, quiet);
         }
         None => print!("{}", content),
@@ -78,7 +79,7 @@ pub(crate) fn save_decrypted_output(
 ) -> Result<()> {
     match output_path {
         Some(path) => {
-            atomic::save_bytes(path, plaintext_bytes)?;
+            save_bytes(path, plaintext_bytes)?;
             print_output_notice("Decrypted to", path, quiet);
         }
         None => {

@@ -7,8 +7,6 @@ use clap::Args;
 #[cfg(test)]
 use std::io::BufRead;
 
-use crate::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
-use crate::app::trust::UnsetPolicy;
 use crate::cli::common::command::{
     resolve_options, resolve_required_member_handle, resolve_trust_store_owner_member,
     run_kv_write_command_with_trust, WriteCommandLabels,
@@ -23,8 +21,10 @@ use crate::cli::common::trust::{
 use crate::cli::options::{
     ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
-use crate::support::tty;
-use crate::{Error, Result};
+use secretenv_core::cli_api::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
+use secretenv_core::cli_api::app::trust::UnsetPolicy;
+use secretenv_core::cli_api::presentation::tty;
+use secretenv_core::{Error, Result};
 
 #[derive(Args)]
 pub struct UnsetArgs {
@@ -89,21 +89,20 @@ fn confirm_unset_operation(force: bool, key: &str) -> Result<()> {
         return Ok(());
     }
     if !tty::is_interactive() {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "Refusing to unset '{}' without --force in non-interactive mode",
-                key
-            ),
-        });
+        return Err(Error::build_invalid_operation_error(format!(
+            "Refusing to unset '{}' without --force in non-interactive mode",
+            key
+        )));
     }
 
     if prompt_yes_no(&format!("Remove '{}' from the secret store?", key), false)? {
         return Ok(());
     }
 
-    Err(Error::InvalidOperation {
-        message: format!("Unset operation cancelled for '{}'", key),
-    })
+    Err(Error::build_invalid_operation_error(format!(
+        "Unset operation cancelled for '{}'",
+        key
+    )))
 }
 
 #[cfg(test)]
@@ -120,12 +119,10 @@ where
         return Ok(());
     }
     if !is_interactive {
-        return Err(Error::InvalidOperation {
-            message: format!(
-                "Refusing to unset '{}' without --force in non-interactive mode",
-                key
-            ),
-        });
+        return Err(Error::build_invalid_operation_error(format!(
+            "Refusing to unset '{}' without --force in non-interactive mode",
+            key
+        )));
     }
 
     if prompt_yes_no_with_reader(
@@ -136,9 +133,10 @@ where
         return Ok(());
     }
 
-    Err(Error::InvalidOperation {
-        message: format!("Unset operation cancelled for '{}'", key),
-    })
+    Err(Error::build_invalid_operation_error(format!(
+        "Unset operation cancelled for '{}'",
+        key
+    )))
 }
 
 #[cfg(test)]

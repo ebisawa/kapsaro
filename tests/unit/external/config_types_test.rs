@@ -4,7 +4,7 @@
 //! Unit tests for config value types.
 
 use crate::test_utils::EnvGuard;
-use secretenv::io::config::paths::get_global_config_path;
+use secretenv_core::cli_api::test_support::storage::config::paths::get_global_config_path;
 use std::path::PathBuf;
 
 #[test]

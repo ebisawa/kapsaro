@@ -3,16 +3,18 @@
 
 //! Unit tests for GitHub binding_claims.github_account verification.
 
-use secretenv::io::github::http::GitHubKeyRecord;
-use secretenv::io::verify_online::github::{
-    verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
-};
-use secretenv::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
-use secretenv::model::public_key::{
+use secretenv_core::cli_api::test_support::domain::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
 };
-use secretenv::{Error, Result};
+use secretenv_core::cli_api::test_support::storage::github::http::GitHubKeyRecord;
+use secretenv_core::cli_api::test_support::storage::verify_online::github::{
+    verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
+};
+use secretenv_core::cli_api::test_support::storage::verify_online::{
+    VerificationStatus, VerifiedGithubIdentity,
+};
+use secretenv_core::{Error, ErrorKind, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -28,14 +30,16 @@ impl GitHubVerificationApi for FakeGitHubApi {
         Box::pin(async move {
             match &self.user_by_id_result {
                 Ok((id, login)) => Ok((*id, login.clone())),
-                Err(Error::Verify { rule, message }) => Err(Error::Verify {
-                    rule: rule.clone(),
-                    message: message.clone(),
-                }),
-                Err(other) => Err(Error::Verify {
-                    rule: "V-GITHUB-API".to_string(),
-                    message: other.to_string(),
-                }),
+                Err(error) if error.kind() == ErrorKind::Verify => {
+                    Err(Error::build_verification_error(
+                        error.verification_rule().expect("verification rule"),
+                        error.format_user_message(),
+                    ))
+                }
+                Err(other) => Err(Error::build_verification_error(
+                    "V-GITHUB-API".to_string(),
+                    other.to_string(),
+                )),
             }
         })
     }
@@ -44,14 +48,16 @@ impl GitHubVerificationApi for FakeGitHubApi {
         Box::pin(async move {
             match &self.keys_result {
                 Ok(keys) => Ok(keys.clone()),
-                Err(Error::Verify { rule, message }) => Err(Error::Verify {
-                    rule: rule.clone(),
-                    message: message.clone(),
-                }),
-                Err(other) => Err(Error::Verify {
-                    rule: "V-GITHUB-API".to_string(),
-                    message: other.to_string(),
-                }),
+                Err(error) if error.kind() == ErrorKind::Verify => {
+                    Err(Error::build_verification_error(
+                        error.verification_rule().expect("verification rule"),
+                        error.format_user_message(),
+                    ))
+                }
+                Err(other) => Err(Error::build_verification_error(
+                    "V-GITHUB-API".to_string(),
+                    other.to_string(),
+                )),
             }
         })
     }
@@ -98,14 +104,16 @@ impl GitHubVerificationApi for RecordingGitHubApi {
             self.user_calls.fetch_add(1, Ordering::SeqCst);
             match &self.user_by_id_result {
                 Ok((id, login)) => Ok((*id, login.clone())),
-                Err(Error::Verify { rule, message }) => Err(Error::Verify {
-                    rule: rule.clone(),
-                    message: message.clone(),
-                }),
-                Err(other) => Err(Error::Verify {
-                    rule: "V-GITHUB-API".to_string(),
-                    message: other.to_string(),
-                }),
+                Err(error) if error.kind() == ErrorKind::Verify => {
+                    Err(Error::build_verification_error(
+                        error.verification_rule().expect("verification rule"),
+                        error.format_user_message(),
+                    ))
+                }
+                Err(other) => Err(Error::build_verification_error(
+                    "V-GITHUB-API".to_string(),
+                    other.to_string(),
+                )),
             }
         })
     }
@@ -116,14 +124,16 @@ impl GitHubVerificationApi for RecordingGitHubApi {
             *self.last_keys_login.lock().unwrap() = Some(login.to_string());
             match &self.keys_result {
                 Ok(keys) => Ok(keys.clone()),
-                Err(Error::Verify { rule, message }) => Err(Error::Verify {
-                    rule: rule.clone(),
-                    message: message.clone(),
-                }),
-                Err(other) => Err(Error::Verify {
-                    rule: "V-GITHUB-API".to_string(),
-                    message: other.to_string(),
-                }),
+                Err(error) if error.kind() == ErrorKind::Verify => {
+                    Err(Error::build_verification_error(
+                        error.verification_rule().expect("verification rule"),
+                        error.format_user_message(),
+                    ))
+                }
+                Err(other) => Err(Error::build_verification_error(
+                    "V-GITHUB-API".to_string(),
+                    other.to_string(),
+                )),
             }
         })
     }
@@ -204,46 +214,46 @@ async fn test_verify_github_account_rejects_id_mismatch() {
 
     let result = verify_github_account_with_api(&public_key, false, None, &api).await;
 
-    match result {
-        Err(Error::Verify { rule, message }) => {
-            assert_eq!(rule, "V-GITHUB-API");
-            assert!(
-                message.contains("document id 42 vs API id 7"),
-                "unexpected: {message}"
-            );
-        }
-        other => panic!("expected verify error, got {other:?}"),
-    }
+    let error = result.expect_err("expected verify error");
+    assert_eq!(error.kind(), ErrorKind::Verify);
+    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert!(
+        error
+            .format_user_message()
+            .contains("document id 42 vs API id 7"),
+        "unexpected: {}",
+        error.format_user_message()
+    );
 }
 
 #[tokio::test]
 async fn test_verify_github_account_rejects_known_account_id_mismatch() {
     let public_key = sample_public_key();
     let api = FakeGitHubApi {
-        user_by_id_result: Err(Error::Verify {
-            rule: "V-GITHUB-API".to_string(),
-            message: "user lookup should be skipped".to_string(),
-        }),
-        keys_result: Err(Error::Verify {
-            rule: "V-GITHUB-API".to_string(),
-            message: "key lookup should be skipped".to_string(),
-        }),
+        user_by_id_result: Err(Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            "user lookup should be skipped".to_string(),
+        )),
+        keys_result: Err(Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            "key lookup should be skipped".to_string(),
+        )),
     };
 
     let result =
         verify_github_account_with_api(&public_key, false, Some((7, "alice".to_string())), &api)
             .await;
 
-    match result {
-        Err(Error::Verify { rule, message }) => {
-            assert_eq!(rule, "V-GITHUB-API");
-            assert!(
-                message.contains("document id 42 vs provided id 7"),
-                "unexpected: {message}"
-            );
-        }
-        other => panic!("expected verify error, got {other:?}"),
-    }
+    let error = result.expect_err("expected verify error");
+    assert_eq!(error.kind(), ErrorKind::Verify);
+    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert!(
+        error
+            .format_user_message()
+            .contains("document id 42 vs provided id 7"),
+        "unexpected: {}",
+        error.format_user_message()
+    );
 }
 
 #[tokio::test]
@@ -269,21 +279,18 @@ async fn test_verify_github_account_propagates_keys_api_error() {
     let public_key = sample_public_key();
     let api = FakeGitHubApi {
         user_by_id_result: Ok((42, "alice".to_string())),
-        keys_result: Err(Error::Verify {
-            rule: "V-GITHUB-API".to_string(),
-            message: "keys endpoint failed".to_string(),
-        }),
+        keys_result: Err(Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            "keys endpoint failed".to_string(),
+        )),
     };
 
     let result = verify_github_account_with_api(&public_key, false, None, &api).await;
 
-    match result {
-        Err(Error::Verify { rule, message }) => {
-            assert_eq!(rule, "V-GITHUB-API");
-            assert_eq!(message, "keys endpoint failed");
-        }
-        other => panic!("expected verify error, got {other:?}"),
-    }
+    let error = result.expect_err("expected verify error");
+    assert_eq!(error.kind(), ErrorKind::Verify);
+    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.format_user_message(), "keys endpoint failed");
 }
 
 #[tokio::test]
@@ -422,10 +429,10 @@ async fn test_verify_github_account_reports_not_configured_for_invalid_attestati
 async fn test_verify_github_account_uses_known_account_without_user_lookup() {
     let public_key = sample_public_key();
     let api = FakeGitHubApi {
-        user_by_id_result: Err(Error::Verify {
-            rule: "V-GITHUB-API".to_string(),
-            message: "user lookup should be skipped".to_string(),
-        }),
+        user_by_id_result: Err(Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            "user lookup should be skipped".to_string(),
+        )),
         keys_result: Ok(vec![GitHubKeyRecord {
             id: 100,
             key: TEST_SSH_PUBKEY.to_string(),
@@ -487,7 +494,9 @@ fn test_github_account_structure_github_has_id_and_login() {
 
 #[test]
 fn test_verification_result_verified_github_some() {
-    use secretenv::io::verify_online::{VerificationResult, VerificationStatus};
+    use secretenv_core::cli_api::test_support::storage::verify_online::{
+        VerificationResult, VerificationStatus,
+    };
     let verified_github =
         VerifiedGithubIdentity::new(99, "bob".to_string(), "SHA256:fp".to_string(), 100);
 

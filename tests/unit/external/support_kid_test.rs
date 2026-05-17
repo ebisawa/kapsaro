@@ -3,11 +3,11 @@
 
 //! Unit tests for kid helpers.
 
-use secretenv::format::kid::derive_public_key_kid;
-use secretenv::support::kid::{
+use secretenv_core::cli_api::test_support::helpers::kid::{
     format_kid_display, format_kid_half_display, normalize_kid, normalize_kid_query,
     resolve_unique_kid,
 };
+use secretenv_core::cli_api::test_support::wire::kid::derive_public_key_kid;
 use serde_json::json;
 
 const CANONICAL_KID: &str = "F0B1CQRGA0Y5C03XDRDMPMTMXNWAQZVG";

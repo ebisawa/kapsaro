@@ -3,13 +3,13 @@
 
 //! Unit tests for trust judgment logic
 
-use secretenv::feature::trust::judgment::{
+use secretenv_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
+use secretenv_core::cli_api::test_support::domain::public_key::PublicKey;
+use secretenv_core::cli_api::test_support::domain::trust_store::{KnownKey, KnownKeyApprovalVia};
+use secretenv_core::cli_api::test_support::operations::trust::judgment::{
     judge_recipients_trust, judge_signer_trust, ActiveMemberSnapshot, KnownKeyCache, SelfTrustSet,
     TrustIdentity, TrustJudgment,
 };
-use secretenv::model::identity::{Kid, MemberHandle};
-use secretenv::model::public_key::PublicKey;
-use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia};
 use std::collections::BTreeMap;
 
 const KID1: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";

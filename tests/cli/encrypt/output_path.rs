@@ -9,7 +9,7 @@ use crate::cli::common::{
 };
 use crate::test_utils::{setup_test_workspace, with_temp_cwd};
 use predicates::prelude::*;
-use secretenv::model::wire::format;
+use secretenv_core::cli_api::test_support::domain::wire::format;
 use std::fs;
 
 fn parse_json_from_transcript(transcript: &str) -> serde_json::Value {

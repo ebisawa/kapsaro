@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::member::query::list_members;
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::member::print_member_list;
-use crate::Error;
+use secretenv_core::cli_api::app::member::query::list_members;
+use secretenv_core::Error;
 
 use super::ListArgs;
 

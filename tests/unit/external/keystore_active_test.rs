@@ -3,8 +3,10 @@
 
 //! Unit tests for keystore active key management
 
-use secretenv::io::keystore::active::{clear_active_kid, load_active_kid, set_active_kid};
-use secretenv::support::limits::MAX_ACTIVE_KID_FILE_SIZE;
+use secretenv_core::cli_api::test_support::helpers::limits::MAX_ACTIVE_KID_FILE_SIZE;
+use secretenv_core::cli_api::test_support::storage::keystore::active::{
+    clear_active_kid, load_active_kid, set_active_kid,
+};
 use tempfile::TempDir;
 
 #[test]

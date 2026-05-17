@@ -11,17 +11,23 @@ use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures,
     update_active_private_key_expires_at,
 };
-use secretenv::feature::context::crypto::CryptoContext;
-use secretenv::feature::decrypt::file::{
+use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
+use secretenv_core::cli_api::test_support::domain::verification::{
+    SignatureVerificationProof, VerifyingKeySource,
+};
+use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::decrypt::file::{
     decrypt_file_document, decrypt_file_document_with_context,
 };
-use secretenv::feature::encrypt::file::encrypt_file_document;
-use secretenv::feature::envelope::signature::SigningContext;
-use secretenv::feature::verify::file::{verify_file_content, verify_file_document};
-use secretenv::format::content::FileEncContent;
-use secretenv::io::keystore::storage::{list_kids, load_public_key};
-use secretenv::model::file_enc::VerifiedFileEncDocument;
-use secretenv::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::verify::file::{
+    verify_file_content, verify_file_document,
+};
+use secretenv_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_public_key,
+};
+use secretenv_core::cli_api::test_support::wire::content::FileEncContent;
 use tempfile::TempDir;
 
 #[test]
@@ -153,7 +159,7 @@ fn test_parse_verify_decrypt_file() {
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
 
     // Use verify+decrypt API
-    let file_doc: secretenv::model::file_enc::FileEncDocument =
+    let file_doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
     let verified_file_doc = verify_file_document(&file_doc, false).unwrap();
     let decrypted = decrypt_file_document(
@@ -261,7 +267,7 @@ fn test_verify_file_document_returns_verified() {
 /// The returned TempDir must be kept alive for the duration of the test
 /// to prevent premature cleanup of keystore and workspace files.
 fn build_encrypted_file_for_error_tests() -> (
-    secretenv::model::file_enc::FileEncDocument,
+    secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument,
     CryptoContext,
     String, // kid
     TempDir,
@@ -296,7 +302,7 @@ fn build_encrypted_file_for_error_tests() -> (
 
 /// Helper: wrap a FileEncDocument into VerifiedFileEncDocument with a dummy proof
 fn wrap_as_verified(
-    doc: secretenv::model::file_enc::FileEncDocument,
+    doc: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument,
     kid: &str,
 ) -> VerifiedFileEncDocument {
     let proof = SignatureVerificationProof::new(

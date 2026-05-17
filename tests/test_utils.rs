@@ -33,8 +33,9 @@ pub use fixture::{
 };
 #[allow(unused_imports)]
 pub use keygen_helpers::{build_test_private_key, keygen_test};
-use secretenv::model::identity::{Kid, MemberHandle};
-use secretenv::{io::keystore::member::find_active_key_document, Error};
+use secretenv_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
+use secretenv_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
+use secretenv_core::Error;
 #[allow(unused_imports)]
 pub use ssh_stubs::{stub_agent_signer, stub_ssh_keygen};
 
@@ -68,14 +69,16 @@ pub fn setup_trust_store_for_workspace(
     home: &std::path::Path,
     workspace_path: &std::path::Path,
     owner_handle: &str,
-    key_ctx: &secretenv::feature::context::crypto::CryptoContext,
+    key_ctx: &secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext,
 ) {
-    use secretenv::feature::trust::signature::sign_trust_store;
-    use secretenv::io::trust::paths::get_trust_store_file_path;
-    use secretenv::io::trust::store::save_trust_store;
-    use secretenv::io::workspace::members::load_active_member_files;
-    use secretenv::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
-    use secretenv::model::wire::format::LOCAL_TRUST_V5;
+    use secretenv_core::cli_api::test_support::domain::trust_store::{
+        KnownKey, KnownKeyApprovalVia, TrustStoreProtected,
+    };
+    use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
+    use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
+    use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+    use secretenv_core::cli_api::test_support::storage::trust::store::save_trust_store;
+    use secretenv_core::cli_api::test_support::storage::workspace::members::load_active_member_files;
     use std::collections::BTreeMap;
 
     let active_members = load_active_member_files(workspace_path).unwrap();
@@ -108,13 +111,17 @@ pub fn setup_trust_store_for_workspace(
 
 /// Generate and activate a new test key for a member with the requested expires_at.
 pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, expires_at: &str) {
-    use secretenv::feature::key::generate::{generate_key, KeyGenerationOptions};
-    use secretenv::feature::key::ssh_binding::SshBindingContext;
-    use secretenv::io::ssh::backend::ssh_keygen::SshKeygenBackend;
-    use secretenv::io::ssh::backend::SignatureBackend;
-    use secretenv::io::ssh::external::keygen::DefaultSshKeygen;
-    use secretenv::io::ssh::protocol::{build_sha256_fingerprint, SshKeyDescriptor};
-    use secretenv::model::ssh::SshDeterminismStatus;
+    use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
+    use secretenv_core::cli_api::test_support::operations::key::generate::{
+        generate_key, KeyGenerationOptions,
+    };
+    use secretenv_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
+    use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+    use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+    use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+    use secretenv_core::cli_api::test_support::storage::ssh::protocol::{
+        build_sha256_fingerprint, SshKeyDescriptor,
+    };
 
     let ssh_key_path = home.join(".ssh").join("test_ed25519");
     let ssh_pubkey = std::fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
@@ -122,8 +129,10 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
         .trim()
         .to_string();
     let created_at =
-        secretenv::support::time::format_timestamp_rfc3339(time::OffsetDateTime::now_utc())
-            .unwrap();
+        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+            time::OffsetDateTime::now_utc(),
+        )
+        .unwrap();
     let ssh_binding = SshBindingContext {
         public_key: ssh_pubkey.clone(),
         fingerprint: build_sha256_fingerprint(&ssh_pubkey).unwrap(),
@@ -150,7 +159,8 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
 
 pub fn build_expiring_soon_timestamp(days_from_now: i64) -> String {
     let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(days_from_now);
-    secretenv::support::time::format_timestamp_rfc3339(expires_at).unwrap()
+    secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(expires_at)
+        .unwrap()
 }
 
 pub fn save_active_public_key_to_workspace(
@@ -160,9 +170,10 @@ pub fn save_active_public_key_to_workspace(
 ) -> Result<(), Error> {
     let active_key =
         find_active_key_document(member_handle, &home.join("keys"))?.ok_or_else(|| {
-            Error::NotFound {
-                message: format!("Active key not found for member: {}", member_handle),
-            }
+            Error::build_not_found_error(format!(
+                "Active key not found for member: {}",
+                member_handle
+            ))
         })?;
     let member_path = workspace
         .join("members")
@@ -192,9 +203,10 @@ pub fn save_active_public_key_to_workspace_incoming(
 ) -> Result<(), Error> {
     let active_key =
         find_active_key_document(member_handle, &home.join("keys"))?.ok_or_else(|| {
-            Error::NotFound {
-                message: format!("Active key not found for member: {}", member_handle),
-            }
+            Error::build_not_found_error(format!(
+                "Active key not found for member: {}",
+                member_handle
+            ))
         })?;
     let member_path = workspace
         .join("members")

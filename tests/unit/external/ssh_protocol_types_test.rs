@@ -3,8 +3,10 @@
 
 //! Unit tests for SSH protocol types
 
-use secretenv::io::ssh::protocol::types::{Ed25519RawSignature, SshSignatureBlob};
-use secretenv::io::ssh::protocol::wire::encode_ssh_string;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::{
+    Ed25519RawSignature, SshSignatureBlob,
+};
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
 use zeroize::Zeroizing;
 
 #[test]
@@ -57,7 +59,8 @@ fn test_ssh_signature_blob_extract_from_wire_format() {
 
     let mut blob_bytes = Vec::new();
     blob_bytes.extend_from_slice(&encode_ssh_string(
-        secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519.as_bytes(),
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
+            .as_bytes(),
     ));
     blob_bytes.extend_from_slice(&encode_ssh_string(&sig64));
 
@@ -100,7 +103,8 @@ fn test_ssh_signature_blob_rejects_truncated_algorithm_string() {
 fn test_ssh_signature_blob_rejects_truncated_signature_string() {
     let mut blob_bytes = Vec::new();
     blob_bytes.extend_from_slice(&encode_ssh_string(
-        secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519.as_bytes(),
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
+            .as_bytes(),
     ));
     blob_bytes.extend_from_slice(&64u32.to_be_bytes());
     blob_bytes.extend_from_slice(&[1, 2, 3]);
@@ -116,7 +120,8 @@ fn test_ssh_signature_blob_rejects_wrong_sig_length() {
     let sig = vec![1u8; 63];
     let mut blob_bytes = Vec::new();
     blob_bytes.extend_from_slice(&encode_ssh_string(
-        secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519.as_bytes(),
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
+            .as_bytes(),
     ));
     blob_bytes.extend_from_slice(&encode_ssh_string(&sig));
 
@@ -129,7 +134,8 @@ fn test_ssh_signature_blob_rejects_wrong_sig_length() {
 fn test_ssh_signature_blob_rejects_trailing_data() {
     let mut blob_bytes = Vec::new();
     blob_bytes.extend_from_slice(&encode_ssh_string(
-        secretenv::io::ssh::protocol::constants::KEY_TYPE_ED25519.as_bytes(),
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
+            .as_bytes(),
     ));
     blob_bytes.extend_from_slice(&encode_ssh_string(&[3u8; 64]));
     blob_bytes.push(0);

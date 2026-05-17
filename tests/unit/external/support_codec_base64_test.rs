@@ -3,15 +3,15 @@
 
 //! Unit tests for support/codec base64 modules.
 
-use secretenv::support::codec::base64_public::{
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::{
     decode_base64_standard, decode_base64url_nopad, encode_base64_standard,
     encode_base64_standard_nopad, encode_base64url_nopad,
 };
-use secretenv::support::codec::base64_secret::{
+use secretenv_core::cli_api::test_support::helpers::codec::base64_secret::{
     decode_base64url_nopad_secret_32, decode_base64url_nopad_secret_64,
     encode_base64url_nopad_secret_32, encode_base64url_nopad_secret_64,
 };
-use secretenv::support::secret::SecretArray;
+use secretenv_core::cli_api::test_support::helpers::secret::SecretArray;
 
 #[test]
 fn test_encode_base64url_nopad_roundtrip() {

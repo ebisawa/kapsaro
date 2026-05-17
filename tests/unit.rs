@@ -16,6 +16,10 @@ pub mod test_utils;
 // Key generation helpers (re-exported from test_utils to avoid duplicate module)
 pub use test_utils::keygen_helpers;
 
+#[path = "unit/external/api_trust_store_mutation_test.rs"]
+pub mod api_trust_store_mutation_test;
+#[path = "unit/external/cli_core_api_boundary_test.rs"]
+pub mod cli_core_api_boundary_test;
 #[path = "unit/external/cli_doctor_args_test.rs"]
 pub mod cli_doctor_args_test;
 #[path = "unit/external/cli_option_surface_test.rs"]
@@ -138,6 +142,7 @@ pub mod install_script_test;
 pub mod io_config_bootstrap_test;
 #[path = "unit/external/io_config_store_test.rs"]
 pub mod io_config_store_test;
+#[cfg(feature = "online")]
 #[path = "unit/external/io_github_account_test.rs"]
 pub mod io_github_account_test;
 #[path = "unit/external/io_keystore_member_test.rs"]
@@ -158,6 +163,7 @@ pub mod io_ssh_protocol_wire_test;
 pub mod io_trust_paths_test;
 #[path = "unit/external/io_trust_store_test.rs"]
 pub mod io_trust_store_test;
+#[cfg(feature = "online")]
 #[path = "unit/external/io_verify_online_github_preflight_test.rs"]
 pub mod io_verify_online_github_preflight_test;
 #[path = "unit/external/io_workspace_setup_test.rs"]
@@ -250,6 +256,7 @@ pub mod support_validation_test;
 pub mod test_harness_registration_test;
 #[path = "unit/external/test_utils_ed25519_backend_test.rs"]
 pub mod test_utils_ed25519_backend_test;
+#[cfg(feature = "online")]
 #[path = "unit/external/verify_github_test.rs"]
 pub mod verify_github_test;
 #[path = "unit/external/workspace_detection_test.rs"]

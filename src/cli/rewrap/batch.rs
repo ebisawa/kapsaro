@@ -5,7 +5,6 @@
 
 use super::promotion::{confirm_incoming_promotions, print_promotion_summary};
 use super::RewrapArgs;
-use crate::app::rewrap::{execute_rewrap_batch_command, RewrapBatchCommandInput};
 use crate::cli::common::command::resolve_execution_input;
 use crate::cli::common::output::rewrap::print_rewrap_batch_outcome;
 use crate::cli::common::output::text::print_warnings;
@@ -13,7 +12,8 @@ use crate::cli::common::trust::{
     confirm_non_member_acceptance, confirm_recipient_approvals, confirm_recipient_set_approval,
     confirm_signer_key_approval,
 };
-use crate::Result;
+use secretenv_core::cli_api::app::rewrap::{execute_rewrap_batch_command, RewrapBatchCommandInput};
+use secretenv_core::Result;
 
 pub(crate) fn run_batch_rewrap(args: &RewrapArgs) -> Result<()> {
     let (options, execution) =

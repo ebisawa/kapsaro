@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv::model::private_key::*;
-use secretenv::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
+use secretenv_core::cli_api::test_support::domain::private_key::*;
+use secretenv_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
 
 #[test]
 fn test_private_key_deserialization() {
     let json_value = serde_json::json!({
         "protected": {
-            "format": secretenv::model::wire::format::PRIVATE_KEY_V7,
+            "format": secretenv_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
@@ -17,7 +17,7 @@ fn test_private_key_deserialization() {
                 "fpr": "SHA256:ABCDEFGH123456789",
                 "ikm_salt": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 "hkdf_salt": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-                "aead": secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                "aead": secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2024-01-15T00:00:00Z",
             "expires_at": "2025-01-15T00:00:00Z"
@@ -33,7 +33,7 @@ fn test_private_key_deserialization() {
 
     assert_eq!(
         pk.protected.format,
-        secretenv::model::wire::format::PRIVATE_KEY_V7
+        secretenv_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V7
     );
     assert_eq!(pk.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(pk.protected.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
@@ -42,7 +42,7 @@ fn test_private_key_deserialization() {
             assert_eq!(fpr, "SHA256:ABCDEFGH123456789");
             assert_eq!(
                 aead,
-                secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
             );
         }
         _ => panic!("Expected SshSig variant"),
@@ -53,14 +53,15 @@ fn test_private_key_deserialization() {
 fn test_private_key_serialization() {
     let pk = PrivateKey {
         protected: PrivateKeyProtected {
-            format: secretenv::model::wire::format::PRIVATE_KEY_V7.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V7.to_string(),
             subject_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string(),
             alg: PrivateKeyAlgorithm::SshSig {
                 fpr: "SHA256:TESTFPR123".to_string(),
                 ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
-                aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
+                aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                    .to_string(),
             },
             created_at: "2024-01-15T00:00:00Z".to_string(),
             expires_at: "2025-01-15T00:00:00Z".to_string(),
@@ -75,7 +76,7 @@ fn test_private_key_serialization() {
 
     assert_eq!(
         json_value["protected"]["format"],
-        secretenv::model::wire::format::PRIVATE_KEY_V7
+        secretenv_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V7
     );
     assert_eq!(json_value["protected"]["subject_handle"], BOB_MEMBER_HANDLE);
     assert_eq!(
@@ -90,13 +91,15 @@ fn test_private_key_plaintext_serialization() {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
+                    .to_string(),
                 x: "cHVibGlja2V5".to_string(),
                 d: "cHJpdmF0ZWtleQ".to_string(),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                    .to_string(),
                 x: "c2lncHVi".to_string(),
                 d: "c2lncHJpdg".to_string(),
             },
@@ -108,12 +111,12 @@ fn test_private_key_plaintext_serialization() {
     assert_eq!(json_value["keys"]["kem"]["kty"], "OKP");
     assert_eq!(
         json_value["keys"]["kem"]["crv"],
-        secretenv::model::wire::jwk::CURVE_X25519
+        secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
     );
     assert_eq!(json_value["keys"]["sig"]["kty"], "OKP");
     assert_eq!(
         json_value["keys"]["sig"]["crv"],
-        secretenv::model::wire::jwk::CURVE_ED25519
+        secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
     );
 }
 
@@ -123,13 +126,15 @@ fn test_private_key_plaintext_debug_redacts_secret_material() {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
+                    .to_string(),
                 x: "public-kem".to_string(),
                 d: "private-kem".to_string(),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                    .to_string(),
                 x: "public-sig".to_string(),
                 d: "private-sig".to_string(),
             },
@@ -160,7 +165,7 @@ fn test_private_key_plaintext_debug_redacts_secret_material() {
 fn test_jwk_okp_private_key_debug_redacts_secret_component() {
     let key = JwkOkpPrivateKey {
         kty: "OKP".to_string(),
-        crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
         x: "public-key".to_string(),
         d: "private-key".to_string(),
     };
@@ -177,13 +182,14 @@ fn test_identity_keys_private_debug_redacts_nested_keys() {
     let keys = IdentityKeysPrivate {
         kem: JwkOkpPrivateKey {
             kty: "OKP".to_string(),
-            crv: secretenv::model::wire::jwk::CURVE_X25519.to_string(),
+            crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
             x: "public-kem".to_string(),
             d: "private-kem".to_string(),
         },
         sig: JwkOkpPrivateKey {
             kty: "OKP".to_string(),
-            crv: secretenv::model::wire::jwk::CURVE_ED25519.to_string(),
+            crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                .to_string(),
             x: "public-sig".to_string(),
             d: "private-sig".to_string(),
         },
@@ -201,13 +207,14 @@ fn test_identity_keys_private_debug_redacts_nested_keys() {
 #[test]
 fn test_private_key_new_preserves_parts() {
     let protected = PrivateKeyProtected {
-        format: secretenv::model::wire::format::PRIVATE_KEY_V7.to_string(),
+        format: secretenv_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V7.to_string(),
         subject_handle: ALICE_MEMBER_HANDLE.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         alg: PrivateKeyAlgorithm::Argon2id {
             ikm_salt: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             hkdf_salt: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
-            aead: secretenv::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
+            aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                .to_string(),
         },
         created_at: "2024-01-15T00:00:00Z".to_string(),
         expires_at: "2025-01-15T00:00:00Z".to_string(),

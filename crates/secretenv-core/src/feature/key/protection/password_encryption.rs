@@ -7,7 +7,7 @@ use super::encryption::build_private_key_decrypt_error;
 use super::material::{
     build_argon2id_algorithm, build_private_key_protected, decode_ciphertext_params,
     decode_hkdf_salt, decode_ikm_salt, decrypt_private_key_plaintext,
-    encrypt_private_key_plaintext, validate_aead_algorithm, PrivateKeyProtectionMaterial,
+    encrypt_private_key_plaintext, validate_aead_algorithm, FreshPrivateKeyProtectionMaterial,
     PrivateKeyProtectionMetadata,
 };
 use super::password_key_derivation;
@@ -25,7 +25,7 @@ pub fn encrypt_private_key_with_password(
     password: &SecretString,
     debug: bool,
 ) -> Result<PrivateKey> {
-    let material = PrivateKeyProtectionMaterial::generate()?;
+    let material = FreshPrivateKeyProtectionMaterial::generate()?;
     let metadata = PrivateKeyProtectionMetadata {
         member_handle,
         kid,

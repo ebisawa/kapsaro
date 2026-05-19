@@ -4,10 +4,9 @@
 //! CEK Derivation for kv-enc
 
 use crate::crypto::kdf;
-use crate::crypto::rng::fill_random_array;
 use crate::crypto::types::data::Ikm;
 use crate::crypto::types::keys::{Cek, MasterKey};
-use crate::crypto::types::primitives::KvSalt;
+use crate::crypto::types::primitives::{FreshKvSalt, KvSalt};
 use crate::feature::envelope::binding::build_kv_cek_info;
 use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::Result;
@@ -30,18 +29,41 @@ pub fn derive_cek(
     key: &str,
     debug: bool,
 ) -> Result<Cek> {
+    let salt_bytes: [u8; 32] = decode_base64url_nopad_array(salt_b64, "salt")?;
+    let salt = KvSalt::new(salt_bytes);
+    derive_cek_from_salt(mk, &salt, sid, key, debug)
+}
+
+pub(crate) fn derive_cek_from_fresh_salt(
+    mk: &MasterKey,
+    salt: &FreshKvSalt,
+    sid: &Uuid,
+    key: &str,
+    debug: bool,
+) -> Result<Cek> {
+    derive_cek_from_salt(mk, salt.as_kv_salt(), sid, key, debug)
+}
+
+fn derive_cek_from_salt(
+    mk: &MasterKey,
+    salt: &KvSalt,
+    sid: &Uuid,
+    key: &str,
+    debug: bool,
+) -> Result<Cek> {
     if debug {
         debug!("[CRYPTO] HKDF-SHA256: expand");
     }
-    let salt_bytes: [u8; 32] = decode_base64url_nopad_array(salt_b64, "salt")?;
-    let salt = KvSalt::new(salt_bytes);
     let ikm = Ikm::from(mk.as_bytes().to_vec());
     let info = build_kv_cek_info(sid, key)?;
-    kdf::expand_to_array(&ikm, Some(&salt), &info)
+    kdf::expand_to_array(&ikm, Some(salt), &info)
 }
 
 /// Generate a random salt for kv-enc entry encryption
-pub(crate) fn generate_salt() -> Result<String> {
-    let salt_obj = KvSalt::new(fill_random_array::<32>()?);
-    Ok(encode_base64url_nopad(salt_obj.as_bytes()))
+pub(crate) fn generate_salt() -> Result<FreshKvSalt> {
+    FreshKvSalt::generate()
+}
+
+pub(crate) fn encode_salt(salt: &FreshKvSalt) -> String {
+    encode_base64url_nopad(salt.as_bytes())
 }

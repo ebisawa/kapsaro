@@ -3,6 +3,9 @@
 
 //! Fixed-size cryptographic primitive types with type safety
 
+use crate::crypto::rng::fill_random_array;
+use crate::Result;
+
 /// XChaCha20-Poly1305 nonce (24 bytes)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct XChaChaNonce([u8; 24]);
@@ -23,6 +26,32 @@ impl XChaChaNonce {
 }
 
 impl_fixed_size_type!(XChaChaNonce, 24, "XChaCha nonce");
+
+/// Fresh XChaCha20-Poly1305 nonce generated for a single encryption.
+///
+/// ```compile_fail
+/// use secretenv_core::crypto::types::primitives::FreshXChaChaNonce;
+/// let _nonce = FreshXChaChaNonce::new([0u8; 24]);
+/// ```
+#[derive(Debug)]
+pub struct FreshXChaChaNonce(XChaChaNonce);
+
+impl FreshXChaChaNonce {
+    /// Generate a fresh nonce from the OS CSPRNG.
+    pub(crate) fn generate() -> Result<Self> {
+        Ok(Self(XChaChaNonce(fill_random_array::<24>()?)))
+    }
+
+    /// Get the nonce bytes.
+    pub fn as_bytes(&self) -> &[u8; 24] {
+        self.0.as_bytes()
+    }
+
+    /// Convert to a stored nonce after encryption.
+    pub(crate) fn into_stored(self) -> XChaChaNonce {
+        self.0
+    }
+}
 
 /// Trait for types that can be used as HKDF salt in key derivation.
 ///
@@ -54,6 +83,32 @@ impl_fixed_size_type!(KvSalt, 32, "kv salt");
 
 impl AsHkdfSalt for KvSalt {
     fn as_hkdf_salt_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+/// Fresh kv-enc salt generated for a single entry encryption.
+///
+/// ```compile_fail
+/// use secretenv_core::crypto::types::primitives::FreshKvSalt;
+/// let _salt = FreshKvSalt::new([0u8; 32]);
+/// ```
+#[derive(Debug)]
+pub struct FreshKvSalt(KvSalt);
+
+impl FreshKvSalt {
+    /// Generate a fresh kv salt from the OS CSPRNG.
+    pub(crate) fn generate() -> Result<Self> {
+        Ok(Self(KvSalt(fill_random_array::<32>()?)))
+    }
+
+    /// Get the salt bytes.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.as_bytes()
+    }
+
+    /// Borrow as a kv salt for CEK derivation.
+    pub(crate) fn as_kv_salt(&self) -> &KvSalt {
         &self.0
     }
 }

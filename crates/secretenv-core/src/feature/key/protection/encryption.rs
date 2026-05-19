@@ -10,7 +10,7 @@ use super::key_derivation;
 use super::material::{
     build_private_key_protected, build_sshsig_algorithm, decode_ciphertext_params,
     decode_hkdf_salt, decrypt_private_key_plaintext, encrypt_private_key_plaintext,
-    validate_aead_algorithm, PrivateKeyProtectionMaterial, PrivateKeyProtectionMetadata,
+    validate_aead_algorithm, FreshPrivateKeyProtectionMaterial, PrivateKeyProtectionMetadata,
 };
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
@@ -73,7 +73,7 @@ pub struct PrivateKeyEncryptionParams<'a> {
 
 /// Encrypt PrivateKey with SSH key
 pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<PrivateKey> {
-    let material = PrivateKeyProtectionMaterial::generate()?;
+    let material = FreshPrivateKeyProtectionMaterial::generate()?;
     let metadata = PrivateKeyProtectionMetadata {
         member_handle: &params.member_handle,
         kid: &params.kid,

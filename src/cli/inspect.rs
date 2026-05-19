@@ -4,7 +4,7 @@
 //! inspect command - Display encryption metadata without decryption
 //!
 //! Shows wrap information, recipients, and payload metadata for debugging
-//! Supports both kv-enc v6 and file-enc v5 formats
+//! Supports both kv-enc v7 and file-enc v5 formats
 
 use clap::Args;
 use std::path::PathBuf;

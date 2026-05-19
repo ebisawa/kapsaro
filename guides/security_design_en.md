@@ -350,7 +350,7 @@ Rationale:
 
 Uses:
 - HKDF inside the HPKE suite (§3.2)
-- CEK derivation for kv-enc (MK + salt + file identifier `sid` → CEK)
+- CEK derivation for kv-enc (MK + salt + file identifier `sid` + KEY line prefix `k` → CEK)
 - `enc_key` derivation for PrivateKey protection (SSH signature or Argon2id output as IKM, with salt + key statement ID `kid` + info → `enc_key`; §9.2, §9.3)
 
 ### 3.6 JCS (RFC 8785)
@@ -489,8 +489,8 @@ The mermaid figure above is a conceptual overview of the hierarchy. Timing of DE
 | Ed25519 private key (signing) | 32 bytes | CSPRNG | Signature generation | Same (signing key corresponds to artifact `kid`) | MUST |
 | Ed25519 public key (signing) | 32 bytes | Derived from Ed25519 private key | Signature verification | Same | — |
 | DEK (Data Encryption Key) | 32 bytes | CSPRNG | file-enc payload encryption | Payload header AAD including file identifier `sid` binds to file context (§6.5) | MUST |
-| MK (Master Key) | 32 bytes | CSPRNG | CEK derivation source for kv-enc | Wrap key statement ID `kid` / file identifier `sid` / protocol identifier `p` (§7.5) and CEK derivation file identifier `sid` (§7.3) | MUST |
-| CEK (Content Encryption Key) | 32 bytes | Derived via HKDF-SHA256 | kv-enc entry encryption | HKDF file identifier `sid` and entry AAD KV entry key `k` / file identifier `sid` / protocol identifier `p` (§7.3, §7.4) | MUST |
+| MK (Master Key) | 32 bytes | CSPRNG | CEK derivation source for kv-enc | Wrap key statement ID `kid` / file identifier `sid` / protocol identifier `p` (§7.5) and CEK derivation file identifier `sid` / KEY line prefix `k` (§7.3) | MUST |
+| CEK (Content Encryption Key) | 32 bytes | Derived via HKDF-SHA256 | kv-enc entry encryption | HKDF file identifier `sid` / KV entry key `k` and entry AAD KV entry key `k` / file identifier `sid` / protocol identifier `p` (§7.3, §7.4) | MUST |
 | enc_key (for PrivateKey protection) | 32 bytes | Derived via HKDF-SHA256 | PrivateKey AEAD encryption | AAD = `jcs(protected)` binds header and ciphertext for that key statement ID `kid` (§9.2.1) | MUST |
 
 Notes:
@@ -805,7 +805,7 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 | Line type | Content | Security role |
 | --- | --- | --- |
-| `:SECRETENV_KV 6` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
+| `:SECRETENV_KV 7` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
 | `:HEAD` | File context such as `sid`, AEAD, and timestamps | Binds wraps and entries to a single file context |
 | `:WRAP` | HPKE-wrapped MK and removal history | Represents recipient state and key-distribution state |
 | `KEY` lines | Per-entry ciphertext | Encrypted units made from the line key plus token salt, nonce, and ciphertext |
@@ -816,7 +816,7 @@ Each token is represented as a JCS-canonicalized JSON object encoded in base64ur
 The full document layout is as follows.
 
 ```text
-:SECRETENV_KV 6
+:SECRETENV_KV 7
 :HEAD <token>
 :WRAP <token>
 <KEY> <token>
@@ -829,7 +829,7 @@ The full document layout is as follows.
 
 ### 7.2 Design Rationale for Two-Layer Key Structure
 
-kv-enc uses one MK per file, while each entry CEK is derived as `HKDF-SHA256(MK, salt, sid)`.
+kv-enc uses one MK per file, while each entry CEK is derived as `HKDF-SHA256(MK, salt, sid, k)`.
 
 This two-layer structure exists for four reasons.
 
@@ -860,8 +860,8 @@ graph TB
     MK["MK<br/>32 bytes<br/>CSPRNG"]
 
     subgraph cek["CEK derivation"]
-        CEK1["CEK1<br/>HKDF(MK, salt1, sid)"]
-        CEK2["CEK2<br/>HKDF(MK, salt2, sid)"]
+        CEK1["CEK1<br/>HKDF(MK, salt1, sid, DATABASE_URL)"]
+        CEK2["CEK2<br/>HKDF(MK, salt2, sid, API_KEY)"]
     end
 
     subgraph p_entries["Plaintext Entries"]
@@ -899,7 +899,7 @@ graph TB
     style CEK2 fill:#90EE90
 ```
 
-On encryption, SecretEnv first generates the MK and HPKE-wraps it to each recipient. It then generates a salt for each entry, derives a CEK using HKDF with `sid` in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
+On encryption, SecretEnv first generates the MK and HPKE-wraps it to each recipient. It then generates a salt for each entry, derives a CEK using HKDF with `sid` and the KEY line prefix in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
 
 On decryption, it verifies the signature first, applies the trust policy from §10, unwraps the MK, and derives CEKs only for the entries that need to be read. Each entry is then decrypted with AAD that includes the KEY line prefix, `sid`, and `p`.
 
@@ -907,20 +907,20 @@ As with file-enc, signature verification always precedes decryption.
 
 ### 7.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:context:hkdf-info:kv-enc:cek@6` and `sid`.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:context:hkdf-info:kv-enc:cek@7`, `sid`, and the KEY line prefix.
 - The salt is independently generated for each entry.
-- Including `sid` in the derivation context ensures that copying an entry to a different file does not reproduce the same CEK.
+- Including `sid` and the KEY line prefix in the derivation context ensures that copying an entry to a different file or another KEY does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
-- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:context:aad:kv-enc:entry-payload@6`.
+- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:context:aad:kv-enc:entry-payload@7`.
 - Including the KEY line prefix prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - `salt` is already consumed by HKDF, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 7.5 HPKE wrap (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:context:hpke-info:kv-enc:wrap@6`.
+- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:context:hpke-info:kv-enc:wrap@7`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into unwrap failure.
 
@@ -1003,12 +1003,14 @@ This makes the wrap binding inputs (`kid`, `p`, `sid`) identical for both `info`
 
 ### 8.4 Rationale for Double-Binding
 
-Why `sid` is included in both CEK derivation info and entry AAD:
+Why `sid` and `k` are included in both CEK derivation info and entry AAD:
 
 For kv-enc:
 
 - Include `sid` in CEK derivation info so `sid` affects the CEK at the HKDF stage
+- Include `k` in CEK derivation info so the entry identity affects the CEK at the HKDF stage
 - Also include `sid` in entry AAD so `sid` is verified again at the AEAD stage
+- Also include `k` in entry AAD so entry identity is verified again at the AEAD stage
 
 In cryptographic terms, one of these may appear sufficient in isolation, but also including it in AAD provides:
 
@@ -1039,7 +1041,7 @@ Recipient integrity is protected by the Ed25519 signature, because wraps are con
 | Processing unit | Input | Included identifiers | Detection point | Confusion prevented |
 | --- | --- | --- | --- | --- |
 | kv wrap | HPKE info = AAD | `p=kv:hpke-wrap`, `sid`, `kid` | HPKE unwrap | Reusing wraps across files or key generations |
-| kv CEK derivation | HKDF info + `entry.salt` | `p=kv:cek`, `sid` | Entry AEAD open | Copying entries between files or misusing a repeated salt |
+| kv CEK derivation | HKDF info + `entry.salt` | `p=kv:cek`, `sid`, `k` | Entry AEAD open | Copying entries between files or keys, or misusing a repeated salt |
 | kv entry | entry AAD | `p=kv:payload`, `sid`, `k` | Entry AEAD open | Swapping entries within one kv-enc or miswiring `sid` / `k` |
 | kv signature | `canonical_bytes` | `:HEAD`, `:WRAP`, KEY lines | kv-enc signature verification | Tampering with the kv-enc body, wraps, entries, or disclosure flags |
 
@@ -1391,8 +1393,8 @@ Important: Self-signature prevents tampering with an existing PublicKey, but it 
 |------|---------|
 | Attack | An attacker copies an entry from kv-enc file A into kv-enc file B |
 | Capability | Write access to the repository |
-| Primary defense | (1) MK separation (2) `sid` in CEK info (3) `sid` in payload AAD |
-| When it weakens | An implementation change drops `sid` from CEK info or AAD |
+| Primary defense | (1) MK separation (2) `sid` and `k` in CEK info (3) `sid` and `k` in payload AAD |
+| When it weakens | An implementation change drops `sid` or `k` from CEK info or AAD |
 | Expected failure point | AEAD decryption failure due to CEK mismatch |
 
 These scenarios share a common structure. Context bindings (`sid`, `kid`, `k`, `p`) and Ed25519 signatures form two independent layers of defense. Bypassing both at the same time requires either compromise of the signer's private key or an implementation defect such as removing a binding or changing the processing order. The verification points in §12 are intended to detect such defects.

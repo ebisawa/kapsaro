@@ -4,11 +4,11 @@
 //! Format detection
 //!
 //! Automatic input type detection:
-//! - kv-enc: Starts with ":SECRETENV_KV 6"
+//! - kv-enc: Starts with ":SECRETENV_KV 7"
 //! - file-enc: JSON with "format": "secretenv:format:file-enc@5"
 //! - kv-plain: UTF-8 text, 2+ non-empty/non-comment lines, 60%+ KEY=VALUE format
 
-use crate::format::kv::HEADER_LINE_V6;
+use crate::format::kv::HEADER_LINE_V7;
 use crate::model::wire::format;
 use crate::support::json_limits::validate_json_limits;
 use crate::Result;
@@ -16,7 +16,7 @@ use crate::Result;
 /// Detected input format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputFormat {
-    /// kv-enc format (:SECRETENV_KV 6)
+    /// kv-enc format (:SECRETENV_KV 7)
     KvEnc,
 
     /// file-enc format (JSON with secretenv:format:file-enc@5)
@@ -54,9 +54,9 @@ pub fn detect_format(content: &str) -> Result<InputFormat> {
 
 /// Detect kv-enc format from content
 ///
-/// Format: ":SECRETENV_KV 6" (colon prefix + space separator)
+/// Format: ":SECRETENV_KV 7" (colon prefix + space separator)
 fn detect_kv_enc(content: &str) -> Result<Option<InputFormat>> {
-    if content.lines().next() == Some(HEADER_LINE_V6) {
+    if content.lines().next() == Some(HEADER_LINE_V7) {
         return Ok(Some(InputFormat::KvEnc));
     }
     Ok(None)

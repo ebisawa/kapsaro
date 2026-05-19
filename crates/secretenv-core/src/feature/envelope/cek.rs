@@ -14,22 +14,29 @@ use crate::Result;
 use tracing::debug;
 use uuid::Uuid;
 
-/// Derive cek from mk, salt, and sid for kv-enc
+/// Derive cek from mk, salt, sid, and key for kv-enc
 ///
 /// In kv-enc, each entry's cek (Content Encryption Key) is derived from:
 /// - mk (Master Key): wrapped in the WRAP line
 /// - salt: base64url-encoded 32 bytes random value, used for key derivation
 /// - sid: file identifier (UUID) from HEAD line
+/// - key: dotenv KEY from the entry line
 ///
-/// cek = HKDF-SHA256(ikm=mk, salt=base64url_decode(salt), info=jcs({p:"secretenv:context:hkdf-info:kv-enc:cek@6", sid}), length=32)
-pub fn derive_cek(mk: &MasterKey, salt_b64: &str, sid: &Uuid, debug: bool) -> Result<Cek> {
+/// cek = HKDF-SHA256(ikm=mk, salt=base64url_decode(salt), info=jcs({p:"secretenv:context:hkdf-info:kv-enc:cek@7", sid, k:key}), length=32)
+pub fn derive_cek(
+    mk: &MasterKey,
+    salt_b64: &str,
+    sid: &Uuid,
+    key: &str,
+    debug: bool,
+) -> Result<Cek> {
     if debug {
         debug!("[CRYPTO] HKDF-SHA256: expand");
     }
     let salt_bytes: [u8; 32] = decode_base64url_nopad_array(salt_b64, "salt")?;
     let salt = KvSalt::new(salt_bytes);
     let ikm = Ikm::from(mk.as_bytes().to_vec());
-    let info = build_kv_cek_info(sid)?;
+    let info = build_kv_cek_info(sid, key)?;
     kdf::expand_to_array(&ikm, Some(&salt), &info)
 }
 

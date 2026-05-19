@@ -110,7 +110,7 @@ fn kv_enc_schema_error_includes_source_name_and_token_context() {
     )
     .unwrap();
     let content = format!(
-        ":SECRETENV_KV 6\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
+        ":SECRETENV_KV 7\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
     );
     let kv = KvEncContent::new_unchecked_with_source(content, ".secretenv/secrets/default.kvenc");
 

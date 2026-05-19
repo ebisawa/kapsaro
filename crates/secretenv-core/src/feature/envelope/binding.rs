@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 pub fn build_kv_entry_aad(sid: &Uuid, key: &str) -> Result<Aad> {
     let bytes = jcs::normalize_to_bytes(&json!({
-        "p": context::AAD_KV_ENTRY_PAYLOAD_V6,
+        "p": context::AAD_KV_ENTRY_PAYLOAD_V7,
         "sid": sid,
         "k": key
     }))?;
@@ -28,7 +28,7 @@ pub fn build_file_payload_aad(protected: &FilePayloadHeader) -> Result<Aad> {
 
 pub fn build_kv_wrap_info(sid: &Uuid, kid: &str) -> Result<Info> {
     let bytes = jcs::normalize_to_bytes(&json!({
-        "p": context::HPKE_INFO_KV_WRAP_V6,
+        "p": context::HPKE_INFO_KV_WRAP_V7,
         "sid": sid,
         "kid": kid
     }))?;
@@ -44,10 +44,11 @@ pub fn build_file_wrap_info(sid: &Uuid, kid: &str) -> Result<Info> {
     Ok(Info::from(bytes))
 }
 
-pub fn build_kv_cek_info(sid: &Uuid) -> Result<Info> {
+pub fn build_kv_cek_info(sid: &Uuid, key: &str) -> Result<Info> {
     let bytes = jcs::normalize_to_bytes(&json!({
-        "p": context::HKDF_INFO_KV_CEK_V6,
-        "sid": sid
+        "p": context::HKDF_INFO_KV_CEK_V7,
+        "sid": sid,
+        "k": key
     }))?;
     Ok(Info::from(bytes))
 }

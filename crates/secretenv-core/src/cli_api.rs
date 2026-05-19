@@ -941,8 +941,8 @@ pub mod test_support {
             }
             pub mod context {
                 pub use crate::model::wire::context::{
-                    AAD_KV_ENTRY_PAYLOAD_V6, HKDF_INFO_PRIVATE_KEY_SSHSIG_V7,
-                    HPKE_INFO_FILE_WRAP_V5, HPKE_INFO_KV_WRAP_V6,
+                    AAD_KV_ENTRY_PAYLOAD_V7, HKDF_INFO_KV_CEK_V7, HKDF_INFO_PRIVATE_KEY_SSHSIG_V7,
+                    HPKE_INFO_FILE_WRAP_V5, HPKE_INFO_KV_WRAP_V7,
                     SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7,
                 };
             }

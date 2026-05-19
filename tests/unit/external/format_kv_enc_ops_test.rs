@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for kv-enc v6 encryption/decryption operations
+//! Unit tests for kv-enc v7 encryption/decryption operations
 
 use crate::keygen_helpers::{
     build_test_private_key, build_verified_private_key, build_verified_recipient_keys,
@@ -143,7 +143,7 @@ fn test_encrypt_and_decrypt_kv() {
     .unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 6\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 7\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));
@@ -241,7 +241,7 @@ fn test_encrypt_empty_input() {
     .unwrap();
 
     // Should have header, HEAD line, WRAP line, and SIG line (v3 requires signature)
-    assert!(encrypted.starts_with(":SECRETENV_KV 6\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 7\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains(":SIG "));

@@ -148,7 +148,7 @@ fn test_encrypt_kv_document_via_inner_api() {
         encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 6\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 7\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));

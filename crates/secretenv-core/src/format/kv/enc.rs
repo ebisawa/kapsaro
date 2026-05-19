@@ -5,12 +5,12 @@
 //!
 //! Line-oriented format:
 //! ```text
-//! :SECRETENV_KV 6
-//! :HEAD <base64url(jcs(KVFileHeader@6))>
-//! :WRAP <base64url(jcs(KVFileWrap@6))>
-//! KEY1 <base64url(jcs(EncryptedKVValue@6))>
-//! KEY2 <base64url(jcs(EncryptedKVValue@6))>
-//! :SIG <base64url(jcs(KVFileSignature@6))>
+//! :SECRETENV_KV 7
+//! :HEAD <base64url(jcs(KVFileHeader@7))>
+//! :WRAP <base64url(jcs(KVFileWrap@7))>
+//! KEY1 <base64url(jcs(EncryptedKVValue@7))>
+//! KEY2 <base64url(jcs(EncryptedKVValue@7))>
+//! :SIG <base64url(jcs(KVFileSignature@7))>
 //! ```
 //!
 //! Diff-friendly: Unchanged lines preserve exact byte representation

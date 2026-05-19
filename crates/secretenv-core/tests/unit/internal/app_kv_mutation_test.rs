@@ -180,7 +180,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
 
         let reviewed = evaluate_set_plan(&options, None);
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
-        fs::write(&kv_path, ":SECRETENV_KV 6\n:HEAD {}\n:WRAP {}\n").unwrap();
+        fs::write(&kv_path, ":SECRETENV_KV 7\n:HEAD {}\n:WRAP {}\n").unwrap();
 
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
@@ -195,7 +195,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
         }
         assert_eq!(
             fs::read_to_string(&kv_path).unwrap(),
-            ":SECRETENV_KV 6\n:HEAD {}\n:WRAP {}\n"
+            ":SECRETENV_KV 7\n:HEAD {}\n:WRAP {}\n"
         );
     });
 }

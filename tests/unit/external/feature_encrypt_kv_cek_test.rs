@@ -12,9 +12,13 @@ fn test_sid() -> Uuid {
     Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
 }
 
+fn test_key() -> &'static str {
+    "DATABASE_URL"
+}
+
 #[test]
 fn test_derive_cek() {
-    // Test CEK derivation from mk + salt + sid
+    // Test CEK derivation from mk + salt + sid + key
     let mk = [0u8; 32]; // All zeros for simplicity
     let mk_obj = MasterKey::new(mk);
     // Fixed 32 bytes salt: all zeros
@@ -22,13 +26,13 @@ fn test_derive_cek() {
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
-    let cek = derive_cek(&mk_obj, &salt, &sid, false).unwrap();
+    let cek = derive_cek(&mk_obj, &salt, &sid, test_key(), false).unwrap();
 
     // Should be 32 bytes
     assert_eq!(cek.as_bytes().len(), 32);
 
     // Should be deterministic
-    let cek2 = derive_cek(&mk_obj, &salt, &sid, false).unwrap();
+    let cek2 = derive_cek(&mk_obj, &salt, &sid, test_key(), false).unwrap();
     assert_eq!(cek.as_bytes(), cek2.as_bytes());
 }
 
@@ -43,8 +47,8 @@ fn test_derive_cek_different_salt() {
     let salt2 = encode_base64url_nopad(&salt2_bytes);
     let sid = test_sid();
 
-    let cek1 = derive_cek(&mk_obj, &salt1, &sid, false).unwrap();
-    let cek2 = derive_cek(&mk_obj, &salt2, &sid, false).unwrap();
+    let cek1 = derive_cek(&mk_obj, &salt1, &sid, test_key(), false).unwrap();
+    let cek2 = derive_cek(&mk_obj, &salt2, &sid, test_key(), false).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }
@@ -60,8 +64,8 @@ fn test_derive_cek_different_mk() {
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
-    let cek1 = derive_cek(&mk1_obj, &salt, &sid, false).unwrap();
-    let cek2 = derive_cek(&mk2_obj, &salt, &sid, false).unwrap();
+    let cek1 = derive_cek(&mk1_obj, &salt, &sid, test_key(), false).unwrap();
+    let cek2 = derive_cek(&mk2_obj, &salt, &sid, test_key(), false).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }
@@ -76,8 +80,22 @@ fn test_derive_cek_different_sid() {
     let sid1 = test_sid();
     let sid2 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
 
-    let cek1 = derive_cek(&mk_obj, &salt, &sid1, false).unwrap();
-    let cek2 = derive_cek(&mk_obj, &salt, &sid2, false).unwrap();
+    let cek1 = derive_cek(&mk_obj, &salt, &sid1, test_key(), false).unwrap();
+    let cek2 = derive_cek(&mk_obj, &salt, &sid2, test_key(), false).unwrap();
+
+    assert_ne!(cek1.as_bytes(), cek2.as_bytes());
+}
+
+#[test]
+fn test_derive_cek_different_key() {
+    let mk = [0u8; 32];
+    let mk_obj = MasterKey::new(mk);
+    let salt_bytes = [0u8; 32];
+    let salt = encode_base64url_nopad(&salt_bytes);
+    let sid = test_sid();
+
+    let cek1 = derive_cek(&mk_obj, &salt, &sid, "DATABASE_URL", false).unwrap();
+    let cek2 = derive_cek(&mk_obj, &salt, &sid, "API_KEY", false).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }
@@ -92,6 +110,6 @@ fn test_derive_cek_invalid_salt_length() {
     let salt = encode_base64url_nopad(&salt_bytes);
     let sid = test_sid();
 
-    let result = derive_cek(&mk_obj, &salt, &sid, false);
+    let result = derive_cek(&mk_obj, &salt, &sid, test_key(), false);
     assert!(result.is_err());
 }

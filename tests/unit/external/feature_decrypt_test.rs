@@ -74,7 +74,7 @@ fn test_file_enc_content_detect_accepts_file_enc() {
 #[test]
 fn test_file_enc_content_detect_rejects_kv_enc() {
     // kv-enc format should be rejected by FileEncContent::detect
-    let kv_enc = ":SECRETENV_KV 6\n:HEAD dummy\n:WRAP dummy\n";
+    let kv_enc = ":SECRETENV_KV 7\n:HEAD dummy\n:WRAP dummy\n";
     let result = FileEncContent::detect(kv_enc.to_string());
     assert!(result.is_err());
 }

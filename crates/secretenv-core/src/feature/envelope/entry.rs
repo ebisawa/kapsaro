@@ -35,7 +35,7 @@ pub(crate) fn encrypt_entry(
     // Generate 32 bytes random salt and encode as base64url (no padding)
     let salt = generate_salt()?;
 
-    let cek = derive_cek(master_key, &salt, sid, debug)?;
+    let cek = derive_cek(master_key, &salt, sid, key, debug)?;
     let cek_key = XChaChaKey::from_slice(cek.as_bytes())?;
     let aad = build_kv_entry_aad(sid, key)?;
     let plaintext = Plaintext::from(value.as_bytes());
@@ -70,7 +70,7 @@ pub(crate) fn decrypt_entry(
     caller: &str,
 ) -> Result<Zeroizing<Vec<u8>>> {
     validate_kv_entry_aead(aead)?;
-    let cek = derive_cek(master_key, &entry.salt, sid, debug)?;
+    let cek = derive_cek(master_key, &entry.salt, sid, key, debug)?;
     let cek_key = XChaChaKey::from_slice(cek.as_bytes())?;
     let nonce_bytes: [u8; 24] = decode_base64url_nopad_array(&entry.nonce, "nonce")?;
     let nonce = XChaChaNonce::new(nonce_bytes);

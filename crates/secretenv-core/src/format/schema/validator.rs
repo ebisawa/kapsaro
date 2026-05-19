@@ -10,41 +10,89 @@ use crate::{Error, Result};
 use jsonschema::error::ValidationErrorKind;
 use jsonschema::ValidationError;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::LazyLock;
 
 const MAX_SCHEMA_ERROR_REASONS: usize = 5;
 
-const EMBEDDED_SCHEMA: &str = include_str!("../../../schemas/secretenv_schema.json");
-const EMBEDDED_TRUST_SCHEMA: &str =
-    include_str!("../../../schemas/secretenv_trust_local_schema.json");
+const COMMON_SCHEMA: &str = include_str!("../../../schemas/secretenv_common_schema.json");
+const PUBLIC_KEY_SCHEMA: &str = include_str!("../../../schemas/secretenv_public_key_schema.json");
+const PRIVATE_KEY_SCHEMA: &str = include_str!("../../../schemas/secretenv_private_key_schema.json");
+const FILE_ENC_SCHEMA: &str = include_str!("../../../schemas/secretenv_file_enc_schema.json");
+const KV_ENC_SCHEMA: &str = include_str!("../../../schemas/secretenv_kv_enc_schema.json");
+const ARTIFACT_SIGNATURE_SCHEMA: &str =
+    include_str!("../../../schemas/secretenv_artifact_signature_schema.json");
+const LOCAL_TRUST_SCHEMA: &str = include_str!("../../../schemas/secretenv_local_trust_schema.json");
 
-static EMBEDDED_VALIDATOR: LazyLock<std::result::Result<Validator, String>> = LazyLock::new(|| {
-    let schema_json: Value = serde_json::from_str(EMBEDDED_SCHEMA)
-        .map_err(|e| format!("Failed to parse embedded schema: {}", e))?;
-    Validator::from_schema(schema_json)
-        .map_err(|e| format!("Failed to compile embedded schema: {}", e))
-});
+const SCHEMA_RESOURCE_CONTENTS: &[SchemaResourceContent] = &[
+    SchemaResourceContent {
+        uri: "secretenv_common_schema.json",
+        content: COMMON_SCHEMA,
+    },
+    SchemaResourceContent {
+        uri: "secretenv_public_key_schema.json",
+        content: PUBLIC_KEY_SCHEMA,
+    },
+    SchemaResourceContent {
+        uri: "secretenv_private_key_schema.json",
+        content: PRIVATE_KEY_SCHEMA,
+    },
+    SchemaResourceContent {
+        uri: "secretenv_file_enc_schema.json",
+        content: FILE_ENC_SCHEMA,
+    },
+    SchemaResourceContent {
+        uri: "secretenv_kv_enc_schema.json",
+        content: KV_ENC_SCHEMA,
+    },
+    SchemaResourceContent {
+        uri: "secretenv_artifact_signature_schema.json",
+        content: ARTIFACT_SIGNATURE_SCHEMA,
+    },
+    SchemaResourceContent {
+        uri: "secretenv_local_trust_schema.json",
+        content: LOCAL_TRUST_SCHEMA,
+    },
+];
 
-static EMBEDDED_TRUST_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
-    LazyLock::new(|| {
-        let schema_json: Value = serde_json::from_str(EMBEDDED_TRUST_SCHEMA)
-            .map_err(|e| format!("Failed to parse embedded trust schema: {}", e))?;
-        Validator::from_schema(schema_json)
-            .map_err(|e| format!("Failed to compile embedded trust schema: {}", e))
-    });
+static PUBLIC_KEY_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::PublicKey));
+static PRIVATE_KEY_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::PrivateKey));
+static FILE_ENC_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::FileEnc));
+static KV_HEAD_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::KvHead));
+static KV_WRAP_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::KvWrap));
+static KV_ENTRY_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::KvEntry));
+static ARTIFACT_SIGNATURE_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::ArtifactSignature));
+static LOCAL_TRUST_VALIDATOR: LazyLock<std::result::Result<Validator, String>> =
+    LazyLock::new(|| compile_embedded_target(SchemaTarget::LocalTrust));
 
-pub fn load_embedded_validator() -> Result<&'static Validator> {
-    EMBEDDED_VALIDATOR
+pub fn load_embedded_validator(target: SchemaTarget) -> Result<&'static Validator> {
+    embedded_validator(target)
         .as_ref()
         .map_err(|e| Error::build_schema_error(e.clone()))
 }
 
 /// Get the embedded Trust Store schema validator.
 pub fn load_embedded_trust_validator() -> Result<&'static Validator> {
-    EMBEDDED_TRUST_VALIDATOR
-        .as_ref()
-        .map_err(|e| Error::build_schema_error(e.clone()))
+    load_embedded_validator(SchemaTarget::LocalTrust)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchemaTarget {
+    PublicKey,
+    PrivateKey,
+    FileEnc,
+    KvHead,
+    KvWrap,
+    KvEntry,
+    ArtifactSignature,
+    LocalTrust,
 }
 
 pub struct Validator {
@@ -52,13 +100,24 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn new() -> Result<Self> {
-        let schema_json = Self::load_schema_from_paths("secretenv_schema.json")?;
-        Self::from_schema(schema_json)
+    pub fn for_target(target: SchemaTarget) -> Result<Self> {
+        let schema_json = target.load_schema_from_paths()?;
+        let resources = load_schema_resources_from_paths()?;
+        Self::from_schema_with_resources(schema_json, &resources)
     }
 
     pub fn from_schema(schema_json: Value) -> Result<Self> {
+        Self::from_schema_with_resources(schema_json, &[])
+    }
+
+    pub fn from_schema_with_resources(
+        schema_json: Value,
+        resources: &[(String, Value)],
+    ) -> Result<Self> {
+        let registry = build_registry(resources)?;
         let compiled = jsonschema::draft202012::options()
+            .with_registry(&registry)
+            .with_base_uri("secretenv.schema")
             .build(&schema_json)
             .map_err(|e| {
                 Error::build_schema_error_with_source(format!("Failed to compile schema: {}", e), e)
@@ -68,33 +127,7 @@ impl Validator {
     }
 
     pub fn load_schema_from_paths(filename: &str) -> Result<Value> {
-        let possible_paths = [
-            PathBuf::from("schemas").join(filename),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("schemas")
-                .join(filename),
-        ];
-
-        for path in &possible_paths {
-            if path.exists() {
-                let content = load_text(path)?;
-                return serde_json::from_str(&content).map_err(|e| {
-                    Error::build_parse_error_with_source(
-                        format!(
-                            "Failed to parse schema file {}: {}",
-                            format_path_relative_to_cwd(path),
-                            e
-                        ),
-                        e,
-                    )
-                });
-            }
-        }
-
-        Err(Error::build_not_found_error(format!(
-            "Schema file not found: {}",
-            filename
-        )))
+        load_schema_file(filename)
     }
 
     pub fn validate_public_key(&self, doc: &Value) -> Result<()> {
@@ -166,6 +199,175 @@ impl Validator {
         Err(Error::build_schema_error(build_schema_error_message(
             messages,
         )))
+    }
+}
+
+struct SchemaResourceContent {
+    uri: &'static str,
+    content: &'static str,
+}
+
+fn embedded_validator(target: SchemaTarget) -> &'static std::result::Result<Validator, String> {
+    match target {
+        SchemaTarget::PublicKey => &PUBLIC_KEY_VALIDATOR,
+        SchemaTarget::PrivateKey => &PRIVATE_KEY_VALIDATOR,
+        SchemaTarget::FileEnc => &FILE_ENC_VALIDATOR,
+        SchemaTarget::KvHead => &KV_HEAD_VALIDATOR,
+        SchemaTarget::KvWrap => &KV_WRAP_VALIDATOR,
+        SchemaTarget::KvEntry => &KV_ENTRY_VALIDATOR,
+        SchemaTarget::ArtifactSignature => &ARTIFACT_SIGNATURE_VALIDATOR,
+        SchemaTarget::LocalTrust => &LOCAL_TRUST_VALIDATOR,
+    }
+}
+
+fn compile_embedded_target(target: SchemaTarget) -> std::result::Result<Validator, String> {
+    let schema_json = parse_embedded_target_schema(target)?;
+    let resources = parse_embedded_schema_resources()?;
+    Validator::from_schema_with_resources(schema_json, &resources)
+        .map_err(|e| format!("Failed to compile embedded {} schema: {}", target.name(), e))
+}
+
+fn parse_embedded_target_schema(target: SchemaTarget) -> std::result::Result<Value, String> {
+    match target.embedded_schema_content() {
+        Some(content) => parse_embedded_schema(target.filename(), content),
+        None => Ok(target.wrapper_schema()),
+    }
+}
+
+fn parse_embedded_schema(filename: &str, content: &str) -> std::result::Result<Value, String> {
+    serde_json::from_str(content)
+        .map_err(|e| format!("Failed to parse embedded schema {}: {}", filename, e))
+}
+
+fn parse_embedded_schema_resources() -> std::result::Result<Vec<(String, Value)>, String> {
+    SCHEMA_RESOURCE_CONTENTS
+        .iter()
+        .map(|resource| {
+            parse_embedded_schema(resource.uri, resource.content)
+                .map(|schema| (resource.uri.to_string(), schema))
+        })
+        .collect()
+}
+
+fn load_schema_resources_from_paths() -> Result<Vec<(String, Value)>> {
+    SCHEMA_RESOURCE_CONTENTS
+        .iter()
+        .map(|resource| {
+            load_schema_file(resource.uri).map(|schema| (resource.uri.to_string(), schema))
+        })
+        .collect()
+}
+
+fn build_registry(resources: &[(String, Value)]) -> Result<jsonschema::Registry<'_>> {
+    let mut registry = jsonschema::Registry::new();
+    for (uri, schema) in resources {
+        registry = registry.add(uri, schema).map_err(|e| {
+            Error::build_schema_error_with_source(
+                format!("Failed to register schema resource {}: {}", uri, e),
+                e,
+            )
+        })?;
+    }
+    registry.prepare().map_err(|e| {
+        Error::build_schema_error_with_source(
+            format!("Failed to prepare schema registry: {}", e),
+            e,
+        )
+    })
+}
+
+fn load_schema_file(filename: &str) -> Result<Value> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("schemas")
+        .join(filename);
+    if !path.exists() {
+        return Err(Error::build_not_found_error(format!(
+            "Schema file not found: {}",
+            filename
+        )));
+    }
+
+    let content = load_text(&path)?;
+    serde_json::from_str(&content).map_err(|e| {
+        Error::build_parse_error_with_source(
+            format!(
+                "Failed to parse schema file {}: {}",
+                format_path_relative_to_cwd(&path),
+                e
+            ),
+            e,
+        )
+    })
+}
+
+impl SchemaTarget {
+    pub fn filename(self) -> &'static str {
+        match self {
+            Self::PublicKey => "secretenv_public_key_schema.json",
+            Self::PrivateKey => "secretenv_private_key_schema.json",
+            Self::FileEnc => "secretenv_file_enc_schema.json",
+            Self::KvHead | Self::KvWrap | Self::KvEntry => "secretenv_kv_enc_schema.json",
+            Self::ArtifactSignature => "secretenv_artifact_signature_schema.json",
+            Self::LocalTrust => "secretenv_local_trust_schema.json",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::PublicKey => "public key",
+            Self::PrivateKey => "private key",
+            Self::FileEnc => "file enc",
+            Self::KvHead => "kv head",
+            Self::KvWrap => "kv wrap",
+            Self::KvEntry => "kv entry",
+            Self::ArtifactSignature => "artifact signature",
+            Self::LocalTrust => "local trust",
+        }
+    }
+
+    fn embedded_schema_content(self) -> Option<&'static str> {
+        match self {
+            Self::PublicKey => Some(PUBLIC_KEY_SCHEMA),
+            Self::PrivateKey => Some(PRIVATE_KEY_SCHEMA),
+            Self::FileEnc => Some(FILE_ENC_SCHEMA),
+            Self::KvHead | Self::KvWrap | Self::KvEntry => None,
+            Self::ArtifactSignature => Some(ARTIFACT_SIGNATURE_SCHEMA),
+            Self::LocalTrust => Some(LOCAL_TRUST_SCHEMA),
+        }
+    }
+
+    fn load_schema_from_paths(self) -> Result<Value> {
+        match self {
+            Self::KvHead | Self::KvWrap | Self::KvEntry => Ok(self.wrapper_schema()),
+            _ => load_schema_file(self.filename()),
+        }
+    }
+
+    fn wrapper_schema(self) -> Value {
+        let (id, title, target_ref) = match self {
+            Self::KvHead => (
+                "secretenv.kv.enc.head.schema.json",
+                "secretenv kv enc head schema",
+                "secretenv_kv_enc_schema.json#/$defs/head",
+            ),
+            Self::KvWrap => (
+                "secretenv.kv.enc.wrap.schema.json",
+                "secretenv kv enc wrap schema",
+                "secretenv_kv_enc_schema.json#/$defs/wrap",
+            ),
+            Self::KvEntry => (
+                "secretenv.kv.enc.entry.schema.json",
+                "secretenv kv enc entry schema",
+                "secretenv_kv_enc_schema.json#/$defs/value",
+            ),
+            _ => unreachable!("non-KV target does not use a wrapper schema"),
+        };
+        serde_json::json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": id,
+            "title": title,
+            "$ref": target_ref
+        })
     }
 }
 

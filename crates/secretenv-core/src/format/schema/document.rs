@@ -3,7 +3,7 @@
 
 //! Schema-aware parsers for SecretEnv JSON documents and JSON tokens.
 
-use crate::format::schema::validator::{load_embedded_validator, Validator};
+use crate::format::schema::validator::{load_embedded_validator, SchemaTarget, Validator};
 use crate::format::token::decode_token_bytes;
 use crate::model::common::validate_wrap_items;
 use crate::model::file_enc::FileEncDocument;
@@ -24,6 +24,7 @@ pub fn parse_public_key_str(content: &str, source_name: &str) -> Result<PublicKe
         content,
         source_name,
         "PublicKey",
+        SchemaTarget::PublicKey,
         Validator::validate_public_key,
     )
 }
@@ -33,6 +34,7 @@ pub fn parse_public_key_bytes(bytes: &[u8], source_name: &str) -> Result<PublicK
         bytes,
         source_name,
         "PublicKey",
+        SchemaTarget::PublicKey,
         Validator::validate_public_key,
     )
 }
@@ -42,6 +44,7 @@ pub fn parse_private_key_str(content: &str, source_name: &str) -> Result<Private
         content,
         source_name,
         "PrivateKey",
+        SchemaTarget::PrivateKey,
         Validator::validate_private_key,
     )
 }
@@ -51,6 +54,7 @@ pub fn parse_private_key_bytes(bytes: &[u8], source_name: &str) -> Result<Privat
         bytes,
         source_name,
         "PrivateKey",
+        SchemaTarget::PrivateKey,
         Validator::validate_private_key,
     )
 }
@@ -60,6 +64,7 @@ pub fn parse_file_enc_str(content: &str, source_name: &str) -> Result<FileEncDoc
         content,
         source_name,
         "FileEncDocument",
+        SchemaTarget::FileEnc,
         Validator::validate_file_enc_document,
     )?;
     validate_file_enc_limits(doc)
@@ -70,6 +75,7 @@ pub fn parse_file_enc_bytes(bytes: &[u8], source_name: &str) -> Result<FileEncDo
         bytes,
         source_name,
         "FileEncDocument",
+        SchemaTarget::FileEnc,
         Validator::validate_file_enc_document,
     )?;
     validate_file_enc_limits(doc)
@@ -96,6 +102,7 @@ pub fn parse_kv_head_token_with_source(token: &str, source_name: &str) -> Result
         token,
         "HEAD token",
         source_name,
+        SchemaTarget::KvHead,
         Validator::validate_kv_head,
     )
 }
@@ -105,6 +112,7 @@ pub fn parse_kv_wrap_token_with_source(token: &str, source_name: &str) -> Result
         token,
         "WRAP token",
         source_name,
+        SchemaTarget::KvWrap,
         Validator::validate_kv_wrap,
     )?;
     validate_kv_wrap_limits(wrap)
@@ -115,6 +123,7 @@ pub fn parse_kv_entry_token_with_source(token: &str, source_name: &str) -> Resul
         token,
         "KV entry token",
         source_name,
+        SchemaTarget::KvEntry,
         Validator::validate_kv_entry,
     )
 }
@@ -127,6 +136,7 @@ pub fn parse_kv_signature_token_with_source(
         token,
         "SIG token",
         source_name,
+        SchemaTarget::ArtifactSignature,
         Validator::validate_artifact_signature,
     )
 }
@@ -135,18 +145,20 @@ fn parse_json_document_str<T>(
     content: &str,
     source_name: &str,
     kind: &str,
+    target: SchemaTarget,
     validate: ValidateJsonFn,
 ) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    parse_json_document_bytes(content.as_bytes(), source_name, kind, validate)
+    parse_json_document_bytes(content.as_bytes(), source_name, kind, target, validate)
 }
 
 fn parse_json_document_bytes<T>(
     bytes: &[u8],
     source_name: &str,
     kind: &str,
+    target: SchemaTarget,
     validate: ValidateJsonFn,
 ) -> Result<T>
 where
@@ -154,7 +166,7 @@ where
 {
     validate_json_limits(bytes)?;
     let value = parse_json_value(bytes, source_name, kind)?;
-    validate(load_embedded_validator()?, &value)
+    validate(load_embedded_validator(target)?, &value)
         .map_err(|e| add_source_to_schema_error(e, source_name))?;
     deserialize_json_value(value, source_name, kind)
 }
@@ -163,6 +175,7 @@ fn parse_json_token<T>(
     token: &str,
     token_name: &str,
     source_name: &str,
+    target: SchemaTarget,
     validate: ValidateJsonFn,
 ) -> Result<T>
 where
@@ -171,7 +184,7 @@ where
     let (bytes, _) = decode_token_bytes(token, false, Some(token_name))?;
     validate_json_limits(&bytes)?;
     let value = parse_json_value(&bytes, source_name, token_name)?;
-    validate(load_embedded_validator()?, &value)
+    validate(load_embedded_validator(target)?, &value)
         .map_err(|e| add_source_to_schema_error(e, source_name))?;
     deserialize_json_value(value, source_name, token_name)
 }

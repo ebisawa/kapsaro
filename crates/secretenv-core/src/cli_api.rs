@@ -630,7 +630,7 @@ pub mod test_support {
             }
             pub mod validator {
                 pub use crate::format::schema::validator::{
-                    load_embedded_trust_validator, Validator,
+                    load_embedded_trust_validator, load_embedded_validator, SchemaTarget, Validator,
                 };
             }
         }

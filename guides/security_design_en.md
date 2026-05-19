@@ -18,25 +18,25 @@ The cryptographic construction uses standard primitives. Per-recipient content-k
 
 Signature verification is self-contained. file-enc and kv-enc signed documents carry an embedded `signer_pub` as the signature verification key source. A verifier does not search for signer keys in workspace `members/active` or in the local keystore. It first validates the `signer_pub` document, including structure, self-signature, and SSH attestation, and then verifies the artifact signature with that key. This keeps signature-key resolution independent of repository state and implementation-specific lookup behavior.
 
-The canonical pre-decryption order is structural validation, `signer_pub` validation, artifact signature verification, trust policy decision, format-specific reference consistency checks, and plaintext decryption. An implementation that decrypts payloads or entries before signature verification or trust-policy evaluation sends attacker-controlled encrypted data into the decryption path and violates a design invariant.
+The canonical pre-decryption order is structural validation, `signer_pub` validation, artifact signature verification including `signature.mac`, trust policy decision, format-specific reference consistency checks, content-key unwrap, key-possession proof verification, and plaintext decryption. An implementation that decrypts payloads or entries before signature verification, trust-policy evaluation, or key-possession proof verification sends attacker-controlled encrypted data into the decryption path and violates a design invariant.
 
 #### Context Binding and Format Differences
 
 Context binding is the primary defense against component reuse. The file identifier (`sid`), key statement ID (`kid`), KV entry key (`k`), and protocol identifier (`p`) are placed in the required HPKE info, HPKE AAD, HKDF info, payload AAD, and signed bytes. As a result, substituting a payload from another file, a wrap from another key generation, an entry ciphertext under another key name, or data from another protocol fails at signature verification, unwrap, AEAD decryption, or reference consistency checking.
 
-file-enc and kv-enc share the same trust model but differ in key structure and rotation semantics. file-enc uses a per-file DEK to encrypt the payload, and HPKE-wraps that DEK for each recipient. kv-enc wraps a per-file MK, and derives each entry CEK from the MK, an entry salt, and `sid`. Recipient addition can keep the existing content key and add wraps in both formats. Recipient removal differs: file-enc keeps the DEK and updates wraps plus removal history, while kv-enc regenerates the MK and re-encrypts all entries so that a removed recipient who retained the old MK cannot derive future entries.
+file-enc and kv-enc share the same trust model but differ in key structure and rotation semantics. file-enc uses a per-file DEK to encrypt the payload, and HPKE-wraps that DEK for each recipient. kv-enc wraps a per-file MK, and derives each entry CEK from the MK, an entry salt, `sid`, and the KEY line `k`. Recipient addition can keep the existing content key and add wraps in both formats. Recipient removal regenerates the DEK and re-encrypts the full payload for file-enc, and regenerates the MK and re-encrypts all entries for kv-enc.
 
 #### Trust Policy
 
 A cryptographically valid signature or public key does not prove that the signer should be accepted in the current workspace or that the key holder's human identity is established. SecretEnv separates cryptographic verification through embedded `signer_pub`, current authorization through `members/active`, key-owner approval through `known_keys`, write-path artifact member set approval through `recipient_sets`, and identity-supporting evidence through manual review and GitHub online verify. GitHub API responses are supplementary evidence, not a trust anchor; they help check whether the SSH key used for attestation is associated with the claimed GitHub account.
 
-On read paths, the signer `kid` and every artifact recipient `kid` that resolves to current `members/active` must be present in `known_keys`, or be manually approved in the current execution. A recipient `kid` that no longer resolves to current `members/active` is surfaced as a warning on the read path so that historical artifacts remain readable. On write paths, recipients are always derived from `members/active`; each recipient `kid` and the output artifact member set must be reviewed before saving, and an input artifact that contains an unresolved recipient `kid` must be rewrapped before writing. `SECRETENV_STRICT_KEY_CHECKING=no` is a narrow exception for explicitly requested read paths: it bypasses read-path local key-approval checks, but not signature verification, active-member authorization, recipient-handle consistency, or signer-in-recipient-set validation, and it has no effect on write paths.
+On read paths, the signer `kid` and every artifact recipient `kid` that resolves to current `members/active` must be present in `known_keys`, or be manually approved in the current execution. A recipient `kid` that no longer resolves to current `members/active` is surfaced as a warning on the read path so that historical artifacts remain readable. On write paths, recipients are always derived from `members/active`; each recipient `kid` and the output artifact member set must be reviewed before saving, and an input artifact that contains an unresolved recipient `kid` must be rewrapped before writing. `SECRETENV_STRICT_KEY_CHECKING=no` is a narrow exception for explicitly requested read paths: it bypasses read-path local key-approval checks, but not signature verification, active-member authorization, recipient-handle consistency, or key-possession proof verification, and it has no effect on write paths.
 
 #### Residual Risks and Audit Focus
 
 The main residual risks are first approval, operational governance, past disclosure, rollback, and the local trusted area rather than primitive weakness. TOFU first approval requires out-of-band confirmation. A legitimate recipient can exfiltrate plaintext after decryption, and previously disclosed secret values cannot be cryptographically reclaimed. If a recipient long-term private key is compromised, existing wraps for that recipient become decryptable. Restoring an old but valid encrypted artifact from Git history to current HEAD is not detected as a freshness violation by context binding alone. Coherent replacement or rollback of the local trust store is outside the local-trust-boundary assumption.
 
-The highest-priority audit checks are: signature verification before decryption, embedded `signer_pub` as the only signature-key source, preservation of all context-binding inputs, equality of HPKE info and AAD on wrap paths, PublicKey self-signature and SSH attestation verification, separation between `members/active`, `known_keys`, and write-path `recipient_sets`, the scope of `SECRETENV_STRICT_KEY_CHECKING`, and limiting environment-variable-based key loading to trusted CI contexts. These are structural conditions that directly support the claimed security properties, not merely implementation style preferences.
+The highest-priority audit checks are: signature verification and key-possession proof verification before plaintext decryption, embedded `signer_pub` as the only signature-key source, preservation of all context-binding inputs, equality of HPKE info and AAD on wrap paths, PublicKey self-signature and SSH attestation verification, separation between `members/active`, `known_keys`, and write-path `recipient_sets`, the scope of `SECRETENV_STRICT_KEY_CHECKING`, and limiting environment-variable-based key loading to trusted CI contexts. These are structural conditions that directly support the claimed security properties, not merely implementation style preferences.
 
 ### Purpose of This Document
 
@@ -114,11 +114,11 @@ The security claims above only hold when the implementation preserves the follow
 
 | Invariant | Claim that breaks if violated |
 | --- | --- |
-| Do not decrypt before signature verification | Tamper detection, trust policy enforcement, fail-closed input handling |
+| Do not decrypt plaintext before signature verification and key-possession proof verification | Tamper detection, trust policy enforcement, fail-closed input handling |
 | Do not remove context-binding elements from AAD, HPKE info, or signed bytes | Payload / entry / wrap swapping resistance, key-generation binding |
 | Resolve file-enc / kv-enc signature verification keys only from embedded `signer_pub` | Self-contained verification, consistent acceptance behavior across implementations |
 | Keep the roles of `members/active`, `known_keys`, and `recipient_sets` distinct | Separation between current authorization and user approval history |
-| Limit `SECRETENV_STRICT_KEY_CHECKING=no` to explicitly requested read paths | Key approval and artifact member set review semantics on write paths |
+| Limit `SECRETENV_STRICT_KEY_CHECKING=no` to approval-cache decisions on explicitly requested read paths | Key approval, artifact member set review, and cryptographic verification semantics |
 
 ### 1.6 Terminology Used Here
 
@@ -246,7 +246,7 @@ Layer 4 relies on manual review of key-statement information, the SSH key finger
 
 Online verification is a present-time check: it asks whether the SSH public key used for attestation is currently present in the GitHub account's SSH key set. It is not a historical proof and does not automatically revoke existing local approvals or workspace membership.
 
-The limited exceptions are non-member acceptance and `SECRETENV_STRICT_KEY_CHECKING=no`. Non-member acceptance is an interactive, one-shot, artifact-scoped exception that does not restore current membership or update the local approval cache. `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path key-owner approval checks on explicitly requested read paths; it does not skip active-member authorization, recipient-handle consistency, signer-in-recipient-set validation, or cryptographic signature verification.
+The limited exceptions are non-member acceptance and `SECRETENV_STRICT_KEY_CHECKING=no`. Non-member acceptance is an interactive, one-shot, artifact-scoped exception that does not restore current membership or update the local approval cache. `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path key-owner approval checks on explicitly requested read paths; it does not skip active-member authorization, recipient-handle consistency, cryptographic signature verification, or key-possession proof verification.
 
 Stronger confidence in key identity depends on these layers working together. Existing-key tampering generally requires compromise of the original key material, while insertion of a brand-new malicious key can succeed through repo-governance failure plus mistaken TOFU approval. Compromise of an attestation SSH key, GitHub account, or local trust store weakens the corresponding operational layer rather than the artifact signature mechanism itself.
 
@@ -545,7 +545,7 @@ Because `kid` is derived from the PublicKey contents, matching `kid` values impl
 
 Key rotation is driven mainly by the `rewrap` command. Typical triggers include changes to the recipient set (add or remove), migrating to a new generation as `expires_at` approaches, and limiting damage after suspected compromise (§13.2).
 
-file-enc uses a per-file DEK; kv-enc uses a per-file MK and per-entry CEKs (§7.2). Therefore recipient removal behaves differently by format: file-enc keeps the DEK and updates wraps only; kv-enc regenerates the MK and re-encrypts every entry (§7.7, §7.8). `--rotate-key` regenerates the content key (DEK / MK) and re-encrypts the entire payload. Protocol details are deferred to §7.8.
+file-enc uses a per-file DEK; kv-enc uses a per-file MK and per-entry CEKs (§7.2). Recipient addition keeps the existing content key and adds wraps in both formats. Recipient removal regenerates the DEK and re-encrypts the full payload for file-enc, and regenerates the MK and re-encrypts every entry for kv-enc (§7.7, §7.8). `--rotate-key` also regenerates the content key (DEK / MK) and re-encrypts the entire payload. Protocol details are deferred to §7.8.
 
 `--rotate-key` limits future encryption after leakage; per §13.2 it does not “restore” confidentiality of ciphertext already distributed. Operating a new `kid` as active while retaining the old `kid` as expired or locally retained for as long as past artifacts need verification or decryption aligns with the timeline in §4.4.
 
@@ -564,6 +564,7 @@ file-enc and kv-enc artifact signatures share the same `signature_v4` structure 
 
 - Embed the signer's PublicKey (`signer_pub`) so the source of the verification key stays inside the artifact
 - Use `kid` to state which key statement performed the signing
+- Include `mac` so the verifier can later check that the signed artifact body corresponds to the unwrapped content key
 - Treat validation of the signer key and verification of the artifact signature as one continuous chain (§5.4)
 
 The local trust store (`secretenv:format:local-trust@5`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
@@ -575,7 +576,8 @@ The main fields of `signature_v4` (artifact signature) are as follows.
 | `alg` | string | Always `eddsa-ed25519` (PureEdDSA) | Unambiguous identification of the signature algorithm |
 | `kid` | Crockford Base32 (32 characters) | Signer's key statement ID | Binds the signing context of the artifact to the `signer_pub` generation (§4.4.1, §8) |
 | `signer_pub` | `PublicKey@6` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
-| `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact (signed payload differs by format; §5.1–§5.3) |
+| `mac` | `hmac-sha256:<base64url>` | Key-possession proof | HMAC used to verify that the artifact body corresponds to the unwrapped DEK / MK |
+| `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact; the signed input is the format-specific body bytes concatenated with `mac` |
 
 file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. That is a premise of self-contained verification. SecretEnv does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §12.1 invariant on where the signing key is resolved.
 
@@ -585,25 +587,25 @@ Both file-enc and kv-enc use the `signature_v4` table above. What differs is onl
 
 | Item | file-enc | kv-enc |
 |------|----------|--------|
-| Signed data | `jcs(protected)` | canonical_bytes (concatenation of text lines) |
+| Signed data | `jcs(protected)` with `ascii(signature.mac)` appended | canonical_bytes (concatenation of text lines) with `ascii(signature.mac)` appended |
 | Format | `signature` field in JSON | `:SIG` line (final line) |
 | Tamper detection scope | Entire `protected` (sid, wrap, payload, timestamps) | HEAD / WRAP / all entry lines |
 | Signature algorithm | `eddsa-ed25519` (PureEdDSA) | `eddsa-ed25519` (PureEdDSA) |
 | Signature format | `signature_v4` format | `signature_v4` format |
 
-file-enc places `protected` and `signature` side by side in a single JSON object (§6.1). kv-enc appends a `:SIG` token at the end of a line-oriented document and signs the deterministic body representation (§7.1). Both rest on the same design choice: Ed25519 tamper detection with a self-contained key source via `signature_v4`.
+file-enc places `protected` and `signature` side by side in a single JSON object (§6.1). kv-enc appends a `:SIG` token at the end of a line-oriented document and signs the deterministic body representation plus `signature.mac` (§7.1). Both rest on the same design choices: Ed25519 tamper detection, a self-contained key source via `signature_v4`, and a key-possession proof that ties the body to the content key.
 
 ### 5.2 file-enc Signature
 
-In file-enc, the signed data is the byte string `jcs(protected)` obtained by JCS-canonicalizing the top-level `protected` object. Therefore every field under `protected`—including `sid`, `wrap[]`, `removed_recipients`, `payload` (inner `payload.protected` and `payload.encrypted`), and timestamps such as `created_at` / `updated_at`—is covered by the outer Ed25519 signature for tamper detection. This matches the JSON layout in §6.1.
+In file-enc, the signed data is the byte string `jcs(protected)` obtained by JCS-canonicalizing the top-level `protected` object, followed by the ASCII bytes of `signature.mac`. Therefore every field under `protected`—including `sid`, `wrap[]`, `removed_recipients`, `payload` (inner `payload.protected` and `payload.encrypted`), and timestamps such as `created_at` / `updated_at`—and the key-possession proof are covered by the outer Ed25519 signature for tamper detection. This matches the JSON layout in §6.1.
 
 The top-level `signature` field sits outside `protected` and is deliberately excluded from the signed data. Including the signature bytes in the signed payload would create a self-referential circular definition and would require the verifier to know the final signature before verification. At the payload layer, `jcs(payload.protected)` is used separately as AEAD AAD, binding the header independently of the outer signature (§6.5, §8).
 
 ### 5.3 kv-enc Signature
 
-In kv-enc, the signed data is canonical_bytes: the document body with each real data line terminated by LF, excluding the `:SIG` line (§7.1). The signed scope includes the `:SECRETENV_KV` version line, the `:HEAD` token line, the `:WRAP` token line, and every `KEY` line. Only the `:SIG` line is left outside the signed scope.
+In kv-enc, the signed data is canonical_bytes, followed by the ASCII bytes of `signature.mac`: canonical_bytes is the document body with each real data line terminated by LF, excluding the `:SIG` line (§7.1). The signed scope includes the `:SECRETENV_KV` version line, the `:HEAD` token line, the `:WRAP` token line, every `KEY` line, and the key-possession proof. The signature bytes themselves remain outside the signed scope.
 
-Thus the signature binds the entire interpretable document body, not a subset of metadata. Adding or updating entries changes the body before the final `:SIG`, so the signature tracks the whole document. As in file-enc, the signature token is not included in its own signed data, to avoid self-reference.
+Thus the signature binds the entire interpretable document body and the key-possession proof, not a subset of metadata. Adding or updating entries changes the body before the final `:SIG`, so the signature tracks the whole document. As in file-enc, the signature bytes themselves are not included in their own signed data, to avoid self-reference.
 
 ### 5.4 Cryptographic Verification of Signed Artifacts
 
@@ -616,9 +618,9 @@ Cryptographic verification of an artifact can be organized into three layers (La
   - Self-signature verification — §5.5; detects tampering with the public-key document
   - SSH attestation verification — §5.6; checks binding between the SecretEnv key and the SSH key
 - Layer B. Binding the key generation to the artifact — The artifact's `signature.kid` matches `signer_pub.protected.kid` (consistent with the derivation rule in §4.4.1)
-- Layer C. Tamper detection for the artifact body — Verify `sig` over the signed payload defined in §5.1, using the signing public key from `signer_pub`
+- Layer C. Tamper detection for the artifact body and key-possession proof — Verify `sig` over the signed payload defined in §5.1, using the signing public key from `signer_pub`
 
-Decryption and unwrap proceed only after Layer C succeeds, consistent with the §1.4 invariant do not decrypt before signature verification.
+Unwrap proceeds only after Layer C succeeds, consistent with the §1.4 invariant do not decrypt before signature verification. After unwrap, SecretEnv recomputes `signature.mac` with the resulting DEK / MK and verifies that the artifact body corresponds to the content key before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body; it is not proof of the signer's human identity or authority to update the artifact.
 
 Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Separately from cryptographic verification (Layers A–C), acceptance is gated by active / expired rules that separate behavior for new crypto operations vs read-path acceptance. Details are consolidated in §4.4 and §10.
 
@@ -665,7 +667,7 @@ file-enc is a JSON-based signed container. The elements that matter most for rev
 | `wrap[]` | Per-recipient DEK delivery data | Uses `kid` and `sid` in the HPKE context to prevent reuse across key generations or files |
 | `payload.protected` | Payload header | Carries `sid` and the AEAD algorithm, and its JCS-canonicalized form becomes the AAD |
 | `payload.encrypted` | Nonce and ciphertext | Holds the file body protected by the DEK |
-| `signature` | `signature_v4` signature | Protects the integrity of the full `protected` object, including wrap and payload |
+| `signature` | `signature_v4` signature | Protects the integrity of the full `protected` object and the key-possession proof |
 
 `wrap[].rh` is the informational recipient handle label used for review, but it is not the cryptographic lookup key. Recipient binding is keyed by `kid`.
 
@@ -674,7 +676,7 @@ The full document layout is as follows.
 ```json
 {
   "protected": {
-    "format": "secretenv:format:file-enc@5",
+    "format": "secretenv:format:file-enc@6",
     "sid": "<UUID>",
     "wrap": [
       {
@@ -694,7 +696,7 @@ The full document layout is as follows.
     ],
     "payload": {
       "protected": {
-        "format": "secretenv:format:file-enc:payload@5",
+        "format": "secretenv:format:file-enc:payload@6",
         "sid": "<UUID>",
         "alg": { "aead": "xchacha20-poly1305" }
       },
@@ -707,7 +709,11 @@ The full document layout is as follows.
     "updated_at": "<RFC3339>"
   },
   "signature": {
-    "...": "artifact signature"
+    "alg": "eddsa-ed25519",
+    "kid": "<signer kid>",
+    "signer_pub": { "...": "PublicKey@6" },
+    "mac": "hmac-sha256:<b64url>",
+    "sig": "<b64url>"
   }
 }
 ```
@@ -771,26 +777,27 @@ This order keeps key delivery, payload binding, and document integrity as distin
 ### 6.4 HPKE wrap
 
 - The HPKE suite is `hpke-32-1-3`; the relevant parameters are described in §3.1 and §3.2.
-- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:context:hpke-info:file-enc:wrap@5`, and the file identifier `sid`.
+- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:context:hpke-info:file-enc:wrap@6`, and the file identifier `sid`.
 - HPKE `info` and `AAD` use the same JCS-canonicalized context bytes. This keeps the key-schedule path and AEAD-verification path aligned and makes implementation drift surface early as unwrap failure.
 - The recipient member handle remains operationally important, but cryptographic wrap binding is keyed by `kid`.
 
 ### 6.5 Payload Encryption
 
-- The payload header carries `format = secretenv:format:file-enc:payload@5`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
+- The payload header carries `format = secretenv:format:file-enc:payload@6`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
 - `jcs(payload.protected)` is used as AAD, with a random 24-byte nonce for XChaCha20-Poly1305.
 - Keeping `sid` at the payload layer binds the payload to the file context independently of the outer signature.
 
 ### 6.6 Decryption Flow
 
-1. Perform structural validation, `signer_pub` validation, and artifact-signature verification.
+1. Perform structural validation, `signer_pub` validation, and artifact-signature verification including `signature.mac`.
 2. Apply the trust policy from §10 to determine whether the artifact is acceptable in the current workspace.
 3. Run file-enc-specific reference consistency checks. This includes checking the payload format, checking the AEAD identifier, and confirming that the outer `sid` and payload `sid` match.
 4. Select the matching wrap by the local `kid` and perform HPKE unwrap with the same context.
-5. Use `jcs(payload.protected)` as AAD and perform AEAD decryption.
-6. Reject fail-closed on any mismatch or verification failure.
+5. Recompute `signature.mac` with the unwrapped DEK and verify the key-possession proof for the artifact body.
+6. Use `jcs(payload.protected)` as AAD and perform AEAD decryption.
+7. Reject fail-closed on any mismatch or verification failure.
 
-The key invariant is that SecretEnv never proceeds to plaintext decryption before signature verification, the trust-policy decision, and format-specific reference consistency checks have all passed.
+The key invariant is that SecretEnv never proceeds to plaintext decryption before signature verification, the trust-policy decision, format-specific reference consistency checks, and key-possession proof verification have all passed.
 
 ---
 
@@ -805,7 +812,7 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 | Line type | Content | Security role |
 | --- | --- | --- |
-| `:SECRETENV_KV 7` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
+| `:SECRETENV_KV 8` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
 | `:HEAD` | File context such as `sid`, AEAD, and timestamps | Binds wraps and entries to a single file context |
 | `:WRAP` | HPKE-wrapped MK and removal history | Represents recipient state and key-distribution state |
 | `KEY` lines | Per-entry ciphertext | Encrypted units made from the line key plus token salt, nonce, and ciphertext |
@@ -816,7 +823,7 @@ Each token is represented as a JCS-canonicalized JSON object encoded in base64ur
 The full document layout is as follows.
 
 ```text
-:SECRETENV_KV 7
+:SECRETENV_KV 8
 :HEAD <token>
 :WRAP <token>
 <KEY> <token>
@@ -901,26 +908,26 @@ graph TB
 
 On encryption, SecretEnv first generates the MK and HPKE-wraps it to each recipient. It then generates a salt for each entry, derives a CEK using HKDF with `sid` and the KEY line prefix in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
 
-On decryption, it verifies the signature first, applies the trust policy from §10, unwraps the MK, and derives CEKs only for the entries that need to be read. Each entry is then decrypted with AAD that includes the KEY line prefix, `sid`, and `p`.
+On decryption, it verifies the signature including `signature.mac`, applies the trust policy from §10, unwraps the MK, verifies the key-possession proof by recomputing `signature.mac` with the unwrapped MK, and derives CEKs only for the entries that need to be read. Each entry is then decrypted with AAD that includes the KEY line prefix, `sid`, and `p`.
 
 As with file-enc, signature verification always precedes decryption.
 
 ### 7.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:context:hkdf-info:kv-enc:cek@7`, `sid`, and the KEY line prefix.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:context:hkdf-info:kv-enc:cek@8`, `sid`, and the KEY line prefix.
 - The salt is independently generated for each entry.
 - Including `sid` and the KEY line prefix in the derivation context ensures that copying an entry to a different file or another KEY does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
-- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:context:aad:kv-enc:entry-payload@7`.
+- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:context:aad:kv-enc:entry-payload@8`.
 - Including the KEY line prefix prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - `salt` is already consumed by HKDF, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 7.5 HPKE wrap (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:context:hpke-info:kv-enc:wrap@7`.
+- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:context:hpke-info:kv-enc:wrap@8`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into unwrap failure.
 
@@ -928,7 +935,7 @@ As with file-enc, signature verification always precedes decryption.
 
 The main benefit of kv-enc is that it can operate on individual entries without decrypting the whole document.
 
-- `get` verifies the signature, unwraps the MK, derives the CEK for the requested key, and decrypts only that entry.
+- `get` verifies the signature, unwraps the MK, verifies the key-possession proof, derives the CEK for the requested key, and decrypts only that entry.
 - `set` follows the same validation path, then generates a fresh salt and CEK only for the updated entry before regenerating the signature.
 
 ### 7.7 Behavior on Recipient Removal
@@ -945,14 +952,14 @@ At the same time, `removed_recipients` and `disclosed` are updated so operators 
 |-----------|--------|-------------|------|---------|
 | Add recipients | file-enc | DEK maintained | Added | Maintained |
 | Add recipients | kv-enc | MK maintained | Added | Maintained |
-| Remove recipients | file-enc | DEK maintained | Removed | Maintained |
+| Remove recipients | file-enc | DEK regenerated | Rebuilt | Re-encrypted |
 | Remove recipients | kv-enc | MK regenerated | Rebuilt | Re-encrypted |
 | `--rotate-key` | file-enc | DEK regenerated | Rebuilt | Re-encrypted |
 | `--rotate-key` | kv-enc | MK regenerated | Rebuilt | Re-encrypted |
 
 For recipient addition, both formats maintain the content key and add new wrap entries.
 
-For recipient removal, the behavior differs by format. In file-enc, the removed recipient's wrap entry is deleted and a removal history is recorded, but the DEK is unchanged. file-enc encrypts one complete payload, and by the time a recipient is removed, that content has already been disclosed to previously authorized recipients. Automatically regenerating only the DEK for unchanged content does not affect what a removed member already saw, remembers, or copied as plaintext. Therefore normal file-enc rewrap focuses on removing the old wrap from the current artifact and retaining removal history. If the previously disclosed file content must be invalidated, `--rotate-key` alone is not enough; the certificate or secret value itself must be revoked or reissued in the external system.
+For recipient removal, both formats regenerate the content key. In file-enc, the removed recipient's wrap entry is deleted, removal history is recorded, the DEK is regenerated, and the full payload is re-encrypted. This removes the removed recipient's ability to decrypt the current artifact. It does not affect what the removed member already saw, remembers, or copied as plaintext because the content had already been disclosed to a previously authorized recipient. If the previously disclosed file content must be invalidated, the certificate or secret value itself must be revoked or reissued in the external system.
 
 In kv-enc, the MK is always regenerated and all entries are re-encrypted. This is because the MK is a long-lived key from which per-entry CEKs are derived (§7.3) — if a removed member retains knowledge of the old MK (e.g., from a prior decryption session), they could derive CEKs for entries added after their removal. Regenerating the MK eliminates this risk.
 
@@ -995,7 +1002,7 @@ These inputs are not aliases for the same parameter inside one primitive. HPKE `
 In file-enc / kv-enc wrap, the same bytes are used for HPKE info and AAD. Example for file-enc:
 
 ```
-info_bytes = jcs({"kid": ..., "p": "secretenv:context:hpke-info:file-enc:wrap@5", "sid": ...})
+info_bytes = jcs({"kid": ..., "p": "secretenv:context:hpke-info:file-enc:wrap@6", "sid": ...})
 aad_bytes  = info_bytes
 ```
 
@@ -1022,7 +1029,7 @@ In cryptographic terms, one of these may appear sufficient in isolation, but als
 
 Recipients, meaning the list of `rh` values in the wrap array, are not included in payload AAD.
 
-Reason: This allows `rewrap` to replace only the wraps while keeping the payload fixed. If recipients were included in AAD, every recipient change would require re-encrypting the entire payload.
+Reason: This allows recipient addition to add only wraps while keeping the payload fixed. If recipients were included in AAD, every recipient addition would require re-encrypting the entire payload.
 
 Recipient integrity is protected by the Ed25519 signature, because wraps are contained in `protected`, which is part of the signed data.
 
@@ -1034,7 +1041,7 @@ Recipient integrity is protected by the Ed25519 signature, because wraps are con
 | --- | --- | --- | --- | --- |
 | file wrap | HPKE info = AAD | `p=file:hpke-wrap`, `sid`, `kid` | HPKE unwrap | Reusing wraps across files or key generations |
 | file payload | payload AAD | `format=file.payload`, `sid` | Payload `sid` reference check, payload AEAD open | Payload swapping across files or payload-header miswiring |
-| file signature | `jcs(protected)` | `sid`, `wrap[].kid`, full payload | file-enc signature verification | Tampering with the file-enc container, wraps, or payload |
+| file signature | `jcs(protected)` with `ascii(signature.mac)` appended | `sid`, `wrap[].kid`, full payload, key-possession proof | file-enc signature verification | Tampering with the file-enc container, wraps, payload, or proof |
 
 #### kv-enc Binding Points
 
@@ -1043,13 +1050,13 @@ Recipient integrity is protected by the Ed25519 signature, because wraps are con
 | kv wrap | HPKE info = AAD | `p=kv:hpke-wrap`, `sid`, `kid` | HPKE unwrap | Reusing wraps across files or key generations |
 | kv CEK derivation | HKDF info + `entry.salt` | `p=kv:cek`, `sid`, `k` | Entry AEAD open | Copying entries between files or keys, or misusing a repeated salt |
 | kv entry | entry AAD | `p=kv:payload`, `sid`, `k` | Entry AEAD open | Swapping entries within one kv-enc or miswiring `sid` / `k` |
-| kv signature | `canonical_bytes` | `:HEAD`, `:WRAP`, KEY lines | kv-enc signature verification | Tampering with the kv-enc body, wraps, entries, or disclosure flags |
+| kv signature | canonical_bytes with `ascii(signature.mac)` appended | `:HEAD`, `:WRAP`, KEY lines, key-possession proof | kv-enc signature verification | Tampering with the kv-enc body, wraps, entries, disclosure flags, or proof |
 
 #### Values Excluded from AAD
 
 | Value | Reason it is excluded from AAD | Protection mechanism |
 | --- | --- | --- |
-| recipients / wrap array | Allows `rewrap` to replace wraps while keeping the payload or entries fixed | file-enc `protected` signature, kv-enc canonical_bytes signature, read-path signer-in-recipient-set validation, and write-path artifact member set review |
+| recipients / wrap array | Allows recipient addition to add wraps while keeping the payload or entries fixed | file-enc `protected` signature, kv-enc canonical_bytes signature, read-path key-possession proof verification, and write-path artifact member set review |
 | `entry.salt` | It is a CEK-derivation salt, not a context identifier for the file or entry | Included in the entry token and protected by the kv-enc signature. Tampering fails through signature verification or AEAD decryption with a mismatched CEK |
 | `disclosed` | Allows `rewrap --clear-disclosure-history` to reset disclosure history without re-encrypting VALUE | Included in the entry token and protected by the kv-enc signature |
 
@@ -1246,15 +1253,13 @@ The local trust store is a per-user approval cache. `known_keys` records key own
 
 ### 10.2 Read-Path Trust Decision
 
-The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. SecretEnv does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification, the trust decision, and format-specific reference consistency checks have completed.
+The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. SecretEnv does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-unwrap key-possession proof verification have completed.
 
 Successful signature verification is not enough to accept an artifact. On read paths, SecretEnv checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`.
 
 Read paths do not use `recipient_sets` to re-approve the entire artifact sharing set. Historical artifacts may still contain recipients that no longer resolve to current `members/active`. Such recipients are surfaced to the user as warnings, preserving readability of historical artifacts while keeping the difference from current state visible.
 
-At the same time, the signer must be part of the artifact recipient set, and recipient handles displayed by the artifact must remain consistent with current active member files. These checks protect against attacks that mislead the user about labels or recipient membership, and are separate from whether the local approval cache already contains a key.
-
-However, signer-in-recipient-set is a reference-consistency check on the artifact. It is not a cryptographic proof that the signer had authority to update the existing artifact.
+At the same time, recipient handles displayed by the artifact must remain consistent with current active member files. This check protects against attacks that mislead the user about labels or recipient membership, and is separate from whether the local approval cache already contains a key. Signer membership in the artifact recipient set is not a read-path acceptance condition. Content-key possession is checked by verifying `signature.mac` with the unwrapped DEK / MK.
 
 ### 10.3 Write-Path Trust Decision
 
@@ -1290,7 +1295,7 @@ For `rewrap`, this exception converts an input from a non-current signer into ou
 
 The self historical exception is limited to self keys and rests on the fact that the corresponding self key in the local keystore belongs to the local trust boundary. It does not replace approval of other members' keys or current-member authorization.
 
-`SECRETENV_STRICT_KEY_CHECKING=no` relaxes only local key-owner approval checks on explicitly requested read paths. Signature verification, current authorization through `members/active`, recipient-handle consistency, and signer-in-recipient-set validation still apply. This setting does not apply to write paths and does not implicitly update `known_keys` or `recipient_sets`. If used in CI or similar automation, the execution context itself must be trusted by the user.
+`SECRETENV_STRICT_KEY_CHECKING=no` relaxes only local key-owner approval checks on explicitly requested read paths. Signature verification, current authorization through `members/active`, recipient-handle consistency, and key-possession proof verification still apply. This setting does not apply to write paths and does not implicitly update `known_keys` or `recipient_sets`. If used in CI or similar automation, the execution context itself must be trusted by the user.
 
 ### 10.6 Freshness and Repository Governance
 
@@ -1408,17 +1413,18 @@ These scenarios share a common structure. Context bindings (`sid`, `kid`, `k`, `
 
 These are architectural constraints that should be verified in design review. Violation indicates a structural flaw, not just a coding error.
 
-Auditors should treat structural validation -> `signer_pub` validation -> artifact signature verification -> trust policy decision -> reference consistency checks -> plaintext decryption as the canonical order. For file-enc, confirming that the outer `sid` and payload `sid` match is part of the format-specific reference consistency checks.
+Auditors should treat structural validation -> `signer_pub` validation -> artifact signature verification including `signature.mac` -> trust policy decision -> reference consistency checks -> content-key unwrap -> key-possession proof verification -> plaintext decryption as the canonical order. For file-enc, confirming that the outer `sid` and payload `sid` match is part of the format-specific reference consistency checks.
 
 | Review target | Expected implementation behavior | Risk if violated |
 |---------------|----------------------------------|------------------|
-| Processing order | Structural validation -> `signer_pub` validation -> artifact signature verification -> trust policy decision -> reference consistency checks -> plaintext decryption | Tampered data or data outside current trust may be decrypted first |
+| Processing order | Structural validation -> `signer_pub` validation -> artifact signature verification -> trust policy decision -> reference consistency checks -> unwrap -> key-possession proof verification -> plaintext decryption | Tampered data or data outside current trust may be decrypted first |
 | Signature key source | The signature verification key source is always the embedded `signer_pub`, with no workspace or keystore fallback | The trust boundary shifts and acceptance conditions may vary by implementation |
 | Bindings | `sid` / `kid` / `k` / `p` are included in info / AAD exactly as specified | Reuse, substitution, or miswiring attacks become easier |
 | HPKE info = AAD | The wrap path uses the same bytes in both places | Early detection of binding mismatches is weakened |
+| Key-possession proof | Recompute `signature.mac` with the unwrapped DEK / MK and check it before plaintext decryption | The signed body may not be verified against the content key |
 | PublicKey verification | Both `signer_pub` and workspace PublicKeys are verified for self-signature and attestation | A tampered PublicKey could be accepted |
 | Trust-source separation | `members/active` is treated as the authorization source, while `known_keys` is treated as key-owner approval and `recipient_sets` as write-path artifact member set approval | Current-member checks, key-owner approval, and write-path artifact member set review may become conflated |
-| `STRICT_KEY_CHECKING` scope | `SECRETENV_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths | The approval cache may be unintentionally disabled in CI or daily operation |
+| `STRICT_KEY_CHECKING` scope | `SECRETENV_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths or key-possession proof verification | The approval cache may be unintentionally disabled in CI or daily operation |
 | Environment variable-based key loading | Used only in trusted CI contexts, and key loading never performs workspace lookup for the self PublicKey | Private keys may be misused in attacker-controlled checkouts |
 
 ### 12.2 Input Validation and DoS Resistance

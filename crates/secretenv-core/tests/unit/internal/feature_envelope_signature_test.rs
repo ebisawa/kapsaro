@@ -4,6 +4,7 @@
 use ed25519_dalek::SigningKey;
 
 use super::*;
+use crate::crypto::types::keys::MasterKey;
 use crate::model::public_key::{
     Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKeyProtected,
 };
@@ -41,21 +42,24 @@ fn build_dummy_public_key(kid: &str) -> PublicKey {
     }
 }
 
+fn build_test_signing_context<'a>(signing_key: &'a SigningKey, kid: &'a str) -> SigningContext<'a> {
+    SigningContext {
+        signing_key,
+        signer_kid: kid,
+        signer_pub: build_dummy_public_key(kid),
+        debug: false,
+    }
+}
+
 #[test]
 fn test_append_kv_signature_produces_sig_line() {
     let signing_key = SigningKey::from_bytes(&[11u8; 32]);
+    let master_key = MasterKey::new([7u8; 32]);
     let kid = "test-kid";
-    let unsigned = ":SECRETENV_KV 7\n:HEAD {}\n:WRAP {}\nKEY token\n";
+    let unsigned = ":SECRETENV_KV 8\n:HEAD {}\n:WRAP {}\nKEY token\n";
+    let signing = build_test_signing_context(&signing_key, kid);
 
-    let result = append_kv_signature(
-        unsigned,
-        &signing_key,
-        kid,
-        build_dummy_public_key(kid),
-        TokenCodec::JsonJcs,
-        false,
-        "test",
-    );
+    let result = append_kv_signature(unsigned, &master_key, &signing, TokenCodec::JsonJcs, "test");
 
     assert!(result.is_ok());
     let signed = result.unwrap();
@@ -67,18 +71,12 @@ fn test_append_kv_signature_produces_sig_line() {
 #[test]
 fn test_append_kv_signature_preserves_unsigned_content() {
     let signing_key = SigningKey::from_bytes(&[13u8; 32]);
-    let unsigned = ":SECRETENV_KV 7\n:HEAD tok\n:WRAP tok\nA val\nB val\n";
+    let master_key = MasterKey::new([7u8; 32]);
+    let unsigned = ":SECRETENV_KV 8\n:HEAD tok\n:WRAP tok\nA val\nB val\n";
+    let signing = build_test_signing_context(&signing_key, "kid");
 
-    let signed = append_kv_signature(
-        unsigned,
-        &signing_key,
-        "kid",
-        build_dummy_public_key("kid"),
-        TokenCodec::JsonJcs,
-        false,
-        "test",
-    )
-    .unwrap();
+    let signed =
+        append_kv_signature(unsigned, &master_key, &signing, TokenCodec::JsonJcs, "test").unwrap();
 
     assert!(signed.starts_with(unsigned));
     let extra = &signed[unsigned.len()..];

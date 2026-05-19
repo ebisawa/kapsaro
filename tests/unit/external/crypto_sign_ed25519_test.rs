@@ -149,8 +149,8 @@ fn test_kv_lf_normalization_matters() {
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
 
-    let lf_version = b":SECRETENV_KV 7\nKEY {...}\n";
-    let crlf_version = b":SECRETENV_KV 7\r\nKEY {...}\r\n";
+    let lf_version = b":SECRETENV_KV 8\nKEY {...}\n";
+    let crlf_version = b":SECRETENV_KV 8\r\nKEY {...}\r\n";
 
     // Sign LF version
     let sig = sign_trust_store_bytes(

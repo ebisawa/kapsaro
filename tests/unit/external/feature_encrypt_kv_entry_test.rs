@@ -11,6 +11,7 @@ use secretenv_core::cli_api::test_support::operations::envelope::signature::Sign
 use secretenv_core::cli_api::test_support::operations::key::material::generate_keypairs;
 use secretenv_core::cli_api::test_support::operations::kv::builder::KvDocumentBuilder;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
 use secretenv_core::cli_api::test_support::wire::kv::document::parse_kv_document;
 use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use std::collections::HashMap;
@@ -193,7 +194,7 @@ fn builder_set_entries(
     .unwrap()
     .build();
     unsigned.set_entries(new_entries);
-    unsigned.sign(signing).unwrap()
+    unsigned.sign(&MasterKey::new([3u8; 32]), signing).unwrap()
 }
 
 /// Helper: build a signed document with set_entries for a single entry
@@ -225,7 +226,7 @@ fn builder_unset_entry(
     .unwrap()
     .build();
     unsigned.unset_entry(target_key);
-    unsigned.sign(signing).unwrap()
+    unsigned.sign(&MasterKey::new([3u8; 32]), signing).unwrap()
 }
 
 // --- set_entry テスト ---

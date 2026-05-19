@@ -14,10 +14,10 @@ pub mod format {
     pub const PRIVATE_KEY_V7: &str = "secretenv:format:private-key@7";
     /// Local Trust Store v5 format identifier.
     pub const LOCAL_TRUST_V5: &str = "secretenv:format:local-trust@5";
-    /// FileEncDocument@5 format identifier.
-    pub const FILE_ENC_V5: &str = "secretenv:format:file-enc@5";
-    /// `FilePayload@5` format identifier (used in file-enc payload.protected).
-    pub const FILE_PAYLOAD_V5: &str = "secretenv:format:file-enc:payload@5";
+    /// FileEncDocument@6 format identifier.
+    pub const FILE_ENC_V6: &str = "secretenv:format:file-enc@6";
+    /// `FilePayload@6` format identifier (used in file-enc payload.protected).
+    pub const FILE_PAYLOAD_V6: &str = "secretenv:format:file-enc:payload@6";
 }
 
 /// Algorithm identifiers that appear on-wire (e.g. in `payload.aead`, `signature.alg`).
@@ -41,12 +41,12 @@ pub mod jwk {
 /// Domain-separation strings for AAD, HPKE info, HKDF info, SSHSIG messages, and hashes.
 pub mod context {
     /// AAD discriminator for KV entry payload encryption.
-    pub const AAD_KV_ENTRY_PAYLOAD_V7: &str = "secretenv:context:aad:kv-enc:entry-payload@7";
+    pub const AAD_KV_ENTRY_PAYLOAD_V8: &str = "secretenv:context:aad:kv-enc:entry-payload@8";
 
     /// HPKE info discriminator for kv-enc WRAP.
-    pub const HPKE_INFO_KV_WRAP_V7: &str = "secretenv:context:hpke-info:kv-enc:wrap@7";
+    pub const HPKE_INFO_KV_WRAP_V8: &str = "secretenv:context:hpke-info:kv-enc:wrap@8";
     /// HPKE info discriminator for file-enc WRAP.
-    pub const HPKE_INFO_FILE_WRAP_V5: &str = "secretenv:context:hpke-info:file-enc:wrap@5";
+    pub const HPKE_INFO_FILE_WRAP_V6: &str = "secretenv:context:hpke-info:file-enc:wrap@6";
 
     /// HKDF info for `PrivateKey@7` encryption key derivation from SSH signature.
     pub const HKDF_INFO_PRIVATE_KEY_SSHSIG_V7: &str =
@@ -55,7 +55,7 @@ pub mod context {
     pub const HKDF_INFO_PRIVATE_KEY_PASSWORD_V7: &str =
         "secretenv:context:hkdf-info:private-key:password@7";
     /// HKDF info discriminator for kv-enc entry CEK derivation.
-    pub const HKDF_INFO_KV_CEK_V7: &str = "secretenv:context:hkdf-info:kv-enc:cek@7";
+    pub const HKDF_INFO_KV_CEK_V8: &str = "secretenv:context:hkdf-info:kv-enc:cek@8";
 
     /// Sign message header for SSH `PrivateKey@7` protection.
     pub const SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7: &str =

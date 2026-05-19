@@ -16,7 +16,7 @@
 
 use crate::crypto::{build_crypto_error, build_crypto_operation_error};
 use crate::model::public_key::PublicKey;
-use crate::model::signature::ArtifactSignature;
+use crate::model::signature::{ArtifactSignature, KeyPossessionProof};
 use crate::model::trust_store::TrustStoreSignature;
 use crate::support::codec::base64_public::{decode_base64url_nopad, encode_base64url_nopad};
 use crate::Result;
@@ -51,6 +51,7 @@ pub fn sign_artifact_bytes(
     signing_key: &SigningKey,
     signer_kid: &str,
     signer_pub: PublicKey,
+    mac: KeyPossessionProof,
     signature_alg: &str,
 ) -> Result<ArtifactSignature> {
     let (alg, sig) = sign_bytes_raw(canonical_bytes, signing_key, signature_alg);
@@ -59,6 +60,7 @@ pub fn sign_artifact_bytes(
         alg,
         kid: signer_kid.to_string(),
         signer_pub,
+        mac,
         sig,
     })
 }

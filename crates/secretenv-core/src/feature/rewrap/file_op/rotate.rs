@@ -9,7 +9,6 @@ use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::decrypt::file::decrypt_file_payload;
 use crate::feature::envelope::payload::encrypt_file_payload_content;
-use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
 use crate::feature::envelope::wrap::{build_wraps_for_recipients, WrapFormat};
 use crate::feature::recipient::resolve_verified_recipients;
 use crate::model::file_enc::FileEncDocumentProtected;
@@ -21,15 +20,13 @@ use crate::Result;
 pub fn rotate_file_key(
     protected: &mut FileEncDocumentProtected,
     verified: &VerifiedFileEncDocument,
+    old_content_key: &MasterKey,
     key_ctx: &CryptoContext,
     target_members: Option<&[VerifiedRecipientKey]>,
     debug: bool,
-) -> Result<()> {
-    let old_content_key =
-        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_handle, key_ctx, debug)?
-            .value;
+) -> Result<MasterKey> {
     let plaintext_bytes =
-        decrypt_file_payload(verified, &old_content_key, debug, "rotate_file_key")?;
+        decrypt_file_payload(verified, old_content_key, debug, "rotate_file_key")?;
     let plaintext_obj = Plaintext::from(plaintext_bytes.as_slice());
     let new_content_key_bytes = fill_secret_array::<32>()?;
     let new_content_key = MasterKey::from_zeroizing(new_content_key_bytes);
@@ -52,5 +49,5 @@ pub fn rotate_file_key(
         WrapFormat::File,
         debug,
     )?;
-    Ok(())
+    Ok(new_content_key)
 }

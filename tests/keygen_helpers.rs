@@ -12,6 +12,7 @@ use secretenv_core::cli_api::test_support::domain::{
         AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
         VerifiedPublicKeyAttested, VerifiedRecipientKey,
     },
+    signature::KeyPossessionProof,
     ssh::SshDeterminismStatus,
     verification::{ExpiryProof, SelfSignatureProof},
     verified::{DecryptionProof, VerifiedPrivateKey},
@@ -322,4 +323,10 @@ pub fn build_dummy_public_key(kid: &str) -> PublicKey {
         },
         signature: encode_base64url_nopad(&[0u8; 64]),
     }
+}
+
+/// Build a placeholder key-possession proof for structural tests.
+pub fn build_dummy_key_possession_proof() -> KeyPossessionProof {
+    KeyPossessionProof::parse("hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        .expect("dummy proof should be valid")
 }

@@ -74,7 +74,7 @@ pub fn extract_kv_header_tokens(lines: &[KvEncLine]) -> Result<(String, String)>
             KvEncLine::Head { token } => Some(token.clone()),
             _ => None,
         })
-        .ok_or_else(|| FormatError::build_parse_error("HEAD line not found in kv-enc v7"))?;
+        .ok_or_else(|| FormatError::build_parse_error("HEAD line not found in kv-enc v8"))?;
 
     let wrap_token = lines
         .iter()
@@ -82,7 +82,7 @@ pub fn extract_kv_header_tokens(lines: &[KvEncLine]) -> Result<(String, String)>
             KvEncLine::Wrap { token } => Some(token.clone()),
             _ => None,
         })
-        .ok_or_else(|| FormatError::build_parse_error("WRAP line not found in kv-enc v7"))?;
+        .ok_or_else(|| FormatError::build_parse_error("WRAP line not found in kv-enc v8"))?;
 
     Ok((head_token, wrap_token))
 }

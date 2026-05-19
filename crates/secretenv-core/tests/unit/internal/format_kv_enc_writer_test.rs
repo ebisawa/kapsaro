@@ -12,12 +12,12 @@ fn test_build_unsigned_kv_document_normal() {
     );
     assert_eq!(
         result,
-        ":SECRETENV_KV 7\n:HEAD head_tok\n:WRAP wrap_tok\nKEY1 val1\nKEY2 val2\n"
+        ":SECRETENV_KV 8\n:HEAD head_tok\n:WRAP wrap_tok\nKEY1 val1\nKEY2 val2\n"
     );
 }
 
 #[test]
 fn test_build_unsigned_kv_document_empty_entries() {
     let result = build_unsigned_kv_document("head_tok", "wrap_tok", &[]);
-    assert_eq!(result, ":SECRETENV_KV 7\n:HEAD head_tok\n:WRAP wrap_tok\n");
+    assert_eq!(result, ":SECRETENV_KV 8\n:HEAD head_tok\n:WRAP wrap_tok\n");
 }

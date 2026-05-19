@@ -58,16 +58,16 @@ fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> st
     keystore_root
 }
 
-/// Create a minimal test file-enc v5 file
+/// Create a minimal test file-enc v6 file
 fn save_test_encrypted_file(path: &std::path::Path) {
     let content = r#"{
   "protected": {
-    "format": "secretenv:format:file-enc@5",
+    "format": "secretenv:format:file-enc@6",
     "sid": "550e8400-e29b-41d4-a716-446655440000",
     "wrap": [],
     "payload": {
       "protected": {
-        "format": "secretenv:format:file-enc:payload@5",
+        "format": "secretenv:format:file-enc:payload@6",
         "sid": "550e8400-e29b-41d4-a716-446655440000",
         "alg": {
           "aead": "xchacha20-poly1305"
@@ -124,7 +124,7 @@ fn test_decrypt_rejects_kv_enc_format() {
     let test_dir = temp_dir.path();
 
     let encrypted_path = test_dir.join("test.kv");
-    let content = r#":SECRETENV_KV 7
+    let content = r#":SECRETENV_KV 8
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0

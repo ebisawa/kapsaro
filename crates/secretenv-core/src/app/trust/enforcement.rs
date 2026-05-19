@@ -10,8 +10,8 @@ use crate::feature::trust::judgment::{
 };
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::{
-    find_recipient_handle_mismatch, is_self_only_recipient_set, is_signer_in_recipient_set,
-    judge_recipient_set, ArtifactRecipientSet, RecipientSetJudgment,
+    find_recipient_handle_mismatch, is_self_only_recipient_set, judge_recipient_set,
+    ArtifactRecipientSet, RecipientSetJudgment,
 };
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
@@ -164,7 +164,7 @@ pub fn enforce_recipients_trust_with_additional(
 
 pub fn enforce_artifact_recipient_set_trust(
     trust_ctx: &TrustContext,
-    signer_kid: &str,
+    _signer_kid: &str,
     current: &ArtifactRecipientSet,
     capability: CommandCapability,
 ) -> Result<ArtifactRecipientTrustOutcome> {
@@ -175,12 +175,8 @@ pub fn enforce_artifact_recipient_set_trust(
     }
 
     match judge_recipient_set(&trust_ctx.recipient_sets, current) {
-        RecipientSetJudgment::Accepted => {
-            enforce_signer_in_reviewed_member_set(signer_kid, current)?;
-            Ok(ArtifactRecipientTrustOutcome::Accepted)
-        }
+        RecipientSetJudgment::Accepted => Ok(ArtifactRecipientTrustOutcome::Accepted),
         RecipientSetJudgment::Missing => {
-            enforce_signer_in_reviewed_member_set(signer_kid, current)?;
             if is_self_only_recipient_set(
                 current,
                 &trust_ctx.active_members_by_kid,
@@ -196,7 +192,6 @@ pub fn enforce_artifact_recipient_set_trust(
             )
         }
         RecipientSetJudgment::Changed { approved } => {
-            enforce_signer_in_reviewed_member_set(signer_kid, current)?;
             if is_self_only_recipient_set(
                 current,
                 &trust_ctx.active_members_by_kid,
@@ -216,11 +211,10 @@ pub fn enforce_artifact_recipient_set_trust(
 
 pub fn evaluate_read_artifact_recipient_keys(
     trust_ctx: &TrustContext,
-    signer_kid: &str,
+    _signer_kid: &str,
     current: &ArtifactRecipientSet,
 ) -> Result<ReadRecipientKeyTrust> {
     enforce_recipient_handle_consistency(trust_ctx, current)?;
-    enforce_signer_in_reviewed_member_set(signer_kid, current)?;
 
     let (recipients, warnings) = resolve_active_artifact_recipients(trust_ctx, current);
     let outcome = if trust_ctx.strict_key_checking.is_disabled() {
@@ -234,11 +228,10 @@ pub fn evaluate_read_artifact_recipient_keys(
 
 pub fn enforce_write_input_artifact_recipients(
     trust_ctx: &TrustContext,
-    signer_kid: &str,
+    _signer_kid: &str,
     current: &ArtifactRecipientSet,
 ) -> Result<()> {
     enforce_recipient_handle_consistency(trust_ctx, current)?;
-    enforce_signer_in_reviewed_member_set(signer_kid, current)?;
 
     if let Some(kid) = current
         .recipient_kids()
@@ -285,24 +278,6 @@ fn enforce_recipient_handle_consistency(
             )));
     }
     Ok(())
-}
-
-fn enforce_signer_in_reviewed_member_set(
-    signer_kid: &str,
-    current: &ArtifactRecipientSet,
-) -> Result<()> {
-    let signer_kid = Kid::try_from(signer_kid.to_string())?.into_string();
-    if is_signer_in_recipient_set(&signer_kid, current)? {
-        return Ok(());
-    }
-
-    Err(Error::build_verification_error(
-        "E_RECIPIENT_SET_SIGNER_NOT_INCLUDED".to_string(),
-        format!(
-            "Signer key '{}' is not included in the member set for this secret",
-            signer_kid
-        ),
-    ))
 }
 
 fn enforce_artifact_recipient_review(

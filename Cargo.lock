@@ -2264,6 +2264,7 @@ dependencies = [
  "fd-lock",
  "hex",
  "hkdf 0.13.0",
+ "hmac 0.13.0",
  "hpke",
  "http",
  "jsonschema",

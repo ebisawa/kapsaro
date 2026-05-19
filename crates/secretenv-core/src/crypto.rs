@@ -3,7 +3,7 @@
 
 //! Cryptographic primitives for secretenv v3
 //!
-//! Implements HPKE (RFC9180), XChaCha20-Poly1305, Ed25519, and HKDF-SHA256
+//! Implements HPKE (RFC9180), XChaCha20-Poly1305, Ed25519, HKDF-SHA256, and HMAC-SHA256
 
 pub(crate) mod error;
 
@@ -42,8 +42,13 @@ pub fn build_crypto_error_with_source(
 }
 
 pub(crate) mod aead;
+pub(crate) mod hmac;
 pub(crate) mod kdf;
 pub(crate) mod kem;
 pub(crate) mod rng;
 pub(crate) mod sign;
 pub(crate) mod types;
+
+#[cfg(test)]
+#[path = "../tests/unit/internal/crypto_hmac_internal_test.rs"]
+mod crypto_hmac_internal_test;

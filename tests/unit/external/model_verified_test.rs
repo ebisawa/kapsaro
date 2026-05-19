@@ -3,7 +3,7 @@
 
 //! Tests for Verified document types
 
-use crate::keygen_helpers::build_dummy_public_key;
+use crate::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
 use secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument;
 use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
 use secretenv_core::cli_api::test_support::domain::verification::{
@@ -14,13 +14,13 @@ use secretenv_core::cli_api::test_support::domain::verification::{
 fn test_verified_new() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocumentProtected {
-            format: "secretenv:format:file-enc@5".to_string(),
+            format: "secretenv:format:file-enc@6".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv_core::cli_api::test_support::domain::file_enc::FilePayload {
                 protected: secretenv_core::cli_api::test_support::domain::file_enc::FilePayloadHeader {
-                    format: "secretenv:format:file-enc:payload@5".to_string(),
+                    format: "secretenv:format:file-enc:payload@6".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv_core::cli_api::test_support::domain::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),
@@ -38,6 +38,7 @@ fn test_verified_new() {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            mac: build_dummy_key_possession_proof(),
             sig: "test".to_string(),
         },
     };
@@ -59,13 +60,13 @@ fn test_verified_new() {
 fn test_verified_into_inner() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocumentProtected {
-            format: "secretenv:format:file-enc@5".to_string(),
+            format: "secretenv:format:file-enc@6".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv_core::cli_api::test_support::domain::file_enc::FilePayload {
                 protected: secretenv_core::cli_api::test_support::domain::file_enc::FilePayloadHeader {
-                    format: "secretenv:format:file-enc:payload@5".to_string(),
+                    format: "secretenv:format:file-enc:payload@6".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv_core::cli_api::test_support::domain::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),
@@ -83,6 +84,7 @@ fn test_verified_into_inner() {
             alg: "eddsa-ed25519".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            mac: build_dummy_key_possession_proof(),
             sig: "test".to_string(),
         },
     };

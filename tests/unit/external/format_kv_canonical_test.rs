@@ -14,13 +14,13 @@ use secretenv_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
 #[test]
 fn test_build_canonical_bytes() {
     let content =
-        ":SECRETENV_KV 7\n:HEAD token0\n:WRAP token1\nKEY1 value1\nKEY2 value2\n:SIG sig_token\n";
+        ":SECRETENV_KV 8\n:HEAD token0\n:WRAP token1\nKEY1 value1\nKEY2 value2\n:SIG sig_token\n";
     let parser = KvEncParser::new(content);
     let lines = parser.parse_all().unwrap();
 
     let canonical = build_canonical_bytes(&lines);
     let canonical = std::str::from_utf8(&canonical).unwrap();
-    assert!(canonical.contains(":SECRETENV_KV 7"));
+    assert!(canonical.contains(":SECRETENV_KV 8"));
     assert!(canonical.contains(":HEAD token0"));
     assert!(canonical.contains(":WRAP token1"));
     assert!(canonical.contains("KEY1 value1"));

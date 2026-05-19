@@ -166,7 +166,7 @@ where
         removed_recipients,
         ctx.verbose,
     )?);
-    session.sign(unsigned)
+    session.sign(unsigned, &master_key)
 }
 
 fn build_current_wrap(

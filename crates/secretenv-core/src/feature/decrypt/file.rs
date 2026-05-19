@@ -8,6 +8,7 @@ use crate::crypto::types::keys::{MasterKey, XChaChaKey};
 use crate::crypto::types::primitives::XChaChaNonce;
 use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::binding::build_file_payload_aad;
+use crate::feature::envelope::key_possession::verify_file_key_possession;
 use crate::feature::envelope::unwrap::{
     unwrap_master_key_for_file, unwrap_master_key_for_file_with_context,
 };
@@ -21,13 +22,13 @@ use crate::{Error, Result};
 use tracing::debug;
 use zeroize::Zeroizing;
 
-/// Validate file-enc v5 format structure.
+/// Validate file-enc v6 format structure.
 fn validate_file_enc_document_format(verified_doc: &VerifiedFileEncDocument) -> Result<()> {
     let doc = verified_doc.document();
-    if doc.protected.format != format::FILE_ENC_V5 {
+    if doc.protected.format != format::FILE_ENC_V6 {
         return Err(Error::build_parse_error(format!(
             "Invalid format: expected '{}', got '{}'",
-            format::FILE_ENC_V5,
+            format::FILE_ENC_V6,
             doc.protected.format
         )));
     }
@@ -35,13 +36,13 @@ fn validate_file_enc_document_format(verified_doc: &VerifiedFileEncDocument) -> 
     Ok(())
 }
 
-/// Validate file-enc v5 payload structure and algorithm.
+/// Validate file-enc v6 payload structure and algorithm.
 fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) -> Result<()> {
     let doc = verified_doc.document();
-    if doc.protected.payload.protected.format != format::FILE_PAYLOAD_V5 {
+    if doc.protected.payload.protected.format != format::FILE_PAYLOAD_V6 {
         return Err(Error::build_parse_error(format!(
             "Invalid payload format: expected '{}', got '{}'",
-            format::FILE_PAYLOAD_V5,
+            format::FILE_PAYLOAD_V6,
             doc.protected.payload.protected.format
         )));
     }
@@ -56,7 +57,7 @@ fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) ->
     Ok(())
 }
 
-/// Decrypt file-enc v5 payload content.
+/// Decrypt file-enc v6 payload content.
 pub(crate) fn decrypt_file_payload(
     verified_doc: &VerifiedFileEncDocument,
     content_key: &MasterKey,
@@ -87,7 +88,7 @@ pub(crate) fn decrypt_file_payload(
     Ok(plaintext.to_zeroizing_vec())
 }
 
-/// Decrypt file-enc v5 format (value-based)
+/// Decrypt file-enc v6 format (value-based)
 ///
 /// This function requires a VerifiedFileEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.
@@ -123,8 +124,14 @@ pub fn decrypt_file_document(
     // Unwrap content key using the shared helper
     let content_key =
         unwrap_master_key_for_file(verified_doc, member_handle, kid, private_key, debug)?;
+    let possession = verify_file_key_possession(verified_doc, content_key)?;
 
-    decrypt_file_payload(verified_doc, &content_key, debug, "decrypt_file_document")
+    decrypt_file_payload(
+        possession.document(),
+        possession.content_key(),
+        debug,
+        "decrypt_file_document",
+    )
 }
 
 pub fn decrypt_file_document_with_context(
@@ -146,14 +153,16 @@ pub fn decrypt_file_document_with_context(
 
     let content_key =
         unwrap_master_key_for_file_with_context(verified_doc, member_handle, key_ctx, debug)?;
+    let key_info = content_key.key_info;
+    let possession = verify_file_key_possession(verified_doc, content_key.value)?;
     let plaintext = decrypt_file_payload(
-        verified_doc,
-        &content_key.value,
+        possession.document(),
+        possession.content_key(),
         debug,
         "decrypt_file_document_with_context",
     )?;
     Ok(DecryptionResult {
         value: plaintext,
-        key_info: content_key.key_info,
+        key_info,
     })
 }

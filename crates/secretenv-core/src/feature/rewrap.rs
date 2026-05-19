@@ -76,6 +76,10 @@ impl<'a> RewrapContext<'a> {
         self.key_ctx
     }
 
+    pub(crate) fn member_handle(&self) -> &'a str {
+        self.member_handle
+    }
+
     pub(crate) fn target_members(&self) -> Option<&'a [VerifiedRecipientKey]> {
         self.target_members
     }
@@ -97,9 +101,6 @@ pub(crate) trait RewrapExecutor {
     fn rewrite_recipient_wraps(&mut self, recipients: &[String]) -> Result<()>;
 
     /// Remove recipients from the encrypted file.
-    ///
-    /// - file-enc: removes wrap items and records in removed_recipients (MK/DEK unchanged)
-    /// - kv-enc: full re-encryption with new MK/DEK, records in removed_recipients
     ///
     /// `recipients` are plain member handle strings.
     fn remove_recipients(&mut self, recipients: &[String]) -> Result<()>;
@@ -147,7 +148,7 @@ pub(crate) fn build_rewrap_operation_plan(
     stale_recipients: &[String],
     options: &RewrapOptions,
 ) -> RewrapOperationPlan {
-    let remove_recipients = current_recipients
+    let remove_recipients: Vec<String> = current_recipients
         .iter()
         .filter(|recipient| !target_recipients.contains(recipient))
         .cloned()

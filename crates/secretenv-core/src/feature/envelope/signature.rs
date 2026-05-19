@@ -4,8 +4,12 @@
 //! Envelope artifact signature orchestration.
 
 use crate::crypto::sign::{sign_artifact_bytes, verify_artifact_bytes};
+use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
+use crate::feature::envelope::key_possession::{
+    build_file_key_possession_proof, build_key_possession_sig_input, build_kv_key_possession_proof,
+};
 use crate::format::file::build_file_signature_bytes;
 use crate::format::kv::enc::canonical::build_canonical_bytes;
 use crate::format::token::TokenCodec;
@@ -73,6 +77,7 @@ pub fn build_signing_context<'a>(
 
 pub fn sign_file_document(
     protected: &FileEncDocumentProtected,
+    content_key: &MasterKey,
     signing_key: &SigningKey,
     signer_kid: &str,
     signer_pub: PublicKey,
@@ -85,11 +90,14 @@ pub fn sign_file_document(
         );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
+    let mac = build_file_key_possession_proof(protected, content_key)?;
+    let sig_input = build_key_possession_sig_input(&canonical_bytes, &mac);
     sign_artifact_bytes(
-        &canonical_bytes,
+        &sig_input,
         signing_key,
         signer_kid,
         signer_pub,
+        mac,
         algorithm::SIGNATURE_ED25519,
     )
 }
@@ -107,8 +115,9 @@ pub fn verify_file_signature(
         );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
+    let sig_input = build_key_possession_sig_input(&canonical_bytes, &signature.mac);
     verify_artifact_bytes(
-        &canonical_bytes,
+        &sig_input,
         verifying_key,
         signature,
         algorithm::SIGNATURE_ED25519,
@@ -121,45 +130,44 @@ mod tests;
 
 pub(crate) fn sign_kv_document(
     unsigned: &str,
+    master_key: &MasterKey,
     signing: &SigningContext<'_>,
     token_codec: TokenCodec,
     caller: &str,
 ) -> Result<String> {
-    append_kv_signature(
-        unsigned,
-        signing.signing_key,
-        signing.signer_kid,
-        signing.signer_pub.clone(),
-        token_codec,
-        signing.debug,
-        caller,
-    )
+    append_kv_signature(unsigned, master_key, signing, token_codec, caller)
 }
 
 pub(crate) fn append_kv_signature(
     unsigned: &str,
-    signing_key: &SigningKey,
-    signer_kid: &str,
-    signer_pub: PublicKey,
+    master_key: &MasterKey,
+    signing: &SigningContext<'_>,
     token_codec: TokenCodec,
-    debug: bool,
     caller: &str,
 ) -> Result<String> {
-    if debug {
+    if signing.debug {
         debug!(
             "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
-            format_kid_half_display_lossy(signer_kid)
+            format_kid_half_display_lossy(signing.signer_kid)
         );
     }
+    let mac = build_kv_key_possession_proof(unsigned, master_key)?;
+    let sig_input = build_key_possession_sig_input(unsigned.as_bytes(), &mac);
     let signature = sign_artifact_bytes(
-        unsigned.as_bytes(),
-        signing_key,
-        signer_kid,
-        signer_pub,
+        &sig_input,
+        signing.signing_key,
+        signing.signer_kid,
+        signing.signer_pub.clone(),
+        mac,
         algorithm::SIGNATURE_ED25519,
     )?;
-    let sig_token =
-        TokenCodec::encode_debug(token_codec, &signature, debug, Some("SIG"), Some(caller))?;
+    let sig_token = TokenCodec::encode_debug(
+        token_codec,
+        &signature,
+        signing.debug,
+        Some("SIG"),
+        Some(caller),
+    )?;
     Ok(format!("{}:SIG {}\n", unsigned, sig_token))
 }
 
@@ -176,8 +184,9 @@ pub fn verify_kv_signature(
         );
     }
     let canonical_bytes = build_canonical_bytes(document.lines());
+    let sig_input = build_key_possession_sig_input(&canonical_bytes, &signature.mac);
     verify_artifact_bytes(
-        &canonical_bytes,
+        &sig_input,
         verifying_key,
         signature,
         algorithm::SIGNATURE_ED25519,

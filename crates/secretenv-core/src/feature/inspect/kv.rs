@@ -100,6 +100,13 @@ fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectS
             format_section_lines(|out| {
                 append_line(out, format!("  Algorithm:   {}", signature.alg));
                 append_line(out, format!("  Kid:         {}", kid_display));
+                append_line(
+                    out,
+                    format!(
+                        "  Key Proof:   {} (present)",
+                        signature.mac.algorithm().as_wire_prefix()
+                    ),
+                );
                 append_signer_info(Some(&signature.signer_pub), out);
                 append_line(
                     out,

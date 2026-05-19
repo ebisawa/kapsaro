@@ -3,7 +3,7 @@
 
 //! Unit tests for FileEncDocument model
 
-use crate::keygen_helpers::build_dummy_public_key;
+use crate::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
 use secretenv_core::cli_api::test_support::domain::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
@@ -16,7 +16,7 @@ fn build_test_payload_envelope() -> FilePayload {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FilePayload {
         protected: FilePayloadHeader {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V5.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6.to_string(),
             sid,
             alg: FileEncAlgorithm {
                 aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
@@ -35,7 +35,7 @@ fn test_file_enc_document_basic() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
                 .to_string(),
             sid,
             wrap: vec![
@@ -57,6 +57,7 @@ fn test_file_enc_document_basic() {
                 .to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            mac: build_dummy_key_possession_proof(),
             sig: "signature_base64url".to_string(),
         },
     };
@@ -71,7 +72,7 @@ fn test_recipients_derived_from_wrap() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
                 .to_string(),
             sid,
             wrap: vec![
@@ -100,6 +101,7 @@ fn test_recipients_derived_from_wrap() {
                 .to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            mac: build_dummy_key_possession_proof(),
             sig: "sig".to_string(),
         },
     };
@@ -116,7 +118,7 @@ fn test_payload_serialization() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
                 .to_string(),
             sid,
             wrap: vec![],
@@ -130,6 +132,7 @@ fn test_payload_serialization() {
                 .to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            mac: build_dummy_key_possession_proof(),
             sig: "sig".to_string(),
         },
     };
@@ -149,7 +152,7 @@ fn test_payload_serialization() {
     // Verify payload.protected has format and alg
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["format"],
-        "secretenv:format:file-enc:payload@5"
+        "secretenv:format:file-enc:payload@6"
     );
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],
@@ -161,12 +164,12 @@ fn test_payload_serialization() {
 fn test_file_enc_document_signature_requires_signer_pub() {
     let json = serde_json::json!({
         "protected": {
-            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5,
+            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6,
             "sid": "01234567-89ab-cdef-0123-456789abcdef",
             "wrap": [],
             "payload": {
                 "protected": {
-                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V5,
+                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6,
                     "sid": "01234567-89ab-cdef-0123-456789abcdef",
                     "alg": {
                         "aead": secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305

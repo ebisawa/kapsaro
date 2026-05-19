@@ -40,16 +40,16 @@ fn test_recipient_set_trust_accepts_reviewed_set_when_signer_is_member() {
 }
 
 #[test]
-fn test_recipient_set_trust_rejects_reviewed_set_when_signer_is_not_member() {
+fn test_recipient_set_trust_accepts_reviewed_set_when_signer_is_not_member() {
     let current = recipient_set(&[("alice@example.com", ALICE_KID)]);
     let mut trust_ctx = trust_ctx(StrictKeyChecking::Yes, false);
     trust_ctx.recipient_sets = vec![record_from_set(&current)];
 
-    let error =
+    let outcome =
         enforce_artifact_recipient_set_trust(&trust_ctx, BOB_KID, &current, CommandCapability::Get)
-            .unwrap_err();
+            .unwrap();
 
-    assert_verify_rule(error, "E_RECIPIENT_SET_SIGNER_NOT_INCLUDED");
+    assert_eq!(outcome, ArtifactRecipientTrustOutcome::Accepted);
 }
 
 #[test]
@@ -194,13 +194,13 @@ fn test_read_recipient_keys_warns_for_unresolved_recipient_kid() {
 }
 
 #[test]
-fn test_read_recipient_keys_rejects_signer_not_in_recipient_set_even_strict_no() {
+fn test_read_recipient_keys_strict_no_accepts_signer_outside_recipient_set() {
     let current = recipient_set(&[("alice@example.com", ALICE_KID)]);
     let trust_ctx = trust_ctx(StrictKeyChecking::No, false);
 
-    let error = evaluate_read_artifact_recipient_keys(&trust_ctx, BOB_KID, &current).unwrap_err();
+    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, BOB_KID, &current).unwrap();
 
-    assert_verify_rule(error, "E_RECIPIENT_SET_SIGNER_NOT_INCLUDED");
+    assert_eq!(result.outcome, RecipientTrustOutcome::Accepted);
 }
 
 #[test]

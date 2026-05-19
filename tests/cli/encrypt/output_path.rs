@@ -44,7 +44,7 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
 
         let content = fs::read_to_string(&expected).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V5);
+        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V6);
     })
 }
 
@@ -85,7 +85,7 @@ fn test_encrypt_stdin_with_out_option_writes_encrypted_file() {
 
     let content = fs::read_to_string(&output_file).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V5);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V6);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_encrypt_stdin_with_stdout_writes_json_to_stdout() {
     );
     assert!(!output.contains("Encrypted to:"), "{output}");
     let parsed = parse_json_from_transcript(&output);
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V5);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V6);
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn test_encrypt_file_with_stdout_writes_json_to_stdout() {
     let output = crate::cli::common::assert_member_set_review_success(&mut command);
     assert!(!output.contains("Encrypted to:"), "{output}");
     let parsed = parse_json_from_transcript(&output);
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V5);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V6);
 }
 
 #[test]

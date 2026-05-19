@@ -6,6 +6,7 @@
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::entry::decrypt_entry;
+use crate::feature::envelope::key_possession::verify_kv_key_possession;
 use crate::feature::envelope::unwrap::{
     unwrap_master_key_for_kv, unwrap_master_key_for_kv_with_context,
 };
@@ -70,6 +71,7 @@ pub fn decrypt_kv_single_entry(
         private_key,
         debug,
     )?;
+    let possession = verify_kv_key_possession(verified_doc, master_key)?;
 
     let entry = doc.entry(key).ok_or_else(|| {
         crate::Error::build_invalid_operation_error(format!("Key '{}' not found", key))
@@ -78,7 +80,7 @@ pub fn decrypt_kv_single_entry(
         entry.value(),
         entry.key(),
         &doc.head().alg.aead,
-        &master_key,
+        possession.master_key(),
         &sid,
         debug,
         "decrypt_kv_single_entry",
@@ -101,6 +103,8 @@ pub fn decrypt_kv_single_entry_with_context(
         key_ctx,
         debug,
     )?;
+    let key_info = master_key.key_info;
+    let possession = verify_kv_key_possession(verified_doc, master_key.value)?;
 
     let entry = doc.entry(key).ok_or_else(|| {
         crate::Error::build_invalid_operation_error(format!("Key '{}' not found", key))
@@ -109,18 +113,15 @@ pub fn decrypt_kv_single_entry_with_context(
         entry.value(),
         entry.key(),
         &doc.head().alg.aead,
-        &master_key.value,
+        possession.master_key(),
         &sid,
         debug,
         "decrypt_kv_single_entry_with_context",
     )?;
-    Ok(DecryptionResult {
-        value,
-        key_info: master_key.key_info,
-    })
+    Ok(DecryptionResult { value, key_info })
 }
 
-/// Decrypt kv-enc v7 format to KV map
+/// Decrypt kv-enc v8 format to KV map
 ///
 /// This function requires a VerifiedKvEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.
@@ -152,10 +153,11 @@ pub fn decrypt_kv_document(
         private_key,
         debug,
     )?;
+    let possession = verify_kv_key_possession(verified_doc, master_key)?;
 
     decrypt_kv_entries(
         doc.entries(),
-        &master_key,
+        possession.master_key(),
         &sid,
         &doc.head().alg.aead,
         debug,
@@ -177,15 +179,17 @@ pub fn decrypt_kv_document_with_context(
         key_ctx,
         debug,
     )?;
+    let key_info = master_key.key_info;
+    let possession = verify_kv_key_possession(verified_doc, master_key.value)?;
     let kv_map = decrypt_kv_entries(
         doc.entries(),
-        &master_key.value,
+        possession.master_key(),
         &sid,
         &doc.head().alg.aead,
         debug,
     )?;
     Ok(DecryptionResult {
         value: kv_map,
-        key_info: master_key.key_info,
+        key_info,
     })
 }

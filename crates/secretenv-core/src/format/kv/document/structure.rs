@@ -69,7 +69,7 @@ pub(super) fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {
 }
 
 fn missing_sig_error() -> Error {
-    Error::build_crypto_error("kv-enc v7 has no SIG line (v7 requires signatures)".to_string())
+    Error::build_crypto_error("kv-enc v8 has no SIG line (v8 requires signatures)".to_string())
 }
 
 fn validate_wrap_token(token: &str, source_name: &str) -> Result<()> {
@@ -115,14 +115,14 @@ fn validate_unique_line(
     if count == 0 {
         return Err(Error::build_verification_error(
             missing_rule.to_string(),
-            format!("kv-enc v7: missing {} line", label),
+            format!("kv-enc v8: missing {} line", label),
         ));
     }
     if count > 1 {
         return Err(Error::build_verification_error(
             "E_SCHEMA_INVALID".to_string(),
             format!(
-                "kv-enc v7: {} line appears {} times (must be exactly once)",
+                "kv-enc v8: {} line appears {} times (must be exactly once)",
                 label, count
             ),
         ));
@@ -150,7 +150,7 @@ fn validate_no_data_after_sig(lines: &[KvEncLine]) -> Result<()> {
                 if found_sig {
                     return Err(Error::build_verification_error(
                         "E_SCHEMA_INVALID".to_string(),
-                        "kv-enc v7: data lines (HEAD/WRAP/KV) must not appear after :SIG line"
+                        "kv-enc v8: data lines (HEAD/WRAP/KV) must not appear after :SIG line"
                             .to_string(),
                     ));
                 }
@@ -169,7 +169,7 @@ fn validate_kv_keys(lines: &[KvEncLine]) -> Result<()> {
                 return Err(Error::build_verification_error(
                     "E_SCHEMA_INVALID".to_string(),
                     format!(
-                        "kv-enc v7: invalid KEY format '{}' (must match ^[A-Za-z_][A-Za-z0-9_]*$)",
+                        "kv-enc v8: invalid KEY format '{}' (must match ^[A-Za-z_][A-Za-z0-9_]*$)",
                         key
                     ),
                 ));
@@ -178,7 +178,7 @@ fn validate_kv_keys(lines: &[KvEncLine]) -> Result<()> {
                 return Err(Error::build_verification_error(
                     "E_DUPLICATE_KEY".to_string(),
                     format!(
-                        "kv-enc v7: duplicate KEY '{}' (each KEY must appear only once)",
+                        "kv-enc v8: duplicate KEY '{}' (each KEY must appear only once)",
                         key
                     ),
                 ));
@@ -196,7 +196,7 @@ fn validate_kv_header_lines(logical_lines: &[(usize, &KvEncLine)]) -> Result<()>
         "E_SCHEMA_INVALID",
         Some(0),
         "E_SCHEMA_INVALID",
-        "kv-enc v7: :SECRETENV_KV 7 must be the first line",
+        "kv-enc v8: :SECRETENV_KV 8 must be the first line",
     )?;
     validate_unique_line(
         logical_lines,
@@ -205,7 +205,7 @@ fn validate_kv_header_lines(logical_lines: &[(usize, &KvEncLine)]) -> Result<()>
         "E_SCHEMA_INVALID",
         Some(1),
         "E_SCHEMA_INVALID",
-        "kv-enc v7: :HEAD must be the second line (after :SECRETENV_KV 7)",
+        "kv-enc v8: :HEAD must be the second line (after :SECRETENV_KV 8)",
     )?;
     validate_unique_line(
         logical_lines,
@@ -214,7 +214,7 @@ fn validate_kv_header_lines(logical_lines: &[(usize, &KvEncLine)]) -> Result<()>
         "E_WRAP_LINE_MISSING",
         Some(2),
         "E_WRAP_LINE_POSITION",
-        "kv-enc v7: :WRAP must be the third line (after :HEAD)",
+        "kv-enc v8: :WRAP must be the third line (after :HEAD)",
     )?;
     validate_unique_line(
         logical_lines,
@@ -223,7 +223,7 @@ fn validate_kv_header_lines(logical_lines: &[(usize, &KvEncLine)]) -> Result<()>
         "E_SIG_LINE_MISSING",
         Some(logical_lines.len() - 1),
         "E_SCHEMA_INVALID",
-        "kv-enc v7: :SIG must be the last logical line (after all KV entries)",
+        "kv-enc v8: :SIG must be the last logical line (after all KV entries)",
     )?;
     Ok(())
 }

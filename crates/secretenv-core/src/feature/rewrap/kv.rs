@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for kv-enc v7 format.
+//! Rewrap operations for kv-enc v8 format.
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::document::KvDocumentDraft;
@@ -112,7 +112,8 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
 
     fn finalize(mut self) -> Result<String> {
         self.doc.update_timestamp()?;
-        self.session.sign(self.doc)
+        let master_key = self.session.unwrap_master_key()?;
+        self.session.sign(self.doc, &master_key)
     }
 }
 
@@ -176,7 +177,7 @@ impl RewrapDocumentAdapter for KvRewrapAdapter {
     }
 }
 
-/// Rewrap kv-enc v7 content.
+/// Rewrap kv-enc v8 content.
 pub fn rewrap_kv_document(
     options: &RewrapOptions,
     content: &KvEncContent,

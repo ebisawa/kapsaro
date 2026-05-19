@@ -95,8 +95,8 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         build_unsigned_from_verified(&self.verified, head, self.token_codec, self.debug)
     }
 
-    pub(crate) fn sign(&self, unsigned: KvDocumentDraft) -> Result<String> {
-        sign_unsigned_with_key_context(unsigned, self.key_ctx, self.debug)
+    pub(crate) fn sign(&self, unsigned: KvDocumentDraft, master_key: &MasterKey) -> Result<String> {
+        sign_unsigned_with_key_context(unsigned, master_key, self.key_ctx, self.debug)
     }
 
     pub(crate) fn unwrap_master_key(&self) -> Result<MasterKey> {

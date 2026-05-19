@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keygen_helpers::build_dummy_public_key;
+use crate::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
 use secretenv_core::cli_api::test_support::domain::common::WrapItem;
 use secretenv_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
 use secretenv_core::cli_api::test_support::domain::kv_enc::header::{
@@ -58,11 +58,11 @@ fn test_parse_file_enc_str_with_schema() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V5,
+            "format": format::FILE_ENC_V6,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V5,
+                    "format": format::FILE_PAYLOAD_V6,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -85,12 +85,13 @@ fn test_parse_file_enc_str_with_schema() {
             "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });
 
     let parsed = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
-    assert_eq!(parsed.protected.format, format::FILE_ENC_V5);
+    assert_eq!(parsed.protected.format, format::FILE_ENC_V6);
 }
 
 #[test]
@@ -100,11 +101,11 @@ fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
     non_canonical_sig.replace_range(85..86, "B");
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V5,
+            "format": format::FILE_ENC_V6,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V5,
+                    "format": format::FILE_PAYLOAD_V6,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -127,6 +128,7 @@ fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
             "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "sig": non_canonical_sig
         }
     });
@@ -171,6 +173,7 @@ fn test_parse_kv_tokens_with_schema() {
         alg: algorithm::SIGNATURE_ED25519.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        mac: build_dummy_key_possession_proof(),
         sig:
             "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
                 .to_string(),
@@ -276,11 +279,11 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
     let wrap: Vec<_> = (0..=MAX_WRAP_ITEMS).map(|_| wrap_item.clone()).collect();
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V5,
+            "format": format::FILE_ENC_V6,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V5,
+                    "format": format::FILE_PAYLOAD_V6,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -297,6 +300,7 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
             "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });
@@ -333,11 +337,11 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V5,
+            "format": format::FILE_ENC_V6,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V5,
+                    "format": format::FILE_PAYLOAD_V6,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -369,16 +373,15 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
             "alg": algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
     });
 
     let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("E_DUPLICATE_RECIPIENT_HANDLE"));
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("E_DUPLICATE_RECIPIENT_HANDLE"));
 }
 
 #[test]

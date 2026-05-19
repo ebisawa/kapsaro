@@ -5,6 +5,7 @@
 //!
 //! Tests for embedded signer_pub based verifying key loading.
 
+use crate::keygen_helpers::build_dummy_key_possession_proof;
 use crate::test_utils::setup_test_workspace_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use secretenv_core::cli_api::test_support::domain::signature::ArtifactSignature;
@@ -35,6 +36,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
         alg: "eddsa-ed25519".to_string(),
         kid: kid.clone(),
         signer_pub: public_key,
+        mac: build_dummy_key_possession_proof(),
         sig: "dummy".to_string(), // sig field not used during key loading
     };
 
@@ -73,6 +75,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succ
         alg: "eddsa-ed25519".to_string(),
         kid: kid.clone(),
         signer_pub: public_key,
+        mac: build_dummy_key_possession_proof(),
         sig: "dummy".to_string(),
     };
 
@@ -97,6 +100,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds(
         alg: "eddsa-ed25519".to_string(),
         kid: kid.clone(),
         signer_pub: public_key,
+        mac: build_dummy_key_possession_proof(),
         sig: "dummy".to_string(),
     };
 
@@ -125,6 +129,7 @@ fn test_load_verifying_key_from_signature_kid_mismatch() {
         alg: "eddsa-ed25519".to_string(),
         kid: "MISMATCHED_KID_000000000000".to_string(),
         signer_pub: public_key,
+        mac: build_dummy_key_possession_proof(),
         sig: "dummy".to_string(),
     };
 

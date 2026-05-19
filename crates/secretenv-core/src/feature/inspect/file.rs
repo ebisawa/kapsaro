@@ -61,6 +61,13 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
             let kid_display = format_kid_display(&sig.kid).unwrap_or_else(|_| sig.kid.clone());
             append_line(out, format!("  Algorithm:   {}", sig.alg));
             append_line(out, format!("  Kid:         {}", kid_display));
+            append_line(
+                out,
+                format!(
+                    "  Key Proof:   {} (present)",
+                    sig.mac.algorithm().as_wire_prefix()
+                ),
+            );
             append_signer_info(Some(&sig.signer_pub), out);
             append_line(
                 out,
@@ -72,7 +79,7 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
 
 pub(crate) fn build_file_inspect_output(doc: &FileEncDocument) -> InspectOutput {
     InspectOutput {
-        title: "File-Enc v5 Metadata".to_string(),
+        title: "File-Enc v6 Metadata".to_string(),
         sections: vec![
             build_file_enc_header_section(doc),
             build_file_enc_wrap_section(doc),

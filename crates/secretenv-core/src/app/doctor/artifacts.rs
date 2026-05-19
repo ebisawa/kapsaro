@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::app::artifact::encrypted_content_recipient_evidence;
 use crate::app::context::options::CommonCommandOptions;
-use crate::feature::trust::recipient_sets::{
-    find_recipient_handle_mismatch, is_signer_in_recipient_set,
-};
+use crate::feature::trust::recipient_sets::find_recipient_handle_mismatch;
 use crate::feature::verify::file::verify_file_content;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::EncContent;
@@ -131,12 +129,7 @@ fn check_artifact(
     };
 
     checks.extend(check_signer(&proof, active_members_by_kid, &subject));
-    checks.extend(check_recipients(
-        &content,
-        &proof,
-        active_members_by_kid,
-        &subject,
-    ));
+    checks.extend(check_recipients(&content, active_members_by_kid, &subject));
     checks.extend(check_disclosure_history(&content, &subject));
     checks
 }
@@ -217,7 +210,6 @@ fn check_signer(
 
 fn check_recipients(
     content: &EncContent,
-    proof: &SignatureVerificationProof,
     active_members_by_kid: &BTreeMap<String, PublicKey>,
     subject: &DoctorSubject,
 ) -> Vec<DoctorCheck> {
@@ -251,33 +243,6 @@ fn check_recipients(
             ))
             .with_next_action("investigate the artifact before using it"),
         );
-    }
-
-    match is_signer_in_recipient_set(&proof.kid, &evidence.recipient_set) {
-        Ok(true) => checks.push(DoctorCheck::ok(
-            "artifact.signer_in_recipients",
-            DoctorCategory::Artifacts,
-            subject.clone(),
-            "Artifact signer is included in recipients",
-        )),
-        Ok(false) => checks.push(
-            DoctorCheck::fail(
-                "artifact.signer_in_recipients",
-                DoctorCategory::Artifacts,
-                subject.clone(),
-                "Artifact signer is not included in recipients",
-            )
-            .with_next_action("investigate the artifact before using it"),
-        ),
-        Err(error) => checks.push(
-            DoctorCheck::fail(
-                "artifact.signer_in_recipients",
-                DoctorCategory::Artifacts,
-                subject.clone(),
-                "Artifact signer recipient membership could not be checked",
-            )
-            .with_reason(error.format_user_message()),
-        ),
     }
 
     let active_kids = active_members_by_kid

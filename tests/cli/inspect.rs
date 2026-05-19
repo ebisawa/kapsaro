@@ -51,7 +51,7 @@ fn test_inspect_file_enc_shows_metadata() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("File-Enc v5 Metadata"))
+        .stdout(predicate::str::contains("File-Enc v6 Metadata"))
         .stdout(predicate::str::contains("Format:"))
         .stdout(predicate::str::contains("SID:"))
         .stdout(predicate::str::contains("Recipients"))
@@ -101,7 +101,7 @@ fn test_inspect_file_enc_json_output_has_sections() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("inspect --json should output valid JSON");
 
-    assert_eq!(parsed["title"], "File-Enc v5 Metadata");
+    assert_eq!(parsed["title"], "File-Enc v6 Metadata");
     let sections = parsed["sections"]
         .as_array()
         .expect("sections should be an array");

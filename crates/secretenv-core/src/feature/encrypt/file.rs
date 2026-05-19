@@ -70,7 +70,7 @@ fn encrypt_payload(
     caller: &str,
 ) -> Result<(FilePayloadHeader, FilePayloadCiphertext)> {
     let payload_protected = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V5.to_string(),
+        format: format::FILE_PAYLOAD_V6.to_string(),
         sid: *sid,
         alg: FileEncAlgorithm {
             aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
@@ -107,7 +107,7 @@ fn build_file_enc_document_protected(
     timestamp: String,
 ) -> FileEncDocumentProtected {
     FileEncDocumentProtected {
-        format: format::FILE_ENC_V5.to_string(),
+        format: format::FILE_ENC_V6.to_string(),
         sid,
         wrap,
         removed_recipients: None,
@@ -117,7 +117,7 @@ fn build_file_enc_document_protected(
     }
 }
 
-/// Encrypt file content to file-enc v5 format
+/// Encrypt file content to file-enc v6 format
 ///
 /// # Arguments
 /// * `content` - File content bytes to encrypt
@@ -146,7 +146,7 @@ pub fn encrypt_file_document(
         timestamp,
         signing.debug,
     )?;
-    finalize_file_document_signature(protected, signing)
+    finalize_file_document_signature(protected, &content_key, signing)
 }
 
 /// Build encryption context and produce a ready `FilePayload`.
@@ -189,10 +189,12 @@ fn assemble_file_enc_protected(
 /// Sign the protected header and produce the final `FileEncDocument`.
 fn finalize_file_document_signature(
     protected: FileEncDocumentProtected,
+    content_key: &MasterKey,
     signing: &SigningContext<'_>,
 ) -> Result<FileEncDocument> {
     let signature = sign_file_document(
         &protected,
+        content_key,
         signing.signing_key,
         signing.signer_kid,
         signing.signer_pub.clone(),

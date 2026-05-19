@@ -97,7 +97,7 @@ where
     Ok(entries)
 }
 
-/// Encrypt KV map to kv-enc v7 format
+/// Encrypt KV map to kv-enc v8 format
 ///
 /// # Arguments
 /// * `kv_map` - Key-value map to encrypt
@@ -107,7 +107,7 @@ where
 /// * `token_codec` - Token codec to use (JSON/JCS or CBOR)
 ///
 /// # Returns
-/// kv-enc v7 format string with SIG line
+/// kv-enc v8 format string with SIG line
 pub fn encrypt_kv_document<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
@@ -120,7 +120,7 @@ where
     encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
 
-/// Encrypt KV map to kv-enc v7 format with disclosed flag control
+/// Encrypt KV map to kv-enc v8 format with disclosed flag control
 pub(crate) fn encrypt_kv_document_with_disclosed<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
@@ -162,5 +162,5 @@ where
     let unsigned = KvDocumentBuilder::new(head_data, wrap_data, token_codec, signing.debug)
         .with_entries(encoded)
         .build();
-    super::sign::sign_unsigned_kv_document(unsigned, signing)
+    super::sign::sign_unsigned_kv_document(unsigned, &master_key, signing)
 }

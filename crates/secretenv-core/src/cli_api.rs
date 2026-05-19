@@ -909,7 +909,9 @@ pub mod test_support {
             };
         }
         pub mod signature {
-            pub use crate::model::signature::ArtifactSignature;
+            pub use crate::model::signature::{
+                ArtifactSignature, KeyPossessionProof, KeyPossessionProofAlgorithm,
+            };
         }
         pub mod ssh {
             pub use crate::model::ssh::SshDeterminismStatus;
@@ -939,14 +941,14 @@ pub mod test_support {
             }
             pub mod context {
                 pub use crate::model::wire::context::{
-                    AAD_KV_ENTRY_PAYLOAD_V7, HKDF_INFO_KV_CEK_V7, HKDF_INFO_PRIVATE_KEY_SSHSIG_V7,
-                    HPKE_INFO_FILE_WRAP_V5, HPKE_INFO_KV_WRAP_V7,
+                    AAD_KV_ENTRY_PAYLOAD_V8, HKDF_INFO_KV_CEK_V8, HKDF_INFO_PRIVATE_KEY_SSHSIG_V7,
+                    HPKE_INFO_FILE_WRAP_V6, HPKE_INFO_KV_WRAP_V8,
                     SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7,
                 };
             }
             pub mod format {
                 pub use crate::model::wire::format::{
-                    FILE_ENC_V5, FILE_PAYLOAD_V5, LOCAL_TRUST_V5, PRIVATE_KEY_V7, PUBLIC_KEY_V6,
+                    FILE_ENC_V6, FILE_PAYLOAD_V6, LOCAL_TRUST_V5, PRIVATE_KEY_V7, PUBLIC_KEY_V6,
                 };
             }
             pub mod jwk {

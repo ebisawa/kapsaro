@@ -10,7 +10,7 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
 use secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument;
-use secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V5;
+use secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::encrypt::encrypt_file_content;
 use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
@@ -60,7 +60,7 @@ fn test_encrypt_file_document() {
     let file_enc_doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
 
     // Verify structure
-    assert_eq!(file_enc_doc.protected.format, FILE_ENC_V5);
+    assert_eq!(file_enc_doc.protected.format, FILE_ENC_V6);
     assert_eq!(
         file_enc_doc.signature.signer_pub.protected.subject_handle,
         ALICE_MEMBER_HANDLE
@@ -148,7 +148,7 @@ fn test_encrypt_kv_document_via_inner_api() {
         encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 7\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 8\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));

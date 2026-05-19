@@ -3,16 +3,15 @@
 
 //! Recipient operations for file-enc content (add, remove).
 
+use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::disclosure::add_to_removed_history;
-use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
 use crate::feature::envelope::wrap::build_wrap_item_for_file;
 use crate::feature::recipient::{
     build_new_wrap_items, check_recipient_exists, print_recipient_not_found_warning,
     resolve_verified_recipients, validate_not_empty_recipients,
 };
 use crate::model::file_enc::FileEncDocumentProtected;
-use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::Result;
 
 /// Remove recipients from file-enc content.
@@ -72,15 +71,12 @@ pub fn remove_file_recipients(
 /// at the time of addition). This is why we normalize recipients once before the loop.
 pub fn add_file_recipients(
     protected: &mut FileEncDocumentProtected,
-    verified: &VerifiedFileEncDocument,
+    content_key: &MasterKey,
     new_recipients: &[String],
     key_ctx: &CryptoContext,
     target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
     debug: bool,
 ) -> Result<()> {
-    let content_key =
-        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_handle, key_ctx, debug)?
-            .value;
     let current_recipients = protected.recipients();
     let wrap_items = build_new_wrap_items(
         &current_recipients,
@@ -89,7 +85,7 @@ pub fn add_file_recipients(
         key_ctx,
         target_members,
         debug,
-        |attested| build_wrap_item_for_file(attested, &protected.sid, &content_key, debug),
+        |attested| build_wrap_item_for_file(attested, &protected.sid, content_key, debug),
     )?;
     protected.wrap.extend(wrap_items);
 
@@ -98,15 +94,12 @@ pub fn add_file_recipients(
 
 pub fn rewrite_file_recipient_wraps(
     protected: &mut FileEncDocumentProtected,
-    verified: &VerifiedFileEncDocument,
+    content_key: &MasterKey,
     recipients_to_refresh: &[String],
     key_ctx: &CryptoContext,
     target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
     debug: bool,
 ) -> Result<()> {
-    let content_key =
-        unwrap_master_key_for_file_with_context(verified, &key_ctx.member_handle, key_ctx, debug)?
-            .value;
     let refreshed_members =
         resolve_verified_recipients(target_members, key_ctx, recipients_to_refresh, debug)?;
 
@@ -117,7 +110,7 @@ pub fn rewrite_file_recipient_wraps(
         protected.wrap.push(build_wrap_item_for_file(
             member,
             &protected.sid,
-            &content_key,
+            content_key,
             debug,
         )?);
     }

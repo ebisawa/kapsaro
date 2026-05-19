@@ -305,11 +305,6 @@ fn test_doctor_warns_when_artifact_recipients_differ_from_active_members() {
     ));
     assert!(has_check(
         &checks,
-        "artifact.signer_in_recipients",
-        DoctorStatus::Ok
-    ));
-    assert!(has_check(
-        &checks,
         "artifact.recipients_active",
         DoctorStatus::Warn
     ));
@@ -351,25 +346,6 @@ fn test_doctor_reports_artifact_signer_not_active() {
     assert!(has_check(
         &checks,
         "artifact.signer_active",
-        DoctorStatus::Fail
-    ));
-}
-
-#[test]
-fn test_doctor_reports_artifact_signer_missing_from_recipients() {
-    let (home, workspace) =
-        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    fs::write(
-        workspace.join("secrets/default.kvenc"),
-        encrypted_kv_for_recipients(&home, ALICE_MEMBER_HANDLE, &[BOB_MEMBER_HANDLE]),
-    )
-    .unwrap();
-
-    let checks = run_workspace_doctor(&home, &workspace);
-
-    assert!(has_check(
-        &checks,
-        "artifact.signer_in_recipients",
         DoctorStatus::Fail
     ));
 }

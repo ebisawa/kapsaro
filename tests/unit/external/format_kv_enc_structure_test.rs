@@ -10,7 +10,7 @@ use secretenv_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
 
 #[test]
 fn test_validate_valid_structure() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    KEY1 token2\n\
@@ -32,10 +32,10 @@ fn test_validate_missing_header() {
 
 #[test]
 fn test_validate_duplicate_header() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
-                   :SECRETENV_KV 7\n\
+                   :SECRETENV_KV 8\n\
                    KEY1 token2\n\
                    :SIG token3";
     let lines = KvEncParser::new(content).parse_all().unwrap();
@@ -45,7 +45,7 @@ fn test_validate_duplicate_header() {
 #[test]
 fn test_validate_header_not_first() {
     let content = ":HEAD token0\n\
-                   :SECRETENV_KV 7\n\
+                   :SECRETENV_KV 8\n\
                    :WRAP token1\n\
                    KEY1 token2\n\
                    :SIG token3";
@@ -55,7 +55,7 @@ fn test_validate_header_not_first() {
 
 #[test]
 fn test_validate_duplicate_head() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :HEAD token1\n\
                    :WRAP token2\n\
@@ -67,7 +67,7 @@ fn test_validate_duplicate_head() {
 
 #[test]
 fn test_validate_head_not_second() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :WRAP token1\n\
                    :HEAD token0\n\
                    KEY1 token2\n\
@@ -78,7 +78,7 @@ fn test_validate_head_not_second() {
 
 #[test]
 fn test_validate_duplicate_wrap() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    :WRAP token2\n\
@@ -90,7 +90,7 @@ fn test_validate_duplicate_wrap() {
 
 #[test]
 fn test_validate_wrap_not_third() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    KEY1 token2\n\
                    :WRAP token1\n\
@@ -101,7 +101,7 @@ fn test_validate_wrap_not_third() {
 
 #[test]
 fn test_validate_duplicate_sig() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    KEY1 token2\n\
@@ -113,7 +113,7 @@ fn test_validate_duplicate_sig() {
 
 #[test]
 fn test_validate_sig_not_last() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    :SIG token3\n\
@@ -124,7 +124,7 @@ fn test_validate_sig_not_last() {
 
 #[test]
 fn test_validate_data_after_sig() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    KEY1 token2\n\
@@ -136,7 +136,7 @@ fn test_validate_data_after_sig() {
 
 #[test]
 fn test_validate_duplicate_key() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    KEY1 token2\n\
@@ -148,7 +148,7 @@ fn test_validate_duplicate_key() {
 
 #[test]
 fn test_validate_invalid_key_format_number_start() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    1KEY token2\n\
@@ -159,7 +159,7 @@ fn test_validate_invalid_key_format_number_start() {
 
 #[test]
 fn test_validate_invalid_key_format_colon() {
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    KEY:NAME token2\n\
@@ -171,7 +171,7 @@ fn test_validate_invalid_key_format_colon() {
 #[test]
 fn test_validate_sig_with_empty_lines_after() {
     // Empty lines after :SIG are allowed
-    let content = ":SECRETENV_KV 7\n\
+    let content = ":SECRETENV_KV 8\n\
                    :HEAD token0\n\
                    :WRAP token1\n\
                    KEY1 token2\n\

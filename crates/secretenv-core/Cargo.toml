@@ -18,6 +18,7 @@ rand = "0.9"
 hpke = "0.13"
 chacha20poly1305 = "0.10"
 hkdf = "0.13"
+hmac = "0.13"
 sha2 = "0.11"
 ed25519-dalek = "2"
 argon2 = { version = "0.5", features = ["alloc"] }

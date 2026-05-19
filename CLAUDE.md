@@ -138,7 +138,12 @@ KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トー
 
 ## Reference Documents
 
-- `schemas/secretenv_schema.json` — v3 JSON Schema
+- `crates/secretenv-core/schemas/secretenv_public_key_schema.json` — PublicKey JSON Schema
+- `crates/secretenv-core/schemas/secretenv_private_key_schema.json` — PrivateKey JSON Schema
+- `crates/secretenv-core/schemas/secretenv_file_enc_schema.json` — file-enc JSON Schema
+- `crates/secretenv-core/schemas/secretenv_kv_enc_schema.json` — kv-enc JSON Schema
+- `crates/secretenv-core/schemas/secretenv_artifact_signature_schema.json` — artifact signature JSON Schema
+- `crates/secretenv-core/schemas/secretenv_local_trust_schema.json` — local trust store JSON Schema
 - `guides/product_brief_en.md` / `guides/product_brief_ja.md` — Product Brief (EN/JA)
 - `guides/security_design_en.md` / `guides/security_design_ja.md` — Security Design (EN/JA)
 - `guides/user_guide_en.md` / `guides/user_guide_ja.md` — User Guide (EN/JA)

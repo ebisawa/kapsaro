@@ -1252,11 +1252,15 @@ Read paths do not use `recipient_sets` to re-approve the entire artifact sharing
 
 At the same time, the signer must be part of the artifact recipient set, and recipient handles displayed by the artifact must remain consistent with current active member files. These checks protect against attacks that mislead the user about labels or recipient membership, and are separate from whether the local approval cache already contains a key.
 
+However, signer-in-recipient-set is a reference-consistency check on the artifact. It is not a cryptographic proof that the signer had authority to update the existing artifact.
+
 ### 10.3 Write-Path Trust Decision
 
 Write paths create new encrypted artifacts or updated encrypted artifacts, so they act as a stricter normalization point than read paths. For `encrypt`, `set`, `unset`, `import`, and `rewrap`, the output recipient set is derived from current `members/active`.
 
 This design avoids silently carrying stale recipients or historical sharing state into new output. Before writing, SecretEnv checks key-owner approval for each recipient through `known_keys` and checks the output recipient set through `recipient_sets`. If a key or recipient set has not been reviewed, the write path asks for the user's judgment before persisting output.
+
+If the recipient set is unreviewed or differs from the previously approved set, a valid signature and valid format are not enough; the output becomes a trusted update only after user approval.
 
 When a write operation reads an input artifact, it first applies the read-path trust decision to that input. If an ordinary write operation sees recipients that no longer resolve to current `members/active`, it does not carry that state forward into a new encrypted artifact; the user must first synchronize the artifact through `rewrap`. `rewrap` is the remediation flow for this case: it can read the historical input and write a new artifact based on current `members/active`.
 
@@ -1265,6 +1269,8 @@ When a write operation reads an input artifact, it first applies the read-path t
 The local trust store is a local approval cache for judgments the user has already made. It is not the source of truth for current members or the current sharing policy, so it is not used as a replacement for `members/active`.
 
 `known_keys` records that the user has reviewed a key owner. `recipient_sets` records that the user has reviewed a write-path output recipient set. These caches reduce operational friction in a TOFU model; they do not by themselves show that a key owner is currently a member or that a sharing set is always appropriate.
+
+`recipient_sets` is used together with Git / PR review as a local approval cache for user judgment on write-path artifact member sets.
 
 The local trust store itself is an exception to the general `signer_pub`-required rule. Because the trust store is a user-local approval record rather than an encrypted artifact, its signature is verified with the owner's PublicKey from the local keystore.
 
@@ -1277,6 +1283,8 @@ For incoming members or unreviewed keys, the user reviews key-statement informat
 Limited exceptions do not permanently change normal trust decisions. They let the user proceed with a specific operation after reviewing the context. Applying an exception does not restore a signer to current membership or implicitly update the local approval cache.
 
 Non-member acceptance is allowed only for `decrypt`, `get`, and `rewrap`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
+
+For `rewrap`, this exception converts an input from a non-current signer into output by the current signer, so the user is shown the signer information and target current recipient set before approval.
 
 The self historical exception is limited to self keys and rests on the fact that the corresponding self key in the local keystore belongs to the local trust boundary. It does not replace approval of other members' keys or current-member authorization.
 

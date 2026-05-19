@@ -27,14 +27,14 @@ pub(super) struct PrivateKeyProtectionMetadata<'a> {
     pub(super) expires_at: &'a str,
 }
 
-pub(super) struct PrivateKeyProtectionMaterial {
+pub(super) struct FreshPrivateKeyProtectionMaterial {
     pub(super) ikm_salt: PrivateKeyIkmSalt,
     pub(super) hkdf_salt: HkdfSalt,
     ikm_salt_b64: String,
     hkdf_salt_b64: String,
 }
 
-impl PrivateKeyProtectionMaterial {
+impl FreshPrivateKeyProtectionMaterial {
     pub(super) fn generate() -> Result<Self> {
         Self::new(
             PrivateKeyIkmSalt::new(fill_random_array::<32>()?),
@@ -84,7 +84,7 @@ pub(super) fn build_private_key_protected(
 
 pub(super) fn build_sshsig_algorithm(
     ssh_fpr: &str,
-    material: &PrivateKeyProtectionMaterial,
+    material: &FreshPrivateKeyProtectionMaterial,
 ) -> PrivateKeyAlgorithm {
     PrivateKeyAlgorithm::SshSig {
         fpr: ssh_fpr.to_string(),
@@ -95,7 +95,7 @@ pub(super) fn build_sshsig_algorithm(
 }
 
 pub(super) fn build_argon2id_algorithm(
-    material: &PrivateKeyProtectionMaterial,
+    material: &FreshPrivateKeyProtectionMaterial,
 ) -> PrivateKeyAlgorithm {
     PrivateKeyAlgorithm::Argon2id {
         ikm_salt: material.ikm_salt_b64().to_string(),

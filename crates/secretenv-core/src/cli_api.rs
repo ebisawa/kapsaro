@@ -312,9 +312,7 @@ pub mod test_support {
         };
         pub mod aead {
             pub mod xchacha {
-                pub use crate::crypto::aead::xchacha::{
-                    decrypt, encrypt, encrypt_with_nonce, NONCE_SIZE,
-                };
+                pub use crate::crypto::aead::xchacha::{decrypt, encrypt_with_nonce, NONCE_SIZE};
             }
         }
         pub mod kdf {

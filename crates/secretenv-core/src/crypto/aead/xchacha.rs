@@ -9,10 +9,9 @@
 //! - ChaCha20 stream cipher + Poly1305 MAC
 
 use crate::crypto::build_crypto_operation_error;
-use crate::crypto::rng::fill_random_bytes;
 use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 use crate::crypto::types::keys::XChaChaKey;
-use crate::crypto::types::primitives::XChaChaNonce;
+use crate::crypto::types::primitives::{FreshXChaChaNonce, XChaChaNonce};
 use crate::Result;
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
@@ -36,12 +35,12 @@ pub const NONCE_SIZE: usize = 24;
 ///
 /// # Errors
 /// Returns `Error::Crypto` if encryption fails
-pub fn encrypt(
+fn encrypt(
     key: &XChaChaKey,
-    nonce: &XChaChaNonce,
+    nonce: FreshXChaChaNonce,
     aad: &Aad,
     plaintext: &Plaintext,
-) -> Result<Ciphertext> {
+) -> Result<(Ciphertext, XChaChaNonce)> {
     let cipher = XChaCha20Poly1305::new(key.as_bytes().into());
 
     let payload = Payload {
@@ -49,10 +48,11 @@ pub fn encrypt(
         aad: aad.as_bytes(),
     };
 
-    cipher
+    let ciphertext = cipher
         .encrypt(nonce.as_bytes().into(), payload)
         .map(Ciphertext::from)
-        .map_err(|_| build_crypto_operation_error("XChaCha20-Poly1305 encryption failed"))
+        .map_err(|_| build_crypto_operation_error("XChaCha20-Poly1305 encryption failed"))?;
+    Ok((ciphertext, nonce.into_stored()))
 }
 
 /// Decrypt ciphertext with XChaCha20-Poly1305 (low-level API with explicit nonce)
@@ -108,10 +108,6 @@ pub fn encrypt_with_nonce(
     plaintext: &Plaintext,
     aad: &Aad,
 ) -> Result<(Ciphertext, XChaChaNonce)> {
-    let mut nonce_bytes = [0u8; NONCE_SIZE];
-    fill_random_bytes(&mut nonce_bytes)?;
-    let nonce = XChaChaNonce::new(nonce_bytes);
-
-    let ciphertext = encrypt(key, &nonce, aad, plaintext)?;
-    Ok((ciphertext, nonce))
+    let fresh_nonce = FreshXChaChaNonce::generate()?;
+    encrypt(key, fresh_nonce, aad, plaintext)
 }

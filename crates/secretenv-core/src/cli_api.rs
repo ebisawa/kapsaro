@@ -35,7 +35,9 @@ pub mod app {
         }
 
         pub mod options {
-            pub use crate::app::context::options::CommonCommandOptions;
+            pub use crate::app::context::options::{
+                resolve_allow_expired_key_option, CommonCommandOptions,
+            };
         }
 
         pub mod ssh {

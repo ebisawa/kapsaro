@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::feature::context::expiry::enforce_expired_key_usage;
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
@@ -17,8 +18,9 @@ use crate::feature::kv::query::{
     decode_decrypted_kv_value, decode_decrypted_kv_values, list_kv_keys_with_disclosed,
 };
 use crate::feature::kv::types::KvInputEntry as InternalKvInputEntry;
-use crate::feature::verify::kv::signature::verify_kv_content;
+use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
+use crate::model::common::WrapSet;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::support::fs::atomic::save_text;
 use crate::support::fs::load_text_with_limit;
@@ -81,7 +83,7 @@ impl KvEncArtifact {
 
     /// Verify the artifact signature.
     pub fn verify(&self, options: OperationOptions) -> Result<VerifiedKvEncArtifact> {
-        verify_kv_content(&self.content, options.debug())
+        verify_kv_content_for_operation(&self.content, options.debug(), options.allow_expired_key())
             .map(|inner| VerifiedKvEncArtifact::from_inner(self.content.clone(), inner))
     }
 
@@ -198,6 +200,7 @@ impl VerifiedKvEncArtifact {
         key: &str,
         options: OperationOptions,
     ) -> Result<SecretString> {
+        enforce_key_context_expiry(self, key_ctx, options)?;
         let value = decrypt_kv_single_entry_with_context(
             self.inner(),
             key_ctx.member_handle(),
@@ -216,6 +219,7 @@ impl VerifiedKvEncArtifact {
         key_ctx: &KeyContext,
         options: OperationOptions,
     ) -> Result<BTreeMap<String, SecretString>> {
+        enforce_key_context_expiry(self, key_ctx, options)?;
         let values = decrypt_kv_document_with_context(
             self.inner(),
             key_ctx.member_handle(),
@@ -230,6 +234,25 @@ impl VerifiedKvEncArtifact {
                 .collect()
         })
     }
+}
+
+fn enforce_key_context_expiry(
+    artifact: &VerifiedKvEncArtifact,
+    key_ctx: &KeyContext,
+    options: OperationOptions,
+) -> Result<()> {
+    let wrap_set = WrapSet::parse(&artifact.inner().document().wrap().wrap, "Document")?;
+    let selected = key_ctx.inner().select_local_decryption_key(
+        &wrap_set,
+        key_ctx.member_handle(),
+        options.debug(),
+    )?;
+    let _ = enforce_expired_key_usage(
+        &selected.info().expires_at,
+        options.allow_expired_key(),
+        "Private key",
+    )?;
+    Ok(())
 }
 
 impl KvInputEntry {

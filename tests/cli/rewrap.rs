@@ -33,6 +33,9 @@ mod roundtrip;
 fn default_rewrap_args(common_opts: CommonOptions, member_handle: &str) -> RewrapArgs {
     RewrapArgs {
         common: common_opts.into(),
+        allow_expired_key: secretenv::cli::options::AllowExpiredKeyOption {
+            allow_expired_key: false,
+        },
         member: secretenv::cli::options::MemberHandleOption {
             member_handle: Some(member_handle.to_string()),
         },
@@ -117,6 +120,9 @@ fn save_kv_file(
         }
         let set_args = set::SetArgs {
             common: common_opts.clone().into(),
+            allow_expired_key: secretenv::cli::options::AllowExpiredKeyOption {
+                allow_expired_key: false,
+            },
             member: secretenv::cli::options::MemberHandleOption {
                 member_handle: Some(member_handle.to_string()),
             },

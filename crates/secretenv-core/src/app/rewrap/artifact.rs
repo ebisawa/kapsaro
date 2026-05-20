@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use crate::app::artifact::encrypted_content_recipient_evidence;
-use crate::app::context::execution::ExecutionContext;
+use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::review::ReviewedTextFile;
 use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
 use crate::app::trust::enforcement::evaluate_read_artifact_recipient_keys;
@@ -21,9 +21,10 @@ use crate::app::trust::{
     ArtifactRecipientTrustOutcome, CommandCapability, RecipientTrustOutcome, SignerTrustOutcome,
     TrustApprovalCandidate, TrustContext,
 };
-use crate::feature::verify::file::verify_file_content;
-use crate::feature::verify::kv::signature::verify_kv_content;
+use crate::feature::verify::file::verify_file_content_for_operation;
+use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::EncContent;
+use crate::model::common::WrapSet;
 use crate::model::verification::SignatureVerificationProof;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
@@ -148,6 +149,9 @@ where
         captured.require_content()?.to_string(),
         format_path_relative_to_cwd(file_path),
     )?;
+    if let Some(warning) = build_rewrap_decryption_key_warning(&content, ctx)? {
+        push_unique_warning(warnings, warning);
+    }
     review_captured_artifact_signer(
         &captured,
         &content,
@@ -189,6 +193,34 @@ where
     Ok(())
 }
 
+fn build_rewrap_decryption_key_warning(
+    content: &EncContent,
+    ctx: &RewrapArtifactExecutionContext<'_>,
+) -> Result<Option<String>> {
+    let wrap_set = match content {
+        EncContent::FileEnc(file_content) => {
+            let doc = file_content.parse()?;
+            WrapSet::parse(&doc.protected.wrap, "Document")?
+        }
+        EncContent::KvEnc(kv_content) => {
+            let doc = kv_content.parse()?;
+            WrapSet::parse(&doc.wrap().wrap, "Document")?
+        }
+    };
+    enforce_selected_decryption_key_expiry(
+        ctx.execution,
+        &wrap_set,
+        ctx.request.options.allow_expired_key,
+        ctx.request.options.debug,
+    )
+}
+
+fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
+    if !warnings.contains(&warning) {
+        warnings.push(warning);
+    }
+}
+
 fn load_captured_artifact(file_path: &Path) -> Result<ReviewedTextFile> {
     ReviewedTextFile::load_existing(
         file_path,
@@ -217,6 +249,7 @@ where
         captured,
         content,
         &trust_ctx,
+        ctx.request.options.allow_expired_key,
         &ctx.current_recipients,
         warnings,
     )?
@@ -261,10 +294,14 @@ fn build_rewrap_input_trust_requirement(
     captured: &ReviewedTextFile,
     content: &EncContent,
     trust_ctx: &TrustContext,
+    allow_expired_key: bool,
     current_recipients: &[String],
     warnings: &mut Vec<String>,
 ) -> Result<Option<RewrapInputTrustRequirement>> {
-    let proof = extract_signature_proof(content)?;
+    let proof = extract_signature_proof(content, allow_expired_key)?;
+    for warning in &proof.warnings {
+        push_unique_warning(warnings, warning.clone());
+    }
     let recipient_evidence = encrypted_content_recipient_evidence(content)?;
     let recipient_trust = evaluate_read_artifact_recipient_keys(
         trust_ctx,
@@ -296,12 +333,21 @@ fn input_trust_accepted(
         && matches!(recipient_outcome, RecipientTrustOutcome::Accepted)
 }
 
-fn extract_signature_proof(content: &EncContent) -> Result<SignatureVerificationProof> {
+fn extract_signature_proof(
+    content: &EncContent,
+    allow_expired_key: bool,
+) -> Result<SignatureVerificationProof> {
     match content {
         EncContent::FileEnc(file_content) => {
-            Ok(verify_file_content(file_content, false)?.proof.clone())
+            Ok(
+                verify_file_content_for_operation(file_content, false, allow_expired_key)?
+                    .proof
+                    .clone(),
+            )
         }
-        EncContent::KvEnc(kv_content) => Ok(verify_kv_content(kv_content, false)?.proof),
+        EncContent::KvEnc(kv_content) => {
+            Ok(verify_kv_content_for_operation(kv_content, false, allow_expired_key)?.proof)
+        }
     }
 }
 

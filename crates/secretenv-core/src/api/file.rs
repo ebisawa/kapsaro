@@ -5,11 +5,13 @@
 
 use std::path::Path;
 
+use crate::feature::context::expiry::enforce_expired_key_usage;
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
 use crate::feature::envelope::signature::build_signing_context;
-use crate::feature::verify::file::verify_file_content;
+use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::format::content::FileEncContent;
+use crate::model::common::WrapSet;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::support::fs::atomic::save_text;
 use crate::support::fs::load_text_with_limit;
@@ -71,7 +73,12 @@ impl FileEncArtifact {
 
     /// Verify the artifact signature.
     pub fn verify(&self, options: OperationOptions) -> Result<VerifiedFileEncArtifact> {
-        verify_file_content(&self.content, options.debug()).map(VerifiedFileEncArtifact::from_inner)
+        verify_file_content_for_operation(
+            &self.content,
+            options.debug(),
+            options.allow_expired_key(),
+        )
+        .map(VerifiedFileEncArtifact::from_inner)
     }
 
     /// Return the serialized artifact text.
@@ -100,6 +107,17 @@ impl VerifiedFileEncArtifact {
         key_ctx: &KeyContext,
         options: OperationOptions,
     ) -> Result<SecretBytes> {
+        let wrap_set = WrapSet::parse(&self.inner().document.protected.wrap, "Document")?;
+        let selected = key_ctx.inner().select_local_decryption_key(
+            &wrap_set,
+            key_ctx.member_handle(),
+            options.debug(),
+        )?;
+        let _ = enforce_expired_key_usage(
+            &selected.info().expires_at,
+            options.allow_expired_key(),
+            "Private key",
+        )?;
         decrypt_file_document_with_context(
             self.inner(),
             key_ctx.member_handle(),

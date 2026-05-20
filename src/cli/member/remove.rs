@@ -4,7 +4,7 @@
 #[cfg(test)]
 use std::io::BufRead;
 
-use crate::cli::common::command::resolve_options;
+use crate::cli::common::command::resolve_options_with_allow_expired_key;
 use crate::cli::common::output::text::member::print_member_remove_summary;
 use crate::cli::common::output::text::{print_warning, print_warning_line};
 use crate::cli::common::prompt::prompt_yes_no;
@@ -18,7 +18,10 @@ use secretenv_core::Error;
 use super::RemoveArgs;
 
 pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
+    let options = resolve_options_with_allow_expired_key(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+    )?;
     let preview = evaluate_member_removal(&options, &args.member_handle)?;
     print_member_remove_preview(&preview);
     confirm_member_remove(args.force.force, &args.member_handle)?;

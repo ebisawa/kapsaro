@@ -6,12 +6,14 @@
 use clap::Args;
 
 use crate::cli::common::command::{
-    resolve_command_input, resolve_options, resolve_trust_store_owner_member,
-    run_read_command_with_trust, ReadCommandLabels,
+    resolve_command_input, resolve_options_with_allow_expired_key,
+    resolve_trust_store_owner_member, run_read_command_with_trust, ReadCommandLabels,
 };
 use crate::cli::common::output::kv::print_kv_read_result;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningOutputOptions};
+use crate::cli::options::{
+    AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOutputOptions,
+};
 use secretenv_core::cli_api::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
 use secretenv_core::cli_api::app::trust::GetPolicy;
 use secretenv_core::Result;
@@ -21,6 +23,9 @@ pub struct GetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOutputOptions,
+
+    #[command(flatten)]
+    pub allow_expired_key: AllowExpiredKeyOption,
 
     /// Output all entries
     #[arg(long, short = 'a')]
@@ -61,7 +66,10 @@ pub fn run(args: GetArgs) -> Result<()> {
             })?,
         )
     };
-    let options = resolve_options(&args.common);
+    let options = resolve_options_with_allow_expired_key(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+    )?;
     let kv_map = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),

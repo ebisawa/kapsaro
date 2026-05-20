@@ -774,9 +774,11 @@ At minimum, follow these rules:
 |-------|-------------|
 | active | Key used for encryption and signing. One per member handle. |
 | available | Can decrypt but is not used for encryption or signing. |
-| expired | Past expiration date. Can still decrypt (with a warning). |
+| expired | Past expiration date. Cannot be used for encryption or signing, and requires explicit recovery allowance for decryption or operational artifact signature verification. |
 
 In everyday use, only the `active` key is used for new encryption and signing. `available` or `expired` keys may still remain because older secrets may still need them for decryption.
+
+Do not use expired keys in normal operation. Rotate before expiration whenever possible. If you must recover older secrets, pass `--allow-expired-key` to the target command, or temporarily set `SECRETENV_ALLOW_EXPIRED_KEY=yes` or `allow_expired_key="yes"`. This allowance only applies to decryption and operational artifact signature verification. It does not allow encryption, signing, or approval of expired PublicKeys with `member verify --approve`.
 
 ### Listing Keys
 
@@ -1185,6 +1187,10 @@ Run `ssh-add -l` to check. If empty, add your key with `ssh-add ~/.ssh/id_ed2551
 
 Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 12](#12-key-management-and-rotation): generate a new key with `secretenv key new`, stage it with `secretenv join`, then run `secretenv rewrap` after the PR is merged.
 
+If `decrypt`, `get`, `run`, `set`, `unset`, `import`, `rewrap`, or `member remove` fails with `E_KEY_EXPIRED`, normally finish rotation and `rewrap` first. If you need emergency recovery for older secrets, pass `--allow-expired-key` to that command. To allow several commands temporarily, set `SECRETENV_ALLOW_EXPIRED_KEY=yes` only for that shell or CI step, or use `secretenv config set allow_expired_key yes` only with a clear plan to set it back afterward.
+
+`member verify --approve` does not approve expired PublicKeys. `--allow-expired-key` and `SECRETENV_ALLOW_EXPIRED_KEY=yes` do not save expired member keys to the local trust store.
+
 ### Q: Unexpected approval prompts when decrypting
 
 This occurs when the signer's `kid` or an active recipient `kid` in the artifact has not been reviewed on your machine. Run `secretenv member verify --approve` to review and approve current active members. If a read command warns that a recipient kid is no longer in `members/active`, the artifact may still contain stale recipient metadata. Run `secretenv rewrap` before writing it.
@@ -1215,6 +1221,7 @@ Accepted options differ by command. These options are shared by multiple command
 | `--debug` | Show internal debug trace logs |
 | `-n` / `--name <name>` | Select a KV store name (default: `default`) |
 | `-f` / `--force` | Skip confirmation for commands that support it |
+| `--allow-expired-key` | Explicitly allow recovery decryption and operational artifact signature verification with expired keys for commands that support it |
 
 ### Initialization and Joining
 
@@ -1227,15 +1234,15 @@ Accepted options differ by command. These options are shared by multiple command
 
 | Command | Description |
 |---------|-------------|
-| `secretenv set [-n <name>] [-m <handle>] <KEY> <VALUE>` | Add or update an entry |
-| `secretenv set [-n <name>] [-m <handle>] <KEY> --stdin` | Read value from stdin and set it |
-| `secretenv get [-n <name>] [-m <handle>] <KEY>` | Retrieve and display a specific key's value |
-| `secretenv get [-n <name>] [-m <handle>] --all` | Retrieve and display all entries |
+| `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> <VALUE>` | Add or update an entry |
+| `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> --stdin` | Read value from stdin and set it |
+| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] <KEY>` | Retrieve and display a specific key's value |
+| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] --all` | Retrieve and display all entries |
 | `secretenv get [-n <name>] [--all] --with-key` | Output in `KEY="VALUE"` format |
-| `secretenv unset [-n <name>] [-m <handle>] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
+| `secretenv unset [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
 | `secretenv list [-n <name>] [--json]` | List key names (values not displayed) |
-| `secretenv import [-n <name>] [-m <handle>] <file> [--json]` | Bulk import a `.env` file |
-| `secretenv run [-n <name>] [-m <handle>] -- <command> [args...]` | Run a command with secrets injected as environment variables |
+| `secretenv import [-n <name>] [-m <handle>] [--allow-expired-key] <file> [--json]` | Bulk import a `.env` file |
+| `secretenv run [-n <name>] [-m <handle>] [--allow-expired-key] -- <command> [args...]` | Run a command with secrets injected as environment variables |
 
 ### File Operations
 
@@ -1243,8 +1250,8 @@ Accepted options differ by command. These options are shared by multiple command
 |---------|-------------|
 | `secretenv encrypt [-m <handle>] <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
 | `secretenv encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] <file> (--out <path> \| --stdout)` | Decrypt a file |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] <file> (--out <path> \| --stdout)` | Decrypt a file |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
 | `secretenv inspect <file> [--json] [--verbose]` | Display encrypted file metadata (no decryption needed) |
 
 ### Diagnostics
@@ -1261,8 +1268,8 @@ Accepted options differ by command. These options are shared by multiple command
 | `secretenv member show <member_handle> [--json] [--verbose]` | Show details for a specific member |
 | `secretenv member verify [-m <handle>] [--approve] [<member_handle>...] [--json]` | Verify active member public keys and optionally save approvals in the local trust store |
 | `secretenv member add <file> [--force]` | Add a member's public key file to incoming |
-| `secretenv member remove <member_handle> [--force]` | Remove a member from the Workspace. Non-interactive use requires `--force` |
-| `secretenv rewrap [-m <handle>] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
+| `secretenv member remove <member_handle> [--force] [--allow-expired-key]` | Remove a member from the Workspace. Non-interactive use requires `--force` |
+| `secretenv rewrap [-m <handle>] [--allow-expired-key] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
 
 When `--target` is omitted, `rewrap` processes all encrypted files in the workspace. When `--target` is provided, only the specified files are processed.
 
@@ -1299,7 +1306,7 @@ When `--target` is omitted, `rewrap` processes all encrypted files in the worksp
 
 Configuration commands do not require a workspace. They operate on the global config file.
 
-Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `ssh_keygen_command`, `ssh_add_command`, `github_user`
+Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `ssh_keygen_command`, `ssh_add_command`, `github_user`, `allow_expired_key`
 
 ---
 
@@ -1327,6 +1334,9 @@ secretenv config set ssh_signing_method auto
 
 # Set SSH key (select a specific key when multiple keys are loaded in ssh-agent)
 secretenv config set ssh_identity ~/.ssh/id_ed25519_work
+
+# Keep expired-key recovery disabled unless you are doing emergency recovery
+secretenv config set allow_expired_key no
 ```
 
 The configuration file is located at `~/.config/secretenv/config.toml`.
@@ -1355,6 +1365,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 | `ssh_keygen_command` | Path to `ssh-keygen` command | `ssh-keygen` | — | — |
 | `ssh_add_command` | Path to `ssh-add` command | `ssh-add` | — | — |
 | `github_user` | Default GitHub login name for `key new` | (none) | `--github-user` | `SECRETENV_GITHUB_USER` |
+| `allow_expired_key` | Whether to allow recovery decryption and operational artifact signature verification with expired keys. Value is `yes` or `no` | `no` | `--allow-expired-key` | `SECRETENV_ALLOW_EXPIRED_KEY` |
 
 Example:
 
@@ -1364,6 +1375,7 @@ workspace = "~/src/project/.secretenv"
 ssh_identity = "~/.ssh/id_ed25519"
 ssh_signing_method = "auto"
 github_user = "alice-gh"
+allow_expired_key = "no"
 ```
 
 If the config file does not exist, secretenv falls back to environment variables and default values without error. If the file exists but contains syntax errors, secretenv reports an error. `config get`, `config set`, `config unset`, and `config list` operate on the global config file and do not check whether the configured workspace exists.
@@ -1379,6 +1391,7 @@ If the config file does not exist, secretenv falls back to environment variables
 | `SECRETENV_GITHUB_USER` | Default GitHub login name for `key new` | (none) |
 | `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected) |
 | `SECRETENV_STRICT_KEY_CHECKING` | Whether to check local approval history during read operations: `yes`, `no` | `yes` |
+| `SECRETENV_ALLOW_EXPIRED_KEY` | Whether to allow recovery decryption and operational artifact signature verification with expired keys: `yes`, `no` | `no` |
 | `SECRETENV_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
 | `SECRETENV_KEY_PASSWORD` | Password for `SECRETENV_PRIVATE_KEY` (CI/CD) | (none) |
 
@@ -1386,6 +1399,7 @@ If the config file does not exist, secretenv falls back to environment variables
 
 - `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 13](#13-cicd-integration) for details.
 - `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
+- `SECRETENV_ALLOW_EXPIRED_KEY=yes` is not a way to return expired keys to normal use. Set it only for the target emergency recovery command or step, then unset it afterward.
 - `SECRETENV_WORKSPACE` overrides automatic workspace detection. Useful when running commands outside the Git repository tree or when using a workspace outside the current directory.
 
 ---

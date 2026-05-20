@@ -15,6 +15,7 @@ fn build_options(home: &std::path::Path) -> CommonCommandOptions {
         verbose: false,
         workspace: None,
         ssh_signing_method: None,
+        allow_expired_key: false,
     }
 }
 

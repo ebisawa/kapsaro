@@ -9,6 +9,7 @@ use crate::app::context::paths::require_workspace;
 use crate::app::trust::approval::{save_known_key_approvals, ApprovalSaveResult, ApprovedKnownKey};
 use crate::app::trust::store::load_or_build_trust_store_for_member;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
+use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
 use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
@@ -66,7 +67,7 @@ pub fn evaluate_members_for_approval(
 
     let mut results = Vec::new();
     for vr in &verification_results {
-        let result = evaluate_candidate_with_snapshot(vr, &active_members, &protected.known_keys);
+        let result = evaluate_candidate_with_snapshot(vr, &active_members, &protected.known_keys)?;
         results.push(result);
     }
 
@@ -138,11 +139,11 @@ fn evaluate_candidate_with_snapshot(
     vr: &crate::io::verify_online::VerificationResult,
     active_members: &[crate::model::public_key::PublicKey],
     known_keys: &[crate::model::trust_store::KnownKey],
-) -> MemberApprovalResult {
+) -> Result<MemberApprovalResult> {
     let member_pk = find_member_public_key(active_members, &vr.member_handle);
 
     let Some(pk) = member_pk else {
-        return MemberApprovalResult {
+        return Ok(MemberApprovalResult {
             member_handle: vr.member_handle.clone(),
             kid: String::new(),
             verified: false,
@@ -159,38 +160,60 @@ fn evaluate_candidate_with_snapshot(
             github_binding_configured: false,
             attestor_pub: None,
             verified_github: None,
-        };
+        });
     };
     let candidate = TrustApprovalCandidateBuilder::from_public_key(pk)
         .with_verification_result(vr)
         .build();
 
+    if is_public_key_expired(&pk.protected.expires_at) {
+        return Err(Error::build_verification_error(
+            "E_KEY_EXPIRED".to_string(),
+            format!(
+                "PublicKey has expired (expires_at: {}); expired member keys cannot be approved",
+                pk.protected.expires_at
+            ),
+        ));
+    }
+
     // Manual review is only allowed when GitHub binding is absent.
     if vr.status == VerificationStatus::Failed
         || (candidate.github_binding_configured && vr.status != VerificationStatus::Verified)
     {
-        return build_member_approval_result(vr, &candidate, false, false, false);
+        return Ok(build_member_approval_result(
+            vr, &candidate, false, false, false,
+        ));
     }
 
     let known_key_state = match judge_known_key(known_keys, &candidate.kid, &vr.member_handle) {
         Ok(state) => state,
         Err(e) => {
-            return build_member_approval_result_with_message(
+            return Ok(build_member_approval_result_with_message(
                 &candidate,
                 true,
                 false,
                 false,
                 format!("Integrity anomaly: {}", e),
-            );
+            ));
         }
     };
 
-    build_member_approval_result(
+    Ok(build_member_approval_result(
         vr,
         &candidate,
         vr.status == VerificationStatus::Verified,
         matches!(known_key_state, KnownKeyJudgment::New),
         matches!(known_key_state, KnownKeyJudgment::Existing),
+    ))
+}
+
+fn is_public_key_expired(expires_at: &str) -> bool {
+    if expires_at.is_empty() {
+        return false;
+    }
+    matches!(
+        check_key_expiry(expires_at, time::OffsetDateTime::now_utc()),
+        Ok(KeyExpiryStatus::Expired { .. })
     )
 }
 

@@ -36,6 +36,7 @@ impl DoctorRequest {
             verbose: self.verbose,
             workspace: self.workspace.clone(),
             ssh_signing_method: None,
+            allow_expired_key: false,
         }
     }
 }

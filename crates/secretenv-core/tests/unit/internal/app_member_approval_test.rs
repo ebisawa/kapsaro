@@ -133,6 +133,32 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
 }
 
 #[test]
+fn test_member_verify_approve_does_not_approve_expired_target_key() {
+    let (_temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let mut active_members = load_active_member_files(&workspace_dir).unwrap();
+    let bob = active_members
+        .iter_mut()
+        .find(|pk| pk.protected.subject_handle == BOB_MEMBER_HANDLE)
+        .unwrap();
+    bob.protected.expires_at = "2020-01-01T00:00:00Z".to_string();
+    let error = super::evaluate_candidate_with_snapshot(
+        &crate::io::verify_online::VerificationResult::not_configured(
+            BOB_MEMBER_HANDLE,
+            "manual review",
+            None,
+            false,
+        ),
+        &active_members,
+        &[],
+    )
+    .unwrap_err();
+
+    assert_eq!(error.verification_rule(), Some("E_KEY_EXPIRED"));
+    assert!(error.to_string().contains("expired"));
+}
+
+#[test]
 fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);

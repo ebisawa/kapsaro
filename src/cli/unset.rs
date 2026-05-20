@@ -8,8 +8,8 @@ use clap::Args;
 use std::io::BufRead;
 
 use crate::cli::common::command::{
-    resolve_options, resolve_required_member_handle, resolve_trust_store_owner_member,
-    run_kv_write_command_with_trust, WriteCommandLabels,
+    resolve_options_with_allow_expired_key, resolve_required_member_handle,
+    resolve_trust_store_owner_member, run_kv_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::text::{print_optional_status, print_warnings};
 use crate::cli::common::prompt::prompt_yes_no;
@@ -19,7 +19,7 @@ use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
 use crate::cli::options::{
-    ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
+    AllowExpiredKeyOption, ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
 use secretenv_core::cli_api::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
 use secretenv_core::cli_api::app::trust::UnsetPolicy;
@@ -31,6 +31,9 @@ pub struct UnsetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOptions,
+
+    #[command(flatten)]
+    pub allow_expired_key: AllowExpiredKeyOption,
 
     #[command(flatten)]
     pub force: ForceOption,
@@ -46,7 +49,10 @@ pub struct UnsetArgs {
 }
 
 pub fn run(args: UnsetArgs) -> Result<()> {
-    let options = resolve_options(&args.common);
+    let options = resolve_options_with_allow_expired_key(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+    )?;
     let member_handle =
         resolve_required_member_handle(&options, args.member.member_handle.clone(), false)?;
     confirm_unset_operation(args.force.force, &args.key)?;
@@ -59,6 +65,7 @@ pub fn run(args: UnsetArgs) -> Result<()> {
                 Some(member_handle.clone()),
                 args.store.name.as_deref(),
                 false,
+                args.allow_expired_key.allow_expired_key,
                 WriteCommandLabels {
                     signer_context: Some(("unset input signer", "input signer")),
                     recipient_context: "unset recipients",

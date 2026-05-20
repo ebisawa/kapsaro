@@ -23,6 +23,7 @@ fn test_validate_key_valid() {
     assert!(validate_key("ssh_add_command").is_ok());
     assert!(validate_key("ssh_signing_method").is_ok());
     assert!(validate_key("github_user").is_ok());
+    assert!(validate_key("allow_expired_key").is_ok());
 }
 
 #[test]

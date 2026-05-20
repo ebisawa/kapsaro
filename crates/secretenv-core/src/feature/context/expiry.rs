@@ -109,6 +109,39 @@ pub fn build_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Result<Option
     }
 }
 
+/// Enforce explicit allowance before using an expired key operationally.
+pub(crate) fn enforce_expired_key_usage(
+    expires_at: &str,
+    allow_expired_key: bool,
+    key_label: &str,
+) -> Result<Option<String>> {
+    match check_key_expiry(expires_at, OffsetDateTime::now_utc())? {
+        KeyExpiryStatus::Valid => Ok(None),
+        KeyExpiryStatus::ExpiringSoon {
+            expires_at,
+            days_remaining,
+        } => Ok(Some(format!(
+            "{} expires in {} days (expires_at: {})",
+            key_label,
+            days_remaining,
+            sanitize_display_field(&expires_at)
+        ))),
+        KeyExpiryStatus::Expired { expires_at } if allow_expired_key => Ok(Some(format!(
+            "{} has expired (expires_at: {}); continuing because expired key use was explicitly allowed",
+            key_label,
+            sanitize_display_field(&expires_at)
+        ))),
+        KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
+            "E_KEY_EXPIRED".to_string(),
+            format!(
+                "{} has expired (expires_at: {}). Use --allow-expired-key or set allow_expired_key=yes only for explicit recovery.",
+                key_label,
+                sanitize_display_field(&expires_at)
+            ),
+        )),
+    }
+}
+
 /// Build a warning message for write operations when the signing key expires soon.
 pub fn build_signing_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Result<Option<String>> {
     match check_key_expiry(expires_at.as_str(), OffsetDateTime::now_utc())? {

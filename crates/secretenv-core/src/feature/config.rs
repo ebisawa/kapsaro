@@ -17,6 +17,7 @@ pub(crate) const VALID_KEYS: &[&str] = &[
     "ssh_add_command",
     "ssh_signing_method",
     "github_user",
+    "allow_expired_key",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

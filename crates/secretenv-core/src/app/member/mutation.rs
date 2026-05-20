@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
 use crate::feature::member::add::add_member_from_file;
-use crate::feature::verify::file::verify_file_content;
-use crate::feature::verify::kv::signature::verify_kv_content;
+use crate::feature::verify::file::verify_file_content_for_operation;
+use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::EncContent;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::kv::KV_ENC_EXTENSION;
@@ -44,9 +44,14 @@ pub fn evaluate_member_removal(
     let mut affected_artifacts = Vec::new();
     let mut warnings = Vec::new();
     for artifact_path in find_encrypted_artifacts(&workspace.root_path)? {
-        match artifact_contains_member(&artifact_path, member_handle) {
-            Ok(true) => affected_artifacts.push(artifact_path),
-            Ok(false) => {}
+        match artifact_contains_member(&artifact_path, member_handle, options.allow_expired_key) {
+            Ok(result) => {
+                warnings.extend(result.warnings);
+                if result.contains_member {
+                    affected_artifacts.push(artifact_path);
+                }
+            }
+            Err(error) if error.verification_rule() == Some("E_KEY_EXPIRED") => return Err(error),
             Err(error) => warnings.push(format_artifact_warning(&artifact_path, &error)),
         }
     }
@@ -92,26 +97,61 @@ fn is_encrypted_artifact(path: &Path) -> bool {
     name.ends_with(KV_ENC_EXTENSION) || name.ends_with(".json") || name.ends_with(".encrypted")
 }
 
-fn artifact_contains_member(path: &Path, member_handle: &str) -> Result<bool> {
+struct ArtifactMemberScan {
+    contains_member: bool,
+    warnings: Vec<String>,
+}
+
+fn artifact_contains_member(
+    path: &Path,
+    member_handle: &str,
+    allow_expired_key: bool,
+) -> Result<ArtifactMemberScan> {
     let content = load_text_with_limit(
         path,
         resolve_encrypted_artifact_read_limit(path),
         "encrypted artifact",
     )?;
-    let recipients = verified_artifact_recipients(content, &format_path_relative_to_cwd(path))?;
-    Ok(recipients
-        .iter()
-        .any(|recipient| recipient == member_handle))
+    let result = verified_artifact_recipients(
+        content,
+        &format_path_relative_to_cwd(path),
+        allow_expired_key,
+    )?;
+    Ok(ArtifactMemberScan {
+        contains_member: result
+            .recipients
+            .iter()
+            .any(|recipient| recipient == member_handle),
+        warnings: result.warnings,
+    })
 }
 
-fn verified_artifact_recipients(content: String, source_name: &str) -> Result<Vec<String>> {
+struct VerifiedArtifactRecipients {
+    recipients: Vec<String>,
+    warnings: Vec<String>,
+}
+
+fn verified_artifact_recipients(
+    content: String,
+    source_name: &str,
+    allow_expired_key: bool,
+) -> Result<VerifiedArtifactRecipients> {
     match EncContent::detect_with_source(content, source_name)? {
-        EncContent::FileEnc(file_content) => Ok(verify_file_content(&file_content, false)?
-            .document()
-            .recipients()),
-        EncContent::KvEnc(kv_content) => Ok(extract_recipients_from_wrap(
-            verify_kv_content(&kv_content, false)?.document().wrap(),
-        )),
+        EncContent::FileEnc(file_content) => {
+            let verified =
+                verify_file_content_for_operation(&file_content, false, allow_expired_key)?;
+            Ok(VerifiedArtifactRecipients {
+                recipients: verified.document().recipients(),
+                warnings: verified.proof.warnings,
+            })
+        }
+        EncContent::KvEnc(kv_content) => {
+            let verified = verify_kv_content_for_operation(&kv_content, false, allow_expired_key)?;
+            Ok(VerifiedArtifactRecipients {
+                recipients: extract_recipients_from_wrap(verified.document().wrap()),
+                warnings: verified.proof.warnings,
+            })
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "secretenv"
-version = "0.8.1-alpha"
+version = "0.9.1-alpha"
 edition = "2021"
 authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
 description = "Offline-first CLI for sharing encrypted .env files and other secrets through Git"
@@ -11,7 +11,7 @@ autotests = false
 members = ["crates/secretenv-core"]
 
 [dependencies]
-secretenv-core = { version = "0.8.1-alpha", path = "crates/secretenv-core", features = ["cli-internal"] }
+secretenv-core = { version = "0.9.1-alpha", path = "crates/secretenv-core", features = ["cli-internal"] }
 
 # CLI framework
 clap = { version = "4", features = ["derive"] }
@@ -40,7 +40,7 @@ default = ["online"]
 online = ["secretenv-core/online"]
 
 [dev-dependencies]
-secretenv-core = { version = "0.8.1-alpha", path = "crates/secretenv-core", features = ["cli-internal", "cli-test-support"] }
+secretenv-core = { version = "0.9.1-alpha", path = "crates/secretenv-core", features = ["cli-internal", "cli-test-support"] }
 
 # CLI testing
 assert_cmd = "2"

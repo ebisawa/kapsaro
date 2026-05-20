@@ -46,13 +46,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update --target ${{ matrix.target }}
 
       - name: Install musl-tools
         if: matrix.musl
@@ -60,15 +55,15 @@ jobs:
 
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --version 0.2.5 --locked
 
       - name: Build (native)
         if: "!matrix.use_cross"
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Build (cross)
         if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }}
+        run: cross build --release --locked --target ${{ matrix.target }}
 
       - name: Create archive
         shell: bash
@@ -109,7 +104,7 @@ jobs:
           cat SHA256SUMS
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |

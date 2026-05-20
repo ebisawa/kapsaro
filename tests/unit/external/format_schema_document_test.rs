@@ -143,6 +143,52 @@ fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
 }
 
 #[test]
+fn test_parse_file_enc_str_rejects_non_canonical_payload_ct_base64url() {
+    let sid = "123e4567-e89b-12d3-a456-426614174000";
+    let file_enc = serde_json::json!({
+        "protected": {
+            "format": format::FILE_ENC_V6,
+            "sid": sid,
+            "payload": {
+                "protected": {
+                    "format": format::FILE_PAYLOAD_V6,
+                    "sid": sid,
+                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
+                },
+                "encrypted": {
+                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AB"
+                }
+            },
+            "wrap": [{
+                "rh": "alice@example.com",
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
+                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            }],
+            "created_at": "2026-01-14T00:00:00Z",
+            "updated_at": "2026-01-14T00:00:00Z"
+        },
+        "signature": {
+            "alg": algorithm::SIGNATURE_ED25519,
+            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+        }
+    });
+
+    let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("protected.payload.encrypted.ct"));
+}
+
+#[test]
 fn test_parse_kv_tokens_with_schema() {
     let kv_salt = encode_base64url_nopad(&[0u8; 32]);
     let head = KvHeader {
@@ -191,6 +237,25 @@ fn test_parse_kv_tokens_with_schema() {
         parse_kv_signature_token(&signature_token).unwrap(),
         signature
     );
+}
+
+#[test]
+fn test_parse_kv_entry_token_rejects_non_canonical_ct_base64url() {
+    let entry = KvEntryValue {
+        salt: encode_base64url_nopad(&[0u8; 32]),
+        nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        ct: "AAB".to_string(),
+        disclosed: false,
+    };
+    let entry_token = TokenCodec::encode(TokenCodec::JsonJcs, &entry).unwrap();
+
+    let result = parse_kv_entry_token(&entry_token);
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("Invalid secretenv document"));
+    assert!(message.contains("ct"));
 }
 
 #[test]

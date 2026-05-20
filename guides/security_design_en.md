@@ -564,7 +564,7 @@ file-enc and kv-enc artifact signatures share the same `signature_v4` structure 
 
 - Embed the signer's PublicKey (`signer_pub`) so the source of the verification key stays inside the artifact
 - Use `kid` to state which key statement performed the signing
-- Include `mac` so the verifier can later check that the signed artifact body corresponds to the unwrapped content key
+- Include `mac` so the verifier can later check that the signed artifact body, signer `kid`, and unwrapped content key correspond to each other
 - Treat validation of the signer key and verification of the artifact signature as one continuous chain (§5.4)
 
 The local trust store (`secretenv:format:local-trust@5`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
@@ -576,7 +576,7 @@ The main fields of `signature_v4` (artifact signature) are as follows.
 | `alg` | string | Always `eddsa-ed25519` (PureEdDSA) | Unambiguous identification of the signature algorithm |
 | `kid` | Crockford Base32 (32 characters) | Signer's key statement ID | Binds the signing context of the artifact to the `signer_pub` generation (§4.4.1, §8) |
 | `signer_pub` | `PublicKey@6` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
-| `mac` | `hmac-sha256:<base64url>` | Key-possession proof | HMAC used to verify that the artifact body corresponds to the unwrapped DEK / MK |
+| `mac` | `hmac-sha256:<base64url>` | Key-possession proof | HMAC used to verify that the artifact body, signer `kid`, and unwrapped DEK / MK correspond to each other |
 | `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact; the signed input is the format-specific body bytes concatenated with `mac` |
 
 file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. That is a premise of self-contained verification. SecretEnv does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §12.1 invariant on where the signing key is resolved.
@@ -593,7 +593,9 @@ Both file-enc and kv-enc use the `signature_v4` table above. What differs is onl
 | Signature algorithm | `eddsa-ed25519` (PureEdDSA) | `eddsa-ed25519` (PureEdDSA) |
 | Signature format | `signature_v4` format | `signature_v4` format |
 
-file-enc places `protected` and `signature` side by side in a single JSON object (§6.1). kv-enc appends a `:SIG` token at the end of a line-oriented document and signs the deterministic body representation plus `signature.mac` (§7.1). Both rest on the same design choices: Ed25519 tamper detection, a self-contained key source via `signature_v4`, and a key-possession proof that ties the body to the content key.
+file-enc places `protected` and `signature` side by side in a single JSON object (§6.1). kv-enc appends a `:SIG` token at the end of a line-oriented document and signs the deterministic body representation plus `signature.mac` (§7.1). Both rest on the same design choices: Ed25519 tamper detection, a self-contained key source via `signature_v4`, and a key-possession proof that ties together the body, signer `kid`, and content key.
+
+The key-possession proof HMAC is computed over the common domain `secretenv:context:mac-domain:key-possession@1`, the format-specific body bytes, and `signature.kid` concatenated in that order. file-enc uses the DEK as the HMAC key, and kv-enc uses the MK. Because verification also checks that `signature.kid` matches `signer_pub.protected.kid`, the HMAC binds content-key possession to the signer's key statement. It does not include a hash of the full `signer_pub`.
 
 ### 5.2 file-enc Signature
 
@@ -620,7 +622,7 @@ Cryptographic verification of an artifact can be organized into three layers (La
 - Layer B. Binding the key generation to the artifact — The artifact's `signature.kid` matches `signer_pub.protected.kid` (consistent with the derivation rule in §4.4.1)
 - Layer C. Tamper detection for the artifact body and key-possession proof — Verify `sig` over the signed payload defined in §5.1, using the signing public key from `signer_pub`
 
-Unwrap proceeds only after Layer C succeeds, consistent with the §1.4 invariant do not decrypt before signature verification. After unwrap, SecretEnv recomputes `signature.mac` with the resulting DEK / MK and verifies that the artifact body corresponds to the content key before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body; it is not proof of the signer's human identity or authority to update the artifact.
+Unwrap proceeds only after Layer C succeeds, consistent with the §1.4 invariant do not decrypt before signature verification. After unwrap, SecretEnv recomputes `signature.mac` with the resulting DEK / MK and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
 
 Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Separately from cryptographic verification (Layers A–C), acceptance is gated by active / expired rules that separate behavior for new crypto operations vs read-path acceptance. Details are consolidated in §4.4 and §10.
 
@@ -793,7 +795,7 @@ This order keeps key delivery, payload binding, and document integrity as distin
 2. Apply the trust policy from §10 to determine whether the artifact is acceptable in the current workspace.
 3. Run file-enc-specific reference consistency checks. This includes checking the payload format, checking the AEAD identifier, and confirming that the outer `sid` and payload `sid` match.
 4. Select the matching wrap by the local `kid` and perform HPKE unwrap with the same context.
-5. Recompute `signature.mac` with the unwrapped DEK and verify the key-possession proof for the artifact body.
+5. Recompute `signature.mac` with the unwrapped DEK and verify the key-possession proof for the artifact body and signer `kid`.
 6. Use `jcs(payload.protected)` as AAD and perform AEAD decryption.
 7. Reject fail-closed on any mismatch or verification failure.
 
@@ -1421,7 +1423,7 @@ Auditors should treat structural validation -> `signer_pub` validation -> artifa
 | Signature key source | The signature verification key source is always the embedded `signer_pub`, with no workspace or keystore fallback | The trust boundary shifts and acceptance conditions may vary by implementation |
 | Bindings | `sid` / `kid` / `k` / `p` are included in info / AAD exactly as specified | Reuse, substitution, or miswiring attacks become easier |
 | HPKE info = AAD | The wrap path uses the same bytes in both places | Early detection of binding mismatches is weakened |
-| Key-possession proof | Recompute `signature.mac` with the unwrapped DEK / MK and check it before plaintext decryption | The signed body may not be verified against the content key |
+| Key-possession proof | Recompute `signature.mac` with the unwrapped DEK / MK and check the body, signer `kid`, and content key before plaintext decryption | The signed body, signer `kid`, and content key may not be verified against each other |
 | PublicKey verification | Both `signer_pub` and workspace PublicKeys are verified for self-signature and attestation | A tampered PublicKey could be accepted |
 | Trust-source separation | `members/active` is treated as the authorization source, while `known_keys` is treated as key-owner approval and `recipient_sets` as write-path artifact member set approval | Current-member checks, key-owner approval, and write-path artifact member set review may become conflated |
 | `STRICT_KEY_CHECKING` scope | `SECRETENV_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths or key-possession proof verification | The approval cache may be unintentionally disabled in CI or daily operation |

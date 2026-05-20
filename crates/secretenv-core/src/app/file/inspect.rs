@@ -92,7 +92,7 @@ fn build_online_section(
         }
     };
 
-    let result = match block_on_result(verify_github_account(public_key, options.debug, None)) {
+    let result = match block_on_result(verify_github_account(public_key, options.debug)) {
         Ok(result) => result,
         Err(err) => build_failed_online_verification_result(
             &public_key.protected.subject_handle,

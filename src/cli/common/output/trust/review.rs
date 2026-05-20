@@ -24,11 +24,15 @@ pub(crate) fn format_candidate_review_lines(candidate: &TrustApprovalCandidate) 
 
 pub(crate) fn print_candidate_review(candidate: &TrustApprovalCandidate) {
     for line in format_candidate_review_lines(candidate) {
-        if is_warning_line(&line) {
-            print_warning_line(&line);
-        } else {
-            eprintln!("{}", line);
-        }
+        print_trust_review_line(&line);
+    }
+}
+
+pub(crate) fn print_trust_review_line(line: &str) {
+    if is_warning_line(line) {
+        print_warning_line(line);
+    } else {
+        eprintln!("{}", line);
     }
 }
 

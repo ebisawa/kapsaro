@@ -164,6 +164,15 @@ fn ssh_public_key_text(signing_key: &SigningKey) -> String {
     format!("ssh-ed25519 {} test-key", encode_base64_standard(&blob))
 }
 
+fn ssh_public_key_text_with_trailing_data(signing_key: &SigningKey) -> String {
+    let verifying_key = signing_key.verifying_key();
+    let mut blob = Vec::new();
+    blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
+    blob.extend_from_slice(&encode_ssh_string(verifying_key.as_bytes()));
+    blob.push(1);
+    format!("ssh-ed25519 {} test-key", encode_base64_standard(&blob))
+}
+
 fn sign_attestation(identity_keys: &IdentityKeys, signing_key: &SigningKey) -> String {
     let signed_data = build_attestation_signed_data(identity_keys).unwrap();
     let signature = signing_key.sign(&signed_data);
@@ -178,6 +187,18 @@ fn test_verify_attestation_raw_signature_success() {
     let sig = sign_attestation(&identity_keys, &signing_key);
 
     verify_attestation(&identity_keys, &ssh_pubkey, &sig).unwrap();
+}
+
+#[test]
+fn test_verify_attestation_rejects_public_key_blob_trailing_data() {
+    let identity_keys = test_identity_keys();
+    let signing_key = test_signing_key();
+    let ssh_pubkey = ssh_public_key_text_with_trailing_data(&signing_key);
+    let sig = sign_attestation(&identity_keys, &signing_key);
+
+    let error = verify_attestation(&identity_keys, &ssh_pubkey, &sig).unwrap_err();
+
+    assert!(error.to_string().contains("unexpected trailing data"));
 }
 
 #[test]

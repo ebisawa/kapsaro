@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::BufRead;
 
 use crate::cli::common::output::text::print_warning;
-use crate::cli::common::output::trust::review::format_candidate_review_lines;
+use crate::cli::common::output::trust::review::{
+    format_candidate_review_lines, print_trust_review_line,
+};
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
@@ -31,7 +33,7 @@ pub(crate) fn confirm_signer_key_approval(
     context_label: &str,
 ) -> Result<bool> {
     for line in format_signer_key_review_lines(candidate, context_label) {
-        eprintln!("{}", line);
+        print_trust_review_line(&line);
     }
     prompt_yes_no("Approve this key?", false)
 }
@@ -42,7 +44,7 @@ pub(crate) fn confirm_non_member_acceptance(
     recipients: &[String],
 ) -> Result<bool> {
     for line in format_non_member_signer_review_lines(candidate, context_label, recipients) {
-        eprintln!("{}", line);
+        print_trust_review_line(&line);
     }
     prompt_yes_no("Accept this signed artifact once?", false)
 }
@@ -69,7 +71,7 @@ pub(crate) fn confirm_recipient_set_approval(
     };
 
     for line in format_recipient_set_review_lines(review, context_label) {
-        eprintln!("{}", line);
+        print_trust_review_line(&line);
     }
     prompt_yes_no(&recipient_set_review_prompt(review), false)
 }
@@ -79,7 +81,7 @@ pub(crate) fn confirm_recipient_key_approval(
     _context_label: &str,
 ) -> Result<bool> {
     for line in format_recipient_key_review_lines(candidate) {
-        eprintln!("{}", line);
+        print_trust_review_line(&line);
     }
     prompt_yes_no("Approve this key?", false)
 }
@@ -89,7 +91,7 @@ pub(crate) fn confirm_member_key_approval(
     _context_label: &str,
 ) -> Result<bool> {
     for line in format_member_key_review_lines(candidate, "member verify") {
-        eprintln!("{}", line);
+        print_trust_review_line(&line);
     }
     prompt_yes_no("Approve this key?", false)
 }
@@ -132,6 +134,9 @@ fn format_non_member_signer_review_lines(
         "Signer".to_string(),
     ];
     lines.extend(format_candidate_review_lines(candidate));
+    if let Some(warning) = format_non_member_online_verification_warning(candidate) {
+        lines.push(warning);
+    }
     if !recipients.is_empty() {
         lines.push(String::new());
         lines.push("Current recipients".to_string());
@@ -142,6 +147,26 @@ fn format_non_member_signer_review_lines(
         );
     }
     lines
+}
+
+fn format_non_member_online_verification_warning(
+    candidate: &TrustApprovalCandidate,
+) -> Option<String> {
+    if !candidate.github_binding_configured
+        || !candidate.online_verification_attempted
+        || candidate.verified_github.is_some()
+    {
+        return None;
+    }
+
+    let message = candidate
+        .online_verification_message
+        .as_deref()
+        .unwrap_or("online verification did not succeed");
+    Some(format!(
+        "Warning: GitHub online verification did not verify this signer: {}",
+        message
+    ))
 }
 
 fn format_recipient_key_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {

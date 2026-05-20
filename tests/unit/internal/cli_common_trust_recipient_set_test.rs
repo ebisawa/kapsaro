@@ -76,6 +76,19 @@ fn test_format_non_member_signer_review_lines_says_decision_is_one_time_only() {
 }
 
 #[test]
+fn test_format_non_member_signer_review_lines_warns_after_online_verification_failure() {
+    let candidate = candidate_with_failed_github_verification();
+
+    let rendered =
+        format_non_member_signer_review_lines(&candidate, "decrypt signer", &[]).join("\n");
+
+    assert!(rendered.contains(
+        "Warning: GitHub online verification did not verify this signer: online verification failed"
+    ));
+    assert!(rendered.contains("GitHub account     not verified (online verification failed)"));
+}
+
+#[test]
 fn test_format_member_key_review_lines_uses_member_verify_copy() {
     let candidate = candidate_with_verified_github();
 
@@ -222,5 +235,22 @@ fn candidate_with_verified_github() -> TrustApprovalCandidate {
         online_verification_message: None,
         public_key: None,
         requires_out_of_band_verification: false,
+    }
+}
+
+fn candidate_with_failed_github_verification() -> TrustApprovalCandidate {
+    TrustApprovalCandidate {
+        member_handle: member_handle("bob@example.com"),
+        kid: test_kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
+        fingerprint: Some("SHA256:test".to_string()),
+        github_id: Some(42),
+        github_login: Some("octocat".to_string()),
+        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
+        verified_github: None,
+        github_binding_configured: true,
+        online_verification_attempted: true,
+        online_verification_message: Some("online verification failed".to_string()),
+        public_key: None,
+        requires_out_of_band_verification: true,
     }
 }

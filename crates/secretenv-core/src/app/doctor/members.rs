@@ -154,7 +154,7 @@ fn check_github_verification(
         .with_next_action("run secretenv member verify if manual review is needed");
     }
 
-    match block_on_result(verify_github_account(public_key, verbose, None)) {
+    match block_on_result(verify_github_account(public_key, verbose)) {
         Ok(result) if result.status == VerificationStatus::Verified => DoctorCheck::ok(
             "github.verify",
             category,

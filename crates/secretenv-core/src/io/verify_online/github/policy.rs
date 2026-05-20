@@ -12,37 +12,6 @@ use tracing::debug;
 pub(super) async fn resolve_github_identity(
     api: &impl GitHubVerificationApi,
     document_id: u64,
-    known: &Option<(u64, String)>,
-    member_handle: &str,
-    verbose: bool,
-) -> Result<(u64, String)> {
-    match known {
-        Some((id_known, login_known)) => {
-            if *id_known != document_id {
-                return Err(Error::build_verification_error(
-                    "V-GITHUB-API".to_string(),
-                    format!(
-                        "GitHub user id mismatch: document id {} vs provided id {}",
-                        document_id, id_known
-                    ),
-                ));
-            }
-            if verbose {
-                debug!(
-                    "[VERIFY] Verify {}: using known github id/current login (skip GET /user/{{id}})",
-                    member_handle
-                );
-            }
-            Ok((*id_known, login_known.clone()))
-        }
-        None => resolve_github_identity_from_api(api, document_id, member_handle, verbose).await,
-    }
-}
-
-async fn resolve_github_identity_from_api(
-    api: &impl GitHubVerificationApi,
-    document_id: u64,
-    _member_handle: &str,
     verbose: bool,
 ) -> Result<(u64, String)> {
     if verbose {

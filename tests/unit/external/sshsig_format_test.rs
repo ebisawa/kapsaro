@@ -102,6 +102,23 @@ fn test_parse_sshsig_blob_valid() {
 }
 
 #[test]
+fn test_parse_sshsig_blob_rejects_trailing_data_after_signature() {
+    let mut blob = Vec::new();
+    blob.extend_from_slice(b"SSHSIG");
+    blob.extend_from_slice(&1u32.to_be_bytes());
+    append_publickey(&mut blob, TEST_SSH_PUBKEY);
+    blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
+    blob.extend_from_slice(&encode_ssh_string(b""));
+    blob.extend_from_slice(&encode_ssh_string(b"sha256"));
+    blob.extend_from_slice(&encode_ssh_string(b"signature_data_here"));
+    blob.push(1);
+
+    let error = parse_sshsig_blob(&blob, KEY_PROTECTION_NAMESPACE, TEST_SSH_PUBKEY).unwrap_err();
+
+    assert!(error.to_string().contains("unexpected trailing data"));
+}
+
+#[test]
 fn test_sshsig_blob_extract_ed25519_raw_signature() {
     let mut raw_sig = [0u8; 64];
     for (index, byte) in raw_sig.iter_mut().enumerate() {

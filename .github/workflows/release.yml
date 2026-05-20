@@ -1,13 +1,10 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v1.2.3). Builds from the commit at this tag and creates a GitHub Release with the same name.'
+        description: 'Tag to release (e.g. v1.2.3 or v1.2.3-alpha.1). Builds from the commit at this tag and creates a GitHub Release with the same name.'
         required: true
         type: string
 
@@ -15,11 +12,92 @@ permissions: {}
 
 env:
   CARGO_TERM_COLOR: always
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  RELEASE_TAG: ${{ github.event.inputs.tag }}
 
 jobs:
+  verify-release-input:
+    name: Verify Release Input
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+      target_sha: ${{ steps.verify.outputs.target_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag, signature, ancestry, and CI
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "::error::Tag must match vX.Y.Z or vX.Y.Z-prerelease"
+            exit 1
+          fi
+
+          ref_json="$(gh api "repos/${REPO}/git/ref/tags/${TAG}")"
+          ref_type="$(jq -r '.object.type' <<<"${ref_json}")"
+          ref_sha="$(jq -r '.object.sha' <<<"${ref_json}")"
+
+          if [ "${ref_type}" != "tag" ]; then
+            echo "::error::Lightweight tags are not accepted for releases"
+            exit 1
+          fi
+
+          tag_json="$(gh api "repos/${REPO}/git/tags/${ref_sha}")"
+          target_type="$(jq -r '.object.type' <<<"${tag_json}")"
+          target_sha="$(jq -r '.object.sha' <<<"${tag_json}")"
+          verified="$(jq -r '.verification.verified' <<<"${tag_json}")"
+
+          if [ "${target_type}" != "commit" ]; then
+            echo "::error::Release tag must point to a commit"
+            exit 1
+          fi
+
+          if [ "${verified}" != "true" ]; then
+            echo "::error::Release tag signature is not verified by GitHub"
+            exit 1
+          fi
+
+          git fetch origin main --tags
+          if ! git merge-base --is-ancestor "${target_sha}" origin/main; then
+            echo "::error::Release tag target is not reachable from origin/main"
+            exit 1
+          fi
+
+          checks_json="$(gh api "repos/${REPO}/commits/${target_sha}/check-runs?per_page=100")"
+          for check_name in Format Clippy Test; do
+            conclusion="$(
+              jq -r --arg name "${check_name}" '
+                [
+                  .check_runs[]
+                  | select(.name == $name and .app.slug == "github-actions")
+                  | .conclusion
+                ]
+                | if any(. == "success") then "success" else "missing_or_failed" end
+              ' <<<"${checks_json}"
+            )"
+
+            if [ "${conclusion}" != "success" ]; then
+              echo "::error::Required check ${check_name} is not successful on ${target_sha}"
+              exit 1
+            fi
+          done
+
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "target_sha=${target_sha}" >> "${GITHUB_OUTPUT}"
+
   build:
     name: Build (${{ matrix.target }})
+    needs: verify-release-input
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -44,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+          ref: ${{ needs.verify-release-input.outputs.tag }}
 
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal --no-self-update --target ${{ matrix.target }}
@@ -68,7 +146,7 @@ jobs:
       - name: Create archive
         shell: bash
         env:
-          TAG: ${{ env.RELEASE_TAG }}
+          TAG: ${{ needs.verify-release-input.outputs.tag }}
           TARGET: ${{ matrix.target }}
         run: |
           ARCHIVE="secretenv-${TAG}-${TARGET}.tar.gz"
@@ -84,12 +162,17 @@ jobs:
 
   release:
     name: Publish Release
-    needs: build
+    needs:
+      - build
+      - verify-release-input
     runs-on: ubuntu-latest
+    environment: release-publish
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-release-input.outputs.tag }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -106,7 +189,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ needs.verify-release-input.outputs.tag }}
           files: |
             artifacts/secretenv-*.tar.gz
             artifacts/SHA256SUMS
@@ -114,11 +197,14 @@ jobs:
 
   update-homebrew-tap:
     name: Update Homebrew Tap
-    needs: release
+    needs:
+      - release
+      - verify-release-input
     runs-on: ubuntu-latest
+    environment: homebrew-tap
     permissions: {}
     env:
-      TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      TAG: ${{ needs.verify-release-input.outputs.tag }}
     steps:
       - name: Download SHA256SUMS
         run: |
@@ -140,7 +226,7 @@ jobs:
       - name: Update Formula
         uses: actions/github-script@v8
         env:
-          TAG: ${{ env.RELEASE_TAG }}
+          TAG: ${{ needs.verify-release-input.outputs.tag }}
           SHA256_LINUX_X86: ${{ env.SHA256_LINUX_X86 }}
           SHA256_LINUX_ARM: ${{ env.SHA256_LINUX_ARM }}
           SHA256_MACOS_ARM: ${{ env.SHA256_MACOS_ARM }}

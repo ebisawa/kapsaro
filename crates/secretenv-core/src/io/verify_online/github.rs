@@ -57,22 +57,18 @@ impl GitHubVerificationApi for GitHubVerificationApiClient {
 
 /// Verify a PublicKey's binding_claims.github_account against GitHub using REST only
 /// (id -> current login -> keys).
-/// When `known_github_account` is `Some((id, login))`, skips GET /user/{id}` and uses the given
-/// current login for keys fetch.
 pub async fn verify_github_account(
     public_key: &PublicKey,
     verbose: bool,
-    known_github_account: Option<(u64, String)>,
 ) -> Result<VerificationResult> {
     let api = GitHubVerificationApiClient::new()?;
-    verify_github_account_with_api(public_key, verbose, known_github_account, &api).await
+    verify_github_account_with_api(public_key, verbose, &api).await
 }
 
 /// Verify a PublicKey's GitHub binding using an injected API implementation.
 pub async fn verify_github_account_with_api(
     public_key: &PublicKey,
     verbose: bool,
-    known_github_account: Option<(u64, String)>,
     api: &impl GitHubVerificationApi,
 ) -> Result<VerificationResult> {
     let member_handle = &public_key.protected.subject_handle;
@@ -112,14 +108,7 @@ pub async fn verify_github_account_with_api(
         }
     };
 
-    let (id_used, login_for_keys) = resolve_github_identity(
-        api,
-        github.id,
-        &known_github_account,
-        member_handle,
-        verbose,
-    )
-    .await?;
+    let (id_used, login_for_keys) = resolve_github_identity(api, github.id, verbose).await?;
 
     verify_github_keys(
         api,

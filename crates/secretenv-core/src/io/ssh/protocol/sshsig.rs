@@ -221,7 +221,13 @@ pub fn parse_sshsig_blob(
     cursor = rest;
 
     // Parse signature - THIS IS THE SSH SIGNATURE BLOB
-    let (signature_blob, _rest) = decode_ssh_string(cursor)?;
+    let (signature_blob, rest) = decode_ssh_string(cursor)?;
+    if !rest.is_empty() {
+        return Err(SshError::build_operation_failed_error(
+            "SSHSIG blob contains unexpected trailing data",
+        )
+        .into());
+    }
 
     Ok(SshSignatureBlob::new(signature_blob.to_vec()))
 }

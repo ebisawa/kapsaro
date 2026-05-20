@@ -106,7 +106,13 @@ fn extract_ed25519_pubkey_from_ssh(ssh_pubkey: &str) -> Result<VerifyingKey> {
         ))
         .into());
     }
-    let (ed25519_pubkey_bytes, _rest) = wire::decode_ssh_string(rest)?;
+    let (ed25519_pubkey_bytes, rest) = wire::decode_ssh_string(rest)?;
+    if !rest.is_empty() {
+        return Err(SshError::build_operation_failed_error(
+            "SSH public key blob contains unexpected trailing data",
+        )
+        .into());
+    }
     if ed25519_pubkey_bytes.len() != 32 {
         return Err(SshError::build_operation_failed_error(format!(
             "Invalid Ed25519 public key length: expected 32 bytes, got {}",

@@ -15,6 +15,11 @@ const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const B64URL_48: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const B64URL_64: &str =
     "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ";
+const B64URL_VARIABLE_MOD2: &str = "AA";
+const B64URL_VARIABLE_MOD3: &str = "AAA";
+const B64URL_VARIABLE_MOD1: &str = "A";
+const B64URL_VARIABLE_NON_CANONICAL_MOD2: &str = "AB";
+const B64URL_VARIABLE_NON_CANONICAL_MOD3: &str = "AAB";
 
 #[test]
 fn test_target_schemas_use_stable_metadata() {
@@ -371,6 +376,38 @@ fn build_valid_private_key() -> serde_json::Value {
 }
 
 #[test]
+fn test_validate_private_key_accepts_canonical_variable_length_ct() {
+    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+
+    for ct in [B64URL_VARIABLE_MOD2, B64URL_VARIABLE_MOD3, B64URL_48] {
+        let mut private_key = build_valid_private_key();
+        set_json_path(&mut private_key, &["encrypted", "ct"], ct);
+
+        let result = validator.validate_private_key(&private_key);
+
+        assert!(result.is_ok(), "should accept canonical ct: {ct}");
+    }
+}
+
+#[test]
+fn test_validate_private_key_rejects_non_canonical_variable_length_ct() {
+    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+
+    for ct in [
+        B64URL_VARIABLE_MOD1,
+        B64URL_VARIABLE_NON_CANONICAL_MOD2,
+        B64URL_VARIABLE_NON_CANONICAL_MOD3,
+    ] {
+        let mut private_key = build_valid_private_key();
+        set_json_path(&mut private_key, &["encrypted", "ct"], ct);
+
+        let result = validator.validate_private_key(&private_key);
+
+        assert!(result.is_err(), "should reject non-canonical ct: {ct}");
+    }
+}
+
+#[test]
 fn test_validate_file_enc_rejects_wrong_fixed_lengths() {
     let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
 
@@ -403,6 +440,90 @@ fn test_validate_file_enc_rejects_wrong_fixed_lengths() {
 
         assert!(result.is_err(), "should reject wrong {field} length");
     }
+}
+
+#[test]
+fn test_validate_file_enc_accepts_canonical_variable_length_payload_ct() {
+    let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
+
+    for ct in [B64URL_VARIABLE_MOD2, B64URL_VARIABLE_MOD3, B64URL_48] {
+        let mut file_enc = build_valid_file_enc_doc("alice@example.com");
+        set_json_path_with_array(
+            &mut file_enc,
+            &["protected", "payload", "encrypted", "ct"],
+            ct,
+        );
+
+        let result = validator.validate_file_enc_document(&file_enc);
+
+        assert!(result.is_ok(), "should accept canonical payload ct: {ct}");
+    }
+}
+
+#[test]
+fn test_validate_file_enc_rejects_non_canonical_variable_length_payload_ct() {
+    let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
+
+    for ct in [
+        B64URL_VARIABLE_MOD1,
+        B64URL_VARIABLE_NON_CANONICAL_MOD2,
+        B64URL_VARIABLE_NON_CANONICAL_MOD3,
+    ] {
+        let mut file_enc = build_valid_file_enc_doc("alice@example.com");
+        set_json_path_with_array(
+            &mut file_enc,
+            &["protected", "payload", "encrypted", "ct"],
+            ct,
+        );
+
+        let result = validator.validate_file_enc_document(&file_enc);
+
+        assert!(
+            result.is_err(),
+            "should reject non-canonical payload ct: {ct}"
+        );
+    }
+}
+
+#[test]
+fn test_validate_kv_entry_accepts_canonical_variable_length_ct() {
+    let validator = Validator::for_target(SchemaTarget::KvEntry).unwrap();
+
+    for ct in [B64URL_VARIABLE_MOD2, B64URL_VARIABLE_MOD3, B64URL_48] {
+        let entry = build_kv_entry_value(ct);
+
+        let result = validator.validate_kv_entry(&entry);
+
+        assert!(result.is_ok(), "should accept canonical entry ct: {ct}");
+    }
+}
+
+#[test]
+fn test_validate_kv_entry_rejects_non_canonical_variable_length_ct() {
+    let validator = Validator::for_target(SchemaTarget::KvEntry).unwrap();
+
+    for ct in [
+        B64URL_VARIABLE_MOD1,
+        B64URL_VARIABLE_NON_CANONICAL_MOD2,
+        B64URL_VARIABLE_NON_CANONICAL_MOD3,
+    ] {
+        let entry = build_kv_entry_value(ct);
+
+        let result = validator.validate_kv_entry(&entry);
+
+        assert!(
+            result.is_err(),
+            "should reject non-canonical entry ct: {ct}"
+        );
+    }
+}
+
+fn build_kv_entry_value(ct: &str) -> serde_json::Value {
+    serde_json::json!({
+        "salt": B64URL_32,
+        "nonce": B64URL_24,
+        "ct": ct
+    })
 }
 
 fn set_json_path_with_array(value: &mut serde_json::Value, path: &[&str], replacement: &str) {

@@ -18,7 +18,6 @@ pub mod github {
     pub async fn verify_github_account(
         public_key: &PublicKey,
         _verbose: bool,
-        _known_github_account: Option<(u64, String)>,
     ) -> Result<VerificationResult> {
         Err(Error::build_config_error(format!(
             "GitHub online verification for '{}' requires the 'online' feature",

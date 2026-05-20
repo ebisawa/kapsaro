@@ -90,7 +90,7 @@ pub fn sign_file_document(
         );
     }
     let canonical_bytes = build_file_signature_bytes(protected)?;
-    let mac = build_file_key_possession_proof(protected, content_key)?;
+    let mac = build_file_key_possession_proof(protected, content_key, signer_kid)?;
     let sig_input = build_key_possession_sig_input(&canonical_bytes, &mac);
     sign_artifact_bytes(
         &sig_input,
@@ -151,7 +151,7 @@ pub(crate) fn append_kv_signature(
             format_kid_half_display_lossy(signing.signer_kid)
         );
     }
-    let mac = build_kv_key_possession_proof(unsigned, master_key)?;
+    let mac = build_kv_key_possession_proof(unsigned, master_key, signing.signer_kid)?;
     let sig_input = build_key_possession_sig_input(unsigned.as_bytes(), &mac);
     let signature = sign_artifact_bytes(
         &sig_input,

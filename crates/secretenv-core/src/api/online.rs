@@ -17,6 +17,15 @@ use super::key::LocalKeyStore;
 use super::operation::OperationOptions;
 
 /// GitHub account metadata used by online verification.
+///
+/// Values are returned by GitHub lookup or successful verification. Callers
+/// cannot construct arbitrary id/login pairs.
+///
+/// ```compile_fail
+/// use secretenv_core::api::online::GitHubAccount;
+///
+/// let _account = GitHubAccount::new(42, "alice");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubAccount {
     id: u64,
@@ -81,17 +90,11 @@ impl GitHubOnlineVerifier {
         key_store: &LocalKeyStore,
         member_handle: &str,
         kid: Option<&str>,
-        known_account: Option<&GitHubAccount>,
     ) -> Result<OnlineVerificationResult> {
         let resolved_kid = resolve_kid(key_store.root(), member_handle, kid)?;
         let public_key = load_public_key(key_store.root(), member_handle, &resolved_kid)?;
-        let known_account = known_account.map(|account| (account.id, account.login.clone()));
-        block_on_result(verify_github_account(
-            &public_key,
-            self.options.debug(),
-            known_account,
-        ))
-        .map(OnlineVerificationResult::from)
+        block_on_result(verify_github_account(&public_key, self.options.debug()))
+            .map(OnlineVerificationResult::from)
     }
 
     /// Return shared operation options.
@@ -101,8 +104,7 @@ impl GitHubOnlineVerifier {
 }
 
 impl GitHubAccount {
-    /// Build account metadata from GitHub's stable id and current login.
-    pub fn new(id: u64, login: impl Into<String>) -> Self {
+    fn new(id: u64, login: impl Into<String>) -> Self {
         Self {
             id,
             login: login.into(),

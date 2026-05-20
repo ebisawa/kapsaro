@@ -245,7 +245,7 @@ async fn verify_member_subject_online(
     subject: &VerifiedMemberSubject,
     verbose: bool,
 ) -> VerificationResult {
-    let result = match verify_github_account(&subject.public_key, verbose, None).await {
+    let result = match verify_github_account(&subject.public_key, verbose).await {
         Ok(result) => result,
         Err(e) => VerificationResult::failed(
             &subject.member_handle,

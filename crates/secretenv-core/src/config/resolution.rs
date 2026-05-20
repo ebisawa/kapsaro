@@ -9,6 +9,7 @@
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default values
 
+pub(crate) mod allow_expired_key;
 pub(crate) mod common;
 pub(crate) mod github_user;
 pub(crate) mod member_handle;

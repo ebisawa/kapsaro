@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::feature::envelope::signature::verify_kv_signature;
+use crate::feature::verify::append_operational_signer_expiry_warning;
 use crate::feature::verify::key_loader::load_verifying_key_from_signature;
 use crate::feature::verify::report::{build_error_report, build_signature_verification_report};
 use crate::feature::verify::signature::verify_signature_with_loaded_key;
@@ -16,6 +17,16 @@ use crate::Result;
 pub fn verify_kv_content(content: &KvEncContent, debug: bool) -> Result<VerifiedKvEncDocument> {
     let doc = content.parse()?;
     verify_kv_document(&doc, debug)
+}
+
+pub fn verify_kv_content_for_operation(
+    content: &KvEncContent,
+    debug: bool,
+    allow_expired_key: bool,
+) -> Result<VerifiedKvEncDocument> {
+    let mut verified = verify_kv_content(content, debug)?;
+    append_operational_signer_expiry_warning(&mut verified.proof, allow_expired_key)?;
+    Ok(verified)
 }
 
 pub fn verify_kv_document_report(content: &str, debug: bool) -> SignatureVerificationReport {
@@ -40,3 +51,7 @@ pub fn verify_kv_document(doc: &KvEncDocument, debug: bool) -> Result<VerifiedKv
 
     Ok(VerifiedKvEncDocument::new(doc.clone(), proof))
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/feature_verify_kv_operation_test.rs"]
+mod tests;

@@ -13,7 +13,8 @@ use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
 use crate::cli::options::{
-    ForceOption, MemberHandleOption, SigningOutputOptions, WorkspaceOptions, WorkspaceOutputOptions,
+    AllowExpiredKeyOption, ForceOption, MemberHandleOption, SigningOutputOptions, WorkspaceOptions,
+    WorkspaceOutputOptions,
 };
 use secretenv_core::Error;
 
@@ -84,6 +85,9 @@ pub struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOptions,
+
+    #[command(flatten)]
+    pub allow_expired_key: AllowExpiredKeyOption,
 
     /// Member handle to remove
     #[arg(value_name = "MEMBER_HANDLE")]

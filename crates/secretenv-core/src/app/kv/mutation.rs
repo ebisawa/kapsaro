@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::artifact::{kv_content_recipient_evidence, kv_recipient_evidence};
-use crate::app::context::execution::ExecutionContext;
+use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::review::{ensure_workspace_members_match_snapshot, ReviewedTextFile};
 use crate::app::context::ssh::SshSigningContextResolution;
@@ -23,9 +23,10 @@ use crate::feature::kv::mutate::{
     KvWriteContext,
 };
 use crate::feature::kv::types::KvInputEntry;
-use crate::feature::verify::kv::signature::verify_kv_content;
+use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
+use crate::model::common::WrapSet;
 use crate::support::fs::lock;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::{Error, Result};
@@ -233,13 +234,23 @@ where
         recipient_review.workspace_members().clone(),
         allow_missing,
     )?;
+    let mut warnings = command.warnings;
     let signer_trust = evaluate_signer_trust(
         review.existing_content(),
         recipient_review.trust_context(),
         options.debug,
+        options.allow_expired_key,
         P::CAPABILITY,
+        &mut warnings,
     )?;
-    let mut warnings = command.warnings;
+    if let Some(warning) = build_existing_decryption_key_warning(
+        review.existing_content(),
+        &command.execution,
+        options.allow_expired_key,
+        options.debug,
+    )? {
+        push_unique_warning(&mut warnings, warning);
+    }
     warnings.extend(recipient_review.warnings().iter().cloned());
 
     Ok(MutationWriteTrustPlan {
@@ -253,6 +264,26 @@ where
         verbose: options.debug,
         _policy: PhantomData,
     })
+}
+
+fn build_existing_decryption_key_warning(
+    reviewed_file: Option<&KvEncContent>,
+    execution: &ExecutionContext,
+    allow_expired_key: bool,
+    debug: bool,
+) -> Result<Option<String>> {
+    let Some(content) = reviewed_file else {
+        return Ok(None);
+    };
+    let doc = content.parse()?;
+    let wrap_set = WrapSet::parse(&doc.wrap().wrap, "Document")?;
+    enforce_selected_decryption_key_expiry(execution, &wrap_set, allow_expired_key, debug)
+}
+
+fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
+    if !warnings.contains(&warning) {
+        warnings.push(warning);
+    }
 }
 
 fn execute_kv_mutation<P, F>(
@@ -310,13 +341,18 @@ fn evaluate_signer_trust(
     reviewed_file: Option<&KvEncContent>,
     trust_ctx: &TrustContext,
     verbose: bool,
+    allow_expired_key: bool,
     capability: CommandCapability,
+    warnings: &mut Vec<String>,
 ) -> Result<Option<SignerTrustOutcome>> {
     let Some(content) = reviewed_file else {
         return Ok(None);
     };
 
-    let verified_doc = verify_kv_content(content, verbose)?;
+    let verified_doc = verify_kv_content_for_operation(content, verbose, allow_expired_key)?;
+    for warning in &verified_doc.proof().warnings {
+        push_unique_warning(warnings, warning.clone());
+    }
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
     enforce_write_input_artifact_recipients(
         trust_ctx,

@@ -103,6 +103,13 @@ pub struct ForceOption {
 }
 
 #[derive(Debug, Clone, Args, Default)]
+pub struct AllowExpiredKeyOption {
+    /// Explicitly allow expired keys for this operation
+    #[arg(long)]
+    pub allow_expired_key: bool,
+}
+
+#[derive(Debug, Clone, Args, Default)]
 pub struct LocalOptions {
     #[command(flatten)]
     pub home: HomeOption,
@@ -377,6 +384,7 @@ impl From<&CommonOptions> for CommonCommandOptions {
             verbose: value.verbose,
             workspace: value.workspace.clone(),
             ssh_signing_method: value.ssh_signing_method(),
+            allow_expired_key: false,
         }
     }
 }

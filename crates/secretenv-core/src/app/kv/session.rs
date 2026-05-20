@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use crate::app::context::execution::{
-    build_read_execution_warnings, build_write_execution_warnings, resolve_read_execution,
-    resolve_write_execution, ExecutionContext,
+    build_write_execution_warnings, resolve_read_execution, resolve_write_execution,
+    ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
@@ -89,7 +89,7 @@ impl KvCommandSession {
     ) -> Result<Self> {
         let target = KvFileTarget::resolve(options, file_name)?;
         let execution = resolve_read_execution(options, member_handle, None, ssh_ctx)?;
-        let warnings = build_read_execution_warnings(&execution)?;
+        let warnings = Vec::new();
         Ok(Self {
             target,
             execution,

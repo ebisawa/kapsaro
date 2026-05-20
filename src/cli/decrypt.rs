@@ -8,12 +8,12 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_command_input, resolve_options, resolve_trust_store_owner_member,
-    run_read_command_with_trust, ReadCommandLabels,
+    resolve_command_input, resolve_options_with_allow_expired_key,
+    resolve_trust_store_owner_member, run_read_command_with_trust, ReadCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
+use crate::cli::options::{AllowExpiredKeyOption, MemberHandleOption, SigningQuietOptions};
 use secretenv_core::cli_api::app::file::decrypt::{
     execute_decrypt_file_command, resolve_decrypt_file_command,
 };
@@ -31,6 +31,9 @@ pub struct DecryptArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOptions,
+
+    #[command(flatten)]
+    pub allow_expired_key: AllowExpiredKeyOption,
 
     /// Key ID to use [default: auto-select]
     #[arg(long, short = 'k')]
@@ -67,7 +70,10 @@ pub fn run(args: DecryptArgs) -> Result<()> {
         source_name,
     )?;
     let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
-    let options = resolve_options(&args.common);
+    let options = resolve_options_with_allow_expired_key(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+    )?;
     let plaintext_bytes = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),

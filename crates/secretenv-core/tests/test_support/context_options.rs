@@ -24,6 +24,7 @@ pub(crate) fn build_test_signing_command_options(
         verbose: false,
         workspace: Some(workspace.to_path_buf()),
         ssh_signing_method: Some(SshSigningMethod::SshKeygen),
+        allow_expired_key: false,
     }
 }
 
@@ -41,5 +42,6 @@ fn build_test_command_options_with(
         verbose,
         workspace: workspace.map(Path::to_path_buf),
         ssh_signing_method,
+        allow_expired_key: false,
     }
 }

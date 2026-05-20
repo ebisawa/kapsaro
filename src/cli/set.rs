@@ -9,14 +9,16 @@ use clap::Args;
 use zeroize::Zeroizing;
 
 use crate::cli::common::command::{
-    resolve_options, resolve_trust_store_owner_member, run_kv_write_command_with_trust,
-    WriteCommandLabels,
+    resolve_options_with_allow_expired_key, resolve_trust_store_owner_member,
+    run_kv_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::text::{print_optional_status, print_warnings};
 use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
-use crate::cli::options::{KvStoreNameOption, MemberHandleOption, SigningQuietOptions};
+use crate::cli::options::{
+    AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
+};
 use secretenv_core::cli_api::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
 use secretenv_core::cli_api::app::kv::types::KvInputEntry;
 use secretenv_core::cli_api::app::trust::SetPolicy;
@@ -28,6 +30,9 @@ pub struct SetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOptions,
+
+    #[command(flatten)]
+    pub allow_expired_key: AllowExpiredKeyOption,
 
     #[command(flatten)]
     pub member: MemberHandleOption,
@@ -67,7 +72,10 @@ fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<SecretString
 
 pub fn run(args: SetArgs) -> Result<()> {
     let value = resolve_value(args.value, args.stdin)?;
-    let options = resolve_options(&args.common);
+    let options = resolve_options_with_allow_expired_key(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+    )?;
     let outcome = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
@@ -77,6 +85,7 @@ pub fn run(args: SetArgs) -> Result<()> {
                 args.member.member_handle.clone(),
                 args.store.name.as_deref(),
                 true,
+                args.allow_expired_key.allow_expired_key,
                 WriteCommandLabels {
                     signer_context: Some(("set input signer", "input signer")),
                     recipient_context: "set recipients",

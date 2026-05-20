@@ -30,13 +30,13 @@ file-enc and kv-enc share the same trust model but differ in key structure and r
 
 A cryptographically valid signature or public key does not prove that the signer should be accepted in the current workspace or that the key holder's human identity is established. SecretEnv separates cryptographic verification through embedded `signer_pub`, current authorization through `members/active`, key-owner approval through `known_keys`, write-path artifact member set approval through `recipient_sets`, and identity-supporting evidence through manual review and GitHub online verify. GitHub API responses are supplementary evidence, not a trust anchor; they help check whether the SSH key used for attestation is associated with the claimed GitHub account.
 
-On read paths, the signer `kid` and every artifact recipient `kid` that resolves to current `members/active` must be present in `known_keys`, or be manually approved in the current execution. A recipient `kid` that no longer resolves to current `members/active` is surfaced as a warning on the read path so that historical artifacts remain readable. On write paths, recipients are always derived from `members/active`; each recipient `kid` and the output artifact member set must be reviewed before saving, and an input artifact that contains an unresolved recipient `kid` must be rewrapped before writing. `SECRETENV_STRICT_KEY_CHECKING=no` is a narrow exception for explicitly requested read paths: it bypasses read-path local key-approval checks, but not signature verification, active-member authorization, recipient-handle consistency, or key-possession proof verification, and it has no effect on write paths.
+On read paths, the signer `kid` and every artifact recipient `kid` that resolves to current `members/active` must be present in `known_keys`, or be manually approved in the current execution. A recipient `kid` that no longer resolves to current `members/active` is surfaced as a warning on the read path so that historical artifacts remain readable. On write paths, recipients are always derived from `members/active`; each recipient `kid` and the output artifact member set must be reviewed before saving, and an input artifact that contains an unresolved recipient `kid` must be rewrapped before writing. Expired keys cannot be used for new wraps or signing, and are allowed for decryption or operational artifact signature verification only when explicit recovery is enabled. `SECRETENV_STRICT_KEY_CHECKING=no` is a narrow exception for explicitly requested read paths: it bypasses read-path local key-approval checks, but not signature verification, active-member authorization, recipient-handle consistency, key-possession proof verification, or expiry gates, and it has no effect on write paths.
 
 #### Residual Risks and Audit Focus
 
 The main residual risks are first approval, operational governance, past disclosure, rollback, and the local trusted area rather than primitive weakness. TOFU first approval requires out-of-band confirmation. A legitimate recipient can exfiltrate plaintext after decryption, and previously disclosed secret values cannot be cryptographically reclaimed. If a recipient long-term private key is compromised, existing wraps for that recipient become decryptable. Restoring an old but valid encrypted artifact from Git history to current HEAD is not detected as a freshness violation by context binding alone. Coherent replacement or rollback of the local trust store is outside the local-trust-boundary assumption.
 
-The highest-priority audit checks are: signature verification and key-possession proof verification before plaintext decryption, embedded `signer_pub` as the only signature-key source, preservation of all context-binding inputs, equality of HPKE info and AAD on wrap paths, PublicKey self-signature and SSH attestation verification, separation between `members/active`, `known_keys`, and write-path `recipient_sets`, the scope of `SECRETENV_STRICT_KEY_CHECKING`, and limiting environment-variable-based key loading to trusted CI contexts. These are structural conditions that directly support the claimed security properties, not merely implementation style preferences.
+The highest-priority audit checks are: signature verification and key-possession proof verification before plaintext decryption, embedded `signer_pub` as the only signature-key source, preservation of all context-binding inputs, equality of HPKE info and AAD on wrap paths, PublicKey self-signature and SSH attestation verification, separation between `members/active`, `known_keys`, and write-path `recipient_sets`, the scope of expired-key recovery, the scope of `SECRETENV_STRICT_KEY_CHECKING`, and limiting environment-variable-based key loading to trusted CI contexts. These are structural conditions that directly support the claimed security properties, not merely implementation style preferences.
 
 ### Purpose of This Document
 
@@ -118,6 +118,7 @@ The security claims above only hold when the implementation preserves the follow
 | Do not remove context-binding elements from AAD, HPKE info, or signed bytes | Payload / entry / wrap swapping resistance, key-generation binding |
 | Resolve file-enc / kv-enc signature verification keys only from embedded `signer_pub` | Self-contained verification, consistent acceptance behavior across implementations |
 | Keep the roles of `members/active`, `known_keys`, and `recipient_sets` distinct | Separation between current authorization and user approval history |
+| Limit expired-key recovery to decryption and operational artifact signature verification, and do not apply it to encryption, signing, or approval of expired PublicKeys | Key-expiry boundary and meaning of the local approval cache |
 | Limit `SECRETENV_STRICT_KEY_CHECKING=no` to approval-cache decisions on explicitly requested read paths | Key approval, artifact member set review, and cryptographic verification semantics |
 
 ### 1.6 Terminology Used Here
@@ -246,7 +247,7 @@ Layer 4 relies on manual review of key-statement information, the SSH key finger
 
 Online verification is a present-time check: it asks whether the SSH public key used for attestation is currently present in the GitHub account's SSH key set. It is not a historical proof and does not automatically revoke existing local approvals or workspace membership.
 
-The limited exceptions are non-member acceptance and `SECRETENV_STRICT_KEY_CHECKING=no`. Non-member acceptance is an interactive, one-shot, artifact-scoped exception that does not restore current membership or update the local approval cache. `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path key-owner approval checks on explicitly requested read paths; it does not skip active-member authorization, recipient-handle consistency, cryptographic signature verification, or key-possession proof verification.
+The limited exceptions are non-member acceptance, expired-key recovery, and `SECRETENV_STRICT_KEY_CHECKING=no`. Non-member acceptance is an interactive, one-shot, artifact-scoped exception that does not restore current membership or update the local approval cache. Expired-key recovery applies only to decryption and operational artifact signature verification. It does not apply to encryption, signing, or approval of expired PublicKeys with `member verify --approve`. `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path key-owner approval checks on explicitly requested read paths; it does not skip active-member authorization, recipient-handle consistency, cryptographic signature verification, key-possession proof verification, or expiry gates.
 
 Stronger confidence in key identity depends on these layers working together. Existing-key tampering generally requires compromise of the original key material, while insertion of a brand-new malicious key can succeed through repo-governance failure plus mistaken TOFU approval. Compromise of an attestation SSH key, GitHub account, or local trust store weakens the corresponding operational layer rather than the artifact signature mechanism itself.
 
@@ -520,12 +521,12 @@ The behavior in each state is as follows:
 
 - Creation: A new key pair and PublicKey document are created using the `key new` command and saved to the local keystore.
 - Active: Valid before `expires_at` is reached. The key can be used for new encryption (wrap) and signing, as well as decryption and verification.
-- Expired: After `expires_at` has passed. New encryption (wrap) and signing are rejected. Decryption and verification of data legitimately encrypted or signed in the past are permitted with a warning.
+- Expired: After `expires_at` has passed. New encryption (wrap) and signing are rejected. Decryption of data legitimately encrypted in the past and operational artifact signature verification are permitted with a warning only when explicit recovery is enabled.
 - Rotate: The active key is replaced by generating a new key pair (new `kid`), e.g. via `rewrap --rotate-key`. Older key material remains in the local keystore for decrypting and verifying past artifacts until it naturally reaches `expires_at` or is removed by operational choice.
 
 Active indicates whether new cryptographic operations are allowed for that key generation. Whether an artifact may be accepted in the workspace is separate: embedded `signer_pub` verification and the trust policy in §10 (`members/active`, `known_keys`, etc.) are orthogonal to this state label.
 
-After expired, ciphertext created earlier under that key does not automatically lose cryptographic integrity or context binding. Expiry is an operational boundary for rejecting new wraps and new signatures; limiting harm to past ciphertext after compromise is a distinct concern and is addressed by measures such as `--rotate-key` (§13.2).
+After expired, ciphertext created earlier under that key does not automatically lose cryptographic integrity or context binding. Expiry is an operational boundary for rejecting new wraps and new signatures; using an expired key for decryption or operational artifact signature verification still requires explicit recovery through `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`. Limiting harm to past ciphertext after compromise is a distinct concern and is addressed by measures such as `--rotate-key` (§13.2).
 
 Rotate makes a new `kid` the operational current key, and the public key published under `members/active` moves to the new generation (follow the user guide and `rewrap` behavior for exact steps). Deleting the old `kid`’s `private.json` from the local keystore prevents unwrap and decryption for that generation (keystore layout: §9.1.2).
 
@@ -624,7 +625,7 @@ Cryptographic verification of an artifact can be organized into three layers (La
 
 Unwrap proceeds only after Layer C succeeds, consistent with the §1.4 invariant do not decrypt before signature verification. After unwrap, SecretEnv recomputes `signature.mac` with the resulting DEK / MK and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
 
-Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Separately from cryptographic verification (Layers A–C), acceptance is gated by active / expired rules that separate behavior for new crypto operations vs read-path acceptance. Details are consolidated in §4.4 and §10.
+Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Separately from cryptographic verification (Layers A–C), acceptance is gated by active / expired rules that separate behavior for new crypto operations and recovery operations. Details are consolidated in §4.4 and §10.
 
 Local trust store exception: trust store documents have no embedded `signer_pub` in `signature`. Verification uses the owner's PublicKey from the local keystore, as in §10.4. This is the only exception to the general `signer_pub`-required rule; it pairs with the fact that the trust store is an approval-cache document, not an authority for current trust state.
 
@@ -1257,7 +1258,7 @@ The local trust store is a per-user approval cache. `known_keys` records key own
 
 The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. SecretEnv does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-unwrap key-possession proof verification have completed.
 
-Successful signature verification is not enough to accept an artifact. On read paths, SecretEnv checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`.
+Successful signature verification is not enough to accept an artifact. On read paths, SecretEnv checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`. If the signer key or the private key used for decryption is expired, `decrypt`, `get`, and `run` fail by default and continue with a warning only when explicit expired-key recovery is enabled.
 
 Read paths do not use `recipient_sets` to re-approve the entire artifact sharing set. Historical artifacts may still contain recipients that no longer resolve to current `members/active`. Such recipients are surfaced to the user as warnings, preserving readability of historical artifacts while keeping the difference from current state visible.
 
@@ -1271,7 +1272,7 @@ This design avoids silently carrying stale recipients or historical sharing stat
 
 If the recipient set is unreviewed or differs from the previously approved set, a valid signature and valid format are not enough; the output becomes a trusted update only after user approval.
 
-When a write operation reads an input artifact, it first applies the read-path trust decision to that input. If an ordinary write operation sees recipients that no longer resolve to current `members/active`, it does not carry that state forward into a new encrypted artifact; the user must first synchronize the artifact through `rewrap`. `rewrap` is the remediation flow for this case: it can read the historical input and write a new artifact based on current `members/active`.
+When a write operation reads an input artifact, it first applies the read-path trust decision to that input. Even operations that do not display secrets directly, such as `set`, `unset`, `import`, `rewrap`, and `member remove`, follow the same expired-key recovery boundary when they verify signatures or decrypt existing artifacts. If an ordinary write operation sees recipients that no longer resolve to current `members/active`, it does not carry that state forward into a new encrypted artifact; the user must first synchronize the artifact through `rewrap`. `rewrap` is the remediation flow for this case: it can read the historical input and write a new artifact based on current `members/active`.
 
 ### 10.4 Local Trust Store and Approval Cache
 
@@ -1285,7 +1286,7 @@ The local trust store itself is an exception to the general `signer_pub`-require
 
 Signature and structural validation of the trust store help detect corruption and inconsistent replacement. They are not a complete defense after compromise of the local trusted area. Silently discarding or recreating an unverifiable trust store could reset past approval judgments in a way that benefits an attacker, so recovery requires explicit user judgment.
 
-For incoming members or unreviewed keys, the user reviews key-statement information, the SSH key fingerprint, and optional GitHub account information. Online verification is supplementary evidence for identity judgment, not the trust anchor itself.
+For incoming members or unreviewed keys, the user reviews key-statement information, the SSH key fingerprint, and optional GitHub account information. Online verification is supplementary evidence for identity judgment, not the trust anchor itself. If the PublicKey being approved is expired, `member verify --approve` does not save it to `known_keys`. Expired-key recovery settings do not override this approval rejection.
 
 ### 10.5 Limited Exceptions
 
@@ -1298,6 +1299,8 @@ For `rewrap`, this exception converts an input from a non-current signer into ou
 The self historical exception is limited to self keys and rests on the fact that the corresponding self key in the local keystore belongs to the local trust boundary. It does not replace approval of other members' keys or current-member authorization.
 
 `SECRETENV_STRICT_KEY_CHECKING=no` relaxes only local key-owner approval checks on explicitly requested read paths. Signature verification, current authorization through `members/active`, recipient-handle consistency, and key-possession proof verification still apply. This setting does not apply to write paths and does not implicitly update `known_keys` or `recipient_sets`. If used in CI or similar automation, the execution context itself must be trusted by the user.
+
+Expired-key recovery is a limited exception for reading historical encrypted artifacts or completing operational artifact signature verification. It is enabled explicitly through `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`. It applies only to `decrypt`, `get`, `run`, `set`, `unset`, `import`, `rewrap`, and `member remove`, and does not apply to encryption, signing, or approval of expired PublicKeys.
 
 ### 10.6 Freshness and Repository Governance
 
@@ -1426,6 +1429,7 @@ Auditors should treat structural validation -> `signer_pub` validation -> artifa
 | Key-possession proof | Recompute `signature.mac` with the unwrapped DEK / MK and check the body, signer `kid`, and content key before plaintext decryption | The signed body, signer `kid`, and content key may not be verified against each other |
 | PublicKey verification | Both `signer_pub` and workspace PublicKeys are verified for self-signature and attestation | A tampered PublicKey could be accepted |
 | Trust-source separation | `members/active` is treated as the authorization source, while `known_keys` is treated as key-owner approval and `recipient_sets` as write-path artifact member set approval | Current-member checks, key-owner approval, and write-path artifact member set review may become conflated |
+| Expired-key recovery scope | `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, and `allow_expired_key="yes"` apply only to decryption and operational artifact signature verification, not to encryption, signing, or approval of expired PublicKeys with `member verify --approve` | Expired keys may return to normal operation or become fixed in the approval cache |
 | `STRICT_KEY_CHECKING` scope | `SECRETENV_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths or key-possession proof verification | The approval cache may be unintentionally disabled in CI or daily operation |
 | Environment variable-based key loading | Used only in trusted CI contexts, and key loading never performs workspace lookup for the self PublicKey | Private keys may be misused in attacker-controlled checkouts |
 

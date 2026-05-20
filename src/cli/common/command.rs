@@ -16,7 +16,9 @@ use secretenv_core::cli_api::app::context::identity::{
     build_missing_member_handle_error, resolve_member_handle_input,
 };
 use secretenv_core::cli_api::app::context::member::resolve_required_member;
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use secretenv_core::cli_api::app::context::options::{
+    resolve_allow_expired_key_option, CommonCommandOptions,
+};
 use secretenv_core::cli_api::app::context::ssh::SshSigningContextResolution;
 use secretenv_core::cli_api::app::file::decrypt::DecryptFileCommand;
 use secretenv_core::cli_api::app::file::encrypt::EncryptFileCommand;
@@ -70,6 +72,16 @@ pub(crate) fn resolve_command_input(
 
 pub(crate) fn resolve_options(common: &impl ToCommonOptions) -> CommonCommandOptions {
     CommonCommandOptions::from(&common.to_common_options())
+}
+
+pub(crate) fn resolve_options_with_allow_expired_key(
+    common: &impl ToCommonOptions,
+    allow_expired_key: bool,
+) -> Result<CommonCommandOptions> {
+    let mut options = resolve_options(common);
+    options.allow_expired_key =
+        resolve_allow_expired_key_option(Some(allow_expired_key), &options)?;
+    Ok(options)
 }
 
 pub(crate) fn resolve_required_member_handle(
@@ -212,6 +224,7 @@ pub(crate) fn run_kv_write_command_with_trust<P, T, Execute>(
     member_handle: Option<String>,
     file_name: Option<&str>,
     allow_missing: bool,
+    allow_expired_key: bool,
     labels: WriteCommandLabels<'_>,
     execute: Execute,
 ) -> Result<T>
@@ -219,7 +232,8 @@ where
     P: WriteTrustPolicy,
     Execute: FnOnce(&CommonCommandOptions, &MutationWriteTrustPlan<P>) -> Result<T>,
 {
-    let (options, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
+    let options = resolve_options_with_allow_expired_key(common, allow_expired_key)?;
+    let (_, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
     let trust_plan = resolve_mutation_write_plan::<P>(
         &options,
         member_handle,

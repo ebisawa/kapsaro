@@ -7,7 +7,10 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::CommandPathResolution;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::context::expiry::{build_key_expiry_warning, build_signing_key_expiry_warning};
+use crate::feature::context::expiry::{
+    build_signing_key_expiry_warning, enforce_expired_key_usage,
+};
+use crate::model::common::WrapSet;
 use crate::model::identity::MemberHandle;
 use crate::{Error, Result};
 use tracing::debug;
@@ -100,14 +103,28 @@ pub fn resolve_write_execution(
     }
 }
 
-pub fn build_read_execution_warnings(execution: &ExecutionContext) -> Result<Vec<String>> {
-    build_execution_warnings(build_key_expiry_warning(&execution.key_ctx.expires_at)?)
-}
-
 pub fn build_write_execution_warnings(execution: &ExecutionContext) -> Result<Vec<String>> {
     build_execution_warnings(build_signing_key_expiry_warning(
         &execution.key_ctx.expires_at,
     )?)
+}
+
+pub fn enforce_selected_decryption_key_expiry(
+    execution: &ExecutionContext,
+    wrap_set: &WrapSet,
+    allow_expired_key: bool,
+    debug_enabled: bool,
+) -> Result<Option<String>> {
+    let selected = execution.key_ctx.select_local_decryption_key(
+        wrap_set,
+        execution.member_handle.as_str(),
+        debug_enabled,
+    )?;
+    enforce_expired_key_usage(
+        &selected.info().expires_at,
+        allow_expired_key,
+        "Private key",
+    )
 }
 
 fn resolve_env_execution(

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::artifact::kv_recipient_evidence;
+use crate::app::context::execution::enforce_selected_decryption_key_expiry;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::errors::build_kv_key_not_found_error;
@@ -15,7 +16,8 @@ use crate::feature::kv::query::{
     decode_decrypted_kv_value, decode_decrypted_kv_values, list_kv_keys_with_disclosed,
     KvDisclosedEntry,
 };
-use crate::feature::verify::kv::signature::verify_kv_content;
+use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
+use crate::model::common::WrapSet;
 use crate::support::secret::SecretEnvMap;
 use crate::Result;
 
@@ -49,10 +51,26 @@ pub fn resolve_kv_read_command<P>(
 where
     P: ReadTrustPolicy,
 {
-    let command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
+    let mut command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
     let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?;
-    let verified_doc = verify_kv_content(&file.kv_content(), options.debug)?;
+    let verified_doc = verify_kv_content_for_operation(
+        &file.kv_content(),
+        options.debug,
+        options.allow_expired_key,
+    )?;
+    for warning in &verified_doc.proof().warnings {
+        push_unique_warning(&mut command.warnings, warning.clone());
+    }
+    let wrap_set = WrapSet::parse(&verified_doc.document().wrap().wrap, "Document")?;
+    if let Some(warning) = enforce_selected_decryption_key_expiry(
+        &command.execution,
+        &wrap_set,
+        options.allow_expired_key,
+        options.debug,
+    )? {
+        push_unique_warning(&mut command.warnings, warning);
+    }
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
     let trust_plan = evaluate_read_artifact_trust::<P>(
         options,
@@ -73,6 +91,12 @@ where
         warnings,
         target_path: file.target.file_path,
     })
+}
+
+fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
+    if !warnings.contains(&warning) {
+        warnings.push(warning);
+    }
 }
 
 pub fn execute_kv_read_command(
@@ -122,3 +146,7 @@ pub fn execute_kv_env_command(command: &KvReadCommand) -> Result<SecretEnvMap> {
         .value,
     )
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_kv_query_test.rs"]
+mod tests;

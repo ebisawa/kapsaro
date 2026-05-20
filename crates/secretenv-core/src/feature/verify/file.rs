@@ -3,7 +3,7 @@
 
 //! File-enc signature verification.
 
-use super::SignatureVerificationReport;
+use super::{append_operational_signer_expiry_warning, SignatureVerificationReport};
 use crate::feature::envelope::signature::verify_file_signature;
 use crate::format::content::FileEncContent;
 use crate::model::common::validate_wrap_items;
@@ -22,6 +22,17 @@ pub fn verify_file_content(
 ) -> Result<VerifiedFileEncDocument> {
     let doc = content.parse()?;
     verify_file_document(&doc, debug)
+}
+
+/// Parse and verify file-enc content with operational expired-key policy.
+pub fn verify_file_content_for_operation(
+    content: &FileEncContent,
+    debug: bool,
+    allow_expired_key: bool,
+) -> Result<VerifiedFileEncDocument> {
+    let mut verified = verify_file_content(content, debug)?;
+    append_operational_signer_expiry_warning(&mut verified.proof, allow_expired_key)?;
+    Ok(verified)
 }
 
 /// Verify signature of FileEncDocument and return report for display.
@@ -50,3 +61,7 @@ pub fn verify_file_document(doc: &FileEncDocument, debug: bool) -> Result<Verifi
 
     Ok(VerifiedFileEncDocument::new(doc.clone(), proof))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_verify_file_operation_test.rs"]
+mod tests;

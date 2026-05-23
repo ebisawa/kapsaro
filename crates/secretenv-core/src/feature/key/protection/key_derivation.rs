@@ -4,10 +4,9 @@
 //! SSH key derivation for PrivateKey protection
 
 use crate::crypto::kdf;
-use crate::crypto::rng::fill_random_array;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::keys::XChaChaKey;
-use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
+use crate::crypto::types::primitives::HkdfSalt;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
@@ -31,16 +30,6 @@ pub fn build_sign_message(ikm_salt_b64: &str) -> String {
         context::SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7,
         ikm_salt_b64
     )
-}
-
-/// Generate a random IKM salt for SSH-based key derivation.
-pub fn generate_ikm_salt() -> Result<PrivateKeyIkmSalt> {
-    Ok(PrivateKeyIkmSalt::new(fill_random_array::<32>()?))
-}
-
-/// Generate a random HKDF salt for SSH-based key derivation.
-pub fn generate_hkdf_salt() -> Result<HkdfSalt> {
-    Ok(HkdfSalt::new(fill_random_array::<32>()?))
 }
 
 /// Derive encryption key for a PrivateKey using SSH signature

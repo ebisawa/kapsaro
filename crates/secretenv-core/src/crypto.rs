@@ -23,24 +23,6 @@ pub fn build_crypto_error(operation: &str, details: impl std::fmt::Display) -> c
     CryptoError::build_operation_failed_error(format!("{}: {}", operation, details)).into()
 }
 
-/// Creates a cryptographic error with a formatted message and source error
-///
-/// # Arguments
-/// * `operation` - The operation that failed (e.g., "XChaCha20-Poly1305 encryption")
-/// * `details` - Additional error details
-/// * `source` - The underlying error that caused this failure
-pub fn build_crypto_error_with_source(
-    operation: &str,
-    details: impl std::fmt::Display,
-    source: impl std::error::Error + Send + Sync + 'static,
-) -> crate::Error {
-    CryptoError::build_operation_failed_error_with_source(
-        format!("{}: {}", operation, details),
-        source,
-    )
-    .into()
-}
-
 pub(crate) mod aead;
 pub(crate) mod hmac;
 pub(crate) mod kdf;

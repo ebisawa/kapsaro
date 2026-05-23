@@ -9,16 +9,16 @@ use secretenv_core::Result;
 use serde::Serialize;
 
 #[derive(Serialize)]
-struct RewrapBatchResultOutput {
+struct RewrapBatchResultOutput<'a> {
     success: bool,
-    processed_files: Vec<String>,
-    failed_files: Vec<RewrapBatchFailureOutput>,
+    processed_files: Vec<&'a str>,
+    failed_files: Vec<RewrapBatchFailureOutput<'a>>,
 }
 
 #[derive(Serialize)]
-struct RewrapBatchFailureOutput {
-    path: String,
-    error: String,
+struct RewrapBatchFailureOutput<'a> {
+    path: &'a str,
+    error: &'a str,
 }
 
 pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) -> Result<()> {
@@ -26,16 +26,16 @@ pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) -> Result<()
     print_json_output(&output)
 }
 
-fn build_rewrap_batch_result_output(outcome: &RewrapBatchView) -> RewrapBatchResultOutput {
+fn build_rewrap_batch_result_output(outcome: &RewrapBatchView) -> RewrapBatchResultOutput<'_> {
     RewrapBatchResultOutput {
         success: outcome.failed_files.is_empty(),
-        processed_files: outcome.processed_files.clone(),
+        processed_files: outcome.processed_files.iter().map(String::as_str).collect(),
         failed_files: outcome
             .failed_files
             .iter()
             .map(|file| RewrapBatchFailureOutput {
-                path: file.path.clone(),
-                error: file.error.clone(),
+                path: &file.path,
+                error: &file.error,
             })
             .collect(),
     }

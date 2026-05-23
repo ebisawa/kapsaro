@@ -15,6 +15,13 @@ fn test_unit_external_files_are_registered_once() {
     let registrations = collect_unit_harness_paths(&root.join("tests/unit.rs"));
 
     assert_registered_once(&external_files, &registrations);
+
+    let core_external_files =
+        collect_test_files(&root.join("crates/secretenv-core/tests/unit/external"));
+    let core_registrations =
+        collect_unit_harness_paths(&root.join("crates/secretenv-core/tests/unit.rs"));
+
+    assert_registered_once(&core_external_files, &core_registrations);
 }
 
 #[test]

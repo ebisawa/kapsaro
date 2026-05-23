@@ -5,8 +5,7 @@
 
 use console::Style;
 
-use secretenv_core::cli_api::app::file::inspect::InspectCommand;
-use secretenv_core::cli_api::presentation::inspect::{InspectOutput, InspectSection};
+use secretenv_core::cli_api::app::file::inspect::{InspectCommand, InspectOutput, InspectSection};
 
 pub(crate) fn print_inspect_banner(input_display: &str) {
     let dim = Style::new().dim();

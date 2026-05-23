@@ -4,10 +4,11 @@
 mod output;
 
 use crate::cli::common::command::{resolve_options, resolve_required_member_handle};
+use crate::cli::common::output::text::registration::print_init_noop_summary;
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
-use output::{print_init_noop_message, print_missing_key_notice, print_registration_outcome};
+use output::{print_missing_key_notice, print_registration_outcome};
 use secretenv_core::cli_api::app::registration::command::{
     evaluate_registration_decision, execute_registration_decision, resolve_registration_command,
     RegistrationDecision,
@@ -31,7 +32,7 @@ pub(crate) fn run_registration_command(
         let init_workspace = evaluate_init_workspace_status(&options)?;
         if init_workspace.state == InitWorkspaceState::NoOp {
             ensure_init_workspace_structure(&init_workspace.workspace_path)?;
-            print_init_noop_message(&init_workspace.workspace_path);
+            print_init_noop_summary(&init_workspace.workspace_path);
             return Ok(());
         }
     }
@@ -46,16 +47,14 @@ pub(crate) fn run_registration_command(
     let github_user = resolve_registration_github_user(needs_new_key, github_user, &options)?;
 
     let ssh_ctx = resolve_registration_ssh_context(needs_new_key, &options)?;
-    let command = match mode {
-        RegistrationMode::Init | RegistrationMode::Join => resolve_registration_command(
-            &options,
-            member_handle,
-            github_user,
-            key_plan,
-            mode,
-            ssh_ctx,
-        )?,
-    };
+    let command = resolve_registration_command(
+        &options,
+        member_handle,
+        github_user,
+        key_plan,
+        mode,
+        ssh_ctx,
+    )?;
     let outcome =
         execute_registration_decision(&command, resolve_registration_decision(&command, force)?)?;
     print_registration_outcome(&outcome)?;

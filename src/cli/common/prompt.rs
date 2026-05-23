@@ -19,6 +19,43 @@ pub(crate) fn prompt_yes_no(prompt: &str, default: bool) -> Result<bool> {
     confirm_yes_no_interactive(prompt, default)
 }
 
+pub(crate) fn confirm_destructive_action(
+    force: bool,
+    prompt: &str,
+    non_interactive_error: impl Into<String>,
+    cancelled_error: impl Into<String>,
+) -> Result<bool> {
+    confirm_destructive_action_with(force, tty::is_interactive(), || {
+        prompt_yes_no(prompt, false)
+    })
+    .map_err(|kind| match kind {
+        DestructiveConfirmationError::NonInteractive => {
+            Error::build_invalid_operation_error(non_interactive_error.into())
+        }
+        DestructiveConfirmationError::Cancelled => {
+            Error::build_invalid_operation_error(cancelled_error.into())
+        }
+        DestructiveConfirmationError::Prompt(error) => error,
+    })
+}
+
+pub(crate) fn confirm_destructive_action_or_cancel(
+    force: bool,
+    prompt: &str,
+    non_interactive_error: impl Into<String>,
+) -> Result<bool> {
+    match confirm_destructive_action_with(force, tty::is_interactive(), || {
+        prompt_yes_no(prompt, false)
+    }) {
+        Ok(accepted) => Ok(accepted),
+        Err(DestructiveConfirmationError::Cancelled) => Ok(false),
+        Err(DestructiveConfirmationError::NonInteractive) => Err(
+            Error::build_invalid_operation_error(non_interactive_error.into()),
+        ),
+        Err(DestructiveConfirmationError::Prompt(error)) => Err(error),
+    }
+}
+
 fn confirm_yes_no_interactive(prompt: &str, default: bool) -> Result<bool> {
     eprintln!();
     let answer = Confirm::new()
@@ -28,6 +65,32 @@ fn confirm_yes_no_interactive(prompt: &str, default: bool) -> Result<bool> {
         .map_err(|e| Error::build_io_error_with_source("Failed to read user input", e.into()))?;
     eprintln!();
     Ok(answer)
+}
+
+enum DestructiveConfirmationError {
+    NonInteractive,
+    Cancelled,
+    Prompt(Error),
+}
+
+fn confirm_destructive_action_with<Prompt>(
+    force: bool,
+    is_interactive: bool,
+    prompt: Prompt,
+) -> std::result::Result<bool, DestructiveConfirmationError>
+where
+    Prompt: FnOnce() -> Result<bool>,
+{
+    if force {
+        return Ok(true);
+    }
+    if !is_interactive {
+        return Err(DestructiveConfirmationError::NonInteractive);
+    }
+    match prompt().map_err(DestructiveConfirmationError::Prompt)? {
+        true => Ok(true),
+        false => Err(DestructiveConfirmationError::Cancelled),
+    }
 }
 
 #[cfg(test)]
@@ -49,6 +112,32 @@ where
     }
 
     Ok(matches!(trimmed.to_ascii_lowercase().as_str(), "y" | "yes"))
+}
+
+#[cfg(test)]
+pub(crate) fn confirm_destructive_action_with_reader<R>(
+    force: bool,
+    prompt: &str,
+    non_interactive_error: impl Into<String>,
+    cancelled_error: impl Into<String>,
+    is_interactive: bool,
+    mut reader: R,
+) -> Result<bool>
+where
+    R: BufRead,
+{
+    confirm_destructive_action_with(force, is_interactive, || {
+        prompt_yes_no_with_reader(prompt, false, &mut reader)
+    })
+    .map_err(|kind| match kind {
+        DestructiveConfirmationError::NonInteractive => {
+            Error::build_invalid_operation_error(non_interactive_error.into())
+        }
+        DestructiveConfirmationError::Cancelled => {
+            Error::build_invalid_operation_error(cancelled_error.into())
+        }
+        DestructiveConfirmationError::Prompt(error) => error,
+    })
 }
 
 #[cfg(test)]

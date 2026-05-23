@@ -14,13 +14,22 @@ mod remove;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]
-pub struct TrustArgs {
+pub(crate) struct TrustArgs {
     #[command(subcommand)]
     pub command: TrustCommands,
 }
 
+impl TrustArgs {
+    pub(crate) fn debug_enabled(&self) -> bool {
+        match &self.command {
+            TrustCommands::Keys(args) => args.debug_enabled(),
+            TrustCommands::Recipients(args) => args.debug_enabled(),
+        }
+    }
+}
+
 #[derive(Subcommand)]
-pub enum TrustCommands {
+pub(crate) enum TrustCommands {
     /// Manage known keys in local trust store
     Keys(KeysArgs),
 
@@ -29,13 +38,23 @@ pub enum TrustCommands {
 }
 
 #[derive(Args)]
-pub struct KeysArgs {
+pub(crate) struct KeysArgs {
     #[command(subcommand)]
     pub command: KeyTrustCommands,
 }
 
+impl KeysArgs {
+    fn debug_enabled(&self) -> bool {
+        match &self.command {
+            KeyTrustCommands::List(args) => args.common.debug.debug,
+            KeyTrustCommands::Remove(args) => args.common.debug.debug,
+            KeyTrustCommands::Purge(args) => args.common.debug.debug,
+        }
+    }
+}
+
 #[derive(Subcommand)]
-pub enum KeyTrustCommands {
+pub(crate) enum KeyTrustCommands {
     /// List known keys in local trust store
     List(ListArgs),
 
@@ -47,13 +66,23 @@ pub enum KeyTrustCommands {
 }
 
 #[derive(Args)]
-pub struct RecipientsArgs {
+pub(crate) struct RecipientsArgs {
     #[command(subcommand)]
     pub command: RecipientTrustCommands,
 }
 
+impl RecipientsArgs {
+    fn debug_enabled(&self) -> bool {
+        match &self.command {
+            RecipientTrustCommands::List(args) => args.common.debug.debug,
+            RecipientTrustCommands::Remove(args) => args.common.debug.debug,
+            RecipientTrustCommands::Purge(args) => args.common.debug.debug,
+        }
+    }
+}
+
 #[derive(Subcommand)]
-pub enum RecipientTrustCommands {
+pub(crate) enum RecipientTrustCommands {
     /// List approved recipient sets in local trust store
     List(ListArgs),
 
@@ -65,7 +94,7 @@ pub enum RecipientTrustCommands {
 }
 
 #[derive(Args)]
-pub struct ListArgs {
+pub(crate) struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOutputOptions,
@@ -75,7 +104,7 @@ pub struct ListArgs {
 }
 
 #[derive(Args)]
-pub struct RemoveArgs {
+pub(crate) struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOptions,
@@ -88,7 +117,7 @@ pub struct RemoveArgs {
 }
 
 #[derive(Args)]
-pub struct PurgeArgs {
+pub(crate) struct PurgeArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOptions,
@@ -105,7 +134,7 @@ pub struct PurgeArgs {
 }
 
 #[derive(Args)]
-pub struct RecipientRemoveArgs {
+pub(crate) struct RecipientRemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOptions,
@@ -117,7 +146,7 @@ pub struct RecipientRemoveArgs {
     pub sid: String,
 }
 
-pub fn run(args: TrustArgs) -> Result<(), Error> {
+pub(crate) fn run(args: TrustArgs) -> Result<(), Error> {
     match args.command {
         TrustCommands::Keys(args) => run_keys(args),
         TrustCommands::Recipients(args) => run_recipients(args),

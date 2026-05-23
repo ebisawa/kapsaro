@@ -80,13 +80,10 @@ fn test_rewrap_clear_disclosure_history() {
         removed
     );
 
-    let mut rewrap_args = default_rewrap_args(common_opts.clone(), ALICE_MEMBER_HANDLE);
-    rewrap_args.clear_disclosure_history = true;
-    let result = rewrap::run(rewrap_args);
-    assert!(
-        result.is_ok(),
-        "Rewrap with clear_disclosure_history should succeed: {:?}",
-        result.err()
+    run_rewrap_with_member_set_review_args(
+        &common_opts,
+        ALICE_MEMBER_HANDLE,
+        &["--clear-disclosure-history"],
     );
 
     let removed_after = load_kv_removed_recipient_handles(&kv_path);

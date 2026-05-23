@@ -5,7 +5,6 @@
 
 use std::path::Path;
 
-use crate::app::artifact::encrypted_content_recipient_evidence;
 use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::review::ReviewedTextFile;
 use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
@@ -21,6 +20,7 @@ use crate::app::trust::{
     ArtifactRecipientTrustOutcome, CommandCapability, RecipientTrustOutcome, SignerTrustOutcome,
     TrustApprovalCandidate, TrustContext,
 };
+use crate::feature::trust::recipient_sets::encrypted_content_recipient_evidence;
 use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::EncContent;
@@ -28,6 +28,7 @@ use crate::model::common::WrapSet;
 use crate::model::verification::SignatureVerificationProof;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
+use crate::support::warning::push_unique_warning;
 use crate::Result;
 
 use super::rewrite::{build_rewritten_artifact, save_rewritten_artifact, RewrapRewriteContext};
@@ -213,12 +214,6 @@ fn build_rewrap_decryption_key_warning(
         ctx.request.options.allow_expired_key,
         ctx.request.options.debug,
     )
-}
-
-fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
-    if !warnings.contains(&warning) {
-        warnings.push(warning);
-    }
 }
 
 fn load_captured_artifact(file_path: &Path) -> Result<ReviewedTextFile> {

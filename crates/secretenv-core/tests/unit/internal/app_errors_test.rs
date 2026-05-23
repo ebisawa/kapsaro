@@ -40,14 +40,14 @@ fn test_build_kv_key_not_found_error_passthrough_for_unrelated_operation() {
 }
 
 #[test]
-fn test_build_kv_key_not_found_error_augments_existing_not_found() {
+fn test_build_kv_key_not_found_error_passthrough_for_not_found_context() {
     let err = Error::build_not_found_error("entry foo not found in document");
     let wrapped = build_kv_key_not_found_error(err, Path::new("/tmp/x.kvenc"), "foo");
     assert_eq!(wrapped.kind(), ErrorKind::NotFound);
-    assert!(wrapped
-        .format_user_message()
-        .contains("entry foo not found"));
-    assert!(wrapped.format_user_message().contains("x.kvenc"));
+    assert_eq!(
+        wrapped.format_user_message(),
+        "entry foo not found in document"
+    );
 }
 
 #[test]

@@ -4,15 +4,13 @@
 //! Workspace-related encryption tests
 
 use crate::cli::common::{
-    default_common_options, encrypt_file_with_member_set_review, set_ssh_key_from_temp_dir,
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
 use crate::test_utils::{
     build_expiring_soon_timestamp, keygen_test, save_active_public_key_to_workspace,
     setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use secretenv::cli::encrypt;
 use std::fs;
 
 #[cfg(unix)]
@@ -57,24 +55,27 @@ fn test_encrypt_rejects_filename_content_mismatch() {
     fs::write(&input_path, b"binary test content").unwrap();
     let encrypted_path = secrets_dir.join("test.encrypted");
 
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
-
-    let encrypt_args = encrypt::EncryptArgs {
-        common: common_opts.into(),
-        member: secretenv::cli::options::MemberHandleOption {
-            member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        },
-        out: Some(encrypted_path.clone()),
-        stdout: false,
-        stdin: false,
-        input: Some(input_path.clone()),
-    };
-
-    let err = encrypt::run(encrypt_args).expect_err("encrypt must reject stem/content mismatch");
-    let msg = err.to_string();
+    let output = cmd()
+        .arg("encrypt")
+        .arg(&input_path)
+        .arg("--out")
+        .arg(&encrypted_path)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env(
+            "SECRETENV_SSH_IDENTITY",
+            temp_dir.path().join(".ssh").join("test_ed25519"),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "encrypt must reject stem/content mismatch"
+    );
+    let msg = String::from_utf8_lossy(&output.stderr);
     assert!(
         msg.contains("Member handle mismatch"),
         "unexpected error: {msg}"

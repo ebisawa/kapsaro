@@ -4,9 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::app::artifact::encrypted_content_recipient_evidence;
 use crate::app::context::options::CommonCommandOptions;
-use crate::feature::trust::recipient_sets::find_recipient_handle_mismatch;
+use crate::feature::trust::recipient_sets::{
+    encrypted_content_recipient_evidence, find_recipient_handle_mismatch,
+};
 use crate::feature::verify::file::verify_file_content;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::EncContent;

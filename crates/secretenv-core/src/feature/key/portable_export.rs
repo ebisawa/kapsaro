@@ -15,11 +15,11 @@ use crate::support::secret::SecretString;
 use crate::{Error, Result};
 
 /// Output of a portable private key export operation.
-pub struct PortableExportOutput {
-    pub member_handle: String,
-    pub kid: String,
-    pub encoded_key: SecretString,
-    pub password_warning: Option<String>,
+pub(crate) struct PortableExportOutput {
+    pub(crate) member_handle: String,
+    pub(crate) kid: String,
+    pub(crate) encoded_key: SecretString,
+    pub(crate) password_warning: Option<String>,
 }
 
 const MIN_PASSWORD_LENGTH: usize = 8;

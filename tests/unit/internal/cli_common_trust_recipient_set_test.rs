@@ -40,7 +40,7 @@ impl Drop for StderrColorGuard {
 fn test_format_signer_key_review_lines_uses_user_facing_copy_and_github_account() {
     let candidate = candidate_with_verified_github();
 
-    let rendered = format_signer_key_review_lines(&candidate, "decrypt signer").join("\n");
+    let rendered = format_signer_key_review_lines(&candidate).join("\n");
 
     assert!(rendered.contains("Key review"));
     assert!(rendered.contains("This secret was signed by the member below."));
@@ -59,12 +59,9 @@ fn test_format_signer_key_review_lines_uses_user_facing_copy_and_github_account(
 fn test_format_non_member_signer_review_lines_says_decision_is_one_time_only() {
     let candidate = candidate_with_verified_github();
 
-    let rendered = format_non_member_signer_review_lines(
-        &candidate,
-        "decrypt signer",
-        &["alice@example.com".to_string()],
-    )
-    .join("\n");
+    let rendered =
+        format_non_member_signer_review_lines(&candidate, &["alice@example.com".to_string()])
+            .join("\n");
 
     assert!(rendered.contains("Signer outside active members"));
     assert!(rendered.contains("Accept only if you intentionally want to read this artifact once."));
@@ -79,8 +76,7 @@ fn test_format_non_member_signer_review_lines_says_decision_is_one_time_only() {
 fn test_format_non_member_signer_review_lines_warns_after_online_verification_failure() {
     let candidate = candidate_with_failed_github_verification();
 
-    let rendered =
-        format_non_member_signer_review_lines(&candidate, "decrypt signer", &[]).join("\n");
+    let rendered = format_non_member_signer_review_lines(&candidate, &[]).join("\n");
 
     assert!(rendered.contains(
         "Warning: GitHub online verification did not verify this signer: online verification failed"
@@ -92,7 +88,7 @@ fn test_format_non_member_signer_review_lines_warns_after_online_verification_fa
 fn test_format_member_key_review_lines_uses_member_verify_copy() {
     let candidate = candidate_with_verified_github();
 
-    let rendered = format_member_key_review_lines(&candidate, "member verify").join("\n");
+    let rendered = format_member_key_review_lines(&candidate).join("\n");
 
     assert!(rendered.contains("Key review"));
     assert!(rendered.contains("You are approving the member key below."));
@@ -117,7 +113,7 @@ fn test_format_recipient_set_review_lines_uses_user_facing_copy_and_member_handl
         approved: None,
     };
 
-    let rendered = format_recipient_set_review_lines(&review, "get signer").join("\n");
+    let rendered = format_recipient_set_review_lines(&review).join("\n");
 
     assert!(rendered.contains("Secret sharing review"));
     assert!(rendered.contains("This secret is shared with the members below."));
@@ -155,7 +151,7 @@ fn test_format_recipient_set_review_lines_shows_colored_diff_for_changed_set() {
         approved: Some(recipient_set_record(&approved_kid, None)),
     };
 
-    let rendered = format_recipient_set_review_lines(&review, "get signer").join("\n");
+    let rendered = format_recipient_set_review_lines(&review).join("\n");
     let plain = strip_ansi_codes(&rendered);
 
     assert!(plain.contains("This secret's member set differs from your last review."));
@@ -188,7 +184,7 @@ fn test_format_recipient_set_review_lines_keeps_diff_readable_without_color() {
         approved: Some(recipient_set_record(&approved_kid, None)),
     };
 
-    let rendered = format_recipient_set_review_lines(&review, "get signer").join("\n");
+    let rendered = format_recipient_set_review_lines(&review).join("\n");
 
     assert!(!rendered.contains("\u{1b}["));
     assert!(rendered.contains("+ alice@example.com  KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));

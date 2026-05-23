@@ -11,7 +11,6 @@ pub use crate::test_utils::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use assert_cmd::{cargo, Command};
-use secretenv::cli::options::CommonOptions;
 use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 use secretenv_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
 use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
@@ -29,6 +28,15 @@ use std::thread;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+
+#[derive(Clone, Debug, Default)]
+pub struct CommonOptions {
+    pub home: Option<PathBuf>,
+    pub identity: Option<PathBuf>,
+    pub json: bool,
+    pub quiet: bool,
+    pub workspace: Option<PathBuf>,
+}
 
 // ============================================================================
 // Test Binary Helper
@@ -459,12 +467,8 @@ pub fn default_common_options() -> CommonOptions {
         home: None,
         workspace: None,
         identity: None,
-        ssh_agent: false,
-        ssh_keygen: true,
         json: false,
         quiet: false,
-        debug: false,
-        verbose: false,
     }
 }
 
@@ -472,6 +476,54 @@ pub fn default_common_options() -> CommonOptions {
 pub fn set_ssh_key_from_temp_dir(common_opts: &mut CommonOptions, temp_dir: &TempDir) {
     let ssh_key_path = temp_dir.path().join(".ssh").join("test_ed25519");
     common_opts.identity = Some(ssh_key_path);
+}
+
+#[cfg(unix)]
+pub fn append_common_command_args(command: &mut StdCommand, common_opts: &CommonOptions) {
+    if let Some(workspace) = &common_opts.workspace {
+        command.arg("--workspace").arg(workspace);
+    }
+    if common_opts.json {
+        command.arg("--json");
+    }
+    if common_opts.quiet {
+        command.arg("--quiet");
+    }
+    if let Some(home) = &common_opts.home {
+        command.env("SECRETENV_HOME", home);
+    }
+    if let Some(identity) = &common_opts.identity {
+        command.env("SECRETENV_SSH_IDENTITY", identity);
+    }
+}
+
+pub fn assert_stderr_order(stderr: &[u8], first: &str, second: &str) {
+    let stderr = String::from_utf8_lossy(stderr);
+    let first_index = stderr
+        .find(first)
+        .unwrap_or_else(|| panic!("Missing '{first}' in stderr: {stderr}"));
+    let second_index = stderr
+        .find(second)
+        .unwrap_or_else(|| panic!("Missing '{second}' in stderr: {stderr}"));
+    assert!(
+        first_index < second_index,
+        "Expected '{first}' before '{second}' in stderr: {stderr}"
+    );
+}
+
+pub fn copy_dir_all(source: &Path, destination: &Path) {
+    std::fs::create_dir_all(destination).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let file_type = entry.file_type().unwrap();
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_all(&source_path, &destination_path);
+        } else {
+            std::fs::copy(&source_path, &destination_path).unwrap();
+        }
+    }
 }
 
 pub fn make_secret_home() -> TempDir {
@@ -517,6 +569,25 @@ pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
         panic!("failed to initialize test workspace: {}", stderr.trim());
     }
 
+    (workspace_dir, home_dir, ssh_temp, ssh_priv)
+}
+
+#[cfg(unix)]
+pub fn setup_workspace_with_kv_entries(
+    entries: &[(&str, &str)],
+) -> (TempDir, TempDir, TempDir, PathBuf) {
+    let (workspace_dir, home_dir, ssh_temp, ssh_priv) = setup_workspace();
+    for (key, value) in entries {
+        set_value_with_member_set_review(
+            workspace_dir.path(),
+            home_dir.path(),
+            &ssh_priv,
+            key,
+            value,
+            None,
+            None,
+        );
+    }
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
 }
 

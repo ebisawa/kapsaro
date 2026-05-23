@@ -44,10 +44,6 @@ impl<'a> VerifiedSigningContext<'a> {
     pub fn signer_kid(&self) -> &'a str {
         self.signing.signer_kid
     }
-
-    pub fn signer_pub(&self) -> PublicKey {
-        self.signing.signer_pub.clone()
-    }
 }
 
 impl<'a> Deref for VerifiedSigningContext<'a> {

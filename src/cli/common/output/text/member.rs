@@ -5,8 +5,8 @@
 
 use console::Style;
 
-use crate::cli::common::output::member::{
-    view::MemberGithubClaimView, MemberApprovalResultsView, MemberListView, MemberShowView,
+use crate::cli::common::output::member::view::{
+    MemberApprovalResultsView, MemberGithubClaimView, MemberListView, MemberShowView,
     MemberVerificationResultsView,
 };
 use crate::cli::common::output::trust::review::print_candidate_review;

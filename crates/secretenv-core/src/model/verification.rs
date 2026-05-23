@@ -11,7 +11,7 @@ use crate::model::public_key::PublicKey;
 /// Proof of PublicKey self-signature verification
 ///
 /// This proof indicates that the PublicKey document's self-signature has been
-/// cryptographically verified. Used in `VerifiedPublicKey`.
+/// cryptographically verified. Used by verified public-key wrappers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelfSignatureProof {}
 

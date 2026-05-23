@@ -5,10 +5,6 @@
 
 pub(crate) mod view;
 
-pub(crate) use view::{
-    MemberApprovalResultsView, MemberListView, MemberShowView, MemberVerificationResultsView,
-};
-
 use crate::cli::common::output::json::member::{
     print_empty_member_list as print_empty_member_list_json,
     print_member_approval_results as print_member_approval_results_json,

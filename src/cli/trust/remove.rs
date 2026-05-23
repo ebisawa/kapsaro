@@ -4,7 +4,7 @@
 //! trust remove CLI handler.
 
 use crate::cli::common::command::{
-    resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
+    resolve_options, resolve_trust_store_owner_member, resolve_write_execution_input,
 };
 use crate::cli::common::output::text;
 use crate::cli::common::output::text::trust::{
@@ -25,7 +25,7 @@ pub(crate) fn run_key(args: RemoveArgs) -> Result<(), Error> {
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
-            let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
+            let execution = resolve_write_execution_input(&options, member_handle.clone())?;
             remove_known_key_command(&options, &execution, &args.kid, options.debug)
         },
     )?;
@@ -41,7 +41,7 @@ pub(crate) fn run_recipient(args: RecipientRemoveArgs) -> Result<(), Error> {
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
-            let (_, execution) = resolve_execution_input(&args.common, member_handle.clone())?;
+            let execution = resolve_write_execution_input(&options, member_handle.clone())?;
             remove_recipient_set_command(&options, &execution, &args.sid, options.debug)
         },
     )?;

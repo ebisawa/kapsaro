@@ -9,13 +9,10 @@ use clap::Args;
 use zeroize::Zeroizing;
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, resolve_trust_store_owner_member,
-    run_kv_write_command_with_trust, WriteCommandLabels,
+    resolve_options_with_allow_expired_key, run_kv_write_command_with_recovery, WriteCommandLabels,
 };
 use crate::cli::common::output::text::{print_optional_status, print_warnings};
-use crate::cli::common::trust::{
-    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
-};
+use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
@@ -26,7 +23,7 @@ use secretenv_core::cli_api::presentation::secret::SecretString;
 use secretenv_core::{Error, Result};
 
 #[derive(Args)]
-pub struct SetArgs {
+pub(crate) struct SetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOptions,
@@ -70,42 +67,35 @@ fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<SecretString
     }
 }
 
-pub fn run(args: SetArgs) -> Result<()> {
-    let value = resolve_value(args.value, args.stdin)?;
+pub(crate) fn run(args: SetArgs) -> Result<()> {
+    let mut value = Some(resolve_value(args.value, args.stdin)?);
     let options = resolve_options_with_allow_expired_key(
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    let outcome = run_with_trust_store_reset_recovery(
+    let outcome = run_kv_write_command_with_recovery::<SetPolicy, _, _>(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || {
-            run_kv_write_command_with_trust::<SetPolicy, _, _>(
-                &args.common,
-                args.member.member_handle.clone(),
-                args.store.name.as_deref(),
-                true,
-                args.allow_expired_key.allow_expired_key,
-                WriteCommandLabels {
-                    signer_context: Some(("set input signer", "input signer")),
-                    recipient_context: "set recipients",
-                },
-                |_, trust_plan| {
-                    let success_message = format!(
-                        "Set key '{}' in '{}'",
-                        args.key,
-                        args.store.name.as_deref().unwrap_or("default")
-                    );
-                    set_kv_command_with_recipient_set_confirmation(
-                        trust_plan,
-                        vec![KvInputEntry::new_secret(
-                            args.key.clone(),
-                            SecretString::new(value.as_str().to_owned()),
-                        )],
-                        Some(&success_message),
-                        confirm_recipient_set_approval,
-                    )
-                },
+        args.member.member_handle.clone(),
+        args.store.name.as_deref(),
+        true,
+        WriteCommandLabels {
+            signer_context: Some(("set input signer", "input signer")),
+            recipient_context: "set recipients",
+        },
+        |_, trust_plan| {
+            let success_message = format!(
+                "Set key '{}' in '{}'",
+                args.key,
+                args.store.name.as_deref().unwrap_or("default")
+            );
+            let value = value.take().ok_or_else(|| {
+                Error::build_invalid_operation_error("Set value was already consumed")
+            })?;
+            set_kv_command_with_recipient_set_confirmation(
+                trust_plan,
+                vec![KvInputEntry::new_secret(args.key.clone(), value)],
+                Some(&success_message),
+                confirm_recipient_set_approval,
             )
         },
     )?;

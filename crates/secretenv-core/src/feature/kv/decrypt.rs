@@ -10,6 +10,7 @@ use crate::feature::envelope::key_possession::verify_kv_key_possession;
 use crate::feature::envelope::unwrap::{
     unwrap_master_key_for_kv, unwrap_master_key_for_kv_with_context,
 };
+use crate::feature::kv::error::build_key_not_found_error;
 use crate::model::kv_enc::document::KvEncEntry;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::verified::VerifiedPrivateKey;
@@ -73,9 +74,9 @@ pub fn decrypt_kv_single_entry(
     )?;
     let possession = verify_kv_key_possession(verified_doc, master_key)?;
 
-    let entry = doc.entry(key).ok_or_else(|| {
-        crate::Error::build_invalid_operation_error(format!("Key '{}' not found", key))
-    })?;
+    let entry = doc
+        .entry(key)
+        .ok_or_else(|| build_key_not_found_error(key))?;
     decrypt_entry(
         entry.value(),
         entry.key(),
@@ -106,9 +107,9 @@ pub fn decrypt_kv_single_entry_with_context(
     let key_info = master_key.key_info;
     let possession = verify_kv_key_possession(verified_doc, master_key.value)?;
 
-    let entry = doc.entry(key).ok_or_else(|| {
-        crate::Error::build_invalid_operation_error(format!("Key '{}' not found", key))
-    })?;
+    let entry = doc
+        .entry(key)
+        .ok_or_else(|| build_key_not_found_error(key))?;
     let value = decrypt_entry(
         entry.value(),
         entry.key(),

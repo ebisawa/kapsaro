@@ -4,7 +4,7 @@
 //! JSON renderers for member commands.
 
 use crate::cli::common::output::json::print_json_output;
-use crate::cli::common::output::member::{
+use crate::cli::common::output::member::view::{
     MemberApprovalResultsView, MemberListView, MemberVerificationResultsView,
 };
 use secretenv_core::Result;
@@ -42,7 +42,6 @@ struct MemberApprovalJsonItem<'a> {
     verified: bool,
     approved: bool,
     review_required: bool,
-    already_known: bool,
     message: &'a str,
     fingerprint: Option<&'a str>,
     github_id: Option<u64>,
@@ -84,7 +83,14 @@ pub(crate) fn print_member_verification_results(
 }
 
 pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>) -> Result<()> {
-    let output = MemberApprovalResultsOutput {
+    let output = build_member_approval_results_output(view);
+    print_json_output(&output)
+}
+
+fn build_member_approval_results_output<'a>(
+    view: &MemberApprovalResultsView<'a>,
+) -> MemberApprovalResultsOutput<'a> {
+    MemberApprovalResultsOutput {
         results: view
             .results
             .iter()
@@ -94,7 +100,6 @@ pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>
                 verified: result.verified,
                 approved: result.approved,
                 review_required: result.review_required,
-                already_known: result.already_known,
                 message: result.message,
                 fingerprint: result.fingerprint,
                 github_id: result.github_id,
@@ -102,6 +107,9 @@ pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>
                 github_binding_configured: result.github_binding_configured,
             })
             .collect(),
-    };
-    print_json_output(&output)
+    }
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/unit/internal/cli_common_output_json_member_test.rs"]
+mod tests;

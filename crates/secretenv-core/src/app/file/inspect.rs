@@ -8,7 +8,10 @@ use crate::feature::inspect::verification::{
     build_online_verification_section, build_signature_verification_section,
     OnlineVerificationDisplay,
 };
-use crate::feature::inspect::{build_inspect_view, InspectOutput, InspectSection};
+use crate::feature::inspect::{
+    build_inspect_view, InspectOutput as FeatureInspectOutput,
+    InspectSection as FeatureInspectSection,
+};
 use crate::feature::verify::file::verify_file_document_report;
 use crate::feature::verify::kv::signature::verify_kv_document_report;
 use crate::feature::verify::SignatureVerificationReport;
@@ -26,16 +29,50 @@ pub struct InspectCommand {
     pub output: InspectOutput,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InspectOutput {
+    pub title: String,
+    pub sections: Vec<InspectSection>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct InspectSection {
+    pub title: String,
+    pub lines: Vec<String>,
+}
+
+impl From<FeatureInspectOutput> for InspectOutput {
+    fn from(output: FeatureInspectOutput) -> Self {
+        Self {
+            title: output.title,
+            sections: output
+                .sections
+                .into_iter()
+                .map(InspectSection::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<FeatureInspectSection> for InspectSection {
+    fn from(section: FeatureInspectSection) -> Self {
+        Self {
+            title: section.title,
+            lines: section.lines,
+        }
+    }
+}
+
 pub fn execute_inspect_file_command(
     options: &CommonCommandOptions,
     input_path: &Path,
 ) -> Result<InspectCommand> {
     let content = load_inspect_content(input_path)?;
-    let mut inspect_output = build_inspect_view(&content)?;
+    let mut inspect_output = InspectOutput::from(build_inspect_view(&content)?);
     let signature_report = build_signature_report(&content, options.debug)?;
     inspect_output
         .sections
-        .push(build_signature_verification_section(&signature_report));
+        .push(build_signature_verification_section(&signature_report).into());
 
     if let Some(section) = build_online_section(options, &signature_report) {
         inspect_output.sections.push(section);
@@ -84,11 +121,14 @@ fn build_online_section(
     let github = match binding_claims.github_account.as_ref() {
         Some(github) => github,
         None => {
-            return Some(build_online_verification_section(
-                &OnlineVerificationDisplay::NoSupportedBinding,
-                None,
-                None,
-            ));
+            return Some(
+                build_online_verification_section(
+                    &OnlineVerificationDisplay::NoSupportedBinding,
+                    None,
+                    None,
+                )
+                .into(),
+            );
         }
     };
 
@@ -110,11 +150,14 @@ fn build_online_section(
         .as_ref()
         .map(|verified| verified.id)
         .or(Some(github.id));
-    Some(build_online_verification_section(
-        &OnlineVerificationDisplay::GithubResult(result),
-        github_login,
-        github_id,
-    ))
+    Some(
+        build_online_verification_section(
+            &OnlineVerificationDisplay::GithubResult(result),
+            github_login,
+            github_id,
+        )
+        .into(),
+    )
 }
 
 fn build_failed_online_verification_result(

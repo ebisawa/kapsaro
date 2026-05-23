@@ -9,8 +9,8 @@ use crate::model::wire::format::PUBLIC_KEY_V6;
 use serde::{Deserialize, Serialize};
 
 pub use super::public_key_verified::{
-    AttestationProof, AttestedIdentity, VerifiedBindingClaims, VerifiedPublicKey,
-    VerifiedPublicKeyAttested, VerifiedRecipientKey, VerifiedSigningPublicKey,
+    AttestationProof, AttestedIdentity, VerifiedBindingClaims, VerifiedPublicKeyAttested,
+    VerifiedRecipientKey, VerifiedSigningPublicKey,
 };
 
 /// PublicKey v6 document (signed container)

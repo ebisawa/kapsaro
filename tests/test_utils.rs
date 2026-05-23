@@ -15,51 +15,20 @@ pub mod ed25519_backend;
 mod fixture;
 #[allow(dead_code)]
 pub mod keygen_helpers;
-#[path = "../tests/test_utils/ssh_stubs.rs"]
-#[allow(dead_code)]
-mod ssh_stubs;
 #[allow(unused_imports)]
 pub use constants::{
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
-    EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
-#[allow(unused_imports)]
 pub use crypto_context::setup_member_key_context;
 #[allow(unused_imports)]
 pub use fixture::{
-    generate_temp_ssh_keypair_in_dir, load_fixture_ssh_pubkey, save_public_key,
-    setup_test_keystore, setup_test_keystore_from_fixtures, setup_test_workspace,
-    setup_test_workspace_from_fixtures,
+    generate_temp_ssh_keypair_in_dir, setup_test_keystore, setup_test_keystore_from_fixtures,
+    setup_test_workspace, setup_test_workspace_from_fixtures,
 };
 #[allow(unused_imports)]
-pub use keygen_helpers::{build_test_private_key, keygen_test};
-use secretenv_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
+pub use keygen_helpers::keygen_test;
 use secretenv_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use secretenv_core::Error;
-#[allow(unused_imports)]
-pub use ssh_stubs::{stub_agent_signer, stub_ssh_keygen};
-
-#[allow(dead_code)]
-pub fn member_handle(value: impl Into<String>) -> MemberHandle {
-    MemberHandle::try_from(value.into()).expect("test member_handle must be valid")
-}
-
-#[allow(dead_code)]
-pub fn kid(value: impl Into<String>) -> Kid {
-    Kid::try_from(value.into()).expect("test kid must be valid")
-}
-
-#[allow(dead_code)]
-pub fn error_chain_contains_serde_json(error: &(dyn std::error::Error + 'static)) -> bool {
-    let mut current = error.source();
-    while let Some(source) = current {
-        if source.downcast_ref::<serde_json::Error>().is_some() {
-            return true;
-        }
-        current = source.source();
-    }
-    false
-}
 
 /// Set up a trust store that approves all active members in a workspace.
 ///
@@ -119,9 +88,8 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
     use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
     use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
     use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-    use secretenv_core::cli_api::test_support::storage::ssh::protocol::{
-        build_sha256_fingerprint, SshKeyDescriptor,
-    };
+    use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+    use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 
     let ssh_key_path = home.join(".ssh").join("test_ed25519");
     let ssh_pubkey = std::fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
@@ -168,38 +136,22 @@ pub fn save_active_public_key_to_workspace(
     workspace: &Path,
     member_handle: &str,
 ) -> Result<(), Error> {
-    let active_key =
-        find_active_key_document(member_handle, &home.join("keys"))?.ok_or_else(|| {
-            Error::build_not_found_error(format!(
-                "Active key not found for member: {}",
-                member_handle
-            ))
-        })?;
-    let member_path = workspace
-        .join("members")
-        .join("active")
-        .join(format!("{member_handle}.json"));
-    std::fs::write(
-        &member_path,
-        serde_json::to_string_pretty(&active_key.public_key).unwrap(),
-    )
-    .map_err(|error| {
-        Error::build_io_error_with_source(
-            format!(
-                "Failed to write workspace member file: {}",
-                member_path.display()
-            ),
-            error,
-        )
-    })
+    save_active_public_key_to_workspace_dir(home, workspace, member_handle, "active")
 }
 
-// Used by library tests (via crate::test_utils) — not referenced in the integration test binary.
-#[allow(dead_code)]
 pub fn save_active_public_key_to_workspace_incoming(
     home: &Path,
     workspace: &Path,
     member_handle: &str,
+) -> Result<(), Error> {
+    save_active_public_key_to_workspace_dir(home, workspace, member_handle, "incoming")
+}
+
+fn save_active_public_key_to_workspace_dir(
+    home: &Path,
+    workspace: &Path,
+    member_handle: &str,
+    member_dir: &str,
 ) -> Result<(), Error> {
     let active_key =
         find_active_key_document(member_handle, &home.join("keys"))?.ok_or_else(|| {
@@ -210,7 +162,7 @@ pub fn save_active_public_key_to_workspace_incoming(
         })?;
     let member_path = workspace
         .join("members")
-        .join("incoming")
+        .join(member_dir)
         .join(format!("{member_handle}.json"));
     std::fs::write(
         &member_path,
@@ -301,32 +253,5 @@ impl Drop for EnvGuard {
                 None => std::env::remove_var(key),
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::lock_unpoisoned;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
-    use std::sync::Mutex;
-
-    #[test]
-    fn test_lock_unpoisoned_returns_guard_for_healthy_mutex() {
-        let mutex = Mutex::new(42_u8);
-        let guard = lock_unpoisoned(&mutex);
-        assert_eq!(*guard, 42);
-    }
-
-    #[test]
-    fn test_lock_unpoisoned_recovers_from_poisoned_mutex() {
-        let mutex = Mutex::new(7_u8);
-
-        let _ = catch_unwind(AssertUnwindSafe(|| {
-            let _guard = mutex.lock().unwrap();
-            panic!("poison test mutex");
-        }));
-
-        let guard = lock_unpoisoned(&mutex);
-        assert_eq!(*guard, 7);
     }
 }

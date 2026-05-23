@@ -5,11 +5,9 @@ use super::super::paths::{find_member_path, members_dir, MemberStatus};
 use crate::format::schema::document::parse_public_key_str;
 use crate::model::public_key::PublicKey;
 use crate::support::fs::{list_dir, load_text_with_limit};
-use crate::support::kid::format_kid_display_lossy;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn load_json_files_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
@@ -106,28 +104,6 @@ pub fn load_member_files(
     Ok(members)
 }
 
-pub fn load_active_member_index_by_kid(
-    workspace_path: &Path,
-) -> Result<BTreeMap<String, PublicKey>> {
-    let mut index = BTreeMap::new();
-
-    for member in load_active_member_files(workspace_path)? {
-        let kid = member.protected.kid.clone();
-        if index.insert(kid.clone(), member).is_some() {
-            return Err(Error::build_config_error(format!(
-                "Ambiguous key: kid '{}' found in multiple members",
-                format_kid_display_lossy(&kid)
-            )));
-        }
-    }
-
-    Ok(index)
-}
-
-pub fn find_active_member_by_kid(workspace_path: &Path, kid: &str) -> Result<Option<PublicKey>> {
-    Ok(load_active_member_index_by_kid(workspace_path)?.remove(kid))
-}
-
 pub fn load_member_file(
     workspace_path: &Path,
     member_handle: &str,
@@ -141,34 +117,6 @@ pub fn load_member_file(
         "Member '{}' not found in workspace",
         member_handle
     )))
-}
-
-pub fn list_member_file_paths(
-    workspace_path: &Path,
-    member_handles: &[String],
-) -> Result<Vec<PathBuf>> {
-    if member_handles.is_empty() {
-        let mut paths = load_json_files_in_dir(&members_dir(workspace_path, MemberStatus::Active))?;
-        paths.extend(load_json_files_in_dir(&members_dir(
-            workspace_path,
-            MemberStatus::Incoming,
-        ))?);
-        return Ok(paths);
-    }
-
-    member_handles
-        .iter()
-        .map(|member_handle| {
-            find_member_path(workspace_path, member_handle)
-                .map(|(path, _)| path)
-                .ok_or_else(|| {
-                    Error::build_not_found_error(format!(
-                        "Member '{}' not found in workspace",
-                        member_handle
-                    ))
-                })
-        })
-        .collect()
 }
 
 pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {

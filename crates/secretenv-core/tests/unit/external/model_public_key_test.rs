@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
-use secretenv_core::cli_api::test_support::domain::public_key::*;
+use secretenv_core::cli_api::test_support::domain::public_key::{
+    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    PublicKeyProtected,
+};
 
 #[test]
 fn test_public_key_deserialization() {

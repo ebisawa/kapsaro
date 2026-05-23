@@ -6,20 +6,19 @@
 use clap::Args;
 
 use crate::cli::common::command::{
-    resolve_command_input, resolve_options_with_allow_expired_key,
-    resolve_trust_store_owner_member, run_read_command_with_trust, ReadCommandLabels,
+    resolve_options_with_allow_expired_key, run_read_command_with_recovery, ReadCommandLabels,
 };
 use crate::cli::common::output::kv::print_kv_read_result;
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOutputOptions,
 };
 use secretenv_core::cli_api::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
+use secretenv_core::cli_api::app::kv::types::KvReadMode;
 use secretenv_core::cli_api::app::trust::GetPolicy;
-use secretenv_core::Result;
+use secretenv_core::{Error, Result};
 
 #[derive(Args)]
-pub struct GetArgs {
+pub(crate) struct GetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOutputOptions,
@@ -45,54 +44,29 @@ pub struct GetArgs {
     pub key: Option<String>,
 }
 
-pub fn run(args: GetArgs) -> Result<()> {
-    if args.all && args.key.is_some() {
-        return Err(secretenv_core::Error::build_invalid_operation_error(
-            "--all and KEY argument cannot be used together".to_string(),
-        ));
-    }
-    if !args.all && args.key.is_none() {
-        return Err(secretenv_core::Error::build_invalid_operation_error(
-            "KEY argument is required (or use --all to get all entries)".to_string(),
-        ));
-    }
-
-    let read_mode = if args.all {
-        secretenv_core::cli_api::app::kv::types::KvReadMode::All
-    } else {
-        secretenv_core::cli_api::app::kv::types::KvReadMode::Single(
-            args.key.as_deref().ok_or_else(|| {
-                secretenv_core::Error::build_invalid_operation_error("KEY argument is required")
-            })?,
-        )
-    };
+pub(crate) fn run(args: GetArgs) -> Result<()> {
+    let read_mode = resolve_get_read_mode(args.all, args.key.as_deref())?;
     let options = resolve_options_with_allow_expired_key(
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    let kv_map = run_with_trust_store_reset_recovery(
+    let kv_map = run_read_command_with_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || {
-            let (_, ssh_ctx) =
-                resolve_command_input(&args.common, args.member.member_handle.clone())?;
-            let command = resolve_kv_read_command::<GetPolicy>(
+        args.member.member_handle.clone(),
+        ReadCommandLabels {
+            context: "get signer",
+            subject: "signer",
+            allow_non_member: true,
+        },
+        |ssh_ctx| {
+            resolve_kv_read_command::<GetPolicy>(
                 &options,
                 args.member.member_handle.clone(),
                 args.store.name.as_deref(),
                 ssh_ctx,
-            )?;
-            run_read_command_with_trust(
-                &options,
-                &command,
-                ReadCommandLabels {
-                    context: "get signer",
-                    subject: "signer",
-                    allow_non_member: true,
-                },
-                || execute_kv_read_command(&command, read_mode, args.common.debug.debug),
             )
         },
+        |command| execute_kv_read_command(command, read_mode, args.common.debug.debug),
     )?;
 
     print_kv_read_result(
@@ -102,3 +76,20 @@ pub fn run(args: GetArgs) -> Result<()> {
         args.with_key,
     )
 }
+
+fn resolve_get_read_mode(all: bool, key: Option<&str>) -> Result<KvReadMode<'_>> {
+    match (all, key) {
+        (true, Some(_)) => Err(Error::build_invalid_operation_error(
+            "--all and KEY argument cannot be used together",
+        )),
+        (true, None) => Ok(KvReadMode::All),
+        (false, Some(key)) => Ok(KvReadMode::Single(key)),
+        (false, None) => Err(Error::build_invalid_operation_error(
+            "KEY argument is required (or use --all to get all entries)",
+        )),
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/cli_get_test.rs"]
+mod tests;

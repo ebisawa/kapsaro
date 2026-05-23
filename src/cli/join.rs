@@ -17,7 +17,7 @@ use secretenv_core::cli_api::app::registration::types::RegistrationMode;
 use secretenv_core::Error;
 
 #[derive(Args)]
-pub struct JoinArgs {
+pub(crate) struct JoinArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOptions,
@@ -34,7 +34,7 @@ pub struct JoinArgs {
 }
 
 /// Join an existing workspace
-pub fn run(args: JoinArgs) -> Result<(), Error> {
+pub(crate) fn run(args: JoinArgs) -> Result<(), Error> {
     run_registration_command(
         args.common,
         args.force.force,

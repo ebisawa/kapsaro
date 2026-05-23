@@ -23,7 +23,7 @@ use secretenv_core::cli_api::test_support::primitives::types::keys::XChaChaKey;
 use secretenv_core::cli_api::test_support::primitives::types::primitives::{
     HkdfSalt, PrivateKeyIkmSalt,
 };
-use secretenv_core::cli_api::test_support::storage::ssh::backend::signature_backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 use std::cell::Cell;

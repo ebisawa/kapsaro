@@ -5,19 +5,16 @@
 
 pub mod atomic;
 pub mod lock;
-mod permission;
+pub(crate) mod permission;
 pub(crate) mod policy;
-mod read;
-mod snapshot;
+pub(crate) mod read;
+pub(crate) mod snapshot;
 
 pub use permission::{
-    check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted,
-    set_file_permission_0600,
+    check_permission_chain, ensure_dir, ensure_dir_restricted, set_file_permission_0600,
 };
-pub use read::{load_bytes, load_bytes_with_limit, load_text, load_text_with_limit};
-pub use snapshot::{
-    ensure_text_file_matches_snapshot, ensure_text_file_matches_snapshot_with_limit,
-};
+pub use read::{load_bytes, load_text, load_text_with_limit};
+pub use snapshot::ensure_text_file_matches_snapshot_with_limit;
 
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};

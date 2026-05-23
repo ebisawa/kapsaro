@@ -11,7 +11,7 @@ use secretenv_core::Result;
 use super::ListArgs;
 
 /// Main entry point for key listing
-pub fn run(args: ListArgs) -> Result<()> {
+pub(super) fn run(args: ListArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let result = list_keys_command(&options, args.member.member_handle.clone())?;
     print_key_list(args.common.json.json, &result, args.common.verbose.verbose)

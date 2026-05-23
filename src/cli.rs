@@ -5,14 +5,14 @@
 
 // Common utilities (enabled for v3)
 pub(crate) mod common;
-pub mod error;
+pub(crate) mod error;
 pub(crate) mod identity_prompt;
-pub mod options;
+pub(crate) mod options;
 
 // Active v3 commands
 mod decrypt;
 mod doctor;
-pub mod encrypt;
+mod encrypt;
 mod get;
 mod import;
 mod init;
@@ -22,28 +22,28 @@ mod key;
 mod list;
 mod member;
 mod registration;
-pub mod rewrap;
+mod rewrap;
 mod run;
-pub mod set;
+mod set;
 mod trust;
 mod unset;
 
 mod config;
 
-pub use config::ConfigArgs;
-pub use decrypt::DecryptArgs;
-pub use doctor::DoctorArgs;
-pub use get::GetArgs;
-pub use import::ImportArgs;
-pub use init::InitArgs;
-pub use inspect::InspectArgs;
-pub use join::JoinArgs;
-pub use key::KeyArgs;
-pub use list::ListArgs;
-pub use member::MemberArgs;
-pub use run::RunArgs;
-pub use trust::TrustArgs;
-pub use unset::UnsetArgs;
+use config::ConfigArgs;
+use decrypt::DecryptArgs;
+use doctor::DoctorArgs;
+use get::GetArgs;
+use import::ImportArgs;
+use init::InitArgs;
+use inspect::InspectArgs;
+use join::JoinArgs;
+use key::KeyArgs;
+use list::ListArgs;
+use member::MemberArgs;
+use run::RunArgs;
+use trust::TrustArgs;
+use unset::UnsetArgs;
 
 use clap::{Parser, Subcommand};
 
@@ -56,13 +56,13 @@ use tracing::debug;
 #[command(name = "secretenv")]
 #[command(version)]
 #[command(disable_help_subcommand = true)]
-pub struct Cli {
+pub(crate) struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
-pub enum Commands {
+enum Commands {
     /// Configuration management
     Config(ConfigArgs),
 
@@ -115,51 +115,90 @@ pub enum Commands {
     Unset(UnsetArgs),
 }
 
-pub fn run() -> Result<(), Error> {
-    let cli = Cli::parse();
-    let capability = command_capability(&cli.command);
+pub(crate) fn parse() -> Cli {
+    Cli::parse()
+}
+
+pub(crate) fn debug_enabled(cli: &Cli) -> bool {
+    cli.command.debug_enabled()
+}
+
+pub(crate) fn run(cli: Cli) -> Result<i32, Error> {
+    let capability = cli.command.capability();
     debug!("[CLI] command={}", capability.label());
     ensure_env_mode_command_allowed(capability)?;
 
-    match cli.command {
-        Commands::Config(args) => config::run(args),
-        Commands::Decrypt(args) => decrypt::run(args),
-        Commands::Doctor(args) => doctor::run(args),
-        Commands::Encrypt(args) => encrypt::run(args),
-        Commands::Get(args) => get::run(args),
-        Commands::Import(args) => import::run(args),
-        Commands::Init(args) => init::run(args),
-        Commands::Inspect(args) => inspect::run(args),
-        Commands::Join(args) => join::run(args),
-        Commands::Key(args) => key::run(args),
-        Commands::List(args) => list::run(args),
-        Commands::Member(args) => member::run(args),
-        Commands::Rewrap(args) => rewrap::run(args),
-        Commands::Run(args) => run::run(args),
-        Commands::Set(args) => set::run(args),
-        Commands::Trust(args) => trust::run(args),
-        Commands::Unset(args) => unset::run(args),
+    cli.command.run()
+}
+
+impl Commands {
+    fn debug_enabled(&self) -> bool {
+        match self {
+            Commands::Config(_) => false,
+            Commands::Decrypt(args) => args.common.debug.debug,
+            Commands::Doctor(args) => args.common.debug.debug,
+            Commands::Encrypt(args) => args.common.debug.debug,
+            Commands::Get(args) => args.common.debug.debug,
+            Commands::Import(args) => args.common.debug.debug,
+            Commands::Init(args) => args.common.debug.debug,
+            Commands::Inspect(args) => args.common.debug.debug,
+            Commands::Join(args) => args.common.debug.debug,
+            Commands::Key(args) => args.debug_enabled(),
+            Commands::List(args) => args.common.debug.debug,
+            Commands::Member(args) => args.debug_enabled(),
+            Commands::Rewrap(args) => args.common.debug.debug,
+            Commands::Run(args) => args.common.debug.debug,
+            Commands::Set(args) => args.common.debug.debug,
+            Commands::Trust(args) => args.debug_enabled(),
+            Commands::Unset(args) => args.common.debug.debug,
+        }
+    }
+
+    fn capability(&self) -> CommandCapability {
+        match self {
+            Commands::Config(_) => CommandCapability::Config,
+            Commands::Decrypt(_) => CommandCapability::Decrypt,
+            Commands::Doctor(_) => CommandCapability::Doctor,
+            Commands::Encrypt(_) => CommandCapability::Encrypt,
+            Commands::Get(_) => CommandCapability::Get,
+            Commands::Import(_) => CommandCapability::Import,
+            Commands::Init(_) => CommandCapability::Init,
+            Commands::Inspect(_) => CommandCapability::Inspect,
+            Commands::Join(_) => CommandCapability::Join,
+            Commands::Key(_) => CommandCapability::Key,
+            Commands::List(_) => CommandCapability::List,
+            Commands::Member(_) => CommandCapability::Member,
+            Commands::Rewrap(_) => CommandCapability::Rewrap,
+            Commands::Run(_) => CommandCapability::Run,
+            Commands::Set(_) => CommandCapability::Set,
+            Commands::Trust(_) => CommandCapability::Trust,
+            Commands::Unset(_) => CommandCapability::Unset,
+        }
+    }
+
+    fn run(self) -> Result<i32, Error> {
+        match self {
+            Commands::Config(args) => config::run(args).map(|_| 0),
+            Commands::Decrypt(args) => decrypt::run(args).map(|_| 0),
+            Commands::Doctor(args) => doctor::run(args),
+            Commands::Encrypt(args) => encrypt::run(args).map(|_| 0),
+            Commands::Get(args) => get::run(args).map(|_| 0),
+            Commands::Import(args) => import::run(args).map(|_| 0),
+            Commands::Init(args) => init::run(args).map(|_| 0),
+            Commands::Inspect(args) => inspect::run(args).map(|_| 0),
+            Commands::Join(args) => join::run(args).map(|_| 0),
+            Commands::Key(args) => key::run(args).map(|_| 0),
+            Commands::List(args) => list::run(args).map(|_| 0),
+            Commands::Member(args) => member::run(args).map(|_| 0),
+            Commands::Rewrap(args) => rewrap::run(args).map(|_| 0),
+            Commands::Run(args) => run::run(args),
+            Commands::Set(args) => set::run(args).map(|_| 0),
+            Commands::Trust(args) => trust::run(args).map(|_| 0),
+            Commands::Unset(args) => unset::run(args).map(|_| 0),
+        }
     }
 }
 
-fn command_capability(command: &Commands) -> CommandCapability {
-    match command {
-        Commands::Config(_) => CommandCapability::Config,
-        Commands::Decrypt(_) => CommandCapability::Decrypt,
-        Commands::Doctor(_) => CommandCapability::Doctor,
-        Commands::Encrypt(_) => CommandCapability::Encrypt,
-        Commands::Get(_) => CommandCapability::Get,
-        Commands::Import(_) => CommandCapability::Import,
-        Commands::Init(_) => CommandCapability::Init,
-        Commands::Inspect(_) => CommandCapability::Inspect,
-        Commands::Join(_) => CommandCapability::Join,
-        Commands::Key(_) => CommandCapability::Key,
-        Commands::List(_) => CommandCapability::List,
-        Commands::Member(_) => CommandCapability::Member,
-        Commands::Rewrap(_) => CommandCapability::Rewrap,
-        Commands::Run(_) => CommandCapability::Run,
-        Commands::Set(_) => CommandCapability::Set,
-        Commands::Trust(_) => CommandCapability::Trust,
-        Commands::Unset(_) => CommandCapability::Unset,
-    }
-}
+#[cfg(test)]
+#[path = "../tests/unit/internal/cli_args_test.rs"]
+mod args_tests;

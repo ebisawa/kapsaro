@@ -34,9 +34,8 @@ use secretenv_core::cli_api::test_support::primitives::kem::generate_keypair as 
 use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
 use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-use secretenv_core::cli_api::test_support::storage::ssh::protocol::{
-    build_sha256_fingerprint, SshKeyDescriptor,
-};
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv_core::{Error, Result};
 use std::path::Path;
 use time::OffsetDateTime;

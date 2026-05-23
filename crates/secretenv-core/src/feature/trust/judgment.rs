@@ -10,9 +10,9 @@ mod recipient;
 mod self_trust;
 mod signer;
 
-pub use active_member::{build_active_members_by_kid, ActiveMemberSnapshot, CurrentMemberMatch};
+pub use active_member::{build_active_members_by_kid, ActiveMemberSnapshot};
 pub use identity::TrustIdentity;
-pub use known_key::{AdditionalKnownKeyCache, KnownKeyCache, KnownKeyMatch};
+pub use known_key::{AdditionalKnownKeyCache, KnownKeyCache};
 pub use recipient::judge_recipients_trust;
 pub use self_trust::SelfTrustSet;
 pub use signer::{judge_signer_trust, TrustJudgment};

@@ -6,9 +6,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::feature::context::crypto::{load_crypto_context_from_keystore, CryptoContext};
+use crate::feature::context::expiry::enforce_expired_key_usage;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::io::keystore::active::{load_active_kid, set_active_kid};
 use crate::io::keystore::storage::{list_kids, list_member_handles, load_public_key};
+use crate::model::common::{WrapItem, WrapSet};
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
 use crate::Result;
 
@@ -144,26 +146,6 @@ impl KeyContextOptions {
         self.operation_options = options;
         self
     }
-
-    /// Return the member handle used for loading the key context.
-    pub fn member_handle(&self) -> &str {
-        &self.member_handle
-    }
-
-    /// Return the optional explicit key ID.
-    pub fn kid(&self) -> Option<&str> {
-        self.kid.as_deref()
-    }
-
-    /// Return the optional workspace path used by key protection checks.
-    pub fn workspace_path(&self) -> Option<&Path> {
-        self.workspace_path.as_deref()
-    }
-
-    /// Return shared operation options.
-    pub fn operation_options(&self) -> OperationOptions {
-        self.operation_options
-    }
 }
 
 impl KeyContext {
@@ -177,6 +159,25 @@ impl KeyContext {
 
     pub(crate) fn keystore_root(&self) -> Option<&Path> {
         self.inner.local_keystore_root()
+    }
+
+    pub(crate) fn enforce_decryption_key_not_expired(
+        &self,
+        wrap_items: &[WrapItem],
+        options: OperationOptions,
+    ) -> Result<()> {
+        let wrap_set = WrapSet::parse(wrap_items, "Document")?;
+        let selected = self.inner().select_local_decryption_key(
+            &wrap_set,
+            self.member_handle(),
+            options.debug(),
+        )?;
+        let _ = enforce_expired_key_usage(
+            &selected.info().expires_at,
+            options.allow_expired_key(),
+            "Private key",
+        )?;
+        Ok(())
     }
 
     /// Return the loaded member handle.
@@ -206,7 +207,7 @@ impl RecipientKeys {
         Ok(Self { handles, keys })
     }
 
-    pub fn handles(&self) -> &[String] {
+    pub(crate) fn handles(&self) -> &[String] {
         &self.handles
     }
 

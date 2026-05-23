@@ -4,12 +4,12 @@
 //! kv-enc artifact facade.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
-use crate::feature::context::expiry::enforce_expired_key_usage;
+use crate::api::artifact_text::ArtifactText;
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
+use crate::feature::kv::error::map_key_not_found_error;
 use crate::feature::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
@@ -20,12 +20,8 @@ use crate::feature::kv::query::{
 use crate::feature::kv::types::KvInputEntry as InternalKvInputEntry;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
-use crate::model::common::WrapSet;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
-use crate::support::fs::atomic::save_text;
-use crate::support::fs::load_text_with_limit;
-use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::{Error, ErrorKind, Result};
+use crate::Result;
 
 use super::key::{KeyContext, RecipientKeys};
 use super::operation::OperationOptions;
@@ -35,7 +31,7 @@ use super::trust::RecipientSetSubject;
 /// Parsed kv-enc artifact.
 #[derive(Debug, Clone)]
 pub struct KvEncArtifact {
-    content: KvEncContent,
+    text: ArtifactText<KvEncContent>,
 }
 
 /// Signature-verified kv-enc artifact.
@@ -58,33 +54,35 @@ pub struct KvDisclosedEntry {
     disclosed: bool,
 }
 
+struct KvFacadeWriteInput<'a> {
+    recipients: KvRecipientSnapshot,
+    ctx: KvWriteContext<'a>,
+}
+
 impl KvEncArtifact {
     /// Parse kv-enc text after format detection.
     pub fn parse(content: impl Into<String>) -> Result<Self> {
-        Ok(Self {
-            content: KvEncContent::detect(content.into())?,
-        })
+        ArtifactText::parse(content).map(Self::from_text)
     }
 
     /// Load kv-enc text from a path.
-    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let content = load_text_with_limit(
-            path.as_ref(),
-            MAX_JSON_DOCUMENT_READ_SIZE,
-            "kv-enc artifact",
-        )?;
-        Self::parse(content)
+    pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
+        ArtifactText::load(path, "kv-enc artifact").map(Self::from_text)
     }
 
     /// Save the artifact text.
-    pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        save_text(path.as_ref(), self.as_str())
+    pub fn save(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        self.text.save(path)
     }
 
     /// Verify the artifact signature.
     pub fn verify(&self, options: OperationOptions) -> Result<VerifiedKvEncArtifact> {
-        verify_kv_content_for_operation(&self.content, options.debug(), options.allow_expired_key())
-            .map(|inner| VerifiedKvEncArtifact::from_inner(self.content.clone(), inner))
+        verify_kv_content_for_operation(
+            self.text.content(),
+            options.debug(),
+            options.allow_expired_key(),
+        )
+        .map(|inner| VerifiedKvEncArtifact::from_inner(self.text.content().clone(), inner))
     }
 
     /// Encrypt entries to a new signed kv-enc artifact.
@@ -99,7 +97,7 @@ impl KvEncArtifact {
 
     /// List entry keys without decrypting values.
     pub fn list_entry_keys(&self) -> Result<Vec<KvDisclosedEntry>> {
-        list_kv_keys_with_disclosed(&self.content).map(|entries| {
+        list_kv_keys_with_disclosed(self.text.content()).map(|entries| {
             entries
                 .into_iter()
                 .map(|entry| KvDisclosedEntry {
@@ -112,7 +110,7 @@ impl KvEncArtifact {
 
     /// Return the serialized artifact text.
     pub fn as_str(&self) -> &str {
-        self.content.as_str()
+        self.text.as_str()
     }
 
     fn rewrite_entries(
@@ -122,27 +120,21 @@ impl KvEncArtifact {
         key_ctx: &KeyContext,
         options: OperationOptions,
     ) -> Result<Self> {
-        let recipient_snapshot = KvRecipientSnapshot {
-            member_handles: recipients.handles().to_vec(),
-            verified_members: recipients.keys().to_vec(),
-        };
-        let ctx = KvWriteContext::new(
-            &key_ctx.inner().member_handle,
-            key_ctx.inner(),
-            options.debug(),
-        );
+        let input = build_kv_write_input(recipients, key_ctx, options);
+        let internal_entries = into_internal_entries(entries);
         let result = set_kv_entry_with_recipients(
             existing,
-            &entries
-                .into_iter()
-                .map(KvInputEntry::into_internal)
-                .collect::<Vec<_>>(),
-            &recipient_snapshot,
-            &ctx,
+            &internal_entries,
+            &input.recipients,
+            &input.ctx,
         )?;
-        Ok(Self {
-            content: result.encrypted,
-        })
+        Ok(Self::from_text(ArtifactText::from_content(
+            result.encrypted,
+        )))
+    }
+
+    fn from_text(text: ArtifactText<KvEncContent>) -> Self {
+        Self { text }
     }
 }
 
@@ -179,17 +171,9 @@ impl VerifiedKvEncArtifact {
         key_ctx: &KeyContext,
         options: OperationOptions,
     ) -> Result<KvEncArtifact> {
-        let recipient_snapshot = KvRecipientSnapshot {
-            member_handles: recipients.handles().to_vec(),
-            verified_members: recipients.keys().to_vec(),
-        };
-        let ctx = KvWriteContext::new(
-            &key_ctx.inner().member_handle,
-            key_ctx.inner(),
-            options.debug(),
-        );
+        let input = build_kv_write_input(recipients, key_ctx, options);
         let content =
-            unset_kv_entry_with_recipients(&self.content, key, &recipient_snapshot, &ctx)?;
+            unset_kv_entry_with_recipients(&self.content, key, &input.recipients, &input.ctx)?;
         KvEncArtifact::parse(content)
     }
 
@@ -209,7 +193,7 @@ impl VerifiedKvEncArtifact {
             options.debug(),
         )
         .map(|result| result.value)
-        .map_err(|error| build_key_not_found_error(error, key))?;
+        .map_err(|error| map_key_not_found_error(error, key))?;
         decode_decrypted_kv_value(key, value).map(SecretString::from_inner)
     }
 
@@ -241,18 +225,28 @@ fn enforce_key_context_expiry(
     key_ctx: &KeyContext,
     options: OperationOptions,
 ) -> Result<()> {
-    let wrap_set = WrapSet::parse(&artifact.inner().document().wrap().wrap, "Document")?;
-    let selected = key_ctx.inner().select_local_decryption_key(
-        &wrap_set,
-        key_ctx.member_handle(),
-        options.debug(),
-    )?;
-    let _ = enforce_expired_key_usage(
-        &selected.info().expires_at,
-        options.allow_expired_key(),
-        "Private key",
-    )?;
-    Ok(())
+    key_ctx.enforce_decryption_key_not_expired(&artifact.inner().document().wrap().wrap, options)
+}
+
+fn build_kv_write_input<'a>(
+    recipients: &RecipientKeys,
+    key_ctx: &'a KeyContext,
+    options: OperationOptions,
+) -> KvFacadeWriteInput<'a> {
+    KvFacadeWriteInput {
+        recipients: KvRecipientSnapshot {
+            member_handles: recipients.handles().to_vec(),
+            verified_members: recipients.keys().to_vec(),
+        },
+        ctx: KvWriteContext::new(key_ctx.member_handle(), key_ctx.inner(), options.debug()),
+    }
+}
+
+fn into_internal_entries(entries: Vec<KvInputEntry>) -> Vec<InternalKvInputEntry> {
+    entries
+        .into_iter()
+        .map(KvInputEntry::into_internal)
+        .collect()
 }
 
 impl KvInputEntry {
@@ -267,11 +261,6 @@ impl KvInputEntry {
     /// Return the entry key.
     pub fn key(&self) -> &str {
         &self.key
-    }
-
-    /// Return the secret entry value.
-    pub fn value(&self) -> &SecretString {
-        &self.value
     }
 
     fn into_internal(self) -> InternalKvInputEntry {
@@ -289,11 +278,4 @@ impl KvDisclosedEntry {
     pub fn disclosed(&self) -> bool {
         self.disclosed
     }
-}
-
-fn build_key_not_found_error(error: Error, key: &str) -> Error {
-    if error.kind() == ErrorKind::InvalidOperation {
-        return Error::build_invalid_operation_error(format!("Key '{}' not found", key));
-    }
-    error
 }

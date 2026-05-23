@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! file-enc v3 format encryption and decryption tests
+//! file-enc format encryption and decryption tests
 
 #[path = "format_file_enc_test/decrypt.rs"]
 mod decrypt;

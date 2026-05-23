@@ -26,13 +26,25 @@ mod verify;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]
-pub struct MemberArgs {
+pub(crate) struct MemberArgs {
     #[command(subcommand)]
     pub command: MemberCommands,
 }
 
+impl MemberArgs {
+    pub(crate) fn debug_enabled(&self) -> bool {
+        match &self.command {
+            MemberCommands::Add(args) => args.common.debug.debug,
+            MemberCommands::List(args) => args.common.debug.debug,
+            MemberCommands::Remove(args) => args.common.debug.debug,
+            MemberCommands::Show(args) => args.common.debug.debug,
+            MemberCommands::Verify(args) => args.common.debug.debug,
+        }
+    }
+}
+
 #[derive(Subcommand)]
-pub enum MemberCommands {
+pub(crate) enum MemberCommands {
     /// Add member's public key to incoming
     Add(AddArgs),
 
@@ -50,7 +62,7 @@ pub enum MemberCommands {
 }
 
 #[derive(Args)]
-pub struct AddArgs {
+pub(crate) struct AddArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOptions,
@@ -63,14 +75,14 @@ pub struct AddArgs {
 }
 
 #[derive(Args)]
-pub struct ListArgs {
+pub(crate) struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOutputOptions,
 }
 
 #[derive(Args)]
-pub struct ShowArgs {
+pub(crate) struct ShowArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOutputOptions,
@@ -81,7 +93,7 @@ pub struct ShowArgs {
 }
 
 #[derive(Args)]
-pub struct RemoveArgs {
+pub(crate) struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOptions,
@@ -98,7 +110,7 @@ pub struct RemoveArgs {
 }
 
 #[derive(Args)]
-pub struct VerifyArgs {
+pub(crate) struct VerifyArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOutputOptions,
@@ -115,7 +127,7 @@ pub struct VerifyArgs {
     pub member_handles: Vec<String>,
 }
 
-pub fn run(args: MemberArgs) -> Result<(), Error> {
+pub(crate) fn run(args: MemberArgs) -> Result<(), Error> {
     match args.command {
         MemberCommands::Add(args) => add::run(args),
         MemberCommands::List(args) => list::run(args),

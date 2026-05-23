@@ -3,8 +3,9 @@
 
 //! Application-layer error helpers.
 
+use crate::feature::kv::error::is_key_not_found_error;
 use crate::support::path::format_path_relative_to_cwd;
-use crate::{Error, ErrorKind};
+use crate::Error;
 use std::path::Path;
 
 #[cfg(test)]
@@ -13,31 +14,10 @@ mod tests;
 
 /// Build a KV key-not-found error with file path context when applicable.
 pub fn build_kv_key_not_found_error(error: Error, input_path: &Path, key: &str) -> Error {
-    if let Some(message) = kv_key_not_found_message(&error, key) {
-        return build_kv_key_file_not_found_error(message, input_path);
+    if is_key_not_found_error(&error, key) {
+        return build_kv_key_file_not_found_error(error.format_user_message(), input_path);
     }
     error
-}
-
-fn kv_key_not_found_message<'a>(error: &'a Error, key: &str) -> Option<&'a str> {
-    let message = error.format_user_message();
-    match error.kind() {
-        ErrorKind::InvalidOperation if is_invalid_operation_kv_key_not_found(message, key) => {
-            Some(message)
-        }
-        ErrorKind::NotFound if is_not_found_kv_key_not_found(message, key) => Some(message),
-        _ => None,
-    }
-}
-
-fn is_invalid_operation_kv_key_not_found(message: &str, key: &str) -> bool {
-    let quoted = format!("Key '{}' not found", key);
-    let unquoted = format!("Key not found: {}", key);
-    message == quoted || message == unquoted
-}
-
-fn is_not_found_kv_key_not_found(message: &str, key: &str) -> bool {
-    message.contains(key) && message.contains("not found")
 }
 
 fn build_kv_key_file_not_found_error(message: &str, input_path: &Path) -> Error {

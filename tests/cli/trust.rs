@@ -8,7 +8,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::cli::common::{cmd, ALICE_MEMBER_HANDLE};
+use crate::cli::common::{cmd, copy_dir_all, ALICE_MEMBER_HANDLE};
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use assert_cmd::cargo;
 #[cfg(unix)]
@@ -103,21 +103,6 @@ fn install_secondary_member_fixture(home: &TempDir, member_handle: &str) {
     let source = secondary_home.path().join("keys").join(member_handle);
     let destination = home.path().join("keys").join(member_handle);
     copy_dir_all(&source, &destination);
-}
-
-fn copy_dir_all(source: &std::path::Path, destination: &std::path::Path) {
-    fs::create_dir_all(destination).unwrap();
-    for entry in fs::read_dir(source).unwrap() {
-        let entry = entry.unwrap();
-        let file_type = entry.file_type().unwrap();
-        let source_path = entry.path();
-        let destination_path = destination.join(entry.file_name());
-        if file_type.is_dir() {
-            copy_dir_all(&source_path, &destination_path);
-        } else {
-            fs::copy(&source_path, &destination_path).unwrap();
-        }
-    }
 }
 
 #[test]

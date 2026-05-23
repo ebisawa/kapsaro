@@ -10,23 +10,23 @@ secretenv は、オフライン優先（offline-first）の暗号ファイル共
 
 本リポジトリは cargo workspace で構成されています。
 
-- ルート crate `secretenv` (bin) — `src/cli/`, `src/main.rs`, `src/lib.rs`。CLI バイナリのみ
+- ルート crate `secretenv` (bin) — `src/cli/`, `src/main.rs`。CLI バイナリのみ
 - `crates/secretenv-core` (lib) — domain ロジック全て（`app/`, `feature/`, `crypto/`, `format/`, `model/`, `io/`, `config/`, `support/` と公開 API `api/`）
 
 ### secretenv-core の API 境界
 
-- `secretenv_core::api` — 外部埋め込み向けの安定公開 API。`FileEncArtifact`, `KvEncArtifact`, `VerifiedFileEncArtifact`, `VerifiedKvEncArtifact`, `SecretEnvHome`, `LocalKeyStore`, `LocalTrustStore`, `VerifiedLocalTrustStore`, `GitHubOnlineVerifier`, `KeyContext`, `OperationOptions`, `SecretString` など
+- `secretenv_core::api` — 外部埋め込み向けの安定公開 API。`FileEncArtifact`, `KvEncArtifact`, `VerifiedFileEncArtifact`, `VerifiedKvEncArtifact`, `LocalKeyStore`, `LocalTrustStore`, `VerifiedLocalTrustStore`, `GitHubOnlineVerifier`, `KeyContext`, `OperationOptions`, `SecretString` など
+- `secretenv_core::Error` / `ErrorKind` / `Result` — crate 共通のエラー型、安定したエラー分類、結果型
 - `secretenv_core::cli_api` — 本リポジトリ内 CLI 専用の内部境界（`cli-internal` feature でのみ公開）
   - `cli_api::app::*` — ユースケース層への入口。CLI はここを経由する
   - `cli_api::presentation::*` — CLI 出力で使う型・関数の再エクスポート（`SecretString`, `format_kid_display`, `tty`, `validation`, `limits` 等）
   - `cli_api::test_support::*` — 本リポジトリのテスト専用 hidden bridge（`cli-test-support` feature）。production CLI と外部埋め込み用途では使用しない。`settings` / `primitives` / `operations` / `wire` / `storage` / `domain` / `helpers` の用途別 helper root を経由し、core 内部 layer root 名の mirror は作らない
-- `secretenv_core::error`, `prelude` — 公開ユーティリティ
 
 default build の `secretenv-core` は保存形式 DTO を public API として再 export しない。外部埋め込み用途では、raw document model ではなく `api` の opaque facade を経由する。
 
 `app` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` の実装 module root は crate-private とし、外部向け root surface として扱わない。必要な first-party access は `cli_api` の明示 allow-list だけを経由する。
 
-`prelude` は通常の embedding flow に必要な最小 import set とし、online verification facade や詳細 trust review 型は含めない。これらを使う場合は `secretenv_core::api::online` または `secretenv_core::api::trust` から明示 import する。外部向け `api::secret::SecretString` / `SecretBytes` は `expose_secret()` と所有権消費の boundary conversion を使い、暗黙的な `AsRef<str>` や equality を公開しない。
+外部埋め込み用途では `secretenv_core::api` の用途別 module path から明示 import する。外部向け `api::secret::SecretString` / `SecretBytes` は `expose_secret()` と所有権消費の boundary conversion を使い、暗黙的な `AsRef<str>` や equality を公開しない。
 
 ルートの `secretenv` crate (CLI) は `secretenv_core::api` と `cli_api::app` / `cli_api::presentation` のみを参照します。`feature/`, `io/`, `crypto/` 等の internal モジュールへの直接アクセスは禁止です。
 
@@ -45,7 +45,7 @@ cargo build                    # Build (workspace 全体)
 cargo build --release          # Release build
 cargo test --workspace         # Run all tests (workspace 全体。--workspace なしだとルート crate のみ)
 cargo test                     # ルート crate (secretenv bin) のテストのみ
-cargo test --lib               # ルート crate の lib テスト（src/ 内 #[cfg(test)]）
+cargo test -p secretenv --bin secretenv  # ルート crate の CLI 内部テスト（src/ 内 #[cfg(test)]）
 cargo test -p secretenv-core   # secretenv-core crate のテストのみ
 cargo test --test unit         # tests/unit.rs から登録される独立ユニットテスト
 cargo test --test cli_integration  # CLI E2E テスト

@@ -8,6 +8,7 @@ pub mod decrypt;
 pub(crate) mod document;
 pub mod encrypt;
 pub(crate) mod entry_codec;
+pub(crate) mod error;
 pub(crate) mod header;
 pub mod mutate;
 pub mod query;

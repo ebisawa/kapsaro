@@ -1,7 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::artifact::file_content_recipient_evidence;
 use crate::app::context::execution::{
     build_write_execution_warnings, resolve_write_execution, ExecutionContext,
 };
@@ -18,6 +17,7 @@ use crate::app::trust::{
 use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
 use crate::feature::encrypt::encrypt_file_content;
 use crate::feature::envelope::signature::build_signing_context;
+use crate::feature::trust::recipient_sets::file_content_recipient_evidence;
 #[cfg(test)]
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::FileEncContent;

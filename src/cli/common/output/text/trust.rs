@@ -3,7 +3,7 @@
 
 //! Text renderers for trust commands.
 
-use crate::cli::common::output::trust::{RecipientSetListItemView, TrustListItemView};
+use crate::cli::common::output::trust::view::{RecipientSetListItemView, TrustListItemView};
 use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 pub(crate) fn print_known_key_list(items: &[TrustListItemView<'_>]) {

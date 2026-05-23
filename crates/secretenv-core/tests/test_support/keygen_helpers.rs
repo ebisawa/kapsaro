@@ -12,6 +12,7 @@ use secretenv_core::cli_api::test_support::domain::{
         AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
         VerifiedPublicKeyAttested, VerifiedRecipientKey,
     },
+    signature::KeyPossessionProof,
     ssh::SshDeterminismStatus,
     verification::{ExpiryProof, SelfSignatureProof},
     verified::{DecryptionProof, VerifiedPrivateKey},
@@ -33,9 +34,8 @@ use secretenv_core::cli_api::test_support::primitives::kem::generate_keypair as 
 use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
 use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
 use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-use secretenv_core::cli_api::test_support::storage::ssh::protocol::{
-    build_sha256_fingerprint, SshKeyDescriptor,
-};
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use secretenv_core::{Error, Result};
 use std::path::Path;
 use time::OffsetDateTime;
@@ -272,7 +272,7 @@ pub fn build_verified_recipient_key(public_key: PublicKey) -> VerifiedRecipientK
 }
 
 /// Build a VerifiedPublicKeyAttested wrapper for PublicKey (for testing only).
-pub fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
+fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
     let proof = AttestationProof {
         method: public_key.protected.identity.attestation.method.clone(),
         ssh_pub: public_key.protected.identity.attestation.pub_.clone(),
@@ -322,4 +322,10 @@ pub fn build_dummy_public_key(kid: &str) -> PublicKey {
         },
         signature: encode_base64url_nopad(&[0u8; 64]),
     }
+}
+
+/// Build a placeholder key-possession proof for structural tests.
+pub fn build_dummy_key_possession_proof() -> KeyPossessionProof {
+    KeyPossessionProof::parse("hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        .expect("dummy proof should be valid")
 }

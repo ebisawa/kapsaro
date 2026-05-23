@@ -3,8 +3,9 @@
 
 //! Stable facade APIs for external applications.
 
+mod artifact_text;
+
 pub mod file;
-pub mod home;
 pub mod key;
 pub mod kv;
 pub mod online;

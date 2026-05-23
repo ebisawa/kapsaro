@@ -1,6 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use super::resolution::resolve_optional_workspace;
 use super::*;
 use serial_test::serial;
 use std::fs;

@@ -7,6 +7,7 @@ use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::ssh::resolve_ssh_context_optional;
 use crate::cli::common::trust::{
     confirm_non_member_acceptance, confirm_recipient_approvals, confirm_signer_key_approval,
+    run_with_trust_store_reset_recovery,
 };
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
@@ -36,12 +37,14 @@ use secretenv_core::cli_api::app::trust::{
 use secretenv_core::Result;
 use tracing::debug;
 
+#[derive(Clone, Copy)]
 pub(crate) struct ReadCommandLabels<'a> {
     pub context: &'a str,
     pub subject: &'a str,
     pub allow_non_member: bool,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct WriteCommandLabels<'a> {
     pub signer_context: Option<(&'a str, &'a str)>,
     pub recipient_context: &'a str,
@@ -59,15 +62,6 @@ pub(crate) trait WriteCommandPlan {
     fn warnings(&self) -> &[String];
     fn signer_trust(&self) -> Option<&SignerTrustOutcome>;
     fn recipient_trust(&self) -> &RecipientTrustOutcome;
-}
-
-pub(crate) fn resolve_command_input(
-    common: &impl ToCommonOptions,
-    member_handle: Option<String>,
-) -> Result<(CommonCommandOptions, Option<SshSigningContextResolution>)> {
-    let options = resolve_options(common);
-    let ssh_ctx = resolve_ssh_context_optional(&options, member_handle)?;
-    Ok((options, ssh_ctx))
 }
 
 pub(crate) fn resolve_options(common: &impl ToCommonOptions) -> CommonCommandOptions {
@@ -115,13 +109,12 @@ where
     }
 }
 
-pub(crate) fn resolve_execution_input(
-    common: &impl ToCommonOptions,
+pub(crate) fn resolve_write_execution_input(
+    options: &CommonCommandOptions,
     member_handle: Option<String>,
-) -> Result<(CommonCommandOptions, ExecutionContext)> {
-    let (options, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
-    let execution = resolve_write_execution(&options, member_handle, ssh_ctx)?;
-    Ok((options, execution))
+) -> Result<ExecutionContext> {
+    let ssh_ctx = resolve_ssh_context_optional(options, member_handle.clone())?;
+    resolve_write_execution(options, member_handle, ssh_ctx)
 }
 
 pub(crate) fn resolve_trust_store_owner_member(
@@ -220,11 +213,10 @@ where
 }
 
 pub(crate) fn run_kv_write_command_with_trust<P, T, Execute>(
-    common: &impl ToCommonOptions,
+    options: &CommonCommandOptions,
     member_handle: Option<String>,
     file_name: Option<&str>,
     allow_missing: bool,
-    allow_expired_key: bool,
     labels: WriteCommandLabels<'_>,
     execute: Execute,
 ) -> Result<T>
@@ -232,18 +224,68 @@ where
     P: WriteTrustPolicy,
     Execute: FnOnce(&CommonCommandOptions, &MutationWriteTrustPlan<P>) -> Result<T>,
 {
-    let options = resolve_options_with_allow_expired_key(common, allow_expired_key)?;
-    let (_, ssh_ctx) = resolve_command_input(common, member_handle.clone())?;
+    let ssh_ctx = resolve_ssh_context_optional(options, member_handle.clone())?;
     let trust_plan = resolve_mutation_write_plan::<P>(
-        &options,
+        options,
         member_handle,
         file_name,
         allow_missing,
         ssh_ctx,
     )?;
-    run_write_command_with_trust(&options, &trust_plan, labels, || {
-        execute(&options, &trust_plan)
+    run_write_command_with_trust(options, &trust_plan, labels, || {
+        execute(options, &trust_plan)
     })
+}
+
+pub(crate) fn run_read_command_with_recovery<Plan, T, ResolvePlan, Execute>(
+    options: &CommonCommandOptions,
+    member_handle: Option<String>,
+    labels: ReadCommandLabels<'_>,
+    mut resolve_plan: ResolvePlan,
+    mut execute: Execute,
+) -> Result<T>
+where
+    Plan: ReadCommandPlan,
+    ResolvePlan: FnMut(Option<SshSigningContextResolution>) -> Result<Plan>,
+    Execute: FnMut(&Plan) -> Result<T>,
+{
+    run_with_trust_store_reset_recovery(
+        options,
+        || resolve_trust_store_owner_member(options, member_handle.clone()),
+        || {
+            let ssh_ctx = resolve_ssh_context_optional(options, member_handle.clone())?;
+            let command = resolve_plan(ssh_ctx)?;
+            run_read_command_with_trust(options, &command, labels, || execute(&command))
+        },
+    )
+}
+
+pub(crate) fn run_kv_write_command_with_recovery<P, T, Execute>(
+    options: &CommonCommandOptions,
+    member_handle: Option<String>,
+    file_name: Option<&str>,
+    allow_missing: bool,
+    labels: WriteCommandLabels<'_>,
+    mut execute: Execute,
+) -> Result<T>
+where
+    P: WriteTrustPolicy,
+    Execute: FnMut(&CommonCommandOptions, &MutationWriteTrustPlan<P>) -> Result<T>,
+{
+    run_with_trust_store_reset_recovery(
+        options,
+        || resolve_trust_store_owner_member(options, member_handle.clone()),
+        || {
+            run_kv_write_command_with_trust::<P, _, _>(
+                options,
+                member_handle.clone(),
+                file_name,
+                allow_missing,
+                labels,
+                |options, trust_plan| execute(options, trust_plan),
+            )
+        },
+    )
 }
 
 fn describe_signer_trust(outcome: &SignerTrustOutcome) -> &'static str {

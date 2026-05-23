@@ -8,16 +8,13 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_command_input, resolve_options_with_allow_expired_key,
-    resolve_trust_store_owner_member, run_read_command_with_trust, ReadCommandLabels,
+    resolve_options_with_allow_expired_key, run_read_command_with_recovery, ReadCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
 use crate::cli::options::{AllowExpiredKeyOption, MemberHandleOption, SigningQuietOptions};
 use secretenv_core::cli_api::app::file::decrypt::{
-    execute_decrypt_file_command, resolve_decrypt_file_command,
+    execute_decrypt_file_command, resolve_decrypt_file_command, validate_decrypt_file_input,
 };
-use secretenv_core::cli_api::presentation::file_content::detect_file_enc_content_with_source;
 use secretenv_core::cli_api::presentation::fs::load_text_with_limit;
 use secretenv_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
@@ -27,7 +24,7 @@ use secretenv_core::{Error, Result};
 #[command(
     override_usage = "secretenv decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       secretenv decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)"
 )]
-pub struct DecryptArgs {
+pub(crate) struct DecryptArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOptions,
@@ -63,41 +60,34 @@ pub struct DecryptArgs {
 // Main Command Implementation
 // ============================================================================
 
-pub fn run(args: DecryptArgs) -> Result<()> {
+pub(crate) fn run(args: DecryptArgs) -> Result<()> {
     let source_name = resolve_decrypt_input_source(args.input.as_ref(), args.stdin);
-    let content = detect_file_enc_content_with_source(
-        resolve_decrypt_input_content(args.input.as_ref(), args.stdin)?,
-        source_name,
-    )?;
+    let content = resolve_decrypt_input_content(args.input.as_ref(), args.stdin)?;
+    validate_decrypt_file_input(&content, source_name.clone())?;
     let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
     let options = resolve_options_with_allow_expired_key(
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    let plaintext_bytes = run_with_trust_store_reset_recovery(
+    let plaintext_bytes = run_read_command_with_recovery(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || {
-            let (_, ssh_ctx) =
-                resolve_command_input(&args.common, args.member.member_handle.clone())?;
-            let command = resolve_decrypt_file_command(
+        args.member.member_handle.clone(),
+        ReadCommandLabels {
+            context: "decrypt signer",
+            subject: "signer",
+            allow_non_member: true,
+        },
+        |ssh_ctx| {
+            resolve_decrypt_file_command(
                 &options,
                 args.member.member_handle.clone(),
                 args.kid.as_deref(),
                 content.clone(),
+                source_name.clone(),
                 ssh_ctx,
-            )?;
-            run_read_command_with_trust(
-                &options,
-                &command,
-                ReadCommandLabels {
-                    context: "decrypt signer",
-                    subject: "signer",
-                    allow_non_member: true,
-                },
-                || execute_decrypt_file_command(&command),
             )
         },
+        execute_decrypt_file_command,
     )?;
 
     save_decrypted_output(

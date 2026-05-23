@@ -4,7 +4,7 @@
 //! Release-candidate E2E coverage for user-safe operational flows.
 
 use crate::cli::common::{
-    assert_member_set_review_success, cmd, encrypt_file_with_member_set_review,
+    assert_member_set_review_success, cmd, copy_dir_all, encrypt_file_with_member_set_review,
     import_file_with_member_set_review, make_secret_home, run_command_with_pty,
     run_command_with_pty_script, secretenv_std_cmd, set_value_with_member_set_review,
     setup_workspace, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
@@ -520,21 +520,6 @@ fn rewrap_std_command(workspace: &Path, home: &Path, ssh_priv: &Path) -> StdComm
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env_remove("CI");
     command
-}
-
-fn copy_dir_all(source: &Path, destination: &Path) {
-    fs::create_dir_all(destination).unwrap();
-    for entry in fs::read_dir(source).unwrap() {
-        let entry = entry.unwrap();
-        let file_type = entry.file_type().unwrap();
-        let source_path = entry.path();
-        let destination_path = destination.join(entry.file_name());
-        if file_type.is_dir() {
-            copy_dir_all(&source_path, &destination_path);
-        } else {
-            fs::copy(&source_path, &destination_path).unwrap();
-        }
-    }
 }
 
 #[cfg(unix)]

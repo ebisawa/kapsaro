@@ -18,21 +18,30 @@ use crate::cli::options::{
 };
 use secretenv_core::Result;
 
-// Submodule declarations
-pub(crate) mod common;
 mod list;
 mod new;
 mod operations;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]
-pub struct KeyArgs {
+pub(crate) struct KeyArgs {
     #[command(subcommand)]
     pub command: KeyCommand,
 }
 
+impl KeyArgs {
+    pub(crate) fn debug_enabled(&self) -> bool {
+        match &self.command {
+            KeyCommand::Activate(_) | KeyCommand::Remove(_) => false,
+            KeyCommand::Export(args) => args.common.debug.debug,
+            KeyCommand::List(args) => args.common.debug.debug,
+            KeyCommand::New(args) => args.common.debug.debug,
+        }
+    }
+}
+
 #[derive(Subcommand)]
-pub enum KeyCommand {
+pub(crate) enum KeyCommand {
     /// Activate a key
     Activate(ActivateArgs),
     /// Export a key
@@ -46,7 +55,7 @@ pub enum KeyCommand {
 }
 
 #[derive(Args)]
-pub struct NewArgs {
+pub(crate) struct NewArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOptions,
@@ -72,7 +81,7 @@ pub struct NewArgs {
 }
 
 #[derive(Args)]
-pub struct ListArgs {
+pub(crate) struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOutputOptions,
@@ -82,7 +91,7 @@ pub struct ListArgs {
 }
 
 #[derive(Args)]
-pub struct ActivateArgs {
+pub(crate) struct ActivateArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOptions,
@@ -95,7 +104,7 @@ pub struct ActivateArgs {
 }
 
 #[derive(Args)]
-pub struct RemoveArgs {
+pub(crate) struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOptions,
@@ -114,7 +123,7 @@ pub struct RemoveArgs {
 #[command(override_usage = "\
 secretenv key export [OPTIONS] -o <OUT> [KID]
        secretenv key export --private [OPTIONS] [--stdout] [KID]")]
-pub struct ExportArgs {
+pub(crate) struct ExportArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningOptions,
@@ -138,7 +147,7 @@ pub struct ExportArgs {
     pub private: bool,
 }
 
-pub fn run(args: KeyArgs) -> Result<()> {
+pub(crate) fn run(args: KeyArgs) -> Result<()> {
     match args.command {
         KeyCommand::Activate(args) => operations::run_activate(args),
         KeyCommand::Export(args) => {

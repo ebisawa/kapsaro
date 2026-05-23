@@ -24,7 +24,7 @@ use zeroize::Zeroizing;
 use super::{ActivateArgs, ExportArgs, RemoveArgs};
 
 /// Main entry point for key activation
-pub fn run_activate(args: ActivateArgs) -> Result<()> {
+pub(super) fn run_activate(args: ActivateArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let result = activate_key_command(
         &options,
@@ -36,7 +36,7 @@ pub fn run_activate(args: ActivateArgs) -> Result<()> {
 }
 
 /// Main entry point for key removal
-pub fn run_remove(args: RemoveArgs) -> Result<()> {
+pub(super) fn run_remove(args: RemoveArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let result = remove_key_command(
         &options,
@@ -49,7 +49,7 @@ pub fn run_remove(args: RemoveArgs) -> Result<()> {
 }
 
 /// Main entry point for public key export
-pub fn run_export(args: ExportArgs) -> Result<()> {
+pub(super) fn run_export(args: ExportArgs) -> Result<()> {
     let out = args.out.as_ref().ok_or_else(|| {
         secretenv_core::Error::build_invalid_argument_error(
             "--out is required for public key export".to_string(),
@@ -68,7 +68,7 @@ pub fn run_export(args: ExportArgs) -> Result<()> {
 }
 
 /// Main entry point for private key export (password-protected portable format)
-pub fn run_export_private(args: ExportArgs) -> Result<()> {
+pub(super) fn run_export_private(args: ExportArgs) -> Result<()> {
     if args.out.is_none() && !args.stdout {
         return Err(secretenv_core::Error::build_invalid_argument_error(
             "--private export requires either --out or --stdout".to_string(),

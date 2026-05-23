@@ -42,20 +42,16 @@ impl<'a> VerifiedFileKeyPossession<'a> {
 }
 
 pub struct VerifiedKvKeyPossession<'a> {
-    document: &'a VerifiedKvEncDocument,
+    _document: &'a VerifiedKvEncDocument,
     master_key: MasterKey,
 }
 
 impl<'a> VerifiedKvKeyPossession<'a> {
     pub fn new(document: &'a VerifiedKvEncDocument, master_key: MasterKey) -> Self {
         Self {
-            document,
+            _document: document,
             master_key,
         }
-    }
-
-    pub fn document(&self) -> &'a VerifiedKvEncDocument {
-        self.document
     }
 
     pub fn master_key(&self) -> &MasterKey {

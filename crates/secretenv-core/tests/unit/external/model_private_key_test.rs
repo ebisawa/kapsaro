@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use secretenv_core::cli_api::test_support::domain::private_key::*;
+use secretenv_core::cli_api::test_support::domain::private_key::{
+    IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData,
+    PrivateKeyPlaintext, PrivateKeyProtected,
+};
 use secretenv_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
 
 #[test]

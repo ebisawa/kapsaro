@@ -1,7 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::artifact::kv_recipient_evidence;
 use crate::app::context::execution::enforce_selected_decryption_key_expiry;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
@@ -14,15 +13,16 @@ use crate::feature::kv::decrypt::{
 };
 use crate::feature::kv::query::{
     decode_decrypted_kv_value, decode_decrypted_kv_values, list_kv_keys_with_disclosed,
-    KvDisclosedEntry,
 };
+use crate::feature::trust::recipient_sets::kv_recipient_evidence;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::model::common::WrapSet;
 use crate::support::secret::SecretEnvMap;
+use crate::support::warning::push_unique_warning;
 use crate::Result;
 
 use super::session::{KvCommandSession, KvFileSession};
-use super::types::{KvReadMode, KvReadResult};
+use super::types::{KvDisclosedEntry, KvReadMode, KvReadResult};
 
 pub struct KvReadCommand {
     pub execution: crate::app::context::execution::ExecutionContext,
@@ -40,6 +40,7 @@ pub fn list_kv_command(
 ) -> Result<Vec<KvDisclosedEntry>> {
     let session = KvFileSession::load(options, file_name)?;
     list_kv_keys_with_disclosed(&session.kv_content())
+        .map(|entries| entries.into_iter().map(Into::into).collect())
 }
 
 pub fn resolve_kv_read_command<P>(
@@ -53,7 +54,10 @@ where
 {
     let mut command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
-    let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?;
+    let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?
+        .into_iter()
+        .map(Into::into)
+        .collect();
     let verified_doc = verify_kv_content_for_operation(
         &file.kv_content(),
         options.debug,
@@ -91,12 +95,6 @@ where
         warnings,
         target_path: file.target.file_path,
     })
-}
-
-fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
-    if !warnings.contains(&warning) {
-        warnings.push(warning);
-    }
 }
 
 pub fn execute_kv_read_command(

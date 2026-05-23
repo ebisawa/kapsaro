@@ -24,7 +24,6 @@ use secretenv_core::cli_api::app::trust::management::{
     PurgeKnownKeysResult, PurgeRecipientSetsResult,
 };
 use secretenv_core::Result;
-pub(crate) use view::{RecipientSetListItemView, TrustListItemView};
 
 pub(crate) fn print_trust_list(json_output: bool, result: &TrustListResult) -> Result<()> {
     let items = view::build_trust_list_views(&result.items);

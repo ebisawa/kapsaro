@@ -5,8 +5,6 @@
 
 pub(crate) mod view;
 
-pub(crate) use view::{KeyInfoView, KeyListView};
-
 use crate::cli::common::output::json::key::{
     print_empty_key_list as print_empty_key_list_json, print_key_list as print_key_list_json,
 };

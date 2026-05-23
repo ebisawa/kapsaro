@@ -3,19 +3,13 @@
 
 //! file-enc artifact facade.
 
-use std::path::Path;
-
-use crate::feature::context::expiry::enforce_expired_key_usage;
+use crate::api::artifact_text::ArtifactText;
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
 use crate::feature::envelope::signature::build_signing_context;
 use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::format::content::FileEncContent;
-use crate::model::common::WrapSet;
 use crate::model::file_enc::VerifiedFileEncDocument;
-use crate::support::fs::atomic::save_text;
-use crate::support::fs::load_text_with_limit;
-use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::Result;
 
 use super::key::{KeyContext, RecipientKeys};
@@ -26,7 +20,7 @@ use super::trust::RecipientSetSubject;
 /// Parsed file-enc artifact.
 #[derive(Debug, Clone)]
 pub struct FileEncArtifact {
-    content: FileEncContent,
+    text: ArtifactText<FileEncContent>,
 }
 
 /// Signature-verified file-enc artifact.
@@ -37,24 +31,17 @@ pub struct VerifiedFileEncArtifact {
 impl FileEncArtifact {
     /// Parse file-enc JSON text after format detection.
     pub fn parse(content: impl Into<String>) -> Result<Self> {
-        Ok(Self {
-            content: FileEncContent::detect(content.into())?,
-        })
+        ArtifactText::parse(content).map(Self::from_text)
     }
 
     /// Load file-enc JSON from a path.
-    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let content = load_text_with_limit(
-            path.as_ref(),
-            MAX_JSON_DOCUMENT_READ_SIZE,
-            "file-enc artifact",
-        )?;
-        Self::parse(content)
+    pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
+        ArtifactText::load(path, "file-enc artifact").map(Self::from_text)
     }
 
     /// Save the artifact text.
-    pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        save_text(path.as_ref(), self.as_str())
+    pub fn save(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        self.text.save(path)
     }
 
     /// Encrypt bytes to a signed file-enc artifact.
@@ -74,7 +61,7 @@ impl FileEncArtifact {
     /// Verify the artifact signature.
     pub fn verify(&self, options: OperationOptions) -> Result<VerifiedFileEncArtifact> {
         verify_file_content_for_operation(
-            &self.content,
+            self.text.content(),
             options.debug(),
             options.allow_expired_key(),
         )
@@ -83,7 +70,11 @@ impl FileEncArtifact {
 
     /// Return the serialized artifact text.
     pub fn as_str(&self) -> &str {
-        self.content.as_str()
+        self.text.as_str()
+    }
+
+    fn from_text(text: ArtifactText<FileEncContent>) -> Self {
+        Self { text }
     }
 }
 
@@ -107,17 +98,8 @@ impl VerifiedFileEncArtifact {
         key_ctx: &KeyContext,
         options: OperationOptions,
     ) -> Result<SecretBytes> {
-        let wrap_set = WrapSet::parse(&self.inner().document.protected.wrap, "Document")?;
-        let selected = key_ctx.inner().select_local_decryption_key(
-            &wrap_set,
-            key_ctx.member_handle(),
-            options.debug(),
-        )?;
-        let _ = enforce_expired_key_usage(
-            &selected.info().expires_at,
-            options.allow_expired_key(),
-            "Private key",
-        )?;
+        key_ctx
+            .enforce_decryption_key_not_expired(&self.inner().document.protected.wrap, options)?;
         decrypt_file_document_with_context(
             self.inner(),
             key_ctx.member_handle(),

@@ -3,7 +3,7 @@
 
 //! encrypt command implementation
 //!
-//! Encrypts a plain file to file-enc v3 format with automatic signing.
+//! Encrypts a plain file to file-enc format with automatic signing.
 //! Recipients are always all active workspace members.
 
 use clap::Args;
@@ -11,11 +11,12 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_command_input, resolve_options, resolve_trust_store_owner_member,
-    run_write_command_with_trust, WriteCommandLabels,
+    resolve_options, resolve_trust_store_owner_member, run_write_command_with_trust,
+    WriteCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
 use crate::cli::common::output::text::print_warnings;
+use crate::cli::common::ssh::resolve_ssh_context_optional;
 use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
@@ -30,7 +31,7 @@ use secretenv_core::{Error, Result};
 #[command(
     override_usage = "secretenv encrypt [OPTIONS] <INPUT>\n       secretenv encrypt [OPTIONS] --stdin (--out <path> | --stdout)"
 )]
-pub struct EncryptArgs {
+pub(crate) struct EncryptArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOptions,
@@ -55,7 +56,7 @@ pub struct EncryptArgs {
     pub input: Option<PathBuf>,
 }
 
-pub fn run(args: EncryptArgs) -> Result<()> {
+pub(crate) fn run(args: EncryptArgs) -> Result<()> {
     let input_bytes = resolve_encrypt_input_bytes(args.input.as_ref(), args.stdin)?;
     let output_path = resolve_encrypted_output_path(
         args.out.as_ref(),
@@ -68,8 +69,8 @@ pub fn run(args: EncryptArgs) -> Result<()> {
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, ssh_ctx) =
-                resolve_command_input(&args.common, args.member.member_handle.clone())?;
+            let ssh_ctx =
+                resolve_ssh_context_optional(&options, args.member.member_handle.clone())?;
             let command = resolve_encrypt_file_command(
                 &options,
                 args.member.member_handle.clone(),

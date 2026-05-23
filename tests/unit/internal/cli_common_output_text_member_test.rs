@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{format_member_list_lines, format_member_show_lines};
-use crate::cli::common::output::member::{
-    view::{MemberGithubClaimView, MemberListEntryView},
-    MemberListView, MemberShowView,
+use crate::cli::common::output::member::view::{
+    MemberGithubClaimView, MemberListEntryView, MemberListView, MemberShowView,
 };
 use console::{colors_enabled, set_colors_enabled};
 use serde_json::json;

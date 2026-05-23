@@ -61,7 +61,8 @@ pub mod app {
     pub mod file {
         pub mod decrypt {
             pub use crate::app::file::decrypt::{
-                execute_decrypt_file_command, resolve_decrypt_file_command, DecryptFileCommand,
+                execute_decrypt_file_command, resolve_decrypt_file_command,
+                validate_decrypt_file_input, DecryptFileCommand,
             };
         }
 
@@ -73,7 +74,9 @@ pub mod app {
         }
 
         pub mod inspect {
-            pub use crate::app::file::inspect::{execute_inspect_file_command, InspectCommand};
+            pub use crate::app::file::inspect::{
+                execute_inspect_file_command, InspectCommand, InspectOutput, InspectSection,
+            };
         }
     }
 
@@ -243,31 +246,13 @@ pub mod presentation {
         pub use crate::config::types::SshSigningMethod;
     }
 
-    pub mod file_content {
-        use crate::format::content::FileEncContent;
-        use crate::Result;
-
-        pub fn detect_file_enc_content_with_source(
-            content: String,
-            source_name: impl Into<String>,
-        ) -> Result<FileEncContent> {
-            FileEncContent::detect_with_source(content, source_name)
-        }
-    }
-
     pub mod fs {
         pub use crate::support::fs::atomic::{save_bytes, save_text};
         pub use crate::support::fs::{load_bytes, load_text_with_limit};
     }
 
-    pub mod inspect {
-        pub use crate::feature::inspect::{InspectOutput, InspectSection};
-    }
-
     pub mod kid {
-        pub use crate::support::kid::{
-            format_kid_display, format_kid_display_lossy, format_kid_half_display,
-        };
+        pub use crate::support::kid::{format_kid_display, format_kid_display_lossy};
     }
 
     pub mod limits {
@@ -308,10 +293,7 @@ pub mod test_support {
         }
     }
     pub mod primitives {
-        pub use crate::crypto::{
-            build_crypto_error, build_crypto_error_with_source, build_crypto_operation_error,
-            CryptoError,
-        };
+        pub use crate::crypto::CryptoError;
         pub mod aead {
             pub mod xchacha {
                 pub use crate::crypto::aead::xchacha::{decrypt, encrypt_with_nonce, NONCE_SIZE};
@@ -328,8 +310,7 @@ pub mod test_support {
         }
         pub mod sign {
             pub use crate::crypto::sign::{
-                sign_artifact_bytes, sign_detached_bytes, sign_trust_store_bytes,
-                verify_artifact_bytes, verify_trust_store_bytes,
+                sign_detached_bytes, sign_trust_store_bytes, verify_trust_store_bytes,
             };
         }
         pub mod types {
@@ -341,7 +322,7 @@ pub mod test_support {
             }
             pub mod primitives {
                 pub use crate::crypto::types::primitives::{
-                    AsHkdfSalt, HkdfSalt, KvSalt, PrivateKeyIkmSalt, XChaChaNonce,
+                    HkdfSalt, KvSalt, PrivateKeyIkmSalt, XChaChaNonce,
                 };
             }
         }
@@ -349,29 +330,22 @@ pub mod test_support {
     pub mod operations {
         pub mod config {
             pub use crate::feature::config::{
-                load_global_config, resolve_config_location, resolve_config_value, validate_key,
-                ConfigLocation, ConfigScope, ConfigValueResolution,
+                resolve_config_location, resolve_config_value, validate_key, ConfigScope,
             };
         }
         pub mod context {
             pub mod crypto {
                 pub use crate::feature::context::crypto::{
-                    load_crypto_context_from_keystore, CryptoContext, DecryptionKeyInfo,
-                    DecryptionResult, LocalKeyAccess,
+                    load_crypto_context_from_keystore, CryptoContext,
                 };
             }
             pub mod env_key {
                 pub use crate::feature::context::env_key::{
-                    is_env_key_mode, load_private_key_from_env, EnvKeyLoadResult,
+                    is_env_key_mode, load_private_key_from_env,
                 };
             }
             pub mod expiry {
-                pub use crate::feature::context::expiry::{
-                    build_key_expiry_warning, build_recipient_key_expiry_warning,
-                    build_signing_key_expiry_warning, check_key_expiry,
-                    collect_recipient_key_expiry_warnings, enforce_key_not_expired_for_signing,
-                    enforce_recipient_key_not_expired, KeyExpiryStatus, VerifiedExpiresAt,
-                };
+                pub use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
             }
         }
         pub mod decrypt {
@@ -402,21 +376,18 @@ pub mod test_support {
             }
             pub mod signature {
                 pub use crate::feature::envelope::signature::{
-                    build_signing_context, sign_file_document, verify_file_signature,
-                    verify_kv_signature, SigningContext, VerifiedSigningContext,
+                    sign_file_document, verify_file_signature, SigningContext,
                 };
             }
             pub mod unwrap {
                 pub use crate::feature::envelope::unwrap::{
                     parse_master_key_from_plaintext, unwrap_master_key, unwrap_master_key_for_file,
-                    unwrap_master_key_for_file_with_context, unwrap_master_key_for_kv,
-                    unwrap_master_key_for_kv_with_context, unwrap_master_key_from_item,
                 };
             }
             pub mod wrap {
                 pub use crate::feature::envelope::wrap::{
-                    build_wrap_item, build_wrap_item_for_file, build_wrap_item_for_kv,
-                    build_wraps_for_recipients, WrapFormat,
+                    build_wrap_item_for_file, build_wrap_item_for_kv, build_wraps_for_recipients,
+                    WrapFormat,
                 };
             }
         }
@@ -453,7 +424,6 @@ pub mod test_support {
             pub mod portable_export {
                 pub use crate::feature::key::portable_export::{
                     build_password_strength_warning, export_private_key_portable,
-                    PortableExportOutput,
                 };
             }
             pub mod protection {
@@ -533,17 +503,13 @@ pub mod test_support {
             pub mod known_keys {
                 pub use crate::feature::trust::known_keys::{
                     add_known_key, find_known_key, judge_known_key, purge_known_keys,
-                    remove_known_key, validate_kid_integrity, IntoKnownKid, IntoKnownMemberHandle,
-                    KnownKeyIdentity, KnownKeyJudgment,
+                    remove_known_key, validate_kid_integrity, KnownKeyJudgment,
                 };
             }
             pub mod recipient_sets {
                 pub use crate::feature::trust::recipient_sets::{
-                    compute_recipient_set_hash, find_recipient_handle_mismatch,
-                    is_self_only_recipient_set, is_signer_in_recipient_set, judge_recipient_set,
-                    normalize_recipient_kids, purge_recipient_sets, remove_recipient_set,
-                    upsert_recipient_set, validate_recipient_set_record, ArtifactRecipientSet,
-                    RecipientHandleMismatch, RecipientSetJudgment,
+                    compute_recipient_set_hash, judge_recipient_set, ArtifactRecipientSet,
+                    RecipientSetJudgment,
                 };
             }
             pub mod signature {
@@ -608,8 +574,7 @@ pub mod test_support {
             pub mod enc {
                 pub mod canonical {
                     pub use crate::format::kv::enc::canonical::{
-                        build_canonical_bytes, extract_kv_header_tokens,
-                        extract_recipients_from_wrap, parse_kv_wrap,
+                        build_canonical_bytes, extract_recipients_from_wrap, parse_kv_wrap,
                     };
                 }
                 pub mod parser {
@@ -620,12 +585,8 @@ pub mod test_support {
         pub mod schema {
             pub mod document {
                 pub use crate::format::schema::document::{
-                    parse_file_enc_bytes, parse_file_enc_str, parse_kv_entry_token,
-                    parse_kv_entry_token_with_source, parse_kv_head_token,
-                    parse_kv_head_token_with_source, parse_kv_signature_token,
-                    parse_kv_signature_token_with_source, parse_kv_wrap_token,
-                    parse_kv_wrap_token_with_source, parse_private_key_bytes,
-                    parse_private_key_str, parse_public_key_bytes, parse_public_key_str,
+                    parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token,
+                    parse_kv_signature_token, parse_kv_wrap_token, parse_public_key_str,
                 };
             }
             pub mod validator {
@@ -656,9 +617,8 @@ pub mod test_support {
             }
         }
         pub mod github {
+            #[cfg(feature = "online")]
             pub mod account {
-                pub use crate::io::github::account::resolve_github_account_by_login;
-                #[cfg(feature = "online")]
                 pub use crate::io::github::account::{
                     resolve_github_account_by_login_with_api, GitHubAccountLookupApi,
                     GitHubAccountLookupFuture,
@@ -681,8 +641,7 @@ pub mod test_support {
             pub mod member {
                 pub use crate::io::keystore::member::{
                     find_active_key_document, load_public_keys_for_member,
-                    load_single_member_handle_from_keystore, remove_key_directory,
-                    select_latest_valid_kid, select_most_recent_kid, ActiveKeyDocument,
+                    load_single_member_handle_from_keystore,
                 };
             }
             pub mod paths {
@@ -708,8 +667,8 @@ pub mod test_support {
             }
             pub mod storage {
                 pub use crate::io::keystore::storage::{
-                    find_member_by_kid, list_kids, list_member_handles, load_private_key,
-                    load_public_key, save_key_pair_atomic,
+                    list_kids, list_member_handles, load_private_key, load_public_key,
+                    save_key_pair_atomic,
                 };
             }
         }
@@ -737,9 +696,6 @@ pub mod test_support {
             }
             pub mod backend {
                 pub use crate::io::ssh::backend::SignatureBackend;
-                pub mod signature_backend {
-                    pub use crate::io::ssh::backend::signature_backend::SignatureBackend;
-                }
                 pub mod ssh_agent {
                     pub use crate::io::ssh::backend::ssh_agent::SshAgentBackend;
                 }
@@ -757,8 +713,8 @@ pub mod test_support {
                 pub mod pubkey {
                     pub use crate::io::ssh::external::pubkey::{
                         collect_ed25519_keys_in_output, load_ed25519_keys_from_agent,
-                        load_ssh_key_candidate_from_file, load_ssh_public_key_file,
-                        load_ssh_public_key_with_descriptor_trait, SshKeyCandidate,
+                        load_ssh_public_key_file, load_ssh_public_key_with_descriptor_trait,
+                        SshKeyCandidate,
                     };
                 }
                 pub mod traits {
@@ -772,15 +728,13 @@ pub mod test_support {
                 };
             }
             pub mod protocol {
-                pub use crate::io::ssh::protocol::{build_sha256_fingerprint, SshKeyDescriptor};
                 pub mod base64 {
                     pub use crate::io::ssh::protocol::base64::decode_base64_armored;
                 }
                 pub mod constants {
                     pub use crate::io::ssh::protocol::constants::{
                         ATTESTATION_METHOD_SSH_SIGN, ATTESTATION_NAMESPACE, KEYGEN_TYPE_ED25519,
-                        KEY_PROTECTION_NAMESPACE, KEY_TYPE_ED25519, SSHSIG_ARMOR_BEGIN,
-                        SSHSIG_ARMOR_END,
+                        KEY_PROTECTION_NAMESPACE, KEY_TYPE_ED25519,
                     };
                 }
                 pub mod fingerprint {
@@ -811,8 +765,7 @@ pub mod test_support {
             }
             pub mod verify {
                 pub use crate::io::ssh::verify::{
-                    build_attestation_signed_data, validate_sshsig_inputs, verify_attestation,
-                    verify_sshsig,
+                    build_attestation_signed_data, verify_attestation, verify_sshsig,
                 };
             }
         }
@@ -821,23 +774,19 @@ pub mod test_support {
                 pub use crate::io::trust::paths::{get_trust_store_dir, get_trust_store_file_path};
             }
             pub mod store {
-                pub use crate::io::trust::store::{
-                    load_trust_store, save_trust_store, TrustStoreLoadResult,
-                };
+                pub use crate::io::trust::store::{load_trust_store, save_trust_store};
             }
         }
         pub mod verify_online {
             pub use crate::io::verify_online::{
                 VerificationResult, VerificationStatus, VerifiedGithubIdentity,
             };
+            #[cfg(feature = "online")]
             pub mod github {
-                pub use crate::io::verify_online::github::verify_github_account;
-                #[cfg(feature = "online")]
                 pub use crate::io::verify_online::github::{
                     verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
                 };
                 pub mod preflight {
-                    #[cfg(feature = "online")]
                     pub use crate::io::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
                 }
             }
@@ -866,10 +815,7 @@ pub mod test_support {
     }
     pub mod domain {
         pub mod common {
-            pub use crate::model::common::{
-                normalize_recipients, validate_wrap_items, RecipientWrap, RemovedRecipient,
-                WrapAlgorithm, WrapItem, WrapSet,
-            };
+            pub use crate::model::common::{RemovedRecipient, WrapAlgorithm, WrapItem, WrapSet};
         }
         pub mod file_enc {
             pub use crate::model::file_enc::{
@@ -969,15 +915,13 @@ pub mod test_support {
             pub mod base64_public {
                 pub use crate::support::codec::base64_public::{
                     decode_base64_standard, decode_base64url_nopad, decode_base64url_nopad_array,
-                    decode_base64url_nopad_ciphertext, decode_base64url_nopad_token,
                     encode_base64_standard, encode_base64_standard_nopad, encode_base64url_nopad,
                 };
             }
             pub mod base64_secret {
                 pub use crate::support::codec::base64_secret::{
                     decode_base64url_nopad_secret_32, decode_base64url_nopad_secret_64,
-                    decode_base64url_nopad_secret_bytes, encode_base64url_nopad_secret_32,
-                    encode_base64url_nopad_secret_64, encode_base64url_nopad_secret_bytes,
+                    encode_base64url_nopad_secret_32, encode_base64url_nopad_secret_64,
                 };
             }
         }
@@ -988,15 +932,18 @@ pub mod test_support {
         }
         pub mod fs {
             pub use crate::support::fs::{
-                check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted,
-                ensure_text_file_matches_snapshot, ensure_text_file_matches_snapshot_with_limit,
-                list_dir, load_bytes_with_limit, load_text, load_text_with_limit,
+                check_permission_chain, ensure_dir, ensure_dir_restricted,
+                ensure_text_file_matches_snapshot_with_limit, list_dir, load_text,
+                load_text_with_limit,
             };
             pub mod atomic {
                 pub use crate::support::fs::atomic::{
                     save_bytes, save_json, save_json_restricted, save_text, save_text_restricted,
                 };
             }
+            pub use crate::support::fs::permission::check_permission;
+            pub use crate::support::fs::read::load_bytes_with_limit;
+            pub use crate::support::fs::snapshot::ensure_text_file_matches_snapshot;
             pub mod lock {
                 pub use crate::support::fs::lock::with_file_lock;
             }
@@ -1004,8 +951,7 @@ pub mod test_support {
         pub mod kid {
             pub use crate::support::kid::{
                 format_kid_display, format_kid_display_lossy, format_kid_half_display,
-                format_kid_half_display_lossy, normalize_kid, normalize_kid_query,
-                resolve_unique_kid,
+                normalize_kid, normalize_kid_query, resolve_unique_kid,
             };
         }
         pub mod limits {
@@ -1015,15 +961,13 @@ pub mod test_support {
             };
         }
         pub mod secret {
-            pub use crate::support::secret::{
-                SecretArray, SecretBytes, SecretEnvMap, SecretString,
-            };
+            pub use crate::support::secret::{SecretArray, SecretBytes, SecretString};
         }
         pub mod time {
             pub use crate::support::time::{format_timestamp_rfc3339, generate_current_timestamp};
         }
         pub mod tty {
-            pub use crate::support::tty::{is_interactive, set_interactive_override};
+            pub use crate::support::tty::set_interactive_override;
         }
         pub mod validation {
             pub use crate::support::validation::{

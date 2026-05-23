@@ -35,7 +35,7 @@ use secretenv_core::cli_api::test_support::storage::keystore::signer::load_signe
 use secretenv_core::cli_api::test_support::storage::keystore::storage::{
     list_kids, save_key_pair_atomic,
 };
-use secretenv_core::cli_api::test_support::storage::ssh::backend::signature_backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 use secretenv_core::cli_api::test_support::wire::kid::derive_public_key_kid;
@@ -589,7 +589,7 @@ fn test_generate_key_rejects_skipped_determinism() {
         ),
     );
     let fingerprint =
-        secretenv_core::cli_api::test_support::storage::ssh::protocol::build_sha256_fingerprint(
+        secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint(
             ssh_pub_content.trim(),
         )
         .unwrap();

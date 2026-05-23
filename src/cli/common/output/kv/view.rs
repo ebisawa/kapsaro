@@ -3,7 +3,6 @@
 
 //! View builders for KV command output.
 
-use crate::cli::common::output::text::print_warning_line;
 use secretenv_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use std::collections::BTreeMap;
 
@@ -18,13 +17,7 @@ pub(crate) struct KvEntryView<'a> {
     pub(crate) disclosed: bool,
 }
 
-pub(crate) struct KvValueView<'a> {
-    pub(crate) key: &'a str,
-    pub(crate) value: &'a str,
-    pub(crate) disclosed: bool,
-}
-
-pub(crate) fn build_kv_key_views(keys: &[KvDisclosedEntry]) -> Vec<KvKeyView<'_>> {
+pub(super) fn build_kv_key_views(keys: &[KvDisclosedEntry]) -> Vec<KvKeyView<'_>> {
     keys.iter()
         .map(|entry| KvKeyView {
             key: entry.key.as_str(),
@@ -33,7 +26,7 @@ pub(crate) fn build_kv_key_views(keys: &[KvDisclosedEntry]) -> Vec<KvKeyView<'_>
         .collect()
 }
 
-pub(crate) fn build_kv_entries(result: &KvReadResult) -> Vec<KvEntryView<'_>> {
+pub(super) fn build_kv_entries(result: &KvReadResult) -> Vec<KvEntryView<'_>> {
     let disclosed = disclosed_lookup(&result.disclosed);
     result
         .values
@@ -46,8 +39,8 @@ pub(crate) fn build_kv_entries(result: &KvReadResult) -> Vec<KvEntryView<'_>> {
         .collect()
 }
 
-pub(crate) fn build_single_kv_value<'a>(result: &'a KvReadResult, key: &'a str) -> KvValueView<'a> {
-    KvValueView {
+pub(super) fn build_single_kv_entry<'a>(result: &'a KvReadResult, key: &'a str) -> KvEntryView<'a> {
+    KvEntryView {
         key,
         value: result
             .values
@@ -58,47 +51,6 @@ pub(crate) fn build_single_kv_value<'a>(result: &'a KvReadResult, key: &'a str) 
             .disclosed
             .iter()
             .any(|entry| entry.key == key && entry.disclosed),
-    }
-}
-
-pub(crate) fn print_disclosed_key_warnings(entries: &[KvEntryView<'_>]) {
-    for entry in entries {
-        print_disclosed_key_warning(entry);
-    }
-}
-
-pub(crate) fn print_disclosed_key_warning(entry: &impl KvDisclosureWarning) {
-    if entry.disclosed() {
-        print_warning_line(&format!(
-            "Warning: Entry '{}' may have been disclosed to a removed recipient. \
-             Consider rotating the secret value.",
-            entry.key()
-        ));
-    }
-}
-
-pub(crate) trait KvDisclosureWarning {
-    fn key(&self) -> &str;
-    fn disclosed(&self) -> bool;
-}
-
-impl KvDisclosureWarning for KvEntryView<'_> {
-    fn key(&self) -> &str {
-        self.key
-    }
-
-    fn disclosed(&self) -> bool {
-        self.disclosed
-    }
-}
-
-impl KvDisclosureWarning for KvValueView<'_> {
-    fn key(&self) -> &str {
-        self.key
-    }
-
-    fn disclosed(&self) -> bool {
-        self.disclosed
     }
 }
 

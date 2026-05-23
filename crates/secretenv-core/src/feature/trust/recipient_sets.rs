@@ -4,9 +4,12 @@
 //! Artifact recipient set approval operations and integrity checks.
 
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
+use crate::format::content::{EncContent, FileEncContent, KvEncContent};
 use crate::format::jcs;
 use crate::model::common::WrapItem;
+use crate::model::file_enc::FileEncDocument;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord};
 use crate::model::wire::context::HASH_DOMAIN_RECIPIENT_SET_V2;
@@ -39,6 +42,11 @@ pub struct RecipientHandleMismatch {
     pub kid: String,
     pub artifact_recipient_handle: String,
     pub active_member_handle: String,
+}
+
+pub struct ArtifactRecipientEvidence {
+    pub recipient_set: ArtifactRecipientSet,
+    pub recipient_handles: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -97,6 +105,54 @@ impl ArtifactRecipientSet {
             approved_via: RecipientSetApprovalVia::ManualReview,
             recipient_handle_hints: non_empty_hints(self.recipient_handle_hints),
         }
+    }
+}
+
+pub(crate) fn file_recipient_evidence(
+    document: &FileEncDocument,
+) -> Result<ArtifactRecipientEvidence> {
+    Ok(ArtifactRecipientEvidence {
+        recipient_set: ArtifactRecipientSet::from_wrap_items(
+            document.protected.sid,
+            &document.protected.wrap,
+        )?,
+        recipient_handles: document.protected.recipients(),
+    })
+}
+
+pub(crate) fn kv_recipient_evidence(document: &KvEncDocument) -> Result<ArtifactRecipientEvidence> {
+    Ok(ArtifactRecipientEvidence {
+        recipient_set: ArtifactRecipientSet::from_wrap_items(
+            document.head.sid,
+            &document.wrap.wrap,
+        )?,
+        recipient_handles: document
+            .wrap
+            .wrap
+            .iter()
+            .map(|item| item.recipient_handle.clone())
+            .collect(),
+    })
+}
+
+pub(crate) fn file_content_recipient_evidence(
+    content: &FileEncContent,
+) -> Result<ArtifactRecipientEvidence> {
+    file_recipient_evidence(&content.parse()?)
+}
+
+pub(crate) fn kv_content_recipient_evidence(
+    content: &KvEncContent,
+) -> Result<ArtifactRecipientEvidence> {
+    kv_recipient_evidence(&content.parse()?)
+}
+
+pub(crate) fn encrypted_content_recipient_evidence(
+    content: &EncContent,
+) -> Result<ArtifactRecipientEvidence> {
+    match content {
+        EncContent::FileEnc(file_content) => file_content_recipient_evidence(file_content),
+        EncContent::KvEnc(kv_content) => kv_content_recipient_evidence(kv_content),
     }
 }
 

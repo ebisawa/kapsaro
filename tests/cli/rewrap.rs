@@ -6,15 +6,12 @@
 //! Tests the rewrap command with the simplified RewrapArgs (auto-sync with @all).
 
 use crate::cli::common::{
-    cmd, default_common_options, encrypt_file_with_member_set_review, generate_temp_ssh_keypair,
-    set_ssh_key_from_temp_dir, set_value_with_member_set_review, setup_workspace,
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    append_common_command_args, cmd, default_common_options, encrypt_file_with_member_set_review,
+    generate_temp_ssh_keypair, set_ssh_key_from_temp_dir, set_value_with_member_set_review,
+    setup_workspace, CommonOptions, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;
-use secretenv::cli::options::CommonOptions;
-use secretenv::cli::rewrap::{self, RewrapArgs};
-use secretenv::cli::set;
 use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,22 +26,6 @@ mod preconditions;
 #[path = "rewrap/roundtrip.rs"]
 mod roundtrip;
 
-/// Build a default RewrapArgs for testing.
-fn default_rewrap_args(common_opts: CommonOptions, member_handle: &str) -> RewrapArgs {
-    RewrapArgs {
-        common: common_opts.into(),
-        allow_expired_key: secretenv::cli::options::AllowExpiredKeyOption {
-            allow_expired_key: false,
-        },
-        member: secretenv::cli::options::MemberHandleOption {
-            member_handle: Some(member_handle.to_string()),
-        },
-        rotate_key: false,
-        clear_disclosure_history: false,
-        targets: Vec::new(),
-    }
-}
-
 fn run_rewrap_with_member_set_review(common_opts: &CommonOptions, member_handle: &str) {
     run_rewrap_with_member_set_review_args(common_opts, member_handle, &[]);
 }
@@ -57,33 +38,30 @@ fn run_rewrap_with_member_set_review_args(
     let mut command = crate::cli::common::secretenv_std_cmd();
     command
         .arg("rewrap")
-        .arg("--workspace")
-        .arg(
-            common_opts
-                .workspace
-                .as_deref()
-                .expect("test common options must include workspace"),
-        )
         .arg("--member-handle")
-        .arg(member_handle)
-        .env(
-            "SECRETENV_HOME",
-            common_opts
-                .home
-                .as_deref()
-                .expect("test common options must include home"),
-        )
-        .env(
-            "SECRETENV_SSH_IDENTITY",
-            common_opts
-                .identity
-                .as_deref()
-                .expect("test common options must include identity"),
-        );
+        .arg(member_handle);
+    append_common_command_args(&mut command, common_opts);
     for arg in extra_args {
         command.arg(arg);
     }
     crate::cli::common::assert_member_set_review_success(&mut command);
+}
+
+fn run_rewrap_command(
+    common_opts: &CommonOptions,
+    member_handle: &str,
+    extra_args: &[&str],
+) -> std::process::Output {
+    let mut command = crate::cli::common::secretenv_std_cmd();
+    command
+        .arg("rewrap")
+        .arg("--member-handle")
+        .arg(member_handle);
+    append_common_command_args(&mut command, common_opts);
+    for arg in extra_args {
+        command.arg(arg);
+    }
+    command.output().unwrap()
 }
 
 /// Create a kv-enc file in the workspace using the set command.
@@ -118,22 +96,24 @@ fn save_kv_file(
             );
             continue;
         }
-        let set_args = set::SetArgs {
-            common: common_opts.clone().into(),
-            allow_expired_key: secretenv::cli::options::AllowExpiredKeyOption {
-                allow_expired_key: false,
-            },
-            member: secretenv::cli::options::MemberHandleOption {
-                member_handle: Some(member_handle.to_string()),
-            },
-            store: secretenv::cli::options::KvStoreNameOption {
-                name: Some(name.to_string()),
-            },
-            stdin: false,
-            key: key.to_string(),
-            value: Some(value.to_string()),
-        };
-        set::run(set_args).unwrap();
+        set_value_with_member_set_review(
+            common_opts
+                .workspace
+                .as_deref()
+                .expect("test common options must include workspace"),
+            common_opts
+                .home
+                .as_deref()
+                .expect("test common options must include home"),
+            common_opts
+                .identity
+                .as_deref()
+                .expect("test common options must include identity"),
+            key,
+            value,
+            Some(member_handle),
+            Some(name),
+        );
     }
     workspace_dir
         .join("secrets")

@@ -3,13 +3,10 @@
 
 //! Read/query operations for kv-enc documents.
 
-use super::decrypt::decrypt_kv_document_with_context;
-use crate::feature::context::crypto::CryptoContext;
-use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::support::secret::SecretString;
 use crate::{Error, Result};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,19 +28,6 @@ pub fn list_kv_keys_with_disclosed(content: &KvEncContent) -> Result<Vec<KvDiscl
         .collect();
     keys.sort_by(|a, b| a.key.cmp(&b.key));
     Ok(keys)
-}
-
-/// Decrypt all KV entries and return as a HashMap.
-pub fn decrypt_all_kv_values(
-    content: &KvEncContent,
-    member_handle: &str,
-    key_ctx: &CryptoContext,
-    verbose: bool,
-) -> Result<HashMap<String, SecretString>> {
-    let verified_doc = verify_kv_content(content, verbose)?;
-    let kv_map =
-        decrypt_kv_document_with_context(&verified_doc, member_handle, key_ctx, verbose)?.value;
-    Ok(decode_decrypted_kv_values(kv_map)?.into_iter().collect())
 }
 
 pub(crate) fn decode_decrypted_kv_values<I>(kv_map: I) -> Result<BTreeMap<String, SecretString>>

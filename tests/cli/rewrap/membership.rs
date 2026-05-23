@@ -11,7 +11,6 @@ use crate::test_utils::{
     update_active_private_key_expires_at,
 };
 use secretenv_core::cli_api::test_support::domain::public_key::GithubAccount;
-use secretenv_core::cli_api::test_support::helpers::tty;
 use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
     build_public_key, PublicKeyDocumentParams,
 };
@@ -394,15 +393,13 @@ fn test_rewrap_rejects_self_incoming_when_local_identity_mismatches() {
         BOB_MEMBER_HANDLE,
     );
 
-    tty::set_interactive_override(Some(false));
-    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE));
-    tty::set_interactive_override(None);
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("E_REWRAP_SELF_PROMOTION_MISMATCH"));
+    let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("did not match local keystore identity"),
+        "unexpected stderr: {stderr}"
+    );
 }
 
 #[test]
@@ -561,15 +558,9 @@ fn test_rewrap_requires_recipient_trust_approval() {
     ))
     .unwrap();
 
-    tty::set_interactive_override(Some(false));
-    let result = rewrap::run(default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE));
-    tty::set_interactive_override(None);
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Unknown recipient kid"));
+    let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Unknown recipient kid"));
 }
 
 #[test]

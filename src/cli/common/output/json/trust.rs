@@ -4,7 +4,7 @@
 //! JSON renderers for trust commands.
 
 use crate::cli::common::output::json::print_json_output;
-use crate::cli::common::output::trust::{RecipientSetListItemView, TrustListItemView};
+use crate::cli::common::output::trust::view::{RecipientSetListItemView, TrustListItemView};
 use secretenv_core::Result;
 use serde::Serialize;
 

@@ -61,35 +61,6 @@ impl AttestedIdentity {
     }
 }
 
-/// PublicKey with a verified self-signature.
-#[derive(Debug, Clone)]
-pub struct VerifiedPublicKey {
-    /// The verified document
-    pub document: PublicKey,
-    /// Proof of self-signature verification
-    pub self_signature_proof: SelfSignatureProof,
-}
-
-impl VerifiedPublicKey {
-    /// Create a new VerifiedPublicKey.
-    pub fn new(document: PublicKey, self_signature_proof: SelfSignatureProof) -> Self {
-        Self {
-            document,
-            self_signature_proof,
-        }
-    }
-
-    /// Get a reference to the verified document.
-    pub fn document(&self) -> &PublicKey {
-        &self.document
-    }
-
-    /// Get a reference to the self-signature proof.
-    pub fn self_signature_proof(&self) -> &SelfSignatureProof {
-        &self.self_signature_proof
-    }
-}
-
 /// PublicKey verified for both self-signature and attestation.
 #[derive(Debug, Clone)]
 pub struct VerifiedPublicKeyAttested {

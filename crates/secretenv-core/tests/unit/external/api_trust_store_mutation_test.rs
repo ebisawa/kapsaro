@@ -9,13 +9,12 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+use secretenv_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore};
+use secretenv_core::api::ssh::{SshRawSignature, SshSignatureBackend};
 use secretenv_core::api::trust::TrustApproval;
 use secretenv_core::cli_api::test_support::helpers::fs::lock::with_file_lock;
 use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use secretenv_core::prelude::{
-    ErrorKind, KeyContext, KeyContextOptions, LocalKeyStore, SecretEnvHome, SshRawSignature,
-    SshSignatureBackend,
-};
+use secretenv_core::ErrorKind;
 use tempfile::TempDir;
 
 use crate::test_utils::{
@@ -50,12 +49,8 @@ impl SshSignatureBackend for PublicApiSshBackend {
     }
 }
 
-fn load_key_context_from_home_path(
-    home: &SecretEnvHome,
-    home_path: &Path,
-    member_handle: &str,
-) -> KeyContext {
-    let key_store = home.key_store();
+fn load_key_context_from_home_path(home_path: &Path, member_handle: &str) -> KeyContext {
+    let key_store = LocalKeyStore::new(home_path.join("keys"));
     load_key_context_from_key_store(home_path, &key_store, member_handle)
 }
 
@@ -81,8 +76,15 @@ fn load_key_context_from_key_store(
         .expect("load key context")
 }
 
-fn load_key_context(home: &SecretEnvHome, temp: &TempDir, member_handle: &str) -> KeyContext {
-    load_key_context_from_home_path(home, temp.path(), member_handle)
+fn load_key_context(temp: &TempDir, member_handle: &str) -> KeyContext {
+    load_key_context_from_home_path(temp.path(), member_handle)
+}
+
+fn build_trust_store(
+    home_path: &Path,
+    owner_handle: &str,
+) -> secretenv_core::api::trust::LocalTrustStore {
+    secretenv_core::api::trust::LocalTrustStore::new(home_path, owner_handle.to_string())
 }
 
 fn fixture_kid(key_store: &LocalKeyStore, member_handle: &str) -> String {
@@ -110,12 +112,11 @@ fn tamper_first_known_key_subject(path: &Path, subject_handle: &str) {
 #[test]
 fn apply_approvals_revalidates_existing_store_with_key_context_keystore() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let home = SecretEnvHome::open(temp.path());
     let default_keys = temp.path().join("keys");
     let custom_keys = temp.path().join("custom_keys");
     fs::rename(&default_keys, &custom_keys).expect("move fixture keys outside default location");
     let key_store = LocalKeyStore::new(&custom_keys);
-    let trust_store = home.trust_store(ALICE);
+    let trust_store = build_trust_store(temp.path(), ALICE);
     let alice_key_ctx = load_key_context_from_key_store(temp.path(), &key_store, ALICE);
     let bob_kid = fixture_kid(&key_store, BOB);
 
@@ -147,10 +148,9 @@ fn apply_approvals_revalidates_existing_store_with_key_context_keystore() {
 #[test]
 fn apply_approvals_rejects_invalid_existing_trust_store() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let home = SecretEnvHome::open(temp.path());
-    let key_store = home.key_store();
-    let trust_store = home.trust_store(ALICE);
-    let alice_key_ctx = load_key_context(&home, &temp, ALICE);
+    let key_store = LocalKeyStore::new(temp.path().join("keys"));
+    let trust_store = build_trust_store(temp.path(), ALICE);
+    let alice_key_ctx = load_key_context(&temp, ALICE);
     let bob_kid = fixture_kid(&key_store, BOB);
 
     trust_store
@@ -186,10 +186,9 @@ fn apply_approvals_rejects_invalid_existing_trust_store() {
 #[test]
 fn apply_approvals_rejects_key_context_for_different_owner() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let home = SecretEnvHome::open(temp.path());
-    let key_store = home.key_store();
-    let trust_store = home.trust_store(ALICE);
-    let bob_key_ctx = load_key_context(&home, &temp, BOB);
+    let key_store = LocalKeyStore::new(temp.path().join("keys"));
+    let trust_store = build_trust_store(temp.path(), ALICE);
+    let bob_key_ctx = load_key_context(&temp, BOB);
     let bob_kid = fixture_kid(&key_store, BOB);
 
     let err = trust_store
@@ -206,9 +205,8 @@ fn apply_approvals_rejects_key_context_for_different_owner() {
 #[test]
 fn apply_approvals_rejects_malformed_known_key_kid() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let home = SecretEnvHome::open(temp.path());
-    let trust_store = home.trust_store(ALICE);
-    let alice_key_ctx = load_key_context(&home, &temp, ALICE);
+    let trust_store = build_trust_store(temp.path(), ALICE);
+    let alice_key_ctx = load_key_context(&temp, ALICE);
 
     let err = trust_store
         .apply_approvals(
@@ -227,10 +225,9 @@ fn apply_approvals_rejects_malformed_known_key_kid() {
 #[test]
 fn apply_approvals_rejects_malformed_known_key_subject_handle() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let home = SecretEnvHome::open(temp.path());
-    let key_store = home.key_store();
-    let trust_store = home.trust_store(ALICE);
-    let alice_key_ctx = load_key_context(&home, &temp, ALICE);
+    let key_store = LocalKeyStore::new(temp.path().join("keys"));
+    let trust_store = build_trust_store(temp.path(), ALICE);
+    let alice_key_ctx = load_key_context(&temp, ALICE);
     let bob_kid = fixture_kid(&key_store, BOB);
 
     let err = trust_store
@@ -251,10 +248,9 @@ fn apply_approvals_rejects_malformed_known_key_subject_handle() {
 fn apply_approvals_rejects_expired_signing_key() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
     update_active_private_key_expires_at(temp.path(), ALICE, "2020-01-01T00:00:00Z");
-    let home = SecretEnvHome::open(temp.path());
-    let key_store = home.key_store();
-    let trust_store = home.trust_store(ALICE);
-    let expired_key_ctx = load_key_context(&home, &temp, ALICE);
+    let key_store = LocalKeyStore::new(temp.path().join("keys"));
+    let trust_store = build_trust_store(temp.path(), ALICE);
+    let expired_key_ctx = load_key_context(&temp, ALICE);
     let bob_kid = fixture_kid(&key_store, BOB);
 
     let err = trust_store
@@ -280,9 +276,8 @@ fn apply_approvals_rejects_expired_signing_key() {
 #[test]
 fn apply_approvals_waits_for_trust_store_file_lock() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let home = SecretEnvHome::open(temp.path());
-    let key_store = home.key_store();
-    let trust_store = home.trust_store(ALICE);
+    let key_store = LocalKeyStore::new(temp.path().join("keys"));
+    let trust_store = build_trust_store(temp.path(), ALICE);
     let path = trust_store.path();
     let home_path = temp.path().to_path_buf();
     let bob_kid = fixture_kid(&key_store, BOB);
@@ -291,9 +286,8 @@ fn apply_approvals_waits_for_trust_store_file_lock() {
 
     let worker = with_file_lock(&path, || {
         let worker = thread::spawn(move || {
-            let home = SecretEnvHome::open(&home_path);
-            let trust_store = home.trust_store(ALICE);
-            let key_ctx = load_key_context_from_home_path(&home, &home_path, ALICE);
+            let trust_store = build_trust_store(&home_path, ALICE);
+            let key_ctx = load_key_context_from_home_path(&home_path, ALICE);
             ready_tx.send(()).expect("signal worker ready");
             let result = trust_store
                 .apply_approvals(vec![TrustApproval::known_key(BOB, bob_kid)], &key_ctx)

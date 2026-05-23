@@ -6,14 +6,11 @@
 use clap::Args;
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, resolve_trust_store_owner_member,
-    run_kv_write_command_with_trust, WriteCommandLabels,
+    resolve_options_with_allow_expired_key, run_kv_write_command_with_recovery, WriteCommandLabels,
 };
 use crate::cli::common::output::kv::print_kv_import_result;
 use crate::cli::common::output::text::print_warnings;
-use crate::cli::common::trust::{
-    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
-};
+use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOutputOptions,
 };
@@ -24,7 +21,7 @@ use secretenv_core::cli_api::presentation::limits::MAX_KV_ENC_FILE_SIZE;
 use secretenv_core::Result;
 
 #[derive(Args)]
-pub struct ImportArgs {
+pub(crate) struct ImportArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOutputOptions,
@@ -42,7 +39,7 @@ pub struct ImportArgs {
     pub filename: String,
 }
 
-pub fn run(args: ImportArgs) -> Result<()> {
+pub(crate) fn run(args: ImportArgs) -> Result<()> {
     let content = load_text_with_limit(
         std::path::Path::new(&args.filename),
         MAX_KV_ENC_FILE_SIZE,
@@ -52,28 +49,21 @@ pub fn run(args: ImportArgs) -> Result<()> {
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    let (outcome, entry_count) = run_with_trust_store_reset_recovery(
+    let (outcome, entry_count) = run_kv_write_command_with_recovery::<ImportPolicy, _, _>(
         &options,
-        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || {
-            run_kv_write_command_with_trust::<ImportPolicy, _, _>(
-                &args.common,
-                args.member.member_handle.clone(),
-                args.store.name.as_deref(),
-                true,
-                args.allow_expired_key.allow_expired_key,
-                WriteCommandLabels {
-                    signer_context: Some(("import input signer", "input signer")),
-                    recipient_context: "import recipients",
-                },
-                |_, trust_plan| {
-                    import_kv_command_with_recipient_set_confirmation(
-                        trust_plan,
-                        &content,
-                        None,
-                        confirm_recipient_set_approval,
-                    )
-                },
+        args.member.member_handle.clone(),
+        args.store.name.as_deref(),
+        true,
+        WriteCommandLabels {
+            signer_context: Some(("import input signer", "input signer")),
+            recipient_context: "import recipients",
+        },
+        |_, trust_plan| {
+            import_kv_command_with_recipient_set_confirmation(
+                trust_plan,
+                &content,
+                None,
+                confirm_recipient_set_approval,
             )
         },
     )?;

@@ -6,8 +6,7 @@
 //! Core library APIs for SecretEnv encrypted artifacts and local state.
 
 pub mod api;
-pub mod error;
-pub mod prelude;
+mod error;
 
 #[cfg(any(feature = "cli-internal", test))]
 #[doc(hidden)]

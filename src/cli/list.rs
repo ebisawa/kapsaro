@@ -12,7 +12,7 @@ use secretenv_core::cli_api::app::kv::query::list_kv_command;
 use secretenv_core::Result;
 
 #[derive(Args)]
-pub struct ListArgs {
+pub(crate) struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOutputOptions,
@@ -21,7 +21,7 @@ pub struct ListArgs {
     pub store: KvStoreNameOption,
 }
 
-pub fn run(args: ListArgs) -> Result<()> {
+pub(crate) fn run(args: ListArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let keys_with_disclosed = list_kv_command(&options, args.store.name.as_deref())?;
     print_kv_key_list(&keys_with_disclosed, args.common.json.json)

@@ -15,13 +15,13 @@ use secretenv_core::Error;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]
-pub struct ConfigArgs {
+pub(crate) struct ConfigArgs {
     #[command(subcommand)]
     pub command: ConfigCommands,
 }
 
 #[derive(Subcommand)]
-pub enum ConfigCommands {
+pub(crate) enum ConfigCommands {
     /// Get configuration value
     Get(GetArgs),
 
@@ -36,7 +36,7 @@ pub enum ConfigCommands {
 }
 
 #[derive(Args)]
-pub struct GetArgs {
+pub(crate) struct GetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOptions,
@@ -46,7 +46,7 @@ pub struct GetArgs {
 }
 
 #[derive(Args)]
-pub struct SetArgs {
+pub(crate) struct SetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOptions,
@@ -59,7 +59,7 @@ pub struct SetArgs {
 }
 
 #[derive(Args)]
-pub struct UnsetArgs {
+pub(crate) struct UnsetArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOptions,
@@ -69,13 +69,13 @@ pub struct UnsetArgs {
 }
 
 #[derive(Args)]
-pub struct ListArgs {
+pub(crate) struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: LocalOptions,
 }
 
-pub fn run(args: ConfigArgs) -> Result<(), Error> {
+pub(crate) fn run(args: ConfigArgs) -> Result<(), Error> {
     match args.command {
         ConfigCommands::Get(args) => run_get(args),
         ConfigCommands::List(args) => run_list(args),

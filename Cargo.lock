@@ -583,7 +583,6 @@ checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
 dependencies = [
  "console",
  "shell-words",
- "tempfile",
  "zeroize",
 ]
 
@@ -647,12 +646,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "dotenvy"
-version = "0.15.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "dunce"
@@ -2232,12 +2225,8 @@ dependencies = [
  "dialoguer",
  "ed25519-dalek",
  "hex",
- "hkdf 0.13.0",
- "http",
  "libc",
  "predicates",
- "rand",
- "reqwest",
  "secretenv-core",
  "serde",
  "serde_json",
@@ -2246,7 +2235,6 @@ dependencies = [
  "temp-env",
  "tempfile",
  "time",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -2259,7 +2247,6 @@ version = "0.9.1-alpha"
 dependencies = [
  "argon2",
  "chacha20poly1305",
- "dotenvy",
  "ed25519-dalek",
  "fd-lock",
  "hex",
@@ -2270,8 +2257,8 @@ dependencies = [
  "jsonschema",
  "libc",
  "rand",
- "regex",
  "reqwest",
+ "secretenv-core",
  "serde",
  "serde_jcs",
  "serde_json",

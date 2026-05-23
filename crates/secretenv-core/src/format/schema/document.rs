@@ -29,16 +29,6 @@ pub fn parse_public_key_str(content: &str, source_name: &str) -> Result<PublicKe
     )
 }
 
-pub fn parse_public_key_bytes(bytes: &[u8], source_name: &str) -> Result<PublicKey> {
-    parse_json_document_bytes(
-        bytes,
-        source_name,
-        "PublicKey",
-        SchemaTarget::PublicKey,
-        Validator::validate_public_key,
-    )
-}
-
 pub fn parse_private_key_str(content: &str, source_name: &str) -> Result<PrivateKey> {
     parse_json_document_str(
         content,
@@ -62,17 +52,6 @@ pub fn parse_private_key_bytes(bytes: &[u8], source_name: &str) -> Result<Privat
 pub fn parse_file_enc_str(content: &str, source_name: &str) -> Result<FileEncDocument> {
     let doc = parse_json_document_str(
         content,
-        source_name,
-        "FileEncDocument",
-        SchemaTarget::FileEnc,
-        Validator::validate_file_enc_document,
-    )?;
-    validate_file_enc_limits(doc)
-}
-
-pub fn parse_file_enc_bytes(bytes: &[u8], source_name: &str) -> Result<FileEncDocument> {
-    let doc = parse_json_document_bytes(
-        bytes,
         source_name,
         "FileEncDocument",
         SchemaTarget::FileEnc,

@@ -7,12 +7,11 @@ use std::io::BufRead;
 use crate::cli::common::command::resolve_options_with_allow_expired_key;
 use crate::cli::common::output::text::member::print_member_remove_summary;
 use crate::cli::common::output::text::{print_warning, print_warning_line};
-use crate::cli::common::prompt::prompt_yes_no;
+use crate::cli::common::prompt::confirm_destructive_action;
 #[cfg(test)]
-use crate::cli::common::prompt::prompt_yes_no_with_reader;
+use crate::cli::common::prompt::confirm_destructive_action_with_reader;
 use secretenv_core::cli_api::app::member::mutation::{evaluate_member_removal, remove_member};
 use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::cli_api::presentation::tty;
 use secretenv_core::Error;
 
 use super::RemoveArgs;
@@ -56,27 +55,13 @@ fn print_member_remove_preview(
 }
 
 fn confirm_member_remove(force: bool, member_handle: &str) -> Result<(), Error> {
-    if force {
-        return Ok(());
-    }
-    if !tty::is_interactive() {
-        return Err(Error::build_invalid_operation_error(format!(
-            "Refusing to remove member '{}' without --force in non-interactive mode",
-            member_handle
-        )));
-    }
-
-    if prompt_yes_no(
-        &format!("Remove member '{}' from the workspace?", member_handle),
-        false,
-    )? {
-        return Ok(());
-    }
-
-    Err(Error::build_invalid_operation_error(format!(
-        "Member removal cancelled for '{}'",
-        member_handle
-    )))
+    confirm_destructive_action(
+        force,
+        &member_remove_prompt(member_handle),
+        member_remove_non_interactive_error(member_handle),
+        member_remove_cancelled_error(member_handle),
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -89,28 +74,30 @@ fn confirm_member_remove_with_reader<R>(
 where
     R: BufRead,
 {
-    if force {
-        return Ok(());
-    }
-    if !is_interactive {
-        return Err(Error::build_invalid_operation_error(format!(
-            "Refusing to remove member '{}' without --force in non-interactive mode",
-            member_handle
-        )));
-    }
-
-    if prompt_yes_no_with_reader(
-        &format!("Remove member '{}' from the workspace?", member_handle),
-        false,
+    confirm_destructive_action_with_reader(
+        force,
+        &member_remove_prompt(member_handle),
+        member_remove_non_interactive_error(member_handle),
+        member_remove_cancelled_error(member_handle),
+        is_interactive,
         &mut reader,
-    )? {
-        return Ok(());
-    }
+    )?;
+    Ok(())
+}
 
-    Err(Error::build_invalid_operation_error(format!(
-        "Member removal cancelled for '{}'",
+fn member_remove_prompt(member_handle: &str) -> String {
+    format!("Remove member '{}' from the workspace?", member_handle)
+}
+
+fn member_remove_non_interactive_error(member_handle: &str) -> String {
+    format!(
+        "Refusing to remove member '{}' without --force in non-interactive mode",
         member_handle
-    )))
+    )
+}
+
+fn member_remove_cancelled_error(member_handle: &str) -> String {
+    format!("Member removal cancelled for '{}'", member_handle)
 }
 
 #[cfg(test)]

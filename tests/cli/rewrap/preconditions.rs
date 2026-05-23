@@ -19,17 +19,16 @@ fn test_rewrap_requires_workspace() {
     common_opts.workspace = None;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let rewrap_args = default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE);
     let invalid_workspace = temp_dir.path().join("workspace-does-not-exist");
-    let result = with_vars(
+    let output = with_vars(
         [(
             "SECRETENV_WORKSPACE",
             Some(invalid_workspace.to_str().expect("invalid path as str")),
         )],
-        || rewrap::run(rewrap_args),
+        || run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]),
     );
 
-    assert!(result.is_err(), "Should fail without workspace");
+    assert!(!output.status.success(), "Should fail without workspace");
 }
 
 #[test]
@@ -42,11 +41,13 @@ fn test_rewrap_with_no_files_fails_gracefully() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let rewrap_args = default_rewrap_args(common_opts, ALICE_MEMBER_HANDLE);
-    let result = rewrap::run(rewrap_args);
-    assert!(result.is_err(), "Should fail with no files in secrets/");
+    let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
+    assert!(
+        !output.status.success(),
+        "Should fail with no files in secrets/"
+    );
 
-    let err_msg = format!("{}", result.unwrap_err());
+    let err_msg = String::from_utf8_lossy(&output.stderr);
     assert!(
         err_msg.contains("No encrypted files"),
         "Error should mention no files found: {}",

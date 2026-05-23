@@ -10,8 +10,8 @@ use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
 use crate::io::ssh::verify::verify_attestation;
 use crate::model::public_key::{
-    AttestationProof, AttestedIdentity, PublicKey, VerifiedPublicKey, VerifiedPublicKeyAttested,
-    VerifiedRecipientKey, VerifiedSigningPublicKey,
+    AttestationProof, AttestedIdentity, PublicKey, VerifiedPublicKeyAttested, VerifiedRecipientKey,
+    VerifiedSigningPublicKey,
 };
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
@@ -30,7 +30,7 @@ pub struct VerifiedPublicKeyForVerification {
 }
 
 struct PublicKeySelfSignatureVerification {
-    verified_public_key: VerifiedPublicKey,
+    proof: SelfSignatureProof,
     verifying_key: VerifyingKey,
 }
 
@@ -44,26 +44,6 @@ pub(crate) const WORKSPACE_INCOMING_MEMBER_CONTEXT: &str = "workspace incoming m
 pub(crate) const WORKSPACE_MEMBER_FILE_CONTEXT: &str = "workspace member file";
 pub(crate) const MEMBER_VERIFICATION_INPUT_CONTEXT: &str = "member verification input public key";
 pub(crate) const TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT: &str = "trust store keystore public key";
-
-/// Verify PublicKey document self-signature only and return VerifiedPublicKey
-///
-/// # Arguments
-/// * `public_key` - PublicKey document to verify
-/// * `debug` - Enable debug logging
-///
-/// # Returns
-/// `VerifiedPublicKey` if self-signature is valid, error otherwise
-pub fn verify_public_key(public_key: &PublicKey, debug: bool) -> Result<VerifiedPublicKey> {
-    verify_public_key_with_context(public_key, debug, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
-}
-
-pub fn verify_public_key_with_context(
-    public_key: &PublicKey,
-    debug: bool,
-    context: &str,
-) -> Result<VerifiedPublicKey> {
-    Ok(verify_public_key_self_signature_context(public_key, debug, context)?.verified_public_key)
-}
 
 fn verify_public_key_self_signature_context(
     public_key: &PublicKey,
@@ -93,9 +73,8 @@ fn verify_public_key_self_signature_context(
         Error::build_crypto_error_with_source("PublicKey self-signature verification failed", e)
     })?;
 
-    let proof = SelfSignatureProof::new();
     Ok(PublicKeySelfSignatureVerification {
-        verified_public_key: VerifiedPublicKey::new(public_key.clone(), proof),
+        proof: SelfSignatureProof::new(),
         verifying_key,
     })
 }
@@ -149,11 +128,8 @@ fn verify_signing_public_key_context(
     };
     let attested_identity = AttestedIdentity::new(public_key.protected.identity.clone(), proof);
 
-    let attested = VerifiedPublicKeyAttested::new(
-        public_key.clone(),
-        verified.verified_public_key.self_signature_proof().clone(),
-        attested_identity,
-    );
+    let attested =
+        VerifiedPublicKeyAttested::new(public_key.clone(), verified.proof, attested_identity);
 
     Ok(VerifiedSigningPublicKey::new(
         attested,

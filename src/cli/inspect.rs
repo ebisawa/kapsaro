@@ -4,7 +4,7 @@
 //! inspect command - Display encryption metadata without decryption
 //!
 //! Shows wrap information, recipients, and payload metadata for debugging
-//! Supports both kv-enc v7 and file-enc v5 formats
+//! Supports encrypted artifact metadata inspection
 
 use clap::Args;
 use std::path::PathBuf;
@@ -19,7 +19,7 @@ use secretenv_core::cli_api::app::file::inspect::execute_inspect_file_command;
 use secretenv_core::Result;
 
 #[derive(Args)]
-pub struct InspectArgs {
+pub(crate) struct InspectArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: WorkspaceOutputOptions,
@@ -28,7 +28,7 @@ pub struct InspectArgs {
     pub input: PathBuf,
 }
 
-pub fn run(args: InspectArgs) -> Result<()> {
+pub(crate) fn run(args: InspectArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let prepared = execute_inspect_file_command(&options, &args.input)?;
 

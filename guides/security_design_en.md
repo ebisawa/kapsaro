@@ -580,7 +580,7 @@ The main fields of `signature_v4` (artifact signature) are as follows.
 | `mac` | `hmac-sha256:<base64url>` | Key-possession proof | HMAC used to verify that the artifact body, signer `kid`, and unwrapped DEK / MK correspond to each other |
 | `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact; the signed input is the format-specific body bytes concatenated with `mac` |
 
-file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. That is a premise of self-contained verification. SecretEnv does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §12.1 invariant on where the signing key is resolved.
+file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. That is a premise of self-contained verification. SecretEnv does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §1.5 invariant on where the signing key is resolved.
 
 ### 5.1 Comparison of Signing Methods
 
@@ -623,7 +623,7 @@ Cryptographic verification of an artifact can be organized into three layers (La
 - Layer B. Binding the key generation to the artifact — The artifact's `signature.kid` matches `signer_pub.protected.kid` (consistent with the derivation rule in §4.4.1)
 - Layer C. Tamper detection for the artifact body and key-possession proof — Verify `sig` over the signed payload defined in §5.1, using the signing public key from `signer_pub`
 
-Unwrap proceeds only after Layer C succeeds, consistent with the §1.4 invariant do not decrypt before signature verification. After unwrap, SecretEnv recomputes `signature.mac` with the resulting DEK / MK and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
+Unwrap proceeds only after Layer C succeeds, consistent with the §1.5 invariant do not decrypt before signature verification. After unwrap, SecretEnv recomputes `signature.mac` with the resulting DEK / MK and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
 
 Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Separately from cryptographic verification (Layers A–C), acceptance is gated by active / expired rules that separate behavior for new crypto operations and recovery operations. Details are consolidated in §4.4 and §10.
 

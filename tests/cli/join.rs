@@ -5,25 +5,11 @@
 //!
 //! Tests the join command that joins an existing workspace without creating it.
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{assert_stderr_order, cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
-
-fn assert_stderr_order(stderr: &[u8], first: &str, second: &str) {
-    let stderr = String::from_utf8_lossy(stderr);
-    let first_index = stderr
-        .find(first)
-        .unwrap_or_else(|| panic!("Missing '{first}' in stderr: {stderr}"));
-    let second_index = stderr
-        .find(second)
-        .unwrap_or_else(|| panic!("Missing '{second}' in stderr: {stderr}"));
-    assert!(
-        first_index < second_index,
-        "Expected '{first}' before '{second}' in stderr: {stderr}"
-    );
-}
 
 fn load_member_kid(path: &std::path::Path) -> String {
     let content = fs::read_to_string(path).unwrap();

@@ -3,58 +3,37 @@
 
 //! doctor command - read-only workspace health diagnostics.
 
-use std::path::PathBuf;
-
 use clap::Args;
 
 use crate::cli::common::output::json::doctor::print_doctor_report;
 use crate::cli::common::output::text::doctor::format_doctor_report;
+use crate::cli::options::{MemberHandleOption, WorkspaceOutputOptions};
 use secretenv_core::cli_api::app::doctor::{run_doctor, DoctorRequest};
 use secretenv_core::Result;
 
 #[derive(Debug, Clone, Args)]
-pub struct DoctorArgs {
-    /// Workspace root directory
-    #[arg(long, short = 'w')]
-    pub workspace: Option<PathBuf>,
+pub(crate) struct DoctorArgs {
+    /// Common options shared across commands
+    #[command(flatten)]
+    pub common: WorkspaceOutputOptions,
 
-    /// Base directory for secretenv local state
-    #[arg(long)]
-    pub home: Option<PathBuf>,
-
-    /// Member handle for local trust store and self key checks
-    #[arg(long = "member-handle", short = 'm', value_name = "MEMBER_HANDLE")]
-    pub member_handle: Option<String>,
-
-    /// Show check ids and lower-level reasons
-    #[arg(long, short = 'v')]
-    pub verbose: bool,
-
-    /// Enable debug trace logging
-    #[arg(long)]
-    pub debug: bool,
-
-    /// Output in JSON format
-    #[arg(long)]
-    pub json: bool,
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 }
 
-pub fn run(args: DoctorArgs) -> Result<()> {
-    let verbose = args.verbose;
+pub(crate) fn run(args: DoctorArgs) -> Result<i32> {
+    let verbose = args.common.verbose.verbose;
     let report = run_doctor(DoctorRequest {
-        workspace: args.workspace,
-        home: args.home,
-        member_handle: args.member_handle,
-        debug: args.debug,
+        workspace: args.common.workspace.workspace,
+        home: args.common.home.home,
+        member_handle: args.member.member_handle,
+        debug: args.common.debug.debug,
         verbose,
     })?;
-    if args.json {
+    if args.common.json.json {
         print_doctor_report(&report)?;
     } else {
         print!("{}", format_doctor_report(&report, verbose));
     }
-    if report.exit_code() != 0 {
-        std::process::exit(report.exit_code());
-    }
-    Ok(())
+    Ok(report.exit_code())
 }

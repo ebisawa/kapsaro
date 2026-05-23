@@ -16,6 +16,7 @@ pub(crate) mod signature;
 use crate::feature::context::expiry::enforce_expired_key_usage;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::support::warning::push_unique_warning;
 use crate::Result;
 
 /// Report of signature verification result
@@ -52,10 +53,4 @@ pub(crate) fn append_operational_signer_expiry_warning(
         push_unique_warning(&mut proof.warnings, warning);
     }
     Ok(())
-}
-
-fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
-    if !warnings.contains(&warning) {
-        warnings.push(warning);
-    }
 }

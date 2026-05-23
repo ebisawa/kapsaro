@@ -96,11 +96,6 @@ impl GitHubOnlineVerifier {
         block_on_result(verify_github_account(&public_key, self.options.debug()))
             .map(OnlineVerificationResult::from)
     }
-
-    /// Return shared operation options.
-    pub fn options(&self) -> OperationOptions {
-        self.options
-    }
 }
 
 impl GitHubAccount {
@@ -167,11 +162,6 @@ impl OnlineVerificationResult {
     /// Return verified GitHub account metadata when verification succeeded.
     pub fn verified_account(&self) -> Option<&GitHubAccount> {
         self.verified_account.as_ref()
-    }
-
-    /// Return true when online verification succeeded.
-    pub fn is_verified(&self) -> bool {
-        self.status == OnlineVerificationStatus::Verified
     }
 }
 

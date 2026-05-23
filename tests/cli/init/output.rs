@@ -2,22 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::setup_init_env;
-use crate::cli::common::{cmd, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    assert_stderr_order, cmd, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
-
-fn assert_stderr_order(stderr: &[u8], first: &str, second: &str) {
-    let stderr = String::from_utf8_lossy(stderr);
-    let first_index = stderr
-        .find(first)
-        .unwrap_or_else(|| panic!("Missing '{first}' in stderr: {stderr}"));
-    let second_index = stderr
-        .find(second)
-        .unwrap_or_else(|| panic!("Missing '{second}' in stderr: {stderr}"));
-    assert!(
-        first_index < second_index,
-        "Expected '{first}' before '{second}' in stderr: {stderr}"
-    );
-}
 
 #[test]
 fn test_init_new_workspace_new_key_output() {

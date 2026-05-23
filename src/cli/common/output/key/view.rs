@@ -24,7 +24,7 @@ pub(crate) struct KeyListView<'a> {
     pub(crate) total_keys: usize,
 }
 
-pub(crate) fn build_key_list_view(result: &KeyListResult) -> KeyListView<'_> {
+pub(super) fn build_key_list_view(result: &KeyListResult) -> KeyListView<'_> {
     KeyListView {
         entries: result
             .entries

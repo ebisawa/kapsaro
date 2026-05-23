@@ -11,22 +11,19 @@ autotests = false
 members = ["crates/secretenv-core"]
 
 [dependencies]
-secretenv-core = { version = "0.9.1-alpha", path = "crates/secretenv-core", features = ["cli-internal"] }
+secretenv-core = { version = "0.9.1-alpha", path = "crates/secretenv-core", default-features = false, features = ["cli-internal"] }
 
 # CLI framework
 clap = { version = "4", features = ["derive"] }
 console = "0.16"
-dialoguer = "0.12"
+dialoguer = { version = "0.12", default-features = false, features = ["password"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Time handling
-time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
-
-# Cryptography - Ed25519 signatures
-ed25519-dalek = "2"
+time = "0.3"
 
 # Secure memory handling
 zeroize = "1"
@@ -40,7 +37,7 @@ default = ["online"]
 online = ["secretenv-core/online"]
 
 [dev-dependencies]
-secretenv-core = { version = "0.9.1-alpha", path = "crates/secretenv-core", features = ["cli-internal", "cli-test-support"] }
+secretenv-core = { version = "0.9.1-alpha", path = "crates/secretenv-core", default-features = false, features = ["cli-internal", "cli-test-support"] }
 
 # CLI testing
 assert_cmd = "2"
@@ -55,12 +52,7 @@ serial_test = "3"
 temp-env = "0.3"
 ed25519-dalek = "2"
 hex = "0.4"
-hkdf = "0.13"
-http = "1"
-rand = "0.9"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 sha2 = "0.11"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [[test]]

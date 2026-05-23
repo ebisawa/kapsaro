@@ -4,17 +4,18 @@
 //! Key generation (key new) implementation
 
 use crate::cli::common::command::{resolve_options, resolve_required_member_handle};
-use crate::cli::common::output::text::key::print_generated_key_summary;
+use crate::cli::common::output::text::key::{
+    print_generated_key_summary, print_key_generation_binding_info,
+};
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt::resolve_key_generation_github_user;
 use secretenv_core::cli_api::app::key::generate::generate_key_command;
 use secretenv_core::Result;
 
-use super::common::print_key_generation_binding_info;
 use super::NewArgs;
 
 /// Main entry point for key generation
-pub fn run(args: NewArgs) -> Result<()> {
+pub(super) fn run(args: NewArgs) -> Result<()> {
     let options = resolve_options(&args.common);
     let member_handle =
         resolve_required_member_handle(&options, args.member.member_handle.clone(), false)?;

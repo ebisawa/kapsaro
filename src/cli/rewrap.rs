@@ -16,7 +16,7 @@ mod batch;
 mod promotion;
 
 #[derive(Args, Clone)]
-pub struct RewrapArgs {
+pub(crate) struct RewrapArgs {
     /// Common options shared across commands
     #[command(flatten)]
     pub common: SigningQuietOutputOptions,
@@ -40,7 +40,7 @@ pub struct RewrapArgs {
     pub targets: Vec<PathBuf>,
 }
 
-pub fn run(args: RewrapArgs) -> Result<()> {
+pub(crate) fn run(args: RewrapArgs) -> Result<()> {
     let options = resolve_options_with_allow_expired_key(
         &args.common,
         args.allow_expired_key.allow_expired_key,
@@ -48,6 +48,6 @@ pub fn run(args: RewrapArgs) -> Result<()> {
     run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || batch::run_batch_rewrap(&args),
+        || batch::run_batch_rewrap(&args, &options),
     )
 }

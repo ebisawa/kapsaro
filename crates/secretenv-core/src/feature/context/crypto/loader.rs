@@ -5,6 +5,7 @@
 
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
+use tracing::debug;
 
 use super::{CryptoContext, LocalKeyAccess, PrivateKeyLoadResult};
 use crate::feature::context::expiry::VerifiedExpiresAt;
@@ -22,6 +23,7 @@ use crate::model::identity::{Kid, MemberHandle};
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
 use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
+use crate::support::kid::format_kid_display;
 use crate::{Error, Result};
 
 pub(crate) fn build_signing_key(plaintext: &PrivateKeyPlaintext) -> Result<SigningKey> {
@@ -80,7 +82,7 @@ pub fn load_crypto_context_from_keystore(
     workspace_path: Option<PathBuf>,
     debug_enabled: bool,
 ) -> Result<CryptoContext> {
-    let kid = resolve_kid(&keystore_root, member_handle, explicit_kid)?;
+    let kid = resolve_keystore_kid(&keystore_root, member_handle, explicit_kid, debug_enabled)?;
     let loaded = load_verified_private_key_from_keystore(
         &keystore_root,
         member_handle,
@@ -110,6 +112,20 @@ pub fn load_crypto_context_from_keystore(
             ssh_backend,
         )),
     ))
+}
+
+fn resolve_keystore_kid(
+    keystore_root: &Path,
+    member_handle: &str,
+    explicit_kid: Option<&str>,
+    debug_enabled: bool,
+) -> Result<String> {
+    let kid = resolve_kid(keystore_root, member_handle, explicit_kid)?;
+    if debug_enabled {
+        let kid_display = format_kid_display(&kid).unwrap_or_else(|_| kid.clone());
+        debug!("[CRYPTO] load_crypto_context: resolved kid={}", kid_display);
+    }
+    Ok(kid)
 }
 
 pub(crate) fn load_verified_private_key_from_keystore(

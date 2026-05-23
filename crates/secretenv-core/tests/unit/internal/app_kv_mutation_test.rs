@@ -6,9 +6,9 @@ use crate::app::kv::mutation::{
     resolve_mutation_write_plan, set_kv_command_with_recipient_set_confirmation,
     unset_kv_command_with_recipient_set_confirmation, MutationWriteTrustPlan,
 };
+use crate::app::kv::types::KvInputEntry;
 use crate::app::trust::{SetPolicy, UnsetPolicy};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
-use crate::feature::kv::types::KvInputEntry;
 use crate::io::keystore::active::set_active_kid;
 use crate::io::keystore::storage::list_kids;
 use crate::io::trust::paths::get_trust_store_file_path;

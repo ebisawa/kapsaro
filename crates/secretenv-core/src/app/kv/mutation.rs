@@ -1,7 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::artifact::{kv_content_recipient_evidence, kv_recipient_evidence};
 use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::review::{ensure_workspace_members_match_snapshot, ReviewedTextFile};
@@ -22,17 +21,18 @@ use crate::feature::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
 };
-use crate::feature::kv::types::KvInputEntry;
+use crate::feature::trust::recipient_sets::{kv_content_recipient_evidence, kv_recipient_evidence};
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
 use crate::model::common::WrapSet;
 use crate::support::fs::lock;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
+use crate::support::warning::push_unique_warning;
 use crate::{Error, Result};
 
 use super::session::{load_existing_content, KvCommandSession, KvFileTarget};
-use super::types::{KvImportResult, KvWriteOutcome};
+use super::types::{KvImportResult, KvInputEntry, KvWriteOutcome};
 use std::marker::PhantomData;
 
 pub struct MutationWriteTrustPlan<P> {
@@ -137,11 +137,19 @@ where
         plan,
         success_message,
         |existing_content, recipients, ctx| {
+            let entries = to_feature_entries(entries);
             let result = set_kv_entry_with_recipients(existing_content, &entries, recipients, ctx)?;
             Ok(result.encrypted.as_str().to_owned())
         },
         confirm_recipient_set,
     )
+}
+
+fn to_feature_entries(entries: Vec<KvInputEntry>) -> Vec<crate::feature::kv::types::KvInputEntry> {
+    entries
+        .into_iter()
+        .map(KvInputEntry::into_feature)
+        .collect()
 }
 
 pub fn unset_kv_command_with_recipient_set_confirmation<P, ConfirmRecipientSet>(
@@ -278,12 +286,6 @@ fn build_existing_decryption_key_warning(
     let doc = content.parse()?;
     let wrap_set = WrapSet::parse(&doc.wrap().wrap, "Document")?;
     enforce_selected_decryption_key_expiry(execution, &wrap_set, allow_expired_key, debug)
-}
-
-fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
-    if !warnings.contains(&warning) {
-        warnings.push(warning);
-    }
 }
 
 fn execute_kv_mutation<P, F>(

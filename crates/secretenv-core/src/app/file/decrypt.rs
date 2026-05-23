@@ -3,7 +3,6 @@
 
 use zeroize::Zeroizing;
 
-use crate::app::artifact::file_recipient_evidence;
 use crate::app::context::execution::{
     enforce_selected_decryption_key_expiry, resolve_read_execution, ExecutionContext,
 };
@@ -13,9 +12,11 @@ use crate::app::trust::{
     evaluate_read_artifact_trust, DecryptPolicy, RecipientTrustOutcome, SignerTrustOutcome,
 };
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
+use crate::feature::trust::recipient_sets::file_recipient_evidence;
 use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::format::content::FileEncContent;
 use crate::model::common::WrapSet;
+use crate::support::warning::push_unique_warning;
 use crate::Result;
 
 pub struct DecryptFileCommand {
@@ -31,11 +32,13 @@ pub fn resolve_decrypt_file_command(
     options: &CommonCommandOptions,
     member_handle: Option<String>,
     kid: Option<&str>,
-    content: FileEncContent,
+    content: String,
+    source_name: impl Into<String>,
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<DecryptFileCommand> {
     let execution = resolve_read_execution(options, member_handle, kid, ssh_ctx)?;
     let mut warnings = Vec::new();
+    let content = FileEncContent::detect_with_source(content, source_name)?;
 
     let verified_doc =
         verify_file_content_for_operation(&content, options.debug, options.allow_expired_key)?;
@@ -72,10 +75,8 @@ pub fn resolve_decrypt_file_command(
     })
 }
 
-fn push_unique_warning(warnings: &mut Vec<String>, warning: String) {
-    if !warnings.contains(&warning) {
-        warnings.push(warning);
-    }
+pub fn validate_decrypt_file_input(content: &str, source_name: impl Into<String>) -> Result<()> {
+    FileEncContent::detect_with_source(content.to_string(), source_name).map(|_| ())
 }
 
 pub fn execute_decrypt_file_command(command: &DecryptFileCommand) -> Result<Zeroizing<Vec<u8>>> {

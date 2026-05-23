@@ -4,69 +4,22 @@
 //! Integration tests for `get` command
 
 use crate::cli::common::{
-    cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
-    tamper_kv_signature, TEST_MEMBER_HANDLE,
+    cmd, setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use secretenv_core::cli_api::test_support::helpers::kid::{
     format_kid_display, format_kid_half_display,
 };
 use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
-use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Helper to create a workspace with initialized member and a key
-fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, PathBuf) {
-    let workspace_dir = TempDir::new().unwrap();
-    let home_dir = make_secret_home();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-
-    // Create workspace structure
-    fs::create_dir_all(workspace_dir.path().join("members")).unwrap();
-    fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-
-    // Run init to register member
-    cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    // Set a key
-    set_value_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        "TEST_KEY",
-        "test_value",
-        None,
-        None,
-    );
-
-    (workspace_dir, home_dir, ssh_temp, ssh_priv)
+fn setup_workspace_with_key() -> (TempDir, TempDir, TempDir, std::path::PathBuf) {
+    setup_workspace_with_kv_entries(&[("TEST_KEY", "test_value")])
 }
 
-fn setup_workspace_with_multiple_keys() -> (TempDir, TempDir, TempDir, PathBuf) {
-    let (workspace_dir, home_dir, ssh_temp, ssh_priv) = setup_workspace_with_key();
-
-    cmd()
-        .arg("set")
-        .arg("ANOTHER_KEY")
-        .arg("another_value")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    (workspace_dir, home_dir, ssh_temp, ssh_priv)
+fn setup_workspace_with_multiple_keys() -> (TempDir, TempDir, TempDir, std::path::PathBuf) {
+    setup_workspace_with_kv_entries(&[("TEST_KEY", "test_value"), ("ANOTHER_KEY", "another_value")])
 }
 
 fn active_test_kid(home_dir: &TempDir) -> String {
@@ -150,25 +103,7 @@ fn test_get_with_json_output() {
 
 #[test]
 fn test_get_error_when_file_not_exists() {
-    let workspace_dir = TempDir::new().unwrap();
-    let home_dir = make_secret_home();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-
-    // Create workspace structure
-    fs::create_dir_all(workspace_dir.path().join("members")).unwrap();
-    fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-
-    // Run init to register member
-    cmd()
-        .arg("init")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .arg("--member-handle")
-        .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
+    let (workspace_dir, home_dir, ssh_temp, ssh_priv) = setup_workspace();
 
     // Try to get a key from non-existent file
     cmd()

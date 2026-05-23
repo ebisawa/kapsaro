@@ -11,7 +11,8 @@ use crate::feature::trust::known_keys::{
     add_known_key, judge_known_key, KnownKeyIdentity, KnownKeyJudgment,
 };
 use crate::feature::trust::recipient_sets::{
-    judge_recipient_set, validate_recipient_set_record, ArtifactRecipientSet, RecipientSetJudgment,
+    file_recipient_evidence, judge_recipient_set, kv_recipient_evidence,
+    validate_recipient_set_record, ArtifactRecipientSet, RecipientSetJudgment,
 };
 use crate::feature::trust::signature::sign_trust_store;
 use crate::feature::trust::verification::verify_trust_store;
@@ -130,17 +131,8 @@ impl LocalTrustStore {
         get_trust_store_file_path(&self.base_dir, &self.owner_handle)
     }
 
-    /// Load and verify the local trust store if it exists.
+    /// Load and verify the local trust store, preserving any permission warnings.
     pub fn load_verified(
-        &self,
-        key_store: &LocalKeyStore,
-    ) -> Result<Option<VerifiedLocalTrustStore>> {
-        self.load_verified_with_warnings(key_store)
-            .map(|loaded| loaded.map(|result| result.store))
-    }
-
-    /// Load and verify the document, preserving any permission warnings.
-    pub fn load_verified_with_warnings(
         &self,
         key_store: &LocalKeyStore,
     ) -> Result<Option<VerifiedLocalTrustStoreLoadResult>> {
@@ -312,25 +304,18 @@ impl TrustPolicyEvaluator {
 
 impl RecipientSetSubject {
     pub(crate) fn from_verified_file(document: &VerifiedFileEncDocument) -> Result<Self> {
-        let document = document.document();
-        ArtifactRecipientSet::from_wrap_items(document.protected.sid, &document.protected.wrap)
-            .map(Self::from_inner)
+        file_recipient_evidence(document.document())
+            .map(|evidence| Self::from_inner(evidence.recipient_set))
     }
 
     pub(crate) fn from_verified_kv(document: &VerifiedKvEncDocument) -> Result<Self> {
-        let document = document.document();
-        ArtifactRecipientSet::from_wrap_items(document.head.sid, &document.wrap.wrap)
-            .map(Self::from_inner)
+        kv_recipient_evidence(document.document())
+            .map(|evidence| Self::from_inner(evidence.recipient_set))
     }
 
     /// Return the artifact recipient-set ID.
     pub fn sid(&self) -> uuid::Uuid {
         self.inner.sid()
-    }
-
-    /// Return the artifact recipient-set ID as a string.
-    pub fn sid_string(&self) -> String {
-        self.inner.sid_string()
     }
 
     /// Return canonical recipient key IDs.

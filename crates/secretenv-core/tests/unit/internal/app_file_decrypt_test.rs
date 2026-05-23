@@ -4,7 +4,6 @@
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::envelope::signature::SigningContext;
-use crate::format::content::FileEncContent;
 use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
@@ -58,7 +57,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
         },
     )
     .unwrap();
-    let content = FileEncContent::new_unchecked(serde_json::to_string(&doc).unwrap());
+    let content = serde_json::to_string(&doc).unwrap();
     let mut options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     options.allow_expired_key = true;
 
@@ -69,6 +68,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
+            "test.fileenc",
             ssh_ctx,
         )
         .unwrap();
@@ -108,7 +108,7 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         },
     )
     .unwrap();
-    let content = FileEncContent::new_unchecked(serde_json::to_string(&doc).unwrap());
+    let content = serde_json::to_string(&doc).unwrap();
 
     update_active_private_key_expires_at(
         temp_dir.path(),
@@ -127,6 +127,7 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
+            "test.fileenc",
             ssh_ctx,
         )
         .unwrap();

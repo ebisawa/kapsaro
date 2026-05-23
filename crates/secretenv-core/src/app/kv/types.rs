@@ -3,9 +3,50 @@
 
 use std::collections::BTreeMap;
 
-pub use crate::feature::kv::query::KvDisclosedEntry;
-pub use crate::feature::kv::types::KvInputEntry;
+use crate::feature::kv::query as feature_query;
+use crate::feature::kv::types as feature_types;
 use crate::support::secret::SecretString;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct KvInputEntry {
+    pub key: String,
+    pub value: SecretString,
+}
+
+impl KvInputEntry {
+    pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::new_secret(key, SecretString::new(value.into()))
+    }
+
+    pub fn new_secret(key: impl Into<String>, value: SecretString) -> Self {
+        Self {
+            key: key.into(),
+            value,
+        }
+    }
+
+    pub(crate) fn into_feature(self) -> feature_types::KvInputEntry {
+        feature_types::KvInputEntry {
+            key: self.key,
+            value: self.value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KvDisclosedEntry {
+    pub key: String,
+    pub disclosed: bool,
+}
+
+impl From<feature_query::KvDisclosedEntry> for KvDisclosedEntry {
+    fn from(value: feature_query::KvDisclosedEntry) -> Self {
+        Self {
+            key: value.key,
+            disclosed: value.disclosed,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct KvWriteOutcome {

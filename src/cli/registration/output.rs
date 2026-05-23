@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::output::text::key::{
-    print_existing_key_summary, print_generated_key_summary,
+    print_existing_key_summary, print_generated_key_summary, print_key_generation_binding_info,
 };
 use crate::cli::common::output::text::print_warning_line;
 use crate::cli::common::output::text::registration::{
-    print_created_workspace_summary, print_init_noop_summary, print_registration_next_steps,
+    print_created_workspace_summary, print_registration_next_steps,
 };
-use crate::cli::key::common::print_key_generation_binding_info;
 use secretenv_core::cli_api::app::registration::types::{
-    MemberKeySetupResult, RegistrationOutcome, RegistrationResult, RegistrationTarget,
+    MemberKeySetupResult, RegistrationOutcome, RegistrationResult,
 };
 use secretenv_core::cli_api::presentation::kid::format_kid_display;
 use secretenv_core::Error;
-use std::path::Path;
 
 pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Result<(), Error> {
     match outcome.result {
@@ -26,7 +24,7 @@ pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Resul
             eprintln!(
                 "Added '{}' to {}/",
                 outcome.member_handle,
-                target_directory_name(outcome.target)
+                outcome.target.directory_name()
             );
             eprintln!();
             print_registration_next_steps(outcome.mode, outcome.is_new_workspace);
@@ -42,10 +40,6 @@ pub(super) fn print_missing_key_notice(member_handle: &str) {
         "No local key found for '{}'. Generating a new key...",
         member_handle
     );
-}
-
-pub(super) fn print_init_noop_message(workspace_path: &Path) {
-    print_init_noop_summary(workspace_path);
 }
 
 fn print_existing_member_message(outcome: &RegistrationOutcome) {
@@ -99,10 +93,6 @@ fn print_generated_key_binding_info(key_result: &MemberKeySetupResult) -> Result
         ssh_determinism,
         key_result.github_verification,
     )
-}
-
-fn target_directory_name(target: RegistrationTarget) -> &'static str {
-    target.directory_name()
 }
 
 fn format_expiry_date(expires_at: &str) -> &str {

@@ -3,7 +3,6 @@
 
 //! Secret-bearing facade helper types.
 
-use std::ffi::OsString;
 use std::fmt;
 
 use zeroize::Zeroizing;
@@ -20,8 +19,7 @@ impl SecretBytes {
         Self(crate::support::secret::SecretBytes::new(bytes))
     }
 
-    /// Take ownership of a zeroizing byte buffer without cloning.
-    pub fn from_zeroizing(bytes: Zeroizing<Vec<u8>>) -> Self {
+    pub(crate) fn from_zeroizing(bytes: Zeroizing<Vec<u8>>) -> Self {
         Self(crate::support::secret::SecretBytes::from_zeroizing(bytes))
     }
 
@@ -42,11 +40,6 @@ impl SecretString {
         Self(crate::support::secret::SecretString::new(value))
     }
 
-    /// Take ownership of a zeroizing string without cloning.
-    pub fn from_zeroizing(value: Zeroizing<String>) -> Self {
-        Self(crate::support::secret::SecretString::from_zeroizing(value))
-    }
-
     pub(crate) fn from_inner(value: crate::support::secret::SecretString) -> Self {
         Self(value)
     }
@@ -58,11 +51,6 @@ impl SecretString {
     /// Explicitly borrow the secret text.
     pub fn expose_secret(&self) -> &str {
         self.0.as_str()
-    }
-
-    /// Convert the secret text into an `OsString` at a process boundary.
-    pub fn into_os_string(self) -> OsString {
-        self.0.into_os_string()
     }
 
     /// Convert the secret text into a plain `String` at an explicit output boundary.
@@ -86,13 +74,5 @@ impl fmt::Debug for SecretString {
             .field("value", &"[REDACTED]")
             .field("len", &self.expose_secret().len())
             .finish()
-    }
-}
-
-impl TryFrom<SecretBytes> for SecretString {
-    type Error = std::string::FromUtf8Error;
-
-    fn try_from(value: SecretBytes) -> Result<Self, Self::Error> {
-        crate::support::secret::SecretString::try_from(value.0).map(Self)
     }
 }

@@ -21,7 +21,7 @@ mod ssh_stubs;
 #[allow(unused_imports)]
 pub use constants::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
-    EVE_MEMBER_HANDLE, FRANK_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    TEST_MEMBER_HANDLE,
 };
 #[allow(unused_imports)]
 pub use crypto_context::setup_member_key_context;
@@ -37,7 +37,7 @@ use secretenv_core::cli_api::test_support::domain::identity::{Kid, MemberHandle}
 use secretenv_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use secretenv_core::Error;
 #[allow(unused_imports)]
-pub use ssh_stubs::{stub_agent_signer, stub_ssh_keygen};
+pub use ssh_stubs::stub_agent_signer;
 
 #[allow(dead_code)]
 pub fn member_handle(value: impl Into<String>) -> MemberHandle {
@@ -119,9 +119,8 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
     use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
     use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
     use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-    use secretenv_core::cli_api::test_support::storage::ssh::protocol::{
-        build_sha256_fingerprint, SshKeyDescriptor,
-    };
+    use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+    use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 
     let ssh_key_path = home.join(".ssh").join("test_ed25519");
     let ssh_pubkey = std::fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
@@ -274,7 +273,7 @@ pub fn with_temp_cwd<R>(dir: &Path, f: impl FnOnce() -> R) -> R {
 
 /// Global mutex for tests that modify environment variables.
 /// All tests that modify environment variables must hold this lock.
-pub static ENV_MUTEX: Mutex<()> = Mutex::new(());
+static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 /// RAII guard that holds the env mutex and restores env vars on drop.
 pub struct EnvGuard {

@@ -3,12 +3,8 @@
 
 //! Basic encryption tests
 
-use crate::cli::common::{
-    default_common_options, encrypt_file_with_member_set_review, set_ssh_key_from_temp_dir,
-    ALICE_MEMBER_HANDLE,
-};
+use crate::cli::common::{cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE};
 use crate::test_utils::{setup_test_keystore, setup_test_workspace};
-use secretenv::cli::encrypt;
 use secretenv_core::cli_api::test_support::domain::wire::format;
 use std::fs;
 
@@ -49,24 +45,27 @@ fn test_encrypt_no_active_members_error() {
     fs::write(&input_path, b"data").unwrap();
 
     let keystore_tmp = setup_test_keystore(ALICE_MEMBER_HANDLE);
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(keystore_tmp.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    set_ssh_key_from_temp_dir(&mut common_opts, &keystore_tmp);
-
-    let args = encrypt::EncryptArgs {
-        common: common_opts.into(),
-        member: secretenv::cli::options::MemberHandleOption {
-            member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        },
-        out: Some(workspace_dir.join("output.encrypted")),
-        stdout: false,
-        stdin: false,
-        input: Some(input_path),
-    };
-    let result = encrypt::run(args);
-    assert!(result.is_err(), "Should fail with no active members");
-    let err_msg = result.unwrap_err().to_string();
+    let output = cmd()
+        .arg("encrypt")
+        .arg(&input_path)
+        .arg("--out")
+        .arg(workspace_dir.join("output.encrypted"))
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .env("SECRETENV_HOME", keystore_tmp.path())
+        .env(
+            "SECRETENV_SSH_IDENTITY",
+            keystore_tmp.path().join(".ssh").join("test_ed25519"),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "Should fail with no active members"
+    );
+    let err_msg = String::from_utf8_lossy(&output.stderr);
     assert!(
         err_msg.contains("No active members")
             || err_msg.contains("No members")

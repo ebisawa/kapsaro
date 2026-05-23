@@ -5,12 +5,13 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::wrap::{build_wraps_for_recipients, WrapFormat};
+use crate::feature::kv::error::build_key_not_found_error;
 use crate::format::content::KvEncContent;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvWrap;
 use crate::model::kv_enc::line::KvEncLine;
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::{Error, Result};
+use crate::Result;
 use std::collections::HashMap;
 
 use super::entry_codec::build_entry_tokens;
@@ -69,10 +70,7 @@ pub fn unset_kv_entry_with_recipients(
 ) -> Result<String> {
     rewrite_existing_kv_content(content, recipients, ctx, |unsigned, session, _| {
         if !contains_key(session.document().lines(), key) {
-            return Err(Error::build_invalid_operation_error(format!(
-                "Key '{}' not found",
-                key
-            )));
+            return Err(build_key_not_found_error(key));
         }
         unsigned.unset_entry(key);
         Ok(())

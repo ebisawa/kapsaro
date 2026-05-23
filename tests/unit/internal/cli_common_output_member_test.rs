@@ -135,5 +135,8 @@ fn test_build_member_approval_results_view_skips_already_known_results() {
 
     assert_eq!(view.results.len(), 1);
     assert_eq!(view.results[0].member_handle, "bob@example.com");
-    assert!(!view.results[0].already_known);
+    assert!(view
+        .results
+        .iter()
+        .all(|result| result.member_handle != "alice@example.com"));
 }

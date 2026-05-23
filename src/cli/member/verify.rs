@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::command::{
-    resolve_execution_input, resolve_options, resolve_trust_store_owner_member,
+    resolve_options, resolve_trust_store_owner_member, resolve_write_execution_input,
 };
 use crate::cli::common::output::member::print_member_approval_results;
 use crate::cli::common::output::member::print_member_verification_results;
@@ -38,8 +38,8 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
         || {
-            let (_, execution) =
-                resolve_execution_input(&args.common, args.member.member_handle.clone())?;
+            let execution =
+                resolve_write_execution_input(&options, args.member.member_handle.clone())?;
 
             let evaluation = evaluate_members_for_approval(
                 &options,

@@ -17,6 +17,7 @@ use crate::cli::common::output::text::kv::{
     print_kv_key_list as print_kv_key_list_text,
     print_single_kv_value as print_single_kv_value_text,
 };
+use crate::cli::common::output::text::print_warning_line;
 use secretenv_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use secretenv_core::Result;
 
@@ -59,7 +60,7 @@ pub(crate) fn print_kv_import_result(
 
 fn print_all_kv_values(result: &KvReadResult, json_output: bool, with_key: bool) -> Result<()> {
     let entries = view::build_kv_entries(result);
-    view::print_disclosed_key_warnings(&entries);
+    print_disclosed_key_warnings(&entries);
     print_json_or_text(
         json_output,
         || print_all_kv_values_json(&entries),
@@ -73,11 +74,27 @@ fn print_single_kv_value(
     json_output: bool,
     with_key: bool,
 ) -> Result<()> {
-    let value = view::build_single_kv_value(result, key);
-    view::print_disclosed_key_warning(&value);
+    let entry = view::build_single_kv_entry(result, key);
+    print_disclosed_key_warning(entry.key, entry.disclosed);
     print_json_or_text(
         json_output,
-        || print_single_kv_value_json(value.key, value.value),
-        || print_single_kv_value_text(value.key, value.value, with_key),
+        || print_single_kv_value_json(entry.key, entry.value),
+        || print_single_kv_value_text(entry.key, entry.value, with_key),
     )
+}
+
+fn print_disclosed_key_warnings(entries: &[view::KvEntryView<'_>]) {
+    for entry in entries {
+        print_disclosed_key_warning(entry.key, entry.disclosed);
+    }
+}
+
+fn print_disclosed_key_warning(key: &str, disclosed: bool) {
+    if disclosed {
+        print_warning_line(&format!(
+            "Warning: Entry '{}' may have been disclosed to a removed recipient. \
+             Consider rotating the secret value.",
+            key
+        ));
+    }
 }

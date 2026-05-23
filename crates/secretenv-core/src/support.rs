@@ -15,3 +15,4 @@ pub(crate) mod secret;
 pub(crate) mod time;
 pub(crate) mod tty;
 pub(crate) mod validation;
+pub(crate) mod warning;

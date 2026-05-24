@@ -4,38 +4,6 @@
 
 ## 0. Document Information
 
-### Executive Summary
-
-#### Core Design Position
-
-SecretEnv does not make Git repository state a cryptographic trust anchor. Protection rests on the encrypted artifacts themselves and on the user's local trusted area. The active member list, incoming member candidates, and encrypted artifacts in the repository are treated as tamperable inputs. The local keystore, local trust store, SecretEnv private keys, and SSH signing capability are inside the user's local trust boundary.
-
-#### Cryptographic Construction and Verification Order
-
-Per-recipient content-key delivery uses HPKE Base mode, file-enc payloads and kv-enc entries use XChaCha20-Poly1305, and Ed25519 signatures provide integrity and signer-key authenticity. JCS provides deterministic byte representation for signed data, AAD, HPKE info, and token representation. HKDF-SHA256 derives kv-enc entry keys and PrivateKey-protection keys. The overall classical security level is 128-bit.
-
-Signature verification is self-contained: file-enc and kv-enc signed documents carry an embedded `signer_pub` as the signature verification key source. A verifier first validates the `signer_pub` document (structure, self-signature, SSH attestation), then verifies the artifact signature with that key. Signer-key resolution never falls back to workspace `members/active` or the local keystore.
-
-The canonical pre-decryption order is: structural validation, `signer_pub` validation, artifact signature verification including `signature.mac`, trust policy decision, format-specific reference consistency checks, content-key HPKE open, key-possession proof verification, and plaintext decryption. Decrypting before signature verification, trust-policy evaluation, or key-possession proof verification violates a design invariant.
-
-#### Context Binding and Format Differences
-
-The file identifier (`sid`), key statement ID (`kid`), KV entry key (`k`), and protocol identifier (`p`) are placed in HPKE info, HPKE AAD, HKDF info, payload AAD, and signed bytes. Substituting a payload from another file, a wrap from another key generation, an entry ciphertext under another key name, or data from another protocol fails at signature verification, HPKE open, AEAD decryption, or reference consistency checking.
-
-file-enc wraps a per-file MK and derives a payload key and MAC key from it. kv-enc wraps a per-file MK, extracts an artifact PRK from that MK and `sid`, and derives each entry CEK from that PRK, the entry nonce, `sid`, and `k`. Recipient addition keeps the existing content key in both formats. Recipient removal regenerates the MK and re-encrypts in both formats.
-
-#### Trust Policy
-
-SecretEnv separates cryptographic verification (embedded `signer_pub`), current authorization (`members/active`), key-owner approval (`known_keys`), write-path artifact member set approval (`recipient_sets`), and identity-supporting evidence (manual review, GitHub online verify). GitHub API responses are supplementary evidence, not a trust anchor.
-
-On read paths, the signer `kid` and every active-resolvable recipient `kid` must be in `known_keys`, or manually approved for the current execution. Unresolved recipient `kid`s are surfaced as warnings. On write paths, recipients are always derived from `members/active`; each `kid` and the output member set must be reviewed before saving. Expired keys cannot be used for new wraps or signing; `SECRETENV_STRICT_KEY_CHECKING=no` bypasses only read-path key-approval checks, not signature verification, active-member authorization, recipient-handle consistency, key-possession proof verification, or expiry gates.
-
-#### Residual Risks and Audit Focus
-
-Main residual risks: TOFU first approval, operational governance, past disclosure, rollback, and local trusted area compromise rather than primitive weakness.
-
-Highest-priority audit checks: signature verification and key-possession proof verification before plaintext decryption; embedded `signer_pub` as the only signature-key source; preservation of all context-binding inputs; equality of HPKE info and AAD on seal/open paths; PublicKey self-signature and SSH attestation verification; separation between `members/active`, `known_keys`, and `recipient_sets`; scope of expired-key recovery; scope of `SECRETENV_STRICT_KEY_CHECKING`; limiting environment-variable-based key loading to trusted CI contexts.
-
 ### Purpose of This Document
 
 This document presents SecretEnv's security claims, the conditions required for those claims to hold, design-level verification points, residual risks, and explicit non-goals.
@@ -47,22 +15,30 @@ Each section shows which design decisions support which security claims, and whe
 | Audience | Primary sections | Purpose |
 |----------|-----------------|---------|
 | Security reviewers / auditors | §1 (claims and boundaries), §2 (threat model), §3 (primitives), §5 (signature architecture), §6–§8 (file-enc / kv-enc / context binding), §11 (attack scenarios), §12 (checkpoints) | Evaluate the security claims, assumptions, residual risks, and review points |
-| Users / operators / decision makers | Executive Summary, §1 (claims and boundaries), §2.1–§2.4 (threat model and trust boundary), §9.4–§10 (PrivateKey protection and trust policy), §13 (limitations), Appendix B (operations checklist) | Decide whether SecretEnv can be operated safely in their environment and what limits they must accept |
+| Users / operators / decision makers | §1 (claims and boundaries), §2.1–§2.4 (threat model and trust boundary), §9.4–§10 (PrivateKey protection and trust policy), §13 (limitations), Appendix B (operations checklist) | Decide whether SecretEnv can be operated safely in their environment and what limits they must accept |
 
 ---
 
 
 ## 1. Security Claims and Boundaries
 
-This chapter states the security claims evaluated by this document and the boundaries under which they hold. Later chapters justify these claims through the threat model, trust boundary, cryptographic primitives, signature verification, concrete file-enc / kv-enc structures, context binding, trust policy, and attack scenarios.
+This chapter explains the design problem SecretEnv addresses and the boundary of its security claims. It starts with the design starting point, then separates what SecretEnv guarantees, what depends on operational assumptions, and what it deliberately does not guarantee.
+
+Later chapters justify these claims through the threat model, trust boundary, cryptographic primitives, signature verification, concrete file-enc / kv-enc structures, context binding, trust policy, and attack scenarios.
 
 ### 1.1 Design Starting Point
 
-The SecretEnv design is built from a single starting point: the repository, as a distribution medium, is not placed at the cryptographic trust anchor.
+SecretEnv is an offline-first CLI for helping teams manage secret values such as `.env` files, certificates, and API keys through Git review and history. The motivating problem is that plaintext chat handoffs and manual distribution leave values behind, make it hard to know who could read what at a given time, and make member changes or CI access changes easy to miss.
 
-Any developer with write access, a compromised CI, or an unauthorized push path can rewrite arbitrary files in the repository. SecretEnv therefore draws its trust boundary deliberately asymmetrically. It treats the local private keys, local keystore, local trust store, and SSH keys on the user's device as the trust anchors, while the workspace's active member list (`members/active/`), incoming member candidates (`members/incoming/`), and encrypted files (`secrets/`) are all treated as tamperable inputs. The authenticity of the latter is established by the cryptographic structure embedded in each artifact in combination with repository governance (PR review, protected branches, and so on).
+At the same time, the Git repository is not a cryptographic trust anchor. Git is useful for replication, history, diff review, and visibility into membership changes, but a developer with write access, compromised CI, or an unauthorized push path can rewrite files in the repository. A design that trusts repository contents at face value would place cryptographic trust in a region that attackers may be able to tamper with.
+
+SecretEnv's answer is to use Git as the distribution medium while keeping cryptographic trust out of repository state itself. Secrets are encrypted for each recipient's key, and encrypted artifacts carry enough structure to be verified through signatures and context binding. Each user's private keys, local keystore, local trust store, and SSH signing capability live in the local trusted area, while workspace member data and encrypted artifacts are treated as inputs that must be verified before use.
+
+This separation makes SecretEnv treat "whether the artifact was tampered with," "which key signed it," "who may decrypt in the current workspace," and "whether the user has reviewed that key owner" as different questions. A cryptographically valid signature does not by itself prove that the artifact should be accepted in the current operational state. This premise drives the threat model and trust boundary in §2 and the trust policy in §10.
 
 ### 1.2 Guaranteed by Design
+
+The following claims hold when the implementation preserves the invariants in §1.5 and the operational assumptions in §1.3 are satisfied.
 
 | Security claim | Main mechanism | Assumption | Residual risk | Detailed in |
 |----------------|----------------|------------|---------------|-------------|
@@ -102,8 +78,8 @@ Any developer with write access, a compromised CI, or an unauthorized push path 
 | --- | --- |
 | Do not decrypt plaintext before signature verification and key-possession proof verification | Tamper detection, trust policy enforcement, fail-closed input handling |
 | Do not remove context-binding elements from AAD, HPKE info, or signed bytes | Payload / entry / wrap swapping resistance, key-generation binding |
-| Resolve file-enc / kv-enc signature verification keys only from embedded `signer_pub` | Self-contained verification, consistent acceptance behavior across implementations |
-| Keep the roles of `members/active`, `known_keys`, and `recipient_sets` distinct | Separation between current authorization and user approval history |
+| Resolve file-enc / kv-enc signature verification keys only from the embedded signer public key (implemented as `signer_pub`) | Self-contained verification, consistent acceptance behavior across implementations |
+| Keep the roles of the active member list (`members/active`), key-owner approval cache (`known_keys`), and recipient-set approval cache (`recipient_sets`) distinct | Separation between current authorization and user approval history |
 | Limit expired-key recovery to decryption and operational artifact signature verification, and do not apply it to encryption, signing, or approval of expired PublicKeys | Key-expiry boundary and meaning of the local approval cache |
 | Limit `SECRETENV_STRICT_KEY_CHECKING=no` to approval-cache decisions on explicitly requested read paths | Key approval, artifact member set review, and cryptographic verification semantics |
 
@@ -113,6 +89,7 @@ Any developer with write access, a compromised CI, or an unauthorized push path 
 |------|--------------------------|
 | Embedded signer public key | The signer's public-key document carried inside each signed artifact (implemented as `signature.signer_pub`; see §5). This is the sole source of the signature verification key, and lookup never falls back to external key servers or other files |
 | Key consistency | Evidence that the same private-key holder created the corresponding public-key document; not identity by itself |
+| Key-statement ID | An ID for the generation of a SecretEnv key pair and public-key document (implemented as `kid`; see §4.4.1). It distinguishes which key is used for signing, decryption, and key delivery |
 | Active member list | The data treated as the authorization basis for the current member / recipient set in the workspace (implemented as `members/active`; see §10) |
 | Incoming member candidates | Members who applied to join the workspace but have not yet been promoted (implemented as `members/incoming`; see §10) |
 | Local approval cache | A local cache that lets a user skip re-review for a key they have already confirmed, or for a write-path artifact member set they have already reviewed (implemented as `known_keys` and `recipient_sets`; see §10.4) |
@@ -128,7 +105,13 @@ Any developer with write access, a compromised CI, or an unauthorized push path 
 
 ## 2. Threat Model and Trust Boundary
 
+SecretEnv's threat model follows from the §1 starting point: Git is useful as a distribution medium, but repository contents are not trusted as-is. The protected assets are secret-value confidentiality, encrypted-artifact integrity, member and key decisions, and the user's local approval history.
+
+This chapter first states which inputs attackers are assumed to be able to manipulate, then explains the operational assumptions required around those inputs. It then separates the local trusted area from repository data that must be verified, and finally explains the layered separation between cryptographic verification, current authorization, user approval, and identity-supporting evidence.
+
 ### 2.1 Attacker Model
+
+The main attacks SecretEnv accounts for target repository data, public-key acceptance, components inside encrypted artifacts, first approval, or local approval history. The table below organizes attackers by which boundary they can influence. Attackers who break repository governance or local trusted-area protection are treated as cases where the operational assumptions in §2.2 no longer hold.
 
 | Attacker | Capability | Assumed Scenario |
 |----------|-----------|----------------|
@@ -141,11 +124,13 @@ Any developer with write access, a compromised CI, or an unauthorized push path 
 
 ### 2.2 Operational Assumptions
 
+Some decisions cannot be completed by the cryptographic construction alone and depend on user or organizational operation. The important point is not to confuse these operational assumptions with cryptographic trust anchors. SecretEnv verifies tamperable inputs and combines those verification results with operational approval.
+
 Repository write control assumes changes to `members/active/` are checked through PR review. The active member list is the authorization source for the current member set / current recipient set, but it is not a cryptographic trust anchor.
 
 Repository-level rollback: a repository-level rollback where an attacker or insider with write access restores a historically valid encrypted file to the current HEAD cannot be detected or prevented by SecretEnv's context bindings alone. Those bindings guarantee artifact integrity and context consistency, not freshness or monotonicity against Git history. Read-path trust review reviews the key owners for the signer and active-resolvable artifact recipients; unresolved recipient `kid`s are reported as warnings. Write paths are stricter: an input artifact with a recipient `kid` that no longer resolves to current `members/active` must be rewrapped before writing. The operational assumption is that protected branches, required review, change management, and pre-deployment checks prevent old secret artifacts from being promoted back to current HEAD.
 
-Local trust store protection assumes the local trust store (`<SECRETENV_HOME>/trust/`) resides on the user's device and is protected by OS / filesystem access control. Signatures on the local trust store are used for integrity checks, corruption detection, and format validation, but they do not fully protect against consistent replacement or rollback inside that area.
+Local trusted-area protection assumes the user's workstation, local keystore, local trust store (`<SECRETENV_HOME>/trust/`), SSH key, and SSH signing inputs are protected under the user's control. Signatures on the local trust store are used for integrity checks, corruption detection, and format validation, but they do not fully protect against consistent replacement or rollback inside that area.
 
 TOFU bootstrap limits: initial bootstrap and first-seen-key approval rely on TOFU. First-contact MITM and whole-workspace substitution are outside the scope of cryptographic prevention.
 

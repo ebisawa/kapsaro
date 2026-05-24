@@ -19,6 +19,7 @@ use crate::support::kid::format_kid_display_lossy;
 use crate::Result;
 use crate::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
+use tracing::debug;
 
 /// Options for key generation.
 pub struct KeyGenerationOptions {
@@ -57,7 +58,18 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     } = opts;
 
     let keystore_root = ensure_keystore_dir(&home)?;
+    if debug {
+        debug!(
+            "[KEYGEN] start member_handle={}, no_activate={}, github_binding={}",
+            member_handle,
+            no_activate,
+            github_account.is_some()
+        );
+    }
     ensure_determinism(&ssh_binding.determinism)?;
+    if debug {
+        debug!("[KEYGEN] ssh determinism verified");
+    }
     let key_material = material::generate_keypairs()?;
     let request = KeyDocumentParams {
         member_handle: &member_handle,
@@ -68,6 +80,12 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     };
     let public_key = build_public_key_document(&request, &key_material, &ssh_binding)?;
     let derived_kid = public_key.protected.kid.clone();
+    if debug {
+        debug!(
+            "[KEYGEN] derived public key id kid={}",
+            format_kid_display_lossy(&derived_kid)
+        );
+    }
     ensure_kid_not_in_keystore(&keystore_root, &derived_kid)?;
     let private_key =
         encrypt_private_key_document(&request, &key_material, &derived_kid, &ssh_binding)?;
@@ -79,6 +97,12 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
         &public_key,
         no_activate,
     )?;
+    if debug {
+        debug!(
+            "[KEYGEN] saved key pair member_handle={}, activated={}",
+            member_handle, !no_activate
+        );
+    }
 
     let key_dir = keystore_root.join(&member_handle).join(&derived_kid);
     Ok(KeyGenerationResult {

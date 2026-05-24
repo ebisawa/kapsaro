@@ -3,7 +3,7 @@
 
 use secretenv_core::cli_api::test_support::primitives::types::keys::{Cek, MasterKey, XChaChaKey};
 use secretenv_core::cli_api::test_support::primitives::types::primitives::{
-    HkdfSalt, KvSalt, PrivateKeyIkmSalt, XChaChaNonce,
+    HkdfSalt, PrivateKeyIkmSalt, XChaChaNonce,
 };
 use secretenv_core::Error;
 
@@ -75,7 +75,6 @@ fn test_xchacha_nonce_from_slice_rejects_wrong_length() {
 fn test_salt_from_slice_accepts_exact_lengths() {
     let bytes = [11u8; 32];
 
-    assert_eq!(KvSalt::from_slice(&bytes).unwrap().as_bytes(), &bytes);
     assert_eq!(HkdfSalt::from_slice(&bytes).unwrap().as_bytes(), &bytes);
     assert_eq!(
         PrivateKeyIkmSalt::from_slice(&bytes).unwrap().as_bytes(),

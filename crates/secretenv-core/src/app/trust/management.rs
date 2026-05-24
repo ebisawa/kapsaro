@@ -12,6 +12,7 @@ use crate::app::trust::store::{
 use crate::app::trust::types::{RemovedKnownKey, TrustMutationResult};
 use crate::feature::trust::known_keys::{purge_known_keys, remove_known_key};
 use crate::feature::trust::recipient_sets::{purge_recipient_sets, remove_recipient_set};
+use crate::model::trust_store::{KnownKey, RecipientSetRecord, TrustStoreProtected};
 use crate::{Error, Result};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -76,27 +77,16 @@ pub fn list_purge_candidates(
     member_handle: &str,
     older_than_timestamp: OffsetDateTime,
 ) -> Result<TrustListResult> {
-    let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
-    let loaded = loaded.ok_or_else(|| {
-        Error::build_not_found_error(format!("Trust store not found for '{}'", member_handle))
-    })?;
-
-    let items = loaded
-        .protected
-        .known_keys
-        .iter()
-        .filter_map(|k| match parse_approved_at(&k.approved_at) {
-            Ok(approved_at) if approved_at < older_than_timestamp => {
-                Some(Ok(TrustListItem::from(k)))
-            }
-            Ok(_) => None,
-            Err(e) => Some(Err(e)),
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let candidates = list_trust_store_purge_candidates(
+        options,
+        member_handle,
+        older_than_timestamp,
+        |protected| &protected.known_keys,
+    )?;
 
     Ok(TrustListResult {
-        items,
-        warnings: loaded.warnings,
+        items: candidates.items,
+        warnings: candidates.warnings,
     })
 }
 
@@ -106,25 +96,81 @@ pub fn list_recipient_set_purge_candidates(
     member_handle: &str,
     older_than_timestamp: OffsetDateTime,
 ) -> Result<RecipientSetListResult> {
+    let candidates = list_trust_store_purge_candidates(
+        options,
+        member_handle,
+        older_than_timestamp,
+        |protected| &protected.recipient_sets,
+    )?;
+
+    Ok(RecipientSetListResult {
+        items: candidates.items,
+        warnings: candidates.warnings,
+    })
+}
+
+struct PurgeCandidateList<T> {
+    items: Vec<T>,
+    warnings: Vec<String>,
+}
+
+trait PurgeCandidateRecord {
+    type Item;
+
+    fn approved_at(&self) -> &str;
+
+    fn to_item(&self) -> Self::Item;
+}
+
+impl PurgeCandidateRecord for KnownKey {
+    type Item = TrustListItem;
+
+    fn approved_at(&self) -> &str {
+        &self.approved_at
+    }
+
+    fn to_item(&self) -> Self::Item {
+        TrustListItem::from(self)
+    }
+}
+
+impl PurgeCandidateRecord for RecipientSetRecord {
+    type Item = RecipientSetListItem;
+
+    fn approved_at(&self) -> &str {
+        &self.approved_at
+    }
+
+    fn to_item(&self) -> Self::Item {
+        RecipientSetListItem::from(self)
+    }
+}
+
+fn list_trust_store_purge_candidates<Record, SelectRecords>(
+    options: &CommonCommandOptions,
+    member_handle: &str,
+    older_than_timestamp: OffsetDateTime,
+    select_records: SelectRecords,
+) -> Result<PurgeCandidateList<Record::Item>>
+where
+    Record: PurgeCandidateRecord,
+    SelectRecords: FnOnce(&TrustStoreProtected) -> &[Record],
+{
     let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
     let loaded = loaded.ok_or_else(|| {
         Error::build_not_found_error(format!("Trust store not found for '{}'", member_handle))
     })?;
 
-    let items = loaded
-        .protected
-        .recipient_sets
+    let items = select_records(&loaded.protected)
         .iter()
-        .filter_map(|record| match parse_approved_at(&record.approved_at) {
-            Ok(approved_at) if approved_at < older_than_timestamp => {
-                Some(Ok(RecipientSetListItem::from(record)))
-            }
+        .filter_map(|record| match parse_approved_at(record.approved_at()) {
+            Ok(approved_at) if approved_at < older_than_timestamp => Some(Ok(record.to_item())),
             Ok(_) => None,
             Err(e) => Some(Err(e)),
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(RecipientSetListResult {
+    Ok(PurgeCandidateList {
         items,
         warnings: loaded.warnings,
     })

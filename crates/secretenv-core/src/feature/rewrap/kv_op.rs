@@ -3,4 +3,4 @@
 
 //! Rewrap operations for kv-enc format.
 
-pub mod recipients;
+pub(super) mod recipients;

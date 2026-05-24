@@ -7,12 +7,13 @@ use uuid::Uuid;
 
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::envelope::entry::encrypt_entry;
+use crate::feature::envelope::key_schedule::KvKeySchedule;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::line::KvEncLine;
 use crate::Result;
 
-use super::types::{KvEncodedEntry, KvInputEntry};
+use super::types::KvInputEntry;
 
 /// Encode encrypted KV entries to token strings.
 pub(crate) fn encode_kv_entries_to_tokens(
@@ -20,16 +21,13 @@ pub(crate) fn encode_kv_entries_to_tokens(
     token_codec: TokenCodec,
     debug: bool,
     caller: &'static str,
-) -> Result<Vec<KvEncodedEntry>> {
+) -> Result<Vec<(String, String)>> {
     entries
         .iter()
         .map(|(key, entry)| {
             let token =
                 TokenCodec::encode_debug(token_codec, entry, debug, Some(key), Some(caller))?;
-            Ok(KvEncodedEntry {
-                key: key.clone(),
-                token,
-            })
+            Ok((key.clone(), token))
         })
         .collect()
 }
@@ -61,13 +59,14 @@ pub(crate) fn build_entry_tokens<'a>(
     verbose: bool,
     caller: &'static str,
 ) -> Result<HashMap<&'a str, String>> {
+    let key_schedule = KvKeySchedule::extract(master_key, sid)?;
     entries
         .iter()
         .map(|entry| {
             let token = encode_encrypted_entry(
                 &entry.key,
                 entry.value.as_str(),
-                master_key,
+                &key_schedule,
                 sid,
                 codec,
                 verbose,
@@ -81,13 +80,13 @@ pub(crate) fn build_entry_tokens<'a>(
 fn encode_encrypted_entry(
     key: &str,
     value: &str,
-    master_key: &MasterKey,
+    key_schedule: &KvKeySchedule,
     sid: &Uuid,
     codec: TokenCodec,
     verbose: bool,
     caller: &'static str,
 ) -> Result<String> {
-    let new_entry = encrypt_entry(key, value, master_key, sid, verbose, caller, false)?;
+    let new_entry = encrypt_entry(key, value, key_schedule, sid, verbose, caller, false)?;
     TokenCodec::encode_debug(codec, &new_entry, verbose, Some(key), Some(caller))
 }
 

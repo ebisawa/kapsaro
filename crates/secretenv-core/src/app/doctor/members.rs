@@ -52,14 +52,13 @@ fn check_active_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Doct
         DoctorSubject::General("members/active".to_string()),
         format!("{} active member file(s) found", paths.len()),
     ));
-    for path in paths {
-        checks.extend(verify_member_path(
-            "members.active.file",
-            DoctorCategory::MembersActive,
-            &path,
-            verbose,
-        ));
-    }
+    extend_member_path_checks(
+        &mut checks,
+        &paths,
+        "members.active.file",
+        DoctorCategory::MembersActive,
+        verbose,
+    );
     Ok(checks)
 }
 
@@ -87,15 +86,26 @@ fn check_incoming_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Do
         )
         .with_next_action("review the PR and run secretenv rewrap"),
     );
-    for path in paths {
-        checks.extend(verify_member_path(
-            "members.incoming.file",
-            DoctorCategory::MembersIncoming,
-            &path,
-            verbose,
-        ));
-    }
+    extend_member_path_checks(
+        &mut checks,
+        &paths,
+        "members.incoming.file",
+        DoctorCategory::MembersIncoming,
+        verbose,
+    );
     Ok(checks)
+}
+
+fn extend_member_path_checks(
+    checks: &mut Vec<DoctorCheck>,
+    paths: &[PathBuf],
+    id: &'static str,
+    category: DoctorCategory,
+    verbose: bool,
+) {
+    for path in paths {
+        checks.extend(verify_member_path(id, category, path, verbose));
+    }
 }
 
 fn verify_member_path(

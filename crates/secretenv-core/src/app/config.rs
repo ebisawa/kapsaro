@@ -4,7 +4,7 @@
 //! Application-layer orchestration for config commands.
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::feature::config::{self};
+use crate::config::resolution::global;
 use crate::io::config::store::{set_config_value, unset_config_value};
 use crate::{Error, Result};
 use std::collections::BTreeMap;
@@ -53,42 +53,42 @@ pub fn unset_config_command(
 }
 
 fn resolve_config_value(key: &str, base_dir: &std::path::Path) -> Result<String> {
-    let normalized = config::normalize_key(key)?;
-    let value = config::resolve_config_value(&normalized, Some(base_dir))?.value;
+    let normalized = global::normalize_key(key)?;
+    let value = global::resolve_config_value(&normalized, Some(base_dir))?.value;
     value.ok_or_else(|| {
         Error::build_not_found_error(format!("Configuration key '{}' not found", key))
     })
 }
 
 fn list_config(base_dir: &std::path::Path) -> Result<BTreeMap<String, String>> {
-    config::load_global_config(Some(base_dir))
+    global::load_global_config(Some(base_dir))
 }
 
 fn set_config(key: &str, value: &str, base_dir: &std::path::Path) -> Result<ConfigSetResult> {
-    let normalized = config::normalize_key(key)?;
-    let resolution = config::resolve_config_location(Some(base_dir))?;
+    let normalized = global::normalize_key(key)?;
+    let resolution = global::resolve_config_location(Some(base_dir))?;
     set_config_value(&resolution.path, &normalized, value)?;
     Ok(ConfigSetResult {
-        key: key.to_string(),
+        key: normalized,
         value: value.to_string(),
         scope: resolution.scope.into(),
     })
 }
 
 fn unset_config(key: &str, base_dir: &std::path::Path) -> Result<ConfigUnsetResult> {
-    let normalized = config::normalize_key(key)?;
-    let resolution = config::resolve_config_location(Some(base_dir))?;
+    let normalized = global::normalize_key(key)?;
+    let resolution = global::resolve_config_location(Some(base_dir))?;
     unset_config_value(&resolution.path, &normalized)?;
     Ok(ConfigUnsetResult {
-        key: key.to_string(),
+        key: normalized,
         scope: resolution.scope.into(),
     })
 }
 
-impl From<crate::feature::config::ConfigScope> for ConfigScope {
-    fn from(scope: crate::feature::config::ConfigScope) -> Self {
+impl From<crate::config::resolution::global::ConfigScope> for ConfigScope {
+    fn from(scope: crate::config::resolution::global::ConfigScope) -> Self {
         match scope {
-            crate::feature::config::ConfigScope::Global => Self::Global,
+            crate::config::resolution::global::ConfigScope::Global => Self::Global,
         }
     }
 }

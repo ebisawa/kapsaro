@@ -2,17 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::types::keys::MasterKey;
+use crate::feature::context::crypto::build_signing_context;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::key_possession::verify_kv_key_possession;
-use crate::feature::envelope::signature::build_signing_context;
 use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
-use crate::feature::kv::document::KvDocumentDraft;
+use crate::format::kv::document::{KvDocumentBuilder, KvDocumentDraft};
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvHeader;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::Result;
 
-use super::super::builder::KvDocumentBuilder;
 use super::super::entry_codec::detect_token_codec;
 
 pub(crate) fn build_unsigned_from_verified(
@@ -52,5 +51,5 @@ pub(crate) fn unwrap_master_key_from_verified(
         debug,
     )
     .map(|result| result.value)?;
-    verify_kv_key_possession(verified, master_key).map(|proof| proof.into_master_key())
+    verify_kv_key_possession(verified, master_key, debug).map(|proof| proof.into_master_key())
 }

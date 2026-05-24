@@ -4,7 +4,7 @@
 //! Secret base64url helpers.
 //!
 //! ```compile_fail
-//! use secretenv_core::support::codec::base64_secret::encode_base64url_nopad_secret_32;
+//! use secretenv_core::format::codec::base64_secret::encode_base64url_nopad_secret_32;
 //!
 //! let public = [0u8; 32];
 //! let _ = encode_base64url_nopad_secret_32(&public);

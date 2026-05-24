@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::feature::envelope::signature::SigningContext;
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::format::content::KvEncContent;
 use crate::format::token::TokenCodec;
@@ -24,14 +24,14 @@ fn operational_kv_verify_preserves_expired_signer_recovery_warning() {
     );
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     let keystore_root = temp_dir.path().join("keys");
-    let kid = key_ctx.kid.to_string();
+    let kid = key_ctx.kid().to_string();
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
     let encrypted = encrypt_kv_document(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
             debug: false,

@@ -9,10 +9,10 @@
 #![cfg(any(unix, windows))]
 
 use super::{check_sign_output, check_verify_output, parse_sign_stdout};
+use crate::format::codec::base64_public::encode_base64_standard;
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
-use crate::support::codec::base64_public::encode_base64_standard;
 use crate::Error;
 
 const TEST_SSH_PUBKEY: &str =

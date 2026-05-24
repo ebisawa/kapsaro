@@ -41,7 +41,7 @@ impl DoctorRequest {
     }
 }
 
-pub fn run_doctor(request: DoctorRequest) -> Result<DoctorReport> {
+pub fn execute_doctor_command(request: DoctorRequest) -> Result<DoctorReport> {
     let options = request.common_options();
     if options.debug {
         debug!(

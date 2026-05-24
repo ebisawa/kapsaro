@@ -8,10 +8,10 @@ use crate::app::rewrap::types::{
     IncomingVerificationReport,
 };
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey};
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
-use crate::support::codec::base64_public::encode_base64url_nopad;
 
 use super::{build_promotion_review_plan, build_promotion_review_session_with_verifier};
 

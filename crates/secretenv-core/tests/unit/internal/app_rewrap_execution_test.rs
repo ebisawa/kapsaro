@@ -19,8 +19,8 @@ use crate::app::rewrap::types::{
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{derive_self_sig_x, CommandTrustSnapshot, RewrapInputPolicy, TrustContext};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::envelope::signature::SigningContext;
 use crate::feature::trust::verification::verify_trust_store;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::format::content::FileEncContent;
@@ -72,7 +72,7 @@ fn encrypt_file_for_members(
         &recipients,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid,
             signer_pub,
             debug: false,
@@ -115,7 +115,7 @@ fn build_empty_plan(
         options,
         workspace_dir,
         &execution.member_handle,
-        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(derive_self_sig_x(execution.key_ctx.signing_key())),
         options.debug,
     )
     .unwrap()
@@ -225,7 +225,7 @@ fn test_execute_reviewed_rewrap_artifacts_bubbles_trust_store_reset_required_err
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
-        &execution.key_ctx.kid,
+        execution.key_ctx.kid(),
         &execution.key_ctx,
         &[ALICE_MEMBER_HANDLE],
     );
@@ -279,7 +279,7 @@ fn test_execute_reviewed_rewrap_artifacts_rejects_unreviewed_output_member_set_n
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
-        &execution.key_ctx.kid,
+        execution.key_ctx.kid(),
         &execution.key_ctx,
         &[ALICE_MEMBER_HANDLE],
     );
@@ -332,7 +332,7 @@ fn test_promote_accepted_incoming_members_moves_accepted_members_to_active() {
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    assert!(!key_ctx.kid.is_empty());
+    assert!(!key_ctx.kid().is_empty());
 
     let bob = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
 
@@ -400,7 +400,7 @@ fn test_execute_confirmed_rewrap_batch_auto_accepts_self_only_output_after_self_
         encrypt_file_for_members(
             temp_dir.path(),
             ALICE_MEMBER_HANDLE,
-            &old_execution.key_ctx.kid,
+            old_execution.key_ctx.kid(),
             &old_execution.key_ctx,
             &[ALICE_MEMBER_HANDLE],
         ),
@@ -479,7 +479,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &options,
             &workspace_dir,
             &execution.member_handle,
-            Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
+            Some(derive_self_sig_x(execution.key_ctx.signing_key())),
             options.debug,
         )
         .unwrap()
@@ -628,7 +628,7 @@ fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_r
     fs::rename(&bob_active, &bob_incoming).unwrap();
 
     let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
-    let reviewed_kid = bob_candidate.review.kid.clone();
+    let reviewed_kid = bob_candidate.review.kid.to_string();
     let reviewed_source = bob_candidate.source_content.clone();
 
     let mut tampered: serde_json::Value =
@@ -670,7 +670,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_fixed_post_promotion_members() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let alice_kid = execution.key_ctx.kid.clone();
+    let alice_kid = execution.key_ctx.kid().to_string();
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
@@ -728,7 +728,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_current_artifact_content_at_execu
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let alice_kid = execution.key_ctx.kid.clone();
+    let alice_kid = execution.key_ctx.kid().to_string();
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
@@ -784,7 +784,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_captured_content_after_live_path_
     let bob_signed = encrypt_file_for_members(
         temp_dir.path(),
         BOB_MEMBER_HANDLE,
-        &bob_key_ctx.kid,
+        bob_key_ctx.kid(),
         &bob_key_ctx,
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
@@ -841,7 +841,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_signer_approval_before_next_a
         encrypt_file_for_members(
             temp_dir.path(),
             BOB_MEMBER_HANDLE,
-            &bob_key_ctx.kid,
+            bob_key_ctx.kid(),
             &bob_key_ctx,
             &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
@@ -852,7 +852,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_signer_approval_before_next_a
         encrypt_file_for_members(
             temp_dir.path(),
             BOB_MEMBER_HANDLE,
-            &bob_key_ctx.kid,
+            bob_key_ctx.kid(),
             &bob_key_ctx,
             &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
@@ -898,7 +898,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_signer_approval_before_next_a
         .protected
         .known_keys
         .iter()
-        .any(|entry| entry.subject_handle == BOB_MEMBER_HANDLE && bob_key_ctx.kid == entry.kid));
+        .any(|entry| entry.subject_handle == BOB_MEMBER_HANDLE && bob_key_ctx.kid() == entry.kid));
 }
 
 #[test]
@@ -913,7 +913,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_recipient_approval_before_rew
         encrypt_file_for_members(
             temp_dir.path(),
             ALICE_MEMBER_HANDLE,
-            &execution.key_ctx.kid,
+            execution.key_ctx.kid(),
             &execution.key_ctx,
             &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
@@ -979,7 +979,7 @@ fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejectio
         encrypt_file_for_members(
             temp_dir.path(),
             BOB_MEMBER_HANDLE,
-            &bob_key_ctx.kid,
+            bob_key_ctx.kid(),
             &bob_key_ctx,
             &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
@@ -990,7 +990,7 @@ fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejectio
         encrypt_file_for_members(
             temp_dir.path(),
             ALICE_MEMBER_HANDLE,
-            &execution.key_ctx.kid,
+            execution.key_ctx.kid(),
             &execution.key_ctx,
             &[ALICE_MEMBER_HANDLE],
         ),
@@ -1045,7 +1045,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
         encrypt_file_for_members(
             temp_dir.path(),
             BOB_MEMBER_HANDLE,
-            &bob_key_ctx.kid,
+            bob_key_ctx.kid(),
             &bob_key_ctx,
             &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
@@ -1172,7 +1172,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
     let encrypted = encrypt_file_for_members(
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
-        &execution.key_ctx.kid,
+        execution.key_ctx.kid(),
         &execution.key_ctx,
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );

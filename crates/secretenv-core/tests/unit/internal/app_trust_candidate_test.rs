@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::io::verify_online::{VerificationResult, VerificationStatus, VerifiedGithubIdentity};
 use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
 };
-use crate::support::codec::base64_public::encode_base64url_nopad;
 
 use super::TrustApprovalCandidateBuilder;
 

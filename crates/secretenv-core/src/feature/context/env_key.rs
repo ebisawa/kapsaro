@@ -9,18 +9,22 @@
 use crate::feature::context::crypto::build_verified_private_key_from_password;
 use crate::feature::context::expiry::VerifiedExpiresAt;
 use crate::feature::key::protection::password_encryption::decrypt_private_key_with_password;
+use crate::format::codec::base64_secret::decode_base64url_nopad_secret_bytes;
 use crate::format::schema::document::parse_private_key_bytes;
 use crate::model::identity::MemberHandle;
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::codec::base64_secret::decode_base64url_nopad_secret_bytes;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::secret::{SecretBytes, SecretString};
 use crate::{Error, Result};
+use tracing::debug;
 
 const ENV_PRIVATE_KEY: &str = "SECRETENV_PRIVATE_KEY";
 const ENV_KEY_PASSWORD: &str = "SECRETENV_KEY_PASSWORD";
 
-struct EnvKeyCleanupGuard;
+struct EnvKeyCleanupGuard {
+    debug_enabled: bool,
+}
 
 impl Drop for EnvKeyCleanupGuard {
     fn drop(&mut self) {
@@ -28,6 +32,9 @@ impl Drop for EnvKeyCleanupGuard {
         // called from main thread only, no concurrent env access.
         std::env::remove_var(ENV_PRIVATE_KEY);
         std::env::remove_var(ENV_KEY_PASSWORD);
+        if self.debug_enabled {
+            debug!("[ENV_KEY] cleanup private key environment");
+        }
     }
 }
 
@@ -56,11 +63,32 @@ pub fn load_private_key_from_env(debug: bool) -> Result<EnvKeyLoadResult> {
     // Note: std::env::remove_var is not thread-safe; this function must
     // be called from the main thread only. The env vars cannot be
     // recovered after removal, so retries require re-setting them.
-    let _cleanup = EnvKeyCleanupGuard;
+    if debug {
+        debug!("[ENV_KEY] load private key: start");
+    }
+    let _cleanup = EnvKeyCleanupGuard {
+        debug_enabled: debug,
+    };
     let encoded = load_env_private_key()?;
+    if debug {
+        debug!("[ENV_KEY] load private key: private key env present");
+    }
     let password = load_env_key_password()?;
+    if debug {
+        debug!("[ENV_KEY] load private key: password env present");
+    }
     let json_bytes = decode_private_key_env(encoded.as_str())?;
+    if debug {
+        debug!("[ENV_KEY] load private key: decoded private key payload");
+    }
     let private_key = parse_password_protected_private_key(json_bytes.as_bytes())?;
+    if debug {
+        debug!(
+            "[ENV_KEY] load private key: parsed password-protected key member_handle={}, kid={}",
+            private_key.protected.subject_handle,
+            format_kid_half_display_lossy(&private_key.protected.kid)
+        );
+    }
     build_env_key_load_result(&private_key, &password, debug)
 }
 
@@ -118,6 +146,13 @@ fn build_env_key_load_result(
     let kid = private_key.protected.kid.clone();
     let plaintext = decrypt_private_key_with_password(private_key, password, debug)?;
     let verified_key = build_verified_private_key_from_password(plaintext, &member_handle, &kid)?;
+    if debug {
+        debug!(
+            "[ENV_KEY] load private key: complete member_handle={}, kid={}",
+            member_handle,
+            format_kid_half_display_lossy(&kid)
+        );
+    }
 
     Ok(EnvKeyLoadResult {
         verified_key,

@@ -208,6 +208,45 @@ fn test_env_key_run_roundtrip() {
         .stdout(predicate::str::contains("run-mode-value"));
 }
 
+#[cfg(unix)]
+#[test]
+fn test_env_key_run_debug_logs_env_key_stages_without_secrets() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
+
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "APP_TOKEN",
+        "env-key-debug-secret-value",
+        None,
+        None,
+    );
+
+    env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
+        .arg("run")
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("true")
+        .env("RUST_LOG", "warn")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[CTX] execution mode=env-key"))
+        .stdout(predicate::str::contains(
+            "[ENV_KEY] load private key: start",
+        ))
+        .stdout(predicate::str::contains(
+            "[ENV_KEY] cleanup private key environment",
+        ))
+        .stdout(predicate::str::contains("env-key-debug-secret-value").not())
+        .stdout(predicate::str::contains(&exported_key).not())
+        .stdout(predicate::str::contains(TEST_PASSWORD).not());
+}
+
 // ============================================================================
 // Error Cases
 // ============================================================================

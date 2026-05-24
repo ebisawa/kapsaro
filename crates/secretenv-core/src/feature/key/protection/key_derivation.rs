@@ -139,8 +139,11 @@ fn derive_key_from_raw_signature(
         context::HKDF_INFO_PRIVATE_KEY_SSHSIG_V7,
         kid
     ));
-    let cek = kdf::expand_to_array(&ikm, Some(hkdf_salt), &info)?;
-    XChaChaKey::from_slice(cek.as_bytes())
+    Ok(XChaChaKey::from_zeroizing(kdf::derive_hkdf_sha256_array(
+        &ikm,
+        Some(hkdf_salt),
+        &info,
+    )?))
 }
 
 fn non_deterministic_signature_error() -> crate::Error {

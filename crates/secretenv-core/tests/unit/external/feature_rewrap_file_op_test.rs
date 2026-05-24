@@ -11,10 +11,11 @@ use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtu
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE};
 use secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument;
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use secretenv_core::cli_api::test_support::operations::envelope::key_schedule::FileKeySchedule;
 use secretenv_core::cli_api::test_support::operations::envelope::signature::sign_file_document;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
 use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
 use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
@@ -47,19 +48,27 @@ fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
 
 fn single_rewrap_request<'a>(
     key_ctx: &'a CryptoContext,
-    workspace_root: Option<&'a std::path::Path>,
+    workspace_root: Option<&std::path::Path>,
     rotate_key: bool,
     clear_disclosure_history: bool,
     debug: bool,
 ) -> RewrapRequest<'a> {
+    let target_members = workspace_root
+        .map(|workspace_root| {
+            let public_keys =
+                secretenv_core::cli_api::test_support::storage::workspace::members::load_active_member_files(
+                    workspace_root,
+                )
+                .unwrap();
+            build_verified_recipient_keys(&public_keys)
+        })
+        .unwrap_or_default();
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
-        workspace_root,
-        target_members: None,
+        target_members,
         rotate_key,
         clear_disclosure_history,
-
         debug,
     }
 }
@@ -140,7 +149,7 @@ fn encrypt_file_for_alice(
         &recipients,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -158,10 +167,14 @@ fn resign_with_invalid_key_possession(
     let keystore_root = temp_dir.path().join("keys");
     let signer_pub = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
     let wrong_content_key = MasterKey::new([0xA5; 32]);
+    let wrong_mac_key = FileKeySchedule::extract(&wrong_content_key, &document.protected.sid)
+        .unwrap()
+        .derive_mac_key()
+        .unwrap();
     document.signature = sign_file_document(
         &document.protected,
-        &wrong_content_key,
-        &key_ctx.signing_key,
+        &wrong_mac_key,
+        key_ctx.signing_key(),
         kid,
         signer_pub,
         false,
@@ -192,7 +205,7 @@ fn encrypt_file_for_alice_and_bob(
         &recipients,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub,
             debug: false,
@@ -263,7 +276,7 @@ fn test_rotate_file_key_preserves_decryptability() {
         &verified,
         ALICE_MEMBER_HANDLE,
         kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -327,7 +340,7 @@ fn test_rewrap_file_rejects_invalid_key_possession_without_rotation() {
             &verified,
             ALICE_MEMBER_HANDLE,
             kid,
-            &key_ctx.private_key,
+            key_ctx.private_key(),
             false,
         )
         .is_err(),
@@ -499,7 +512,7 @@ fn test_replace_file_recipient_wraps_added_member_with_rotated_key() {
         &verified,
         CAROL_MEMBER_HANDLE,
         &carol_kid,
-        &carol_ctx.private_key,
+        carol_ctx.private_key(),
         false,
     )
     .unwrap();

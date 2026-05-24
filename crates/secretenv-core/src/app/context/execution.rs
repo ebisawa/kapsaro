@@ -7,10 +7,8 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::CommandPathResolution;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::context::expiry::{
-    build_signing_key_expiry_warning, enforce_expired_key_usage,
-};
-use crate::model::common::WrapSet;
+use crate::feature::context::expiry::enforce_expired_key_usage;
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::model::identity::MemberHandle;
 use crate::{Error, Result};
 use tracing::debug;
@@ -61,14 +59,10 @@ impl ExecutionContext {
             options,
             "environment variable key loading (CI mode)",
         )?;
-        let workspace_root = resolved.workspace_root.ok_or_else(|| {
-            Error::build_config_error(
-                "Workspace is required for environment variable key loading (CI mode)".to_string(),
-            )
-        })?;
+        let workspace_root = resolved.into_required_workspace_root();
         let key_ctx =
             load_crypto_context_from_env(workspace_root.root_path.clone(), options.debug)?;
-        let member_handle = key_ctx.member_handle.clone();
+        let member_handle = key_ctx.member_handle_id().clone();
 
         Ok(Self {
             member_handle,
@@ -104,9 +98,7 @@ pub fn resolve_write_execution(
 }
 
 pub fn build_write_execution_warnings(execution: &ExecutionContext) -> Result<Vec<String>> {
-    build_execution_warnings(build_signing_key_expiry_warning(
-        &execution.key_ctx.expires_at,
-    )?)
+    build_execution_warnings(execution.key_ctx.build_signing_key_expiry_warning()?)
 }
 
 pub fn enforce_selected_decryption_key_expiry(

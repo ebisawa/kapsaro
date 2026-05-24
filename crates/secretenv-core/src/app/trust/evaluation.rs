@@ -7,11 +7,11 @@ use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::enforcement::{
     build_signer_identity, enforce_artifact_recipient_set_trust, enforce_signer_trust,
-    evaluate_read_artifact_recipient_keys, ArtifactRecipientTrustOutcome, RecipientTrustOutcome,
-    SignerTrustOutcome,
+    evaluate_read_artifact_recipient_keys,
 };
 use crate::app::trust::policy::{CommandCapability, ReadTrustPolicy, TrustPolicy};
 use crate::app::trust::snapshot::{load_read_trust_context, TrustContext};
+use crate::app::trust::{ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome};
 use crate::feature::trust::judgment::{
     judge_signer_trust_with_additional, AdditionalKnownKeyCache,
 };
@@ -47,14 +47,13 @@ where
         options,
         &workspace.root_path,
         &execution.member_handle,
-        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(execution.key_ctx.self_signature_public_key_x()),
         options.debug,
     )?;
     let trust_ctx = &loaded.trust_ctx;
     let signer_outcome =
         evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, current_recipients)?;
-    let recipient_trust =
-        evaluate_read_artifact_recipient_keys(trust_ctx, &proof.kid, current_recipient_set)?;
+    let recipient_trust = evaluate_read_artifact_recipient_keys(trust_ctx, current_recipient_set)?;
     if options.debug {
         debug!(
             "[TRUST] read evaluation: capability={}, signer_kid={}, recipient_count={}, stale_recipient_warnings={}",
@@ -103,16 +102,13 @@ pub fn evaluate_signer_trust_with_proof(
 
 pub fn evaluate_output_recipient_set_trust(
     trust_ctx: &TrustContext,
-    signer_kid: &str,
     recipient_set: &ArtifactRecipientSet,
     capability: CommandCapability,
 ) -> Result<ArtifactRecipientTrustOutcome> {
-    let outcome =
-        enforce_artifact_recipient_set_trust(trust_ctx, signer_kid, recipient_set, capability)?;
+    let outcome = enforce_artifact_recipient_set_trust(trust_ctx, recipient_set, capability)?;
     debug!(
-        "[TRUST] output recipient set: capability={}, signer_kid={}, recipient_count={}, outcome={}",
+        "[TRUST] output recipient set: capability={}, recipient_count={}, outcome={}",
         capability.label(),
-        format_kid_half_display_lossy(signer_kid),
         recipient_set.recipient_kids().len(),
         describe_artifact_recipient_outcome(&outcome)
     );

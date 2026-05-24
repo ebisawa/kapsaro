@@ -1,10 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for file-enc v6 format.
+//! Rewrap operations for file-enc v7 format.
 
 use crate::crypto::types::keys::MasterKey;
-use crate::feature::context::crypto::CryptoContext;
+use crate::feature::context::crypto::{build_signing_context, CryptoContext};
+use crate::feature::envelope::key_schedule::FileKeySchedule;
 use crate::feature::envelope::signature::sign_file_document;
 use crate::feature::rewrap::file_op::content_key::unwrap_verified_file_content_key;
 use crate::feature::rewrap::file_op::recipients::{
@@ -19,7 +20,6 @@ use crate::model::file_enc::{FileEncDocument, FileEncDocumentProtected};
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::time;
 use crate::{Error, Result};
-use std::path::Path;
 
 use super::{
     rewrap_document_with_common_skeleton, RewrapContext, RewrapDocumentAdapter, RewrapExecutor,
@@ -56,7 +56,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             &mut self.protected,
             content_key,
             recipients,
-            self.ctx.key_ctx(),
             self.ctx.target_members(),
             self.ctx.options().debug,
         )
@@ -69,7 +68,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             &mut self.protected,
             content_key,
             recipients,
-            self.ctx.key_ctx(),
             self.ctx.target_members(),
             self.ctx.options().debug,
         )
@@ -89,7 +87,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             &mut self.protected,
             &self.verified,
             self.content_key.as_ref(),
-            self.ctx.key_ctx(),
             self.ctx.target_members(),
             self.ctx.options().debug,
         )?;
@@ -112,14 +109,15 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             ..
         } = executor;
         protected.updated_at = time::generate_current_timestamp()?;
-        let signer_pub = ctx.load_signer_pub()?;
+        let signing = build_signing_context(ctx.key_ctx(), ctx.options().debug)?;
         let content_key = content_key.into_key();
+        let mac_key = FileKeySchedule::extract(&content_key, &protected.sid)?.derive_mac_key()?;
         let signature = sign_file_document(
             &protected,
-            &content_key,
-            &ctx.key_ctx().signing_key,
-            &ctx.key_ctx().kid,
-            signer_pub,
+            &mac_key,
+            signing.signing_key(),
+            signing.signer_kid(),
+            signing.signer_pub.clone(),
             ctx.options().debug,
         )?;
 
@@ -129,7 +127,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
         };
         serde_json::to_string_pretty(&doc).map_err(|e| {
             Error::build_parse_error_with_source(
-                format!("Failed to serialize file-enc v6: {}", e),
+                format!("Failed to serialize file-enc v7: {}", e),
                 e,
             )
         })
@@ -206,21 +204,19 @@ impl RewrapDocumentAdapter for FileRewrapAdapter {
     }
 }
 
-/// Rewrap file-enc v6 content.
+/// Rewrap file-enc v7 content.
 pub fn rewrap_file_document(
     options: &RewrapOptions,
     content: &FileEncContent,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    workspace_root: Option<&Path>,
-    target_members: Option<&[VerifiedRecipientKey]>,
+    target_members: &[VerifiedRecipientKey],
 ) -> Result<String> {
     rewrap_document_with_common_skeleton::<FileRewrapAdapter>(
         options,
         content,
         member_handle,
         key_ctx,
-        workspace_root,
         target_members,
     )
 }

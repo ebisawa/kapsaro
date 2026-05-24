@@ -7,8 +7,8 @@ use std::path::Path;
 
 use super::evaluate_member_removal;
 use crate::app_test_utils::build_test_signing_command_options;
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::envelope::signature::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::storage::{list_kids, load_public_key};
@@ -72,7 +72,7 @@ fn save_file_artifact(
         &recipients,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &signer_kid,
             signer_pub,
             debug: false,
@@ -99,7 +99,7 @@ fn save_kv_artifact(
         &kv_map,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &signer_kid,
             signer_pub,
             debug: false,

@@ -4,7 +4,6 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::trust::review::{save_approved_known_key_warnings, TrustExecutionContext};
 use crate::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
-use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
 use crate::Result;
 
 use super::artifact::{execute_rewrap_artifacts, RewrapArtifactExecutionContext};
@@ -43,7 +42,7 @@ where
         &review_session.plan.workspace_root,
         &review_session.expected_post_promotion_members,
     )?;
-    enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
+    execution.key_ctx.enforce_signing_key_not_expired()?;
     let mut approval_warnings = save_approved_known_key_warnings(
         TrustExecutionContext {
             options: &review_session.request.options,
@@ -94,7 +93,7 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
+    execution.key_ctx.enforce_signing_key_not_expired()?;
     let ctx = RewrapArtifactExecutionContext::new(
         request,
         plan,

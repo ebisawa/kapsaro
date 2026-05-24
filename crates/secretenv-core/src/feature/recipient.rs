@@ -5,10 +5,10 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::verify::recipients::verify_recipient_public_keys_from_source;
+use crate::model::common::WrapItem;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::support::limits::validate_wrap_count;
 use crate::{Error, Result};
-use std::path::Path;
 use tracing::warn;
 
 pub(crate) fn check_recipient_exists(
@@ -29,32 +29,18 @@ pub(crate) fn validate_not_empty_recipients(recipients: &[String]) -> Result<()>
     Ok(())
 }
 
-pub(crate) fn print_recipient_not_found_warning(recipient_handle: &str) {
-    warn!(
-        "[CRYPTO] Warning: {} is not a recipient, skipping",
-        recipient_handle
-    );
-}
-
 pub(crate) fn build_new_wrap_items<T, Build>(
     current_recipients: &[String],
     current_wrap_count: usize,
     new_recipients: &[String],
-    key_ctx: &CryptoContext,
-    target_members: Option<&[VerifiedRecipientKey]>,
-    debug: bool,
+    target_members: &[VerifiedRecipientKey],
     mut build_wrap: Build,
 ) -> Result<Vec<T>>
 where
     Build: FnMut(&VerifiedRecipientKey) -> Result<T>,
 {
-    let attested_pubkeys = resolve_new_verified_recipients(
-        target_members,
-        key_ctx,
-        new_recipients,
-        current_recipients,
-        debug,
-    )?;
+    let attested_pubkeys =
+        resolve_new_snapshot_recipients(target_members, new_recipients, current_recipients)?;
     validate_wrap_count(
         current_wrap_count + attested_pubkeys.len(),
         "Updated wrap set",
@@ -69,7 +55,7 @@ pub(crate) fn resolve_verified_recipients(
     debug: bool,
 ) -> Result<Vec<VerifiedRecipientKey>> {
     match target_members {
-        Some(members) => load_snapshot_verified_recipients(members, recipient_handles),
+        Some(members) => resolve_snapshot_verified_recipients(members, recipient_handles),
         None => verify_recipient_public_keys_from_source(
             key_ctx.pub_key_source.as_ref(),
             recipient_handles,
@@ -78,45 +64,33 @@ pub(crate) fn resolve_verified_recipients(
     }
 }
 
-pub(crate) fn collect_target_recipient_handles(
-    workspace_root: Option<&Path>,
-    target_members: Option<&[VerifiedRecipientKey]>,
-) -> Result<Vec<String>> {
-    match target_members {
-        Some(members) => {
-            let mut recipients = members
-                .iter()
-                .map(|member| member.document().protected.subject_handle.clone())
-                .collect::<Vec<_>>();
-            recipients.sort();
-            Ok(recipients)
-        }
-        None => {
-            let workspace_root = workspace_root.ok_or_else(|| {
-                Error::build_config_error("rewrap requires a workspace".to_string())
-            })?;
-            crate::io::workspace::members::list_active_member_handles(workspace_root)
-        }
+pub(crate) fn replace_recipient_wrap_items<Build>(
+    wrap_items: &mut Vec<WrapItem>,
+    recipient_handles: &[String],
+    target_members: &[VerifiedRecipientKey],
+    mut build_wrap: Build,
+) -> Result<()>
+where
+    Build: FnMut(&VerifiedRecipientKey) -> Result<WrapItem>,
+{
+    let refreshed_members =
+        resolve_snapshot_verified_recipients(target_members, recipient_handles)?;
+
+    wrap_items.retain(|wrap| !recipient_handles.contains(&wrap.recipient_handle));
+    for member in &refreshed_members {
+        wrap_items.push(build_wrap(member)?);
     }
+
+    Ok(())
 }
 
-fn resolve_new_verified_recipients(
-    target_members: Option<&[VerifiedRecipientKey]>,
-    key_ctx: &CryptoContext,
+fn resolve_new_snapshot_recipients(
+    target_members: &[VerifiedRecipientKey],
     recipient_handles: &[String],
     current_recipients: &[String],
-    debug: bool,
 ) -> Result<Vec<VerifiedRecipientKey>> {
-    let recipients =
-        resolve_verified_recipients(target_members, key_ctx, recipient_handles, debug)?;
+    let recipients = resolve_snapshot_verified_recipients(target_members, recipient_handles)?;
     Ok(filter_existing_recipients(recipients, current_recipients))
-}
-
-fn print_recipient_already_exists_warning(recipient_handle: &str) {
-    warn!(
-        "[CRYPTO] Warning: {} is already a recipient, skipping",
-        recipient_handle
-    );
 }
 
 fn filter_existing_recipients(
@@ -127,7 +101,10 @@ fn filter_existing_recipients(
     for member in recipients {
         let member_handle = &member.document().protected.subject_handle;
         if check_recipient_exists(current_recipients, member_handle) {
-            print_recipient_already_exists_warning(member_handle);
+            warn!(
+                "[CRYPTO] Warning: {} is already a recipient, skipping",
+                member_handle
+            );
             continue;
         }
         filtered.push(member);
@@ -135,7 +112,7 @@ fn filter_existing_recipients(
     filtered
 }
 
-fn load_snapshot_verified_recipients(
+pub(crate) fn resolve_snapshot_verified_recipients(
     target_members: &[VerifiedRecipientKey],
     member_handles: &[String],
 ) -> Result<Vec<VerifiedRecipientKey>> {

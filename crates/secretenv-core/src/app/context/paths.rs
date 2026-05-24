@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use crate::app::context::options::CommonCommandOptions;
+use crate::config::resolution::workspace::resolve_workspace_from_config_base;
 use crate::io::workspace::detection::{resolve_optional_workspace_with_base, WorkspaceRoot};
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -11,7 +12,26 @@ use tracing::debug;
 
 /// Resolve the workspace if one is explicitly configured or auto-detectable.
 pub fn load_optional_workspace(options: &CommonCommandOptions) -> Result<Option<WorkspaceRoot>> {
-    resolve_optional_workspace_with_base(options.workspace.clone(), options.home.as_deref())
+    if options.workspace.is_some() || std::env::var("SECRETENV_WORKSPACE").is_ok() {
+        return resolve_optional_workspace_with_base(options.workspace.clone(), None);
+    }
+
+    let base_dir = options.resolve_base_dir()?;
+    if let Some(path) = resolve_workspace_from_config_base(Some(&base_dir))? {
+        return resolve_config_workspace_path(path);
+    }
+
+    resolve_optional_workspace_with_base(None, None)
+}
+
+fn resolve_config_workspace_path(path: PathBuf) -> Result<Option<WorkspaceRoot>> {
+    resolve_optional_workspace_with_base(Some(path.clone()), None).map_err(|error| {
+        Error::build_config_error(format!(
+            "Invalid workspace path in config.toml '{}': {}",
+            format_path_relative_to_cwd(&path),
+            error
+        ))
+    })
 }
 
 /// Resolve a workspace and fail if none is configured or auto-detectable.
@@ -47,6 +67,11 @@ impl CommandPathResolution {
             )));
         }
         Ok(paths)
+    }
+
+    pub fn into_required_workspace_root(self) -> WorkspaceRoot {
+        self.workspace_root
+            .expect("required workspace resolution must contain a workspace root")
     }
 }
 

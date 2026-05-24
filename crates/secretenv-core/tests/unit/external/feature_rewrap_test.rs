@@ -8,9 +8,10 @@
 use crate::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use secretenv_core::cli_api::test_support::domain::public_key::VerifiedRecipientKey;
 use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
 use secretenv_core::cli_api::test_support::storage::keystore::storage::{
     list_kids, load_public_key,
@@ -19,19 +20,29 @@ use secretenv_core::cli_api::test_support::wire::content::{EncContent, FileEncCo
 
 fn single_rewrap_request<'a>(
     key_ctx: &'a secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext,
-    workspace_root: Option<&'a std::path::Path>,
+    target_members: Vec<VerifiedRecipientKey>,
     debug: bool,
 ) -> RewrapRequest<'a> {
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
-        workspace_root,
-        target_members: None,
+        target_members,
         rotate_key: false,
         clear_disclosure_history: false,
-
         debug,
     }
+}
+
+fn build_rewrap_targets(
+    temp_dir: &tempfile::TempDir,
+    members: &[(&str, &str)],
+) -> Vec<VerifiedRecipientKey> {
+    let keystore_root = temp_dir.path().join("keys");
+    let public_keys = members
+        .iter()
+        .map(|(member_handle, kid)| load_public_key(&keystore_root, member_handle, kid).unwrap())
+        .collect::<Vec<_>>();
+    build_verified_recipient_keys(&public_keys)
 }
 
 fn rewrap_file_content(
@@ -61,7 +72,7 @@ fn test_rewrap_file_operation_rejects_invalid_signature() {
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
             debug: false,
@@ -73,7 +84,8 @@ fn test_rewrap_file_operation_rejects_invalid_signature() {
     file_enc_doc_tampered.signature.sig = encode_base64url_nopad(b"tampered_signature");
     let json = serde_json::to_string_pretty(&file_enc_doc_tampered).unwrap();
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false);
+    let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, kid)]);
+    let request = single_rewrap_request(&key_ctx, target_members, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(

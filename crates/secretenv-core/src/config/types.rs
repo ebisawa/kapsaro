@@ -5,7 +5,86 @@
 //!
 //! Defines shared value types used while resolving secretenv configuration.
 
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
+
+const GITHUB_USER_TYPO_ALIAS: &str = "gihub_user";
+
+/// Supported flat global config key.
+///
+/// Centralizes canonical names and accepted aliases for config.toml keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigKey {
+    MemberHandle,
+    Workspace,
+    SshIdentity,
+    SshKeygenCommand,
+    SshAddCommand,
+    SshSigningMethod,
+    GithubUser,
+    AllowExpiredKey,
+}
+
+impl ConfigKey {
+    const ALL: [Self; 8] = [
+        Self::MemberHandle,
+        Self::Workspace,
+        Self::SshIdentity,
+        Self::SshKeygenCommand,
+        Self::SshAddCommand,
+        Self::SshSigningMethod,
+        Self::GithubUser,
+        Self::AllowExpiredKey,
+    ];
+
+    /// Return the canonical global config.toml key names.
+    pub fn canonical_names() -> &'static [&'static str] {
+        &[
+            "member_handle",
+            "workspace",
+            "ssh_identity",
+            "ssh_keygen_command",
+            "ssh_add_command",
+            "ssh_signing_method",
+            "github_user",
+            "allow_expired_key",
+        ]
+    }
+
+    /// Parse a user-provided config key and normalize accepted aliases.
+    pub fn parse(key: &str) -> Result<Self> {
+        if key == GITHUB_USER_TYPO_ALIAS {
+            return Ok(Self::GithubUser);
+        }
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|candidate| candidate.canonical_name() == key)
+            .ok_or_else(|| build_invalid_config_key_error(key))
+    }
+
+    /// Return the canonical config.toml key name.
+    pub const fn canonical_name(self) -> &'static str {
+        match self {
+            Self::MemberHandle => "member_handle",
+            Self::Workspace => "workspace",
+            Self::SshIdentity => "ssh_identity",
+            Self::SshKeygenCommand => "ssh_keygen_command",
+            Self::SshAddCommand => "ssh_add_command",
+            Self::SshSigningMethod => "ssh_signing_method",
+            Self::GithubUser => "github_user",
+            Self::AllowExpiredKey => "allow_expired_key",
+        }
+    }
+}
+
+fn build_invalid_config_key_error(key: &str) -> Error {
+    Error::build_invalid_argument_error(format!(
+        "invalid key '{}'. Valid keys: {}",
+        key,
+        ConfigKey::canonical_names().join(", ")
+    ))
+}
 
 /// Signing method configuration value
 ///

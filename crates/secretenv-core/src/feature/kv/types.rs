@@ -23,15 +23,3 @@ impl KvInputEntry {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KvEncodedEntry {
-    pub key: String,
-    pub token: String,
-}
-
-impl From<(String, String)> for KvEncodedEntry {
-    fn from((key, token): (String, String)) -> Self {
-        Self { key, token }
-    }
-}

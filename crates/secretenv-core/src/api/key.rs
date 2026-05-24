@@ -7,10 +7,11 @@ use std::path::{Path, PathBuf};
 
 use crate::feature::context::crypto::{load_crypto_context_from_keystore, CryptoContext};
 use crate::feature::context::expiry::enforce_expired_key_usage;
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::io::keystore::active::{load_active_kid, set_active_kid};
 use crate::io::keystore::storage::{list_kids, list_member_handles, load_public_key};
-use crate::model::common::{WrapItem, WrapSet};
+use crate::model::common::WrapItem;
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
 use crate::Result;
 
@@ -182,17 +183,17 @@ impl KeyContext {
 
     /// Return the loaded member handle.
     pub fn member_handle(&self) -> &str {
-        self.inner.member_handle.as_str()
+        self.inner.member_handle()
     }
 
     /// Return the loaded key ID.
     pub fn kid(&self) -> &str {
-        self.inner.kid.as_str()
+        self.inner.kid()
     }
 
     /// Return the verified key expiration timestamp.
     pub fn expires_at(&self) -> &str {
-        self.inner.expires_at.as_str()
+        self.inner.expires_at()
     }
 }
 

@@ -13,6 +13,7 @@ use crate::Result;
 use std::path::Path;
 
 use super::common::resolve_string_with_priority;
+use crate::config::types::ConfigKey;
 
 /// Resolve github_user based on priority order
 ///
@@ -30,7 +31,7 @@ pub(crate) fn resolve_github_user(
     let github_user = resolve_string_with_priority(
         cli_value,
         Some("SECRETENV_GITHUB_USER"),
-        "github_user",
+        ConfigKey::GithubUser.canonical_name(),
         base_dir,
         None,
     )?;

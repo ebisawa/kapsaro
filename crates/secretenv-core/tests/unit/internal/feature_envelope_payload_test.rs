@@ -3,9 +3,9 @@
 
 use super::*;
 use crate::crypto::types::keys::XChaChaKey;
+use crate::format::codec::base64_public::decode_base64url_nopad;
 use crate::model::file_enc::{FileEncAlgorithm, FilePayloadHeader};
 use crate::model::wire::{algorithm, format};
-use crate::support::codec::base64_public::decode_base64url_nopad;
 use uuid::Uuid;
 
 #[test]
@@ -15,7 +15,7 @@ fn encrypt_file_payload_content_returns_valid_ciphertext() {
     let plaintext = Plaintext::from(b"hello world".as_slice());
     let sid = Uuid::new_v4();
     let header = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V6.to_string(),
+        format: format::FILE_PAYLOAD_V7.to_string(),
         sid,
         alg: FileEncAlgorithm {
             aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),

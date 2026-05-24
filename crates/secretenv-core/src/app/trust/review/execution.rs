@@ -173,17 +173,16 @@ where
     save_approved_recipient_set(execution, approval, emit_warnings)
 }
 
-pub struct GeneratedArtifactRecipientSetReview<'a> {
+pub struct ArtifactRecipientSetReviewInput<'a> {
     pub trust_ctx: &'a TrustContext,
-    pub signer_kid: &'a str,
     pub recipient_set: &'a ArtifactRecipientSet,
     pub capability: CommandCapability,
     pub context_label: &'a str,
 }
 
-pub fn review_generated_artifact_recipient_set<EmitWarnings, ConfirmRecipientSet>(
+pub fn review_artifact_recipient_set_output<EmitWarnings, ConfirmRecipientSet>(
     execution: TrustExecutionContext<'_>,
-    review: GeneratedArtifactRecipientSetReview<'_>,
+    review: ArtifactRecipientSetReviewInput<'_>,
     emit_warnings: &mut EmitWarnings,
     confirm_recipient_set: ConfirmRecipientSet,
 ) -> Result<()>
@@ -193,7 +192,6 @@ where
 {
     let outcome = evaluate_output_recipient_set_trust(
         review.trust_ctx,
-        review.signer_kid,
         review.recipient_set,
         review.capability,
     )?;
@@ -276,7 +274,7 @@ where
         | ArtifactRecipientTrustOutcome::SkippedStrictKeyCheckingNo => Ok(None),
         ArtifactRecipientTrustOutcome::NeedsManualApproval(review) => {
             if confirm(outcome, context_label)? {
-                Ok(Some(review.current.clone()))
+                Ok(Some(review.current_set().clone()))
             } else {
                 Err(crate::Error::build_invalid_operation_error(
                     "Recipient set approval declined".to_string(),

@@ -7,12 +7,12 @@
 
 use super::protocol::parse::decode_ssh_public_key_blob;
 use super::protocol::{sshsig, wire};
+use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::format::jcs;
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
 use crate::model::public_key::IdentityKeys;
-use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::Result;
 use ed25519_dalek::{Verifier, VerifyingKey};
 

@@ -6,20 +6,20 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::feature::envelope::signature::build_signing_context;
+use crate::feature::context::crypto::build_signing_context;
 use crate::feature::trust::known_keys::{
     add_known_key, judge_known_key, KnownKeyIdentity, KnownKeyJudgment,
 };
 use crate::feature::trust::recipient_sets::{
-    file_recipient_evidence, judge_recipient_set, kv_recipient_evidence,
-    validate_recipient_set_record, ArtifactRecipientSet, RecipientSetJudgment,
+    file_recipient_evidence, judge_recipient_set, kv_recipient_evidence, upsert_recipient_set,
+    ArtifactRecipientSet, RecipientSetJudgment,
 };
 use crate::feature::trust::signature::sign_trust_store;
 use crate::feature::trust::verification::verify_trust_store;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::{load_trust_store, save_trust_store};
 use crate::model::trust_store::{
-    KnownKey, KnownKeyApprovalVia, RecipientSetRecord, TrustStoreDocument, TrustStoreProtected,
+    KnownKey, KnownKeyApprovalVia, TrustStoreDocument, TrustStoreProtected,
 };
 use crate::model::trust_store_verified::VerifiedTrustStore;
 use crate::model::{file_enc::VerifiedFileEncDocument, kv_enc::verified::VerifiedKvEncDocument};
@@ -252,9 +252,12 @@ fn apply_recipient_set_approval(
     protected: &mut TrustStoreProtected,
     approval: RecipientSetApproval,
 ) -> Result<()> {
-    let record = approval.into_record(generate_current_timestamp()?)?;
-    validate_recipient_set_record(&record)?;
-    upsert_record_by_sid(&mut protected.recipient_sets, record);
+    let recipient_set = ArtifactRecipientSet::new(approval.sid, approval.recipient_kids)?;
+    upsert_recipient_set(
+        &mut protected.recipient_sets,
+        recipient_set,
+        generate_current_timestamp()?,
+    );
     Ok(())
 }
 
@@ -430,13 +433,6 @@ impl KnownKeyApproval {
     }
 }
 
-impl RecipientSetApproval {
-    fn into_record(self, approved_at: String) -> Result<RecipientSetRecord> {
-        ArtifactRecipientSet::new(self.sid, self.recipient_kids)
-            .map(|set| set.into_record(approved_at))
-    }
-}
-
 fn require_review_field<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str> {
     value.ok_or_else(|| {
         Error::build_invalid_argument_error(format!("Trust review request is missing {}", field))
@@ -465,16 +461,5 @@ fn recipient_review_request(
         kid: None,
         sid: Some(current.sid_string()),
         recipient_kids: current.recipient_kids().to_vec(),
-    }
-}
-
-fn upsert_record_by_sid(records: &mut Vec<RecipientSetRecord>, record: RecipientSetRecord) {
-    if let Some(existing) = records
-        .iter_mut()
-        .find(|existing| existing.sid == record.sid)
-    {
-        *existing = record;
-    } else {
-        records.push(record);
     }
 }

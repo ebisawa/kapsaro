@@ -12,8 +12,8 @@ use crate::test_utils::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, DAVE_MEMBER_HANDLE,
 };
 use secretenv_core::cli_api::test_support::domain::verification::VerifyingKeySource;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::encrypt::encrypt_file_content;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::inspect::{
     build_inspect_view, InspectOutput,
 };
@@ -59,8 +59,8 @@ fn encrypt_kv_fixture(temp_dir: &TempDir, member_handle: &str, key: &str, value:
     let mut kv = HashMap::new();
     kv.insert(key.to_string(), value.to_string());
     let signing = SigningContext {
-        signing_key: &key_ctx.signing_key,
-        signer_kid: key_ctx.kid.as_str(),
+        signing_key: key_ctx.signing_key(),
+        signer_kid: key_ctx.kid(),
         signer_pub: public_key.clone(),
         debug: false,
     };
@@ -76,8 +76,8 @@ fn encrypt_kv_fixture(temp_dir: &TempDir, member_handle: &str, key: &str, value:
 fn encrypt_file_fixture(temp_dir: &TempDir, member_handle: &str, content: &[u8]) -> String {
     let (key_ctx, public_key) = build_signing_context(temp_dir, member_handle);
     let signing = SigningContext {
-        signing_key: &key_ctx.signing_key,
-        signer_kid: key_ctx.kid.as_str(),
+        signing_key: key_ctx.signing_key(),
+        signer_kid: key_ctx.kid(),
         signer_pub: public_key.clone(),
         debug: false,
     };

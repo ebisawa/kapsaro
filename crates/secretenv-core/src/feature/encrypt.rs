@@ -5,8 +5,8 @@
 
 pub mod file;
 
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::envelope::signature::SigningContext;
 use crate::model::common::normalize_recipients;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::{Error, Result};

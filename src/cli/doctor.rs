@@ -8,7 +8,7 @@ use clap::Args;
 use crate::cli::common::output::json::doctor::print_doctor_report;
 use crate::cli::common::output::text::doctor::format_doctor_report;
 use crate::cli::options::{MemberHandleOption, WorkspaceOutputOptions};
-use secretenv_core::cli_api::app::doctor::{run_doctor, DoctorRequest};
+use secretenv_core::cli_api::app::doctor::{execute_doctor_command, DoctorRequest};
 use secretenv_core::Result;
 
 #[derive(Debug, Clone, Args)]
@@ -23,7 +23,7 @@ pub(crate) struct DoctorArgs {
 
 pub(crate) fn run(args: DoctorArgs) -> Result<i32> {
     let verbose = args.common.verbose.verbose;
-    let report = run_doctor(DoctorRequest {
+    let report = execute_doctor_command(DoctorRequest {
         workspace: args.common.workspace.workspace,
         home: args.common.home.home,
         member_handle: args.member.member_handle,

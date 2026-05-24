@@ -1,7 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::model::public_key::PublicKey;
+//! Feature-facing DTOs for reusable key generation results.
+//! Excludes command orchestration result types owned by the app layer.
+
 use crate::model::ssh::SshDeterminismStatus;
 use std::path::PathBuf;
 
@@ -17,41 +19,4 @@ pub struct KeyGenerationResult {
     pub ssh_fingerprint: String,
     pub ssh_public_key: String,
     pub ssh_determinism: SshDeterminismStatus,
-}
-
-/// Key list info.
-#[derive(Debug, Clone)]
-pub struct KeyInfo {
-    pub kid: String,
-    pub member_handle: String,
-    pub created_at: String,
-    pub expires_at: String,
-    pub active: bool,
-    pub format: String,
-}
-
-/// Grouped key list result.
-pub struct KeyListResult {
-    pub entries: Vec<(String, Vec<KeyInfo>)>,
-    pub total_keys: usize,
-}
-
-/// Result for key activation.
-pub struct KeyActivateResult {
-    pub member_handle: String,
-    pub kid: String,
-}
-
-/// Result for key removal.
-pub struct KeyRemoveResult {
-    pub member_handle: String,
-    pub kid: String,
-    pub was_active: bool,
-}
-
-/// Result for key export.
-pub struct KeyExportResult {
-    pub member_handle: String,
-    pub kid: String,
-    pub public_key: PublicKey,
 }

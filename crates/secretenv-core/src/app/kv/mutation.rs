@@ -8,24 +8,22 @@ use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::enforcement::enforce_write_input_artifact_recipients;
 use crate::app::trust::review::{
-    review_generated_artifact_recipient_set, GeneratedArtifactRecipientSetReview,
-    TrustExecutionContext,
+    review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
 };
 use crate::app::trust::{
-    derive_self_sig_x, evaluate_signer_trust_with_proof, ArtifactRecipientTrustOutcome,
-    CommandCapability, RecipientTrustOutcome, SignerTrustOutcome, TrustContext,
-    WorkspaceMemberSnapshot, WriteRecipientTrustPlan, WriteTrustPolicy,
+    evaluate_signer_trust_with_proof, ArtifactRecipientTrustOutcome, CommandCapability,
+    RecipientTrustOutcome, SignerTrustOutcome, TrustContext, WorkspaceMemberSnapshot,
+    WriteRecipientTrustPlan, WriteTrustPolicy,
 };
-use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
 };
-use crate::feature::trust::recipient_sets::{kv_content_recipient_evidence, kv_recipient_evidence};
+use crate::feature::trust::recipient_sets::kv_recipient_evidence;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
-use crate::format::content::KvEncContent;
+use crate::format::content::{EncContent, KvEncContent};
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
-use crate::model::common::WrapSet;
 use crate::support::fs::lock;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::warning::push_unique_warning;
@@ -234,7 +232,7 @@ where
         options,
         &command.target.workspace_root.root_path,
         &command.execution.member_handle,
-        Some(derive_self_sig_x(&command.execution.key_ctx.signing_key)),
+        Some(command.execution.key_ctx.self_signature_public_key_x()),
         options.debug,
     )?;
     let review = MutationReviewSnapshot::build(
@@ -292,7 +290,7 @@ fn execute_kv_mutation<P, F>(
     plan: &MutationWriteTrustPlan<P>,
     success_message: Option<&str>,
     operation: F,
-    confirm_recipient_set: impl FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+    mut confirm_recipient_set: impl FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 ) -> Result<KvWriteOutcome>
 where
     P: WriteTrustPolicy,
@@ -301,7 +299,7 @@ where
     let file_path = plan.review.target.file_path.clone();
     lock::with_file_lock(&file_path, || {
         plan.review.ensure_current(plan.verbose)?;
-        enforce_key_not_expired_for_signing(&plan.execution.key_ctx.expires_at)?;
+        plan.execution.key_ctx.enforce_signing_key_not_expired()?;
         let write_ctx = KvWriteContext::new(
             &plan.execution.member_handle,
             &plan.execution.key_ctx,
@@ -312,31 +310,39 @@ where
             &plan.review.recipients,
             &write_ctx,
         )?;
-        let content = KvEncContent::new_unchecked(encrypted.clone());
-        let evidence = kv_content_recipient_evidence(&content)?;
+        let content = EncContent::KvEnc(KvEncContent::new_unchecked(encrypted.clone()));
         let mut warnings = Vec::new();
-        review_generated_artifact_recipient_set(
-            TrustExecutionContext {
-                options: &plan.options,
-                execution: &plan.execution,
-                warnings: &[],
-            },
-            GeneratedArtifactRecipientSetReview {
-                trust_ctx: &plan.trust_context,
-                signer_kid: plan.execution.key_ctx.kid.as_str(),
-                recipient_set: &evidence.recipient_set,
-                capability: P::CAPABILITY,
-                context_label: "kv output member set",
-            },
-            &mut |new_warnings| warnings.extend_from_slice(new_warnings),
-            confirm_recipient_set,
-        )?;
+        review_kv_output_recipient_set(plan, &content, &mut warnings, &mut confirm_recipient_set)?;
         plan.review.file_snapshot.save_replacement(&encrypted)?;
         Ok(KvWriteOutcome {
             message: success_message.map(ToOwned::to_owned),
             warnings,
         })
     })
+}
+
+fn review_kv_output_recipient_set<P, ConfirmRecipientSet>(
+    plan: &MutationWriteTrustPlan<P>,
+    content: &EncContent,
+    warnings: &mut Vec<String>,
+    confirm_recipient_set: &mut ConfirmRecipientSet,
+) -> Result<()>
+where
+    P: WriteTrustPolicy,
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
+    review_artifact_output_recipient_set(
+        ArtifactOutputRecipientSetReviewInput {
+            options: &plan.options,
+            execution: &plan.execution,
+            trust_ctx: &plan.trust_context,
+            content,
+            capability: P::CAPABILITY,
+            context_label: "kv output member set",
+        },
+        warnings,
+        confirm_recipient_set,
+    )
 }
 
 fn evaluate_signer_trust(
@@ -356,11 +362,7 @@ fn evaluate_signer_trust(
         push_unique_warning(warnings, warning.clone());
     }
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
-    enforce_write_input_artifact_recipients(
-        trust_ctx,
-        verified_doc.proof().kid.as_str(),
-        &recipient_evidence.recipient_set,
-    )?;
+    enforce_write_input_artifact_recipients(trust_ctx, &recipient_evidence.recipient_set)?;
     let outcome =
         evaluate_signer_trust_with_proof(trust_ctx, verified_doc.proof(), capability, &[])?;
     Ok(Some(outcome))

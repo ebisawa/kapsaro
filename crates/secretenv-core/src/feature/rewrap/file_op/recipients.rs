@@ -4,21 +4,22 @@
 //! Recipient operations for file-enc content (add, remove).
 
 use crate::crypto::types::keys::MasterKey;
-use crate::feature::context::crypto::CryptoContext;
 use crate::feature::disclosure::add_to_removed_history;
 use crate::feature::envelope::wrap::build_wrap_item_for_file;
 use crate::feature::recipient::{
-    build_new_wrap_items, check_recipient_exists, print_recipient_not_found_warning,
-    resolve_verified_recipients, validate_not_empty_recipients,
+    build_new_wrap_items, check_recipient_exists, replace_recipient_wrap_items,
+    validate_not_empty_recipients,
 };
 use crate::model::file_enc::FileEncDocumentProtected;
+use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
+use tracing::warn;
 
 /// Remove recipients from file-enc content.
 ///
 /// Note: For file-enc, recipients can be removed by directly filtering the wrap items.
 /// Each recipient is processed individually to update the removal history.
-pub fn remove_file_recipients(
+pub(in crate::feature::rewrap) fn remove_file_recipients(
     protected: &mut FileEncDocumentProtected,
     recipients_to_remove: &[String],
 ) -> Result<()> {
@@ -28,7 +29,10 @@ pub fn remove_file_recipients(
     let mut to_remove: Vec<(String, String)> = Vec::new();
     for recipient_handle in recipients_to_remove {
         if !check_recipient_exists(&current_recipients, recipient_handle) {
-            print_recipient_not_found_warning(recipient_handle);
+            warn!(
+                "[CRYPTO] Warning: {} is not a recipient, skipping",
+                recipient_handle
+            );
             continue;
         }
 
@@ -69,12 +73,11 @@ pub fn remove_file_recipients(
 ///
 /// Note: For file-enc, all wrap items use the same recipients list (existing recipients
 /// at the time of addition). This is why we normalize recipients once before the loop.
-pub fn add_file_recipients(
+pub(in crate::feature::rewrap) fn add_file_recipients(
     protected: &mut FileEncDocumentProtected,
     content_key: &MasterKey,
     new_recipients: &[String],
-    key_ctx: &CryptoContext,
-    target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
+    target_members: &[VerifiedRecipientKey],
     debug: bool,
 ) -> Result<()> {
     let current_recipients = protected.recipients();
@@ -82,9 +85,7 @@ pub fn add_file_recipients(
         &current_recipients,
         protected.wrap.len(),
         new_recipients,
-        key_ctx,
         target_members,
-        debug,
         |attested| build_wrap_item_for_file(attested, &protected.sid, content_key, debug),
     )?;
     protected.wrap.extend(wrap_items);
@@ -92,28 +93,17 @@ pub fn add_file_recipients(
     Ok(())
 }
 
-pub fn rewrite_file_recipient_wraps(
+pub(in crate::feature::rewrap) fn rewrite_file_recipient_wraps(
     protected: &mut FileEncDocumentProtected,
     content_key: &MasterKey,
     recipients_to_refresh: &[String],
-    key_ctx: &CryptoContext,
-    target_members: Option<&[crate::model::public_key::VerifiedRecipientKey]>,
+    target_members: &[VerifiedRecipientKey],
     debug: bool,
 ) -> Result<()> {
-    let refreshed_members =
-        resolve_verified_recipients(target_members, key_ctx, recipients_to_refresh, debug)?;
-
-    protected
-        .wrap
-        .retain(|wrap| !recipients_to_refresh.contains(&wrap.recipient_handle));
-    for member in &refreshed_members {
-        protected.wrap.push(build_wrap_item_for_file(
-            member,
-            &protected.sid,
-            content_key,
-            debug,
-        )?);
-    }
-
-    Ok(())
+    replace_recipient_wrap_items(
+        &mut protected.wrap,
+        recipients_to_refresh,
+        target_members,
+        |member| build_wrap_item_for_file(member, &protected.sid, content_key, debug),
+    )
 }

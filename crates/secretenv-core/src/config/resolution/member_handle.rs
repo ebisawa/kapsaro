@@ -17,6 +17,7 @@ use crate::Result;
 use std::path::Path;
 
 use super::common::resolve_string_with_priority;
+use crate::config::types::ConfigKey;
 
 /// Resolve the member handle from non-interactive sources and return `None` when unresolved.
 pub(crate) fn resolve_member_handle_with_fallback(
@@ -27,7 +28,7 @@ pub(crate) fn resolve_member_handle_with_fallback(
     if let Some(member_handle) = resolve_string_with_priority(
         member_handle_opt,
         Some("SECRETENV_MEMBER_HANDLE"),
-        "member_handle",
+        ConfigKey::MemberHandle.canonical_name(),
         base_dir,
         None,
     )? {

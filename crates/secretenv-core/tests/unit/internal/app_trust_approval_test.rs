@@ -19,7 +19,7 @@ fn test_save_known_key_approvals_rejects_self_candidate() {
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
     let candidate =
-        ApprovedKnownKey::from_review(ALICE_MEMBER_HANDLE, &execution.key_ctx.kid, None, None);
+        ApprovedKnownKey::from_review(ALICE_MEMBER_HANDLE, execution.key_ctx.kid(), None, None);
 
     let result = save_known_key_approvals(&options, &execution, &[candidate]);
 

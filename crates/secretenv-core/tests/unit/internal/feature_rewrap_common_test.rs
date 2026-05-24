@@ -86,7 +86,8 @@ fn test_rewrite_with_rewrap_operation_plan_applies_operations_in_common_order() 
     let stale = vec!["alice".to_string()];
     let plan = build_rewrap_operation_plan(&current, &target, &stale, &options(true, true));
 
-    let result = rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan).unwrap();
+    let result =
+        rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan, false).unwrap();
 
     assert_eq!(
         result,

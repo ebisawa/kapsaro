@@ -8,10 +8,11 @@ use std::marker::PhantomData;
 use std::path::Path;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::enforcement::{enforce_recipients_trust, RecipientTrustOutcome};
+use crate::app::trust::enforcement::enforce_recipients_trust;
 use crate::app::trust::evaluation::enforce_policy_strict_key_checking;
 use crate::app::trust::policy::{TrustPolicy, WriteTrustPolicy};
 use crate::app::trust::store::load_optional_trust_store_for_member;
+use crate::app::trust::RecipientTrustOutcome;
 use crate::config::types::{
     StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
 };

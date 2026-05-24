@@ -50,6 +50,11 @@ impl Plaintext {
     pub fn to_zeroizing_vec(&self) -> Zeroizing<Vec<u8>> {
         Zeroizing::new(self.0.clone())
     }
+
+    /// Move plaintext bytes into a zeroizing vector without cloning.
+    pub fn take_zeroizing_vec(&mut self) -> Zeroizing<Vec<u8>> {
+        Zeroizing::new(std::mem::take(&mut self.0))
+    }
 }
 
 impl From<Vec<u8>> for Plaintext {

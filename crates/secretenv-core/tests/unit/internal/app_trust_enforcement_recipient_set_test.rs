@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 
 use crate::app::trust::enforcement::{
     enforce_artifact_recipient_set_trust, evaluate_read_artifact_recipient_keys,
-    ArtifactRecipientTrustOutcome, RecipientTrustOutcome,
 };
-use crate::app::trust::{CommandCapability, TrustContext};
+use crate::app::trust::{
+    ArtifactRecipientTrustOutcome, CommandCapability, RecipientTrustOutcome, TrustContext,
+};
 use crate::config::types::{StrictKeyChecking, StrictKeyCheckingResolution};
 use crate::feature::trust::judgment::SelfTrustSet;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
@@ -28,13 +29,8 @@ fn test_recipient_set_trust_accepts_reviewed_set_when_signer_is_member() {
     let mut trust_ctx = trust_ctx(StrictKeyChecking::Yes, false);
     trust_ctx.recipient_sets = vec![record_from_set(&current)];
 
-    let outcome = enforce_artifact_recipient_set_trust(
-        &trust_ctx,
-        ALICE_KID,
-        &current,
-        CommandCapability::Get,
-    )
-    .unwrap();
+    let outcome =
+        enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get).unwrap();
 
     assert_eq!(outcome, ArtifactRecipientTrustOutcome::Accepted);
 }
@@ -46,8 +42,7 @@ fn test_recipient_set_trust_accepts_reviewed_set_when_signer_is_not_member() {
     trust_ctx.recipient_sets = vec![record_from_set(&current)];
 
     let outcome =
-        enforce_artifact_recipient_set_trust(&trust_ctx, BOB_KID, &current, CommandCapability::Get)
-            .unwrap();
+        enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get).unwrap();
 
     assert_eq!(outcome, ArtifactRecipientTrustOutcome::Accepted);
 }
@@ -57,13 +52,8 @@ fn test_recipient_set_review_allows_missing_set_when_signer_is_member() {
     let current = recipient_set(&[("alice@example.com", ALICE_KID)]);
     let trust_ctx = trust_ctx(StrictKeyChecking::Yes, true);
 
-    let outcome = enforce_artifact_recipient_set_trust(
-        &trust_ctx,
-        ALICE_KID,
-        &current,
-        CommandCapability::Get,
-    )
-    .unwrap();
+    let outcome =
+        enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get).unwrap();
 
     assert!(matches!(
         outcome,
@@ -81,13 +71,8 @@ fn test_recipient_set_review_auto_accepts_missing_self_only_set() {
         active_member("alice@example.com", ALICE_KID),
     );
 
-    let outcome = enforce_artifact_recipient_set_trust(
-        &trust_ctx,
-        ALICE_KID,
-        &current,
-        CommandCapability::Get,
-    )
-    .unwrap();
+    let outcome =
+        enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get).unwrap();
 
     assert_eq!(outcome, ArtifactRecipientTrustOutcome::Accepted);
 }
@@ -104,13 +89,8 @@ fn test_recipient_set_review_auto_accepts_changed_self_only_set() {
     );
     trust_ctx.recipient_sets = vec![record_from_set(&approved)];
 
-    let outcome = enforce_artifact_recipient_set_trust(
-        &trust_ctx,
-        ALICE_KID,
-        &current,
-        CommandCapability::Get,
-    )
-    .unwrap();
+    let outcome =
+        enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get).unwrap();
 
     assert_eq!(outcome, ArtifactRecipientTrustOutcome::Accepted);
 }
@@ -121,8 +101,7 @@ fn test_strict_key_checking_no_skips_recipient_member_set_check() {
     let trust_ctx = trust_ctx(StrictKeyChecking::No, false);
 
     let outcome =
-        enforce_artifact_recipient_set_trust(&trust_ctx, BOB_KID, &current, CommandCapability::Get)
-            .unwrap();
+        enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get).unwrap();
 
     assert_eq!(
         outcome,
@@ -139,13 +118,8 @@ fn test_recipient_set_trust_rejects_active_member_handle_mismatch() {
         active_member("bob@example.com", ALICE_KID),
     );
 
-    let error = enforce_artifact_recipient_set_trust(
-        &trust_ctx,
-        ALICE_KID,
-        &current,
-        CommandCapability::Get,
-    )
-    .unwrap_err();
+    let error = enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get)
+        .unwrap_err();
 
     assert_verify_rule(error, "E_RECIPIENT_SET_HANDLE_MISMATCH");
 }
@@ -159,9 +133,8 @@ fn test_strict_key_checking_no_rejects_active_member_handle_mismatch() {
         active_member("bob@example.com", ALICE_KID),
     );
 
-    let error =
-        enforce_artifact_recipient_set_trust(&trust_ctx, BOB_KID, &current, CommandCapability::Get)
-            .unwrap_err();
+    let error = enforce_artifact_recipient_set_trust(&trust_ctx, &current, CommandCapability::Get)
+        .unwrap_err();
 
     assert_verify_rule(error, "E_RECIPIENT_SET_HANDLE_MISMATCH");
 }
@@ -178,7 +151,7 @@ fn test_read_recipient_keys_warns_for_unresolved_recipient_kid() {
         active_member("alice@example.com", ALICE_KID),
     );
 
-    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, ALICE_KID, &current).unwrap();
+    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, &current).unwrap();
 
     assert_eq!(
         result.outcome,
@@ -198,7 +171,7 @@ fn test_read_recipient_keys_strict_no_accepts_signer_outside_recipient_set() {
     let current = recipient_set(&[("alice@example.com", ALICE_KID)]);
     let trust_ctx = trust_ctx(StrictKeyChecking::No, false);
 
-    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, BOB_KID, &current).unwrap();
+    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, &current).unwrap();
 
     assert_eq!(result.outcome, RecipientTrustOutcome::Accepted);
 }
@@ -212,7 +185,7 @@ fn test_read_recipient_keys_strict_no_keeps_validation_but_skips_key_review() {
         active_member("alice@example.com", ALICE_KID),
     );
 
-    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, ALICE_KID, &current).unwrap();
+    let result = evaluate_read_artifact_recipient_keys(&trust_ctx, &current).unwrap();
 
     assert_eq!(result.outcome, RecipientTrustOutcome::Accepted);
     assert!(result.warnings.is_empty());

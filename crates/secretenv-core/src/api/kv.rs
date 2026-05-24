@@ -5,11 +5,11 @@
 
 use std::collections::BTreeMap;
 
-use crate::api::artifact_text::ArtifactText;
+use crate::api::artifact_text::{ArtifactLoadPolicy, ArtifactText};
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
-use crate::feature::kv::error::map_key_not_found_error;
+use crate::feature::kv::error::normalize_key_not_found_error;
 use crate::feature::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
@@ -21,6 +21,7 @@ use crate::feature::kv::types::KvInputEntry as InternalKvInputEntry;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
+use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
 use crate::Result;
 
 use super::key::{KeyContext, RecipientKeys};
@@ -59,6 +60,9 @@ struct KvFacadeWriteInput<'a> {
     ctx: KvWriteContext<'a>,
 }
 
+const KV_ENC_LOAD_POLICY: ArtifactLoadPolicy =
+    ArtifactLoadPolicy::new(MAX_KV_ENC_FILE_SIZE, "kv-enc artifact");
+
 impl KvEncArtifact {
     /// Parse kv-enc text after format detection.
     pub fn parse(content: impl Into<String>) -> Result<Self> {
@@ -67,7 +71,7 @@ impl KvEncArtifact {
 
     /// Load kv-enc text from a path.
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
-        ArtifactText::load(path, "kv-enc artifact").map(Self::from_text)
+        ArtifactText::load(path, KV_ENC_LOAD_POLICY).map(Self::from_text)
     }
 
     /// Save the artifact text.
@@ -193,7 +197,7 @@ impl VerifiedKvEncArtifact {
             options.debug(),
         )
         .map(|result| result.value)
-        .map_err(|error| map_key_not_found_error(error, key))?;
+        .map_err(|error| normalize_key_not_found_error(error, key))?;
         decode_decrypted_kv_value(key, value).map(SecretString::from_inner)
     }
 

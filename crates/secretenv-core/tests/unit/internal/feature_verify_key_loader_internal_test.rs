@@ -14,6 +14,7 @@ use crate::feature::verify::public_key::{
     build_public_key_expiry_warning, verify_public_key_for_verification_context,
     verify_public_key_with_attestation_context, verify_recipient_public_keys,
 };
+use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::external::keygen::DefaultSshKeygen;
@@ -21,7 +22,6 @@ use crate::io::ssh::protocol::{build_sha256_fingerprint, SshKeyDescriptor};
 use crate::model::public_key::{Identity, PublicKey};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::model::verification::VerifyingKeySource;
-use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use std::path::Path;
 
 /// Build SSH binding context from test SSH keypair

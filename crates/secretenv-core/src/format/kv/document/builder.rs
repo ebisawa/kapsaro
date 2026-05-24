@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! KV document builder for assembling unsigned kv-enc documents.
+//! Builder for unsigned KV document wire-format drafts.
+//! Converts parsed kv-enc lines into token-preserving draft state.
 
 use crate::format::schema::document::{parse_kv_entry_token, parse_kv_wrap_token};
 use crate::format::token::TokenCodec;
@@ -10,8 +11,7 @@ use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::KvEncLine;
 use crate::{Error, Result};
 
-use super::document::{KvDocumentDraft, KvDocumentEntry, WrapSource};
-use super::types::KvEncodedEntry;
+use super::draft::{KvDocumentDraft, KvDocumentEntry, WrapSource};
 
 /// Builder for assembling a KV-enc document prior to signing.
 pub struct KvDocumentBuilder {
@@ -64,7 +64,7 @@ impl KvDocumentBuilder {
 
     /// Build from parsed KV-enc lines.
     ///
-    /// * `wrap` — if `Some`, the WRAP line is stored as `Decoded`; if `None`,
+    /// * `wrap` - if `Some`, the WRAP line is stored as `Decoded`; if `None`,
     ///   the WRAP token is decoded from the raw line and stored as `Raw`.
     pub fn from_lines(
         head: KvHeader,
@@ -121,14 +121,14 @@ impl KvDocumentBuilder {
         }
     }
 
-    /// Append entries as Encoded.
+    /// Append already encoded entry tokens.
     pub fn with_entries<I, E>(mut self, entries: I) -> Self
     where
         I: IntoIterator<Item = E>,
-        E: Into<KvEncodedEntry>,
+        E: Into<(String, String)>,
     {
         for entry in entries {
-            let KvEncodedEntry { key, token } = entry.into();
+            let (key, token) = entry.into();
             self.entries.push(KvDocumentEntry::Encoded { key, token });
         }
         self
@@ -147,5 +147,5 @@ impl KvDocumentBuilder {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_kv_builder_test.rs"]
+#[path = "../../../../tests/unit/internal/feature_kv_builder_test.rs"]
 mod tests;

@@ -66,8 +66,11 @@ pub fn derive_key_from_password(
         context::HKDF_INFO_PRIVATE_KEY_PASSWORD_V7,
         kid
     ));
-    let cek = kdf::expand_to_array(&Ikm::from(ikm.as_ref()), Some(hkdf_salt), &info)?;
-    XChaChaKey::from_slice(cek.as_bytes())
+    Ok(XChaChaKey::from_zeroizing(kdf::derive_hkdf_sha256_array(
+        &Ikm::from(ikm.as_ref()),
+        Some(hkdf_salt),
+        &info,
+    )?))
 }
 
 /// Hash password with Argon2id, returning a 32-byte IKM wrapped in Zeroizing

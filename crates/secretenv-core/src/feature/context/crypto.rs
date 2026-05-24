@@ -6,20 +6,26 @@
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 
-use crate::feature::context::expiry::VerifiedExpiresAt;
+use crate::feature::context::expiry::{
+    build_signing_key_expiry_warning, enforce_key_not_expired_for_signing, VerifiedExpiresAt,
+};
 use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::model::public_key::PublicKey;
 use crate::model::verified::VerifiedPrivateKey;
+use crate::Result;
 
 mod decryption_key;
 mod loader;
+mod signing;
 
 pub use loader::{
     build_local_key_access, build_verified_private_key_from_password,
     load_crypto_context_from_keystore,
 };
 pub(crate) use loader::{build_signing_key, load_verified_private_key_from_keystore};
+pub use signing::{build_signing_context, SigningContext, VerifiedSigningContext};
 
 pub struct LocalKeyAccess {
     keystore_root: PathBuf,
@@ -29,14 +35,14 @@ pub struct LocalKeyAccess {
 
 /// Context for cryptographic operations requiring member keys
 pub struct CryptoContext {
-    pub member_handle: MemberHandle,
-    pub kid: Kid,
-    pub pub_key_source: Box<dyn PublicKeySource>,
-    pub workspace_path: Option<PathBuf>,
-    pub private_key: VerifiedPrivateKey,
-    pub signing_key: SigningKey,
+    member_handle: MemberHandle,
+    kid: Kid,
+    pub(crate) pub_key_source: Box<dyn PublicKeySource>,
+    workspace_path: Option<PathBuf>,
+    private_key: VerifiedPrivateKey,
+    signing_key: SigningKey,
     /// Key expiration timestamp (RFC 3339) from PrivateKeyProtected
-    pub expires_at: VerifiedExpiresAt,
+    expires_at: VerifiedExpiresAt,
     selected_kid_override: Option<Kid>,
     local_key_access: Option<LocalKeyAccess>,
 }
@@ -130,6 +136,51 @@ impl CryptoContext {
         self.selected_kid_override = selected_kid_override;
         self.local_key_access = local_key_access;
         self
+    }
+
+    pub fn member_handle(&self) -> &str {
+        self.member_handle.as_str()
+    }
+
+    pub fn kid(&self) -> &str {
+        self.kid.as_str()
+    }
+
+    pub fn private_key(&self) -> &VerifiedPrivateKey {
+        &self.private_key
+    }
+
+    pub fn signing_key(&self) -> &SigningKey {
+        &self.signing_key
+    }
+
+    pub fn workspace_path(&self) -> Option<&Path> {
+        self.workspace_path.as_deref()
+    }
+
+    pub fn expires_at(&self) -> &str {
+        self.expires_at.as_str()
+    }
+
+    pub fn load_signer_public_key(&self) -> Result<PublicKey> {
+        self.pub_key_source.load_public_key(self.member_handle())
+    }
+
+    pub(crate) fn member_handle_id(&self) -> &MemberHandle {
+        &self.member_handle
+    }
+
+    pub(crate) fn self_signature_public_key_x(&self) -> [u8; 32] {
+        let verifying_key: ed25519_dalek::VerifyingKey = (&self.signing_key).into();
+        verifying_key.to_bytes()
+    }
+
+    pub(crate) fn enforce_signing_key_not_expired(&self) -> Result<()> {
+        enforce_key_not_expired_for_signing(&self.expires_at)
+    }
+
+    pub(crate) fn build_signing_key_expiry_warning(&self) -> Result<Option<String>> {
+        build_signing_key_expiry_warning(&self.expires_at)
     }
 
     pub(crate) fn local_keystore_root(&self) -> Option<&Path> {

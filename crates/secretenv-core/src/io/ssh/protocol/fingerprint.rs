@@ -4,7 +4,7 @@
 //! SSH fingerprint computation (pure functions).
 
 use super::parse::decode_ssh_public_key_blob;
-use crate::support::codec::base64_public::encode_base64_standard_nopad;
+use crate::format::codec::base64_public::encode_base64_standard_nopad;
 use crate::Result;
 use sha2::{Digest, Sha256};
 

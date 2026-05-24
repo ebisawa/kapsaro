@@ -12,10 +12,10 @@ use crate::app::trust::{
     evaluate_read_artifact_trust, DecryptPolicy, RecipientTrustOutcome, SignerTrustOutcome,
 };
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::trust::recipient_sets::file_recipient_evidence;
 use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::format::content::FileEncContent;
-use crate::model::common::WrapSet;
 use crate::support::warning::push_unique_warning;
 use crate::Result;
 

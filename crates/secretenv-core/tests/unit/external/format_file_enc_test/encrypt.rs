@@ -7,8 +7,8 @@ use super::helpers::{
 };
 use crate::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::encrypt::file as file_enc;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use uuid::Uuid;
 
 #[test]
@@ -46,7 +46,7 @@ fn test_encrypt_file_basic() {
 
     assert_eq!(
         file_enc_doc.protected.format,
-        secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
+        secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7
     );
     assert_eq!(
         file_enc_doc.recipients(),
@@ -57,7 +57,7 @@ fn test_encrypt_file_basic() {
         serde_json::from_str(&serde_json::to_string(&file_enc_doc).unwrap()).unwrap();
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["format"],
-        secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6
+        secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V7
     );
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],

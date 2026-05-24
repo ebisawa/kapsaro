@@ -10,8 +10,8 @@ use super::base64::decode_base64_armored;
 use super::parse::decode_ssh_public_key_blob;
 use super::types::SshSignatureBlob;
 use super::wire::{decode_ssh_string, encode_ssh_string};
+use crate::format::codec::base64_public::encode_base64_standard_nopad;
 use crate::io::ssh::SshError;
-use crate::support::codec::base64_public::encode_base64_standard_nopad;
 use crate::Result;
 use sha2::{Digest, Sha256};
 

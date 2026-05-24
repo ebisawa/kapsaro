@@ -17,7 +17,7 @@ use secretenv_core::cli_api::test_support::operations::key::protection::encrypti
 };
 use secretenv_core::cli_api::test_support::operations::key::protection::key_derivation::build_sign_message;
 use secretenv_core::cli_api::test_support::primitives::aead::xchacha;
-use secretenv_core::cli_api::test_support::primitives::kdf::expand_to_array;
+use secretenv_core::cli_api::test_support::primitives::kdf::derive_hkdf_sha256_array;
 use secretenv_core::cli_api::test_support::primitives::types::data::{Ikm, Info, Plaintext};
 use secretenv_core::cli_api::test_support::primitives::types::keys::XChaChaKey;
 use secretenv_core::cli_api::test_support::primitives::types::primitives::{
@@ -62,8 +62,11 @@ fn derive_enc_key(
 ) -> secretenv_core::Result<XChaChaKey> {
     let ikm = Ikm::from(raw_sig);
     let info = Info::from_string(&format!("{}:{}", HKDF_INFO_PRIVATE_KEY_SSHSIG_V7, kid));
-    let cek = expand_to_array(&ikm, Some(salt), &info)?;
-    XChaChaKey::from_slice(cek.as_bytes())
+    Ok(XChaChaKey::from_zeroizing(derive_hkdf_sha256_array(
+        &ikm,
+        Some(salt),
+        &info,
+    )?))
 }
 
 fn tamper_base64url(input: &str) -> String {

@@ -37,7 +37,7 @@ fn rewrite_member_with_github_binding(
         identity: existing.protected.identity,
         created_at: &created_at,
         expires_at: &expires_at,
-        sig_sk: &key_ctx.signing_key,
+        sig_sk: key_ctx.signing_key(),
         debug: false,
         github_account: Some(GithubAccount {
             id,
@@ -68,7 +68,7 @@ fn rewrite_member_with_foreign_identity(
         identity: source.protected.identity,
         created_at: &created_at,
         expires_at: &expires_at,
-        sig_sk: &key_ctx.signing_key,
+        sig_sk: key_ctx.signing_key(),
         debug: false,
         github_account: None,
     })

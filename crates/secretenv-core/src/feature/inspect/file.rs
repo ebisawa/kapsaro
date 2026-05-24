@@ -8,15 +8,9 @@ use crate::support::kid::format_kid_display;
 
 use super::formatter::{
     append_file_payload_info, append_line, append_removed_recipients, append_signer_info,
-    append_wrap_item,
+    append_wrap_item, format_section_lines,
 };
 use super::{build_section, InspectOutput, InspectSection};
-
-fn format_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
-    let mut out = String::new();
-    build(&mut out);
-    out.lines().map(ToOwned::to_owned).collect()
-}
 
 fn build_file_enc_header_section(doc: &FileEncDocument) -> InspectSection {
     build_section(
@@ -79,7 +73,7 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
 
 pub(crate) fn build_file_inspect_output(doc: &FileEncDocument) -> InspectOutput {
     InspectOutput {
-        title: "File-Enc v6 Metadata".to_string(),
+        title: "File-Enc v7 Metadata".to_string(),
         sections: vec![
             build_file_enc_header_section(doc),
             build_file_enc_wrap_section(doc),

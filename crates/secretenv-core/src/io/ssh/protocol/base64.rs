@@ -3,8 +3,8 @@
 
 //! Base64 processing utilities for SSH formats
 
+use crate::format::codec::base64_public::decode_base64_standard;
 use crate::io::ssh::SshError;
-use crate::support::codec::base64_public::decode_base64_standard;
 use crate::Result;
 use zeroize::Zeroizing;
 

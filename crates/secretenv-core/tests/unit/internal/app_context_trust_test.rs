@@ -388,7 +388,7 @@ fn test_enforce_signer_trust_needs_known_key_approval_interactive() {
     match result {
         SignerTrustOutcome::NeedsKnownKeyApproval(candidate) => {
             assert_eq!(candidate.member_handle, "bob@example.com");
-            assert_eq!(candidate.kid, VALID_TEST_KID);
+            assert_eq!(candidate.kid.as_str(), VALID_TEST_KID);
             assert_eq!(candidate.github_id, None);
             assert_eq!(candidate.github_login.as_deref(), None);
             assert!(candidate.github_binding_configured);
@@ -549,7 +549,7 @@ fn test_evaluate_signer_trust_with_proof_uses_embedded_signer_public_key() {
     match result {
         SignerTrustOutcome::NeedsNonMemberAcceptance { candidate, .. } => {
             assert_eq!(candidate.member_handle, public_key.protected.subject_handle);
-            assert_eq!(candidate.kid, public_key.protected.kid);
+            assert_eq!(candidate.kid.as_str(), public_key.protected.kid.as_str());
         }
         other => panic!("unexpected outcome: {:?}", other),
     }
@@ -779,10 +779,10 @@ fn test_trust_list_surfaces_insecure_permission_warning() {
         owner_handle: owner_handle.to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         updated_at: "2026-01-01T00:00:00Z".to_string(),
-        known_keys: vec![build_known_key(&key_ctx.kid, owner_handle)],
+        known_keys: vec![build_known_key(key_ctx.kid(), owner_handle)],
         recipient_sets: Vec::new(),
     };
-    let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+    let document = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
     let trust_path = get_trust_store_file_path(dir.path(), owner_handle);
     save_trust_store(&trust_path, &document).unwrap();
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();

@@ -349,7 +349,7 @@ fn test_verify_trust_store_rejects_semantically_invalid_timestamp() {
         }],
         recipient_sets: Vec::new(),
     };
-    let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+    let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
 
     let result = verify_trust_store(&doc, &home.path().join("keys"));
 
@@ -371,7 +371,7 @@ fn test_verify_trust_store_rejects_duplicate_known_key_kid() {
         ],
         recipient_sets: Vec::new(),
     };
-    let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+    let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
 
     let result = verify_trust_store(&doc, &home.path().join("keys"));
 
@@ -396,7 +396,7 @@ fn test_verify_trust_store_rejects_duplicate_recipient_set_sid() {
             recipient_set_record(sid, &[CAROL_KID]),
         ],
     };
-    let doc = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+    let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
 
     let result = verify_trust_store(&doc, &home.path().join("keys"));
 

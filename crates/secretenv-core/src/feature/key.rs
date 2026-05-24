@@ -1,10 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Keys feature - key generation and management.
+//! Keys feature - key generation and portable key material handling.
 
 pub mod generate;
-pub mod manage;
 pub mod material;
 pub mod portable_export;
 pub mod protection;

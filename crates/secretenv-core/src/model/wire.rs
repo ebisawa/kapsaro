@@ -14,10 +14,10 @@ pub mod format {
     pub const PRIVATE_KEY_V7: &str = "secretenv:format:private-key@7";
     /// Local Trust Store v5 format identifier.
     pub const LOCAL_TRUST_V5: &str = "secretenv:format:local-trust@5";
-    /// FileEncDocument@6 format identifier.
-    pub const FILE_ENC_V6: &str = "secretenv:format:file-enc@6";
-    /// `FilePayload@6` format identifier (used in file-enc payload.protected).
-    pub const FILE_PAYLOAD_V6: &str = "secretenv:format:file-enc:payload@6";
+    /// FileEncDocument@7 format identifier.
+    pub const FILE_ENC_V7: &str = "secretenv:format:file-enc@7";
+    /// `FilePayload@7` format identifier (used in file-enc payload.protected).
+    pub const FILE_PAYLOAD_V7: &str = "secretenv:format:file-enc:payload@7";
 }
 
 /// Algorithm identifiers that appear on-wire (e.g. in `payload.aead`, `signature.alg`).
@@ -41,12 +41,12 @@ pub mod jwk {
 /// Domain-separation strings for AAD, HPKE info, HKDF info, MAC, SSHSIG messages, and hashes.
 pub mod context {
     /// AAD discriminator for KV entry payload encryption.
-    pub const AAD_KV_ENTRY_PAYLOAD_V8: &str = "secretenv:context:aad:kv-enc:entry-payload@8";
+    pub const AAD_KV_ENTRY_PAYLOAD_V9: &str = "secretenv:context:aad:kv-enc:entry-payload@9";
 
     /// HPKE info discriminator for kv-enc WRAP.
-    pub const HPKE_INFO_KV_WRAP_V8: &str = "secretenv:context:hpke-info:kv-enc:wrap@8";
+    pub const HPKE_INFO_KV_WRAP_V9: &str = "secretenv:context:hpke-info:kv-enc:wrap@9";
     /// HPKE info discriminator for file-enc WRAP.
-    pub const HPKE_INFO_FILE_WRAP_V6: &str = "secretenv:context:hpke-info:file-enc:wrap@6";
+    pub const HPKE_INFO_FILE_WRAP_V7: &str = "secretenv:context:hpke-info:file-enc:wrap@7";
 
     /// HKDF info for `PrivateKey@7` encryption key derivation from SSH signature.
     pub const HKDF_INFO_PRIVATE_KEY_SSHSIG_V7: &str =
@@ -54,11 +54,25 @@ pub mod context {
     /// HKDF info for `PrivateKey@7` encryption key derivation from password.
     pub const HKDF_INFO_PRIVATE_KEY_PASSWORD_V7: &str =
         "secretenv:context:hkdf-info:private-key:password@7";
+    /// HKDF salt discriminator for file-enc artifact key schedule.
+    pub const HKDF_SALT_FILE_V7: &str = "secretenv:context:hkdf-salt:file-enc@7";
+    /// HKDF salt discriminator for kv-enc artifact key schedule.
+    pub const HKDF_SALT_KV_V9: &str = "secretenv:context:hkdf-salt:kv-enc@9";
+    /// HKDF info discriminator for file-enc payload content key derivation.
+    pub const HKDF_INFO_FILE_CONTENT_KEY_V7: &str =
+        "secretenv:context:hkdf-info:file-enc:content-key@7";
+    /// HKDF info discriminator for file-enc key-possession MAC key derivation.
+    pub const HKDF_INFO_FILE_MAC_KEY_V7: &str = "secretenv:context:hkdf-info:file-enc:mac-key@7";
     /// HKDF info discriminator for kv-enc entry CEK derivation.
-    pub const HKDF_INFO_KV_CEK_V8: &str = "secretenv:context:hkdf-info:kv-enc:cek@8";
+    pub const HKDF_INFO_KV_CEK_V9: &str = "secretenv:context:hkdf-info:kv-enc:cek@9";
+    /// HKDF info discriminator for kv-enc key-possession MAC key derivation.
+    pub const HKDF_INFO_KV_MAC_KEY_V9: &str = "secretenv:context:hkdf-info:kv-enc:mac-key@9";
 
     /// MAC domain separator for artifact key-possession proof.
-    pub const MAC_DOMAIN_KEY_POSSESSION_V1: &str = "secretenv:context:mac-domain:key-possession@1";
+    pub const MAC_DOMAIN_KEY_POSSESSION_V2: &str = "secretenv:context:mac-domain:key-possession@2";
+    /// Signature-input domain separator for signed artifacts.
+    pub const SIG_DOMAIN_ARTIFACT_SIGNATURE_V2: &str =
+        "secretenv:context:sig-domain:artifact-signature@2";
 
     /// Sign message header for SSH `PrivateKey@7` protection.
     pub const SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7: &str =

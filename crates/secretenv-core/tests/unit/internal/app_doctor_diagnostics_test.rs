@@ -7,8 +7,8 @@ use std::path::Path;
 
 use crate::app::doctor::ci::check_ci_readiness;
 use crate::app::doctor::types::{DoctorCheck, DoctorStatus};
-use crate::app::doctor::{run_doctor, DoctorRequest};
-use crate::feature::envelope::signature::SigningContext;
+use crate::app::doctor::{execute_doctor_command, DoctorRequest};
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::format::token::TokenCodec;
@@ -37,7 +37,7 @@ fn doctor_request(home: &TempDir, workspace: &Path) -> DoctorRequest {
 }
 
 fn run_workspace_doctor(home: &TempDir, workspace: &Path) -> Vec<DoctorCheck> {
-    run_doctor(doctor_request(home, workspace))
+    execute_doctor_command(doctor_request(home, workspace))
         .unwrap()
         .checks()
         .to_vec()
@@ -65,7 +65,7 @@ fn save_empty_trust_store(home: &TempDir) {
         known_keys: Vec::new(),
         recipient_sets: Vec::new(),
     };
-    let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+    let document = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
     let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     save_trust_store(&path, &document).unwrap();
 }
@@ -102,7 +102,7 @@ fn encrypted_kv_for_recipients(
     let mut values = HashMap::new();
     values.insert("API_TOKEN".to_string(), "secret".to_string());
     let signing = SigningContext {
-        signing_key: &key_ctx.signing_key,
+        signing_key: key_ctx.signing_key(),
         signer_kid: &kid,
         signer_pub,
         debug: false,
@@ -130,7 +130,7 @@ fn encrypted_kv_for_mislabeled_bob_recipient(home: &TempDir) -> String {
     let mut values = HashMap::new();
     values.insert("API_TOKEN".to_string(), "secret".to_string());
     let signing = SigningContext {
-        signing_key: &key_ctx.signing_key,
+        signing_key: key_ctx.signing_key(),
         signer_kid: &signer_kid,
         signer_pub,
         debug: false,
@@ -381,7 +381,7 @@ fn test_doctor_without_member_handle_reports_owner_warnings_when_ambiguous() {
         verbose: false,
     };
 
-    let checks = run_doctor(request).unwrap().checks().to_vec();
+    let checks = execute_doctor_command(request).unwrap().checks().to_vec();
 
     assert!(has_check(&checks, "keystore.member", DoctorStatus::Warn));
     assert!(has_check(

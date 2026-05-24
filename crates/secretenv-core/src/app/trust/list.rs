@@ -6,7 +6,7 @@
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::load_optional_trust_store_for_member;
 use crate::model::identity::{Kid, MemberHandle};
-use crate::model::trust_store::{KnownKey, RecipientSetRecord};
+use crate::model::trust_store::{KnownKey, RecipientSetRecord, TrustStoreProtected};
 use crate::Result;
 
 #[derive(Debug, Clone)]
@@ -39,6 +39,11 @@ pub struct RecipientSetListResult {
     pub warnings: Vec<String>,
 }
 
+struct TrustStoreListEntries<T> {
+    items: Vec<T>,
+    warnings: Vec<String>,
+}
+
 impl From<&KnownKey> for TrustListItem {
     fn from(known_key: &KnownKey) -> Self {
         Self {
@@ -68,24 +73,16 @@ pub fn list_known_keys(
     options: &CommonCommandOptions,
     member_handle: &str,
 ) -> Result<TrustListResult> {
-    let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
-    let Some(loaded) = loaded else {
-        return Ok(TrustListResult {
-            items: Vec::new(),
-            warnings: Vec::new(),
-        });
-    };
-
-    let items = loaded
-        .protected
-        .known_keys
-        .iter()
-        .map(TrustListItem::from)
-        .collect();
-
+    let entries = load_trust_store_list_entries(options, member_handle, |protected| {
+        protected
+            .known_keys
+            .iter()
+            .map(TrustListItem::from)
+            .collect()
+    })?;
     Ok(TrustListResult {
-        items,
-        warnings: loaded.warnings,
+        items: entries.items,
+        warnings: entries.warnings,
     })
 }
 
@@ -94,23 +91,33 @@ pub fn list_recipient_sets(
     options: &CommonCommandOptions,
     member_handle: &str,
 ) -> Result<RecipientSetListResult> {
+    let entries = load_trust_store_list_entries(options, member_handle, |protected| {
+        protected
+            .recipient_sets
+            .iter()
+            .map(RecipientSetListItem::from)
+            .collect()
+    })?;
+    Ok(RecipientSetListResult {
+        items: entries.items,
+        warnings: entries.warnings,
+    })
+}
+
+fn load_trust_store_list_entries<T>(
+    options: &CommonCommandOptions,
+    member_handle: &str,
+    build_items: impl FnOnce(&TrustStoreProtected) -> Vec<T>,
+) -> Result<TrustStoreListEntries<T>> {
     let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
     let Some(loaded) = loaded else {
-        return Ok(RecipientSetListResult {
+        return Ok(TrustStoreListEntries {
             items: Vec::new(),
             warnings: Vec::new(),
         });
     };
-
-    let items = loaded
-        .protected
-        .recipient_sets
-        .iter()
-        .map(RecipientSetListItem::from)
-        .collect();
-
-    Ok(RecipientSetListResult {
-        items,
+    Ok(TrustStoreListEntries {
+        items: build_items(&loaded.protected),
         warnings: loaded.warnings,
     })
 }

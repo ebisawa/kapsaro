@@ -3,6 +3,7 @@
 
 //! Shared trust review orchestration for app-layer commands.
 
+mod artifact_recipient;
 mod error;
 mod execution;
 mod online_verification;
@@ -12,10 +13,14 @@ mod rewrap;
 mod signer;
 mod types;
 
+pub use artifact_recipient::{
+    review_artifact_content_recipient_set_output, review_artifact_output_recipient_set,
+    ArtifactContentReviewInput, ArtifactOutputRecipientSetReviewInput,
+};
 pub use execution::TrustExecutionContext;
 pub use execution::{
     execute_read_with_signer_trust, execute_write_with_recipient_trust,
-    review_generated_artifact_recipient_set, GeneratedArtifactRecipientSetReview,
+    review_artifact_recipient_set_output, ArtifactRecipientSetReviewInput,
 };
 pub use persistence::save_approved_known_key_warnings;
 pub use recipient::review_recipient_trust_with_confirmation;

@@ -10,10 +10,11 @@ use secretenv_core::cli_api::test_support::domain::file_enc::{
     FilePayloadHeader,
 };
 use secretenv_core::cli_api::test_support::domain::wire::algorithm;
+use secretenv_core::cli_api::test_support::operations::envelope::key_schedule::FileKeySchedule;
 use secretenv_core::cli_api::test_support::operations::envelope::signature::{
     sign_file_document, verify_file_signature,
 };
-use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
+use secretenv_core::cli_api::test_support::primitives::types::keys::{MacKey, MasterKey};
 use secretenv_core::cli_api::test_support::wire::file::build_file_signature_bytes;
 use uuid::Uuid;
 
@@ -22,7 +23,7 @@ use crate::keygen_helpers::build_dummy_public_key;
 fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
-        format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6.to_string(),
+        format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7.to_string(),
         sid,
         wrap: vec![WrapItem {
             recipient_handle: "alice@example.com".to_string(),
@@ -34,7 +35,7 @@ fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
         removed_recipients: None,
         payload: FilePayload {
             protected: FilePayloadHeader {
-                format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6.to_string(),
+                format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V7.to_string(),
                 sid,
                 alg: FileEncAlgorithm {
                     aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
@@ -49,6 +50,13 @@ fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
         created_at: "2025-01-01T00:00:00Z".to_string(),
         updated_at: "2025-01-01T00:00:00Z".to_string(),
     }
+}
+
+fn derive_mac_key(doc: &FileEncDocumentProtected, master_key: &MasterKey) -> MacKey {
+    FileKeySchedule::extract(master_key, &doc.sid)
+        .unwrap()
+        .derive_mac_key()
+        .unwrap()
 }
 
 #[test]
@@ -69,10 +77,11 @@ fn test_sign_file_document_returns_valid_structure() {
     let content_key = MasterKey::new([7u8; 32]);
 
     let doc = build_test_file_enc_document_protected();
+    let mac_key = derive_mac_key(&doc, &content_key);
 
     let sig = sign_file_document(
         &doc,
-        &content_key,
+        &mac_key,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
@@ -98,10 +107,11 @@ fn test_verify_file_enc_signature_accepts_valid_signature() {
     let content_key = MasterKey::new([7u8; 32]);
 
     let doc = build_test_file_enc_document_protected();
+    let mac_key = derive_mac_key(&doc, &content_key);
 
     let sig = sign_file_document(
         &doc,
-        &content_key,
+        &mac_key,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
@@ -119,10 +129,11 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
     let content_key = MasterKey::new([7u8; 32]);
 
     let doc = build_test_file_enc_document_protected();
+    let mac_key = derive_mac_key(&doc, &content_key);
 
     let sig = sign_file_document(
         &doc,
-        &content_key,
+        &mac_key,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
@@ -143,16 +154,47 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
 }
 
 #[test]
+fn test_verify_file_enc_signature_rejects_tampered_signature_kid() {
+    let seed = [42u8; 32];
+    let sk = SigningKey::from_bytes(&seed);
+    let vk = sk.verifying_key();
+    let content_key = MasterKey::new([7u8; 32]);
+
+    let doc = build_test_file_enc_document_protected();
+    let mac_key = derive_mac_key(&doc, &content_key);
+
+    let mut sig = sign_file_document(
+        &doc,
+        &mac_key,
+        &sk,
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        false,
+    )
+    .unwrap();
+    sig.kid = "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string();
+
+    let result = verify_file_signature(&doc, &vk, &sig, false);
+
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Signature verification failed"));
+}
+
+#[test]
 fn test_sign_file_document_deterministic() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
     let content_key = MasterKey::new([7u8; 32]);
 
     let doc = build_test_file_enc_document_protected();
+    let mac_key = derive_mac_key(&doc, &content_key);
 
     let sig1 = sign_file_document(
         &doc,
-        &content_key,
+        &mac_key,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
@@ -161,7 +203,7 @@ fn test_sign_file_document_deterministic() {
     .unwrap();
     let sig2 = sign_file_document(
         &doc,
-        &content_key,
+        &mac_key,
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),

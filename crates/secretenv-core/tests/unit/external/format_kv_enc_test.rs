@@ -11,12 +11,12 @@ use secretenv_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
 // Header parsing tests
 
 #[test]
-fn test_parse_header_v8() {
-    let parsed = KvEncParser::parse_line(":SECRETENV_KV 8").unwrap();
+fn test_parse_header_v9() {
+    let parsed = KvEncParser::parse_line(":SECRETENV_KV 9").unwrap();
     assert_eq!(
         parsed,
         KvEncLine::Header {
-            version: KvEncVersion::V8
+            version: KvEncVersion::V9
         }
     );
 }
@@ -79,13 +79,13 @@ fn test_parse_empty_line() {
 
 #[test]
 fn test_parse_comment_line_rejected() {
-    // Comment lines are not allowed in kv-enc v8
+    // Comment lines are not allowed in kv-enc v9.
     let result = KvEncParser::parse_line("# This is a comment");
     assert!(result.is_err());
     if let Err(e) = result {
         assert!(
             e.to_string().contains("comment lines are not allowed")
-                || e.to_string().contains("kv-enc v8")
+                || e.to_string().contains("kv-enc v9")
         );
     }
 }
@@ -124,7 +124,7 @@ fn test_parse_kv_line_with_tab_rejected() {
 
 #[test]
 fn test_parse_document() {
-    let content = ":SECRETENV_KV 8\n\
+    let content = ":SECRETENV_KV 9\n\
                    :HEAD eyJzaWQiOiIxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTU1In0\n\
                    :WRAP eyJ3cmFwIjpbXX0\n\
                    DATABASE_URL eyJzYWx0IjoiQUFBQUFBQUFBQUFBQUFBQSIsImsiOiJEQVRBQkFTRV9VUkwifQ\n\
@@ -137,7 +137,7 @@ fn test_parse_document() {
     assert!(matches!(
         lines[0],
         KvEncLine::Header {
-            version: KvEncVersion::V8
+            version: KvEncVersion::V9
         }
     ));
     assert!(matches!(lines[1], KvEncLine::Head { .. }));
@@ -150,7 +150,7 @@ fn test_parse_document() {
 #[test]
 fn test_parse_with_empty_lines() {
     // Empty lines are allowed
-    let content = ":SECRETENV_KV 8\n:HEAD token0\n:WRAP token\n\nDATABASE_URL token2";
+    let content = ":SECRETENV_KV 9\n:HEAD token0\n:WRAP token\n\nDATABASE_URL token2";
 
     let lines = KvEncParser::new(content).parse_all().unwrap();
 

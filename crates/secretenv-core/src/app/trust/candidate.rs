@@ -78,17 +78,10 @@ impl TrustApprovalCandidateBuilder {
     }
 
     pub fn with_verified_github(mut self, verified_github: Option<VerifiedGithubIdentity>) -> Self {
+        let (github_id, github_login) = derive_github_review_fields(verified_github.as_ref());
         self.candidate.verified_github = verified_github;
-        self.candidate.github_id = self
-            .candidate
-            .verified_github
-            .as_ref()
-            .map(|account| account.id);
-        self.candidate.github_login = self
-            .candidate
-            .verified_github
-            .as_ref()
-            .map(|account| account.login.clone());
+        self.candidate.github_id = github_id;
+        self.candidate.github_login = github_login;
         self
     }
 
@@ -144,6 +137,15 @@ fn github_binding_configured(public_key: &PublicKey) -> bool {
         .as_ref()
         .and_then(|claims| claims.github_account.as_ref())
         .is_some()
+}
+
+fn derive_github_review_fields(
+    verified_github: Option<&VerifiedGithubIdentity>,
+) -> (Option<u64>, Option<String>) {
+    match verified_github {
+        Some(account) => (Some(account.id), Some(account.login.clone())),
+        None => (None, None),
+    }
 }
 
 #[cfg(test)]

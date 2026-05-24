@@ -16,8 +16,8 @@ use std::fmt;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::format::codec::base64_public::{decode_base64url_nopad, encode_base64url_nopad};
 use crate::model::public_key::PublicKey;
-use crate::support::codec::base64_public::{decode_base64url_nopad, encode_base64url_nopad};
 
 pub const KEY_POSSESSION_HMAC_SHA256: &str = "hmac-sha256";
 pub const KEY_POSSESSION_HMAC_SHA256_TAG_LEN: usize = 32;

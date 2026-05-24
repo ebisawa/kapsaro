@@ -19,41 +19,10 @@ use crate::model::trust_store::RecipientSetRecord;
 use crate::{Error, Result};
 
 use super::candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SignerTrustOutcome {
-    Accepted,
-    NeedsKnownKeyApproval(TrustApprovalCandidate),
-    NeedsNonMemberAcceptance {
-        candidate: TrustApprovalCandidate,
-        current_recipients: Vec<String>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RecipientTrustOutcome {
-    Accepted,
-    NeedsManualApproval(Vec<TrustApprovalCandidate>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ArtifactRecipientTrustOutcome {
-    Accepted,
-    SkippedStrictKeyCheckingNo,
-    NeedsManualApproval(Box<ArtifactRecipientSetReview>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArtifactRecipientSetReview {
-    pub current: ArtifactRecipientSet,
-    pub approved: Option<RecipientSetRecord>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadRecipientKeyTrust {
-    pub outcome: RecipientTrustOutcome,
-    pub warnings: Vec<String>,
-}
+use super::outcome::{
+    ArtifactRecipientSetReview, ArtifactRecipientTrustOutcome, ReadRecipientKeyTrust,
+    RecipientTrustOutcome, SignerTrustOutcome,
+};
 
 pub fn enforce_signer_trust(
     trust_ctx: &TrustContext,
@@ -164,7 +133,6 @@ pub fn enforce_recipients_trust_with_additional(
 
 pub fn enforce_artifact_recipient_set_trust(
     trust_ctx: &TrustContext,
-    _signer_kid: &str,
     current: &ArtifactRecipientSet,
     capability: CommandCapability,
 ) -> Result<ArtifactRecipientTrustOutcome> {
@@ -211,7 +179,6 @@ pub fn enforce_artifact_recipient_set_trust(
 
 pub fn evaluate_read_artifact_recipient_keys(
     trust_ctx: &TrustContext,
-    _signer_kid: &str,
     current: &ArtifactRecipientSet,
 ) -> Result<ReadRecipientKeyTrust> {
     enforce_recipient_handle_consistency(trust_ctx, current)?;
@@ -228,7 +195,6 @@ pub fn evaluate_read_artifact_recipient_keys(
 
 pub fn enforce_write_input_artifact_recipients(
     trust_ctx: &TrustContext,
-    _signer_kid: &str,
     current: &ArtifactRecipientSet,
 ) -> Result<()> {
     enforce_recipient_handle_consistency(trust_ctx, current)?;
@@ -288,7 +254,7 @@ fn enforce_artifact_recipient_review(
 ) -> Result<ArtifactRecipientTrustOutcome> {
     if trust_ctx.is_interactive {
         return Ok(ArtifactRecipientTrustOutcome::NeedsManualApproval(
-            Box::new(ArtifactRecipientSetReview { current, approved }),
+            Box::new(ArtifactRecipientSetReview::new(current, approved)),
         ));
     }
 

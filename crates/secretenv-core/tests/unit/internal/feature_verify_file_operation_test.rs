@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::envelope::signature::SigningContext;
 use crate::format::content::FileEncContent;
 use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
@@ -21,7 +21,7 @@ fn operational_file_verify_preserves_expired_signer_recovery_warning() {
     );
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     let keystore_root = temp_dir.path().join("keys");
-    let kid = key_ctx.kid.to_string();
+    let kid = key_ctx.kid().to_string();
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
     let doc = encrypt_file_document(
@@ -29,7 +29,7 @@ fn operational_file_verify_preserves_expired_signer_recovery_warning() {
         &[ALICE_MEMBER_HANDLE.to_string()],
         &recipients,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
             debug: false,

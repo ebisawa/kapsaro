@@ -11,9 +11,9 @@ use crate::test_utils::{
     load_fixture_ssh_pubkey, setup_member_key_context, setup_test_keystore_from_fixtures,
 };
 use secretenv_core::cli_api::test_support::domain::public_key::PublicKey;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
@@ -51,7 +51,7 @@ fn test_parse_verify_decrypt_kv() {
         &kv_map,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
             debug: false,
@@ -66,8 +66,8 @@ fn test_parse_verify_decrypt_kv() {
     let decrypted = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -108,7 +108,7 @@ fn test_parse_verify_decrypt_file() {
         &recipient_handles,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
             debug: false,
@@ -125,8 +125,8 @@ fn test_parse_verify_decrypt_file() {
     let decrypted = decrypt_file_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -149,8 +149,8 @@ fn test_crypto_context_load() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Verify context
-    assert_eq!(key_ctx.member_handle, ALICE_MEMBER_HANDLE);
-    assert_eq!(key_ctx.kid, *kid);
+    assert_eq!(key_ctx.member_handle(), ALICE_MEMBER_HANDLE);
+    assert_eq!(key_ctx.kid(), kid.as_str());
     // Verify pub_key_source works by loading the signer's public key
     let loaded = key_ctx.pub_key_source.load_public_key(ALICE_MEMBER_HANDLE);
     assert!(loaded.is_ok());
@@ -165,8 +165,8 @@ fn test_crypto_context_load_without_explicit_kid() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     // Verify context
-    assert_eq!(key_ctx.member_handle, ALICE_MEMBER_HANDLE);
-    assert!(!key_ctx.kid.is_empty());
+    assert_eq!(key_ctx.member_handle(), ALICE_MEMBER_HANDLE);
+    assert!(!key_ctx.kid().is_empty());
     // Verify pub_key_source works by loading the signer's public key
     let loaded = key_ctx.pub_key_source.load_public_key(ALICE_MEMBER_HANDLE);
     assert!(loaded.is_ok());

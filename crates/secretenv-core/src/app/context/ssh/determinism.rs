@@ -1,7 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::feature::context::ssh::params::SshSigningParams;
+//! SSH signing determinism checks for app command contexts.
+
+use super::SshSigningParams;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::model::ssh::SshDeterminismStatus;
@@ -12,7 +14,7 @@ use tracing::debug;
 const NON_DETERMINISTIC_SIGNATURE_MESSAGE: &str =
     "Non-deterministic signature detected: same input produced different signatures";
 
-pub(crate) fn check_ssh_signature_determinism(
+pub(super) fn check_ssh_signature_determinism(
     params: &SshSigningParams,
     backend: &dyn SignatureBackend,
     ssh_pub: &str,
@@ -46,7 +48,7 @@ pub(crate) fn check_ssh_signature_determinism(
     determinism
 }
 
-pub(crate) fn validate_ssh_key_type(ssh_pub: &str) -> Result<()> {
+pub(super) fn validate_ssh_key_type(ssh_pub: &str) -> Result<()> {
     let key_type = ssh_pub.split_whitespace().next().unwrap_or("unknown");
     if key_type != ssh::KEY_TYPE_ED25519 {
         return Err(Error::build_invalid_argument_error(format!(

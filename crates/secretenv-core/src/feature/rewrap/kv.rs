@@ -1,23 +1,21 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rewrap operations for kv-enc v8 format.
+//! Rewrap operations for kv-enc v9 format.
 
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::kv::document::KvDocumentDraft;
 use crate::feature::kv::rewrite_session::{KvRecipientRewriteRequest, VerifiedKvRewriteSession};
-use crate::feature::recipient::{
-    check_recipient_exists, print_recipient_not_found_warning, validate_not_empty_recipients,
-};
+use crate::feature::recipient::{check_recipient_exists, validate_not_empty_recipients};
 use crate::feature::rewrap::kv_op::recipients::{add_kv_recipients, rewrite_kv_recipient_wraps};
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
+use crate::format::kv::document::KvDocumentDraft;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::model::common::WrapItem;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
-use std::path::Path;
+use tracing::warn;
 
 use super::{
     rewrap_document_with_common_skeleton, RewrapContext, RewrapDocumentAdapter, RewrapExecutor,
@@ -44,7 +42,6 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             self.doc.wrap_mut(),
             recipients,
             &master_key,
-            self.ctx.key_ctx(),
             self.ctx.target_members(),
             self.ctx.options().debug,
         )?;
@@ -59,7 +56,6 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             self.doc.wrap_mut(),
             recipients,
             &master_key,
-            self.ctx.key_ctx(),
             self.ctx.target_members(),
             self.ctx.options().debug,
         )?;
@@ -70,13 +66,16 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
         let mut current_recipients = self.session.current_recipients();
         for recipient in recipients {
             if !check_recipient_exists(&current_recipients, recipient) {
-                print_recipient_not_found_warning(recipient);
+                warn!(
+                    "[CRYPTO] Warning: {} is not a recipient, skipping",
+                    recipient
+                );
             }
         }
         current_recipients.retain(|recipient| !recipients.contains(recipient));
         validate_not_empty_recipients(&current_recipients)?;
         let new_content = self.session.rewrap_kv_with_recipients(
-            self.ctx.target_members(),
+            Some(self.ctx.target_members()),
             KvRecipientRewriteRequest {
                 new_recipients: &current_recipients,
                 removed_recipients: recipients,
@@ -92,7 +91,7 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
     fn rotate_key(&mut self) -> Result<()> {
         let current_recipients = self.session.current_recipients();
         let new_content = self.session.rewrap_kv_with_recipients(
-            self.ctx.target_members(),
+            Some(self.ctx.target_members()),
             KvRecipientRewriteRequest {
                 new_recipients: &current_recipients,
                 removed_recipients: &[],
@@ -177,21 +176,19 @@ impl RewrapDocumentAdapter for KvRewrapAdapter {
     }
 }
 
-/// Rewrap kv-enc v8 content.
+/// Rewrap kv-enc v9 content.
 pub fn rewrap_kv_document(
     options: &RewrapOptions,
     content: &KvEncContent,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    workspace_root: Option<&Path>,
-    target_members: Option<&[VerifiedRecipientKey]>,
+    target_members: &[VerifiedRecipientKey],
 ) -> Result<String> {
     rewrap_document_with_common_skeleton::<KvRewrapAdapter>(
         options,
         content,
         member_handle,
         key_ctx,
-        workspace_root,
         target_members,
     )
 }

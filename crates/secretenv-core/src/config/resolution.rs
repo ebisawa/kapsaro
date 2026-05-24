@@ -12,6 +12,7 @@
 pub(crate) mod allow_expired_key;
 pub(crate) mod common;
 pub(crate) mod github_user;
+pub(crate) mod global;
 pub(crate) mod member_handle;
 pub(crate) mod ssh_key;
 pub(crate) mod ssh_signing_method;

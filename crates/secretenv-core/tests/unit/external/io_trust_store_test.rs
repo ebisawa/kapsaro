@@ -134,6 +134,72 @@ fn test_load_trust_store_invalid_json_fails() {
 }
 
 #[test]
+fn test_load_trust_store_rejects_duplicate_top_level_member() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("alice@example.com.json");
+    let duplicate_signature = r#"{
+        "protected": {
+            "format": "secretenv:format:local-trust@5",
+            "owner_handle": "alice@example.com",
+            "created_at": "2026-03-29T12:34:56Z",
+            "updated_at": "2026-03-29T12:34:56Z",
+            "known_keys": [],
+            "recipient_sets": []
+        },
+        "signature": {
+            "alg": "eddsa-ed25519",
+            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "sig": "first_signature"
+        },
+        "signature": {
+            "alg": "eddsa-ed25519",
+            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "sig": "second_signature"
+        }
+    }"#;
+    std::fs::write(&path, duplicate_signature).unwrap();
+
+    let result = load_trust_store(&path, dir.path());
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("duplicate JSON member name"));
+    assert!(message.contains("signature"));
+}
+
+#[test]
+fn test_load_trust_store_rejects_duplicate_nested_member() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("alice@example.com.json");
+    let duplicate_owner = r#"{
+        "protected": {
+            "format": "secretenv:format:local-trust@5",
+            "owner_handle": "mallory@example.com",
+            "owner_handle": "alice@example.com",
+            "created_at": "2026-03-29T12:34:56Z",
+            "updated_at": "2026-03-29T12:34:56Z",
+            "known_keys": [],
+            "recipient_sets": []
+        },
+        "signature": {
+            "alg": "eddsa-ed25519",
+            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "sig": "test_signature"
+        }
+    }"#;
+    std::fs::write(&path, duplicate_owner).unwrap();
+
+    let result = load_trust_store(&path, dir.path());
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("duplicate JSON member name"));
+    assert!(message.contains("owner_handle"));
+}
+
+#[test]
 fn test_load_trust_store_rejects_json_exceeding_depth_limit_before_parse() {
     let dir = TempDir::new().unwrap();
     let base_dir = dir.path().join("secretenv");

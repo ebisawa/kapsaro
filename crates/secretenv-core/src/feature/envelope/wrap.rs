@@ -7,10 +7,10 @@ use crate::crypto::kem::{seal_base, X25519PublicKey};
 use crate::crypto::types::data::{Aad, Info, Plaintext};
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info};
+use crate::format::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::model::common::WrapItem;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::model::wire::algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305;
-use crate::support::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::limits::validate_wrap_count;
 use crate::Result;
@@ -37,7 +37,7 @@ pub enum WrapFormat {
 /// * `info_builder` - Function to build HPKE info
 /// * `debug` - Enable debug logging
 /// * `caller` - Caller function name for debug logging
-pub fn build_wrap_item(
+fn build_wrap_item(
     member: &VerifiedRecipientKey,
     sid: &Uuid,
     master_key: &MasterKey,

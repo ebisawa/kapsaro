@@ -9,7 +9,7 @@ use secretenv_core::cli_api::test_support::operations::envelope::binding;
 use secretenv_core::cli_api::test_support::operations::key::protection::binding as private_key_binding;
 use uuid::Uuid;
 
-/// Test HPKE info for kv-file (WRAP line) - v8 format
+/// Test HPKE info for kv-file (WRAP line) - v9 format.
 #[test]
 fn test_hpke_info_kv_file() {
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
@@ -24,12 +24,12 @@ fn test_hpke_info_kv_file() {
     let parsed: serde_json::Value = serde_json::from_str(info_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::HPKE_INFO_KV_WRAP_V8);
+    assert_eq!(parsed["p"], wire_context::HPKE_INFO_KV_WRAP_V9);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
 }
 
-/// Test HPKE info for file-enc - v3 format
+/// Test HPKE info for file-enc - v7 format.
 #[test]
 fn test_hpke_info_file() {
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
@@ -44,28 +44,29 @@ fn test_hpke_info_file() {
     let parsed: serde_json::Value = serde_json::from_str(info_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::HPKE_INFO_FILE_WRAP_V6);
+    assert_eq!(parsed["p"], wire_context::HPKE_INFO_FILE_WRAP_V7);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
 }
 
-/// Test CEK info for kv-enc - v8 format
+/// Test CEK info for kv-enc - v9 format.
 #[test]
 fn test_cek_info_kv() {
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
     let key = "MY_KEY";
+    let nonce = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-    let info = binding::build_kv_cek_info(&sid, key).unwrap();
+    let info = binding::build_kv_cek_info(&sid, key, nonce).unwrap();
     let info_str = std::str::from_utf8(info.as_bytes()).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(info_str).unwrap();
 
-    assert_eq!(parsed["p"], wire_context::HKDF_INFO_KV_CEK_V8);
+    assert_eq!(parsed["p"], wire_context::HKDF_INFO_KV_CEK_V9);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["k"], key);
-    assert!(parsed.get("salt").is_none());
+    assert_eq!(parsed["nonce"], nonce);
 }
 
-/// Test payload AAD for kv-enc - v8 format
+/// Test payload AAD for kv-enc - v9 format.
 #[test]
 fn test_aad_payload_kv() {
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
@@ -80,14 +81,14 @@ fn test_aad_payload_kv() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields
-    assert_eq!(parsed["p"], wire_context::AAD_KV_ENTRY_PAYLOAD_V8);
+    assert_eq!(parsed["p"], wire_context::AAD_KV_ENTRY_PAYLOAD_V9);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["k"], key);
-    // salt is NOT in AAD (used in HKDF salt parameter instead)
+    // Nonce is used only in CEK derivation info.
     assert!(parsed.get("salt").is_none());
 }
 
-/// Test payload AAD for file-enc - v3 format (envelope: JCS of payload.protected)
+/// Test payload AAD for file-enc - v7 format (envelope: JCS of payload.protected).
 #[test]
 fn test_aad_file_payload() {
     use secretenv_core::cli_api::test_support::domain::file_enc::{
@@ -96,7 +97,7 @@ fn test_aad_file_payload() {
 
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
     let payload_protected = FilePayloadHeader {
-        format: format::FILE_PAYLOAD_V6.to_string(),
+        format: format::FILE_PAYLOAD_V7.to_string(),
         sid,
         alg: FileEncAlgorithm {
             aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
@@ -112,7 +113,7 @@ fn test_aad_file_payload() {
     let parsed: serde_json::Value = serde_json::from_str(aad_str).unwrap();
 
     // Should have required fields from payload.protected
-    assert_eq!(parsed["format"], format::FILE_PAYLOAD_V6);
+    assert_eq!(parsed["format"], format::FILE_PAYLOAD_V7);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["alg"]["aead"], algorithm::AEAD_XCHACHA20_POLY1305);
 }

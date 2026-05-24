@@ -3,7 +3,7 @@
 
 //! KV-enc wire format writer — assembles unsigned KV-enc document strings.
 
-use crate::format::kv::HEADER_LINE_V8;
+use crate::format::kv::HEADER_LINE_V9;
 
 /// Build an unsigned KV-enc document string from pre-encoded tokens.
 ///
@@ -15,7 +15,7 @@ pub fn build_unsigned_kv_document(
     entries: &[(&str, &str)],
 ) -> String {
     let mut out = String::new();
-    out.push_str(HEADER_LINE_V8);
+    out.push_str(HEADER_LINE_V9);
     out.push('\n');
     out.push_str(&format!(":HEAD {}\n", head_token));
     out.push_str(&format!(":WRAP {}\n", wrap_token));

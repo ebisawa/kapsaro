@@ -9,15 +9,12 @@ use crate::feature::verify::public_key::{
 };
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
-use crate::io::workspace::members::{
-    get_active_member_file_path, list_active_member_paths, load_member_file_from_path,
-};
+use crate::io::workspace::members::load_member_file_from_path;
 use crate::model::public_key::PublicKey;
-use crate::support::display::sanitize_display_field;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 struct VerifiedMemberSubject {
@@ -115,16 +112,6 @@ pub fn derive_member_handle_from_path(member_file: &Path) -> String {
         .unwrap_or_else(|| format_path_relative_to_cwd(member_file))
 }
 
-/// Verify binding_claims.github_account for members (GitHub).
-pub async fn verify_member(
-    workspace_path: &Path,
-    member_handles: &[String],
-    verbose: bool,
-) -> Result<Vec<VerificationResult>> {
-    let member_files = list_verifiable_member_files(workspace_path, member_handles)?;
-    Ok(verify_member_files(&member_files, verbose).await)
-}
-
 pub async fn verify_member_public_keys(
     public_keys: &[PublicKey],
     verbose: bool,
@@ -158,28 +145,32 @@ pub fn build_verification_result_groups(
 /// Offline verification failures, network errors, and API failures are converted
 /// to `VerificationResult::failed` rather than propagated as `Err`.
 pub async fn verify_member_files(
-    member_files: &[std::path::PathBuf],
+    member_files: &[PathBuf],
     verbose: bool,
 ) -> Vec<VerificationResult> {
     verify_verified_member_subjects(
         member_files,
         verbose,
-        |member_file, verbose| {
-            load_verified_member_subject_from_file(
-                member_file,
-                Some(&derive_member_handle_from_path(member_file)),
-                verbose,
-            )
-        },
-        |member_file, error| {
-            build_offline_verification_failure(
-                &derive_member_handle_from_path(member_file),
-                error,
-                false,
-            )
-        },
+        |member_file, verbose| build_verified_member_subject_from_member_file(member_file, verbose),
+        |member_file, error| build_member_file_offline_verification_failure(member_file, error),
     )
     .await
+}
+
+fn build_verified_member_subject_from_member_file(
+    member_file: &Path,
+    verbose: bool,
+) -> Result<VerifiedMemberSubject> {
+    let member_handle = derive_member_handle_from_path(member_file);
+    load_verified_member_subject_from_file(member_file, Some(&member_handle), verbose)
+}
+
+fn build_member_file_offline_verification_failure(
+    member_file: &Path,
+    error: Error,
+) -> VerificationResult {
+    let member_handle = derive_member_handle_from_path(member_file);
+    build_offline_verification_failure(&member_handle, error, false)
 }
 
 async fn verify_public_key_candidates(
@@ -256,28 +247,6 @@ async fn verify_member_subject_online(
     };
 
     append_verification_warnings(result, &subject.warnings)
-}
-
-fn list_verifiable_member_files(
-    workspace_path: &Path,
-    member_handles: &[String],
-) -> Result<Vec<std::path::PathBuf>> {
-    if member_handles.is_empty() {
-        return list_active_member_paths(workspace_path);
-    }
-
-    member_handles
-        .iter()
-        .map(|member_handle| {
-            let path = get_active_member_file_path(workspace_path, member_handle);
-            path.exists().then_some(path).ok_or_else(|| {
-                Error::build_not_found_error(format!(
-                    "Member '{}' not found in active/",
-                    sanitize_display_field(member_handle)
-                ))
-            })
-        })
-        .collect()
 }
 
 fn append_verification_warnings(

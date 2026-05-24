@@ -305,6 +305,33 @@ fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
 }
 
 #[test]
+fn test_member_verify_approve_debug_logs_candidate_verification() {
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+
+    cmd()
+        .arg("member")
+        .arg("verify")
+        .arg("--approve")
+        .arg("--debug")
+        .arg(BOB_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains(
+            "[MEMBER] approve: verify candidate public keys",
+        ))
+        .stdout(predicate::str::contains(
+            "[VERIFY] PublicKey: verify self-signature",
+        ))
+        .stderr(predicate::str::contains("interactive confirmation"));
+}
+
+#[test]
 fn test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     fs::remove_file(temp_dir.path().join("config.toml")).unwrap();
@@ -556,6 +583,48 @@ fn test_member_remove_warns_on_tampered_artifact_but_continues() {
         .success()
         .stderr(predicate::str::contains("member-remove.json"))
         .stderr(predicate::str::contains("Signature verification failed"));
+}
+
+#[test]
+fn test_member_remove_debug_logs_artifact_scan() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    let input_file = home_dir.path().join("member-remove-debug.txt");
+    let encrypted_file = workspace_dir
+        .path()
+        .join("secrets")
+        .join("member-remove-debug.json");
+    fs::write(&input_file, b"member remove debug preview").unwrap();
+
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &input_file,
+        &encrypted_file,
+        TEST_MEMBER_HANDLE,
+    );
+
+    cmd()
+        .arg("member")
+        .arg("remove")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--force")
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "[MEMBER] remove scan: verify artifact",
+        ))
+        .stdout(predicate::str::contains(
+            "[VERIFY] Ed25519: verify_artifact_bytes",
+        ))
+        .stdout(predicate::str::contains("member remove debug preview").not());
 }
 
 // ============================================================================

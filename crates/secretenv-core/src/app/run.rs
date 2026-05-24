@@ -5,8 +5,12 @@ use crate::app::kv::query::{execute_kv_env_command, KvReadCommand};
 use crate::io::process::execute_command_with_env;
 use crate::{Error, Result};
 
-pub fn execute_run_command(command: &KvReadCommand, command_args: &[String]) -> Result<i32> {
-    let env_vars = execute_kv_env_command(command)?;
+pub fn execute_run_command(
+    command: &KvReadCommand,
+    command_args: &[String],
+    debug: bool,
+) -> Result<i32> {
+    let env_vars = execute_kv_env_command(command, debug)?;
     let (command, args) = split_command_args(command_args)?;
     execute_command_with_env(&command, &args, &env_vars)
 }

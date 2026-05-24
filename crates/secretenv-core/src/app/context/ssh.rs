@@ -3,20 +3,26 @@
 
 use std::path::PathBuf;
 
+mod candidate;
+mod determinism;
+mod resolution;
+
 use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
-use crate::feature::context::ssh::backend::build_ssh_signing_context as feature_build_ssh_signing_context;
-use crate::feature::context::ssh::candidate::resolve_ssh_key_candidates as feature_resolve_ssh_key_candidates;
-use crate::feature::context::ssh::params::SshSigningParams as FeatureSshSigningParams;
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::io::keystore::active::load_active_kid;
 use crate::io::keystore::storage::load_private_key;
-use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::backend::{build_backend, SignatureBackend};
+use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::external::pubkey::SshKeyCandidate;
+use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::model::private_key::PrivateKey;
 use crate::model::private_key::PrivateKeyAlgorithm;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::{Error, Result};
+use candidate::resolve_ssh_key_candidates as resolve_app_ssh_key_candidates;
+use determinism::{check_ssh_signature_determinism, validate_ssh_key_type};
+use resolution::{resolve_backend_key_descriptor, resolve_signing_method, resolve_ssh_commands};
 use tracing::debug;
 
 pub struct SshSigningContextResolution {
@@ -73,14 +79,7 @@ pub fn resolve_ssh_key_candidates(
 pub fn resolve_ssh_key_candidates_with_params(
     params: &SshSigningParams,
 ) -> Result<Vec<SshKeyCandidateView>> {
-    let params = FeatureSshSigningParams {
-        ssh_key: params.ssh_key.clone(),
-        signing_method: params.signing_method,
-        base_dir: params.base_dir.clone(),
-        verbose: params.verbose,
-        check_determinism: params.check_determinism,
-    };
-    let candidates = feature_resolve_ssh_key_candidates(&params)?;
+    let candidates = resolve_app_ssh_key_candidates(params)?;
     if params.verbose {
         debug!("[SSH] candidate count={}", candidates.len());
     }
@@ -101,14 +100,7 @@ pub fn build_ssh_signing_context_with_params(
     params: &SshSigningParams,
     selected_pubkey: &str,
 ) -> Result<SshSigningContextResolution> {
-    let params = FeatureSshSigningParams {
-        ssh_key: params.ssh_key.clone(),
-        signing_method: params.signing_method,
-        base_dir: params.base_dir.clone(),
-        verbose: params.verbose,
-        check_determinism: params.check_determinism,
-    };
-    let ssh_signing_context = feature_build_ssh_signing_context(&params, selected_pubkey)?;
+    let ssh_signing_context = build_app_ssh_signing_context(params, selected_pubkey)?;
     if params.verbose {
         debug!(
             "[SSH] signing context: fingerprint={}, determinism={}",
@@ -121,6 +113,30 @@ pub fn build_ssh_signing_context_with_params(
         fingerprint: ssh_signing_context.fingerprint,
         backend: ssh_signing_context.backend,
         determinism: ssh_signing_context.determinism,
+    })
+}
+
+fn build_app_ssh_signing_context(
+    params: &SshSigningParams,
+    selected_pubkey: &str,
+) -> Result<SshSigningContextResolution> {
+    let base_dir = params.base_dir.as_deref();
+    let signing_method = resolve_signing_method(params, base_dir)?;
+    let commands = resolve_ssh_commands(base_dir)?;
+
+    validate_ssh_key_type(selected_pubkey)?;
+    let fingerprint = build_sha256_fingerprint(selected_pubkey)?;
+    let key_descriptor = resolve_backend_key_descriptor(signing_method, &params.ssh_key, base_dir)?;
+
+    let ssh_keygen = Box::new(DefaultSshKeygen::new(commands.ssh_keygen_path));
+    let backend = build_backend(signing_method, ssh_keygen, key_descriptor)?;
+    let determinism = check_ssh_signature_determinism(params, backend.as_ref(), selected_pubkey)?;
+
+    Ok(SshSigningContextResolution {
+        public_key: selected_pubkey.to_string(),
+        fingerprint,
+        backend,
+        determinism,
     })
 }
 

@@ -3,10 +3,10 @@
 
 //! Token encoding implementation
 
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::jcs;
 use crate::format::token::TokenCodec;
 use crate::format::FormatError;
-use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::Result;
 
 /// Serialize value to token.

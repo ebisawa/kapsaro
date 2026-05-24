@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::search::{detect_workspace_root, find_git_root, validate_workspace_path, WorkspaceRoot};
-use crate::config::resolution::workspace::{
-    resolve_workspace_from_config, resolve_workspace_from_config_base,
-};
 use crate::support::fs::policy::is_real_dir;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, ErrorKind, Result};
@@ -17,7 +14,7 @@ pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot
 
 pub fn resolve_workspace_with_base(
     workspace_opt: Option<PathBuf>,
-    base_dir: Option<&std::path::Path>,
+    _base_dir: Option<&std::path::Path>,
 ) -> Result<WorkspaceRoot> {
     if let Some(path) = workspace_opt {
         let canonical = path.canonicalize().map_err(|e| {
@@ -36,17 +33,6 @@ pub fn resolve_workspace_with_base(
             Error::build_config_error(format!(
                 "Invalid SECRETENV_WORKSPACE path '{}': {}",
                 format_path_relative_to_cwd(&path),
-                e
-            ))
-        })?;
-        return validate_workspace_path(&canonical);
-    }
-
-    if let Some(config_path) = resolve_workspace_path_from_config(base_dir)? {
-        let canonical = config_path.canonicalize().map_err(|e| {
-            Error::build_config_error(format!(
-                "Invalid workspace path in config.toml '{}': {}",
-                format_path_relative_to_cwd(&config_path),
                 e
             ))
         })?;
@@ -75,10 +61,6 @@ pub fn resolve_optional_workspace_with_base(
         return resolve_workspace_with_base(None, base_dir).map(Some);
     }
 
-    if resolve_workspace_path_from_config(base_dir)?.is_some() {
-        return resolve_workspace_with_base(None, base_dir).map(Some);
-    }
-
     match env::current_dir() {
         Ok(current_dir) => match detect_workspace_root(&current_dir) {
             Ok(workspace) => Ok(Some(workspace)),
@@ -89,15 +71,6 @@ pub fn resolve_optional_workspace_with_base(
             "Failed to get current directory: {}",
             e
         ))),
-    }
-}
-
-fn resolve_workspace_path_from_config(
-    base_dir: Option<&std::path::Path>,
-) -> Result<Option<PathBuf>> {
-    match base_dir {
-        Some(dir) => resolve_workspace_from_config_base(Some(dir)),
-        None => resolve_workspace_from_config(),
     }
 }
 

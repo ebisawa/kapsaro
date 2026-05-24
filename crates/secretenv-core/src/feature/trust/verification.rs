@@ -3,7 +3,7 @@
 
 //! Trust Store document verification.
 
-use crate::crypto::sign::verify_trust_store_bytes;
+use crate::crypto::sign::verify_detached_bytes;
 use crate::feature::trust::recipient_sets::validate_recipient_set_record;
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
@@ -12,7 +12,7 @@ use crate::format::schema::validator::load_embedded_trust_validator;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
-use crate::model::trust_store::TrustStoreDocument;
+use crate::model::trust_store::{TrustStoreDocument, TrustStoreSignature};
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
 use crate::model::wire::algorithm::SIGNATURE_ED25519;
 use crate::model::wire::format::LOCAL_TRUST_V5;
@@ -107,8 +107,23 @@ fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedS
 
 fn validate_signature(doc: &TrustStoreDocument, verifying_key: &VerifyingKey) -> Result<()> {
     let canonical = build_trust_store_signature_bytes(&doc.protected)?;
-    verify_trust_store_bytes(&canonical, verifying_key, &doc.signature, SIGNATURE_ED25519).map_err(
-        |e| Error::build_crypto_error_with_source("Trust store signature verification failed", e),
+    verify_trust_store_bytes(&canonical, verifying_key, &doc.signature).map_err(|e| {
+        Error::build_crypto_error_with_source("Trust store signature verification failed", e)
+    })
+}
+
+/// Verify trust-store bytes against the wire signature DTO.
+pub fn verify_trust_store_bytes(
+    canonical_bytes: &[u8],
+    verifying_key: &VerifyingKey,
+    signature: &TrustStoreSignature,
+) -> Result<()> {
+    verify_detached_bytes(
+        canonical_bytes,
+        verifying_key,
+        &signature.alg,
+        &signature.sig,
+        SIGNATURE_ED25519,
     )
 }
 

@@ -5,33 +5,32 @@
 
 use std::path::Path;
 
+use crate::app::artifact::{
+    artifact_recipient_evidence, artifact_wrap_set, detect_reviewed_artifact,
+    load_reviewed_artifact, verify_artifact_signature_for_operation,
+};
 use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::review::ReviewedTextFile;
 use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
 use crate::app::trust::enforcement::evaluate_read_artifact_recipient_keys;
 use crate::app::trust::recovery::requires_trust_store_reset;
 use crate::app::trust::review::{
-    review_generated_artifact_recipient_set,
-    review_rewrap_input_trust_requirements_with_confirmation, GeneratedArtifactRecipientSetReview,
-    TrustExecutionContext,
+    review_artifact_output_recipient_set, review_rewrap_input_trust_requirements_with_confirmation,
+    ArtifactOutputRecipientSetReviewInput,
 };
 use crate::app::trust::{
-    derive_self_sig_x, evaluate_signer_trust_with_proof, load_read_trust_context,
-    ArtifactRecipientTrustOutcome, CommandCapability, RecipientTrustOutcome, SignerTrustOutcome,
-    TrustApprovalCandidate, TrustContext,
+    evaluate_signer_trust_with_proof, load_read_trust_context, ArtifactRecipientTrustOutcome,
+    CommandCapability, RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate,
+    TrustContext,
 };
-use crate::feature::trust::recipient_sets::encrypted_content_recipient_evidence;
-use crate::feature::verify::file::verify_file_content_for_operation;
-use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::EncContent;
-use crate::model::common::WrapSet;
 use crate::model::verification::SignatureVerificationProof;
-use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::support::warning::push_unique_warning;
 use crate::Result;
+use tracing::debug;
 
-use super::rewrite::{build_rewritten_artifact, save_rewritten_artifact, RewrapRewriteContext};
+use super::rewrite::{build_rewritten_artifact, RewrapRewriteContext};
 use super::types::{
     RewrapBatchOutcome, RewrapBatchPlan, RewrapBatchRequest, RewrapFileFailure, RewrapFileSuccess,
     RewrapInputTrustRequirement, VerifiedPostPromotionRecipients,
@@ -145,11 +144,14 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    let captured = load_captured_artifact(file_path)?;
-    let content = EncContent::detect_with_source(
-        captured.require_content()?.to_string(),
-        format_path_relative_to_cwd(file_path),
-    )?;
+    if ctx.request.options.debug {
+        debug!(
+            "[REWRAP] artifact: process path={}",
+            format_path_relative_to_cwd(file_path)
+        );
+    }
+    let captured = load_reviewed_artifact(file_path)?;
+    let content = detect_reviewed_artifact(&captured)?;
     if let Some(warning) = build_rewrap_decryption_key_warning(&content, ctx)? {
         push_unique_warning(warnings, warning);
     }
@@ -162,65 +164,73 @@ where
         confirm_non_member,
         confirm_recipients,
     )?;
+    let rewritten = rewrite_and_review_output_artifact(
+        file_path,
+        &content,
+        ctx,
+        warnings,
+        confirm_recipient_set,
+    )?;
+    captured.save_replacement(&rewritten)?;
+    Ok(())
+}
+
+fn rewrite_and_review_output_artifact<ConfirmRecipientSet>(
+    file_path: &Path,
+    content: &EncContent,
+    ctx: &RewrapArtifactExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+    confirm_recipient_set: &mut ConfirmRecipientSet,
+) -> Result<String>
+where
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
     let rewrite_ctx = RewrapRewriteContext {
         request: ctx.request,
         plan: ctx.plan,
         execution: ctx.execution,
         post_promotion_members: ctx.post_promotion_members,
     };
-    let rewritten = build_rewritten_artifact(&content, &rewrite_ctx)?;
-    let rewritten_content = EncContent::detect_with_source(
-        rewritten.to_string(),
-        format_path_relative_to_cwd(file_path),
-    )?;
-    let recipient_evidence = encrypted_content_recipient_evidence(&rewritten_content)?;
-    review_generated_artifact_recipient_set(
-        TrustExecutionContext {
+    let rewritten = build_rewritten_artifact(content, &rewrite_ctx)?;
+    let rewritten_content =
+        EncContent::detect_with_source(rewritten.clone(), format_path_relative_to_cwd(file_path))?;
+    review_rewrap_output_recipient_set(&rewritten_content, ctx, warnings, confirm_recipient_set)?;
+    Ok(rewritten)
+}
+
+fn review_rewrap_output_recipient_set<ConfirmRecipientSet>(
+    rewritten_content: &EncContent,
+    ctx: &RewrapArtifactExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+    confirm_recipient_set: &mut ConfirmRecipientSet,
+) -> Result<()>
+where
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
+    review_artifact_output_recipient_set(
+        ArtifactOutputRecipientSetReviewInput {
             options: &ctx.request.options,
             execution: ctx.execution,
-            warnings: &[],
-        },
-        GeneratedArtifactRecipientSetReview {
             trust_ctx: ctx.post_promotion_trust,
-            signer_kid: ctx.execution.key_ctx.kid.as_str(),
-            recipient_set: &recipient_evidence.recipient_set,
+            content: rewritten_content,
             capability: CommandCapability::Rewrap,
             context_label: "rewrap output member set",
         },
-        &mut |new_warnings| warnings.extend_from_slice(new_warnings),
+        warnings,
         confirm_recipient_set,
-    )?;
-    save_rewritten_artifact(&captured, &rewritten)?;
-    Ok(())
+    )
 }
 
 fn build_rewrap_decryption_key_warning(
     content: &EncContent,
     ctx: &RewrapArtifactExecutionContext<'_>,
 ) -> Result<Option<String>> {
-    let wrap_set = match content {
-        EncContent::FileEnc(file_content) => {
-            let doc = file_content.parse()?;
-            WrapSet::parse(&doc.protected.wrap, "Document")?
-        }
-        EncContent::KvEnc(kv_content) => {
-            let doc = kv_content.parse()?;
-            WrapSet::parse(&doc.wrap().wrap, "Document")?
-        }
-    };
+    let wrap_set = artifact_wrap_set(content)?;
     enforce_selected_decryption_key_expiry(
         ctx.execution,
         &wrap_set,
         ctx.request.options.allow_expired_key,
         ctx.request.options.debug,
-    )
-}
-
-fn load_captured_artifact(file_path: &Path) -> Result<ReviewedTextFile> {
-    ReviewedTextFile::load_existing(
-        file_path,
-        "encrypted artifact",
-        resolve_encrypted_artifact_read_limit(file_path),
     )
 }
 
@@ -245,6 +255,7 @@ where
         content,
         &trust_ctx,
         ctx.request.options.allow_expired_key,
+        ctx.request.options.debug,
         &ctx.current_recipients,
         warnings,
     )?
@@ -276,7 +287,7 @@ fn load_rewrap_signer_trust_context(
         &request.options,
         &plan.workspace_root,
         &execution.member_handle,
-        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(execution.key_ctx.self_signature_public_key_x()),
         request.options.debug,
     )?
     .trust_ctx;
@@ -290,19 +301,20 @@ fn build_rewrap_input_trust_requirement(
     content: &EncContent,
     trust_ctx: &TrustContext,
     allow_expired_key: bool,
+    debug_enabled: bool,
     current_recipients: &[String],
     warnings: &mut Vec<String>,
 ) -> Result<Option<RewrapInputTrustRequirement>> {
-    let proof = extract_signature_proof(content, allow_expired_key)?;
+    if debug_enabled {
+        debug!("[REWRAP] input signer: verify captured artifact proof");
+    }
+    let proof = extract_signature_proof(content, allow_expired_key, debug_enabled)?;
     for warning in &proof.warnings {
         push_unique_warning(warnings, warning.clone());
     }
-    let recipient_evidence = encrypted_content_recipient_evidence(content)?;
-    let recipient_trust = evaluate_read_artifact_recipient_keys(
-        trust_ctx,
-        &proof.kid,
-        &recipient_evidence.recipient_set,
-    )?;
+    let recipient_evidence = artifact_recipient_evidence(content)?;
+    let recipient_trust =
+        evaluate_read_artifact_recipient_keys(trust_ctx, &recipient_evidence.recipient_set)?;
     warnings.extend(recipient_trust.warnings);
     let signer_outcome = evaluate_signer_trust_with_proof(
         trust_ctx,
@@ -331,19 +343,9 @@ fn input_trust_accepted(
 fn extract_signature_proof(
     content: &EncContent,
     allow_expired_key: bool,
+    debug_enabled: bool,
 ) -> Result<SignatureVerificationProof> {
-    match content {
-        EncContent::FileEnc(file_content) => {
-            Ok(
-                verify_file_content_for_operation(file_content, false, allow_expired_key)?
-                    .proof
-                    .clone(),
-            )
-        }
-        EncContent::KvEnc(kv_content) => {
-            Ok(verify_kv_content_for_operation(kv_content, false, allow_expired_key)?.proof)
-        }
-    }
+    verify_artifact_signature_for_operation(content, debug_enabled, allow_expired_key)
 }
 
 fn save_known_key_approval_warnings(

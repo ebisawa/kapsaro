@@ -3,13 +3,14 @@
 
 //! file-enc artifact facade.
 
-use crate::api::artifact_text::ArtifactText;
+use crate::api::artifact_text::{ArtifactLoadPolicy, ArtifactText};
+use crate::feature::context::crypto::build_signing_context;
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
-use crate::feature::envelope::signature::build_signing_context;
 use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::format::content::FileEncContent;
 use crate::model::file_enc::VerifiedFileEncDocument;
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::Result;
 
 use super::key::{KeyContext, RecipientKeys};
@@ -28,6 +29,9 @@ pub struct VerifiedFileEncArtifact {
     inner: VerifiedFileEncDocument,
 }
 
+const FILE_ENC_LOAD_POLICY: ArtifactLoadPolicy =
+    ArtifactLoadPolicy::new(MAX_JSON_DOCUMENT_READ_SIZE, "file-enc artifact");
+
 impl FileEncArtifact {
     /// Parse file-enc JSON text after format detection.
     pub fn parse(content: impl Into<String>) -> Result<Self> {
@@ -36,7 +40,7 @@ impl FileEncArtifact {
 
     /// Load file-enc JSON from a path.
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
-        ArtifactText::load(path, "file-enc artifact").map(Self::from_text)
+        ArtifactText::load(path, FILE_ENC_LOAD_POLICY).map(Self::from_text)
     }
 
     /// Save the artifact text.

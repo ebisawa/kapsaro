@@ -29,7 +29,7 @@ fn test_encrypt_file_with_workspace() {
     assert!(output_path.exists());
     let content = fs::read_to_string(&output_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V6);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V7);
 }
 
 #[test]

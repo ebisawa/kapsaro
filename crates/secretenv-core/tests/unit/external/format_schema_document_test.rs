@@ -13,7 +13,7 @@ use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode
 use secretenv_core::cli_api::test_support::helpers::limits::MAX_WRAP_ITEMS;
 use secretenv_core::cli_api::test_support::wire::schema::document::{
     parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token, parse_kv_signature_token,
-    parse_kv_wrap_token, parse_public_key_str,
+    parse_kv_wrap_token, parse_public_key_str, parse_trust_store_str,
 };
 use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
 use uuid::Uuid;
@@ -58,11 +58,11 @@ fn test_parse_file_enc_str_with_schema() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V6,
+            "format": format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V6,
+                    "format": format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -91,7 +91,121 @@ fn test_parse_file_enc_str_with_schema() {
     });
 
     let parsed = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
-    assert_eq!(parsed.protected.format, format::FILE_ENC_V6);
+    assert_eq!(parsed.protected.format, format::FILE_ENC_V7);
+}
+
+#[test]
+fn test_parse_file_enc_str_rejects_duplicate_top_level_member() {
+    let sid = "123e4567-e89b-12d3-a456-426614174000";
+    let signer_pub =
+        serde_json::to_string(&build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap();
+    let file_enc = format!(
+        r#"{{
+            "protected": {{
+                "format": "{}",
+                "sid": "{}",
+                "payload": {{
+                    "protected": {{
+                        "format": "{}",
+                        "sid": "{}",
+                        "alg": {{ "aead": "{}" }}
+                    }},
+                    "encrypted": {{
+                        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                        "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    }}
+                }},
+                "wrap": [{{
+                    "rh": "alice@example.com",
+                    "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                    "alg": "{}",
+                    "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                }}],
+                "created_at": "2026-01-14T00:00:00Z",
+                "updated_at": "2026-01-14T00:00:00Z"
+            }},
+            "signature": {{
+                "alg": "{}",
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "signer_pub": {},
+                "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+            }},
+            "signature": {{
+                "alg": "{}",
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "signer_pub": {},
+                "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+            }}
+        }}"#,
+        format::FILE_ENC_V7,
+        sid,
+        format::FILE_PAYLOAD_V7,
+        sid,
+        algorithm::AEAD_XCHACHA20_POLY1305,
+        algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
+        algorithm::SIGNATURE_ED25519,
+        signer_pub,
+        algorithm::SIGNATURE_ED25519,
+        signer_pub,
+    );
+
+    let result = parse_file_enc_str(&file_enc, "inline file-enc");
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("duplicate JSON member name"));
+    assert!(message.contains("signature"));
+}
+
+#[test]
+fn test_parse_file_enc_str_rejects_duplicate_nested_member() {
+    let file_enc = r#"{
+        "protected": {
+            "format": "secretenv:format:file-enc@7",
+            "format": "secretenv:format:file-enc@7"
+        },
+        "signature": {}
+    }"#;
+
+    let result = parse_file_enc_str(file_enc, "inline file-enc");
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("duplicate JSON member name"));
+    assert!(message.contains("format"));
+}
+
+#[test]
+fn test_parse_trust_store_str_rejects_duplicate_nested_member() {
+    let trust_store = r#"{
+        "protected": {
+            "format": "secretenv:format:local-trust@5",
+            "owner_handle": "mallory@example.com",
+            "owner_handle": "alice@example.com",
+            "created_at": "2026-03-29T12:34:56Z",
+            "updated_at": "2026-03-29T12:34:56Z",
+            "known_keys": [],
+            "recipient_sets": []
+        },
+        "signature": {
+            "alg": "eddsa-ed25519",
+            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "sig": "test_signature"
+        }
+    }"#;
+
+    let result = parse_trust_store_str(trust_store, "inline trust store");
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("duplicate JSON member name"));
+    assert!(message.contains("owner_handle"));
 }
 
 #[test]
@@ -101,11 +215,11 @@ fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
     non_canonical_sig.replace_range(85..86, "B");
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V6,
+            "format": format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V6,
+                    "format": format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -147,11 +261,11 @@ fn test_parse_file_enc_str_rejects_non_canonical_payload_ct_base64url() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V6,
+            "format": format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V6,
+                    "format": format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -190,7 +304,6 @@ fn test_parse_file_enc_str_rejects_non_canonical_payload_ct_base64url() {
 
 #[test]
 fn test_parse_kv_tokens_with_schema() {
-    let kv_salt = encode_base64url_nopad(&[0u8; 32]);
     let head = KvHeader {
         sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
         alg: KvFileAlgorithm {
@@ -210,7 +323,6 @@ fn test_parse_kv_tokens_with_schema() {
         removed_recipients: None,
     };
     let entry = KvEntryValue {
-        salt: kv_salt,
         nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
         disclosed: false,
@@ -240,9 +352,27 @@ fn test_parse_kv_tokens_with_schema() {
 }
 
 #[test]
+fn test_parse_kv_entry_token_rejects_duplicate_member() {
+    let raw_entry = br#"{
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "ct": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+        "disclosed": false
+    }"#;
+    let entry_token = encode_base64url_nopad(raw_entry);
+
+    let result = parse_kv_entry_token(&entry_token);
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let message = error.format_user_message();
+    assert!(message.contains("duplicate JSON member name"));
+    assert!(message.contains("ct"));
+}
+
+#[test]
 fn test_parse_kv_entry_token_rejects_non_canonical_ct_base64url() {
     let entry = KvEntryValue {
-        salt: encode_base64url_nopad(&[0u8; 32]),
         nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
         ct: "AAB".to_string(),
         disclosed: false,
@@ -344,11 +474,11 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
     let wrap: Vec<_> = (0..=MAX_WRAP_ITEMS).map(|_| wrap_item.clone()).collect();
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V6,
+            "format": format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V6,
+                    "format": format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -402,11 +532,11 @@ fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let file_enc = serde_json::json!({
         "protected": {
-            "format": format::FILE_ENC_V6,
+            "format": format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": format::FILE_PAYLOAD_V6,
+                    "format": format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
                 },

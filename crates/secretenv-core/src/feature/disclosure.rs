@@ -59,8 +59,19 @@ fn upsert_removed_recipient(list: &mut Vec<RemovedRecipient>, removed: RemovedRe
 }
 
 fn dedup_removed_recipients(list: &mut Vec<RemovedRecipient>) {
-    let mut deduped = Vec::with_capacity(list.len());
-    for removed in list.drain(..) {
+    *list = build_unique_removed_recipients(list.drain(..));
+}
+
+fn build_deduped_removed_recipients(source: &[RemovedRecipient]) -> Vec<RemovedRecipient> {
+    build_unique_removed_recipients(source.iter().cloned())
+}
+
+fn build_unique_removed_recipients(
+    source: impl IntoIterator<Item = RemovedRecipient>,
+) -> Vec<RemovedRecipient> {
+    let removed_recipients = source.into_iter();
+    let mut deduped = Vec::with_capacity(removed_recipients.size_hint().0);
+    for removed in removed_recipients {
         if deduped
             .iter()
             .any(|existing: &RemovedRecipient| existing.kid == removed.kid)
@@ -68,20 +79,6 @@ fn dedup_removed_recipients(list: &mut Vec<RemovedRecipient>) {
             continue;
         }
         deduped.push(removed);
-    }
-    *list = deduped;
-}
-
-fn build_deduped_removed_recipients(source: &[RemovedRecipient]) -> Vec<RemovedRecipient> {
-    let mut deduped = Vec::with_capacity(source.len());
-    for removed in source {
-        if deduped
-            .iter()
-            .any(|existing: &RemovedRecipient| existing.kid == removed.kid)
-        {
-            continue;
-        }
-        deduped.push(removed.clone());
     }
     deduped
 }

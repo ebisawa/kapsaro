@@ -39,27 +39,31 @@ pub fn resolve_decrypt_file_command(
     let execution = resolve_read_execution(options, member_handle, kid, ssh_ctx)?;
     let mut warnings = Vec::new();
     let content = FileEncContent::detect_with_source(content, source_name)?;
+    let operation_options = options.operation_options();
 
-    let verified_doc =
-        verify_file_content_for_operation(&content, options.debug, options.allow_expired_key)?;
-    for warning in &verified_doc.proof.warnings {
+    let verified_doc = verify_file_content_for_operation(
+        &content,
+        operation_options.debug(),
+        operation_options.allow_expired_key(),
+    )?;
+    for warning in &verified_doc.proof().warnings {
         push_unique_warning(&mut warnings, warning.clone());
     }
-    let wrap_set = WrapSet::parse(&verified_doc.document.protected.wrap, "Document")?;
+    let wrap_set = WrapSet::parse(&verified_doc.document().protected.wrap, "Document")?;
     if let Some(warning) = enforce_selected_decryption_key_expiry(
         &execution,
         &wrap_set,
-        options.allow_expired_key,
-        options.debug,
+        operation_options.allow_expired_key(),
+        operation_options.debug(),
     )? {
         push_unique_warning(&mut warnings, warning);
     }
-    let recipient_evidence = file_recipient_evidence(&verified_doc.document)?;
+    let recipient_evidence = file_recipient_evidence(verified_doc.document())?;
 
     let trust_plan = evaluate_read_artifact_trust::<DecryptPolicy>(
         options,
         &execution,
-        &verified_doc.proof,
+        verified_doc.proof(),
         &recipient_evidence.recipient_set,
         &recipient_evidence.recipient_handles,
     )?;
@@ -71,7 +75,7 @@ pub fn resolve_decrypt_file_command(
         trust_outcome: trust_plan.signer_outcome,
         recipient_trust_outcome: trust_plan.recipient_outcome,
         warnings,
-        debug: options.debug,
+        debug: operation_options.debug(),
     })
 }
 

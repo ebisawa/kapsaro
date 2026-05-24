@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+// Workspace root search and validated workspace metadata.
+// This module detects workspace layout only; config precedence lives elsewhere.
+
 use crate::support::fs::policy::is_real_dir;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -14,8 +17,6 @@ pub struct WorkspaceRoot {
     pub root_path: PathBuf,
     /// True if .secretenv-root marker file exists
     pub has_marker_file: bool,
-    /// True if config.toml exists
-    pub has_config_file: bool,
 }
 
 impl WorkspaceRoot {
@@ -25,14 +26,6 @@ impl WorkspaceRoot {
 
     pub fn secrets_dir(&self) -> PathBuf {
         self.root_path.join("secrets")
-    }
-
-    pub fn config_path(&self) -> Option<PathBuf> {
-        if self.has_config_file {
-            Some(self.root_path.join("config.toml"))
-        } else {
-            None
-        }
     }
 }
 
@@ -109,9 +102,9 @@ fn detect_current_workspace_without_git(
     }
 
     Err(Error::build_not_found_error(format!(
-            "No workspace found from '{}'. Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE.",
-            format_path_relative_to_cwd(start_path)
-        )))
+        "No workspace found from '{}'",
+        format_path_relative_to_cwd(start_path)
+    )))
 }
 
 pub(super) fn find_git_root(start: &Path) -> Option<PathBuf> {
@@ -201,7 +194,6 @@ fn validate_workspace_structure(path: &Path) -> Option<WorkspaceRoot> {
         Some(WorkspaceRoot {
             root_path: path.to_path_buf(),
             has_marker_file: path.join(".secretenv-root").exists(),
-            has_config_file: path.join("config.toml").exists(),
         })
     } else {
         None

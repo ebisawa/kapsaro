@@ -6,7 +6,8 @@
 use std::path::Path;
 
 use crate::cli::common::output::key::view::{KeyInfoView, KeyListView};
-use secretenv_core::cli_api::app::verification::OnlineVerificationStatus;
+use crate::cli::common::output::text::layout;
+use secretenv_core::api::online::OnlineVerificationStatus;
 use secretenv_core::cli_api::presentation::kid::format_kid_display;
 use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
 use secretenv_core::cli_api::presentation::ssh::SshDeterminismStatus;
@@ -19,41 +20,77 @@ pub(crate) fn print_empty_key_list() {
 }
 
 pub(crate) fn print_key_list(result: &KeyListView<'_>, verbose: bool) {
+    for line in format_key_list_lines(result, verbose) {
+        println!("{line}");
+    }
+}
+
+fn format_key_list_lines(result: &KeyListView<'_>, verbose: bool) -> Vec<String> {
+    let mut lines = Vec::new();
     for entry in &result.entries {
         if entry.keys.is_empty() {
             continue;
         }
-        println!("Keys for member: {}", entry.member_handle);
-        println!();
+        lines.extend(layout::format_value_lines(
+            "Keys for member: ",
+            entry.member_handle,
+        ));
+        lines.push(String::new());
         for key_info in &entry.keys {
-            print_key_info(key_info, verbose);
+            lines.extend(format_key_info_lines(key_info, verbose));
         }
     }
 
     if result.entries.len() > 1 {
-        println!(
+        lines.push(format!(
             "Total: {} member(s), {} key(s)",
             result.entries.len(),
             result.total_keys
-        );
+        ));
     } else {
-        println!("Total: {} key(s)", result.total_keys);
+        lines.push(format!("Total: {} key(s)", result.total_keys));
     }
+    lines
 }
 
 pub(crate) fn print_key_activate_summary(member_handle: &str, kid: &str) {
-    let kid_display = display_kid_or_raw(kid);
-    eprintln!("Activated key for '{}':", member_handle);
-    eprintln!("  Kid: {}", kid_display);
+    print_stderr_lines(format_key_activate_summary_lines(member_handle, kid));
 }
 
 pub(crate) fn print_key_remove_summary(member_handle: &str, kid: &str, was_active: bool) {
-    let kid_display = display_kid_or_raw(kid);
-    eprintln!("Removed key for '{}':", member_handle);
-    eprintln!("  Kid: {}", kid_display);
+    print_stderr_lines(format_key_remove_summary_lines(
+        member_handle,
+        kid,
+        was_active,
+    ));
+}
+
+fn format_key_activate_summary_lines(member_handle: &str, kid: &str) -> Vec<String> {
+    let mut lines = format_plain_lines(&format!("Activated key for '{member_handle}':"));
+    lines.extend(format_key_summary_field_lines(
+        "Kid",
+        &display_kid_or_raw(kid),
+    ));
+    lines
+}
+
+fn format_key_remove_summary_lines(
+    member_handle: &str,
+    kid: &str,
+    was_active: bool,
+) -> Vec<String> {
+    let mut lines = format_plain_lines(&format!("Removed key for '{member_handle}':"));
+    lines.extend(format_key_summary_field_lines(
+        "Kid",
+        &display_kid_or_raw(kid),
+    ));
     if was_active {
-        eprintln!("  Note: This was the active key. No key is now active.");
+        lines.extend(format_key_summary_field_lines(
+            "Note",
+            "This was the active key. No key is now active.",
+        ));
     }
+    lines
 }
 
 pub(crate) fn print_generated_key_summary(
@@ -65,12 +102,16 @@ pub(crate) fn print_generated_key_summary(
     let kid_display = display_kid_or_raw(kid);
     eprintln!();
     if activated {
-        eprintln!("Generated and activated key for '{}':", member_handle);
+        print_stderr_lines(format_plain_lines(&format!(
+            "Generated and activated key for '{member_handle}':"
+        )));
     } else {
-        eprintln!("Generated key for '{}':", member_handle);
+        print_stderr_lines(format_plain_lines(&format!(
+            "Generated key for '{member_handle}':"
+        )));
     }
-    eprintln!("  Key ID:  {}", kid_display);
-    eprintln!("  Expires: {}", expires_at);
+    print_stderr_lines(format_key_summary_field_lines("Key ID", &kid_display));
+    print_stderr_lines(format_key_summary_field_lines("Expires", expires_at));
 }
 
 pub(crate) fn print_key_generation_binding_info(
@@ -79,14 +120,17 @@ pub(crate) fn print_key_generation_binding_info(
     github_verification: OnlineVerificationStatus,
 ) -> Result<()> {
     eprintln!();
-    eprintln!("Using SSH key: {}", ssh_fingerprint);
+    print_stderr_lines(layout::format_value_lines(
+        "Using SSH key: ",
+        ssh_fingerprint,
+    ));
     if ssh_determinism.is_verified() {
         eprintln!("SSH signature determinism: OK");
     } else if let Some(message) = ssh_determinism.message() {
         return Err(Error::build_crypto_error(message.to_string()));
     }
 
-    if github_verification.is_verified() {
+    if is_online_verification_verified(github_verification) {
         eprintln!("GitHub verification: OK");
     }
 
@@ -95,53 +139,126 @@ pub(crate) fn print_key_generation_binding_info(
 
 pub(crate) fn print_existing_key_summary(member_handle: &str, kid: &str) {
     let kid_display = display_kid_or_raw(kid);
-    eprintln!(
-        "Using existing key for '{}' ({})",
-        member_handle, kid_display
-    );
+    print_stderr_lines(format_plain_lines(&format!(
+        "Using existing key for '{member_handle}' ({kid_display})"
+    )));
 }
 
 pub(crate) fn print_key_export_summary(member_handle: &str, kid: &str, out: &Path) {
-    let kid_display = display_kid_or_raw(kid);
-    eprintln!("Exported public key for '{}':", member_handle);
-    eprintln!("  Kid:    {}", kid_display);
-    eprintln!("  Output: {}", format_path_relative_to_cwd(out));
+    print_stderr_lines(format_key_export_summary_lines(member_handle, kid, out));
 }
 
 pub(crate) fn print_private_key_export_file_summary(member_handle: &str, kid: &str, out: &Path) {
-    let kid_display = display_kid_or_raw(kid);
-    eprintln!("Exported private key for '{}':", member_handle);
-    eprintln!("  Kid:    {}", kid_display);
-    eprintln!("  Output: {}", format_path_relative_to_cwd(out));
+    print_stderr_lines(format_private_key_export_file_summary_lines(
+        member_handle,
+        kid,
+        out,
+    ));
 }
 
 pub(crate) fn print_private_key_export_stdout_summary(member_handle: &str, kid: &str) {
-    let kid_display = display_kid_or_raw(kid);
     eprintln!();
-    eprintln!("Exported private key for '{}':", member_handle);
-    eprintln!("  Kid: {}", kid_display);
+    print_stderr_lines(format_private_key_export_stdout_summary_lines(
+        member_handle,
+        kid,
+    ));
 }
 
-fn print_key_info(key_info: &KeyInfoView<'_>, verbose: bool) {
+fn format_key_info_lines(key_info: &KeyInfoView<'_>, verbose: bool) -> Vec<String> {
+    let mut lines = Vec::new();
     let active_marker = if key_info.active { " (ACTIVE)" } else { "" };
     let kid_display = display_kid_or_raw(key_info.kid);
-    print_key_info_field("Kid", format_args!("{}{}", kid_display, active_marker));
+    lines.extend(format_key_info_field_lines(
+        "Kid",
+        &format!("{}{}", kid_display, active_marker),
+    ));
     if verbose {
-        print_key_info_field("Format", format_args!("{}", key_info.format));
-        print_key_info_field("Member Handle", format_args!("{}", key_info.member_handle));
-        print_key_info_field("Created", format_args!("{}", key_info.created_at));
+        lines.extend(format_key_info_field_lines("Format", key_info.format));
+        lines.extend(format_key_info_field_lines(
+            "Member Handle",
+            key_info.member_handle,
+        ));
+        lines.extend(format_key_info_field_lines("Created", key_info.created_at));
     }
-    print_key_info_field("Expires", format_args!("{}", key_info.expires_at));
-    println!();
+    lines.extend(format_key_info_field_lines("Expires", key_info.expires_at));
+    lines.push(String::new());
+    lines
 }
 
-fn print_key_info_field(label: &str, value: std::fmt::Arguments<'_>) {
-    let padding = KEY_INFO_LABEL_WIDTH.saturating_sub(label.len()) + 1;
-    println!("  {label}:{:padding$}{value}", "");
+fn format_key_info_field_lines(label: &str, value: &str) -> Vec<String> {
+    format_labeled_value_lines(label, value, KEY_INFO_LABEL_WIDTH)
+}
+
+fn format_key_export_summary_lines(member_handle: &str, kid: &str, out: &Path) -> Vec<String> {
+    let mut lines = format_plain_lines(&format!("Exported public key for '{member_handle}':"));
+    lines.extend(format_labeled_value_lines(
+        "Kid",
+        &display_kid_or_raw(kid),
+        "Output".len(),
+    ));
+    lines.extend(format_labeled_value_lines(
+        "Output",
+        &format_path_relative_to_cwd(out),
+        "Output".len(),
+    ));
+    lines
+}
+
+fn format_private_key_export_file_summary_lines(
+    member_handle: &str,
+    kid: &str,
+    out: &Path,
+) -> Vec<String> {
+    let mut lines = format_plain_lines(&format!("Exported private key for '{member_handle}':"));
+    lines.extend(format_labeled_value_lines(
+        "Kid",
+        &display_kid_or_raw(kid),
+        "Output".len(),
+    ));
+    lines.extend(format_labeled_value_lines(
+        "Output",
+        &format_path_relative_to_cwd(out),
+        "Output".len(),
+    ));
+    lines
+}
+
+fn format_private_key_export_stdout_summary_lines(member_handle: &str, kid: &str) -> Vec<String> {
+    let mut lines = format_plain_lines(&format!("Exported private key for '{member_handle}':"));
+    lines.extend(layout::format_value_lines(
+        "  Kid: ",
+        &display_kid_or_raw(kid),
+    ));
+    lines
+}
+
+fn format_labeled_value_lines(label: &str, value: &str, label_width: usize) -> Vec<String> {
+    let padding = label_width.saturating_sub(label.len()) + 1;
+    let prefix = format!("  {label}:{:padding$}", "");
+    layout::format_value_lines(&prefix, value)
+}
+
+fn format_key_summary_field_lines(label: &str, value: &str) -> Vec<String> {
+    let prefix = format!("  {label}: ");
+    layout::format_value_lines(&prefix, value)
+}
+
+fn format_plain_lines(line: &str) -> Vec<String> {
+    layout::format_value_lines("", line)
+}
+
+fn print_stderr_lines(lines: Vec<String>) {
+    for line in lines {
+        eprintln!("{line}");
+    }
 }
 
 fn display_kid_or_raw(kid: &str) -> String {
     format_kid_display(kid).unwrap_or_else(|_| kid.to_string())
+}
+
+fn is_online_verification_verified(status: OnlineVerificationStatus) -> bool {
+    matches!(status, OnlineVerificationStatus::Verified)
 }
 
 #[cfg(test)]

@@ -4,10 +4,10 @@
 //! Artifact output recipient-set review helper.
 //! Keeps app commands from duplicating artifact evidence extraction.
 
-use crate::app::artifact::artifact_recipient_evidence;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::{ArtifactRecipientTrustOutcome, CommandCapability, TrustContext};
+use crate::feature::artifact::artifact_recipient_evidence;
 use crate::format::content::EncContent;
 use crate::Result;
 

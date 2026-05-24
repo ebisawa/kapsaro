@@ -5,10 +5,7 @@
 
 use std::path::Path;
 
-use crate::app::artifact::{
-    artifact_recipient_evidence, artifact_wrap_set, detect_reviewed_artifact,
-    load_reviewed_artifact, verify_artifact_signature_for_operation,
-};
+use crate::app::artifact::{detect_reviewed_artifact, load_reviewed_artifact};
 use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::review::ReviewedTextFile;
 use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
@@ -22,6 +19,9 @@ use crate::app::trust::{
     evaluate_signer_trust_with_proof, load_read_trust_context, ArtifactRecipientTrustOutcome,
     CommandCapability, RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate,
     TrustContext,
+};
+use crate::feature::artifact::{
+    artifact_recipient_evidence, artifact_wrap_set, verify_artifact_signature_for_operation,
 };
 use crate::format::content::EncContent;
 use crate::model::verification::SignatureVerificationProof;

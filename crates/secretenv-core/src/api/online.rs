@@ -8,13 +8,15 @@ use crate::io::keystore::helpers::resolve_kid;
 use crate::io::keystore::storage::load_public_key;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;
 use crate::io::verify_online::github::verify_github_account;
-use crate::io::verify_online::{VerificationResult, VerificationStatus};
+use crate::io::verify_online::VerificationResult;
 use crate::model::public_key::GithubAccount as InternalGithubAccount;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 
 use super::key::LocalKeyStore;
 use super::operation::OperationOptions;
+
+pub use crate::app::verification::OnlineVerificationStatus;
 
 /// GitHub account metadata used by online verification.
 ///
@@ -36,14 +38,6 @@ pub struct GitHubAccount {
 #[derive(Debug, Clone, Copy)]
 pub struct GitHubOnlineVerifier {
     options: OperationOptions,
-}
-
-/// Online verification status returned by the facade.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OnlineVerificationStatus {
-    NotConfigured,
-    Verified,
-    Failed,
 }
 
 /// Online verification result without raw document model exposure.
@@ -162,16 +156,6 @@ impl OnlineVerificationResult {
     /// Return verified GitHub account metadata when verification succeeded.
     pub fn verified_account(&self) -> Option<&GitHubAccount> {
         self.verified_account.as_ref()
-    }
-}
-
-impl From<VerificationStatus> for OnlineVerificationStatus {
-    fn from(value: VerificationStatus) -> Self {
-        match value {
-            VerificationStatus::NotConfigured => Self::NotConfigured,
-            VerificationStatus::Verified => Self::Verified,
-            VerificationStatus::Failed => Self::Failed,
-        }
     }
 }
 

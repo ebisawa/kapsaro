@@ -6,14 +6,15 @@ use crate::app::context::ssh::{
 };
 use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 use secretenv_core::cli_api::test_support::domain::wire::algorithm;
-use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad_array;
+use secretenv_core::cli_api::test_support::helpers::codec::base64_public::{
+    decode_base64url_nopad_array, encode_base64url_nopad,
+};
 use secretenv_core::cli_api::test_support::operations::key::generate::{
     generate_key, KeyGenerationOptions,
 };
 use secretenv_core::cli_api::test_support::operations::verify::public_key::verify_public_key_with_attestation;
 use secretenv_core::cli_api::test_support::primitives::sign::sign_detached_bytes;
 use secretenv_core::cli_api::test_support::settings::types::SshSigningMethod;
-use secretenv_core::cli_api::test_support::storage::keystore::storage::load_public_key;
 use secretenv_core::cli_api::test_support::wire::jcs;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -38,23 +39,15 @@ fn generate_real_ssh_attested_public_key(
 
     let result = generate_key(KeyGenerationOptions {
         member_handle: "attestation-test@example.com".to_string(),
-        home: Some(home_dir.clone()),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2026-12-31T23:59:59Z".to_string(),
-        no_activate: false,
         debug: false,
         github_account: None,
-        verbose: false,
         ssh_binding: ssh_signing_context.into_ssh_binding(),
     })
     .unwrap();
 
-    load_public_key(
-        &home_dir.join("keys"),
-        "attestation-test@example.com",
-        &result.kid,
-    )
-    .unwrap()
+    result.public_key
 }
 
 #[test]
@@ -81,7 +74,8 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
 
     public_key.protected.kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string();
     let protected_jcs = jcs::normalize(&public_key.protected).unwrap();
-    public_key.signature = sign_detached_bytes(&protected_jcs, &signing_key).unwrap();
+    public_key.signature =
+        encode_base64url_nopad(&sign_detached_bytes(&protected_jcs, &signing_key).unwrap());
 
     let error = verify_public_key_with_attestation(&public_key, false)
         .unwrap_err()

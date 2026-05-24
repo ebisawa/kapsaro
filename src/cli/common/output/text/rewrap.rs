@@ -4,17 +4,34 @@
 //! Text renderers for rewrap commands.
 
 use crate::cli::common::output::rewrap::RewrapBatchView;
+use crate::cli::common::output::text::layout;
 
 pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) {
+    for line in format_rewrap_batch_outcome_lines(outcome) {
+        eprintln!("{line}");
+    }
+}
+
+fn format_rewrap_batch_outcome_lines(outcome: &RewrapBatchView) -> Vec<String> {
+    let mut lines = Vec::new();
     for file in &outcome.processed_files {
-        eprintln!("Rewrapped: {}", file);
+        lines.extend(layout::format_value_lines("Rewrapped: ", file));
     }
     for file in &outcome.failed_files {
-        eprintln!("Error processing {}: {}", file.path, file.error);
+        lines.extend(layout::format_value_lines(
+            "Error processing ",
+            &format!("{}: {}", file.path, file.error),
+        ));
     }
-    eprintln!(
-        "\nRewraped {} file(s) successfully, {} error(s)",
+    lines.push(String::new());
+    lines.push(format!(
+        "Rewrapped {} file(s) successfully, {} error(s)",
         outcome.processed_files.len(),
         outcome.failed_files.len()
-    );
+    ));
+    lines
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/unit/internal/cli_common_output_text_rewrap_test.rs"]
+mod tests;

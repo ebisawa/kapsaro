@@ -8,6 +8,9 @@ use secretenv_core::cli_api::test_support::domain::trust_store::TrustStoreSignat
 use secretenv_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519;
 use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store_bytes;
 use secretenv_core::cli_api::test_support::operations::trust::verification::verify_trust_store_bytes;
+use secretenv_core::cli_api::test_support::primitives::sign::{
+    sign_detached_bytes, verify_detached_bytes,
+};
 
 #[test]
 fn test_sign_trust_store_bytes_returns_valid_structure() {
@@ -130,4 +133,25 @@ fn test_kv_lf_normalization_matters() {
     // Verify with CRLF should fail (caller must normalize)
     let result = verify_trust_store_bytes(crlf_version, &vk, &sig);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_sign_detached_bytes_returns_raw_ed25519_signature_bytes() {
+    let seed = [42u8; 32];
+    let sk = SigningKey::from_bytes(&seed);
+
+    let signature = sign_detached_bytes(b"raw signature input", &sk).unwrap();
+
+    assert_eq!(signature.len(), 64);
+}
+
+#[test]
+fn test_verify_detached_bytes_accepts_raw_ed25519_signature_bytes() {
+    let seed = [42u8; 32];
+    let sk = SigningKey::from_bytes(&seed);
+    let vk = sk.verifying_key();
+    let message = b"raw signature input";
+    let signature = sign_detached_bytes(message, &sk).unwrap();
+
+    verify_detached_bytes(message, &vk, &signature).unwrap();
 }

@@ -1,6 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Workspace path validation and auto-detection helpers.
+//!
+//! Higher-level setting precedence is resolved by config::resolution::workspace.
+
 use super::search::{detect_workspace_root, find_git_root, validate_workspace_path, WorkspaceRoot};
 use crate::support::fs::policy::is_real_dir;
 use crate::support::path::format_path_relative_to_cwd;
@@ -9,34 +13,8 @@ use std::env;
 use std::path::PathBuf;
 
 pub fn resolve_workspace(workspace_opt: Option<PathBuf>) -> Result<WorkspaceRoot> {
-    resolve_workspace_with_base(workspace_opt, None)
-}
-
-pub fn resolve_workspace_with_base(
-    workspace_opt: Option<PathBuf>,
-    _base_dir: Option<&std::path::Path>,
-) -> Result<WorkspaceRoot> {
     if let Some(path) = workspace_opt {
-        let canonical = path.canonicalize().map_err(|e| {
-            Error::build_config_error(format!(
-                "Invalid workspace path '{}': {}",
-                format_path_relative_to_cwd(&path),
-                e
-            ))
-        })?;
-        return validate_workspace_path(&canonical);
-    }
-
-    if let Ok(env_path) = env::var("SECRETENV_WORKSPACE") {
-        let path = PathBuf::from(env_path);
-        let canonical = path.canonicalize().map_err(|e| {
-            Error::build_config_error(format!(
-                "Invalid SECRETENV_WORKSPACE path '{}': {}",
-                format_path_relative_to_cwd(&path),
-                e
-            ))
-        })?;
-        return validate_workspace_path(&canonical);
+        return validate_explicit_workspace_path(path);
     }
 
     let current_dir = env::current_dir().map_err(|e| {
@@ -46,19 +24,8 @@ pub fn resolve_workspace_with_base(
 }
 
 pub fn resolve_optional_workspace(workspace_opt: Option<PathBuf>) -> Result<Option<WorkspaceRoot>> {
-    resolve_optional_workspace_with_base(workspace_opt, None)
-}
-
-pub fn resolve_optional_workspace_with_base(
-    workspace_opt: Option<PathBuf>,
-    base_dir: Option<&std::path::Path>,
-) -> Result<Option<WorkspaceRoot>> {
     if let Some(path) = workspace_opt {
-        return resolve_workspace_with_base(Some(path), base_dir).map(Some);
-    }
-
-    if env::var("SECRETENV_WORKSPACE").is_ok() {
-        return resolve_workspace_with_base(None, base_dir).map(Some);
+        return resolve_workspace(Some(path)).map(Some);
     }
 
     match env::current_dir() {
@@ -72,6 +39,17 @@ pub fn resolve_optional_workspace_with_base(
             e
         ))),
     }
+}
+
+fn validate_explicit_workspace_path(path: PathBuf) -> Result<WorkspaceRoot> {
+    let canonical = path.canonicalize().map_err(|e| {
+        Error::build_config_error(format!(
+            "Invalid workspace path '{}': {}",
+            format_path_relative_to_cwd(&path),
+            e
+        ))
+    })?;
+    validate_workspace_path(&canonical)
 }
 
 pub fn resolve_workspace_creation_path(workspace_opt: Option<PathBuf>) -> Result<PathBuf> {
@@ -94,6 +72,7 @@ pub fn resolve_workspace_creation_path(workspace_opt: Option<PathBuf>) -> Result
         });
     }
 
-    Err(Error::build_config_error("No git repository or current .secretenv directory found. Specify workspace explicitly with --workspace or SECRETENV_WORKSPACE."
-                .to_string()))
+    Err(Error::build_config_error(
+        "No git repository or current .secretenv directory found".to_string(),
+    ))
 }

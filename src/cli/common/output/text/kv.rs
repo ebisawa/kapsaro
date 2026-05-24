@@ -4,15 +4,11 @@
 //! Text renderers for KV commands.
 
 use crate::cli::common::output::kv::view::{KvEntryView, KvKeyView};
-use crate::cli::common::output::text::print_optional_status;
+use crate::cli::common::output::text::{layout, print_optional_status};
 
 pub(crate) fn print_kv_key_list(keys: &[KvKeyView<'_>]) {
-    for key in keys {
-        if key.disclosed {
-            println!("{} [DISCLOSED]", key.key);
-        } else {
-            println!("{}", key.key);
-        }
+    for line in format_kv_key_list_lines(keys) {
+        println!("{line}");
     }
 }
 
@@ -54,3 +50,19 @@ fn print_escaped_value(value: &str) {
         }
     }
 }
+
+fn format_kv_key_list_lines(keys: &[KvKeyView<'_>]) -> Vec<String> {
+    keys.iter()
+        .flat_map(|key| {
+            if key.disclosed {
+                layout::format_value_lines("", &format!("{} [DISCLOSED]", key.key))
+            } else {
+                layout::format_value_lines("", key.key)
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "../../../../../tests/unit/internal/cli_common_output_text_kv_test.rs"]
+mod tests;

@@ -9,6 +9,7 @@ use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
 use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
+use crate::format::signature::encode_ed25519_signature;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
 use crate::model::public_key::{
@@ -86,7 +87,7 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
             kid_display
         );
     }
-    let signature = sign_detached_bytes(&protected_jcs, params.sig_sk)?;
+    let signature = encode_ed25519_signature(&sign_detached_bytes(&protected_jcs, params.sig_sk)?);
 
     Ok(PublicKey {
         protected,

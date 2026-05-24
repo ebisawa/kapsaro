@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::app::member::verification::verify_member_public_keys;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
-use crate::feature::member::verification::verify_member_public_keys;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
 

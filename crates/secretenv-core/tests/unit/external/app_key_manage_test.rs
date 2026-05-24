@@ -10,13 +10,13 @@ use crate::test_utils::{
     build_test_private_key, keygen_test, setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE,
     BOB_MEMBER_HANDLE,
 };
+use secretenv_core::api::secret::SecretString;
 use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
 use secretenv_core::cli_api::app::context::ssh::SshSigningContextResolution;
 use secretenv_core::cli_api::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, list_keys_command,
     remove_key_command,
 };
-use secretenv_core::cli_api::presentation::secret::SecretString;
 use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
 use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
 use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;

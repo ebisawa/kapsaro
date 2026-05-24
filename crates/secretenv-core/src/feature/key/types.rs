@@ -1,21 +1,21 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Feature-facing DTOs for reusable key generation results.
-//! Excludes command orchestration result types owned by the app layer.
+//! Feature-facing DTOs for reusable key document generation.
+//! Keeps keystore persistence and activation orchestration in the app layer.
 
+use crate::model::private_key::PrivateKey;
+use crate::model::public_key::PublicKey;
 use crate::model::ssh::SshDeterminismStatus;
-use std::path::PathBuf;
 
-/// Result for key generation.
+/// Generated key documents and metadata before persistence.
 pub struct KeyGenerationResult {
     pub member_handle: String,
     pub kid: String,
     pub created_at: String,
     pub expires_at: String,
-    pub keystore_root: PathBuf,
-    pub key_dir: PathBuf,
-    pub activated: bool,
+    pub private_key: PrivateKey,
+    pub public_key: PublicKey,
     pub ssh_fingerprint: String,
     pub ssh_public_key: String,
     pub ssh_determinism: SshDeterminismStatus,

@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
 use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
-use crate::feature::member::verification::verify_member_file;
+use crate::feature::member::verification::{
+    derive_member_handle_from_path, verify_member_public_key_file,
+};
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::VerificationStatus;
 use crate::io::workspace::detection::WorkspaceRoot;
@@ -114,7 +116,28 @@ fn verify_member_path(
     path: &Path,
     verbose: bool,
 ) -> Vec<DoctorCheck> {
-    match verify_member_file(path, None, verbose) {
+    let member_handle = derive_member_handle_from_path(path);
+    let public_key = match load_member_file_from_path(path) {
+        Ok(public_key) => public_key,
+        Err(error) => {
+            return vec![DoctorCheck::fail(
+                id,
+                category,
+                DoctorSubject::Member(member_handle),
+                format!(
+                    "{} failed validation: {}",
+                    format_path_relative_to_cwd(path),
+                    error.format_user_message()
+                ),
+            )];
+        }
+    };
+    match verify_member_public_key_file(
+        &public_key,
+        Some(&member_handle),
+        &format_path_relative_to_cwd(path),
+        verbose,
+    ) {
         Ok(verified) => {
             let mut checks = vec![DoctorCheck::ok(
                 id,

@@ -9,6 +9,7 @@ pub(crate) mod doctor;
 pub(crate) mod inspect;
 pub(crate) mod key;
 pub(crate) mod kv;
+pub(crate) mod layout;
 pub(crate) mod member;
 pub(crate) mod registration;
 pub(crate) mod rewrap;

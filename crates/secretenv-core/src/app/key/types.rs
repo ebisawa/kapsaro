@@ -4,12 +4,12 @@
 //! Application-facing DTOs for key commands.
 //! Keeps CLI output data separate from reusable feature key generation data.
 
-use crate::app::verification::OnlineVerificationStatus;
 use crate::feature::key::portable_export::PortableExportOutput;
-use crate::feature::key::types as feature_key_types;
 use crate::model::public_key::PublicKey;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::support::secret::SecretString;
+
+pub use crate::app::verification::OnlineVerificationStatus;
 
 #[derive(Debug, Clone)]
 pub struct KeyGenerationResult {
@@ -20,20 +20,6 @@ pub struct KeyGenerationResult {
     pub ssh_fingerprint: String,
     pub ssh_determinism: SshDeterminismStatus,
     pub github_verification: OnlineVerificationStatus,
-}
-
-impl From<feature_key_types::KeyGenerationResult> for KeyGenerationResult {
-    fn from(r: feature_key_types::KeyGenerationResult) -> Self {
-        Self {
-            member_handle: r.member_handle,
-            kid: r.kid,
-            expires_at: r.expires_at,
-            activated: r.activated,
-            ssh_fingerprint: r.ssh_fingerprint,
-            ssh_determinism: r.ssh_determinism,
-            github_verification: OnlineVerificationStatus::NotConfigured,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

@@ -10,7 +10,6 @@ use crate::app::trust::approval::{save_known_key_approvals, ApprovalSaveResult, 
 use crate::app::trust::store::load_or_build_trust_store_for_member;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
-use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
 use crate::io::workspace::members::load_active_member_files;
@@ -67,8 +66,10 @@ pub fn evaluate_members_for_approval(
             approval_targets.len()
         );
     }
-    let verification_results =
-        block_on_result(verify_member_public_keys(&approval_targets, options.debug))?;
+    let verification_results = block_on_result(super::verification::verify_member_public_keys(
+        &approval_targets,
+        options.debug,
+    ))?;
 
     let (_, loaded) = load_or_build_trust_store_for_member(options, self_member_handle)?;
     let protected = loaded.protected;

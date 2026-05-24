@@ -4,6 +4,9 @@
 use secretenv_core::api::file::{FileEncArtifact, VerifiedFileEncArtifact};
 use secretenv_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, RecipientKeys};
 use secretenv_core::api::kv::{KvEncArtifact, KvInputEntry, VerifiedKvEncArtifact};
+use secretenv_core::api::online::{
+    GitHubAccount, OnlineVerificationResult, OnlineVerificationStatus,
+};
 use secretenv_core::api::operation::OperationOptions;
 use secretenv_core::api::secret::{SecretBytes, SecretString};
 use secretenv_core::api::ssh::{SshRawSignature, SshSignatureBackend};
@@ -12,6 +15,7 @@ use secretenv_core::api::trust::{
     TrustReviewKind, VerifiedLocalTrustStore,
 };
 use secretenv_core::{Error, ErrorKind, Result};
+use zeroize::Zeroizing;
 
 struct StubSshBackend;
 
@@ -100,6 +104,13 @@ fn canonical_api_exposes_facade_helper_types() {
     assert!(std::any::type_name::<LocalTrustStore>().contains("LocalTrustStore"));
     assert!(std::any::type_name::<TrustDecision>().contains("TrustDecision"));
     assert!(std::any::type_name::<TrustPolicyEvaluator>().contains("TrustPolicyEvaluator"));
+    assert!(std::any::type_name::<GitHubAccount>().contains("GitHubAccount"));
+    assert!(std::any::type_name::<OnlineVerificationResult>().contains("OnlineVerificationResult"));
+    assert_eq!(
+        OnlineVerificationStatus::Verified,
+        OnlineVerificationStatus::Verified
+    );
+    assert!(OnlineVerificationStatus::Verified.is_verified());
 }
 
 #[test]
@@ -118,6 +129,10 @@ fn secret_facade_debug_redacts_and_plain_output_is_explicit() {
     assert_eq!(
         SecretString::new("plain at boundary".to_string()).into_plain_string_for_output(),
         "plain at boundary"
+    );
+    assert_eq!(
+        SecretString::from_zeroizing(Zeroizing::new("zeroizing input".to_string())).expose_secret(),
+        "zeroizing input"
     );
 }
 

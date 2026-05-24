@@ -4,6 +4,7 @@
 //! Trust Store document signing.
 
 use crate::crypto::sign::sign_detached_bytes;
+use crate::format::signature::encode_ed25519_signature;
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::model::trust_store::{TrustStoreDocument, TrustStoreProtected, TrustStoreSignature};
 use crate::model::wire::algorithm::SIGNATURE_ED25519;
@@ -16,7 +17,7 @@ pub fn sign_trust_store_bytes(
     signing_key: &SigningKey,
     signer_kid: &str,
 ) -> Result<TrustStoreSignature> {
-    let sig = sign_detached_bytes(canonical_bytes, signing_key)?;
+    let sig = encode_ed25519_signature(&sign_detached_bytes(canonical_bytes, signing_key)?);
     Ok(TrustStoreSignature {
         alg: SIGNATURE_ED25519.to_string(),
         kid: signer_kid.to_string(),

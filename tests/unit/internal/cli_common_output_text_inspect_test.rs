@@ -4,7 +4,9 @@
 use console::{colors_enabled, set_colors_enabled};
 use serial_test::serial;
 
-use super::colorize_inspect_line;
+use super::{colorize_inspect_line, format_inspect_banner_lines, format_inspect_output};
+use crate::cli::common::output::text::layout::visible_width;
+use secretenv_core::cli_api::app::file::inspect::{InspectOutput, InspectSection};
 
 struct StdoutColorGuard {
     enabled: bool,
@@ -47,4 +49,72 @@ fn test_colorize_inspect_line_keeps_ok_status_colored_when_stdout_colors_enabled
     let rendered = colorize_inspect_line("  Status:      \u{2714} OK");
 
     assert!(rendered.contains("\u{1b}[32m\u{2714} OK\u{1b}[0m"));
+}
+
+#[test]
+#[serial]
+fn test_format_inspect_output_wraps_long_section_lines() {
+    let _guard = StdoutColorGuard::new(false);
+    let output = InspectOutput {
+        title: "File Encryption".to_string(),
+        sections: vec![InspectSection {
+            title: "Verification".to_string(),
+            lines: vec![format!(
+                "  Warning:     PublicKey for '{}' has expired and needs rotation before reuse",
+                "release.engineering.".repeat(6)
+            )],
+        }],
+    };
+
+    let rendered = format_inspect_output(&output);
+
+    assert!(rendered.lines().all(|line| visible_width(line) <= 100));
+    assert!(rendered.contains("  Warning:     PublicKey"));
+}
+
+#[test]
+#[serial]
+fn test_format_inspect_banner_lines_wraps_long_input_display() {
+    let _guard = StdoutColorGuard::new(false);
+    let input_display = format!(
+        "target/{}/secret.env.encrypted",
+        "very-long-directory-name/".repeat(6)
+    );
+
+    let lines = format_inspect_banner_lines(&input_display);
+
+    assert_line_lengths_at_most(&lines, 100);
+    assert!(lines[0].starts_with("Inspecting: "));
+}
+
+#[test]
+#[serial]
+fn test_format_inspect_output_wraps_long_title_and_section_title() {
+    let _guard = StdoutColorGuard::new(false);
+    let output = InspectOutput {
+        title: format!("File Encryption {}", "release engineering ".repeat(8)),
+        sections: vec![InspectSection {
+            title: format!("Signature Verification {}", "long section title ".repeat(8)),
+            lines: vec!["  Status:      \u{2714} OK".to_string()],
+        }],
+    };
+
+    let rendered = format_inspect_output(&output);
+
+    assert_line_lengths_at_most(
+        &rendered.lines().map(str::to_string).collect::<Vec<_>>(),
+        100,
+    );
+    assert!(rendered.contains("File Encryption"));
+    assert!(rendered.contains("Signature Verification"));
+}
+
+fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
+    for line in lines {
+        assert!(
+            visible_width(line) <= max_width,
+            "expected line to fit within {max_width} columns, got {}: {line}",
+            visible_width(line)
+        );
+    }
 }

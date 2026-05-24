@@ -151,9 +151,9 @@ impl FileEncDocument {
 #[derive(Debug, Clone)]
 pub struct VerifiedFileEncDocument {
     /// The verified document
-    pub document: FileEncDocument,
+    document: FileEncDocument,
     /// Proof of signature verification
-    pub proof: SignatureVerificationProof,
+    proof: SignatureVerificationProof,
 }
 impl VerifiedFileEncDocument {
     /// Create a new VerifiedFileEncDocument wrapper
@@ -166,15 +166,14 @@ impl VerifiedFileEncDocument {
         &self.document
     }
 
-    /// Get a mutable reference to the verified document.
-    /// Used by rewrap operations that mutate the document and then re-sign in finalize.
-    pub fn document_mut(&mut self) -> &mut FileEncDocument {
-        &mut self.document
-    }
-
     /// Get a reference to the verification proof
     pub fn proof(&self) -> &SignatureVerificationProof {
         &self.proof
+    }
+
+    /// Get a mutable reference to the verification proof
+    pub(crate) fn proof_mut(&mut self) -> &mut SignatureVerificationProof {
+        &mut self.proof
     }
 
     /// Extract the inner document and proof (consumes self)

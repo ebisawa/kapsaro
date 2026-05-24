@@ -3,6 +3,7 @@
 
 //! Feature module - business logic organized by feature.
 
+pub(crate) mod artifact;
 pub(crate) mod context;
 pub(crate) mod decrypt;
 pub(crate) mod disclosure;

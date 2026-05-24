@@ -144,14 +144,28 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
 
     generate_key(KeyGenerationOptions {
         member_handle: member_handle.to_string(),
-        home: Some(home.to_path_buf()),
         created_at,
         expires_at: expires_at.to_string(),
-        no_activate: false,
         debug: false,
         github_account: None,
-        verbose: false,
         ssh_binding,
+    })
+    .map(|result| {
+        let keystore_root = home.join("keys");
+        secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
+            &keystore_root,
+            member_handle,
+            &result.kid,
+            &result.private_key,
+            &result.public_key,
+        )
+        .unwrap();
+        secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid(
+            member_handle,
+            &result.kid,
+            &keystore_root,
+        )
+        .unwrap();
     })
     .unwrap();
 }

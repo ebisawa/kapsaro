@@ -3,10 +3,12 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::feature::member::verification::verify_member_file;
+use crate::feature::member::verification::{
+    derive_member_handle_from_path, verify_member_public_key_file,
+};
 use crate::io::workspace::members::{
     get_active_member_file_path, get_incoming_member_file_path, list_active_member_paths,
-    list_incoming_member_paths, MemberStatus,
+    list_incoming_member_paths, load_member_file_from_path, MemberStatus,
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::Error;
@@ -50,7 +52,14 @@ pub fn load_member_show_result(
             member_handle
         )));
     };
-    let verified = verify_member_file(&member_path, Some(member_handle), options.debug)?;
+    let public_key = load_member_file_from_path(&member_path)?;
+    let source_name = format_path_relative_to_cwd(&member_path);
+    let verified = verify_member_public_key_file(
+        &public_key,
+        Some(member_handle),
+        &source_name,
+        options.debug,
+    )?;
     Ok(MemberShowResult {
         member: build_member_document_view(verified.public_key, verified.warnings)?,
         status: MembershipStatus::from(status),
@@ -64,7 +73,17 @@ fn collect_member_entries(
 ) -> Result<Vec<super::types::MemberListEntry>> {
     let mut entries = Vec::new();
     for member_path in member_paths {
-        match verify_member_file(member_path, None, debug) {
+        let source_name = format_path_relative_to_cwd(member_path);
+        let expected_member_handle = derive_member_handle_from_path(member_path);
+        let result = load_member_file_from_path(member_path).and_then(|public_key| {
+            verify_member_public_key_file(
+                &public_key,
+                Some(&expected_member_handle),
+                &source_name,
+                debug,
+            )
+        });
+        match result {
             Ok(verified) => entries.push(build_member_list_entry(verified.public_key)?),
             Err(error) => warnings.push(format!(
                 "Skipping invalid member file {}: {}",

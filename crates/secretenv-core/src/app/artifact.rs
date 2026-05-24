@@ -1,21 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! App-layer encrypted artifact inspection helpers.
-//! Centralizes command orchestration around artifact files without owning domain rules.
+//! App-layer encrypted artifact file helpers.
+//! Owns workspace artifact discovery and reviewed file loading.
 
 use std::path::{Path, PathBuf};
 
 use crate::app::context::review::ReviewedTextFile;
-use crate::feature::envelope::wrap_set::WrapSet;
-use crate::feature::trust::recipient_sets::{
-    encrypted_content_recipient_evidence, ArtifactRecipientEvidence,
-};
-use crate::feature::verify::file::{verify_file_content, verify_file_content_for_operation};
-use crate::feature::verify::kv::signature::{verify_kv_content, verify_kv_content_for_operation};
 use crate::format::content::EncContent;
 use crate::format::kv::KV_ENC_EXTENSION;
-use crate::model::verification::SignatureVerificationProof;
 use crate::support::fs::list_dir;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
@@ -66,54 +59,6 @@ pub(crate) fn detect_reviewed_artifact(captured: &ReviewedTextFile) -> Result<En
 
 pub(crate) fn load_artifact_content(path: &Path) -> Result<EncContent> {
     detect_reviewed_artifact(&load_reviewed_artifact(path)?)
-}
-
-pub(crate) fn verify_artifact_signature(
-    content: &EncContent,
-    debug: bool,
-) -> Result<SignatureVerificationProof> {
-    match content {
-        EncContent::FileEnc(file_content) => Ok(verify_file_content(file_content, debug)?.proof),
-        EncContent::KvEnc(kv_content) => Ok(verify_kv_content(kv_content, debug)?.proof),
-    }
-}
-
-pub(crate) fn verify_artifact_signature_for_operation(
-    content: &EncContent,
-    debug: bool,
-    allow_expired_key: bool,
-) -> Result<SignatureVerificationProof> {
-    match content {
-        EncContent::FileEnc(file_content) => {
-            Ok(
-                verify_file_content_for_operation(file_content, debug, allow_expired_key)?
-                    .proof
-                    .clone(),
-            )
-        }
-        EncContent::KvEnc(kv_content) => {
-            Ok(verify_kv_content_for_operation(kv_content, debug, allow_expired_key)?.proof)
-        }
-    }
-}
-
-pub(crate) fn artifact_recipient_evidence(
-    content: &EncContent,
-) -> Result<ArtifactRecipientEvidence> {
-    encrypted_content_recipient_evidence(content)
-}
-
-pub(crate) fn artifact_wrap_set(content: &EncContent) -> Result<WrapSet> {
-    match content {
-        EncContent::FileEnc(file_content) => {
-            let doc = file_content.parse()?;
-            WrapSet::parse(&doc.protected.wrap, "Document")
-        }
-        EncContent::KvEnc(kv_content) => {
-            let doc = kv_content.parse()?;
-            WrapSet::parse(&doc.wrap().wrap, "Document")
-        }
-    }
 }
 
 #[cfg(test)]

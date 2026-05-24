@@ -9,6 +9,5 @@ pub(crate) fn build_test_workspace_root(workspace: &Path) -> WorkspaceRoot {
     WorkspaceRoot {
         root_path: workspace.to_path_buf(),
         has_marker_file: false,
-        has_config_file: false,
     }
 }

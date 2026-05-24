@@ -165,6 +165,84 @@ pub(crate) fn rewrite_with_rewrap_operation_plan<E: RewrapExecutor>(
     plan: RewrapOperationPlan,
     debug_enabled: bool,
 ) -> Result<String> {
+    log_rewrap_operation_plan(&plan, debug_enabled);
+    apply_rewrap_operation_plan(&mut executor, &plan, debug_enabled)?;
+    log_rewrap_plan_step("finalize artifact", debug_enabled);
+    executor.finalize()
+}
+
+fn apply_rewrap_operation_plan<E: RewrapExecutor>(
+    executor: &mut E,
+    plan: &RewrapOperationPlan,
+    debug_enabled: bool,
+) -> Result<()> {
+    apply_recipient_step(
+        executor,
+        &plan.remove_recipients,
+        "remove recipients",
+        debug_enabled,
+        RewrapExecutor::remove_recipients,
+    )?;
+    apply_recipient_step(
+        executor,
+        &plan.stale_recipient_handles,
+        "rewrite stale recipient wraps",
+        debug_enabled,
+        RewrapExecutor::rewrite_recipient_wraps,
+    )?;
+    apply_recipient_step(
+        executor,
+        &plan.add_recipients,
+        "add recipients",
+        debug_enabled,
+        RewrapExecutor::add_recipients,
+    )?;
+    apply_flag_step(plan.rotate_key, "rotate key", debug_enabled, || {
+        executor.rotate_key()
+    })?;
+    apply_flag_step(
+        plan.clear_disclosure_history,
+        "clear disclosure history",
+        debug_enabled,
+        || executor.clear_disclosure_history(),
+    )
+}
+
+fn apply_recipient_step<E, Apply>(
+    executor: &mut E,
+    recipients: &[String],
+    label: &str,
+    debug_enabled: bool,
+    apply: Apply,
+) -> Result<()>
+where
+    E: RewrapExecutor,
+    Apply: FnOnce(&mut E, &[String]) -> Result<()>,
+{
+    if recipients.is_empty() {
+        return Ok(());
+    }
+    log_rewrap_recipient_step(label, recipients.len(), debug_enabled);
+    apply(executor, recipients)
+}
+
+fn apply_flag_step<Apply>(
+    enabled: bool,
+    label: &str,
+    debug_enabled: bool,
+    apply: Apply,
+) -> Result<()>
+where
+    Apply: FnOnce() -> Result<()>,
+{
+    if !enabled {
+        return Ok(());
+    }
+    log_rewrap_plan_step(label, debug_enabled);
+    apply()
+}
+
+fn log_rewrap_operation_plan(plan: &RewrapOperationPlan, debug_enabled: bool) {
     if debug_enabled {
         debug!(
             "[REWRAP] plan: remove={}, stale={}, add={}, rotate_key={}, clear_disclosure_history={}",
@@ -175,50 +253,18 @@ pub(crate) fn rewrite_with_rewrap_operation_plan<E: RewrapExecutor>(
             plan.clear_disclosure_history
         );
     }
-    if !plan.remove_recipients.is_empty() {
-        if debug_enabled {
-            debug!(
-                "[REWRAP] plan: remove recipients count={}",
-                plan.remove_recipients.len()
-            );
-        }
-        executor.remove_recipients(&plan.remove_recipients)?;
-    }
-    if !plan.stale_recipient_handles.is_empty() {
-        if debug_enabled {
-            debug!(
-                "[REWRAP] plan: rewrite stale recipient wraps count={}",
-                plan.stale_recipient_handles.len()
-            );
-        }
-        executor.rewrite_recipient_wraps(&plan.stale_recipient_handles)?;
-    }
-    if !plan.add_recipients.is_empty() {
-        if debug_enabled {
-            debug!(
-                "[REWRAP] plan: add recipients count={}",
-                plan.add_recipients.len()
-            );
-        }
-        executor.add_recipients(&plan.add_recipients)?;
-    }
-    if plan.rotate_key {
-        if debug_enabled {
-            debug!("[REWRAP] plan: rotate key");
-        }
-        executor.rotate_key()?;
-    }
-    if plan.clear_disclosure_history {
-        if debug_enabled {
-            debug!("[REWRAP] plan: clear disclosure history");
-        }
-        executor.clear_disclosure_history()?;
-    }
+}
 
+fn log_rewrap_recipient_step(label: &str, count: usize, debug_enabled: bool) {
     if debug_enabled {
-        debug!("[REWRAP] plan: finalize artifact");
+        debug!("[REWRAP] plan: {label} count={count}");
     }
-    executor.finalize()
+}
+
+fn log_rewrap_plan_step(label: &str, debug_enabled: bool) {
+    if debug_enabled {
+        debug!("[REWRAP] plan: {label}");
+    }
 }
 
 pub(crate) fn collect_stale_recipient_handles(

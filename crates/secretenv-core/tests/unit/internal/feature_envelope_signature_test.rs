@@ -8,7 +8,9 @@ use crate::crypto::types::keys::MasterKey;
 use crate::feature::envelope::key_possession::build_kv_key_possession_proof;
 use crate::feature::envelope::key_schedule::KvKeySchedule;
 use crate::format::kv::enc::parser::KvEncParser;
-use crate::format::signature::build_artifact_signature_input;
+use crate::format::signature::{
+    build_artifact_signature_input, build_kv_artifact_body_bytes_from_unsigned,
+};
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use crate::model::public_key::{Attestation, IdentityKeys, JwkOkpPublicKey, PublicKeyProtected};
@@ -111,11 +113,13 @@ fn test_verify_kv_signature_rejects_tampered_signature_kid() {
         .unwrap();
     let unsigned = ":SECRETENV_KV 9\n:HEAD {}\n:WRAP {}\nKEY token\n";
     let signing = build_test_signing_context(&signing_key, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    let mac = build_kv_key_possession_proof(unsigned, &mac_key, signing.signer_kid, false).unwrap();
+    let body_bytes = build_kv_artifact_body_bytes_from_unsigned(unsigned);
+    let mac =
+        build_kv_key_possession_proof(&body_bytes, &mac_key, signing.signer_kid, false).unwrap();
     let sig_input = build_artifact_signature_input(
         algorithm::SIGNATURE_ED25519,
         signing.signer_kid,
-        unsigned.as_bytes(),
+        &body_bytes,
         mac.as_str(),
     )
     .unwrap();

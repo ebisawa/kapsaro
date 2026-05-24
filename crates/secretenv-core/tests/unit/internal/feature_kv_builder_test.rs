@@ -231,12 +231,11 @@ fn test_unsigned_doc_unset_entry() {
 }
 
 #[test]
-fn test_unsigned_doc_update_timestamp() {
+fn test_unsigned_doc_set_updated_at() {
     let mut doc =
         KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false).build();
-    let old = doc.head().updated_at.clone();
-    doc.update_timestamp().unwrap();
-    assert_ne!(doc.head().updated_at, old);
+    doc.set_updated_at("2026-05-25T00:00:00Z".to_string());
+    assert_eq!(doc.head().updated_at, "2026-05-25T00:00:00Z");
 }
 
 #[test]

@@ -94,3 +94,16 @@ fn test_rewrite_with_rewrap_operation_plan_applies_operations_in_common_order() 
         "remove:carol|stale:alice|add:bob|rotate|clear|finalize"
     );
 }
+
+#[test]
+fn test_rewrite_with_rewrap_operation_plan_skips_empty_operations() {
+    let current = vec!["alice".to_string()];
+    let target = vec!["alice".to_string()];
+    let stale = Vec::new();
+    let plan = build_rewrap_operation_plan(&current, &target, &stale, &options(false, false));
+
+    let result =
+        rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan, false).unwrap();
+
+    assert_eq!(result, "finalize");
+}

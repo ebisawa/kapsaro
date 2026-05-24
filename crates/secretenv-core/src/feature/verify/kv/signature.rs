@@ -28,7 +28,7 @@ pub fn verify_kv_content_for_operation(
     allow_expired_key: bool,
 ) -> Result<VerifiedKvEncDocument> {
     let mut verified = verify_kv_content(content, debug)?;
-    append_operational_signer_expiry_warning(&mut verified.proof, allow_expired_key)?;
+    append_operational_signer_expiry_warning(verified.proof_mut(), allow_expired_key)?;
     Ok(verified)
 }
 

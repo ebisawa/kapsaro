@@ -1,20 +1,18 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Member verification - online verification of member binding claims.
+//! Member verification - offline PublicKey validation and result grouping.
 
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, MEMBER_VERIFICATION_INPUT_CONTEXT,
     WORKSPACE_MEMBER_FILE_CONTEXT,
 };
-use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
-use crate::io::workspace::members::load_member_file_from_path;
 use crate::model::public_key::PublicKey;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone)]
 struct VerifiedMemberSubject {
@@ -30,13 +28,23 @@ pub struct VerifiedMemberFile {
     pub warnings: Vec<String>,
 }
 
-pub fn verify_member_file(
-    member_file: &Path,
+pub fn verify_member_public_key_file(
+    public_key: &PublicKey,
     expected_member_handle: Option<&str>,
+    source_name: &str,
     debug: bool,
 ) -> Result<VerifiedMemberFile> {
-    load_verified_member_subject_from_file(member_file, expected_member_handle, debug)
-        .map(Into::into)
+    build_verified_member_subject_for_workspace_file(
+        public_key,
+        expected_member_handle,
+        source_name,
+        debug,
+    )
+    .map(Into::into)
+}
+
+pub fn verify_member_public_key(public_key: &PublicKey, debug: bool) -> Result<VerifiedMemberFile> {
+    build_verified_member_subject_for_input(public_key, debug).map(Into::into)
 }
 
 impl From<VerifiedMemberSubject> for VerifiedMemberFile {
@@ -59,19 +67,19 @@ impl VerifiedMemberSubject {
     }
 }
 
-fn load_verified_member_subject_from_file(
-    member_file: &Path,
+fn build_verified_member_subject_for_workspace_file(
+    public_key: &PublicKey,
     expected_member_handle: Option<&str>,
+    source_name: &str,
     debug: bool,
 ) -> Result<VerifiedMemberSubject> {
     let fallback_member_handle = expected_member_handle
         .map(str::to_string)
-        .unwrap_or_else(|| derive_member_handle_from_path(member_file));
-    let public_key = load_member_file_from_path(member_file)?;
+        .unwrap_or_else(|| source_name.to_string());
 
-    validate_member_file_member_handle(member_file, &fallback_member_handle, &public_key)?;
+    validate_member_file_member_handle(source_name, &fallback_member_handle, public_key)?;
     let verified = verify_public_key_for_verification_context(
-        &public_key,
+        public_key,
         debug,
         WORKSPACE_MEMBER_FILE_CONTEXT,
     )?;
@@ -82,13 +90,13 @@ fn load_verified_member_subject_from_file(
             .protected
             .subject_handle
             .clone(),
-        public_key,
+        public_key.clone(),
         verified.warnings,
     ))
 }
 
 fn validate_member_file_member_handle(
-    member_file: &Path,
+    source_name: &str,
     expected_member_handle: &str,
     public_key: &PublicKey,
 ) -> Result<()> {
@@ -98,9 +106,7 @@ fn validate_member_file_member_handle(
 
     Err(Error::build_invalid_argument_error(format!(
         "Member handle mismatch in {}: expected '{}', found '{}'",
-        format_path_relative_to_cwd(member_file),
-        expected_member_handle,
-        public_key.protected.subject_handle
+        source_name, expected_member_handle, public_key.protected.subject_handle
     )))
 }
 
@@ -110,13 +116,6 @@ pub fn derive_member_handle_from_path(member_file: &Path) -> String {
         .and_then(OsStr::to_str)
         .map(str::to_string)
         .unwrap_or_else(|| format_path_relative_to_cwd(member_file))
-}
-
-pub async fn verify_member_public_keys(
-    public_keys: &[PublicKey],
-    verbose: bool,
-) -> Result<Vec<VerificationResult>> {
-    verify_public_key_candidates(public_keys, verbose).await
 }
 
 /// Classify verification results into verified, failed, and not_configured.
@@ -140,58 +139,6 @@ pub fn build_verification_result_groups(
     (verified, failed, not_configured)
 }
 
-/// Verify member files' binding_claims via GitHub online verification.
-///
-/// Offline verification failures, network errors, and API failures are converted
-/// to `VerificationResult::failed` rather than propagated as `Err`.
-pub async fn verify_member_files(
-    member_files: &[PathBuf],
-    verbose: bool,
-) -> Vec<VerificationResult> {
-    verify_verified_member_subjects(
-        member_files,
-        verbose,
-        |member_file, verbose| build_verified_member_subject_from_member_file(member_file, verbose),
-        |member_file, error| build_member_file_offline_verification_failure(member_file, error),
-    )
-    .await
-}
-
-fn build_verified_member_subject_from_member_file(
-    member_file: &Path,
-    verbose: bool,
-) -> Result<VerifiedMemberSubject> {
-    let member_handle = derive_member_handle_from_path(member_file);
-    load_verified_member_subject_from_file(member_file, Some(&member_handle), verbose)
-}
-
-fn build_member_file_offline_verification_failure(
-    member_file: &Path,
-    error: Error,
-) -> VerificationResult {
-    let member_handle = derive_member_handle_from_path(member_file);
-    build_offline_verification_failure(&member_handle, error, false)
-}
-
-async fn verify_public_key_candidates(
-    public_keys: &[PublicKey],
-    verbose: bool,
-) -> Result<Vec<VerificationResult>> {
-    Ok(verify_verified_member_subjects(
-        public_keys,
-        verbose,
-        build_verified_member_subject_from_public_key,
-        |public_key, error| {
-            build_offline_verification_failure(
-                &public_key.protected.subject_handle,
-                error,
-                has_github_claim(public_key),
-            )
-        },
-    )
-    .await)
-}
-
 fn build_verified_member_subject_from_public_key(
     public_key: &PublicKey,
     verbose: bool,
@@ -208,48 +155,14 @@ fn build_verified_member_subject_from_public_key(
     ))
 }
 
-async fn verify_verified_member_subjects<T, Build, Failure>(
-    items: &[T],
+fn build_verified_member_subject_for_input(
+    public_key: &PublicKey,
     verbose: bool,
-    mut build_subject: Build,
-    mut build_failure: Failure,
-) -> Vec<VerificationResult>
-where
-    Build: FnMut(&T, bool) -> Result<VerifiedMemberSubject>,
-    Failure: FnMut(&T, Error) -> VerificationResult,
-{
-    let mut results = Vec::new();
-    for item in items {
-        let subject = match build_subject(item, verbose) {
-            Ok(subject) => subject,
-            Err(error) => {
-                results.push(build_failure(item, error));
-                continue;
-            }
-        };
-        results.push(verify_member_subject_online(&subject, verbose).await);
-    }
-    results
+) -> Result<VerifiedMemberSubject> {
+    build_verified_member_subject_from_public_key(public_key, verbose)
 }
 
-async fn verify_member_subject_online(
-    subject: &VerifiedMemberSubject,
-    verbose: bool,
-) -> VerificationResult {
-    let result = match verify_github_account(&subject.public_key, verbose).await {
-        Ok(result) => result,
-        Err(e) => VerificationResult::failed(
-            &subject.member_handle,
-            format!("Online verification error: {}", e.format_user_message()),
-            None,
-            has_github_claim(&subject.public_key),
-        ),
-    };
-
-    append_verification_warnings(result, &subject.warnings)
-}
-
-fn append_verification_warnings(
+pub(crate) fn append_verification_warnings(
     mut result: VerificationResult,
     warnings: &[String],
 ) -> VerificationResult {
@@ -261,7 +174,7 @@ fn append_verification_warnings(
     result
 }
 
-fn build_offline_verification_failure(
+pub(crate) fn build_offline_verification_failure(
     member_handle: &str,
     error: Error,
     github_claim_present: bool,
@@ -277,7 +190,7 @@ fn build_offline_verification_failure(
     )
 }
 
-fn has_github_claim(public_key: &PublicKey) -> bool {
+pub(crate) fn has_github_claim(public_key: &PublicKey) -> bool {
     public_key
         .protected
         .binding_claims

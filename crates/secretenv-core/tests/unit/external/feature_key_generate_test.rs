@@ -575,7 +575,6 @@ fn test_load_signer_public_key() {
 
 #[test]
 fn test_generate_key_rejects_skipped_determinism() {
-    let temp_dir = TempDir::new().unwrap();
     let ssh_temp = TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
@@ -620,13 +619,10 @@ fn test_generate_key_rejects_skipped_determinism() {
     let result = secretenv_core::cli_api::test_support::operations::key::generate::generate_key(
         KeyGenerationOptions {
             member_handle: ALICE_MEMBER_HANDLE.to_string(),
-            home: Some(temp_dir.path().to_path_buf()),
             created_at,
             expires_at,
-            no_activate: false,
             debug: false,
             github_account: None,
-            verbose: false,
             ssh_binding,
         },
     );

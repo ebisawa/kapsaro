@@ -6,10 +6,13 @@
 use console::Style;
 
 use crate::cli::common::output::member::view::{
-    MemberApprovalResultsView, MemberGithubClaimView, MemberListView, MemberShowView,
-    MemberVerificationResultsView,
+    MemberApprovalItemView, MemberApprovalResultsView, MemberGithubClaimView, MemberListView,
+    MemberShowView, MemberVerificationResultsView,
 };
-use crate::cli::common::output::trust::review::print_candidate_review;
+use crate::cli::common::output::text::layout;
+use crate::cli::common::output::trust::review::{
+    format_candidate_review_lines, print_trust_review_line,
+};
 use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
@@ -24,11 +27,24 @@ pub(crate) fn print_member_sections(view: &MemberListView<'_>) {
 fn format_member_list_lines(view: &MemberListView<'_>) -> Vec<String> {
     let mut lines = Vec::new();
     let member_handle_width = member_list_id_width(view);
-    push_member_list_section(&mut lines, "Active:", &view.active, member_handle_width);
+    let kid_width = member_list_kid_width(view);
+    push_member_list_section(
+        &mut lines,
+        "Active:",
+        &view.active,
+        member_handle_width,
+        kid_width,
+    );
 
     if !view.incoming.is_empty() {
         lines.push(String::new());
-        push_member_list_section(&mut lines, "Incoming:", &view.incoming, member_handle_width);
+        push_member_list_section(
+            &mut lines,
+            "Incoming:",
+            &view.incoming,
+            member_handle_width,
+            kid_width,
+        );
     }
 
     lines
@@ -43,19 +59,31 @@ fn member_list_id_width(view: &MemberListView<'_>) -> usize {
         .unwrap_or(0)
 }
 
+fn member_list_kid_width(view: &MemberListView<'_>) -> usize {
+    view.active
+        .iter()
+        .chain(view.incoming.iter())
+        .map(|member| format_kid_display_lossy(member.kid).len())
+        .max()
+        .unwrap_or(0)
+}
+
 fn push_member_list_section(
     lines: &mut Vec<String>,
     title: &str,
     members: &[crate::cli::common::output::member::view::MemberListEntryView<'_>],
     member_handle_width: usize,
+    key_id_width: usize,
 ) {
     lines.push(title.to_string());
+    let member_handle_width =
+        layout::capped_pair_left_width(member_handle_width, "  ", key_id_width);
     for member in members {
-        lines.push(format!(
-            "  {:<width$}  {}",
+        lines.extend(layout::format_pair_row(
+            "  ",
             member.member_handle,
-            format_kid_display_lossy(member.kid),
-            width = member_handle_width
+            &format_kid_display_lossy(member.kid),
+            member_handle_width,
         ));
     }
 }
@@ -73,24 +101,39 @@ pub(crate) fn print_empty_member_approval_results() {
 }
 
 pub(crate) fn print_member_verification_results(view: &MemberVerificationResultsView<'_>) {
+    for line in format_member_verification_results_lines(view) {
+        eprintln!("{line}");
+    }
+}
+
+fn format_member_verification_results_lines(
+    view: &MemberVerificationResultsView<'_>,
+) -> Vec<String> {
     let ok = Style::new().green().apply_to("\u{2713}");
     let ng = Style::new().red().apply_to("\u{2717}");
+    let mut lines = Vec::new();
     for result in &view.results {
-        if result.verified {
-            eprintln!("{} {}: {}", ok, result.member_handle, result.message);
+        let marker = if result.verified {
+            ok.to_string()
         } else {
-            eprintln!("{} {}: {}", ng, result.member_handle, result.message);
-        }
+            ng.to_string()
+        };
+        lines.extend(layout::format_value_lines(
+            "",
+            &format!("{} {}: {}", marker, result.member_handle, result.message),
+        ));
         if let Some(fp) = result.fingerprint {
-            eprintln!("  SSH key fingerprint: {}", fp);
+            lines.extend(layout::format_value_lines("  SSH key fingerprint: ", fp));
         }
     }
     let verified_count = view.results.iter().filter(|result| result.verified).count();
-    eprintln!(
-        "\nVerified {}/{} members",
+    lines.push(String::new());
+    lines.push(format!(
+        "Verified {}/{} members",
         verified_count,
         view.results.len()
-    );
+    ));
+    lines
 }
 
 pub(crate) fn print_member_show(member: &MemberShowView<'_>) {
@@ -108,33 +151,53 @@ pub(crate) fn print_member_remove_summary(member_handle: &str) {
 }
 
 pub(crate) fn print_member_approval_results(view: &MemberApprovalResultsView<'_>) {
-    let ok_style = Style::new().green();
-    let ng_style = Style::new().red();
-    for result in &view.results {
-        let status: String = if result.approved {
-            if result.verified {
-                format!("{}", ok_style.apply_to("\u{2713} approved"))
-            } else {
-                format!("{}", ok_style.apply_to("\u{2713} approved (manual review)"))
-            }
-        } else if result.review_required {
-            "- skipped".to_string()
+    for line in format_member_approval_results_lines(view) {
+        if line.starts_with("  ") {
+            print_trust_review_line(&line);
         } else {
-            format!("{}", ng_style.apply_to("\u{2717} not verified"))
-        };
-        eprintln!("{} {}: {}", status, result.member_handle, result.message);
-        print_candidate_review(&result.review_candidate);
+            eprintln!("{line}");
+        }
+    }
+}
+
+fn format_member_approval_results_lines(view: &MemberApprovalResultsView<'_>) -> Vec<String> {
+    let mut lines = Vec::new();
+    for result in &view.results {
+        lines.extend(format_member_approval_item_lines(result));
+        lines.extend(format_candidate_review_lines(&result.review_candidate));
     }
     let approved_count = view.results.iter().filter(|result| result.approved).count();
-    eprintln!(
-        "\nApproved {}/{} members",
+    lines.push(String::new());
+    lines.push(format!(
+        "Approved {}/{} members",
         approved_count,
         view.results.len()
-    );
+    ));
+    lines
+}
+
+fn format_member_approval_item_lines(result: &MemberApprovalItemView<'_>) -> Vec<String> {
+    let ok_style = Style::new().green();
+    let ng_style = Style::new().red();
+    let status: String = if result.approved {
+        if result.verified {
+            format!("{}", ok_style.apply_to("\u{2713} approved"))
+        } else {
+            format!("{}", ok_style.apply_to("\u{2713} approved (manual review)"))
+        }
+    } else if result.review_required {
+        "- skipped".to_string()
+    } else {
+        format!("{}", ng_style.apply_to("\u{2717} not verified"))
+    };
+    layout::format_value_lines(
+        "",
+        &format!("{} {}: {}", status, result.member_handle, result.message),
+    )
 }
 
 fn format_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
-    let mut lines = vec![format_member_show_header(member.member_handle)];
+    let mut lines = format_member_show_header_lines(member.member_handle);
 
     push_member_show_section(
         &mut lines,
@@ -149,10 +212,7 @@ fn format_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
     push_member_show_section(
         &mut lines,
         "SSH Attestation".to_string(),
-        vec![format_member_show_row(
-            "Fingerprint",
-            member.ssh_fingerprint,
-        )],
+        format_member_show_row_lines("Fingerprint", member.ssh_fingerprint),
     );
     if let Some(github) = &member.github_claim {
         push_member_show_section(
@@ -172,37 +232,45 @@ fn format_member_show_header(member_handle: &str) -> String {
     )
 }
 
+fn format_member_show_header_lines(member_handle: &str) -> Vec<String> {
+    let header = format_member_show_header(member_handle);
+    if layout::visible_width(&header) <= layout::TEXT_WIDTH {
+        return vec![header];
+    }
+    layout::format_value_lines(&format!("{MEMBER_SHOW_BULLET} "), member_handle)
+}
+
 fn format_key_section_title(kid: &str) -> String {
     let title = format!("Key  {}", format_kid_display_lossy(kid));
     Style::new().bold().apply_to(title).to_string()
 }
 
 fn format_member_show_status_lines(member: &MemberShowView<'_>) -> Vec<String> {
-    vec![
-        format_member_show_row(
-            "Membership",
-            &style_membership_value(member.membership_status).to_string(),
-        ),
-        format_member_show_row(
-            "Verification",
-            &style_verification_value(member.verification_status).to_string(),
-        ),
-    ]
+    let mut lines = format_member_show_row_lines(
+        "Membership",
+        &style_membership_value(member.membership_status).to_string(),
+    );
+    lines.extend(format_member_show_row_lines(
+        "Verification",
+        &style_verification_value(member.verification_status).to_string(),
+    ));
+    lines
 }
 
 fn format_member_show_key_lines(member: &MemberShowView<'_>) -> Vec<String> {
-    let mut lines = vec![
-        format_member_show_row("Algorithm", &member.algorithm),
-        format_member_show_row("Expires At", member.expires_at),
-    ];
+    let mut lines = format_member_show_row_lines("Algorithm", &member.algorithm);
+    lines.extend(format_member_show_row_lines(
+        "Expires At",
+        member.expires_at,
+    ));
     if let Some(created) = member.created_at {
-        lines.push(format_member_show_row("Created At", created));
+        lines.extend(format_member_show_row_lines("Created At", created));
     }
     lines
 }
 
 fn format_member_show_binding_lines(github: &MemberGithubClaimView<'_>) -> Vec<String> {
-    vec![format!("  {} (id: {})", github.login, github.id)]
+    layout::format_value_lines("  ", &format!("{} (id: {})", github.login, github.id))
 }
 
 fn style_membership_value(value: &str) -> console::StyledObject<String> {
@@ -228,13 +296,9 @@ fn push_member_show_section(lines: &mut Vec<String>, title: String, body: Vec<St
     lines.extend(body);
 }
 
-fn format_member_show_row(label: &str, value: &str) -> String {
-    format!(
-        "  {:<width$}: {}",
-        label,
-        value,
-        width = MEMBER_SHOW_LABEL_WIDTH
-    )
+fn format_member_show_row_lines(label: &str, value: &str) -> Vec<String> {
+    let prefix = format!("  {:<width$}: ", label, width = MEMBER_SHOW_LABEL_WIDTH);
+    layout::format_value_lines(&prefix, value)
 }
 
 #[cfg(test)]

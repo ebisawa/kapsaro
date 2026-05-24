@@ -40,8 +40,17 @@ impl SecretString {
         Self(crate::support::secret::SecretString::new(value))
     }
 
+    /// Take ownership of zeroizing secret text without cloning.
+    pub fn from_zeroizing(value: Zeroizing<String>) -> Self {
+        Self(crate::support::secret::SecretString::from_zeroizing(value))
+    }
+
     pub(crate) fn from_inner(value: crate::support::secret::SecretString) -> Self {
         Self(value)
+    }
+
+    pub(crate) fn as_inner(&self) -> &crate::support::secret::SecretString {
+        &self.0
     }
 
     pub(crate) fn into_inner(self) -> crate::support::secret::SecretString {

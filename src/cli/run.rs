@@ -65,7 +65,7 @@ pub(crate) fn run(args: RunArgs) -> Result<i32> {
                 ssh_ctx,
             )
         },
-        |command| execute_run_command(command, &args.command),
+        |command| execute_run_command(command, &args.command, options.debug),
     )?;
     Ok(exit_code)
 }

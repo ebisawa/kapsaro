@@ -6,8 +6,8 @@
 //! Tests for:
 //! - Automatic input type detection
 //! - kv-plain detection (60% KEY=VALUE rule)
-//! - kv-enc detection (:SECRETENV_KV 8 header)
-//! - file-enc detection (JSON with "format": "secretenv:format:file-enc@6")
+//! - kv-enc detection (:SECRETENV_KV 9 header)
+//! - file-enc detection (JSON with "format": "secretenv:format:file-enc@7")
 
 use secretenv_core::cli_api::test_support::helpers::limits::MAX_JSON_DEPTH;
 use secretenv_core::cli_api::test_support::wire::detection::{detect_format, InputFormat};
@@ -25,15 +25,15 @@ fn deeply_nested_json(depth: usize) -> String {
 }
 
 #[test]
-fn test_detect_kv_enc_v8() {
-    let content = ":SECRETENV_KV 8\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n:WRAP eyJrZXkiOiJ2YWx1ZSJ9\nDATABASE_URL eyJrZXkiOiJ2YWx1ZSJ9\n";
+fn test_detect_kv_enc_v9() {
+    let content = ":SECRETENV_KV 9\n:HEAD eyJrZXkiOiJ2YWx1ZSJ9\n:WRAP eyJrZXkiOiJ2YWx1ZSJ9\nDATABASE_URL eyJrZXkiOiJ2YWx1ZSJ9\n";
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::KvEnc);
 }
 
 #[test]
-fn test_detect_file_enc_v6() {
-    let content = r#"{"protected": {"format": "secretenv:format:file-enc@6", "sid": "550e8400-e29b-41d4-a716-446655440000", "wrap": [], "payload": {"protected": {"format": "secretenv:format:file-enc:payload@6", "sid": "550e8400-e29b-41d4-a716-446655440000", "alg": {"aead": "xchacha20-poly1305"}}, "encrypted": {"nonce": "...", "ct": "..."}}, "created_at": "2026-01-19T10:00:00Z", "updated_at": "2026-01-19T10:00:00Z"}, "signature": {"alg": "eddsa-ed25519", "kid": "...", "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "sig": "..."}}"#;
+fn test_detect_file_enc_v7() {
+    let content = r#"{"protected": {"format": "secretenv:format:file-enc@7", "sid": "550e8400-e29b-41d4-a716-446655440000", "wrap": [], "payload": {"protected": {"format": "secretenv:format:file-enc:payload@7", "sid": "550e8400-e29b-41d4-a716-446655440000", "alg": {"aead": "xchacha20-poly1305"}}, "encrypted": {"nonce": "...", "ct": "..."}}, "created_at": "2026-01-19T10:00:00Z", "updated_at": "2026-01-19T10:00:00Z"}, "signature": {"alg": "eddsa-ed25519", "kid": "...", "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "sig": "..."}}"#;
     let format = detect_format(content).unwrap();
     assert_eq!(format, InputFormat::FileEnc);
 }

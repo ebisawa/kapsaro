@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for kv-enc v8 encryption/decryption operations
+//! Unit tests for kv-enc v9 encryption/decryption operations.
 
 use crate::keygen_helpers::{
     build_test_private_key, build_verified_private_key, build_verified_recipient_keys,
@@ -14,7 +14,7 @@ use secretenv_core::cli_api::test_support::domain::public_key::PublicKey;
 use secretenv_core::cli_api::test_support::domain::verification::{
     SignatureVerificationProof, VerifyingKeySource,
 };
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::kv::mutate::{
@@ -143,7 +143,7 @@ fn test_encrypt_and_decrypt_kv() {
     .unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 8\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 9\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));
@@ -241,7 +241,7 @@ fn test_encrypt_empty_input() {
     .unwrap();
 
     // Should have header, HEAD line, WRAP line, and SIG line (v3 requires signature)
-    assert!(encrypted.starts_with(":SECRETENV_KV 8\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 9\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains(":SIG "));
@@ -511,7 +511,7 @@ fn encrypt_initial_kv_doc(
     secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document(
         &kv_map,
         &verified_members,
-        &secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext {
+        &secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
             signer_pub: public_key.clone(),
@@ -566,7 +566,7 @@ fn unset_kv_entry(
     key: &str,
     ctx: &KvWriteContext<'_>,
 ) -> secretenv_core::Result<String> {
-    let workspace_root = ctx.key_ctx.workspace_path.as_deref().ok_or_else(|| {
+    let workspace_root = ctx.key_ctx.workspace_path().ok_or_else(|| {
         secretenv_core::Error::build_config_error(
             "Workspace is required for kv mutation".to_string(),
         )

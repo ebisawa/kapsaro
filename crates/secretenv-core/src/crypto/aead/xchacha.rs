@@ -111,3 +111,13 @@ pub fn encrypt_with_nonce(
     let fresh_nonce = FreshXChaChaNonce::generate()?;
     encrypt(key, fresh_nonce, aad, plaintext)
 }
+
+/// Encrypt plaintext with a caller-generated fresh nonce.
+pub(crate) fn encrypt_with_fresh_nonce(
+    key: &XChaChaKey,
+    plaintext: &Plaintext,
+    aad: &Aad,
+    nonce: FreshXChaChaNonce,
+) -> Result<(Ciphertext, XChaChaNonce)> {
+    encrypt(key, nonce, aad, plaintext)
+}

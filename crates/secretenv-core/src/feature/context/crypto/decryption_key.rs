@@ -5,10 +5,11 @@
 
 use super::loader::load_verified_private_key_from_keystore;
 use super::{CryptoContext, DecryptionKeyInfo, DecryptionKeyResolution};
-use crate::model::common::WrapSet;
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::model::identity::Kid;
-use crate::support::kid::format_kid_display_lossy;
+use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
 use crate::{Error, ErrorKind, Result};
+use tracing::debug;
 
 impl CryptoContext {
     pub(crate) fn select_local_decryption_key<'a>(
@@ -20,9 +21,24 @@ impl CryptoContext {
         let wrap_kids = wrap_set.self_wrap_kids(member_handle);
         let candidates =
             build_candidate_kids(&wrap_kids, self.selected_kid_override.as_ref(), &self.kid);
+        if debug_enabled {
+            debug!(
+                "[CRYPTO] local decryption key: select member_handle={}, explicit_kid={}, wrap_kid_count={}, candidate_count={}",
+                member_handle,
+                self.selected_kid_override.is_some(),
+                wrap_kids.len(),
+                candidates.len()
+            );
+        }
 
         for kid in &candidates {
             if kid == &self.kid {
+                if debug_enabled {
+                    debug!(
+                        "[CRYPTO] local decryption key: selected active key (kid: {})",
+                        format_kid_half_display_lossy(kid.as_str())
+                    );
+                }
                 return Ok(DecryptionKeyResolution::Active {
                     private_key: &self.private_key,
                     info: DecryptionKeyInfo {
@@ -34,8 +50,20 @@ impl CryptoContext {
             }
 
             let Some(local_key_access) = self.local_key_access.as_ref() else {
+                if debug_enabled {
+                    debug!(
+                        "[CRYPTO] local decryption key: fallback unavailable (kid: {})",
+                        format_kid_half_display_lossy(kid.as_str())
+                    );
+                }
                 continue;
             };
+            if debug_enabled {
+                debug!(
+                    "[CRYPTO] local decryption key: try fallback key (kid: {})",
+                    format_kid_half_display_lossy(kid.as_str())
+                );
+            }
 
             match load_verified_private_key_from_keystore(
                 &local_key_access.keystore_root,
@@ -46,6 +74,12 @@ impl CryptoContext {
                 debug_enabled,
             ) {
                 Ok(loaded) => {
+                    if debug_enabled {
+                        debug!(
+                            "[CRYPTO] local decryption key: selected fallback key (kid: {})",
+                            format_kid_half_display_lossy(kid.as_str())
+                        );
+                    }
                     return Ok(DecryptionKeyResolution::Fallback {
                         private_key: Box::new(loaded.private_key),
                         info: DecryptionKeyInfo {
@@ -55,7 +89,15 @@ impl CryptoContext {
                         },
                     });
                 }
-                Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    if debug_enabled {
+                        debug!(
+                            "[CRYPTO] local decryption key: fallback key not found (kid: {})",
+                            format_kid_half_display_lossy(kid.as_str())
+                        );
+                    }
+                    continue;
+                }
                 Err(error) => return Err(error),
             }
         }

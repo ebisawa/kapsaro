@@ -9,9 +9,10 @@ use crate::test_utils::{
     setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
+use secretenv_core::cli_api::test_support::domain::public_key::VerifiedRecipientKey;
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
 use secretenv_core::cli_api::test_support::storage::keystore::storage::{
     list_kids, load_public_key,
@@ -37,7 +38,7 @@ fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
 
 fn single_rewrap_request<'a>(
     key_ctx: &'a CryptoContext,
-    workspace_root: Option<&'a std::path::Path>,
+    target_members: Vec<VerifiedRecipientKey>,
     rotate_key: bool,
     clear_disclosure_history: bool,
     debug: bool,
@@ -45,13 +46,20 @@ fn single_rewrap_request<'a>(
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
-        workspace_root,
-        target_members: None,
+        target_members,
         rotate_key,
         clear_disclosure_history,
-
         debug,
     }
+}
+
+fn build_rewrap_targets(temp_dir: &TempDir, members: &[(&str, &str)]) -> Vec<VerifiedRecipientKey> {
+    let keystore_root = temp_dir.path().join("keys");
+    let public_keys = members
+        .iter()
+        .map(|(member_handle, kid)| load_public_key(&keystore_root, member_handle, kid).unwrap())
+        .collect::<Vec<_>>();
+    build_verified_recipient_keys(&public_keys)
 }
 
 fn rewrap_file_content(
@@ -74,7 +82,7 @@ fn encrypt_file_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
             debug: false,
@@ -107,7 +115,7 @@ fn encrypt_file_for_alice_and_bob(
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub,
             debug: false,
@@ -162,7 +170,7 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
     let keystore_root = temp_dir.path().join("keys");
 
     let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let old_kid = old_key_ctx.kid.to_string();
+    let old_kid = old_key_ctx.kid().to_string();
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &old_kid);
     let json = encrypt_file_for_alice(&temp_dir, &old_kid, &old_key_ctx);
 
@@ -175,11 +183,12 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
         .unwrap();
 
     let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let new_kid = new_key_ctx.kid.to_string();
+    let new_kid = new_key_ctx.kid().to_string();
     assert_ne!(new_kid, old_kid);
     assert!(load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &new_kid).is_ok());
 
-    let request = single_rewrap_request(&new_key_ctx, Some(temp_dir.path()), false, false, false);
+    let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, &new_kid)]);
+    let request = single_rewrap_request(&new_key_ctx, target_members, false, false, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
@@ -198,7 +207,7 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
         .find(|wrap| wrap.recipient_handle == ALICE_MEMBER_HANDLE)
         .unwrap();
     assert_eq!(alice_wrap.kid, new_kid);
-    assert_eq!(doc.signature.kid, new_key_ctx.kid.to_string());
+    assert_eq!(doc.signature.kid, new_key_ctx.kid().to_string());
 }
 
 #[test]
@@ -212,8 +221,9 @@ fn test_rewrap_file_clear_disclosure_history() {
     // Setup workspace with only alice (bob removed) => removal creates disclosure history
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
 
+    let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, &alice_kid)]);
     let remove_request =
-        single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+        single_rewrap_request(&key_ctx, target_members.clone(), false, false, false);
     let after_remove =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &remove_request).unwrap();
 
@@ -226,7 +236,7 @@ fn test_rewrap_file_clear_disclosure_history() {
     );
 
     // Now rewrap again with clear_disclosure_history
-    let clear_request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, true, false);
+    let clear_request = single_rewrap_request(&key_ctx, target_members, false, true, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(after_remove), &clear_request);
 
     assert!(
@@ -246,7 +256,7 @@ fn test_rewrap_file_clear_disclosure_history() {
 }
 
 #[test]
-fn test_rewrap_file_requires_workspace() {
+fn test_rewrap_file_uses_fixed_target_member_snapshot() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -256,18 +266,13 @@ fn test_rewrap_file_requires_workspace() {
 
     let json = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
 
-    let request = single_rewrap_request(&key_ctx, None, false, false, false);
+    let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, kid)]);
+    let request = single_rewrap_request(&key_ctx, target_members, false, false, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
-        result.is_err(),
-        "rewrap_file_document must fail when workspace_root is None"
-    );
-
-    let err_msg = format!("{}", result.unwrap_err());
-    assert!(
-        err_msg.contains("workspace"),
-        "error message must mention workspace, got: {}",
-        err_msg
+        result.is_ok(),
+        "rewrap_file_document should use the supplied target member snapshot: {:?}",
+        result.err()
     );
 }

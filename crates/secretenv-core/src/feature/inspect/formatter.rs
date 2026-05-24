@@ -7,6 +7,13 @@ use crate::model::common::{RemovedRecipient, WrapItem};
 use crate::model::file_enc::FilePayload;
 use crate::support::kid::format_kid_display;
 
+/// Format lines built through the append helpers.
+pub(crate) fn format_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
+    let mut out = String::new();
+    build(&mut out);
+    out.lines().map(ToOwned::to_owned).collect()
+}
+
 /// Append file payload information.
 pub(crate) fn append_file_payload_info(payload: &FilePayload, out: &mut String) {
     append_line(out, "  Protected:");

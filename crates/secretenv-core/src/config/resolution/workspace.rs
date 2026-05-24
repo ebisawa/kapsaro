@@ -3,6 +3,7 @@
 
 //! Workspace resolution from global config
 
+use crate::config::types::ConfigKey;
 use crate::Result;
 use std::path::PathBuf;
 
@@ -20,7 +21,7 @@ pub(crate) fn resolve_workspace_from_config() -> Result<Option<PathBuf>> {
 pub(crate) fn resolve_workspace_from_config_base(
     base_dir: Option<&std::path::Path>,
 ) -> Result<Option<PathBuf>> {
-    let value = load_field_from_global_config("workspace", base_dir)?;
+    let value = load_field_from_global_config(ConfigKey::Workspace.canonical_name(), base_dir)?;
     match value {
         Some(path_str) => {
             let expanded = expand_tilde(&path_str)?;

@@ -3,27 +3,29 @@
 
 //! Trust store management use cases.
 
-pub mod approval;
-pub mod candidate;
-pub mod enforcement;
-pub mod evaluation;
-pub mod list;
-pub mod management;
-pub mod policy;
-pub mod recovery;
-pub mod review;
-pub mod snapshot;
-pub mod store;
-pub mod types;
+pub(crate) mod approval;
+pub(crate) mod candidate;
+pub(crate) mod enforcement;
+pub(crate) mod evaluation;
+pub(crate) mod list;
+pub(crate) mod management;
+pub(crate) mod outcome;
+pub(crate) mod policy;
+pub(crate) mod recovery;
+pub(crate) mod review;
+pub(crate) mod snapshot;
+pub(crate) mod store;
+pub(crate) mod types;
 
 pub use candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
-pub use enforcement::{
-    enforce_recipients_trust_with_additional, ArtifactRecipientTrustOutcome, RecipientTrustOutcome,
-    SignerTrustOutcome,
-};
+pub use enforcement::enforce_recipients_trust_with_additional;
 pub use evaluation::{
     derive_self_sig_x, evaluate_output_recipient_set_trust, evaluate_read_artifact_trust,
     evaluate_signer_trust_with_proof,
+};
+pub use outcome::{
+    ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
+    ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome,
 };
 pub use policy::{
     CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ReadTrustPolicy,
@@ -34,13 +36,15 @@ pub use snapshot::{
 };
 
 #[cfg(test)]
-pub use enforcement::{build_signer_identity, enforce_recipients_trust, enforce_signer_trust};
+pub(crate) use enforcement::{
+    build_signer_identity, enforce_recipients_trust, enforce_signer_trust,
+};
 #[cfg(test)]
-pub use evaluation::enforce_policy_strict_key_checking;
+pub(crate) use evaluation::enforce_policy_strict_key_checking;
 #[cfg(test)]
-pub use policy::RewrapInputPolicy;
+pub(crate) use policy::RewrapInputPolicy;
 #[cfg(test)]
-pub use snapshot::CommandTrustSnapshot;
+pub(crate) use snapshot::CommandTrustSnapshot;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/app_context_trust_test.rs"]

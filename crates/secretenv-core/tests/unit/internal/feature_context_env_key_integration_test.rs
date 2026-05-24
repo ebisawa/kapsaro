@@ -132,14 +132,14 @@ fn test_load_crypto_context_from_env_does_not_require_workspace_member_file() {
     let ctx = load_crypto_context_from_env(workspace.path().to_path_buf(), false)
         .expect("env crypto context should not require own workspace member file");
 
-    assert_eq!(ctx.member_handle, public_key.protected.subject_handle);
-    assert_eq!(ctx.kid, public_key.protected.kid);
+    assert_eq!(ctx.member_handle(), public_key.protected.subject_handle);
+    assert_eq!(ctx.kid(), public_key.protected.kid.as_str());
     assert_eq!(
-        ctx.private_key.document().keys.sig.x,
+        ctx.private_key().document().keys.sig.x,
         public_key.protected.identity.keys.sig.x
     );
     assert_eq!(
-        ctx.private_key.document().keys.kem.x,
+        ctx.private_key().document().keys.kem.x,
         public_key.protected.identity.keys.kem.x
     );
 }

@@ -157,6 +157,61 @@ fn test_run_with_multiple_env_vars() {
 
 #[cfg(unix)]
 #[test]
+fn test_run_debug_logs_decryption_without_secret_values() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
+
+    cmd()
+        .arg("set")
+        .arg("RUN_DEBUG_SECRET")
+        .arg("run-debug-secret-value")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    cmd()
+        .arg("run")
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("true")
+        .env("RUST_LOG", "warn")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[KV] env command: decrypt values"))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] local decryption key: selected active key",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] key possession: verify success",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HKDF-SHA256: key possession: extract artifact key schedule format=kv",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HKDF-SHA256: key possession: expand mac key format=kv",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HMAC-SHA256: key possession: build verification message format=kv",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HMAC-SHA256: key possession: verify tag format=kv",
+        ))
+        .stdout(predicate::str::contains("domain=secretenv:context").not())
+        .stdout(predicate::str::contains("body_bytes_len=").not())
+        .stdout(predicate::str::contains("expected_tag_len=").not())
+        .stdout(predicate::str::contains("run-debug-secret-value").not());
+}
+
+#[cfg(unix)]
+#[test]
 fn test_run_rejects_tampered_kv_signature() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
     let kv_path = workspace_dir.path().join("secrets").join("default.kvenc");

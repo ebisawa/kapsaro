@@ -3,18 +3,18 @@
 
 //! Shared CLI prompts for trust decisions.
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, print_trust_review_line,
 };
 use crate::cli::common::prompt::prompt_yes_no;
 use console::Style;
-use secretenv_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
+use secretenv_core::cli_api::app::trust::enforcement::{
+    ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
+};
 use secretenv_core::cli_api::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
 use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
-use secretenv_core::cli_api::presentation::trust_document::RecipientHandleHint;
 use secretenv_core::Result;
+use std::collections::{BTreeMap, BTreeSet};
 
 mod recovery;
 
@@ -177,27 +177,23 @@ fn format_key_approval_review_lines(intro: &str) -> Vec<String> {
 }
 
 fn format_recipient_set_review_lines(review: &ArtifactRecipientSetReview) -> Vec<String> {
-    let mut lines = recipient_set_review_intro(review.approved.is_some());
-    if let Some(approved) = &review.approved {
+    let mut lines = recipient_set_review_intro(review.has_approved_set());
+    if review.has_approved_set() {
         lines.push("Member changes".to_string());
-        lines.extend(format_recipient_diff_lines(
-            review.current.recipient_kids(),
-            review.current.recipient_handle_hints(),
-            &approved.recipient_kids,
-            approved.recipient_handle_hints.as_deref().unwrap_or(&[]),
-        ));
+        lines.extend(format_recipient_diff_rows(&build_recipient_diff_rows(
+            review,
+        )));
     } else {
         lines.push("Current members".to_string());
-        lines.extend(format_recipient_lines(
-            review.current.recipient_kids(),
-            review.current.recipient_handle_hints(),
-        ));
+        lines.extend(format_recipient_lines(&build_recipient_rows(
+            &review.current_snapshot(),
+        )));
     }
     lines
 }
 
 fn recipient_set_review_prompt(review: &ArtifactRecipientSetReview) -> String {
-    if review.approved.is_some() {
+    if review.has_approved_set() {
         "Update the trusted member set for this secret?".to_string()
     } else {
         "Trust this member set for this secret?".to_string()
@@ -232,18 +228,99 @@ fn style_changed_message(message: &str) -> String {
         .to_string()
 }
 
-fn format_recipient_lines(kids: &[String], hints: &[RecipientHandleHint]) -> Vec<String> {
-    let rows = kids
+fn format_recipient_lines(rows: &[ArtifactRecipientReviewRow]) -> Vec<String> {
+    let rows = rows
         .iter()
-        .map(|kid| RecipientDisplayRow::new(kid, find_recipient_handle(kid, hints)))
+        .map(|row| RecipientDisplayRow::new(&row.kid, row.member_handle.clone()))
         .collect::<Vec<_>>();
     format_member_key_rows(&rows)
+}
+
+#[derive(Clone, Copy)]
+enum ArtifactRecipientReviewDiffStatus {
+    Added,
+    Removed,
+    Unchanged,
+}
+
+#[derive(Clone)]
+struct ArtifactRecipientReviewRow {
+    member_handle: String,
+    kid: String,
+}
+
+struct ArtifactRecipientReviewDiffRow {
+    status: ArtifactRecipientReviewDiffStatus,
+    row: ArtifactRecipientReviewRow,
 }
 
 #[derive(Clone)]
 struct RecipientDisplayRow {
     member_handle: String,
     key_id: String,
+}
+
+fn build_recipient_diff_rows(
+    review: &ArtifactRecipientSetReview,
+) -> Vec<ArtifactRecipientReviewDiffRow> {
+    let current = build_recipient_rows_by_kid(&review.current_snapshot());
+    let approved = review
+        .approved_snapshot()
+        .map(|snapshot| build_recipient_rows_by_kid(&snapshot))
+        .unwrap_or_default();
+    let all_kids = current
+        .keys()
+        .chain(approved.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    all_kids
+        .into_iter()
+        .filter_map(|kid| match (current.get(&kid), approved.get(&kid)) {
+            (Some(row), None) => Some(ArtifactRecipientReviewDiffRow {
+                status: ArtifactRecipientReviewDiffStatus::Added,
+                row: row.clone(),
+            }),
+            (None, Some(row)) => Some(ArtifactRecipientReviewDiffRow {
+                status: ArtifactRecipientReviewDiffStatus::Removed,
+                row: row.clone(),
+            }),
+            (Some(row), Some(_)) => Some(ArtifactRecipientReviewDiffRow {
+                status: ArtifactRecipientReviewDiffStatus::Unchanged,
+                row: row.clone(),
+            }),
+            (None, None) => None,
+        })
+        .collect()
+}
+
+fn build_recipient_rows_by_kid(
+    snapshot: &ArtifactRecipientSetSnapshot,
+) -> BTreeMap<String, ArtifactRecipientReviewRow> {
+    build_recipient_rows(snapshot)
+        .into_iter()
+        .map(|row| (row.kid.clone(), row))
+        .collect()
+}
+
+fn build_recipient_rows(
+    snapshot: &ArtifactRecipientSetSnapshot,
+) -> Vec<ArtifactRecipientReviewRow> {
+    snapshot
+        .recipient_kids
+        .iter()
+        .map(|kid| ArtifactRecipientReviewRow {
+            member_handle: find_recipient_handle(kid, &snapshot.recipient_handle_hints),
+            kid: kid.clone(),
+        })
+        .collect()
+}
+
+fn find_recipient_handle(kid: &str, hints: &[ArtifactRecipientHandleHint]) -> String {
+    hints
+        .iter()
+        .find(|hint| hint.kid == kid)
+        .map(|hint| hint.recipient_handle.clone())
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 impl RecipientDisplayRow {
@@ -278,108 +355,39 @@ fn format_member_key_rows(rows: &[RecipientDisplayRow]) -> Vec<String> {
     lines
 }
 
-fn format_recipient_diff_lines(
-    current_kids: &[String],
-    current_hints: &[RecipientHandleHint],
-    approved_kids: &[String],
-    approved_hints: &[RecipientHandleHint],
-) -> Vec<String> {
-    let current = build_recipient_rows_by_kid(current_kids, current_hints);
-    let approved = build_recipient_rows_by_kid(approved_kids, approved_hints);
-    let rows = build_recipient_diff_rows(&current, &approved);
-    format_recipient_diff_rows(&rows)
+fn recipient_diff_marker(status: ArtifactRecipientReviewDiffStatus) -> &'static str {
+    match status {
+        ArtifactRecipientReviewDiffStatus::Added => "+",
+        ArtifactRecipientReviewDiffStatus::Removed => "-",
+        ArtifactRecipientReviewDiffStatus::Unchanged => " ",
+    }
 }
 
-fn build_recipient_rows_by_kid(
-    kids: &[String],
-    hints: &[RecipientHandleHint],
-) -> BTreeMap<String, RecipientDisplayRow> {
-    kids.iter()
-        .map(|kid| {
+fn style_recipient_diff_line(status: ArtifactRecipientReviewDiffStatus, line: String) -> String {
+    match status {
+        ArtifactRecipientReviewDiffStatus::Added => {
+            Style::new().green().for_stderr().apply_to(line).to_string()
+        }
+        ArtifactRecipientReviewDiffStatus::Removed => {
+            Style::new().red().for_stderr().apply_to(line).to_string()
+        }
+        ArtifactRecipientReviewDiffStatus::Unchanged => line,
+    }
+}
+
+fn format_recipient_diff_rows(rows: &[ArtifactRecipientReviewDiffRow]) -> Vec<String> {
+    let rows = rows
+        .iter()
+        .map(|diff| {
             (
-                kid.clone(),
-                RecipientDisplayRow::new(kid, find_recipient_handle(kid, hints)),
+                diff.status,
+                RecipientDisplayRow::new(&diff.row.kid, diff.row.member_handle.clone()),
             )
         })
-        .collect()
-}
-
-fn build_recipient_diff_rows(
-    current: &BTreeMap<String, RecipientDisplayRow>,
-    approved: &BTreeMap<String, RecipientDisplayRow>,
-) -> Vec<RecipientDiffRow> {
-    let all_kids = current
-        .keys()
-        .chain(approved.keys())
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    all_kids
-        .into_iter()
-        .filter_map(|kid| match (current.get(&kid), approved.get(&kid)) {
-            (Some(row), None) => Some(RecipientDiffRow::added(row.clone())),
-            (None, Some(row)) => Some(RecipientDiffRow::removed(row.clone())),
-            (Some(row), Some(_)) => Some(RecipientDiffRow::unchanged(row.clone())),
-            (None, None) => None,
-        })
-        .collect()
-}
-
-struct RecipientDiffRow {
-    status: RecipientDiffStatus,
-    row: RecipientDisplayRow,
-}
-
-impl RecipientDiffRow {
-    fn added(row: RecipientDisplayRow) -> Self {
-        Self {
-            status: RecipientDiffStatus::Added,
-            row,
-        }
-    }
-
-    fn removed(row: RecipientDisplayRow) -> Self {
-        Self {
-            status: RecipientDiffStatus::Removed,
-            row,
-        }
-    }
-
-    fn unchanged(row: RecipientDisplayRow) -> Self {
-        Self {
-            status: RecipientDiffStatus::Unchanged,
-            row,
-        }
-    }
-}
-
-enum RecipientDiffStatus {
-    Added,
-    Removed,
-    Unchanged,
-}
-
-impl RecipientDiffStatus {
-    fn marker(&self) -> &'static str {
-        match self {
-            Self::Added => "+",
-            Self::Removed => "-",
-            Self::Unchanged => " ",
-        }
-    }
-
-    fn style_line(&self, line: String) -> String {
-        match self {
-            Self::Added => Style::new().green().for_stderr().apply_to(line).to_string(),
-            Self::Removed => Style::new().red().for_stderr().apply_to(line).to_string(),
-            Self::Unchanged => line,
-        }
-    }
-}
-
-fn format_recipient_diff_rows(rows: &[RecipientDiffRow]) -> Vec<String> {
+        .collect::<Vec<_>>();
     let member_width = rows
         .iter()
-        .map(|diff| diff.row.member_handle.len())
+        .map(|(_, row)| row.member_handle.len())
         .max()
         .unwrap_or("member handle".len())
         .max("member handle".len());
@@ -388,25 +396,17 @@ fn format_recipient_diff_rows(rows: &[RecipientDiffRow]) -> Vec<String> {
         "member handle",
         member_width = member_width
     )];
-    lines.extend(rows.iter().map(|diff| {
+    lines.extend(rows.iter().map(|(status, row)| {
         let line = format!(
             "  {} {:member_width$}  {}",
-            diff.status.marker(),
-            diff.row.member_handle,
-            diff.row.key_id,
+            recipient_diff_marker(*status),
+            row.member_handle,
+            row.key_id,
             member_width = member_width
         );
-        diff.status.style_line(line)
+        style_recipient_diff_line(*status, line)
     }));
     lines
-}
-
-fn find_recipient_handle(kid: &str, hints: &[RecipientHandleHint]) -> String {
-    hints
-        .iter()
-        .find(|hint| hint.kid == kid)
-        .map(|hint| hint.recipient_handle.clone())
-        .unwrap_or_else(|| "unknown".to_string())
 }
 
 #[cfg(test)]

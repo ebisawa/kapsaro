@@ -58,16 +58,16 @@ fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> st
     keystore_root
 }
 
-/// Create a minimal test file-enc v6 file
+/// Create a minimal test file-enc v7 file.
 fn save_test_encrypted_file(path: &std::path::Path) {
     let content = r#"{
   "protected": {
-    "format": "secretenv:format:file-enc@6",
+    "format": "secretenv:format:file-enc@7",
     "sid": "550e8400-e29b-41d4-a716-446655440000",
     "wrap": [],
     "payload": {
       "protected": {
-        "format": "secretenv:format:file-enc:payload@6",
+        "format": "secretenv:format:file-enc:payload@7",
         "sid": "550e8400-e29b-41d4-a716-446655440000",
         "alg": {
           "aead": "xchacha20-poly1305"
@@ -124,7 +124,7 @@ fn test_decrypt_rejects_kv_enc_format() {
     let test_dir = temp_dir.path();
 
     let encrypted_path = test_dir.join("test.kv");
-    let content = r#":SECRETENV_KV 8
+    let content = r#":SECRETENV_KV 9
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
@@ -217,10 +217,27 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
+        .arg("--debug")
         .env("SECRETENV_HOME", home_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HKDF-SHA256: key possession: extract artifact key schedule format=file",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HKDF-SHA256: key possession: expand mac key format=file",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HMAC-SHA256: key possession: build verification message format=file",
+        ))
+        .stdout(predicate::str::contains(
+            "[CRYPTO] HMAC-SHA256: key possession: verify tag format=file",
+        ))
+        .stdout(predicate::str::contains("domain=secretenv:context").not())
+        .stdout(predicate::str::contains("body_bytes_len=").not())
+        .stdout(predicate::str::contains("expected_tag_len=").not())
+        .stdout(predicate::str::contains("SECRET_VALUE=hello_world").not())
         .stderr(predicate::str::contains("Decrypted to:"))
         .stderr(predicate::str::contains("decrypted.txt"));
 

@@ -16,6 +16,7 @@ use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
 use crate::io::workspace::members::load_active_member_files;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct MemberApprovalEvaluation {
@@ -59,8 +60,15 @@ pub fn evaluate_members_for_approval(
 
     let approval_targets =
         select_approval_targets(&active_members, member_handles, self_member_handle)?;
+    if options.debug {
+        debug!(
+            "[MEMBER] approve: verify candidate public keys active_count={}, target_count={}",
+            active_members.len(),
+            approval_targets.len()
+        );
+    }
     let verification_results =
-        block_on_result(verify_member_public_keys(&approval_targets, false))?;
+        block_on_result(verify_member_public_keys(&approval_targets, options.debug))?;
 
     let (_, loaded) = load_or_build_trust_store_for_member(options, self_member_handle)?;
     let protected = loaded.protected;
@@ -133,7 +141,7 @@ fn select_approval_targets(
 /// Evaluate a single candidate using a pre-loaded active members snapshot.
 ///
 /// The `active_members` slice MUST be the same snapshot loaded before
-/// `verify_member()` was called, preventing TOCTOU between verification
+/// `verify_member_public_keys()` was called, preventing TOCTOU between verification
 /// and kid resolution.
 fn evaluate_candidate_with_snapshot(
     vr: &crate::io::verify_online::VerificationResult,
@@ -143,24 +151,7 @@ fn evaluate_candidate_with_snapshot(
     let member_pk = find_member_public_key(active_members, &vr.member_handle);
 
     let Some(pk) = member_pk else {
-        return Ok(MemberApprovalResult {
-            member_handle: vr.member_handle.clone(),
-            kid: String::new(),
-            verified: false,
-            approved: false,
-            review_required: false,
-            already_known: false,
-            message: "Member not found in active members".to_string(),
-            fingerprint: vr.fingerprint.clone(),
-            github_id: vr.verified_github.as_ref().map(|account| account.id),
-            github_login: vr
-                .verified_github
-                .as_ref()
-                .map(|account| account.login.clone()),
-            github_binding_configured: false,
-            attestor_pub: None,
-            verified_github: None,
-        });
+        return Ok(build_missing_active_member_approval_result(vr));
     };
     let candidate = TrustApprovalCandidateBuilder::from_public_key(pk)
         .with_verification_result(vr)
@@ -229,6 +220,29 @@ fn find_member_public_key<'a>(
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/app_member_approval_test.rs"]
 mod tests;
+
+fn build_missing_active_member_approval_result(
+    vr: &crate::io::verify_online::VerificationResult,
+) -> MemberApprovalResult {
+    MemberApprovalResult {
+        member_handle: vr.member_handle.clone(),
+        kid: String::new(),
+        verified: false,
+        approved: false,
+        review_required: false,
+        already_known: false,
+        message: "Member not found in active members".to_string(),
+        fingerprint: vr.fingerprint.clone(),
+        github_id: vr.verified_github.as_ref().map(|account| account.id),
+        github_login: vr
+            .verified_github
+            .as_ref()
+            .map(|account| account.login.clone()),
+        github_binding_configured: false,
+        attestor_pub: None,
+        verified_github: None,
+    }
+}
 
 fn build_member_approval_result(
     vr: &crate::io::verify_online::VerificationResult,

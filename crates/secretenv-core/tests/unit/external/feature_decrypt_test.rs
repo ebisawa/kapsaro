@@ -16,11 +16,11 @@ use secretenv_core::cli_api::test_support::domain::verification::{
     SignatureVerificationProof, VerifyingKeySource,
 };
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::{
     decrypt_file_document, decrypt_file_document_with_context,
 };
 use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::verify::file::{
     verify_file_content, verify_file_document,
 };
@@ -53,7 +53,7 @@ fn test_file_enc_content_detect_accepts_file_enc() {
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -74,7 +74,7 @@ fn test_file_enc_content_detect_accepts_file_enc() {
 #[test]
 fn test_file_enc_content_detect_rejects_kv_enc() {
     // kv-enc format should be rejected by FileEncContent::detect
-    let kv_enc = ":SECRETENV_KV 8\n:HEAD dummy\n:WRAP dummy\n";
+    let kv_enc = ":SECRETENV_KV 9\n:HEAD dummy\n:WRAP dummy\n";
     let result = FileEncContent::detect(kv_enc.to_string());
     assert!(result.is_err());
 }
@@ -102,7 +102,7 @@ fn test_verify_content_then_decrypt_file() {
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -117,8 +117,8 @@ fn test_verify_content_then_decrypt_file() {
     let decrypted = decrypt_file_document(
         &verified,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -148,7 +148,7 @@ fn test_parse_verify_decrypt_file() {
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -165,8 +165,8 @@ fn test_parse_verify_decrypt_file() {
     let decrypted = decrypt_file_document(
         &verified_file_doc,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -181,7 +181,7 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
     let keystore_root = temp_dir.path().join("keys");
 
     let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let old_kid = old_key_ctx.kid.to_string();
+    let old_kid = old_key_ctx.kid().to_string();
     let old_public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &old_kid).unwrap();
 
     let content = b"Hello from the old key";
@@ -192,7 +192,7 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &old_key_ctx.signing_key,
+            signing_key: old_key_ctx.signing_key(),
             signer_kid: &old_kid,
             signer_pub: old_public_key,
             debug: false,
@@ -206,7 +206,7 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
         "2028-01-01T00:00:00Z",
     );
     let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    assert_ne!(new_key_ctx.kid.to_string(), old_kid);
+    assert_ne!(new_key_ctx.kid().to_string(), old_kid);
 
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
     let verified =
@@ -243,7 +243,7 @@ fn test_verify_file_document_returns_verified() {
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -289,7 +289,7 @@ fn build_encrypted_file_for_error_tests() -> (
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -325,8 +325,8 @@ fn test_decrypt_file_wrong_format() {
     let result = decrypt_file_document(
         &verified,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     );
 
@@ -349,8 +349,8 @@ fn test_decrypt_file_wrong_payload_format() {
     let result = decrypt_file_document(
         &verified,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     );
 
@@ -373,8 +373,8 @@ fn test_decrypt_file_unsupported_aead() {
     let result = decrypt_file_document(
         &verified,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     );
 
@@ -397,8 +397,8 @@ fn test_decrypt_file_sid_mismatch() {
     let result = decrypt_file_document(
         &verified,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     );
 

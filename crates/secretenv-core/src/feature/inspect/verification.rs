@@ -5,16 +5,7 @@
 
 use crate::feature::inspect::{build_section, InspectSection};
 use crate::feature::verify::SignatureVerificationReport;
-use crate::io::verify_online::{VerificationResult, VerificationStatus};
 use crate::model::verification::VerifyingKeySource;
-
-/// Online verification display variants
-pub enum OnlineVerificationDisplay {
-    /// GitHub verification result available
-    GithubResult(VerificationResult),
-    /// binding_claims exist but no supported binding is configured
-    NoSupportedBinding,
-}
 
 /// Build signature verification report section.
 pub(crate) fn build_signature_verification_section(
@@ -46,40 +37,4 @@ pub(crate) fn build_signature_verification_section(
         lines.push(format!("  Reason:      {}", report.message));
     }
     build_section("Signature Verification", lines)
-}
-
-/// Build online verification section.
-pub fn build_online_verification_section(
-    display: &OnlineVerificationDisplay,
-    github_login: Option<&str>,
-    github_id: Option<u64>,
-) -> InspectSection {
-    match display {
-        OnlineVerificationDisplay::GithubResult(result) => {
-            let mut lines = Vec::new();
-            match result.status {
-                VerificationStatus::Verified => {
-                    lines.push("  Status:      \u{2714} OK".to_string());
-                    if let (Some(login), Some(id)) = (github_login, github_id) {
-                        lines.push(format!("  Account:     {} (id: {})", login, id));
-                    }
-                    if let Some(ref fp) = result.fingerprint {
-                        lines.push(format!("  SSH key:     {}", fp));
-                    }
-                    if let Some(key_id) = result.matched_key_id {
-                        lines.push(format!("  Matched ID:  {}", key_id));
-                    }
-                }
-                VerificationStatus::Failed | VerificationStatus::NotConfigured => {
-                    lines.push("  Status:      \u{2718} FAILED".to_string());
-                    lines.push(format!("  Reason:      {}", result.message));
-                }
-            }
-            build_section("Online Verification (GitHub)", lines)
-        }
-        OnlineVerificationDisplay::NoSupportedBinding => build_section(
-            "Online Verification",
-            vec!["  Status:      Not available (no supported binding configured)".to_string()],
-        ),
-    }
 }

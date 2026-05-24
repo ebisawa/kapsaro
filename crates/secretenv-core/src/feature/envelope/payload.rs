@@ -7,8 +7,8 @@ use crate::crypto::aead::xchacha::encrypt_with_nonce as xchacha_encrypt_with_non
 use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::XChaChaKey;
 use crate::feature::envelope::binding::build_file_payload_aad;
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::model::file_enc::{FilePayloadCiphertext, FilePayloadHeader};
-use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::Result;
 use tracing::debug;
 

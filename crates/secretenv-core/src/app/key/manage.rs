@@ -1,30 +1,53 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Application orchestration for local key management commands.
+//! Resolves command context, keystore paths, and key I/O before feature calls.
+
 use std::path::Path;
 
 use crate::app::context::member::{resolve_key_owner, resolve_required_member};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::key::export::save_exported_public_key;
-use crate::app::key::types::{KeyExportPrivateResult, KeyListResult};
-use crate::feature::key::manage::common::{resolve_active_kid, resolve_keystore_root};
-use crate::feature::key::manage::export::export_key;
-use crate::feature::key::manage::mutation::{activate_key, remove_key};
-use crate::feature::key::manage::private_load::load_private_key_export_material;
-use crate::feature::key::manage::query::list_keys;
+use crate::app::key::types::{
+    KeyActivateResult, KeyExportPrivateResult, KeyExportResult, KeyInfo, KeyListResult,
+    KeyRemoveResult,
+};
+use crate::feature::key::material::validate_private_key_material;
 use crate::feature::key::portable_export::{
     build_password_strength_warning, export_private_key_portable,
 };
-use crate::feature::key::types::{KeyActivateResult, KeyExportResult, KeyRemoveResult};
+use crate::feature::key::protection::encryption::decrypt_private_key;
+use crate::feature::verify::private_key::verify_private_key_matches_public_key;
+use crate::feature::verify::public_key::{
+    verify_public_key_with_attestation_context, KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
+};
+use crate::io::keystore::active::{clear_active_kid, load_active_kid, set_active_kid};
+use crate::io::keystore::helpers::resolve_member_kid_query;
+use crate::io::keystore::member::{remove_key_directory, select_latest_valid_kid};
+use crate::io::keystore::paths::get_private_key_file_path_from_root;
+use crate::io::keystore::storage::{
+    list_kids, list_member_handles, load_private_key, load_public_key,
+};
+use crate::io::ssh::backend::SignatureBackend;
+use crate::model::private_key::PrivateKeyPlaintext;
 use crate::support::secret::SecretString;
-use crate::Result;
+use crate::{Error, Result};
 
 pub fn list_keys_command(
     options: &CommonCommandOptions,
     member_handle: Option<String>,
 ) -> Result<KeyListResult> {
-    list_keys(options.home.clone(), member_handle).map(Into::into)
+    let keystore_root = options.resolve_keystore_root()?;
+    let member_handles = resolve_member_handles(&keystore_root, member_handle)?;
+    let entries = load_key_infos(&keystore_root, &member_handles)?;
+    let total_keys = entries.iter().map(|(_, keys)| keys.len()).sum();
+
+    Ok(KeyListResult {
+        entries,
+        total_keys,
+    })
 }
 
 pub fn activate_key_command(
@@ -33,7 +56,11 @@ pub fn activate_key_command(
     kid: Option<String>,
 ) -> Result<KeyActivateResult> {
     let member_handle = resolve_required_member(options, member_handle)?;
-    activate_key(options.home.clone(), member_handle, kid)
+    let keystore_root = options.resolve_keystore_root()?;
+    let kid = resolve_activated_kid(&keystore_root, &member_handle, kid)?;
+    validate_key_exists(&keystore_root, &member_handle, &kid)?;
+    set_active_kid(&member_handle, &kid, &keystore_root)?;
+    Ok(KeyActivateResult { member_handle, kid })
 }
 
 pub fn remove_key_command(
@@ -43,7 +70,23 @@ pub fn remove_key_command(
     force: bool,
 ) -> Result<KeyRemoveResult> {
     let resolved_member_handle = resolve_key_owner(options, member_handle, &kid)?;
-    remove_key(options.home.clone(), resolved_member_handle, kid, force)
+    let keystore_root = options.resolve_keystore_root()?;
+    let kid = resolve_member_kid_query(&keystore_root, &resolved_member_handle, &kid)?;
+    validate_key_directory_exists(&keystore_root, &resolved_member_handle, &kid)?;
+    let was_active =
+        load_active_kid(&resolved_member_handle, &keystore_root)?.as_ref() == Some(&kid);
+    validate_key_removal(&kid, was_active, force)?;
+    remove_key_directory(&keystore_root, &resolved_member_handle, &kid)?;
+
+    if was_active {
+        clear_active_kid(&resolved_member_handle, &keystore_root)?;
+    }
+
+    Ok(KeyRemoveResult {
+        member_handle: resolved_member_handle,
+        kid,
+        was_active,
+    })
 }
 
 pub fn export_key_command(
@@ -53,7 +96,14 @@ pub fn export_key_command(
     out: &Path,
 ) -> Result<KeyExportResult> {
     let member_handle = resolve_required_member(options, member_handle)?;
-    let result = export_key(options.home.clone(), member_handle, kid)?;
+    let keystore_root = options.resolve_keystore_root()?;
+    let kid = resolve_active_kid(&keystore_root, &member_handle, kid)?;
+    let public_key = load_public_key(&keystore_root, &member_handle, &kid)?;
+    let result = KeyExportResult {
+        member_handle,
+        kid,
+        public_key,
+    };
     save_exported_public_key(out, &result.public_key)?;
     Ok(result)
 }
@@ -64,7 +114,7 @@ pub fn validate_kid(
     member_handle: &str,
     kid: Option<String>,
 ) -> Result<()> {
-    let keystore_root = resolve_keystore_root(options.home.clone())?;
+    let keystore_root = options.resolve_keystore_root()?;
     resolve_active_kid(&keystore_root, member_handle, kid)?;
     Ok(())
 }
@@ -76,8 +126,10 @@ pub fn export_private_key_command(
     password: &SecretString,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<KeyExportPrivateResult> {
+    let keystore_root = options.resolve_keystore_root()?;
+    let kid = resolve_active_kid(&keystore_root, &member_handle, kid)?;
     let loaded = load_private_key_export_material(
-        options.home.clone(),
+        &keystore_root,
         member_handle,
         kid,
         ssh_ctx.backend.as_ref(),
@@ -102,4 +154,155 @@ pub fn export_private_key_command(
         password_warning: build_password_strength_warning(password.as_str()),
     }
     .into())
+}
+
+struct PrivateKeyExportMaterial {
+    plaintext: PrivateKeyPlaintext,
+    member_handle: String,
+    kid: String,
+    created_at: String,
+    expires_at: String,
+}
+
+fn resolve_member_handles(
+    keystore_root: &Path,
+    member_handle: Option<String>,
+) -> Result<Vec<String>> {
+    match member_handle {
+        Some(member_handle) => Ok(vec![member_handle]),
+        None => list_member_handles(keystore_root),
+    }
+}
+
+fn load_key_infos(
+    keystore_root: &Path,
+    member_handles: &[String],
+) -> Result<Vec<(String, Vec<KeyInfo>)>> {
+    member_handles
+        .iter()
+        .map(|member_handle| load_member_key_infos(keystore_root, member_handle))
+        .collect()
+}
+
+fn load_member_key_infos(
+    keystore_root: &Path,
+    member_handle: &str,
+) -> Result<(String, Vec<KeyInfo>)> {
+    let kids = list_kids(keystore_root, member_handle)?;
+    let active_kid = load_active_kid(member_handle, keystore_root)?;
+    let key_infos = kids
+        .iter()
+        .map(|kid| load_key_info(keystore_root, member_handle, kid, active_kid.as_deref()))
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok((member_handle.to_string(), key_infos))
+}
+
+fn load_key_info(
+    keystore_root: &Path,
+    member_handle: &str,
+    kid: &str,
+    active_kid: Option<&str>,
+) -> Result<KeyInfo> {
+    let public_key = load_public_key(keystore_root, member_handle, kid)?;
+    Ok(KeyInfo {
+        kid: kid.to_string(),
+        member_handle: public_key.protected.subject_handle.clone(),
+        created_at: public_key.protected.created_at.clone().unwrap_or_default(),
+        expires_at: public_key.protected.expires_at.clone(),
+        active: active_kid == Some(kid),
+        format: public_key.protected.format.clone(),
+    })
+}
+
+fn resolve_active_kid(
+    keystore_root: &Path,
+    member_handle: &str,
+    kid: Option<String>,
+) -> Result<String> {
+    match kid {
+        Some(kid) => resolve_member_kid_query(keystore_root, member_handle, &kid),
+        None => load_active_kid(member_handle, keystore_root)?.ok_or_else(|| {
+            Error::build_not_found_error(format!("No active key for member: {}", member_handle))
+        }),
+    }
+}
+
+fn load_private_key_export_material(
+    keystore_root: &Path,
+    member_handle: String,
+    kid: String,
+    backend: &dyn SignatureBackend,
+    ssh_pubkey: &str,
+    debug: bool,
+) -> Result<PrivateKeyExportMaterial> {
+    let encrypted = load_private_key(keystore_root, &member_handle, &kid)?;
+    let public_key = load_public_key(keystore_root, &member_handle, &kid)?;
+    let verified_public_key = verify_public_key_with_attestation_context(
+        &public_key,
+        debug,
+        KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
+    )?;
+    verify_private_key_matches_public_key(&encrypted, verified_public_key.document())?;
+
+    let plaintext = decrypt_private_key(&encrypted, backend, ssh_pubkey, debug)?;
+    validate_private_key_material(&plaintext)?;
+
+    Ok(PrivateKeyExportMaterial {
+        plaintext,
+        member_handle,
+        kid,
+        created_at: encrypted.protected.created_at.clone(),
+        expires_at: encrypted.protected.expires_at.clone(),
+    })
+}
+
+fn resolve_activated_kid(
+    keystore_root: &Path,
+    member_handle: &str,
+    kid: Option<String>,
+) -> Result<String> {
+    match kid {
+        Some(kid) => resolve_member_kid_query(keystore_root, member_handle, &kid),
+        None => select_latest_valid_kid(keystore_root, member_handle),
+    }
+}
+
+fn validate_key_exists(keystore_root: &Path, member_handle: &str, kid: &str) -> Result<()> {
+    let private_key_path = get_private_key_file_path_from_root(keystore_root, member_handle, kid);
+    if private_key_path.exists() {
+        return Ok(());
+    }
+
+    Err(Error::build_not_found_error(format!(
+        "Key not found: {}",
+        kid
+    )))
+}
+
+fn validate_key_directory_exists(
+    keystore_root: &Path,
+    member_handle: &str,
+    kid: &str,
+) -> Result<()> {
+    let key_dir = keystore_root.join(member_handle).join(kid);
+    if key_dir.exists() {
+        return Ok(());
+    }
+
+    Err(Error::build_not_found_error(format!(
+        "Key not found: {}",
+        kid
+    )))
+}
+
+fn validate_key_removal(kid: &str, was_active: bool, force: bool) -> Result<()> {
+    if !was_active || force {
+        return Ok(());
+    }
+
+    Err(Error::build_config_error(format!(
+        "Cannot remove active key '{}'. Use --force to remove anyway.",
+        kid
+    )))
 }

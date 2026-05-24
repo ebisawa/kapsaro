@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::app::trust::GetPolicy;
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
-use crate::feature::envelope::signature::SigningContext;
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
 use crate::format::token::TokenCodec;
@@ -26,7 +26,7 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
         "2020-01-01T00:00:00Z",
     );
     let expired_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let expired_kid = expired_key_ctx.kid.to_string();
+    let expired_kid = expired_key_ctx.kid().to_string();
     let keystore_root = temp_dir.path().join("keys");
     let expired_public_key =
         load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &expired_kid).unwrap();
@@ -39,7 +39,7 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
     save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
         .unwrap();
     let current_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let current_kid = current_key_ctx.kid.to_string();
+    let current_kid = current_key_ctx.kid().to_string();
     let current_public_key =
         load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &current_kid).unwrap();
     setup_trust_store_for_workspace(
@@ -54,7 +54,7 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
-            signing_key: &expired_key_ctx.signing_key,
+            signing_key: expired_key_ctx.signing_key(),
             signer_kid: &expired_kid,
             signer_pub: expired_public_key,
             debug: false,
@@ -93,7 +93,7 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
 fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid() {
     let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let valid_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let valid_kid = valid_key_ctx.kid.to_string();
+    let valid_kid = valid_key_ctx.kid().to_string();
     let keystore_root = temp_dir.path().join("keys");
     let valid_public_key =
         load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &valid_kid).unwrap();
@@ -109,7 +109,7 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
-            signing_key: &valid_key_ctx.signing_key,
+            signing_key: valid_key_ctx.signing_key(),
             signer_kid: &valid_kid,
             signer_pub: valid_public_key,
             debug: false,
@@ -131,7 +131,7 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         "2020-01-01T00:00:00Z",
     );
     let expired_active_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    assert_ne!(expired_active_ctx.kid.to_string(), valid_kid);
+    assert_ne!(expired_active_ctx.kid().to_string(), valid_kid);
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
@@ -146,8 +146,8 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         .unwrap();
 
         assert_eq!(
-            command.execution.key_ctx.kid.to_string(),
-            expired_active_ctx.kid.to_string()
+            command.execution.key_ctx.kid().to_string(),
+            expired_active_ctx.kid().to_string()
         );
     });
 }

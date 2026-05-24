@@ -7,7 +7,7 @@ use ed25519_dalek::SigningKey;
 use secretenv_core::cli_api::test_support::domain::kv_enc::document::KvEncDocument;
 use secretenv_core::cli_api::test_support::domain::kv_enc::header::KvHeader;
 use secretenv_core::cli_api::test_support::domain::public_key::VerifiedRecipientKey;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::key::material::generate_keypairs;
 use secretenv_core::cli_api::test_support::operations::kv::builder::KvDocumentBuilder;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;

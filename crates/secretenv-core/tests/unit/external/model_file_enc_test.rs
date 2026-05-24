@@ -16,7 +16,7 @@ fn build_test_payload_envelope() -> FilePayload {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FilePayload {
         protected: FilePayloadHeader {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V7.to_string(),
             sid,
             alg: FileEncAlgorithm {
                 aead: secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
@@ -35,7 +35,7 @@ fn test_file_enc_document_basic() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7
                 .to_string(),
             sid,
             wrap: vec![
@@ -72,7 +72,7 @@ fn test_recipients_derived_from_wrap() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7
                 .to_string(),
             sid,
             wrap: vec![
@@ -118,7 +118,7 @@ fn test_payload_serialization() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6
+            format: secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7
                 .to_string(),
             sid,
             wrap: vec![],
@@ -152,7 +152,7 @@ fn test_payload_serialization() {
     // Verify payload.protected has format and alg
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["format"],
-        "secretenv:format:file-enc:payload@6"
+        "secretenv:format:file-enc:payload@7"
     );
     assert_eq!(
         parsed["protected"]["payload"]["protected"]["alg"]["aead"],
@@ -164,12 +164,12 @@ fn test_payload_serialization() {
 fn test_file_enc_document_signature_requires_signer_pub() {
     let json = serde_json::json!({
         "protected": {
-            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6,
+            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7,
             "sid": "01234567-89ab-cdef-0123-456789abcdef",
             "wrap": [],
             "payload": {
                 "protected": {
-                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6,
+                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V7,
                     "sid": "01234567-89ab-cdef-0123-456789abcdef",
                     "alg": {
                         "aead": secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305

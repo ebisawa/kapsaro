@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use super::common::{
     expand_tilde, get_default_ssh_key_path, resolve_string_with_source, StringSourceResolution,
 };
+use crate::config::types::ConfigKey;
 
 /// Source of SSH key configuration
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +128,7 @@ fn resolve_configured_ssh_key_candidate(
     resolve_string_with_source(
         None,
         Some("SECRETENV_SSH_IDENTITY"),
-        "ssh_identity",
+        ConfigKey::SshIdentity.canonical_name(),
         base_dir,
         None,
     )?

@@ -8,8 +8,8 @@
 use crate::crypto::build_crypto_operation_error;
 use crate::crypto::rng::{fill_secret_array, hpke_sender_setup_rng};
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+use crate::format::codec::base64_secret::decode_base64url_nopad_secret_32;
 use crate::model::verified::VerifiedPrivateKey;
-use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
 use crate::Result;
 use hpke::{
     aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::X25519HkdfSha256, Deserializable,

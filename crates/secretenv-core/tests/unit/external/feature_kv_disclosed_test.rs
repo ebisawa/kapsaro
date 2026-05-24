@@ -9,7 +9,7 @@ use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
 use secretenv_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
 use secretenv_core::cli_api::test_support::domain::kv_enc::line::KvEncLine;
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::kv::mutate::{
     set_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult, KvWriteContext,
@@ -121,7 +121,7 @@ fn encrypt_two_member_document(
         &kv_map,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub.clone(),
             debug: false,
@@ -133,16 +133,24 @@ fn encrypt_two_member_document(
 
 fn single_rewrap_request<'a>(
     key_ctx: &'a CryptoContext,
-    workspace_root: Option<&'a std::path::Path>,
+    workspace_root: Option<&std::path::Path>,
 ) -> RewrapRequest<'a> {
+    let target_members = workspace_root
+        .map(|workspace_root| {
+            let public_keys =
+                secretenv_core::cli_api::test_support::storage::workspace::members::load_active_member_files(
+                    workspace_root,
+                )
+                .unwrap();
+            build_verified_recipient_keys(&public_keys)
+        })
+        .unwrap_or_default();
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
-        workspace_root,
-        target_members: None,
+        target_members,
         rotate_key: false,
         clear_disclosure_history: false,
-
         debug: false,
     }
 }

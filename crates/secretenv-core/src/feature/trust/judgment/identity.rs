@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
-use crate::support::codec::base64_public::decode_base64url_nopad_array;
 use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

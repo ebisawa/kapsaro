@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::feature::context::crypto::build_signing_context;
 use crate::feature::context::crypto::CryptoContext;
-use crate::feature::envelope::signature::build_signing_context;
 use crate::feature::kv::encrypt::KvValueRef;
 use crate::format::token::TokenCodec;
 use crate::model::public_key::VerifiedRecipientKey;

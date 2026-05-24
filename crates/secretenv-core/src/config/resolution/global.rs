@@ -1,24 +1,15 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Config feature - configuration operations.
+//! Global config.toml key resolution helpers.
+//! Owns supported-key normalization and flat global config loading.
 
-use crate::io::config;
-use crate::{Error, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-// Keep this list aligned with the supported global config.toml keys.
-pub(crate) const VALID_KEYS: &[&str] = &[
-    "member_handle",
-    "workspace",
-    "ssh_identity",
-    "ssh_keygen_command",
-    "ssh_add_command",
-    "ssh_signing_method",
-    "github_user",
-    "allow_expired_key",
-];
+use crate::config::types::ConfigKey;
+use crate::io::config;
+use crate::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigScope {
@@ -38,30 +29,17 @@ pub struct ConfigLocation {
 }
 
 pub(crate) fn normalize_key(key: &str) -> Result<String> {
-    // User-facing convenience:
-    // historically some users typed `gihub_user` (typo). Normalize to the canonical key.
-    if key == "gihub_user" {
-        return Ok("github_user".to_string());
-    }
-
-    if VALID_KEYS.contains(&key) {
-        Ok(key.to_string())
-    } else {
-        Err(Error::build_invalid_argument_error(format!(
-            "invalid key '{}'. Valid keys: {}",
-            key,
-            VALID_KEYS.join(", ")
-        )))
-    }
+    Ok(ConfigKey::parse(key)?.canonical_name().to_string())
 }
 
 pub fn validate_key(key: &str) -> Result<()> {
-    let _ = normalize_key(key)?;
+    let _ = ConfigKey::parse(key)?;
     Ok(())
 }
 
 pub fn resolve_config_value(key: &str, base_dir: Option<&Path>) -> Result<ConfigValueResolution> {
-    if let Some(value) = load_global_config(base_dir)?.get(key) {
+    let normalized = normalize_key(key)?;
+    if let Some(value) = load_global_config(base_dir)?.get(&normalized) {
         return Ok(ConfigValueResolution {
             value: Some(value.clone()),
             scope: Some("global".to_string()),

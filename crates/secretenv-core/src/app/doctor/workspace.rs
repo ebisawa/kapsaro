@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::io::config::paths::get_global_config_path_from_base;
@@ -128,20 +128,12 @@ fn workspace_from_path(path: &Path) -> WorkspaceRoot {
 }
 
 fn workspace_structure_ok(workspace_root: &Path) -> bool {
-    let required = [
-        workspace_root.join("members/active"),
-        workspace_root.join("members/incoming"),
-        workspace_root.join("secrets"),
-    ];
+    let required = required_workspace_dirs(workspace_root);
     required.iter().all(|path| is_real_dir(path))
 }
 
 fn check_workspace_structure(workspace_root: &Path, structure_ok: bool) -> DoctorCheck {
-    let required = [
-        workspace_root.join("members/active"),
-        workspace_root.join("members/incoming"),
-        workspace_root.join("secrets"),
-    ];
+    let required = required_workspace_dirs(workspace_root);
     let missing = required
         .iter()
         .filter(|path| !is_real_dir(path))
@@ -163,6 +155,14 @@ fn check_workspace_structure(workspace_root: &Path, structure_ok: bool) -> Docto
     )
     .with_reason(format!("missing: {}", missing.join(", ")))
     .with_next_action("run secretenv init or repair the workspace")
+}
+
+fn required_workspace_dirs(workspace_root: &Path) -> [PathBuf; 3] {
+    [
+        workspace_root.join("members/active"),
+        workspace_root.join("members/incoming"),
+        workspace_root.join("secrets"),
+    ]
 }
 
 fn is_gitless_layout(workspace_root: &Path) -> bool {

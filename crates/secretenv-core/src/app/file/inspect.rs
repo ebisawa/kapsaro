@@ -4,10 +4,8 @@
 use std::path::Path;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::feature::inspect::verification::{
-    build_online_verification_section, build_signature_verification_section,
-    OnlineVerificationDisplay,
-};
+use crate::feature::inspect::build_section;
+use crate::feature::inspect::verification::build_signature_verification_section;
 use crate::feature::inspect::{
     build_inspect_view, InspectOutput as FeatureInspectOutput,
     InspectSection as FeatureInspectSection,
@@ -18,6 +16,7 @@ use crate::feature::verify::SignatureVerificationReport;
 use crate::format::content::EncContent;
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
+use crate::model::public_key::GithubAccount;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
@@ -27,6 +26,19 @@ use crate::Result;
 pub struct InspectCommand {
     pub input_display: String,
     pub output: InspectOutput,
+}
+
+struct GithubAccountDisplayValues {
+    login: String,
+    id: u64,
+}
+
+/// Online verification display variants.
+pub enum OnlineVerificationDisplay {
+    /// GitHub verification result available.
+    GithubResult(VerificationResult),
+    /// Binding claims exist but no supported binding is configured.
+    NoSupportedBinding,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -121,14 +133,11 @@ fn build_online_section(
     let github = match binding_claims.github_account.as_ref() {
         Some(github) => github,
         None => {
-            return Some(
-                build_online_verification_section(
-                    &OnlineVerificationDisplay::NoSupportedBinding,
-                    None,
-                    None,
-                )
-                .into(),
-            );
+            return Some(build_online_verification_section(
+                &OnlineVerificationDisplay::NoSupportedBinding,
+                None,
+                None,
+            ));
         }
     };
 
@@ -141,23 +150,64 @@ fn build_online_section(
             true,
         ),
     };
-    let verified_github = result.verified_github.clone();
-    let github_login = verified_github
-        .as_ref()
-        .map(|verified| verified.login.as_str())
-        .or(Some(github.login.as_str()));
-    let github_id = verified_github
-        .as_ref()
-        .map(|verified| verified.id)
-        .or(Some(github.id));
-    Some(
-        build_online_verification_section(
-            &OnlineVerificationDisplay::GithubResult(result),
-            github_login,
-            github_id,
+    let github_display = build_github_account_display_values(&result, github);
+    Some(build_online_verification_section(
+        &OnlineVerificationDisplay::GithubResult(result),
+        Some(github_display.login.as_str()),
+        Some(github_display.id),
+    ))
+}
+
+pub fn build_online_verification_section(
+    display: &OnlineVerificationDisplay,
+    github_login: Option<&str>,
+    github_id: Option<u64>,
+) -> InspectSection {
+    match display {
+        OnlineVerificationDisplay::GithubResult(result) => {
+            let mut lines = Vec::new();
+            match result.status {
+                VerificationStatus::Verified => {
+                    lines.push("  Status:      \u{2714} OK".to_string());
+                    if let (Some(login), Some(id)) = (github_login, github_id) {
+                        lines.push(format!("  Account:     {} (id: {})", login, id));
+                    }
+                    if let Some(ref fp) = result.fingerprint {
+                        lines.push(format!("  SSH key:     {}", fp));
+                    }
+                    if let Some(key_id) = result.matched_key_id {
+                        lines.push(format!("  Matched ID:  {}", key_id));
+                    }
+                }
+                VerificationStatus::Failed | VerificationStatus::NotConfigured => {
+                    lines.push("  Status:      \u{2718} FAILED".to_string());
+                    lines.push(format!("  Reason:      {}", result.message));
+                }
+            }
+            build_section("Online Verification (GitHub)", lines).into()
+        }
+        OnlineVerificationDisplay::NoSupportedBinding => build_section(
+            "Online Verification",
+            vec!["  Status:      Not available (no supported binding configured)".to_string()],
         )
         .into(),
-    )
+    }
+}
+
+fn build_github_account_display_values(
+    result: &VerificationResult,
+    github_claim: &GithubAccount,
+) -> GithubAccountDisplayValues {
+    match result.verified_github.as_ref() {
+        Some(verified) => GithubAccountDisplayValues {
+            login: verified.login.clone(),
+            id: verified.id,
+        },
+        None => GithubAccountDisplayValues {
+            login: github_claim.login.clone(),
+            id: github_claim.id,
+        },
+    }
 }
 
 fn build_failed_online_verification_result(

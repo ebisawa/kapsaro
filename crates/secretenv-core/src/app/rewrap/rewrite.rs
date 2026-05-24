@@ -4,7 +4,6 @@
 //! Captured artifact rewrite executor for rewrap.
 
 use crate::app::context::execution::ExecutionContext;
-use crate::app::context::review::ReviewedTextFile;
 use crate::feature::rewrap::{rewrap_content as rewrap_feature_content, RewrapRequest};
 use crate::format::content::EncContent;
 use crate::Result;
@@ -26,17 +25,11 @@ pub fn build_rewritten_artifact(
     rewrap_feature_content(content, &rewrap_request)
 }
 
-pub fn save_rewritten_artifact(captured: &ReviewedTextFile, rewritten: &str) -> Result<()> {
-    captured.save_replacement(rewritten)?;
-    Ok(())
-}
-
 fn build_rewrap_request<'a>(ctx: &'a RewrapRewriteContext<'a>) -> RewrapRequest<'a> {
     RewrapRequest {
         member_handle: ctx.execution.member_handle.as_str(),
         key_ctx: &ctx.execution.key_ctx,
-        workspace_root: Some(ctx.plan.workspace_root.as_path()),
-        target_members: Some(ctx.post_promotion_members.verified_members()),
+        target_members: ctx.post_promotion_members.verified_members().to_vec(),
         rotate_key: ctx.request.rotate_key,
         clear_disclosure_history: ctx.request.clear_disclosure_history,
         debug: ctx.request.options.debug,

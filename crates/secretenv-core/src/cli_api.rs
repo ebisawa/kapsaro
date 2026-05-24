@@ -49,7 +49,7 @@ pub mod app {
     }
 
     pub mod doctor {
-        pub use crate::app::doctor::{run_doctor, DoctorRequest};
+        pub use crate::app::doctor::{execute_doctor_command, DoctorRequest};
 
         pub mod types {
             pub use crate::app::doctor::types::{
@@ -93,7 +93,10 @@ pub mod app {
         }
 
         pub mod types {
-            pub use crate::app::key::types::{KeyExportPrivateResult, KeyInfo, KeyListResult};
+            pub use crate::app::key::types::{
+                KeyActivateResult, KeyExportPrivateResult, KeyExportResult, KeyInfo, KeyListResult,
+                KeyRemoveResult,
+            };
         }
     }
 
@@ -201,7 +204,10 @@ pub mod app {
         };
 
         pub mod enforcement {
-            pub use crate::app::trust::enforcement::ArtifactRecipientSetReview;
+            pub use crate::app::trust::{
+                ArtifactRecipientHandleHint, ArtifactRecipientSetReview,
+                ArtifactRecipientSetSnapshot,
+            };
         }
 
         pub mod list {
@@ -271,10 +277,6 @@ pub mod presentation {
         pub use crate::model::ssh::SshDeterminismStatus;
     }
 
-    pub mod trust_document {
-        pub use crate::model::trust_store::RecipientHandleHint;
-    }
-
     pub mod tty {
         pub use crate::support::tty::is_interactive;
     }
@@ -289,7 +291,7 @@ pub mod presentation {
 pub mod test_support {
     pub mod settings {
         pub mod types {
-            pub use crate::config::types::SshSigningMethod;
+            pub use crate::config::types::{ConfigKey, SshSigningMethod};
         }
     }
     pub mod primitives {
@@ -300,7 +302,7 @@ pub mod test_support {
             }
         }
         pub mod kdf {
-            pub use crate::crypto::kdf::{expand, expand_to_array};
+            pub use crate::crypto::kdf::{derive_hkdf_sha256_array, derive_hkdf_sha256_bytes};
         }
         pub mod kem {
             pub use crate::crypto::kem::{
@@ -309,34 +311,32 @@ pub mod test_support {
             };
         }
         pub mod sign {
-            pub use crate::crypto::sign::{
-                sign_detached_bytes, sign_trust_store_bytes, verify_trust_store_bytes,
-            };
+            pub use crate::crypto::sign::{sign_detached_bytes, verify_detached_bytes};
         }
         pub mod types {
             pub mod data {
                 pub use crate::crypto::types::data::{Aad, Ciphertext, Enc, Ikm, Info, Plaintext};
             }
             pub mod keys {
-                pub use crate::crypto::types::keys::{Cek, MasterKey, XChaChaKey};
+                pub use crate::crypto::types::keys::{Cek, MacKey, MasterKey, XChaChaKey};
             }
             pub mod primitives {
                 pub use crate::crypto::types::primitives::{
-                    HkdfSalt, KvSalt, PrivateKeyIkmSalt, XChaChaNonce,
+                    HkdfSalt, PrivateKeyIkmSalt, XChaChaNonce,
                 };
             }
         }
     }
     pub mod operations {
         pub mod config {
-            pub use crate::feature::config::{
+            pub use crate::config::resolution::global::{
                 resolve_config_location, resolve_config_value, validate_key, ConfigScope,
             };
         }
         pub mod context {
             pub mod crypto {
                 pub use crate::feature::context::crypto::{
-                    load_crypto_context_from_keystore, CryptoContext,
+                    load_crypto_context_from_keystore, CryptoContext, SigningContext,
                 };
             }
             pub mod env_key {
@@ -367,16 +367,21 @@ pub mod test_support {
         pub mod envelope {
             pub mod binding {
                 pub use crate::feature::envelope::binding::{
-                    build_file_payload_aad, build_file_wrap_info, build_kv_cek_info,
-                    build_kv_entry_aad, build_kv_wrap_info,
+                    build_file_content_key_info, build_file_key_schedule_salt,
+                    build_file_mac_key_info, build_file_payload_aad, build_file_wrap_info,
+                    build_kv_cek_info, build_kv_entry_aad, build_kv_key_schedule_salt,
+                    build_kv_mac_key_info, build_kv_wrap_info,
                 };
             }
             pub mod cek {
                 pub use crate::feature::envelope::cek::derive_cek;
             }
+            pub mod key_schedule {
+                pub use crate::feature::envelope::key_schedule::{FileKeySchedule, KvKeySchedule};
+            }
             pub mod signature {
                 pub use crate::feature::envelope::signature::{
-                    sign_file_document, verify_file_signature, SigningContext,
+                    sign_file_document, verify_file_signature,
                 };
             }
             pub mod unwrap {
@@ -390,11 +395,14 @@ pub mod test_support {
                     WrapFormat,
                 };
             }
+            pub mod wrap_set {
+                pub use crate::feature::envelope::wrap_set::{WrapAlgorithm, WrapSet};
+            }
         }
         pub mod inspect {
             pub use crate::feature::inspect::{build_inspect_view, InspectOutput, InspectSection};
             pub mod verification {
-                pub use crate::feature::inspect::verification::{
+                pub use crate::app::file::inspect::{
                     build_online_verification_section, OnlineVerificationDisplay,
                 };
             }
@@ -402,17 +410,6 @@ pub mod test_support {
         pub mod key {
             pub mod generate {
                 pub use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
-            }
-            pub mod manage {
-                pub mod export {
-                    pub use crate::feature::key::manage::export::export_key;
-                }
-                pub mod mutation {
-                    pub use crate::feature::key::manage::mutation::{activate_key, remove_key};
-                }
-                pub mod query {
-                    pub use crate::feature::key::manage::query::list_keys;
-                }
             }
             pub mod material {
                 pub use crate::feature::key::material::{
@@ -462,7 +459,7 @@ pub mod test_support {
         }
         pub mod kv {
             pub mod builder {
-                pub use crate::feature::kv::builder::KvDocumentBuilder;
+                pub use crate::format::kv::document::KvDocumentBuilder;
             }
             pub mod decrypt {
                 pub use crate::feature::kv::decrypt::{
@@ -487,7 +484,7 @@ pub mod test_support {
                 pub use crate::feature::member::add::add_member_from_file;
             }
             pub mod verification {
-                pub use crate::feature::member::verification::verify_member;
+                pub use crate::feature::member::verification::verify_member_files;
             }
         }
         pub mod rewrap {
@@ -513,10 +510,14 @@ pub mod test_support {
                 };
             }
             pub mod signature {
-                pub use crate::feature::trust::signature::sign_trust_store;
+                pub use crate::feature::trust::signature::{
+                    sign_trust_store, sign_trust_store_bytes,
+                };
             }
             pub mod verification {
-                pub use crate::feature::trust::verification::verify_trust_store;
+                pub use crate::feature::trust::verification::{
+                    verify_trust_store, verify_trust_store_bytes,
+                };
             }
         }
         pub mod verify {
@@ -587,6 +588,7 @@ pub mod test_support {
                 pub use crate::format::schema::document::{
                     parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token,
                     parse_kv_signature_token, parse_kv_wrap_token, parse_public_key_str,
+                    parse_trust_store_str,
                 };
             }
             pub mod validator {
@@ -815,7 +817,7 @@ pub mod test_support {
     }
     pub mod domain {
         pub mod common {
-            pub use crate::model::common::{RemovedRecipient, WrapAlgorithm, WrapItem, WrapSet};
+            pub use crate::model::common::{RemovedRecipient, WrapItem};
         }
         pub mod file_enc {
             pub use crate::model::file_enc::{
@@ -889,14 +891,16 @@ pub mod test_support {
             }
             pub mod context {
                 pub use crate::model::wire::context::{
-                    AAD_KV_ENTRY_PAYLOAD_V8, HKDF_INFO_KV_CEK_V8, HKDF_INFO_PRIVATE_KEY_SSHSIG_V7,
-                    HPKE_INFO_FILE_WRAP_V6, HPKE_INFO_KV_WRAP_V8,
+                    AAD_KV_ENTRY_PAYLOAD_V9, HKDF_INFO_FILE_CONTENT_KEY_V7,
+                    HKDF_INFO_FILE_MAC_KEY_V7, HKDF_INFO_KV_CEK_V9, HKDF_INFO_KV_MAC_KEY_V9,
+                    HKDF_INFO_PRIVATE_KEY_SSHSIG_V7, HKDF_SALT_FILE_V7, HKDF_SALT_KV_V9,
+                    HPKE_INFO_FILE_WRAP_V7, HPKE_INFO_KV_WRAP_V9,
                     SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7,
                 };
             }
             pub mod format {
                 pub use crate::model::wire::format::{
-                    FILE_ENC_V6, FILE_PAYLOAD_V6, LOCAL_TRUST_V5, PRIVATE_KEY_V7, PUBLIC_KEY_V6,
+                    FILE_ENC_V7, FILE_PAYLOAD_V7, LOCAL_TRUST_V5, PRIVATE_KEY_V7, PUBLIC_KEY_V6,
                 };
             }
             pub mod jwk {
@@ -913,13 +917,13 @@ pub mod test_support {
     pub mod helpers {
         pub mod codec {
             pub mod base64_public {
-                pub use crate::support::codec::base64_public::{
+                pub use crate::format::codec::base64_public::{
                     decode_base64_standard, decode_base64url_nopad, decode_base64url_nopad_array,
                     encode_base64_standard, encode_base64_standard_nopad, encode_base64url_nopad,
                 };
             }
             pub mod base64_secret {
-                pub use crate::support::codec::base64_secret::{
+                pub use crate::format::codec::base64_secret::{
                     decode_base64url_nopad_secret_32, decode_base64url_nopad_secret_64,
                     encode_base64url_nopad_secret_32, encode_base64url_nopad_secret_64,
                 };
@@ -957,7 +961,7 @@ pub mod test_support {
         pub mod limits {
             pub use crate::support::limits::{
                 MAX_ACTIVE_KID_FILE_SIZE, MAX_CONFIG_FILE_SIZE, MAX_JSON_DEPTH,
-                MAX_JSON_DOCUMENT_READ_SIZE, MAX_WRAP_ITEMS,
+                MAX_JSON_DOCUMENT_READ_SIZE, MAX_KV_ENC_FILE_SIZE, MAX_WRAP_ITEMS,
             };
         }
         pub mod secret {

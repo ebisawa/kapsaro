@@ -3,6 +3,6 @@
 
 //! Rewrap operations for file-enc format.
 
-pub mod content_key;
-pub mod recipients;
-pub mod rotate;
+pub(super) mod content_key;
+pub(super) mod recipients;
+pub(super) mod rotate;

@@ -3,12 +3,10 @@
 
 //! Unit tests for crypto module
 
-use secretenv_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519;
+use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store_bytes;
+use secretenv_core::cli_api::test_support::operations::trust::verification::verify_trust_store_bytes;
 use secretenv_core::cli_api::test_support::primitives::kem::{
     derive_public_key_from_secret, X25519PublicKey, X25519SecretKey,
-};
-use secretenv_core::cli_api::test_support::primitives::sign::{
-    sign_trust_store_bytes, verify_trust_store_bytes,
 };
 use serde::{Deserialize, Serialize};
 
@@ -179,6 +177,17 @@ fn test_plaintext_to_zeroizing_vec_clones_contents() {
 }
 
 #[test]
+fn test_plaintext_take_zeroizing_vec_moves_contents() {
+    use secretenv_core::cli_api::test_support::primitives::types::data::Plaintext;
+
+    let mut plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
+    let bytes = plaintext.take_zeroizing_vec();
+
+    assert_eq!(bytes.as_slice(), b"super-secret-token");
+    assert!(plaintext.as_bytes().is_empty());
+}
+
+#[test]
 fn test_hpke_open_error_message_sanitized() {
     use secretenv_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
     use secretenv_core::cli_api::test_support::primitives::types::data::{
@@ -251,11 +260,7 @@ fn test_ed25519_wrong_key_error() {
         &canonical_bytes,
         &alice_sk,
         "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-        SIGNATURE_ED25519,
     )
     .unwrap();
-    assert!(
-        verify_trust_store_bytes(&canonical_bytes, &bob_vk, &signature, SIGNATURE_ED25519,)
-            .is_err()
-    );
+    assert!(verify_trust_store_bytes(&canonical_bytes, &bob_vk, &signature).is_err());
 }

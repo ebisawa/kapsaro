@@ -5,9 +5,11 @@
 
 use crate::crypto::rng::fill_secret_array;
 use crate::crypto::types::keys::MasterKey;
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::envelope::entry::encrypt_entry;
-use crate::feature::envelope::signature::SigningContext;
+use crate::feature::envelope::key_schedule::KvKeySchedule;
 use crate::feature::envelope::wrap::{build_wraps_for_recipients, WrapFormat};
+use crate::format::kv::document::KvDocumentBuilder;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
@@ -17,7 +19,6 @@ use crate::Result;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::builder::KvDocumentBuilder;
 use super::entry_codec::encode_kv_entries_to_tokens;
 
 pub trait KvValueRef {
@@ -75,13 +76,14 @@ pub(crate) fn encrypt_kv_entries<V>(
 where
     V: KvValueRef,
 {
+    let key_schedule = KvKeySchedule::extract(master_key, sid)?;
     let mut entries: Vec<_> = kv_map
         .iter()
         .map(|(key, value)| {
             encrypt_entry(
                 key,
                 value.as_kv_value(),
-                master_key,
+                &key_schedule,
                 sid,
                 debug,
                 "encrypt_kv_entries",
@@ -97,7 +99,7 @@ where
     Ok(entries)
 }
 
-/// Encrypt KV map to kv-enc v8 format
+/// Encrypt KV map to kv-enc v9 format
 ///
 /// # Arguments
 /// * `kv_map` - Key-value map to encrypt
@@ -107,7 +109,7 @@ where
 /// * `token_codec` - Token codec to use (JSON/JCS or CBOR)
 ///
 /// # Returns
-/// kv-enc v8 format string with SIG line
+/// kv-enc v9 format string with SIG line
 pub fn encrypt_kv_document<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],
@@ -120,7 +122,7 @@ where
     encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
 
-/// Encrypt KV map to kv-enc v8 format with disclosed flag control
+/// Encrypt KV map to kv-enc v9 format with disclosed flag control
 pub(crate) fn encrypt_kv_document_with_disclosed<V>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],

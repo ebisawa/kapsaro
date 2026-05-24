@@ -1,22 +1,53 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Key Derivation Functions
+//! HKDF-SHA256 key derivation helpers.
+//!
+//! Provides one-shot derivation and reusable PRK expansion primitives.
 
 use crate::crypto::build_crypto_operation_error;
 use crate::crypto::types::data::{Ikm, Info};
-use crate::crypto::types::keys::Cek;
 use crate::crypto::types::primitives::AsHkdfSalt;
 use crate::Result;
 use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-/// Internal helper function for HKDF expansion
-fn expand_internal(ikm: &Ikm, salt: Option<&[u8]>, info: &Info, output: &mut [u8]) -> Result<()> {
+/// HKDF-SHA256 pseudorandom key for artifact key schedules.
+///
+/// This is the result of HKDF-Extract and is held so callers can derive
+/// multiple purpose-specific keys via HKDF-Expand.
+pub struct HkdfSha256Prk(Zeroizing<[u8; 32]>);
+
+impl HkdfSha256Prk {
+    fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+fn expand_from_ikm(ikm: &Ikm, salt: Option<&[u8]>, info: &Info, output: &mut [u8]) -> Result<()> {
     let hkdf = Hkdf::<Sha256>::new(salt, ikm.as_bytes());
-    hkdf.expand(info.as_bytes(), output)
-        .map_err(|_| build_crypto_operation_error("HKDF expand failed"))
+    expand_hkdf(&hkdf, info, output)
+}
+
+/// Run HKDF-Extract for an artifact key schedule.
+pub fn derive_hkdf_sha256_prk(ikm: &Ikm, salt: &[u8]) -> HkdfSha256Prk {
+    let (raw_prk, _) = Hkdf::<Sha256>::extract(Some(salt), ikm.as_bytes());
+    let mut prk = Zeroizing::new([0u8; 32]);
+    prk.as_mut().copy_from_slice(&raw_prk);
+    HkdfSha256Prk(prk)
+}
+
+/// Expand an artifact PRK to a 32-byte output.
+pub fn derive_hkdf_sha256_array_from_prk(
+    prk: &HkdfSha256Prk,
+    info: &Info,
+) -> Result<Zeroizing<[u8; 32]>> {
+    let hkdf = Hkdf::<Sha256>::from_prk(prk.as_bytes())
+        .map_err(|_| build_crypto_operation_error("HKDF PRK initialization failed"))?;
+    let mut okm = Zeroizing::new([0u8; 32]);
+    expand_hkdf(&hkdf, info, okm.as_mut())?;
+    Ok(okm)
 }
 
 /// Expand HKDF-SHA256
@@ -29,7 +60,7 @@ fn expand_internal(ikm: &Ikm, salt: Option<&[u8]>, info: &Info, output: &mut [u8
 ///
 /// # Returns
 /// Derived key material
-pub fn expand<S: AsHkdfSalt>(
+pub fn derive_hkdf_sha256_bytes<S: AsHkdfSalt>(
     ikm: &Ikm,
     salt: Option<&S>,
     info: &Info,
@@ -37,7 +68,7 @@ pub fn expand<S: AsHkdfSalt>(
 ) -> Result<Zeroizing<Vec<u8>>> {
     let mut okm = vec![0u8; length];
     let raw_salt = salt.map(|s| s.as_hkdf_salt_bytes());
-    expand_internal(ikm, raw_salt, info, &mut okm)?;
+    expand_from_ikm(ikm, raw_salt, info, &mut okm)?;
     Ok(Zeroizing::new(okm))
 }
 
@@ -47,13 +78,13 @@ pub fn expand<S: AsHkdfSalt>(
 /// `PrivateKeyIkmSalt` does not implement this trait, preventing accidental misuse:
 ///
 /// ```compile_fail
-/// use secretenv_core::crypto::kdf::expand_to_array;
+/// use secretenv_core::crypto::kdf::derive_hkdf_sha256_array;
 /// use secretenv_core::crypto::types::data::{Ikm, Info};
 /// use secretenv_core::crypto::types::primitives::PrivateKeyIkmSalt;
 /// let ikm = Ikm::from(&[0u8; 32][..]);
 /// let salt = PrivateKeyIkmSalt::new([1u8; 32]);
 /// let info = Info::from_string("test");
-/// let _ = expand_to_array(&ikm, Some(&salt), &info);
+/// let _ = derive_hkdf_sha256_array(&ikm, Some(&salt), &info);
 /// ```
 ///
 /// # Arguments
@@ -62,10 +93,23 @@ pub fn expand<S: AsHkdfSalt>(
 /// * `info` - Context and application specific information
 ///
 /// # Returns
-/// Derived key material (32 bytes) as CEK
-pub fn expand_to_array<S: AsHkdfSalt>(ikm: &Ikm, salt: Option<&S>, info: &Info) -> Result<Cek> {
+/// Derived key material (32 bytes)
+pub fn derive_hkdf_sha256_array<S: AsHkdfSalt>(
+    ikm: &Ikm,
+    salt: Option<&S>,
+    info: &Info,
+) -> Result<Zeroizing<[u8; 32]>> {
     let mut okm = Zeroizing::new([0u8; 32]);
     let raw_salt = salt.map(|s| s.as_hkdf_salt_bytes());
-    expand_internal(ikm, raw_salt, info, okm.as_mut())?;
-    Ok(Cek::from_zeroizing(okm))
+    expand_from_ikm(ikm, raw_salt, info, okm.as_mut())?;
+    Ok(okm)
 }
+
+fn expand_hkdf(hkdf: &Hkdf<Sha256>, info: &Info, output: &mut [u8]) -> Result<()> {
+    hkdf.expand(info.as_bytes(), output)
+        .map_err(|_| build_crypto_operation_error("HKDF expand failed"))
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/crypto_kdf_internal_test.rs"]
+mod tests;

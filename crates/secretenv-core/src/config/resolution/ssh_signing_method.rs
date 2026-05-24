@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSH signing method resolution
+//! SSH signing method resolution.
 //!
 //! Resolves SSH signing method based on the following priority order:
 //! 1. CLI option (--ssh-agent / --ssh-keygen)
@@ -9,7 +9,7 @@
 //! 3. Global config (SECRETENV_HOME/config.toml)
 //! 4. Default (auto)
 
-use crate::config::types;
+use crate::config::types::{self, ConfigKey};
 use crate::{Error, Result};
 use std::path::Path;
 
@@ -52,7 +52,7 @@ pub(crate) fn resolve_ssh_signing_method_config(
     let signing_method = resolve_string_required(
         None,
         Some("SECRETENV_SSH_SIGNING_METHOD"),
-        "ssh_signing_method",
+        ConfigKey::SshSigningMethod.canonical_name(),
         base_dir,
         "auto".to_string(),
     )?;

@@ -4,11 +4,11 @@
 //! Format detection
 //!
 //! Automatic input type detection:
-//! - kv-enc: Starts with ":SECRETENV_KV 8"
-//! - file-enc: JSON with "format": "secretenv:format:file-enc@6"
+//! - kv-enc: Starts with ":SECRETENV_KV 9"
+//! - file-enc: JSON with "format": "secretenv:format:file-enc@7"
 //! - kv-plain: UTF-8 text, 2+ non-empty/non-comment lines, 60%+ KEY=VALUE format
 
-use crate::format::kv::HEADER_LINE_V8;
+use crate::format::kv::HEADER_LINE_V9;
 use crate::model::wire::format;
 use crate::support::json_limits::validate_json_limits;
 use crate::Result;
@@ -16,10 +16,10 @@ use crate::Result;
 /// Detected input format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputFormat {
-    /// kv-enc format (:SECRETENV_KV 8)
+    /// kv-enc format (:SECRETENV_KV 9)
     KvEnc,
 
-    /// file-enc format (JSON with secretenv:format:file-enc@6)
+    /// file-enc format (JSON with secretenv:format:file-enc@7)
     FileEnc,
 
     /// kv-plain format (dotenv-style KEY=VALUE)
@@ -54,9 +54,9 @@ pub fn detect_format(content: &str) -> Result<InputFormat> {
 
 /// Detect kv-enc format from content
 ///
-/// Format: ":SECRETENV_KV 8" (colon prefix + space separator)
+/// Format: ":SECRETENV_KV 9" (colon prefix + space separator)
 fn detect_kv_enc(content: &str) -> Result<Option<InputFormat>> {
-    if content.lines().next() == Some(HEADER_LINE_V8) {
+    if content.lines().next() == Some(HEADER_LINE_V9) {
         return Ok(Some(InputFormat::KvEnc));
     }
     Ok(None)
@@ -64,7 +64,7 @@ fn detect_kv_enc(content: &str) -> Result<Option<InputFormat>> {
 
 /// Detect file-enc format from content
 ///
-/// Format: JSON with `protected.format = "secretenv:format:file-enc@6"`
+/// Format: JSON with `protected.format = "secretenv:format:file-enc@7"`
 fn detect_file_enc(content: &str) -> Result<Option<InputFormat>> {
     if !content.trim_start().starts_with('{') {
         return Ok(None);
@@ -78,7 +78,7 @@ fn detect_file_enc(content: &str) -> Result<Option<InputFormat>> {
 
     if let Some(protected) = value.get("protected") {
         if let Some(format) = protected.get("format").and_then(|v| v.as_str()) {
-            if format == format::FILE_ENC_V6 {
+            if format == format::FILE_ENC_V7 {
                 return Ok(Some(InputFormat::FileEnc));
             }
         }

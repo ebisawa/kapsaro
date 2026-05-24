@@ -10,10 +10,10 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use ed25519_dalek::SigningKey;
 use secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocument;
-use secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6;
+use secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::encrypt::encrypt_file_content;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
 use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
@@ -39,7 +39,7 @@ fn test_encrypt_file_document() {
 
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
 
-    let signing_key = &key_ctx.signing_key;
+    let signing_key = key_ctx.signing_key();
 
     // Input content
     let content = b"Hello, World!";
@@ -60,7 +60,7 @@ fn test_encrypt_file_document() {
     let file_enc_doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
 
     // Verify structure
-    assert_eq!(file_enc_doc.protected.format, FILE_ENC_V6);
+    assert_eq!(file_enc_doc.protected.format, FILE_ENC_V7);
     assert_eq!(
         file_enc_doc.signature.signer_pub.protected.subject_handle,
         ALICE_MEMBER_HANDLE
@@ -72,8 +72,8 @@ fn test_encrypt_file_document() {
     let decrypted = decrypt_file_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -127,7 +127,7 @@ fn test_encrypt_kv_document_via_inner_api() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
 
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
-    let signing_key = &key_ctx.signing_key;
+    let signing_key = key_ctx.signing_key();
 
     let mut kv_map = HashMap::new();
     kv_map.insert(
@@ -148,7 +148,7 @@ fn test_encrypt_kv_document_via_inner_api() {
         encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
 
     // Verify structure
-    assert!(encrypted.starts_with(":SECRETENV_KV 8\n"));
+    assert!(encrypted.starts_with(":SECRETENV_KV 9\n"));
     assert!(encrypted.contains(":HEAD "));
     assert!(encrypted.contains(":WRAP "));
     assert!(encrypted.contains("DATABASE_URL "));
@@ -169,8 +169,8 @@ fn test_encrypt_kv_document_via_inner_api() {
     let decrypted_map_zeroizing = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         false,
     )
     .unwrap();

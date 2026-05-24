@@ -520,7 +520,6 @@ fn test_validate_kv_entry_rejects_non_canonical_variable_length_ct() {
 
 fn build_kv_entry_value(ct: &str) -> serde_json::Value {
     serde_json::json!({
-        "salt": B64URL_32,
         "nonce": B64URL_24,
         "ct": ct
     })
@@ -546,11 +545,11 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     serde_json::json!({
         "protected": {
-            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6,
+            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6,
+                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": { "aead": secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
@@ -586,11 +585,11 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let valid_file_enc_doc = serde_json::json!({
         "protected": {
-            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V6,
+            "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_ENC_V7,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V6,
+                    "format": secretenv_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V7,
                     "sid": sid,
                     "alg": {
                         "aead": secretenv_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305

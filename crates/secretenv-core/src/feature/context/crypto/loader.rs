@@ -15,6 +15,7 @@ use crate::feature::verify::private_key::verify_private_key_matches_public_key;
 use crate::feature::verify::public_key::{
     verify_public_key_with_attestation_context, KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
 };
+use crate::format::codec::base64_secret::decode_base64url_nopad_secret_32;
 use crate::io::keystore::helpers::resolve_kid;
 use crate::io::keystore::public_key_source::KeystorePublicKeySource;
 use crate::io::keystore::storage::{load_private_key, load_public_key};
@@ -22,7 +23,6 @@ use crate::io::ssh::backend::SignatureBackend;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm, PrivateKeyPlaintext};
 use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
-use crate::support::codec::base64_secret::decode_base64url_nopad_secret_32;
 use crate::support::kid::format_kid_display;
 use crate::{Error, Result};
 

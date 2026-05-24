@@ -63,56 +63,6 @@ pub trait AsHkdfSalt {
     fn as_hkdf_salt_bytes(&self) -> &[u8];
 }
 
-/// kv-enc HKDF salt (32 bytes)
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KvSalt([u8; 32]);
-
-impl KvSalt {
-    /// Create a new kv salt from 32 bytes
-    pub fn new(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-
-    /// Get the kv salt bytes
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl_fixed_size_type!(KvSalt, 32, "kv salt");
-
-impl AsHkdfSalt for KvSalt {
-    fn as_hkdf_salt_bytes(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-/// Fresh kv-enc salt generated for a single entry encryption.
-///
-/// ```compile_fail
-/// use secretenv_core::crypto::types::primitives::FreshKvSalt;
-/// let _salt = FreshKvSalt::new([0u8; 32]);
-/// ```
-#[derive(Debug)]
-pub struct FreshKvSalt(KvSalt);
-
-impl FreshKvSalt {
-    /// Generate a fresh kv salt from the OS CSPRNG.
-    pub(crate) fn generate() -> Result<Self> {
-        Ok(Self(KvSalt(fill_random_array::<32>()?)))
-    }
-
-    /// Get the salt bytes.
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.as_bytes()
-    }
-
-    /// Borrow as a kv salt for CEK derivation.
-    pub(crate) fn as_kv_salt(&self) -> &KvSalt {
-        &self.0
-    }
-}
-
 /// PrivateKey IKM salt (32 bytes)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateKeyIkmSalt([u8; 32]);

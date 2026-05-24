@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
+use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::envelope::signature::SigningContext;
 use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
@@ -21,7 +21,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
         "2020-01-01T00:00:00Z",
     );
     let expired_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let expired_kid = expired_key_ctx.kid.to_string();
+    let expired_kid = expired_key_ctx.kid().to_string();
     let keystore_root = temp_dir.path().join("keys");
     let expired_public_key =
         load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &expired_kid).unwrap();
@@ -34,7 +34,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
     save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
         .unwrap();
     let current_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let current_kid = current_key_ctx.kid.to_string();
+    let current_kid = current_key_ctx.kid().to_string();
     let current_public_key =
         load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &current_kid).unwrap();
     setup_trust_store_for_workspace(
@@ -50,7 +50,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
         &[ALICE_MEMBER_HANDLE.to_string()],
         &recipients,
         &SigningContext {
-            signing_key: &expired_key_ctx.signing_key,
+            signing_key: expired_key_ctx.signing_key(),
             signer_kid: &expired_kid,
             signer_pub: expired_public_key,
             debug: false,
@@ -84,7 +84,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
 fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid() {
     let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let valid_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let valid_kid = valid_key_ctx.kid.to_string();
+    let valid_kid = valid_key_ctx.kid().to_string();
     let keystore_root = temp_dir.path().join("keys");
     let valid_public_key =
         load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &valid_kid).unwrap();
@@ -101,7 +101,7 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         &[ALICE_MEMBER_HANDLE.to_string()],
         &recipients,
         &SigningContext {
-            signing_key: &valid_key_ctx.signing_key,
+            signing_key: valid_key_ctx.signing_key(),
             signer_kid: &valid_kid,
             signer_pub: valid_public_key,
             debug: false,
@@ -116,7 +116,7 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         "2020-01-01T00:00:00Z",
     );
     let expired_active_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    assert_ne!(expired_active_ctx.kid.to_string(), valid_kid);
+    assert_ne!(expired_active_ctx.kid().to_string(), valid_kid);
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
@@ -133,8 +133,8 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
         .unwrap();
 
         assert_eq!(
-            command.execution.key_ctx.kid.to_string(),
-            expired_active_ctx.kid.to_string()
+            command.execution.key_ctx.kid().to_string(),
+            expired_active_ctx.kid().to_string()
         );
     });
 }

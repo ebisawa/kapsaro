@@ -29,7 +29,7 @@ fn file_enc_detect_rejects_non_json() {
 
 #[test]
 fn kv_enc_detect_rejects_json() {
-    let result = KvEncContent::detect(r#"{"format":"secretenv:format:file-enc@6"}"#.to_string());
+    let result = KvEncContent::detect(r#"{"format":"secretenv:format:file-enc@7"}"#.to_string());
     assert!(result.is_err());
 }
 
@@ -62,7 +62,7 @@ fn new_unchecked_preserves_content() {
 
 #[test]
 fn file_enc_schema_error_includes_source_name() {
-    let content = r#"{"protected":{"format":"secretenv:format:file-enc@6"}}"#;
+    let content = r#"{"protected":{"format":"secretenv:format:file-enc@7"}}"#;
     let file = FileEncContent::new_unchecked_with_source(
         content.to_string(),
         ".secretenv/secrets/app.json",
@@ -110,7 +110,7 @@ fn kv_enc_schema_error_includes_source_name_and_token_context() {
     )
     .unwrap();
     let content = format!(
-        ":SECRETENV_KV 8\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
+        ":SECRETENV_KV 9\n:HEAD {head_token}\n:WRAP {wrap_token}\n:SIG {signature_token}\n"
     );
     let kv = KvEncContent::new_unchecked_with_source(content, ".secretenv/secrets/default.kvenc");
 

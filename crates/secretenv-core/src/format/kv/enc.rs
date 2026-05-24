@@ -5,7 +5,7 @@
 //!
 //! Line-oriented format:
 //! ```text
-//! :SECRETENV_KV 8
+//! :SECRETENV_KV 9
 //! :HEAD <base64url(jcs(KVFileHeader@7))>
 //! :WRAP <base64url(jcs(KVFileWrap@7))>
 //! KEY1 <base64url(jcs(EncryptedKVValue@7))>

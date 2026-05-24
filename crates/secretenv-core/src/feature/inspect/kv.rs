@@ -11,6 +11,7 @@ use crate::Result;
 
 use super::formatter::{
     append_line, append_removed_recipients, append_signer_info, append_wrap_item,
+    format_section_lines,
 };
 use super::{build_section, InspectOutput, InspectSection};
 
@@ -20,12 +21,6 @@ struct KvEncInspectionData {
     wrap_data: Option<(KvWrap, String)>,
     entries: Vec<(String, KvEntryValue, String)>,
     signature: Option<(KvFileSignature, String)>,
-}
-
-fn format_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
-    let mut out = String::new();
-    build(&mut out);
-    out.lines().map(ToOwned::to_owned).collect()
 }
 
 fn build_kv_enc_header_section(data: &KvEncInspectionData) -> Option<InspectSection> {
@@ -70,7 +65,6 @@ fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
         format_section_lines(|out| {
             for (i, (key, entry, _token)) in data.entries.iter().enumerate() {
                 append_line(out, format!("  [{}] Key: {}", i, key));
-                append_line(out, format!("      Salt:    {}", entry.salt));
                 append_line(out, format!("      Nonce:   {}", entry.nonce));
                 append_line(
                     out,

@@ -81,8 +81,7 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
 
     public_key.protected.kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE".to_string();
     let protected_jcs = jcs::normalize(&public_key.protected).unwrap();
-    public_key.signature =
-        sign_detached_bytes(&protected_jcs, &signing_key, algorithm::SIGNATURE_ED25519).unwrap();
+    public_key.signature = sign_detached_bytes(&protected_jcs, &signing_key).unwrap();
 
     let error = verify_public_key_with_attestation(&public_key, false)
         .unwrap_err()

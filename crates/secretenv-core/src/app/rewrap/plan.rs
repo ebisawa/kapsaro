@@ -1,21 +1,20 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::app::artifact::list_workspace_encrypted_artifacts;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
+use crate::app::trust::load_read_trust_context;
 use crate::app::trust::TrustApprovalCandidateBuilder;
-use crate::app::trust::{derive_self_sig_x, load_read_trust_context};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
 };
-use crate::format::kv::KV_ENC_EXTENSION;
 use crate::io::workspace::members::{
     ensure_workspace_member_kid_uniqueness, list_incoming_member_paths,
     load_verified_member_file_from_path,
 };
 use crate::model::public_key::PublicKey;
-use crate::support::fs::list_dir;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
@@ -42,7 +41,7 @@ pub fn build_rewrap_batch_plan(
         options,
         &workspace.root_path,
         &execution.member_handle,
-        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(execution.key_ctx.self_signature_public_key_x()),
         options.debug,
     )?
     .trust_ctx;
@@ -64,37 +63,13 @@ pub fn build_rewrap_batch_plan(
 #[path = "../../../tests/unit/internal/app_rewrap_plan_test.rs"]
 mod tests;
 
-fn find_encrypted_files_in_workspace(workspace_root: &Path) -> Result<Vec<PathBuf>> {
-    let secrets_dir = workspace_root.join("secrets");
-    let entries = list_dir(&secrets_dir)
-        .map_err(|e| Error::build_io_error(format!("Failed to read secrets directory: {}", e)))?;
-
-    let mut files: Vec<PathBuf> = entries
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| is_encrypted_file(path))
-        .collect();
-    files.sort();
-    Ok(files)
-}
-
-fn is_encrypted_file(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-    name.ends_with(KV_ENC_EXTENSION) || name.ends_with(".json") || name.ends_with(".encrypted")
-}
-
 fn collect_rewrap_target_paths(
     workspace_root: &Path,
     explicit_targets: &[PathBuf],
 ) -> Result<Vec<PathBuf>> {
     let mut paths = BTreeMap::new();
     let candidate_paths = if explicit_targets.is_empty() {
-        find_encrypted_files_in_workspace(workspace_root)?
+        list_workspace_encrypted_artifacts(workspace_root)?
     } else {
         explicit_targets.to_vec()
     };

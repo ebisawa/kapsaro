@@ -1,9 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Application-facing DTOs for key commands.
+//! Keeps CLI output data separate from reusable feature key generation data.
+
 use crate::app::verification::OnlineVerificationStatus;
 use crate::feature::key::portable_export::PortableExportOutput;
 use crate::feature::key::types as feature_key_types;
+use crate::model::public_key::PublicKey;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::support::secret::SecretString;
 
@@ -42,37 +46,26 @@ pub struct KeyInfo {
     pub format: String,
 }
 
-impl From<feature_key_types::KeyInfo> for KeyInfo {
-    fn from(value: feature_key_types::KeyInfo) -> Self {
-        Self {
-            kid: value.kid,
-            member_handle: value.member_handle,
-            created_at: value.created_at,
-            expires_at: value.expires_at,
-            active: value.active,
-            format: value.format,
-        }
-    }
-}
-
 pub struct KeyListResult {
     pub entries: Vec<(String, Vec<KeyInfo>)>,
     pub total_keys: usize,
 }
 
-impl From<feature_key_types::KeyListResult> for KeyListResult {
-    fn from(value: feature_key_types::KeyListResult) -> Self {
-        Self {
-            entries: value
-                .entries
-                .into_iter()
-                .map(|(member_handle, keys)| {
-                    (member_handle, keys.into_iter().map(Into::into).collect())
-                })
-                .collect(),
-            total_keys: value.total_keys,
-        }
-    }
+pub struct KeyActivateResult {
+    pub member_handle: String,
+    pub kid: String,
+}
+
+pub struct KeyRemoveResult {
+    pub member_handle: String,
+    pub kid: String,
+    pub was_active: bool,
+}
+
+pub struct KeyExportResult {
+    pub member_handle: String,
+    pub kid: String,
+    pub public_key: PublicKey,
 }
 
 pub struct KeyExportPrivateResult {

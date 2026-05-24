@@ -10,7 +10,7 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures, setup_test_workspace_from_fixtures,
 };
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_single_entry;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::kv::mutate::{
@@ -48,7 +48,7 @@ fn build_test_kv_enc_content(
     let verified_members = build_verified_recipient_keys(&members);
 
     let signing = SigningContext {
-        signing_key: &key_ctx.signing_key,
+        signing_key: key_ctx.signing_key(),
         signer_kid: kid,
         signer_pub,
         debug: false,
@@ -83,8 +83,8 @@ fn decrypt_kv_value(
     let value = decrypt_kv_single_entry(
         &verified,
         member_handle,
-        &key_ctx.kid,
-        &key_ctx.private_key,
+        key_ctx.kid(),
+        key_ctx.private_key(),
         key,
         false,
     )?;
@@ -131,7 +131,7 @@ fn unset_kv_entry(
     key: &str,
     ctx: &KvWriteContext<'_>,
 ) -> secretenv_core::Result<String> {
-    let workspace_root = ctx.key_ctx.workspace_path.as_deref().ok_or_else(|| {
+    let workspace_root = ctx.key_ctx.workspace_path().ok_or_else(|| {
         secretenv_core::Error::build_config_error(
             "Workspace is required for kv mutation".to_string(),
         )

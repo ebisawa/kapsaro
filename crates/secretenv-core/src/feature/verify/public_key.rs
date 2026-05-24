@@ -6,6 +6,7 @@
 use crate::feature::context::expiry::{
     check_key_expiry, enforce_recipient_key_not_expired, KeyExpiryStatus,
 };
+use crate::format::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
 use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
 use crate::io::ssh::verify::verify_attestation;
@@ -15,7 +16,6 @@ use crate::model::public_key::{
 };
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
-use crate::support::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
 use crate::support::display::sanitize_display_field;
 use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
 use crate::{Error, Result};

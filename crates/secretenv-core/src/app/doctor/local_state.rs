@@ -18,8 +18,10 @@ use crate::io::keystore::storage::{load_private_key, load_public_key};
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::io::workspace::members::load_active_member_files;
+use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
+use tracing::debug;
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
@@ -35,6 +37,13 @@ pub fn check_local_state(
 ) -> Result<LocalStateDiagnostics> {
     let base_dir = options.resolve_base_dir()?;
     let keystore_root = options.resolve_keystore_root()?;
+    if options.debug {
+        debug!(
+            "[DOCTOR] local state: start home={}, keystore_root={}",
+            format_path_relative_to_cwd(&base_dir),
+            format_path_relative_to_cwd(&keystore_root)
+        );
+    }
     let mut checks = vec![DoctorCheck::ok(
         "config.paths",
         DoctorCategory::LocalKeystore,
@@ -63,6 +72,9 @@ pub fn check_local_state(
 
     let owner = resolve_owner(options, member_handle);
     let Some(owner) = owner else {
+        if options.debug {
+            debug!("[DOCTOR] local state: member owner unresolved");
+        }
         checks.push(
             DoctorCheck::warn(
                 "keystore.member",
@@ -74,8 +86,11 @@ pub fn check_local_state(
         );
         return Ok(LocalStateDiagnostics { checks });
     };
+    if options.debug {
+        debug!("[DOCTOR] local state: member owner={owner}");
+    }
 
-    checks.extend(check_member_keystore(&keystore_root, &owner));
+    checks.extend(check_member_keystore(&keystore_root, &owner, options.debug));
     Ok(LocalStateDiagnostics { checks })
 }
 
@@ -97,6 +112,13 @@ pub fn check_trust_store(
     };
 
     let path = get_trust_store_file_path(&base_dir, &owner);
+    if options.debug {
+        debug!(
+            "[DOCTOR] trust store: inspect path={}, owner={}",
+            format_path_relative_to_cwd(&path),
+            owner
+        );
+    }
     if !path.exists() {
         return Ok(vec![DoctorCheck::warn(
             "trust_store.present",
@@ -120,6 +142,13 @@ pub fn check_trust_store(
             .with_next_action("follow the trust store recovery procedure")]);
         }
     };
+    if options.debug {
+        debug!(
+            "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
+            state.protected.known_keys.len(),
+            state.protected.recipient_sets.len()
+        );
+    }
 
     let mut checks = vec![DoctorCheck::ok(
         "trust_store.present",
@@ -155,7 +184,11 @@ fn resolve_owner(options: &CommonCommandOptions, member_handle: Option<&str>) ->
     resolve_required_member(options, None).ok()
 }
 
-fn check_member_keystore(keystore_root: &Path, member_handle: &str) -> Vec<DoctorCheck> {
+fn check_member_keystore(
+    keystore_root: &Path,
+    member_handle: &str,
+    debug_enabled: bool,
+) -> Vec<DoctorCheck> {
     let member_dir = keystore_root.join(member_handle);
     let mut checks = Vec::new();
     if !is_real_dir(&member_dir) {
@@ -204,6 +237,13 @@ fn check_member_keystore(keystore_root: &Path, member_handle: &str) -> Vec<Docto
             return checks;
         }
     };
+    if debug_enabled {
+        debug!(
+            "[DOCTOR] local state: inspect active key member_handle={}, kid={}",
+            member_handle,
+            format_kid_half_display_lossy(&active_kid)
+        );
+    }
 
     checks.push(DoctorCheck::ok(
         "keystore.active_key",

@@ -4,11 +4,11 @@
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::decrypt::decrypt_kv_document_with_context;
-use crate::feature::kv::document::KvDocumentDraft;
 use crate::feature::kv::query::decode_decrypted_kv_values;
 use crate::feature::recipient::resolve_verified_recipients;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
+use crate::format::kv::document::KvDocumentDraft;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvHeader;

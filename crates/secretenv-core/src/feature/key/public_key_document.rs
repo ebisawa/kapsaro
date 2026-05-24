@@ -5,6 +5,7 @@
 
 use crate::crypto::sign::sign_detached_bytes;
 use crate::feature::key::ssh_binding::SshBindingContext;
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
 use crate::io::ssh::protocol::constants as ssh;
@@ -13,7 +14,6 @@ use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, PublicKey,
 };
 use crate::model::wire::algorithm;
-use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::support::kid::format_kid_display;
 use crate::Result;
 use ed25519_dalek::SigningKey;
@@ -82,8 +82,7 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
             kid_display
         );
     }
-    let signature =
-        sign_detached_bytes(&protected_jcs, params.sig_sk, algorithm::SIGNATURE_ED25519)?;
+    let signature = sign_detached_bytes(&protected_jcs, params.sig_sk)?;
 
     Ok(PublicKey {
         protected,

@@ -7,9 +7,9 @@
 //! then JCS-normalizes and Base64url-encodes the result for portable transport.
 
 use crate::feature::key::protection::password_encryption::encrypt_private_key_with_password;
+use crate::format::codec::base64_secret::encode_base64url_nopad_secret_bytes;
 use crate::format::jcs;
 use crate::model::private_key::PrivateKeyPlaintext;
-use crate::support::codec::base64_secret::encode_base64url_nopad_secret_bytes;
 use crate::support::secret::SecretBytes;
 use crate::support::secret::SecretString;
 use crate::{Error, Result};

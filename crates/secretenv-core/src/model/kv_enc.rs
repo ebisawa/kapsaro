@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! KV v8 models.
+//! KV v9 models.
 
 pub mod document;
 pub mod entry;

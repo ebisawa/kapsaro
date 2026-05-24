@@ -4,6 +4,7 @@
 //! Artifact recipient set approval operations and integrity checks.
 
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::content::{EncContent, FileEncContent, KvEncContent};
 use crate::format::jcs;
 use crate::model::common::WrapItem;
@@ -13,7 +14,6 @@ use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord};
 use crate::model::wire::context::HASH_DOMAIN_RECIPIENT_SET_V2;
-use crate::support::codec::base64_public::encode_base64url_nopad;
 use crate::{Error, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};

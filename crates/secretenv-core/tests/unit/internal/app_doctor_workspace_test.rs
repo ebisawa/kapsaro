@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::app::doctor::types::DoctorStatus;
-use crate::app::doctor::{run_doctor, DoctorRequest};
+use crate::app::doctor::{execute_doctor_command, DoctorRequest};
 use tempfile::TempDir;
 
 #[test]
@@ -10,7 +10,7 @@ fn test_doctor_reports_missing_workspace_structure_as_fail() {
     let workspace = TempDir::new().unwrap();
     let home = TempDir::new().unwrap();
 
-    let report = run_doctor(DoctorRequest {
+    let report = execute_doctor_command(DoctorRequest {
         workspace: Some(workspace.path().to_path_buf()),
         home: Some(home.path().to_path_buf()),
         member_handle: Some("alice@example.com".to_string()),
@@ -34,7 +34,7 @@ fn test_doctor_reports_empty_incoming_as_ok() {
     std::fs::create_dir_all(workspace.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace.path().join("secrets")).unwrap();
 
-    let report = run_doctor(DoctorRequest {
+    let report = execute_doctor_command(DoctorRequest {
         workspace: Some(workspace.path().to_path_buf()),
         home: Some(home.path().to_path_buf()),
         member_handle: Some("alice@example.com".to_string()),

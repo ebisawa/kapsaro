@@ -1,13 +1,28 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::app::context::options::CommonCommandOptions;
+use crate::app::context::paths::load_optional_workspace;
+
 use super::resolution::resolve_optional_workspace;
 use super::*;
 use serial_test::serial;
 use std::fs;
 
 #[test]
-fn resolve_workspace_from_config_toml() {
+fn io_workspace_detection_resolution_does_not_import_config_resolution() {
+    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/io/workspace/detection/resolution.rs");
+    let source = fs::read_to_string(&source_path).unwrap();
+    assert!(
+        !source.contains("crate::config::resolution"),
+        "{} must not depend on config resolution",
+        source_path.display()
+    );
+}
+
+#[test]
+fn app_context_resolves_workspace_from_config_toml() {
     let tmp = tempfile::tempdir().unwrap();
     let ws_path = tmp.path().join(".secretenv");
     fs::create_dir_all(ws_path.join("members").join("active")).unwrap();
@@ -23,14 +38,15 @@ fn resolve_workspace_from_config_toml() {
             ("SECRETENV_WORKSPACE", None::<&str>),
         ],
         || {
-            let result = resolve_workspace(None).unwrap();
+            let options = command_options(Some(config_dir.path().to_path_buf()), None);
+            let result = load_optional_workspace(&options).unwrap().unwrap();
             assert_eq!(result.root_path, ws_path.canonicalize().unwrap());
         },
     );
 }
 
 #[test]
-fn resolve_workspace_config_invalid_path_shows_config_source() {
+fn app_context_config_invalid_path_shows_config_source() {
     let config_dir = tempfile::tempdir().unwrap();
     let config_content = "workspace = \"/nonexistent/path/.secretenv\"\n";
     fs::write(config_dir.path().join("config.toml"), config_content).unwrap();
@@ -41,7 +57,8 @@ fn resolve_workspace_config_invalid_path_shows_config_source() {
             ("SECRETENV_WORKSPACE", None::<&str>),
         ],
         || {
-            let result = resolve_workspace(None);
+            let options = command_options(Some(config_dir.path().to_path_buf()), None);
+            let result = load_optional_workspace(&options);
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
             assert!(
@@ -54,7 +71,7 @@ fn resolve_workspace_config_invalid_path_shows_config_source() {
 }
 
 #[test]
-fn resolve_workspace_env_var_takes_priority_over_config() {
+fn app_context_env_var_takes_priority_over_config() {
     let env_ws = tempfile::tempdir().unwrap();
     let env_ws_path = env_ws.path().join(".secretenv");
     fs::create_dir_all(env_ws_path.join("members").join("active")).unwrap();
@@ -75,14 +92,15 @@ fn resolve_workspace_env_var_takes_priority_over_config() {
             ("SECRETENV_WORKSPACE", Some(env_ws_path.to_str().unwrap())),
         ],
         || {
-            let result = resolve_workspace(None).unwrap();
+            let options = command_options(Some(config_dir.path().to_path_buf()), None);
+            let result = load_optional_workspace(&options).unwrap().unwrap();
             assert_eq!(result.root_path, env_ws_path.canonicalize().unwrap());
         },
     );
 }
 
 #[test]
-fn resolve_workspace_explicit_option_takes_priority_over_config() {
+fn app_context_explicit_option_takes_priority_over_config() {
     let explicit_ws = tempfile::tempdir().unwrap();
     let explicit_ws_path = explicit_ws.path().join(".secretenv");
     fs::create_dir_all(explicit_ws_path.join("members").join("active")).unwrap();
@@ -103,7 +121,11 @@ fn resolve_workspace_explicit_option_takes_priority_over_config() {
             ("SECRETENV_WORKSPACE", None::<&str>),
         ],
         || {
-            let result = resolve_workspace(Some(explicit_ws_path.clone())).unwrap();
+            let options = command_options(
+                Some(config_dir.path().to_path_buf()),
+                Some(explicit_ws_path.clone()),
+            );
+            let result = load_optional_workspace(&options).unwrap().unwrap();
             assert_eq!(result.root_path, explicit_ws_path.canonicalize().unwrap());
         },
     );
@@ -162,4 +184,19 @@ fn resolve_optional_workspace_preserves_explicit_path_errors() {
         .join("missing-workspace");
     let result = resolve_optional_workspace(Some(missing));
     assert!(result.is_err());
+}
+
+fn command_options(
+    home: Option<std::path::PathBuf>,
+    workspace: Option<std::path::PathBuf>,
+) -> CommonCommandOptions {
+    CommonCommandOptions {
+        home,
+        identity: None,
+        debug: false,
+        verbose: false,
+        workspace,
+        ssh_signing_method: None,
+        allow_expired_key: false,
+    }
 }

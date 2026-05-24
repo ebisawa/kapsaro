@@ -7,6 +7,7 @@ use crate::{Error, Result};
 use std::env;
 use std::path::{Path, PathBuf};
 
+use crate::config::types::ConfigKey;
 use crate::io::config::paths::get_global_config_path_from_base;
 use crate::io::config::store::load_config_file;
 
@@ -154,7 +155,11 @@ fn resolve_command_path(
 /// 1. Global config
 /// 2. Default value
 pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_command_path("ssh_keygen_command", "ssh-keygen", base_dir)
+    resolve_command_path(
+        ConfigKey::SshKeygenCommand.canonical_name(),
+        "ssh-keygen",
+        base_dir,
+    )
 }
 
 /// Resolve ssh-add command path from config
@@ -163,7 +168,11 @@ pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String>
 /// 1. Global config
 /// 2. Default value
 pub(crate) fn resolve_ssh_add_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_command_path("ssh_add_command", "ssh-add", base_dir)
+    resolve_command_path(
+        ConfigKey::SshAddCommand.canonical_name(),
+        "ssh-add",
+        base_dir,
+    )
 }
 
 #[cfg(test)]

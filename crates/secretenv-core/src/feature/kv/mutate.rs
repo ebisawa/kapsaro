@@ -7,6 +7,7 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::feature::envelope::wrap::{build_wraps_for_recipients, WrapFormat};
 use crate::feature::kv::error::build_key_not_found_error;
 use crate::format::content::KvEncContent;
+use crate::format::kv::document::KvDocumentDraft;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvWrap;
 use crate::model::kv_enc::line::KvEncLine;
@@ -139,7 +140,7 @@ fn rewrite_existing_kv_content<F>(
 ) -> Result<String>
 where
     F: FnOnce(
-        &mut crate::feature::kv::document::KvDocumentDraft,
+        &mut KvDocumentDraft,
         &super::rewrite_session::VerifiedKvRewriteSession<'_>,
         &crate::crypto::types::keys::MasterKey,
     ) -> Result<()>,

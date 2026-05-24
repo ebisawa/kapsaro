@@ -10,7 +10,6 @@ fn is_false(value: &bool) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct KvEntryValue {
-    pub salt: String,
     pub nonce: String,
     #[serde(rename = "ct")]
     pub ct: String,

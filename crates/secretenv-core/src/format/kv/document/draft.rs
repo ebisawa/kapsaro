@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unsigned KV document state and serialization helpers.
+//! Unsigned KV document state before artifact signature assembly.
+//! Preserves raw WRAP tokens unless a domain operation mutates WRAP data.
 
 use crate::format::kv::enc::writer::build_unsigned_kv_document;
 use crate::format::token::TokenCodec;

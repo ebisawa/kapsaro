@@ -83,7 +83,7 @@ fn save_signed_trust_store_with_recipient_sets(
         ],
         recipient_sets,
     };
-    let document = sign_trust_store(&protected, &key_ctx.signing_key, &key_ctx.kid).unwrap();
+    let document = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
     let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     save_trust_store(&path, &document).unwrap();
 }

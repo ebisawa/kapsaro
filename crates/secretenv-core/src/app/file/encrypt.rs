@@ -7,20 +7,17 @@ use crate::app::context::execution::{
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::review::{
-    review_generated_artifact_recipient_set, GeneratedArtifactRecipientSetReview,
-    TrustExecutionContext,
+    review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
 };
 use crate::app::trust::{
-    derive_self_sig_x, ArtifactRecipientTrustOutcome, CommandCapability, EncryptPolicy,
-    RecipientTrustOutcome, TrustContext, WriteRecipientTrustPlan,
+    ArtifactRecipientTrustOutcome, CommandCapability, EncryptPolicy, RecipientTrustOutcome,
+    TrustContext, WriteRecipientTrustPlan,
 };
-use crate::feature::context::expiry::enforce_key_not_expired_for_signing;
+use crate::feature::context::crypto::build_signing_context;
 use crate::feature::encrypt::encrypt_file_content;
-use crate::feature::envelope::signature::build_signing_context;
-use crate::feature::trust::recipient_sets::file_content_recipient_evidence;
 #[cfg(test)]
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
-use crate::format::content::FileEncContent;
+use crate::format::content::{EncContent, FileEncContent};
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::{Error, Result};
@@ -47,7 +44,7 @@ pub fn resolve_encrypt_file_command(
         options,
         &workspace_root.root_path,
         &execution.member_handle,
-        Some(derive_self_sig_x(&execution.key_ctx.signing_key)),
+        Some(execution.key_ctx.self_signature_public_key_x()),
         options.debug,
     )?;
     let workspace_members = trust_plan.workspace_members();
@@ -85,23 +82,18 @@ where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
     let encrypted = execute_encrypt_file_command(command, debug)?;
-    let content = FileEncContent::new_unchecked(encrypted.clone());
-    let evidence = file_content_recipient_evidence(&content)?;
+    let content = EncContent::FileEnc(FileEncContent::new_unchecked(encrypted.clone()));
     let mut warnings = Vec::new();
-    review_generated_artifact_recipient_set(
-        TrustExecutionContext {
+    review_artifact_output_recipient_set(
+        ArtifactOutputRecipientSetReviewInput {
             options,
             execution: &command.execution,
-            warnings: &[],
-        },
-        GeneratedArtifactRecipientSetReview {
             trust_ctx: &command.trust_context,
-            signer_kid: command.execution.key_ctx.kid.as_str(),
-            recipient_set: &evidence.recipient_set,
+            content: &content,
             capability: CommandCapability::Encrypt,
             context_label: "encrypt output member set",
         },
-        &mut |new_warnings| warnings.extend_from_slice(new_warnings),
+        &mut warnings,
         confirm_recipient_set,
     )?;
     Ok((encrypted, warnings))
@@ -114,7 +106,6 @@ pub fn evaluate_encrypt_output_recipient_set(
 ) -> Result<ArtifactRecipientTrustOutcome> {
     crate::app::trust::evaluate_output_recipient_set_trust(
         &command.trust_context,
-        command.execution.key_ctx.kid.as_str(),
         recipient_set,
         CommandCapability::Encrypt,
     )
@@ -126,7 +117,7 @@ fn resolve_encrypt_execution(
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<ExecutionContext> {
     let execution = resolve_write_execution(options, member_handle, ssh_ctx)?;
-    enforce_key_not_expired_for_signing(&execution.key_ctx.expires_at)?;
+    execution.key_ctx.enforce_signing_key_not_expired()?;
     Ok(execution)
 }
 

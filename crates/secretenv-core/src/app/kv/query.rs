@@ -8,6 +8,7 @@ use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::{
     evaluate_read_artifact_trust, ReadTrustPolicy, RecipientTrustOutcome, SignerTrustOutcome,
 };
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
@@ -16,10 +17,10 @@ use crate::feature::kv::query::{
 };
 use crate::feature::trust::recipient_sets::kv_recipient_evidence;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
-use crate::model::common::WrapSet;
 use crate::support::secret::SecretEnvMap;
 use crate::support::warning::push_unique_warning;
 use crate::Result;
+use tracing::debug;
 
 use super::session::{KvCommandSession, KvFileSession};
 use super::types::{KvDisclosedEntry, KvReadMode, KvReadResult};
@@ -54,15 +55,13 @@ where
 {
     let mut command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
-    let disclosed = list_kv_keys_with_disclosed(&file.kv_content())?
+    let kv_content = file.kv_content();
+    let disclosed = list_kv_keys_with_disclosed(&kv_content)?
         .into_iter()
         .map(Into::into)
         .collect();
-    let verified_doc = verify_kv_content_for_operation(
-        &file.kv_content(),
-        options.debug,
-        options.allow_expired_key,
-    )?;
+    let verified_doc =
+        verify_kv_content_for_operation(&kv_content, options.debug, options.allow_expired_key)?;
     for warning in &verified_doc.proof().warnings {
         push_unique_warning(&mut command.warnings, warning.clone());
     }
@@ -133,13 +132,19 @@ pub fn execute_kv_read_command(
     })
 }
 
-pub fn execute_kv_env_command(command: &KvReadCommand) -> Result<SecretEnvMap> {
+pub fn execute_kv_env_command(
+    command: &KvReadCommand,
+    debug_enabled: bool,
+) -> Result<SecretEnvMap> {
+    if debug_enabled {
+        debug!("[KV] env command: decrypt values");
+    }
     decode_decrypted_kv_values(
         decrypt_kv_document_with_context(
             &command.verified_doc,
             &command.execution.member_handle,
             &command.execution.key_ctx,
-            false,
+            debug_enabled,
         )?
         .value,
     )

@@ -6,12 +6,14 @@
 use super::{append_operational_signer_expiry_warning, SignatureVerificationReport};
 use crate::feature::envelope::signature::verify_file_signature;
 use crate::format::content::FileEncContent;
-use crate::model::common::validate_wrap_items;
+use crate::format::wrap::validate_wrap_items;
 use crate::model::file_enc::FileEncDocument;
+use crate::model::file_enc::FileEncDocumentProtected;
 use crate::model::file_enc::VerifiedFileEncDocument;
+use crate::model::signature::ArtifactSignature;
 use crate::Result;
 
-use super::key_loader::load_verifying_key_from_signature;
+use super::key_loader::{load_verifying_key_from_signature, SignatureVerificationKey};
 use super::report::build_signature_verification_report;
 use super::signature::verify_signature_with_loaded_key;
 
@@ -44,7 +46,7 @@ pub fn verify_file_document_report(
     let protected = doc.extract_protected_for_signing();
     build_signature_verification_report(
         load_verifying_key_from_signature(signature, debug),
-        |loaded| verify_file_signature(protected, &loaded.verifying_key, signature, debug),
+        |loaded| verify_loaded_file_signature(protected, signature, loaded, debug),
     )
 }
 
@@ -56,10 +58,19 @@ pub fn verify_file_document(doc: &FileEncDocument, debug: bool) -> Result<Verifi
     let signature = &doc.signature;
     let protected = doc.extract_protected_for_signing();
     let proof = verify_signature_with_loaded_key(signature, debug, |loaded| {
-        verify_file_signature(protected, &loaded.verifying_key, signature, debug)
+        verify_loaded_file_signature(protected, signature, loaded, debug)
     })?;
 
     Ok(VerifiedFileEncDocument::new(doc.clone(), proof))
+}
+
+fn verify_loaded_file_signature(
+    protected: &FileEncDocumentProtected,
+    signature: &ArtifactSignature,
+    loaded: &SignatureVerificationKey,
+    debug: bool,
+) -> Result<()> {
+    verify_file_signature(protected, &loaded.verifying_key, signature, debug)
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@
 //! Public base64/base64url helpers.
 //!
 //! ```compile_fail
-//! use secretenv_core::support::codec::base64_public::encode_base64url_nopad;
+//! use secretenv_core::format::codec::base64_public::encode_base64url_nopad;
 //! use secretenv_core::support::secret::SecretArray;
 //!
 //! let secret = SecretArray::new([0u8; 32]);

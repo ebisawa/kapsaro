@@ -3,9 +3,9 @@
 
 //! Token decoding implementation.
 
+use crate::format::codec::base64_public::decode_base64url_nopad_token;
 use crate::format::token::TokenCodec;
 use crate::format::FormatError;
-use crate::support::codec::base64_public::decode_base64url_nopad_token;
 use crate::Result;
 
 /// Decode a token's raw bytes.

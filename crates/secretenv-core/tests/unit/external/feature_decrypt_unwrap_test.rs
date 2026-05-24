@@ -18,10 +18,10 @@ use secretenv_core::cli_api::test_support::domain::verification::{
     SignatureVerificationProof, VerifyingKeySource,
 };
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::envelope::binding::build_file_wrap_info;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 use secretenv_core::cli_api::test_support::operations::envelope::unwrap::{
     unwrap_master_key, unwrap_master_key_for_file,
 };
@@ -79,7 +79,7 @@ fn encrypt_file_for_test(
         &recipient_handles,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -122,7 +122,7 @@ fn encrypt_kv_for_test(
         &kv_map,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub,
             debug: false,
@@ -151,7 +151,7 @@ fn test_decrypt_file_selects_wrap_by_kid() {
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         &kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     );
 
@@ -169,7 +169,7 @@ fn test_decrypt_file_reports_missing_wrap_kid() {
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         nonexistent_kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     );
 
@@ -194,7 +194,7 @@ fn test_decrypt_file_rejects_recipient_handle_mismatch() {
         &verified_doc,
         different_member_handle,
         &kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     );
 
@@ -227,7 +227,7 @@ fn test_decrypt_kv_document_rh_mismatch_fails() {
         &verified_doc,
         different_member_handle,
         &kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     );
 
@@ -275,7 +275,7 @@ fn test_decrypt_kv_entries_empty() {
         &kv_map,
         &verified_members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub,
             debug: false,
@@ -291,7 +291,7 @@ fn test_decrypt_kv_entries_empty() {
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         &kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -312,7 +312,7 @@ fn test_decrypt_kv_entries_multiple() {
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         &kid,
-        &key_ctx.private_key,
+        key_ctx.private_key(),
         false,
     )
     .unwrap();
@@ -451,11 +451,12 @@ fn test_unwrap_master_key_from_wrap_item() {
         "SHA256:test",
     );
     let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
-    let wrap_set = secretenv_core::cli_api::test_support::domain::common::WrapSet::parse(
-        &[wrap_item],
-        "Document",
-    )
-    .unwrap();
+    let wrap_set =
+        secretenv_core::cli_api::test_support::operations::envelope::wrap_set::WrapSet::parse(
+            &[wrap_item],
+            "Document",
+        )
+        .unwrap();
     let parsed_wrap_item = wrap_set
         .find_by_kid_for_member(&public_key.protected.kid, ALICE_MEMBER_HANDLE)
         .unwrap();

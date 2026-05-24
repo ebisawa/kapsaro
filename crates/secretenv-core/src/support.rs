@@ -3,7 +3,6 @@
 
 //! Shared support utilities.
 
-pub(crate) mod codec;
 pub(crate) mod display;
 pub(crate) mod fs;
 pub(crate) mod json_limits;

@@ -16,8 +16,12 @@ pub mod test_utils;
 // Key generation helpers (re-exported from test_utils to avoid duplicate module)
 pub use test_utils::keygen_helpers;
 
+#[path = "unit/external/api_artifact_load_policy_test.rs"]
+pub mod api_artifact_load_policy_test;
 #[path = "unit/external/api_trust_store_mutation_test.rs"]
 pub mod api_trust_store_mutation_test;
+#[path = "unit/external/app_key_manage_test.rs"]
+pub mod app_key_manage_test;
 #[path = "unit/external/config_types_test.rs"]
 pub mod config_types_test;
 #[path = "unit/external/crypto_kdf_test.rs"]
@@ -66,8 +70,6 @@ pub mod feature_inspect_test;
 pub mod feature_inspect_verification_test;
 #[path = "unit/external/feature_key_generate_test.rs"]
 pub mod feature_key_generate_test;
-#[path = "unit/external/feature_key_manage_test.rs"]
-pub mod feature_key_manage_test;
 #[path = "unit/external/feature_key_portable_export_test.rs"]
 pub mod feature_key_portable_export_test;
 #[path = "unit/external/feature_key_protection_password_encryption_test.rs"]

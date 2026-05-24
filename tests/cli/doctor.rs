@@ -27,6 +27,29 @@ fn test_doctor_missing_trust_store_warns_but_exits_success() {
 }
 
 #[test]
+fn test_doctor_debug_logs_local_state_without_password_env_name() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+
+    cmd()
+        .arg("doctor")
+        .arg("--debug")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env("RUST_LOG", "warn")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[DOCTOR] local state: start"))
+        .stdout(predicate::str::contains(
+            "[DOCTOR] local state: inspect active key",
+        ))
+        .stdout(predicate::str::contains("SECRETENV_KEY_PASSWORD").not());
+}
+
+#[test]
 fn test_doctor_json_missing_trust_store_warns_but_exits_success() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
 

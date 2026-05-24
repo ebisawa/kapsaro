@@ -108,10 +108,7 @@ fn test_format_recipient_set_review_lines_uses_user_facing_copy_and_member_handl
         &[wrap_item("alice@example.com", &current_kid)],
     )
     .unwrap();
-    let review = ArtifactRecipientSetReview {
-        current,
-        approved: None,
-    };
+    let review = ArtifactRecipientSetReview::new(current, None);
 
     let rendered = format_recipient_set_review_lines(&review).join("\n");
 
@@ -146,10 +143,8 @@ fn test_format_recipient_set_review_lines_shows_colored_diff_for_changed_set() {
         &[wrap_item("alice@example.com", &current_kid)],
     )
     .unwrap();
-    let review = ArtifactRecipientSetReview {
-        current,
-        approved: Some(recipient_set_record(&approved_kid, None)),
-    };
+    let review =
+        ArtifactRecipientSetReview::new(current, Some(recipient_set_record(&approved_kid, None)));
 
     let rendered = format_recipient_set_review_lines(&review).join("\n");
     let plain = strip_ansi_codes(&rendered);
@@ -179,10 +174,8 @@ fn test_format_recipient_set_review_lines_keeps_diff_readable_without_color() {
         &[wrap_item("alice@example.com", &current_kid)],
     )
     .unwrap();
-    let review = ArtifactRecipientSetReview {
-        current,
-        approved: Some(recipient_set_record(&approved_kid, None)),
-    };
+    let review =
+        ArtifactRecipientSetReview::new(current, Some(recipient_set_record(&approved_kid, None)));
 
     let rendered = format_recipient_set_review_lines(&review).join("\n");
 

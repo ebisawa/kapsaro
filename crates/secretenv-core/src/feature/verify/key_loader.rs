@@ -29,17 +29,8 @@ pub fn load_verifying_key_from_signature(
     signature: &ArtifactSignature,
     debug: bool,
 ) -> Result<SignatureVerificationKey> {
-    load_from_signer_pub(signature, &signature.signer_pub, debug)
-}
-
-/// Load verifying key from embedded signer_pub.
-fn load_from_signer_pub(
-    signature: &ArtifactSignature,
-    signer_pub: &PublicKey,
-    debug: bool,
-) -> Result<SignatureVerificationKey> {
     build_loaded_verifying_key(
-        signer_pub,
+        &signature.signer_pub,
         &signature.kid,
         VerifyingKeySource::SignerPubEmbedded,
         "signer_pub embedded",

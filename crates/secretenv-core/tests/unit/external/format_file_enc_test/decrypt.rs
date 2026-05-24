@@ -11,9 +11,9 @@ use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocu
 use secretenv_core::cli_api::test_support::domain::verification::{
     SignatureVerificationProof, VerifyingKeySource,
 };
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
 use secretenv_core::cli_api::test_support::operations::encrypt::file as file_enc;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
 
 #[test]
 fn test_decrypt_file_roundtrip() {

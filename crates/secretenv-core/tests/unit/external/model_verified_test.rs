@@ -14,13 +14,13 @@ use secretenv_core::cli_api::test_support::domain::verification::{
 fn test_verified_new() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocumentProtected {
-            format: "secretenv:format:file-enc@6".to_string(),
+            format: "secretenv:format:file-enc@7".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv_core::cli_api::test_support::domain::file_enc::FilePayload {
                 protected: secretenv_core::cli_api::test_support::domain::file_enc::FilePayloadHeader {
-                    format: "secretenv:format:file-enc:payload@6".to_string(),
+                    format: "secretenv:format:file-enc:payload@7".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv_core::cli_api::test_support::domain::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),
@@ -60,13 +60,13 @@ fn test_verified_new() {
 fn test_verified_into_inner() {
     let file_enc_doc = FileEncDocument {
         protected: secretenv_core::cli_api::test_support::domain::file_enc::FileEncDocumentProtected {
-            format: "secretenv:format:file-enc@6".to_string(),
+            format: "secretenv:format:file-enc@7".to_string(),
             sid: uuid::Uuid::new_v4(),
             wrap: vec![],
             removed_recipients: None,
             payload: secretenv_core::cli_api::test_support::domain::file_enc::FilePayload {
                 protected: secretenv_core::cli_api::test_support::domain::file_enc::FilePayloadHeader {
-                    format: "secretenv:format:file-enc:payload@6".to_string(),
+                    format: "secretenv:format:file-enc:payload@7".to_string(),
                     sid: uuid::Uuid::new_v4(),
                     alg: secretenv_core::cli_api::test_support::domain::file_enc::FileEncAlgorithm {
                         aead: "xchacha20-poly1305".to_string(),

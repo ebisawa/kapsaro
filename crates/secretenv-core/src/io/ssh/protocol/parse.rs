@@ -4,8 +4,8 @@
 //! SSH public key parsing helpers (pure).
 
 use super::constants::KEY_TYPE_ED25519;
+use crate::format::codec::base64_public::decode_base64_standard;
 use crate::io::ssh::SshError;
-use crate::support::codec::base64_public::decode_base64_standard;
 use crate::Result;
 
 /// Decode the base64 key blob from an OpenSSH public key line.

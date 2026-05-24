@@ -23,12 +23,6 @@ pub fn build_member_document_view(
     public_key: PublicKey,
     verification_warnings: Vec<String>,
 ) -> Result<MemberDocumentView> {
-    let verification_status = if verification_warnings.is_empty() {
-        MemberDocumentStatus::Valid
-    } else {
-        MemberDocumentStatus::Expired
-    };
-
     let ssh_attestation_fingerprint =
         build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_)?;
 
@@ -40,19 +34,31 @@ pub fn build_member_document_view(
         kem_curve: public_key.protected.identity.keys.kem.crv.clone(),
         sig_curve: public_key.protected.identity.keys.sig.crv.clone(),
         ssh_attestation_fingerprint,
-        github_claim: public_key
-            .protected
-            .binding_claims
-            .as_ref()
-            .and_then(|claims| claims.github_account.as_ref())
-            .map(|account| MemberGithubClaim {
-                id: account.id,
-                login: account.login.clone(),
-            }),
-        verification_status,
+        github_claim: build_member_github_claim(&public_key),
+        verification_status: build_member_document_status(&verification_warnings),
         verification_warnings,
         document: serialize_to_json_value(&public_key)?,
     })
+}
+
+fn build_member_document_status(verification_warnings: &[String]) -> MemberDocumentStatus {
+    if verification_warnings.is_empty() {
+        MemberDocumentStatus::Valid
+    } else {
+        MemberDocumentStatus::Expired
+    }
+}
+
+fn build_member_github_claim(public_key: &PublicKey) -> Option<MemberGithubClaim> {
+    public_key
+        .protected
+        .binding_claims
+        .as_ref()
+        .and_then(|claims| claims.github_account.as_ref())
+        .map(|account| MemberGithubClaim {
+            id: account.id,
+            login: account.login.clone(),
+        })
 }
 
 pub fn build_member_verification_result(

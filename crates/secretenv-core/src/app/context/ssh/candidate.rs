@@ -1,14 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! SSH public key candidate resolution for app command contexts.
+
+use super::resolution::{build_not_found_error, resolve_signing_method, resolve_ssh_commands};
+use super::SshSigningParams;
 use crate::config::resolution::ssh_key::{
     resolve_ssh_key_candidate, resolve_ssh_key_descriptor, SshKeySource,
 };
 use crate::config::types::SshSigningMethod;
-use crate::feature::context::ssh::params::SshSigningParams;
-use crate::feature::context::ssh::resolution::{
-    build_not_found_error, resolve_signing_method, resolve_ssh_commands,
-};
 use crate::io::ssh::external::add::DefaultSshAdd;
 use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::external::pubkey::{
@@ -17,7 +17,7 @@ use crate::io::ssh::external::pubkey::{
 use crate::io::ssh::protocol::SshKeyDescriptor;
 use crate::Result;
 
-pub(crate) fn resolve_ssh_key_candidates(
+pub(super) fn resolve_ssh_key_candidates(
     params: &SshSigningParams,
 ) -> Result<Vec<SshKeyCandidate>> {
     let base_dir = params.base_dir.as_deref();

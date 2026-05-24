@@ -9,13 +9,13 @@ use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt, XChaChaNonce};
 use crate::feature::key::protection::binding::build_private_key_aad;
+use crate::format::codec::base64_public::{
+    decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
+};
 use crate::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use crate::model::wire::{algorithm, format};
-use crate::support::codec::base64_public::{
-    decode_base64url_nopad_array, decode_base64url_nopad_ciphertext, encode_base64url_nopad,
-};
 use crate::support::kid::format_kid_half_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;

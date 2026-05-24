@@ -13,7 +13,7 @@ use secretenv_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
 use secretenv_core::cli_api::test_support::domain::kv_enc::header::KvWrap;
 use secretenv_core::cli_api::test_support::domain::kv_enc::line::KvEncLine;
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
-use secretenv_core::cli_api::test_support::operations::envelope::signature::SigningContext;
+use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::rewrap::{rewrap_content, RewrapRequest};
 use secretenv_core::cli_api::test_support::storage::keystore::storage::{
@@ -46,19 +46,27 @@ fn setup_workspace_members(temp_dir: &TempDir, member_handle: &str, kid: &str) {
 
 fn single_rewrap_request<'a>(
     key_ctx: &'a CryptoContext,
-    workspace_root: Option<&'a std::path::Path>,
+    workspace_root: Option<&std::path::Path>,
     rotate_key: bool,
     clear_disclosure_history: bool,
     debug: bool,
 ) -> RewrapRequest<'a> {
+    let target_members = workspace_root
+        .map(|workspace_root| {
+            let public_keys =
+                secretenv_core::cli_api::test_support::storage::workspace::members::load_active_member_files(
+                    workspace_root,
+                )
+                .unwrap();
+            build_verified_recipient_keys(&public_keys)
+        })
+        .unwrap_or_default();
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
         key_ctx,
-        workspace_root,
-        target_members: None,
+        target_members,
         rotate_key,
         clear_disclosure_history,
-
         debug,
     }
 }
@@ -80,7 +88,7 @@ fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) 
         &kv_map,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
@@ -106,7 +114,7 @@ fn encrypt_kv_for_alice_and_bob(
         &kv_map,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub,
             debug: false,
@@ -210,7 +218,7 @@ fn test_rewrap_kv_succeeds_when_only_old_self_wrap_exists() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
 
     let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let old_kid = old_key_ctx.kid.to_string();
+    let old_kid = old_key_ctx.kid().to_string();
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &old_kid);
     let encrypted = encrypt_kv_for_alice(&temp_dir, &old_kid, &old_key_ctx);
 
@@ -223,7 +231,7 @@ fn test_rewrap_kv_succeeds_when_only_old_self_wrap_exists() {
         .unwrap();
 
     let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
-    let new_kid = new_key_ctx.kid.to_string();
+    let new_kid = new_key_ctx.kid().to_string();
     assert_ne!(new_kid, old_kid);
 
     let request = single_rewrap_request(&new_key_ctx, Some(temp_dir.path()), false, false, false);
@@ -513,7 +521,7 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
         &kv_map,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &alice_kid,
             signer_pub: alice_pub,
             debug: false,
@@ -561,7 +569,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
         &kv_map,
         &members,
         &SigningContext {
-            signing_key: &key_ctx.signing_key,
+            signing_key: key_ctx.signing_key(),
             signer_kid: &alice_kid,
             signer_pub: alice_pub,
             debug: false,

@@ -5,17 +5,20 @@
 
 use crate::format::schema::validator::{load_embedded_validator, SchemaTarget, Validator};
 use crate::format::token::decode_token_bytes;
-use crate::model::common::validate_wrap_items;
+use crate::format::wrap::validate_wrap_items;
 use crate::model::file_enc::FileEncDocument;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
 use crate::model::signature::ArtifactSignature;
+use crate::model::trust_store::TrustStoreDocument;
 use crate::support::json_limits::validate_json_limits;
 use crate::{Error, Result};
-use serde::de::DeserializeOwned;
-use serde_json::Value;
+use serde::de::{DeserializeOwned, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde_json::{Map, Number, Value};
+use std::collections::BTreeSet;
+use std::fmt;
 
 type ValidateJsonFn = fn(&Validator, &Value) -> Result<()>;
 
@@ -58,6 +61,16 @@ pub fn parse_file_enc_str(content: &str, source_name: &str) -> Result<FileEncDoc
         Validator::validate_file_enc_document,
     )?;
     validate_file_enc_limits(doc)
+}
+
+pub fn parse_trust_store_str(content: &str, source_name: &str) -> Result<TrustStoreDocument> {
+    parse_json_document_str(
+        content,
+        source_name,
+        "TrustStoreDocument",
+        SchemaTarget::LocalTrust,
+        Validator::validate_trust_store,
+    )
 }
 
 pub fn parse_kv_head_token(token: &str) -> Result<KvHeader> {
@@ -169,12 +182,119 @@ where
 }
 
 fn parse_json_value(bytes: &[u8], source_name: &str, kind: &str) -> Result<Value> {
-    serde_json::from_slice(bytes).map_err(|e| {
+    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
+    let value = UniqueJsonValue
+        .deserialize(&mut deserializer)
+        .map_err(|e| {
+            Error::build_parse_error_with_source(
+                format!("Failed to parse {} from {}: {}", kind, source_name, e),
+                e,
+            )
+        })?;
+    deserializer.end().map_err(|e| {
         Error::build_parse_error_with_source(
             format!("Failed to parse {} from {}: {}", kind, source_name, e),
             e,
         )
-    })
+    })?;
+    Ok(value)
+}
+
+struct UniqueJsonValue;
+
+impl<'de> DeserializeSeed<'de> for UniqueJsonValue {
+    type Value = Value;
+
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(UniqueJsonVisitor)
+    }
+}
+
+struct UniqueJsonVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonVisitor {
+    type Value = Value;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a JSON value without duplicate object member names")
+    }
+
+    fn visit_bool<E>(self, value: bool) -> std::result::Result<Self::Value, E> {
+        Ok(Value::Bool(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E> {
+        Ok(Value::Number(Number::from(value)))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E> {
+        Ok(Value::Number(Number::from(value)))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Number::from_f64(value)
+            .map(Value::Number)
+            .ok_or_else(|| E::custom("invalid JSON number"))
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E> {
+        Ok(Value::String(value.to_string()))
+    }
+
+    fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E> {
+        Ok(Value::String(value))
+    }
+
+    fn visit_none<E>(self) -> std::result::Result<Self::Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_unit<E>(self) -> std::result::Result<Self::Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        UniqueJsonValue.deserialize(deserializer)
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element_seed(UniqueJsonValue)? {
+            values.push(value);
+        }
+        Ok(Value::Array(values))
+    }
+
+    fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut names = BTreeSet::new();
+        let mut object = Map::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !names.insert(key.clone()) {
+                return Err(serde::de::Error::custom(format!(
+                    "duplicate JSON member name '{}'",
+                    key
+                )));
+            }
+            let value = map.next_value_seed(UniqueJsonValue)?;
+            object.insert(key, value);
+        }
+        Ok(Value::Object(object))
+    }
 }
 
 fn deserialize_json_value<T>(value: Value, source_name: &str, kind: &str) -> Result<T>

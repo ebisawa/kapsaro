@@ -1,21 +1,20 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::app::artifact::{
+    artifact_recipient_evidence, list_workspace_encrypted_artifacts, load_artifact_content,
+    verify_artifact_signature_for_operation,
+};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
 use crate::feature::member::add::add_member_from_file;
-use crate::feature::verify::file::verify_file_content_for_operation;
-use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::EncContent;
-use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
-use crate::format::kv::KV_ENC_EXTENSION;
 use crate::io::workspace::members::remove_member as remove_member_file;
-use crate::support::fs::{list_dir, load_text_with_limit};
-use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
+use tracing::debug;
 
 use super::types::{MemberRemovalReport, MemberRemoveResult};
 
@@ -43,8 +42,13 @@ pub fn evaluate_member_removal(
 
     let mut affected_artifacts = Vec::new();
     let mut warnings = Vec::new();
-    for artifact_path in find_encrypted_artifacts(&workspace.root_path)? {
-        match artifact_contains_member(&artifact_path, member_handle, options.allow_expired_key) {
+    for artifact_path in list_workspace_encrypted_artifacts(&workspace.root_path)? {
+        match artifact_contains_member(
+            &artifact_path,
+            member_handle,
+            options.allow_expired_key,
+            options.debug,
+        ) {
             Ok(result) => {
                 warnings.extend(result.warnings);
                 if result.contains_member {
@@ -74,29 +78,6 @@ pub fn remove_member(
     })
 }
 
-fn find_encrypted_artifacts(workspace_root: &Path) -> Result<Vec<PathBuf>> {
-    let secrets_dir = workspace_root.join("secrets");
-    let entries = list_dir(&secrets_dir)?;
-    let mut paths = entries
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| is_encrypted_artifact(path))
-        .collect::<Vec<_>>();
-    paths.sort();
-    Ok(paths)
-}
-
-fn is_encrypted_artifact(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
-
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-    name.ends_with(KV_ENC_EXTENSION) || name.ends_with(".json") || name.ends_with(".encrypted")
-}
-
 struct ArtifactMemberScan {
     contains_member: bool,
     warnings: Vec<String>,
@@ -106,22 +87,29 @@ fn artifact_contains_member(
     path: &Path,
     member_handle: &str,
     allow_expired_key: bool,
+    debug_enabled: bool,
 ) -> Result<ArtifactMemberScan> {
-    let content = load_text_with_limit(
-        path,
-        resolve_encrypted_artifact_read_limit(path),
-        "encrypted artifact",
-    )?;
-    let result = verified_artifact_recipients(
-        content,
-        &format_path_relative_to_cwd(path),
-        allow_expired_key,
-    )?;
+    if debug_enabled {
+        debug!(
+            "[MEMBER] remove scan: verify artifact path={}",
+            format_path_relative_to_cwd(path)
+        );
+    }
+    let content = load_artifact_content(path)?;
+    let result = verified_artifact_recipients(&content, allow_expired_key, debug_enabled)?;
+    let contains_member = result
+        .recipients
+        .iter()
+        .any(|recipient| recipient == member_handle);
+    if debug_enabled {
+        debug!(
+            "[MEMBER] remove scan: artifact recipients={} contains_target={}",
+            result.recipients.len(),
+            contains_member
+        );
+    }
     Ok(ArtifactMemberScan {
-        contains_member: result
-            .recipients
-            .iter()
-            .any(|recipient| recipient == member_handle),
+        contains_member,
         warnings: result.warnings,
     })
 }
@@ -132,27 +120,23 @@ struct VerifiedArtifactRecipients {
 }
 
 fn verified_artifact_recipients(
-    content: String,
-    source_name: &str,
+    content: &EncContent,
     allow_expired_key: bool,
+    debug_enabled: bool,
 ) -> Result<VerifiedArtifactRecipients> {
-    match EncContent::detect_with_source(content, source_name)? {
-        EncContent::FileEnc(file_content) => {
-            let verified =
-                verify_file_content_for_operation(&file_content, false, allow_expired_key)?;
-            Ok(VerifiedArtifactRecipients {
-                recipients: verified.document().recipients(),
-                warnings: verified.proof.warnings,
-            })
-        }
-        EncContent::KvEnc(kv_content) => {
-            let verified = verify_kv_content_for_operation(&kv_content, false, allow_expired_key)?;
-            Ok(VerifiedArtifactRecipients {
-                recipients: extract_recipients_from_wrap(verified.document().wrap()),
-                warnings: verified.proof.warnings,
-            })
-        }
+    if debug_enabled {
+        let artifact_type = match content {
+            EncContent::FileEnc(_) => "file",
+            EncContent::KvEnc(_) => "kv",
+        };
+        debug!("[MEMBER] remove scan: detected {artifact_type} artifact");
     }
+    let proof = verify_artifact_signature_for_operation(content, debug_enabled, allow_expired_key)?;
+    let evidence = artifact_recipient_evidence(content)?;
+    Ok(VerifiedArtifactRecipients {
+        recipients: evidence.recipient_handles,
+        warnings: proof.warnings,
+    })
 }
 
 fn format_artifact_warning(path: &Path, error: &Error) -> String {

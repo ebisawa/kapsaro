@@ -7,7 +7,7 @@
 
 use crate::test_utils::setup_test_workspace;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use secretenv_core::cli_api::test_support::operations::member::verification::verify_member;
+use secretenv_core::cli_api::test_support::operations::member::verification::verify_member_files;
 use secretenv_core::cli_api::test_support::storage::workspace::members::{
     load_active_member_files, load_member_file, remove_member,
 };
@@ -76,48 +76,43 @@ fn test_member_remove() {
 async fn test_verify_member_all() {
     let (_temp_dir, workspace_dir) =
         setup_test_workspace(&[ALICE_MEMBER_HANDLE, "bob@example.com"]);
+    let member_files = vec![
+        active_member_path(&workspace_dir, ALICE_MEMBER_HANDLE),
+        active_member_path(&workspace_dir, "bob@example.com"),
+    ];
 
-    let result = verify_member(&workspace_dir, &[], false).await;
+    let result = verify_member_files(&member_files, false).await;
 
-    assert_eq!(result.unwrap().len(), 2);
+    assert_eq!(result.len(), 2);
 }
 
 #[tokio::test]
-async fn test_verify_member_all_excludes_incoming() {
+async fn test_verify_member_files_accepts_selected_member_file() {
     let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-    let alice_active = workspace_dir
-        .join("members")
-        .join("active")
-        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
-    let alice_incoming = workspace_dir
-        .join("members")
-        .join("incoming")
-        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
-    std::fs::rename(&alice_active, &alice_incoming).unwrap();
+    let member_files = vec![active_member_path(&workspace_dir, ALICE_MEMBER_HANDLE)];
 
-    let result = verify_member(&workspace_dir, &[], false).await;
+    let result = verify_member_files(&member_files, false).await;
 
-    assert!(result.unwrap().is_empty());
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].member_handle, ALICE_MEMBER_HANDLE);
 }
 
 #[tokio::test]
-async fn test_verify_member_explicit_incoming_fails() {
+async fn test_verify_member_files_reports_offline_verification_failure() {
     let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
-    let alice_active = workspace_dir
+    let alice_active = active_member_path(&workspace_dir, ALICE_MEMBER_HANDLE);
+    std::fs::write(&alice_active, b"{").unwrap();
+
+    let result = verify_member_files(&[alice_active], false).await;
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].member_handle, ALICE_MEMBER_HANDLE);
+    assert!(result[0].message.contains("Offline verification failed:"));
+}
+
+fn active_member_path(workspace_dir: &std::path::Path, member_handle: &str) -> std::path::PathBuf {
+    workspace_dir
         .join("members")
         .join("active")
-        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
-    let alice_incoming = workspace_dir
-        .join("members")
-        .join("incoming")
-        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
-    std::fs::rename(&alice_active, &alice_incoming).unwrap();
-
-    let result = verify_member(&workspace_dir, &[ALICE_MEMBER_HANDLE.to_string()], false).await;
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("not found in active/"));
+        .join(format!("{}.json", member_handle))
 }

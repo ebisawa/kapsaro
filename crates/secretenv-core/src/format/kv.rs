@@ -13,8 +13,8 @@ pub mod enc;
 
 /// Header line prefix with colon: `:SECRETENV_KV `.
 pub const HEADER_LINE_PREFIX: &str = ":SECRETENV_KV ";
-/// Header line for v8: `:SECRETENV_KV 8`.
-pub const HEADER_LINE_V8: &str = ":SECRETENV_KV 8";
+/// Header line for v9: `:SECRETENV_KV 9`.
+pub const HEADER_LINE_V9: &str = ":SECRETENV_KV 9";
 
 /// File extension for kv-enc files.
 pub const KV_ENC_EXTENSION: &str = ".kvenc";

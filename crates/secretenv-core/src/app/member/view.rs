@@ -24,15 +24,15 @@ pub fn build_member_document_view(
     verification_warnings: Vec<String>,
 ) -> Result<MemberDocumentView> {
     let ssh_attestation_fingerprint =
-        build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_)?;
+        build_sha256_fingerprint(&public_key.protected.attestation.pub_)?;
 
     Ok(MemberDocumentView {
         member_handle: public_key.protected.subject_handle.clone(),
         kid: public_key.protected.kid.clone(),
         expires_at: public_key.protected.expires_at.clone(),
         created_at: public_key.protected.created_at.clone(),
-        kem_curve: public_key.protected.identity.keys.kem.crv.clone(),
-        sig_curve: public_key.protected.identity.keys.sig.crv.clone(),
+        kem_curve: public_key.protected.keys.kem.crv.clone(),
+        sig_curve: public_key.protected.keys.sig.crv.clone(),
         ssh_attestation_fingerprint,
         github_claim: build_member_github_claim(&public_key),
         verification_status: build_member_document_status(&verification_warnings),

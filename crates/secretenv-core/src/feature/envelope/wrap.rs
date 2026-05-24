@@ -48,7 +48,7 @@ fn build_wrap_item(
     let public_key = member.document();
     let info = info_builder(sid, &public_key.protected.kid)?;
     let kem_pk_bytes: [u8; 32] =
-        decode_base64url_nopad_array(&public_key.protected.identity.keys.kem.x, "KEM public key")?;
+        decode_base64url_nopad_array(&public_key.protected.keys.kem.x, "KEM public key")?;
     let kem_pk = X25519PublicKey::from_bytes(kem_pk_bytes);
 
     if debug {

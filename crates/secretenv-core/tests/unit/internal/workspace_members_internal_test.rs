@@ -237,20 +237,18 @@ fn build_public_key_json(member_handle: &str, kid: &str) -> String {
     format!(
         r#"{{
   "protected": {{
-    "format": "secretenv:format:public-key@6",
+    "format": "secretenv:format:public-key@7",
     "subject_handle": "{member_handle}",
     "kid": "{kid}",
-    "identity": {{
-      "keys": {{
-        "kem": {{"kty":"OKP","crv":"X25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}},
-        "sig": {{"kty":"OKP","crv":"Ed25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}
-      }},
-      "attestation": {{
-        "method": "ssh-sign",
-        "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-      }}
-    }},
+  "keys": {{
+    "kem": {{"kty":"OKP","crv":"X25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}},
+    "sig": {{"kty":"OKP","crv":"Ed25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}
+  }},
+  "attestation": {{
+    "method": "ssh-sign",
+    "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+  }},
     "created_at": "2026-01-01T00:00:00Z",
     "expires_at": "2099-01-01T00:00:00Z"
   }},

@@ -28,7 +28,7 @@ fn build_dummy_signer_pub(
     kid: &str,
 ) -> secretenv_core::cli_api::test_support::domain::public_key::PublicKey {
     use secretenv_core::cli_api::test_support::domain::public_key::{
-        Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+        Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
     };
     use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 
@@ -39,29 +39,27 @@ fn build_dummy_signer_pub(
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: "test@example.com".to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: b64url(kem_pk.as_bytes()),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: b64url(vk.as_bytes()),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: b64url(kem_pk.as_bytes()),
                 },
-                attestation: Attestation {
-                    method: "ssh-sign".to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
-                    sig: b64url(&[0u8; 64]),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: b64url(vk.as_bytes()),
                 },
             },
             binding_claims: None,
+            attestation: Attestation {
+                method: "ssh-sign".to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
+                sig: b64url(&[0u8; 64]),
+            },
             expires_at: "2099-01-01T00:00:00Z".to_string(),
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
         },
@@ -75,7 +73,7 @@ fn build_verified_recipient_key_for_test(
 ) -> VerifiedRecipientKey {
     use ed25519_dalek::Signer;
     use secretenv_core::cli_api::test_support::domain::public_key::{
-        Attestation, AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey,
+        Attestation, AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey,
         PublicKey, PublicKeyProtected, VerifiedPublicKeyAttested,
     };
     use secretenv_core::cli_api::test_support::domain::verification::{
@@ -90,29 +88,27 @@ fn build_verified_recipient_key_for_test(
 
     let test_pk = PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: "test@example.com".to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: b64url(kem_pk.as_bytes()),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: b64url(vk.as_bytes()),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: b64url(kem_pk.as_bytes()),
                 },
-                attestation: Attestation {
-                    method: "test".to_string(),
-                    pub_: "test".to_string(),
-                    sig: b64url(b"test"),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: b64url(vk.as_bytes()),
                 },
             },
             binding_claims: None,
+            attestation: Attestation {
+                method: "test".to_string(),
+                pub_: "test".to_string(),
+                sig: b64url(b"test"),
+            },
             expires_at: "2099-01-01T00:00:00Z".to_string(),
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
         },
@@ -124,7 +120,7 @@ fn build_verified_recipient_key_for_test(
         ssh_pub: "test".to_string(),
         verified_at: None,
     };
-    let attested = AttestedIdentity::new(test_pk.protected.identity.clone(), proof);
+    let attested = AttestedKeyStatement::new(test_pk.protected.keys.clone(), proof);
     let self_sig_proof = SelfSignatureProof::new();
     let attested_key = VerifiedPublicKeyAttested::new(test_pk, self_sig_proof, attested);
     VerifiedRecipientKey::new(attested_key, ExpiryProof::new())

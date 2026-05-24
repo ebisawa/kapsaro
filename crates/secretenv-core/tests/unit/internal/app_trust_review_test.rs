@@ -16,7 +16,8 @@ use crate::app_test_utils::{build_test_command_options, build_test_execution_con
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::public_key::{
-    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    PublicKeyParts,
 };
 use crate::test_utils::{
     kid as test_kid, member_handle as test_member_handle, setup_test_keystore_from_fixtures,
@@ -60,33 +61,31 @@ fn build_public_key(member_handle: &str, kid: &str, github_binding_configured: b
         }),
     });
 
-    PublicKey::new(
-        member_handle.to_string(),
-        kid.to_string(),
-        Identity {
-            keys: IdentityKeys {
-                kem: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: "X25519".to_string(),
-                    x: "kem-x".to_string(),
-                },
-                sig: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: "Ed25519".to_string(),
-                    x: "sig-x".to_string(),
-                },
+    PublicKey::new(PublicKeyParts {
+        subject_handle: member_handle.to_string(),
+        kid: kid.to_string(),
+        keys: IdentityKeys {
+            kem: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: "X25519".to_string(),
+                x: "kem-x".to_string(),
             },
-            attestation: Attestation {
-                method: "ssh".to_string(),
-                pub_: "ssh-ed25519 AAAA test".to_string(),
-                sig: "sig".to_string(),
+            sig: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: "Ed25519".to_string(),
+                x: "sig-x".to_string(),
             },
         },
         binding_claims,
-        "2030-01-01T00:00:00Z".to_string(),
-        None,
-        "signature".to_string(),
-    )
+        attestation: Attestation {
+            method: "ssh".to_string(),
+            pub_: "ssh-ed25519 AAAA test".to_string(),
+            sig: "sig".to_string(),
+        },
+        expires_at: "2030-01-01T00:00:00Z".to_string(),
+        created_at: None,
+        signature: "signature".to_string(),
+    })
 }
 
 fn build_verified_candidate(candidate: &TrustApprovalCandidate) -> TrustApprovalCandidate {

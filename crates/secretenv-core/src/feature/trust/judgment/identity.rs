@@ -39,7 +39,7 @@ impl TrustIdentity {
             public_key.protected.subject_handle.clone(),
             public_key.protected.kid.clone(),
             decode_base64url_nopad_array(
-                &public_key.protected.identity.keys.sig.x,
+                &public_key.protected.keys.sig.x,
                 "signer Ed25519 public key",
             )?,
         )

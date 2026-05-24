@@ -10,7 +10,7 @@ use secretenv_core::cli_api::test_support::domain::verification::{
 use secretenv_core::cli_api::test_support::domain::{
     private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext},
     public_key::{
-        Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+        Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
         VerifiedRecipientKey,
     },
 };
@@ -75,11 +75,10 @@ pub(super) fn recipients_and_members(
 pub(super) fn build_test_public_key(member_handle: &str, kid: &str, kem_pub: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
+                            keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
@@ -98,7 +97,6 @@ pub(super) fn build_test_public_key(member_handle: &str, kid: &str, kem_pub: &st
                     pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
                     sig: "dummy".to_string(),
                 },
-            },
             binding_claims: None,
             expires_at: "2030-01-01T00:00:00Z".to_string(),
             created_at: Some("2025-01-01T00:00:00Z".to_string()),

@@ -9,11 +9,12 @@ use crate::feature::key::protection::encryption::{
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::feature::key::types::KeyGenerationResult;
 use crate::feature::key::{material, public_key_document};
+use crate::format::public_key::AttestationBodyInput;
 use crate::io::keystore::active::set_active_kid;
 use crate::io::keystore::resolver::KeystoreResolver;
 use crate::io::keystore::storage::{find_member_by_kid, save_key_pair_atomic};
 use crate::model::private_key::PrivateKey;
-use crate::model::public_key::{GithubAccount, Identity, PublicKey};
+use crate::model::public_key::{GithubAccount, PublicKey};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::support::kid::format_kid_display_lossy;
 use crate::Result;
@@ -148,20 +149,27 @@ fn build_public_key_document(
     key_material: &material::KeypairMaterial,
     ssh_binding: &SshBindingContext,
 ) -> Result<PublicKey> {
-    let identity_keys = material::build_identity_keys(&key_material.kem_pk, &key_material.sig_pk)?;
-    let attestation = public_key_document::build_attestation(ssh_binding, &identity_keys)?;
-    let identity = Identity {
-        keys: identity_keys,
-        attestation,
-    };
+    let keys = material::build_identity_keys(&key_material.kem_pk, &key_material.sig_pk)?;
+    let binding_claims = public_key_document::build_binding_claims(request.github_account.clone());
+    let attestation = public_key_document::build_attestation(
+        ssh_binding,
+        &AttestationBodyInput {
+            subject_handle: request.member_handle,
+            keys: &keys,
+            binding_claims: binding_claims.as_ref(),
+            created_at: Some(request.created_at),
+            expires_at: request.expires_at,
+        },
+    )?;
     public_key_document::build_public_key(&public_key_document::PublicKeyDocumentParams {
         member_handle: request.member_handle,
-        identity,
+        keys,
+        binding_claims,
+        attestation,
         created_at: request.created_at,
         expires_at: request.expires_at,
         sig_sk: &key_material.sig_sk,
         debug: request.debug,
-        github_account: request.github_account.clone(),
     })
 }
 

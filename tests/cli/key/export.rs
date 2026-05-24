@@ -86,7 +86,7 @@ fn test_key_export_explicit_kid() {
     );
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V6,
+        format::PUBLIC_KEY_V7,
         "Exported format should be v6"
     );
 
@@ -136,7 +136,7 @@ fn test_key_export_active() {
 
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V6,
+        format::PUBLIC_KEY_V7,
         "Exported format should be v6"
     );
 

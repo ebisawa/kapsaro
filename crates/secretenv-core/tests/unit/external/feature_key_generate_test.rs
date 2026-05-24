@@ -13,7 +13,7 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use secretenv_core::cli_api::test_support::domain::public_key::{
-    Attestation, GithubAccount, Identity,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys,
 };
 use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
 use secretenv_core::cli_api::test_support::domain::wire::jwk::{CURVE_ED25519, CURVE_X25519};
@@ -103,13 +103,13 @@ fn test_build_private_key_plaintext_key_consistency() {
 
     // The public key's x field in kem should match the private key's x field in kem
     assert_eq!(
-        plaintext.keys.kem.x, public_key.protected.identity.keys.kem.x,
+        plaintext.keys.kem.x, public_key.protected.keys.kem.x,
         "KEM public key in private and public key documents must match"
     );
 
     // The public key's x field in sig should match the private key's x field in sig
     assert_eq!(
-        plaintext.keys.sig.x, public_key.protected.identity.keys.sig.x,
+        plaintext.keys.sig.x, public_key.protected.keys.sig.x,
         "Signing public key in private and public key documents must match"
     );
 }
@@ -129,37 +129,38 @@ fn build_protected_without_kid_value(
     value
 }
 
-fn generate_test_identity() -> (Identity, ed25519_dalek::SigningKey) {
+fn generate_test_key_statement() -> (IdentityKeys, Attestation, ed25519_dalek::SigningKey) {
     let keypairs = generate_keypairs().unwrap();
-    let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
-    let identity = Identity {
-        keys: identity_keys,
-        attestation: Attestation {
-            method: ATTESTATION_METHOD_SSH_SIGN.to_string(),
-            pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
-            sig: "dummy".to_string(),
-        },
+    let keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
+    let attestation = Attestation {
+        method: ATTESTATION_METHOD_SSH_SIGN.to_string(),
+        pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
+        sig: "dummy".to_string(),
     };
-    (identity, keypairs.sig_sk.clone())
+    (keys, attestation, keypairs.sig_sk.clone())
 }
 
 #[test]
 fn test_build_public_key_with_github_account() {
-    let (identity, sig_sk) = generate_test_identity();
+    let (keys, attestation, sig_sk) = generate_test_key_statement();
 
     let github_account = GithubAccount {
         id: 12345,
         login: "testuser".to_string(),
     };
+    let binding_claims = Some(BindingClaims {
+        github_account: Some(github_account),
+    });
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle: ALICE_MEMBER_HANDLE,
-        identity,
+        keys,
+        binding_claims,
+        attestation,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk,
         debug: false,
-        github_account: Some(github_account),
     })
     .unwrap();
 
@@ -178,16 +179,17 @@ fn test_build_public_key_with_github_account() {
 
 #[test]
 fn test_build_public_key_without_github_account() {
-    let (identity, sig_sk) = generate_test_identity();
+    let (keys, attestation, sig_sk) = generate_test_key_statement();
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle: ALICE_MEMBER_HANDLE,
-        identity,
+        keys,
+        binding_claims: None,
+        attestation,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk,
         debug: false,
-        github_account: None,
     })
     .unwrap();
 
@@ -203,16 +205,17 @@ fn test_build_public_key_without_github_account() {
 
 #[test]
 fn test_build_public_key_self_signature_valid_base64url() {
-    let (identity, sig_sk) = generate_test_identity();
+    let (keys, attestation, sig_sk) = generate_test_key_statement();
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle: ALICE_MEMBER_HANDLE,
-        identity,
+        keys,
+        binding_claims: None,
+        attestation,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk,
         debug: false,
-        github_account: None,
     })
     .unwrap();
 
@@ -231,29 +234,35 @@ fn test_build_public_key_self_signature_valid_base64url() {
 
 #[test]
 fn test_build_public_key_changes_kid_when_github_account_changes() {
-    let (identity_with_claim, sig_sk_with_claim) = generate_test_identity();
+    let (keys_with_claim, attestation_with_claim, sig_sk_with_claim) =
+        generate_test_key_statement();
     let with_claim = build_public_key(&PublicKeyDocumentParams {
         member_handle: ALICE_MEMBER_HANDLE,
-        identity: identity_with_claim,
+        keys: keys_with_claim,
+        binding_claims: Some(BindingClaims {
+            github_account: Some(GithubAccount {
+                id: 12345,
+                login: "testuser".to_string(),
+            }),
+        }),
+        attestation: attestation_with_claim,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk_with_claim,
         debug: false,
-        github_account: Some(GithubAccount {
-            id: 12345,
-            login: "testuser".to_string(),
-        }),
     })
     .unwrap();
-    let (identity_without_claim, sig_sk_without_claim) = generate_test_identity();
+    let (keys_without_claim, attestation_without_claim, sig_sk_without_claim) =
+        generate_test_key_statement();
     let without_claim = build_public_key(&PublicKeyDocumentParams {
         member_handle: ALICE_MEMBER_HANDLE,
-        identity: identity_without_claim,
+        keys: keys_without_claim,
+        binding_claims: None,
+        attestation: attestation_without_claim,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk_without_claim,
         debug: false,
-        github_account: None,
     })
     .unwrap();
 
@@ -523,25 +532,22 @@ fn test_build_public_key() {
         let keypairs = generate_keypairs().unwrap();
         (temp_dir, keypairs)
     };
-    let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
-
-    let identity = Identity {
-        keys: identity_keys,
-        attestation: Attestation {
-            method: ATTESTATION_METHOD_SSH_SIGN.to_string(),
-            pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
-            sig: "dummy".to_string(),
-        },
+    let keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
+    let attestation = Attestation {
+        method: ATTESTATION_METHOD_SSH_SIGN.to_string(),
+        pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
+        sig: "dummy".to_string(),
     };
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle: ALICE_MEMBER_HANDLE,
-        identity,
+        keys,
+        binding_claims: None,
+        attestation,
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &keypairs.sig_sk,
         debug: false,
-        github_account: None,
     })
     .unwrap();
 

@@ -3,35 +3,33 @@
 
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use secretenv_core::cli_api::test_support::domain::public_key::{
-    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
-    PublicKeyProtected,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    PublicKeyParts, PublicKeyProtected,
 };
 
 #[test]
 fn test_public_key_deserialization() {
     let json_str = r#"{
         "protected": {
-            "format": "secretenv:format:public-key@6",
+            "format": "secretenv:format:public-key@7",
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "identity": {
-                "keys": {
-                    "kem": {
-                        "kty": "OKP",
-                        "crv": "X25519",
-                        "x": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU"
-                    },
-                    "sig": {
-                        "kty": "OKP",
-                        "crv": "Ed25519",
-                        "x": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU"
-                    }
+            "keys": {
+                "kem": {
+                    "kty": "OKP",
+                    "crv": "X25519",
+                    "x": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU"
                 },
-                "attestation": {
-                    "method": "ssh-sign",
-                    "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPf...",
-                    "sig": "c2lnbmF0dXJl"
+                "sig": {
+                    "kty": "OKP",
+                    "crv": "Ed25519",
+                    "x": "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU"
                 }
+            },
+            "attestation": {
+                "method": "ssh-sign",
+                "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPf...",
+                "sig": "c2lnbmF0dXJl"
             },
             "expires_at": "2025-01-15T00:00:00Z",
             "created_at": "2024-01-15T00:00:00Z"
@@ -43,17 +41,17 @@ fn test_public_key_deserialization() {
 
     assert_eq!(
         pk.protected.format,
-        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6
+        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7
     );
     assert_eq!(pk.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(pk.protected.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
-    assert_eq!(pk.protected.identity.keys.kem.kty, "OKP");
+    assert_eq!(pk.protected.keys.kem.kty, "OKP");
     assert_eq!(
-        pk.protected.identity.keys.kem.crv,
+        pk.protected.keys.kem.crv,
         secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
     );
     assert_eq!(
-        pk.protected.identity.attestation.method,
+        pk.protected.attestation.method,
         secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
     );
 }
@@ -62,31 +60,29 @@ fn test_public_key_deserialization() {
 fn test_public_key_serialization() {
     let pk = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7.to_string(),
             subject_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
-                        x: "dGVzdGtleQ".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
-                        x: "dGVzdGtleQ".to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
+                    x: "dGVzdGtleQ".to_string(),
                 },
-                attestation: Attestation {
-                    method:
-                        secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                            .to_string(),
-                    pub_: "ssh-ed25519 AAAAC3...".to_string(),
-                    sig: "c2lnbmF0dXJl".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
+                    x: "dGVzdGtleQ".to_string(),
                 },
             },
             binding_claims: None,
+            attestation: Attestation {
+                method:
+                    secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                        .to_string(),
+                pub_: "ssh-ed25519 AAAAC3...".to_string(),
+                sig: "c2lnbmF0dXJl".to_string(),
+            },
             expires_at: "2025-01-15T00:00:00Z".to_string(),
             created_at: Some("2024-01-15T00:00:00Z".to_string()),
         },
@@ -97,7 +93,7 @@ fn test_public_key_serialization() {
 
     assert_eq!(
         json_value["protected"]["format"],
-        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6
+        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7
     );
     assert_eq!(json_value["protected"]["subject_handle"], BOB_MEMBER_HANDLE);
     assert_eq!(
@@ -112,36 +108,36 @@ fn test_public_key_new_preserves_binding_claims() {
         id: 42,
         login: "alice".to_string(),
     };
-    let public_key = PublicKey::new(
-        TEST_MEMBER_HANDLE.to_string(),
-        "6Q4T8N1R5K3VM7PH2C9XD4BJ8F6AW2YE".to_string(),
-        Identity {
-            keys: IdentityKeys {
-                kem: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
-                    x: "a2VtcHVi".to_string(),
-                },
-                sig: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
-                    x: "c2lncHVi".to_string(),
-                },
-            },
-            attestation: Attestation {
-                method: secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+    let public_key = PublicKey::new(PublicKeyParts {
+        subject_handle: TEST_MEMBER_HANDLE.to_string(),
+        kid: "6Q4T8N1R5K3VM7PH2C9XD4BJ8F6AW2YE".to_string(),
+        keys: IdentityKeys {
+            kem: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
                     .to_string(),
-                pub_: "ssh-ed25519 AAAAC3...".to_string(),
-                sig: "YXR0ZXN0c2ln".to_string(),
+                x: "a2VtcHVi".to_string(),
+            },
+            sig: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                    .to_string(),
+                x: "c2lncHVi".to_string(),
             },
         },
-        Some(BindingClaims {
+        binding_claims: Some(BindingClaims {
             github_account: Some(github_account.clone()),
         }),
-        "2025-12-31T23:59:59Z".to_string(),
-        Some("2024-01-01T00:00:00Z".to_string()),
-        "c2ln".to_string(),
-    );
+        attestation: Attestation {
+            method: secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                .to_string(),
+            pub_: "ssh-ed25519 AAAAC3...".to_string(),
+            sig: "YXR0ZXN0c2ln".to_string(),
+        },
+        expires_at: "2025-12-31T23:59:59Z".to_string(),
+        created_at: Some("2024-01-01T00:00:00Z".to_string()),
+        signature: "c2ln".to_string(),
+    });
 
     assert_eq!(
         public_key

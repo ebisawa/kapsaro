@@ -48,19 +48,17 @@ fn minimal_public_key_json(kid: &str, member_handle: &str) -> String {
     format!(
         r#"{{
         "protected": {{
-            "format": "secretenv:format:public-key@6",
+            "format": "secretenv:format:public-key@7",
             "subject_handle": "{}",
             "kid": "{}",
-            "identity": {{
-                "keys": {{
-                    "kem": {{ "kty": "OKP", "crv": "X25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }},
-                    "sig": {{ "kty": "OKP", "crv": "Ed25519", "x": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" }}
-                }},
-                "attestation": {{
-                    "method": "ssh",
-                    "pub": "ssh-ed25519 test",
-                    "sig": "test"
-                }}
+            "keys": {{
+                "kem": {{ "kty": "OKP", "crv": "X25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }},
+                "sig": {{ "kty": "OKP", "crv": "Ed25519", "x": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" }}
+            }},
+            "attestation": {{
+                "method": "ssh",
+                "pub": "ssh-ed25519 test",
+                "sig": "test"
             }},
             "expires_at": "2030-01-01T00:00:00Z"
         }},

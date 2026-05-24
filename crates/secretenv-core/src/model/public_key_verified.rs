@@ -3,7 +3,7 @@
 
 //! Verified wrappers for public-key-related domain models.
 
-use super::public_key::{BindingClaims, Identity, PublicKey};
+use super::public_key::{BindingClaims, IdentityKeys, PublicKey};
 use super::verification::{BindingVerificationProof, ExpiryProof, SelfSignatureProof};
 use ed25519_dalek::VerifyingKey;
 
@@ -45,19 +45,19 @@ pub struct AttestationProof {
     pub verified_at: Option<String>,
 }
 
-/// Identity verified to have a valid SSH attestation.
+/// Public key statement verified to have a valid SSH attestation.
 #[derive(Debug, Clone)]
-pub struct AttestedIdentity {
-    /// The attested identity (keys + attestation payload)
-    pub identity: Identity,
+pub struct AttestedKeyStatement {
+    /// Public keys covered by the attested statement.
+    pub keys: IdentityKeys,
     /// Proof of attestation verification
     pub proof: AttestationProof,
 }
 
-impl AttestedIdentity {
-    /// Create a new AttestedIdentity.
-    pub fn new(identity: Identity, proof: AttestationProof) -> Self {
-        Self { identity, proof }
+impl AttestedKeyStatement {
+    /// Create a new AttestedKeyStatement.
+    pub fn new(keys: IdentityKeys, proof: AttestationProof) -> Self {
+        Self { keys, proof }
     }
 }
 
@@ -68,20 +68,20 @@ pub struct VerifiedPublicKeyAttested {
     pub document: PublicKey,
     /// Proof of self-signature verification
     pub self_signature_proof: SelfSignatureProof,
-    /// Attestation-verified identity.
-    pub identity: AttestedIdentity,
+    /// Attestation-verified key statement.
+    pub statement: AttestedKeyStatement,
 }
 impl VerifiedPublicKeyAttested {
     /// Create a new VerifiedPublicKeyAttested.
     pub fn new(
         document: PublicKey,
         self_signature_proof: SelfSignatureProof,
-        identity: AttestedIdentity,
+        statement: AttestedKeyStatement,
     ) -> Self {
         Self {
             document,
             self_signature_proof,
-            identity,
+            statement,
         }
     }
 
@@ -90,9 +90,9 @@ impl VerifiedPublicKeyAttested {
         &self.document
     }
 
-    /// Get a reference to the attestation-verified identity.
-    pub fn identity(&self) -> &AttestedIdentity {
-        &self.identity
+    /// Get a reference to the attestation-verified key statement.
+    pub fn statement(&self) -> &AttestedKeyStatement {
+        &self.statement
     }
 }
 
@@ -117,9 +117,9 @@ impl VerifiedSigningPublicKey {
         self.attested.document()
     }
 
-    /// Get a reference to the attestation-verified identity.
-    pub fn identity(&self) -> &AttestedIdentity {
-        self.attested.identity()
+    /// Get a reference to the attestation-verified key statement.
+    pub fn statement(&self) -> &AttestedKeyStatement {
+        self.attested.statement()
     }
 
     /// Get a reference to the attested key wrapper.
@@ -159,9 +159,9 @@ impl VerifiedRecipientKey {
         self.verified.document()
     }
 
-    /// Get a reference to the attestation-verified identity.
-    pub fn identity(&self) -> &AttestedIdentity {
-        self.verified.identity()
+    /// Get a reference to the attestation-verified key statement.
+    pub fn statement(&self) -> &AttestedKeyStatement {
+        self.verified.statement()
     }
 
     pub fn attested(&self) -> &VerifiedPublicKeyAttested {

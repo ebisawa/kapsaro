@@ -136,10 +136,10 @@ fn test_load_crypto_context_from_env_does_not_require_workspace_member_file() {
     assert_eq!(ctx.kid(), public_key.protected.kid.as_str());
     assert_eq!(
         ctx.private_key().document().keys.sig.x,
-        public_key.protected.identity.keys.sig.x
+        public_key.protected.keys.sig.x
     );
     assert_eq!(
         ctx.private_key().document().keys.kem.x,
-        public_key.protected.identity.keys.kem.x
+        public_key.protected.keys.kem.x
     );
 }

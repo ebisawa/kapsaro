@@ -6,11 +6,14 @@
 //! Tests for verify_sshsig validation logic
 
 use ed25519_dalek::{Signer, SigningKey};
-use secretenv_core::cli_api::test_support::domain::public_key::{IdentityKeys, JwkOkpPublicKey};
+use secretenv_core::cli_api::test_support::domain::public_key::{
+    BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey,
+};
 use secretenv_core::cli_api::test_support::helpers::codec::base64_public::{
     encode_base64_standard, encode_base64url_nopad,
 };
 use secretenv_core::cli_api::test_support::storage::ssh::external::traits::SshKeygen;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_NAMESPACE;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
@@ -18,11 +21,15 @@ use secretenv_core::cli_api::test_support::storage::ssh::verify::verify_sshsig;
 use secretenv_core::cli_api::test_support::storage::ssh::verify::{
     build_attestation_signed_data, verify_attestation,
 };
+use secretenv_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
 use std::path::Path;
 use std::sync::Mutex;
 
 const VALID_SIG: &str = "-----BEGIN SSH SIGNATURE-----\n-----END SSH SIGNATURE-----";
 const ED25519_KEY: &str = "ssh-ed25519 AAAA... comment";
+const ATTESTATION_SUBJECT_HANDLE: &str = "alice@example.com";
+const ATTESTATION_CREATED_AT: &str = "2026-01-01T00:00:00Z";
+const ATTESTATION_EXPIRES_AT: &str = "2027-01-01T00:00:00Z";
 
 /// Stub SshKeygen that always succeeds (validation tests never reach trait methods)
 struct StubSshKeygen;
@@ -152,6 +159,25 @@ fn test_identity_keys() -> IdentityKeys {
     }
 }
 
+fn test_attestation_input(keys: &IdentityKeys) -> AttestationBodyInput<'_> {
+    AttestationBodyInput {
+        subject_handle: ATTESTATION_SUBJECT_HANDLE,
+        keys,
+        binding_claims: None,
+        created_at: Some(ATTESTATION_CREATED_AT),
+        expires_at: ATTESTATION_EXPIRES_AT,
+    }
+}
+
+fn test_binding_claims() -> BindingClaims {
+    BindingClaims {
+        github_account: Some(GithubAccount {
+            id: 42,
+            login: "alice".to_string(),
+        }),
+    }
+}
+
 fn test_signing_key() -> SigningKey {
     SigningKey::from_bytes(&[9u8; 32])
 }
@@ -173,8 +199,8 @@ fn ssh_public_key_text_with_trailing_data(signing_key: &SigningKey) -> String {
     format!("ssh-ed25519 {} test-key", encode_base64_standard(&blob))
 }
 
-fn sign_attestation(identity_keys: &IdentityKeys, signing_key: &SigningKey) -> String {
-    let signed_data = build_attestation_signed_data(identity_keys).unwrap();
+fn sign_attestation(input: &AttestationBodyInput<'_>, signing_key: &SigningKey) -> String {
+    let signed_data = build_attestation_signed_data(input).unwrap();
     let signature = signing_key.sign(&signed_data);
     encode_base64url_nopad(&signature.to_bytes())
 }
@@ -182,21 +208,24 @@ fn sign_attestation(identity_keys: &IdentityKeys, signing_key: &SigningKey) -> S
 #[test]
 fn test_verify_attestation_raw_signature_success() {
     let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
     let signing_key = test_signing_key();
     let ssh_pubkey = ssh_public_key_text(&signing_key);
-    let sig = sign_attestation(&identity_keys, &signing_key);
+    let sig = sign_attestation(&input, &signing_key);
 
-    verify_attestation(&identity_keys, &ssh_pubkey, &sig).unwrap();
+    verify_attestation(&input, ATTESTATION_METHOD_SSH_SIGN, &ssh_pubkey, &sig).unwrap();
 }
 
 #[test]
 fn test_verify_attestation_rejects_public_key_blob_trailing_data() {
     let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
     let signing_key = test_signing_key();
     let ssh_pubkey = ssh_public_key_text_with_trailing_data(&signing_key);
-    let sig = sign_attestation(&identity_keys, &signing_key);
+    let sig = sign_attestation(&input, &signing_key);
 
-    let error = verify_attestation(&identity_keys, &ssh_pubkey, &sig).unwrap_err();
+    let error =
+        verify_attestation(&input, ATTESTATION_METHOD_SSH_SIGN, &ssh_pubkey, &sig).unwrap_err();
 
     assert!(error.to_string().contains("unexpected trailing data"));
 }
@@ -204,24 +233,119 @@ fn test_verify_attestation_rejects_public_key_blob_trailing_data() {
 #[test]
 fn test_verify_attestation_rejects_tampered_identity_keys() {
     let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
     let signing_key = test_signing_key();
     let ssh_pubkey = ssh_public_key_text(&signing_key);
-    let sig = sign_attestation(&identity_keys, &signing_key);
+    let sig = sign_attestation(&input, &signing_key);
     let mut tampered = identity_keys.clone();
     tampered.sig.x = encode_base64url_nopad(&[3u8; 32]);
+    let tampered_input = test_attestation_input(&tampered);
 
-    let error = verify_attestation(&tampered, &ssh_pubkey, &sig).unwrap_err();
+    let error = verify_attestation(
+        &tampered_input,
+        ATTESTATION_METHOD_SSH_SIGN,
+        &ssh_pubkey,
+        &sig,
+    )
+    .unwrap_err();
 
     assert!(error.to_string().contains("verification failed"));
 }
 
 #[test]
+fn test_verify_attestation_rejects_tampered_subject_handle() {
+    let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
+    let signing_key = test_signing_key();
+    let ssh_pubkey = ssh_public_key_text(&signing_key);
+    let sig = sign_attestation(&input, &signing_key);
+    let tampered = AttestationBodyInput {
+        subject_handle: "mallory@example.com",
+        ..input
+    };
+
+    let error =
+        verify_attestation(&tampered, ATTESTATION_METHOD_SSH_SIGN, &ssh_pubkey, &sig).unwrap_err();
+
+    assert!(error.to_string().contains("verification failed"));
+}
+
+#[test]
+fn test_verify_attestation_rejects_tampered_binding_claims() {
+    let identity_keys = test_identity_keys();
+    let binding_claims = test_binding_claims();
+    let input = AttestationBodyInput {
+        subject_handle: ATTESTATION_SUBJECT_HANDLE,
+        keys: &identity_keys,
+        binding_claims: Some(&binding_claims),
+        created_at: Some(ATTESTATION_CREATED_AT),
+        expires_at: ATTESTATION_EXPIRES_AT,
+    };
+    let signing_key = test_signing_key();
+    let ssh_pubkey = ssh_public_key_text(&signing_key);
+    let sig = sign_attestation(&input, &signing_key);
+    let tampered_binding_claims = BindingClaims {
+        github_account: Some(GithubAccount {
+            id: 43,
+            login: "mallory".to_string(),
+        }),
+    };
+    let tampered = AttestationBodyInput {
+        binding_claims: Some(&tampered_binding_claims),
+        ..input
+    };
+
+    let error =
+        verify_attestation(&tampered, ATTESTATION_METHOD_SSH_SIGN, &ssh_pubkey, &sig).unwrap_err();
+
+    assert!(error.to_string().contains("verification failed"));
+}
+
+#[test]
+fn test_verify_attestation_rejects_tampered_expires_at() {
+    let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
+    let signing_key = test_signing_key();
+    let ssh_pubkey = ssh_public_key_text(&signing_key);
+    let sig = sign_attestation(&input, &signing_key);
+    let tampered = AttestationBodyInput {
+        expires_at: "2028-01-01T00:00:00Z",
+        ..input
+    };
+
+    let error =
+        verify_attestation(&tampered, ATTESTATION_METHOD_SSH_SIGN, &ssh_pubkey, &sig).unwrap_err();
+
+    assert!(error.to_string().contains("verification failed"));
+}
+
+#[test]
+fn test_verify_attestation_rejects_unsupported_method() {
+    let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
+    let signing_key = test_signing_key();
+    let ssh_pubkey = ssh_public_key_text(&signing_key);
+    let sig = sign_attestation(&input, &signing_key);
+
+    let error = verify_attestation(&input, "ssh", &ssh_pubkey, &sig).unwrap_err();
+
+    assert!(error.to_string().contains("Unsupported attestation method"));
+}
+
+#[test]
 fn test_verify_attestation_rejects_invalid_base64url_signature() {
     let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
     let signing_key = test_signing_key();
     let ssh_pubkey = ssh_public_key_text(&signing_key);
 
-    let error = verify_attestation(&identity_keys, &ssh_pubkey, "*not-base64*").unwrap_err();
+    let error = verify_attestation(
+        &input,
+        ATTESTATION_METHOD_SSH_SIGN,
+        &ssh_pubkey,
+        "*not-base64*",
+    )
+    .unwrap_err();
 
     assert!(error
         .to_string()
@@ -231,10 +355,17 @@ fn test_verify_attestation_rejects_invalid_base64url_signature() {
 #[test]
 fn test_verify_attestation_rejects_invalid_ssh_public_key() {
     let identity_keys = test_identity_keys();
+    let input = test_attestation_input(&identity_keys);
     let signing_key = test_signing_key();
-    let sig = sign_attestation(&identity_keys, &signing_key);
+    let sig = sign_attestation(&input, &signing_key);
 
-    let error = verify_attestation(&identity_keys, "ssh-ed25519 not-base64", &sig).unwrap_err();
+    let error = verify_attestation(
+        &input,
+        ATTESTATION_METHOD_SSH_SIGN,
+        "ssh-ed25519 not-base64",
+        &sig,
+    )
+    .unwrap_err();
 
     assert!(error.to_string().contains("Failed to decode base64"));
 }

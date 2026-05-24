@@ -11,9 +11,7 @@ use crate::format::kv::enc::parser::KvEncParser;
 use crate::format::signature::build_artifact_signature_input;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
-use crate::model::public_key::{
-    Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKeyProtected,
-};
+use crate::model::public_key::{Attestation, IdentityKeys, JwkOkpPublicKey, PublicKeyProtected};
 use crate::model::signature::ArtifactSignature;
 use crate::model::wire::algorithm;
 use uuid::Uuid;
@@ -21,11 +19,10 @@ use uuid::Uuid;
 fn build_dummy_public_key(kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: "signer@test".to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
+                            keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: "X25519".to_string(),
@@ -42,7 +39,6 @@ fn build_dummy_public_key(kid: &str) -> PublicKey {
                     pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                     sig: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ".to_string(),
                 },
-            },
             binding_claims: None,
             expires_at: "2099-01-01T00:00:00Z".to_string(),
             created_at: Some("2026-01-01T00:00:00Z".to_string()),

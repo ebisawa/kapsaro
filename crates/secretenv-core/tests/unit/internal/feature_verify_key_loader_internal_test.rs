@@ -15,11 +15,12 @@ use crate::feature::verify::public_key::{
     verify_public_key_with_attestation_context, verify_recipient_public_keys,
 };
 use crate::format::codec::base64_public::decode_base64url_nopad_array;
+use crate::format::public_key::AttestationBodyInput;
 use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::protocol::{build_sha256_fingerprint, SshKeyDescriptor};
-use crate::model::public_key::{Identity, PublicKey};
+use crate::model::public_key::PublicKey;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::model::verification::VerifyingKeySource;
 use std::path::Path;
@@ -63,20 +64,27 @@ fn build_test_public_key(expires_at: &str) -> (PublicKey, String) {
     let ssh_context = build_test_ssh_context(&ssh_priv, &ssh_pub_content);
 
     let keypairs = generate_keypairs().unwrap();
-    let identity_keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
-    let attestation = build_attestation(&ssh_context, &identity_keys).unwrap();
-    let identity = Identity {
-        keys: identity_keys,
-        attestation,
-    };
+    let keys = build_identity_keys(&keypairs.kem_pk, &keypairs.sig_pk).unwrap();
+    let attestation = build_attestation(
+        &ssh_context,
+        &AttestationBodyInput {
+            subject_handle: "test@example.com",
+            keys: &keys,
+            binding_claims: None,
+            created_at: Some("2026-01-01T00:00:00Z"),
+            expires_at,
+        },
+    )
+    .unwrap();
     let params = PublicKeyDocumentParams {
         member_handle: "test@example.com",
-        identity,
+        keys,
+        binding_claims: None,
+        attestation,
         created_at: "2026-01-01T00:00:00Z",
         expires_at,
         sig_sk: &keypairs.sig_sk,
         debug: false,
-        github_account: None,
     };
     let public_key = build_public_key(&params).unwrap();
     // Keep ssh_temp alive until public_key is built
@@ -149,11 +157,9 @@ fn test_verify_public_key_for_verification_exposes_signing_key_material() {
 
     let verified = verify_public_key_for_verification_context(&public_key, false, "test").unwrap();
 
-    let expected_key: [u8; 32] = decode_base64url_nopad_array(
-        &public_key.protected.identity.keys.sig.x,
-        "Ed25519 public key",
-    )
-    .unwrap();
+    let expected_key: [u8; 32] =
+        decode_base64url_nopad_array(&public_key.protected.keys.sig.x, "Ed25519 public key")
+            .unwrap();
     assert_eq!(
         verified.verified_public_key.verifying_key().to_bytes(),
         expected_key

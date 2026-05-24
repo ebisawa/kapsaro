@@ -8,8 +8,8 @@
 
 /// On-wire `format` identifiers.
 pub mod format {
-    /// `PublicKey@6` format identifier.
-    pub const PUBLIC_KEY_V6: &str = "secretenv:format:public-key@6";
+    /// `PublicKey@7` format identifier.
+    pub const PUBLIC_KEY_V7: &str = "secretenv:format:public-key@7";
     /// `PrivateKey@7` format identifier.
     pub const PRIVATE_KEY_V7: &str = "secretenv:format:private-key@7";
     /// Local Trust Store v5 format identifier.
@@ -77,6 +77,9 @@ pub mod context {
     /// Sign message header for SSH `PrivateKey@7` protection.
     pub const SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V7: &str =
         "secretenv:context:sshsig-message:private-key:protection@7";
+    /// Attestation body discriminator for `PublicKey@7`.
+    pub const SSHSIG_MESSAGE_PUBLIC_KEY_ATTESTATION_V7: &str =
+        "secretenv:context:sshsig-message:public-key:attestation@7";
     /// Message used to check determinism of SSH signing backend.
     pub const SSHSIG_MESSAGE_DETERMINISM_CHECK_V1: &[u8] =
         b"secretenv:context:sshsig-message:determinism-check@1";

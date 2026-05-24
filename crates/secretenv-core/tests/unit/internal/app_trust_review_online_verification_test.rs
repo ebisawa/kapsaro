@@ -7,8 +7,7 @@ use super::{
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::public_key::{
-    Attestation, BindingClaims, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
-    PublicKeyProtected,
+    Attestation, BindingClaims, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
 
 const TEST_SSH_PUBKEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
@@ -42,27 +41,25 @@ fn failed_candidate(candidate: &TrustApprovalCandidate, message: &str) -> TrustA
 fn public_key_for_member(member_handle: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: member_handle.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 },
-                attestation: Attestation {
-                    method: "ssh".to_string(),
-                    pub_: TEST_SSH_PUBKEY.to_string(),
-                    sig: "signature".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
                 },
+            },
+            attestation: Attestation {
+                method: "ssh".to_string(),
+                pub_: TEST_SSH_PUBKEY.to_string(),
+                sig: "signature".to_string(),
             },
             binding_claims: Some(BindingClaims {
                 github_account: None,

@@ -9,6 +9,7 @@
 //! - file: file-enc canonicalization helpers
 //! - jcs: JCS (JSON Canonicalization Scheme) normalization (RFC 8785) and token serialization
 //! - kv: KV format modules (dotenv and kv-enc)
+//! - public_key: PublicKey canonical binding input builders
 //! - signature: Artifact signature input byte builders
 
 pub(crate) mod codec;
@@ -19,6 +20,7 @@ pub(crate) mod file;
 pub(crate) mod jcs;
 pub(crate) mod kid;
 pub(crate) mod kv;
+pub(crate) mod public_key;
 pub(crate) mod schema;
 pub(crate) mod signature;
 pub(crate) mod token;

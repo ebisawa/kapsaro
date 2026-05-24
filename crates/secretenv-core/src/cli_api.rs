@@ -560,6 +560,11 @@ pub mod test_support {
         pub mod kid {
             pub use crate::format::kid::derive_public_key_kid;
         }
+        pub mod public_key {
+            pub use crate::format::public_key::{
+                build_attestation_body_bytes, AttestationBodyInput,
+            };
+        }
         pub mod kv {
             pub mod document {
                 pub use crate::format::kv::document::{
@@ -853,8 +858,8 @@ pub mod test_support {
         }
         pub mod public_key {
             pub use crate::model::public_key::{
-                Attestation, AttestationProof, AttestedIdentity, BindingClaims, GithubAccount,
-                Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+                Attestation, AttestationProof, AttestedKeyStatement, BindingClaims, GithubAccount,
+                IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyParts, PublicKeyProtected,
                 VerifiedBindingClaims, VerifiedPublicKeyAttested, VerifiedRecipientKey,
             };
         }
@@ -900,7 +905,7 @@ pub mod test_support {
             }
             pub mod format {
                 pub use crate::model::wire::format::{
-                    FILE_ENC_V7, FILE_PAYLOAD_V7, LOCAL_TRUST_V5, PRIVATE_KEY_V7, PUBLIC_KEY_V6,
+                    FILE_ENC_V7, FILE_PAYLOAD_V7, LOCAL_TRUST_V5, PRIVATE_KEY_V7, PUBLIC_KEY_V7,
                 };
             }
             pub mod jwk {

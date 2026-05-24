@@ -4,7 +4,7 @@
 //! Unit tests for GitHub binding_claims.github_account verification.
 
 use secretenv_core::cli_api::test_support::domain::public_key::{
-    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
 };
 use secretenv_core::cli_api::test_support::storage::github::http::GitHubKeyRecord;
@@ -142,27 +142,25 @@ impl GitHubVerificationApi for RecordingGitHubApi {
 fn sample_public_key() -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: "alice@example.com".to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 },
-                attestation: Attestation {
-                    method: "ssh".to_string(),
-                    pub_: TEST_SSH_PUBKEY.to_string(),
-                    sig: "signature".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
                 },
+            },
+            attestation: Attestation {
+                method: "ssh".to_string(),
+                pub_: TEST_SSH_PUBKEY.to_string(),
+                sig: "signature".to_string(),
             },
             binding_claims: Some(BindingClaims {
                 github_account: Some(GithubAccount {
@@ -378,7 +376,7 @@ async fn test_verify_github_account_reports_not_configured_without_github_accoun
 #[tokio::test]
 async fn test_verify_github_account_reports_not_configured_for_invalid_attestation() {
     let mut public_key = sample_public_key();
-    public_key.protected.identity.attestation.pub_ = "invalid-ssh-key".to_string();
+    public_key.protected.attestation.pub_ = "invalid-ssh-key".to_string();
     let api = FakeGitHubApi {
         user_by_id_result: Ok((42, "alice".to_string())),
         keys_result: Ok(Vec::new()),

@@ -9,7 +9,7 @@
 use secretenv_core::cli_api::test_support::domain::{
     private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyPlaintext},
     public_key::{
-        AttestationProof, AttestedIdentity, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
+        AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey, PublicKey,
         VerifiedPublicKeyAttested, VerifiedRecipientKey,
     },
     signature::KeyPossessionProof,
@@ -36,6 +36,7 @@ use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBacke
 use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use secretenv_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
 use secretenv_core::{Error, Result};
 use std::path::Path;
 use time::OffsetDateTime;
@@ -142,7 +143,7 @@ pub fn keygen_test(
         },
     };
 
-    let identity_keys = IdentityKeys {
+    let keys = IdentityKeys {
         kem: JwkOkpPublicKey {
             kty: "OKP".to_string(),
             crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
@@ -158,20 +159,25 @@ pub fn keygen_test(
 
     // Build real SSH attestation
     let ssh_context = build_test_ssh_context(ssh_key_path, ssh_pubkey)?;
-    let attestation = build_attestation(&ssh_context, &identity_keys)?;
-
-    let identity = Identity {
-        keys: identity_keys,
-        attestation,
-    };
+    let attestation = build_attestation(
+        &ssh_context,
+        &AttestationBodyInput {
+            subject_handle: member_handle,
+            keys: &keys,
+            binding_claims: None,
+            created_at: Some(&created_at),
+            expires_at: &expires_at,
+        },
+    )?;
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle,
-        identity,
+        keys,
+        binding_claims: None,
+        attestation,
         created_at: &created_at,
         expires_at: &expires_at,
         sig_sk: &signing_key,
         debug: false,
-        github_account: None,
     })?;
 
     Ok((private_key, public_key))
@@ -274,13 +280,13 @@ pub fn build_verified_recipient_key(public_key: PublicKey) -> VerifiedRecipientK
 /// Build a VerifiedPublicKeyAttested wrapper for PublicKey (for testing only).
 pub fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
     let proof = AttestationProof {
-        method: public_key.protected.identity.attestation.method.clone(),
-        ssh_pub: public_key.protected.identity.attestation.pub_.clone(),
+        method: public_key.protected.attestation.method.clone(),
+        ssh_pub: public_key.protected.attestation.pub_.clone(),
         verified_at: None,
     };
-    let attested_identity = AttestedIdentity::new(public_key.protected.identity.clone(), proof);
+    let attested_statement = AttestedKeyStatement::new(public_key.protected.keys.clone(), proof);
     let self_sig_proof = SelfSignatureProof::new();
-    VerifiedPublicKeyAttested::new(public_key, self_sig_proof, attested_identity)
+    VerifiedPublicKeyAttested::new(public_key, self_sig_proof, attested_statement)
 }
 
 /// Build a dummy PublicKey for tests that only need the structural shape.
@@ -294,29 +300,27 @@ pub fn build_dummy_public_key(kid: &str) -> PublicKey {
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: "signer@test".to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 },
-                attestation: Attestation {
-                    method: "ssh-sign".to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    sig: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 },
             },
             binding_claims: None,
+            attestation: Attestation {
+                method: "ssh-sign".to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                sig: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ".to_string(),
+            },
             expires_at: "2099-01-01T00:00:00Z".to_string(),
             created_at: Some("2026-01-01T00:00:00Z".to_string()),
         },

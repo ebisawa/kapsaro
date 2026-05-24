@@ -14,6 +14,7 @@ use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::model::common::WrapItem;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::public_key::VerifiedRecipientKey;
+use crate::support::time::generate_current_timestamp;
 use crate::Result;
 use tracing::warn;
 
@@ -45,7 +46,7 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             self.ctx.target_members(),
             self.ctx.options().debug,
         )?;
-        self.doc.update_timestamp()
+        self.update_timestamp()
     }
 
     fn rewrite_recipient_wraps(&mut self, recipients: &[String]) -> Result<()> {
@@ -59,7 +60,7 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             self.ctx.target_members(),
             self.ctx.options().debug,
         )?;
-        self.doc.update_timestamp()
+        self.update_timestamp()
     }
 
     fn remove_recipients(&mut self, recipients: &[String]) -> Result<()> {
@@ -110,7 +111,7 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
     }
 
     fn finalize(mut self) -> Result<String> {
-        self.doc.update_timestamp()?;
+        self.update_timestamp()?;
         let master_key = self.session.unwrap_master_key()?;
         self.session.sign(self.doc, &master_key)
     }
@@ -147,6 +148,11 @@ impl<'a> KvRewrapExecutor<'a> {
         )?;
         let kv_doc = self.session.document();
         self.doc = self.session.build_unsigned(kv_doc.head().clone())?;
+        Ok(())
+    }
+
+    fn update_timestamp(&mut self) -> Result<()> {
+        self.doc.set_updated_at(generate_current_timestamp()?);
         Ok(())
     }
 }

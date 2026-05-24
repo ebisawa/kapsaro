@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::output::text::doctor::format_doctor_report;
+use crate::cli::common::output::text::layout::visible_width;
 use secretenv_core::cli_api::app::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
 };
@@ -59,4 +60,33 @@ fn test_doctor_report_exit_code_fails_only_on_fail() {
         "Artifact signature verification failed",
     )]);
     assert_eq!(report.exit_code(), 1);
+}
+
+#[test]
+fn test_doctor_text_output_wraps_long_messages_and_paths() {
+    let workspace = format!("/workspace/{}", "nested-directory/".repeat(8));
+    let subject = format!("secrets/{}.kvenc", "long-path-segment".repeat(10));
+    let message = format!(
+        "Artifact recipient handle {} does not match an active workspace member",
+        "alice.release.engineering.".repeat(5)
+    );
+    let reason = format!(
+        "recipient hash {} could not be matched to current members",
+        "abcdef0123456789".repeat(8)
+    );
+    let next_action = format!("run secretenv rewrap --target {subject}");
+    let mut report = DoctorReport::new(workspace);
+    report.extend([DoctorCheck::new(
+        "artifact.recipient_handle",
+        DoctorCategory::Artifacts,
+        DoctorStatus::Fail,
+        DoctorSubject::Path(subject),
+        message,
+    )
+    .with_reason(reason)
+    .with_next_action(next_action)]);
+
+    let output = format_doctor_report(&report, true);
+
+    assert!(output.lines().all(|line| visible_width(line) <= 100));
 }

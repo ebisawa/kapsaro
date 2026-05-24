@@ -8,6 +8,5 @@
 //!
 //! Global config helpers for the flat key-value TOML format.
 
-pub mod bootstrap;
 pub mod paths;
 pub mod store;

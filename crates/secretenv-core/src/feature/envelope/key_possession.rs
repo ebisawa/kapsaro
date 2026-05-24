@@ -8,9 +8,10 @@
 use crate::crypto::hmac::{compute_hmac_sha256_tag, verify_hmac_sha256_tag};
 use crate::crypto::types::keys::{MacKey, MasterKey, XChaChaKey};
 use crate::feature::envelope::key_schedule::{FileKeySchedule, KvKeySchedule};
-use crate::format::file::build_file_signature_bytes;
-use crate::format::kv::enc::canonical::build_canonical_bytes;
-use crate::format::signature::build_key_possession_mac_message;
+use crate::format::signature::{
+    build_file_artifact_body_bytes, build_key_possession_mac_message, build_kv_artifact_body_bytes,
+    ArtifactBodyBytes,
+};
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::signature::{KeyPossessionProof, KeyPossessionProofAlgorithm};
@@ -91,28 +92,21 @@ impl<'a> VerifiedKvKeyPossession<'a> {
 }
 
 pub fn build_file_key_possession_proof(
-    protected: &crate::model::file_enc::FileEncDocumentProtected,
+    body_bytes: &ArtifactBodyBytes,
     mac_key: &MacKey,
     signer_kid: &str,
     debug_enabled: bool,
 ) -> Result<KeyPossessionProof> {
-    let body_bytes = build_file_signature_bytes(protected)?;
-    build_key_possession_proof("file", &body_bytes, mac_key, signer_kid, debug_enabled)
+    build_key_possession_proof("file", body_bytes, mac_key, signer_kid, debug_enabled)
 }
 
 pub fn build_kv_key_possession_proof(
-    unsigned: &str,
+    body_bytes: &ArtifactBodyBytes,
     mac_key: &MacKey,
     signer_kid: &str,
     debug_enabled: bool,
 ) -> Result<KeyPossessionProof> {
-    build_key_possession_proof(
-        "kv",
-        unsigned.as_bytes(),
-        mac_key,
-        signer_kid,
-        debug_enabled,
-    )
+    build_key_possession_proof("kv", body_bytes, mac_key, signer_kid, debug_enabled)
 }
 
 pub fn verify_file_key_possession<'a>(
@@ -120,7 +114,7 @@ pub fn verify_file_key_possession<'a>(
     master_key: MasterKey,
     debug_enabled: bool,
 ) -> Result<VerifiedFileKeyPossession<'a>> {
-    let body_bytes = build_file_signature_bytes(&document.document().protected)?;
+    let body_bytes = build_file_artifact_body_bytes(&document.document().protected)?;
     debug_key_possession_hkdf_extract("file", debug_enabled);
     let schedule = FileKeySchedule::extract(&master_key, &document.document().protected.sid)?;
     debug_key_possession_hkdf_expand("file", "mac key", debug_enabled);
@@ -147,7 +141,7 @@ pub fn verify_kv_key_possession<'a>(
     master_key: MasterKey,
     debug_enabled: bool,
 ) -> Result<VerifiedKvKeyPossession<'a>> {
-    let body_bytes = build_canonical_bytes(document.document().lines());
+    let body_bytes = build_kv_artifact_body_bytes(document.document());
     debug_key_possession_hkdf_extract("kv", debug_enabled);
     let schedule = KvKeySchedule::extract(&master_key, &document.document().head().sid)?;
     debug_key_possession_hkdf_expand("kv", "mac key", debug_enabled);
@@ -165,7 +159,7 @@ pub fn verify_kv_key_possession<'a>(
 
 fn build_key_possession_proof(
     format: &str,
-    body_bytes: &[u8],
+    body_bytes: &ArtifactBodyBytes,
     mac_key: &MacKey,
     signer_kid: &str,
     debug_enabled: bool,
@@ -194,7 +188,7 @@ fn verify_key_possession_proof(
     format: &str,
     proof: &KeyPossessionProof,
     key: &MacKey,
-    body_bytes: &[u8],
+    body_bytes: &ArtifactBodyBytes,
     signer_kid: &str,
     debug_enabled: bool,
 ) -> Result<()> {
@@ -275,7 +269,7 @@ fn debug_key_possession_hmac_tag(operation: &str, format: &str, debug_enabled: b
 fn compute_key_possession_tag(
     algorithm: KeyPossessionProofAlgorithm,
     key: &MacKey,
-    body_bytes: &[u8],
+    body_bytes: &ArtifactBodyBytes,
     signer_kid: &str,
     format: &str,
     debug_enabled: bool,
@@ -293,7 +287,7 @@ fn compute_key_possession_tag(
 fn verify_key_possession_tag(
     algorithm: KeyPossessionProofAlgorithm,
     key: &MacKey,
-    body_bytes: &[u8],
+    body_bytes: &ArtifactBodyBytes,
     signer_kid: &str,
     expected_tag: &[u8],
     format: &str,

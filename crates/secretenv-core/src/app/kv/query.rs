@@ -56,12 +56,16 @@ where
     let mut command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
     let kv_content = file.kv_content();
+    let operation_options = options.operation_options();
     let disclosed = list_kv_keys_with_disclosed(&kv_content)?
         .into_iter()
         .map(Into::into)
         .collect();
-    let verified_doc =
-        verify_kv_content_for_operation(&kv_content, options.debug, options.allow_expired_key)?;
+    let verified_doc = verify_kv_content_for_operation(
+        &kv_content,
+        operation_options.debug(),
+        operation_options.allow_expired_key(),
+    )?;
     for warning in &verified_doc.proof().warnings {
         push_unique_warning(&mut command.warnings, warning.clone());
     }
@@ -69,8 +73,8 @@ where
     if let Some(warning) = enforce_selected_decryption_key_expiry(
         &command.execution,
         &wrap_set,
-        options.allow_expired_key,
-        options.debug,
+        operation_options.allow_expired_key(),
+        operation_options.debug(),
     )? {
         push_unique_warning(&mut command.warnings, warning);
     }

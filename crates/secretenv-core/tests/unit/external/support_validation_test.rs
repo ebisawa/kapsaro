@@ -50,6 +50,12 @@ fn test_validate_member_handle_invalid_characters() {
 }
 
 #[test]
+fn test_validate_member_handle_rejects_path_like_values() {
+    assert!(validate_member_handle("../alice").is_err());
+    assert!(validate_member_handle("alice/../bob").is_err());
+}
+
+#[test]
 fn test_validate_github_login_accepts_valid_values() {
     assert!(validate_github_login("alice").is_ok());
     assert!(validate_github_login("alice-gh").is_ok());

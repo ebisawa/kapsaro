@@ -9,6 +9,7 @@ use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
 };
 use crate::format::schema::validator::load_embedded_trust_validator;
+use crate::format::signature::{decode_ed25519_signature, verify_signature_algorithm};
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::io::keystore::storage::load_public_key;
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
@@ -118,13 +119,9 @@ pub fn verify_trust_store_bytes(
     verifying_key: &VerifyingKey,
     signature: &TrustStoreSignature,
 ) -> Result<()> {
-    verify_detached_bytes(
-        canonical_bytes,
-        verifying_key,
-        &signature.alg,
-        &signature.sig,
-        SIGNATURE_ED25519,
-    )
+    verify_signature_algorithm(&signature.alg, SIGNATURE_ED25519)?;
+    let signature_bytes = decode_ed25519_signature(&signature.sig)?;
+    verify_detached_bytes(canonical_bytes, verifying_key, &signature_bytes)
 }
 
 fn validate_kid_match(doc: &TrustStoreDocument, signer_public_key: &PublicKey) -> Result<()> {

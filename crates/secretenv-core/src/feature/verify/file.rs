@@ -33,7 +33,7 @@ pub fn verify_file_content_for_operation(
     allow_expired_key: bool,
 ) -> Result<VerifiedFileEncDocument> {
     let mut verified = verify_file_content(content, debug)?;
-    append_operational_signer_expiry_warning(&mut verified.proof, allow_expired_key)?;
+    append_operational_signer_expiry_warning(verified.proof_mut(), allow_expired_key)?;
     Ok(verified)
 }
 

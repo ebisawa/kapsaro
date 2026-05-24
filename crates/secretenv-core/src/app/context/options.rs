@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use crate::api::operation::OperationOptions;
 use crate::config::resolution::allow_expired_key::resolve_allow_expired_key;
 use crate::config::types::SshSigningMethod;
 use crate::io::config::paths::get_base_dir;
@@ -41,4 +42,15 @@ impl CommonCommandOptions {
     pub fn resolve_keystore_root(&self) -> Result<PathBuf> {
         KeystoreResolver::resolve(self.home.as_ref())
     }
+
+    /// Build non-secret facade operation options for verification and crypto paths.
+    pub fn operation_options(&self) -> OperationOptions {
+        OperationOptions::new()
+            .with_debug(self.debug)
+            .with_allow_expired_key(self.allow_expired_key)
+    }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_context_options_test.rs"]
+mod tests;

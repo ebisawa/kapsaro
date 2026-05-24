@@ -17,6 +17,7 @@ use secretenv_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocu
 use secretenv_core::cli_api::test_support::domain::verification::{
     SignatureVerificationProof, VerifyingKeySource,
 };
+use secretenv_core::cli_api::test_support::operations::context::crypto::decode_kem_secret_key;
 use secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext;
 use secretenv_core::cli_api::test_support::operations::context::crypto::SigningContext;
 use secretenv_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
@@ -31,7 +32,6 @@ use secretenv_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_d
 use secretenv_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
 use secretenv_core::cli_api::test_support::operations::verify::file::verify_file_document;
 use secretenv_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
-use secretenv_core::cli_api::test_support::primitives::kem::decode_kem_secret_key;
 use secretenv_core::cli_api::test_support::primitives::types::keys::MasterKey;
 use secretenv_core::cli_api::test_support::storage::keystore::storage::{
     list_kids, load_private_key, load_public_key,

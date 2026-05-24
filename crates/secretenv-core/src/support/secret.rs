@@ -121,9 +121,20 @@ impl SecretString {
         OsString::from(std::mem::take(&mut self.0))
     }
 
-    /// Convert the secret text into a plain `String` at an explicit output boundary.
-    pub fn into_plain_string_for_output(mut self) -> String {
+    fn take_plain_string(mut self) -> String {
         std::mem::take(&mut self.0)
+    }
+
+    /// Convert secret text into a plain `String` at an explicit output boundary.
+    #[cfg(any(feature = "cli-test-support", test))]
+    pub fn into_plain_string_for_output(self) -> String {
+        self.take_plain_string()
+    }
+
+    /// Convert secret text into a plain `String` at an explicit output boundary.
+    #[cfg(not(any(feature = "cli-test-support", test)))]
+    pub(crate) fn into_plain_string_for_output(self) -> String {
+        self.take_plain_string()
     }
 }
 

@@ -124,9 +124,8 @@ impl KvDocumentDraft {
         self.entries.retain(|entry| entry.key() != key);
     }
 
-    pub fn update_timestamp(&mut self) -> Result<()> {
-        self.head.updated_at = crate::support::time::generate_current_timestamp()?;
-        Ok(())
+    pub fn set_updated_at(&mut self, updated_at: String) {
+        self.head.updated_at = updated_at;
     }
 
     pub fn set_wrap(&mut self, wrap: KvWrap) {

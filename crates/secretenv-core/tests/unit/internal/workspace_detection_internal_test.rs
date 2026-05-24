@@ -22,6 +22,27 @@ fn io_workspace_detection_resolution_does_not_import_config_resolution() {
 }
 
 #[test]
+fn io_workspace_detection_errors_do_not_reference_cli_or_env_inputs() {
+    for relative_path in [
+        "src/io/workspace/detection/resolution.rs",
+        "src/io/workspace/detection/search.rs",
+    ] {
+        let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
+        let source = fs::read_to_string(&source_path).unwrap();
+        assert!(
+            !source.contains("--workspace"),
+            "{} must not mention CLI options",
+            source_path.display()
+        );
+        assert!(
+            !source.contains("SECRETENV_WORKSPACE"),
+            "{} must not mention environment variables",
+            source_path.display()
+        );
+    }
+}
+
+#[test]
 fn app_context_resolves_workspace_from_config_toml() {
     let tmp = tempfile::tempdir().unwrap();
     let ws_path = tmp.path().join(".secretenv");

@@ -1,13 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use std::path::{Path, PathBuf};
 
 use crate::app::context::options::CommonCommandOptions;
+use crate::config::resolution::workspace::resolve_optional_workspace_from_sources;
 use crate::io::config::paths::get_global_config_path_from_base;
 use crate::io::keystore::resolver::KeystoreResolver;
-use crate::io::workspace::detection::{resolve_optional_workspace_with_base, WorkspaceRoot};
+use crate::io::workspace::detection::WorkspaceRoot;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
 
@@ -46,7 +46,7 @@ pub fn check_workspace(options: &CommonCommandOptions) -> Result<DoctorWorkspace
         ),
     )];
 
-    let resolved = resolve_doctor_workspace(options, &base_dir);
+    let resolved = resolve_doctor_workspace(options, &base_dir)?;
     let Some((workspace_root, source)) = resolved else {
         checks.push(
             DoctorCheck::fail(
@@ -97,34 +97,32 @@ pub fn check_workspace(options: &CommonCommandOptions) -> Result<DoctorWorkspace
 fn resolve_doctor_workspace(
     options: &CommonCommandOptions,
     base_dir: &Path,
-) -> Option<(WorkspaceRoot, &'static str)> {
+) -> Result<Option<(WorkspaceRoot, &'static str)>> {
     if let Some(path) = options.workspace.as_ref() {
-        return Some((workspace_from_path(path), "command line"));
+        let root_path = path.canonicalize().map_err(|error| {
+            crate::Error::build_config_error(format!(
+                "Invalid workspace path '{}': {}",
+                format_path_relative_to_cwd(path),
+                error
+            ))
+        })?;
+        return Ok(Some((
+            WorkspaceRoot {
+                has_marker_file: root_path.join(".secretenv-root").exists(),
+                root_path,
+            },
+            "command line",
+        )));
     }
 
-    if let Ok(path) = env::var("SECRETENV_WORKSPACE") {
-        return Some((workspace_from_path(Path::new(&path)), "SECRETENV_WORKSPACE"));
-    }
-
-    if let Ok(Some(path)) =
-        crate::config::resolution::workspace::resolve_workspace_from_config_base(Some(base_dir))
-    {
-        return Some((workspace_from_path(&path), "config.toml"));
-    }
-
-    resolve_optional_workspace_with_base(None, Some(base_dir))
-        .ok()
-        .flatten()
-        .map(|workspace| (workspace, "auto-detect"))
-}
-
-fn workspace_from_path(path: &Path) -> WorkspaceRoot {
-    let root_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    WorkspaceRoot {
-        has_marker_file: root_path.join(".secretenv-root").exists(),
-        has_config_file: root_path.join("config.toml").exists(),
-        root_path,
-    }
+    resolve_optional_workspace_from_sources(options.workspace.clone(), Some(base_dir)).map(
+        |resolution| {
+            resolution.map(|workspace| {
+                let source = workspace.source.as_str();
+                (workspace.root, source)
+            })
+        },
+    )
 }
 
 fn workspace_structure_ok(workspace_root: &Path) -> bool {

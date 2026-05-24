@@ -267,6 +267,10 @@ impl KvInputEntry {
         &self.key
     }
 
+    pub(crate) fn into_secret_parts(self) -> (String, SecretString) {
+        (self.key, self.value)
+    }
+
     fn into_internal(self) -> InternalKvInputEntry {
         InternalKvInputEntry::new_secret(self.key, self.value.into_inner())
     }

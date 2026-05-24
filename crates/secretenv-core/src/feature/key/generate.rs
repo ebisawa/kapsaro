@@ -10,28 +10,20 @@ use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::feature::key::types::KeyGenerationResult;
 use crate::feature::key::{material, public_key_document};
 use crate::format::public_key::AttestationBodyInput;
-use crate::io::keystore::active::set_active_kid;
-use crate::io::keystore::resolver::KeystoreResolver;
-use crate::io::keystore::storage::{find_member_by_kid, save_key_pair_atomic};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::{GithubAccount, PublicKey};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::support::kid::format_kid_display_lossy;
 use crate::Result;
-use crate::{Error, ErrorKind};
-use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Options for key generation.
 pub struct KeyGenerationOptions {
     pub member_handle: String,
-    pub home: Option<PathBuf>,
     pub created_at: String,
     pub expires_at: String,
-    pub no_activate: bool,
     pub debug: bool,
     pub github_account: Option<GithubAccount>,
-    pub verbose: bool,
     /// Pre-resolved SSH signing context.
     pub ssh_binding: SshBindingContext,
 }
@@ -44,26 +36,21 @@ struct KeyDocumentParams<'a> {
     debug: bool,
 }
 
-/// Generate a new key pair and save to keystore.
+/// Generate a new key pair and return unsigned persistence inputs.
 pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     let KeyGenerationOptions {
         member_handle,
-        home,
         created_at,
         expires_at,
-        no_activate,
         debug,
         github_account,
-        verbose: _,
         ssh_binding,
     } = opts;
 
-    let keystore_root = ensure_keystore_dir(&home)?;
     if debug {
         debug!(
-            "[KEYGEN] start member_handle={}, no_activate={}, github_binding={}",
+            "[KEYGEN] start member_handle={}, github_binding={}",
             member_handle,
-            no_activate,
             github_account.is_some()
         );
     }
@@ -87,49 +74,26 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
             format_kid_display_lossy(&derived_kid)
         );
     }
-    ensure_kid_not_in_keystore(&keystore_root, &derived_kid)?;
     let private_key =
         encrypt_private_key_document(&request, &key_material, &derived_kid, &ssh_binding)?;
-    save_generated_key(
-        &keystore_root,
-        &member_handle,
-        &derived_kid,
-        &private_key,
-        &public_key,
-        no_activate,
-    )?;
     if debug {
         debug!(
-            "[KEYGEN] saved key pair member_handle={}, activated={}",
-            member_handle, !no_activate
+            "[KEYGEN] generated key pair member_handle={}",
+            member_handle
         );
     }
 
-    let key_dir = keystore_root.join(&member_handle).join(&derived_kid);
     Ok(KeyGenerationResult {
         member_handle,
         kid: derived_kid,
         created_at,
         expires_at,
-        keystore_root,
-        key_dir,
-        activated: !no_activate,
+        private_key,
+        public_key,
         ssh_fingerprint: ssh_binding.fingerprint,
         ssh_public_key: ssh_binding.public_key,
         ssh_determinism: ssh_binding.determinism,
     })
-}
-
-fn ensure_kid_not_in_keystore(keystore_root: &Path, kid: &str) -> Result<()> {
-    match find_member_by_kid(keystore_root, kid) {
-        Ok(owner_handle) => Err(Error::build_crypto_error(format!(
-            "kid '{}' already exists in keystore (member_handle: '{}')",
-            format_kid_display_lossy(kid),
-            owner_handle
-        ))),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e),
-    }
 }
 
 fn ensure_determinism(status: &SshDeterminismStatus) -> Result<()> {
@@ -196,26 +160,6 @@ fn encrypt_private_key_document(
         expires_at: request.expires_at.to_string(),
         debug: request.debug,
     })
-}
-
-/// Ensure keystore directory exists.
-pub(crate) fn ensure_keystore_dir(home: &Option<PathBuf>) -> Result<PathBuf> {
-    KeystoreResolver::ensure_keystore_root(home.as_ref())
-}
-
-fn save_generated_key(
-    keystore_root: &Path,
-    member_handle: &str,
-    kid: &str,
-    private_key: &PrivateKey,
-    public_key: &PublicKey,
-    no_activate: bool,
-) -> Result<()> {
-    save_key_pair_atomic(keystore_root, member_handle, kid, private_key, public_key)?;
-    if !no_activate {
-        set_active_kid(member_handle, kid, keystore_root)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

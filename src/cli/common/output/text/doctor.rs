@@ -5,6 +5,7 @@
 
 use console::Style;
 
+use crate::cli::common::output::text::layout;
 use secretenv_core::cli_api::app::doctor::types::{DoctorCheck, DoctorReport, DoctorStatus};
 
 pub(crate) fn format_doctor_report(report: &DoctorReport, verbose: bool) -> String {
@@ -19,7 +20,7 @@ pub(crate) fn format_doctor_report(report: &DoctorReport, verbose: bool) -> Stri
 
 fn push_summary(out: &mut String, report: &DoctorReport) {
     out.push_str(&format!("Status: {}\n", report.overall_status().as_str()));
-    out.push_str(&format!("Workspace: {}\n", report.workspace_display()));
+    push_wrapped_value(out, "Workspace: ", report.workspace_display());
     out.push_str(&format!(
         "Checks: {} OK, {} WARN, {} FAIL, {} SKIP\n",
         report.count(DoctorStatus::Ok),
@@ -45,7 +46,8 @@ fn push_next_actions(out: &mut String, report: &DoctorReport) {
         return;
     }
     for (index, action) in actions.iter().enumerate() {
-        out.push_str(&format!("{}. {}\n", index + 1, action));
+        let prefix = format!("{}. ", index + 1);
+        push_wrapped_value(out, &prefix, action);
     }
 }
 
@@ -62,23 +64,20 @@ fn push_findings(out: &mut String, report: &DoctorReport, verbose: bool) {
 }
 
 fn push_finding(out: &mut String, check: &DoctorCheck, verbose: bool) {
-    out.push_str(&format!(
-        "{}  {}\n",
-        color_status(check.status),
-        check.message
-    ));
+    let prefix = format!("{}  ", color_status(check.status));
+    push_wrapped_value(out, &prefix, &check.message);
     if verbose {
-        out.push_str(&format!("      Check: {}\n", check.id));
+        push_wrapped_value(out, "      Check: ", check.id);
         if let Some(rule) = check.rule.as_deref() {
-            out.push_str(&format!("      Rule: {}\n", rule));
+            push_wrapped_value(out, "      Rule: ", rule);
         }
     }
-    out.push_str(&format!("      Target: {}\n", check.subject.as_str()));
+    push_wrapped_value(out, "      Target: ", check.subject.as_str());
     if let Some(reason) = check.reason.as_deref() {
-        out.push_str(&format!("      Reason: {}\n", reason));
+        push_wrapped_value(out, "      Reason: ", reason);
     }
     if let Some(next) = check.next_action.as_deref() {
-        out.push_str(&format!("      Next: {}\n", next));
+        push_wrapped_value(out, "      Next: ", next);
     }
     out.push('\n');
 }
@@ -91,14 +90,21 @@ fn push_healthy_areas(out: &mut String, report: &DoctorReport) {
         return;
     }
     for category in categories {
-        out.push_str(&format!("OK  {}\n", category.title()));
+        push_wrapped_value(out, "OK  ", category.title());
     }
 }
 
 fn push_details(out: &mut String, report: &DoctorReport) {
     out.push_str("\nDetails\n");
-    out.push_str(&format!("Workspace: {}\n", report.workspace_display()));
+    push_wrapped_value(out, "Workspace: ", report.workspace_display());
     out.push_str(&format!("Checks: {}\n", report.checks().len()));
+}
+
+fn push_wrapped_value(out: &mut String, prefix: &str, value: &str) {
+    for line in layout::format_value_lines(prefix, value) {
+        out.push_str(&line);
+        out.push('\n');
+    }
 }
 
 fn color_status(status: DoctorStatus) -> String {

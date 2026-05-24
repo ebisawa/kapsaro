@@ -43,7 +43,7 @@ fn operational_kv_verify_preserves_expired_signer_recovery_warning() {
 
     let verified = super::verify_kv_content_for_operation(&content, false, true).unwrap();
 
-    assert!(verified.proof.warnings.iter().any(|warning| {
+    assert!(verified.proof().warnings.iter().any(|warning| {
         warning.contains("Artifact signing key has expired")
             && warning.contains("continuing because expired key use was explicitly allowed")
     }));

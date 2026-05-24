@@ -10,12 +10,12 @@ use crate::cli::common::output::text::key::{
 };
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::ssh::resolve_ssh_context_for_active_key;
+use secretenv_core::api::secret::SecretString;
 use secretenv_core::cli_api::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, remove_key_command,
     validate_kid,
 };
 use secretenv_core::cli_api::presentation::fs::save_text;
-use secretenv_core::cli_api::presentation::secret::SecretString;
 use secretenv_core::Result;
 use std::io::IsTerminal;
 use std::io::{self, BufRead};

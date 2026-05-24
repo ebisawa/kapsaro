@@ -5,16 +5,14 @@
 
 use console::Style;
 
+use crate::cli::common::output::text::layout;
 use secretenv_core::cli_api::app::file::inspect::{InspectCommand, InspectOutput, InspectSection};
 
 pub(crate) fn print_inspect_banner(input_display: &str) {
-    let dim = Style::new().dim();
-    let bold = Style::new().bold();
-    eprintln!(
-        "{} {}\n",
-        dim.apply_to("Inspecting:"),
-        bold.apply_to(input_display)
-    );
+    for line in format_inspect_banner_lines(input_display) {
+        eprintln!("{line}");
+    }
+    eprintln!();
 }
 
 pub(crate) fn format_inspect_command_output(command: &InspectCommand) -> String {
@@ -26,7 +24,10 @@ fn format_inspect_output(output: &InspectOutput) -> String {
     let section_style = Style::new().bold();
 
     let mut out = String::new();
-    out.push_str(&format!("{}\n", title_style.apply_to(&output.title)));
+    for line in format_styled_value_lines("", &output.title, &title_style) {
+        out.push_str(&line);
+        out.push('\n');
+    }
     out.push('\n');
     for (index, section) in output.sections.iter().enumerate() {
         push_inspect_section(&mut out, section, &section_style);
@@ -39,11 +40,66 @@ fn format_inspect_output(output: &InspectOutput) -> String {
 }
 
 fn push_inspect_section(out: &mut String, section: &InspectSection, section_style: &Style) {
-    out.push_str(&format!("{}\n", section_style.apply_to(&section.title)));
-    for line in &section.lines {
-        out.push_str(&colorize_inspect_line(line));
+    for line in format_styled_value_lines("", &section.title, section_style) {
+        out.push_str(&line);
         out.push('\n');
     }
+    for line in &section.lines {
+        for wrapped in format_inspect_line_lines(line) {
+            out.push_str(&wrapped);
+            out.push('\n');
+        }
+    }
+}
+
+fn format_inspect_banner_lines(input_display: &str) -> Vec<String> {
+    let dim = Style::new().dim();
+    let bold = Style::new().bold();
+    layout::format_value_lines("Inspecting: ", input_display)
+        .into_iter()
+        .map(|line| colorize_banner_line(&line, &dim, &bold))
+        .collect()
+}
+
+fn colorize_banner_line(line: &str, dim: &Style, bold: &Style) -> String {
+    if let Some(value) = line.strip_prefix("Inspecting: ") {
+        return format!("{} {}", dim.apply_to("Inspecting:"), bold.apply_to(value));
+    }
+    bold.apply_to(line).to_string()
+}
+
+fn format_styled_value_lines(prefix: &str, value: &str, style: &Style) -> Vec<String> {
+    layout::format_value_lines(prefix, value)
+        .into_iter()
+        .map(|line| style.apply_to(line).to_string())
+        .collect()
+}
+
+fn format_inspect_line_lines(line: &str) -> Vec<String> {
+    let (prefix, value) = split_inspect_line_prefix(line);
+    layout::format_value_lines(prefix, value)
+        .into_iter()
+        .map(|line| colorize_inspect_line(&line))
+        .collect()
+}
+
+fn split_inspect_line_prefix(line: &str) -> (&str, &str) {
+    let Some(colon_index) = line.find(':') else {
+        return split_leading_whitespace(line);
+    };
+
+    let value_start = line[colon_index + 1..]
+        .find(|ch: char| !ch.is_whitespace())
+        .map(|offset| colon_index + 1 + offset)
+        .unwrap_or(line.len());
+    line.split_at(value_start)
+}
+
+fn split_leading_whitespace(line: &str) -> (&str, &str) {
+    let value_start = line
+        .find(|ch: char| !ch.is_whitespace())
+        .unwrap_or(line.len());
+    line.split_at(value_start)
 }
 
 fn colorize_inspect_line(line: &str) -> String {

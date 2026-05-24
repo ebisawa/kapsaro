@@ -4,11 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::app::artifact::{
-    artifact_recipient_evidence, list_workspace_encrypted_artifacts, load_artifact_content,
-    verify_artifact_signature,
-};
+use crate::app::artifact::{list_workspace_encrypted_artifacts, load_artifact_content};
 use crate::app::context::options::CommonCommandOptions;
+use crate::feature::artifact::{artifact_recipient_evidence, verify_artifact_signature};
 use crate::feature::trust::recipient_sets::find_recipient_handle_mismatch;
 use crate::format::content::EncContent;
 use crate::io::workspace::detection::WorkspaceRoot;

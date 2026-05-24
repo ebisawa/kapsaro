@@ -113,7 +113,6 @@ mode = "git"
     assert!(result.is_ok());
     let workspace = result.unwrap();
     assert_eq!(workspace.root_path, workspace_root);
-    assert!(workspace.has_config_file);
 }
 
 #[test]
@@ -183,12 +182,11 @@ fn test_workspace_root_fields() {
 
     assert_eq!(workspace.root_path, workspace_root);
     assert!(workspace.has_marker_file);
-    assert!(workspace.has_config_file);
     assert_eq!(workspace.members_dir(), workspace_root.join("members"));
     assert_eq!(workspace.secrets_dir(), workspace_root.join("secrets"));
 }
 
-// Phase 1.3 tests: Environment variable resolution
+// Phase 1.3 tests: explicit path validation and auto-detection
 
 #[test]
 fn test_resolve_workspace_with_explicit_option() {
@@ -210,45 +208,20 @@ fn test_resolve_workspace_with_explicit_option() {
 }
 
 #[test]
-fn test_resolve_workspace_from_environment_variable() {
+#[serial]
+fn test_resolve_workspace_ignores_environment_variable() {
     let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
-
-    let temp = TempDir::new().unwrap();
-    let (_repo_root, root_path) = build_workspace(&temp);
-
-    // Set environment variable
-    env::set_var("SECRETENV_WORKSPACE", &root_path);
-
-    // No explicit option, should use environment variable
-    let result = resolve_workspace(None);
-    assert!(result.is_ok());
-    let workspace = result.unwrap();
-    assert_eq!(workspace.root_path, root_path);
-}
-
-#[test]
-fn test_resolve_workspace_env_var_invalid_path() {
-    let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
-
-    // Set environment variable to non-existent path
-    env::set_var("SECRETENV_WORKSPACE", "/nonexistent/path");
+    let original_dir = env::current_dir().unwrap();
+    let current = TempDir::new().unwrap();
+    let env_workspace = TempDir::new().unwrap();
+    let (_repo_root, env_path) = build_workspace(&env_workspace);
+    env::set_var("SECRETENV_WORKSPACE", &env_path);
+    env::set_current_dir(current.path()).unwrap();
 
     let result = resolve_workspace(None);
     assert!(result.is_err());
-}
 
-#[test]
-fn test_resolve_workspace_env_var_not_workspace() {
-    let _guard = EnvGuard::new(&["SECRETENV_WORKSPACE"]);
-
-    let temp = TempDir::new().unwrap();
-    let root_path = temp.path().canonicalize().unwrap();
-
-    // Create directory without members/secrets
-    env::set_var("SECRETENV_WORKSPACE", &root_path);
-
-    let result = resolve_workspace(None);
-    assert!(result.is_err());
+    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]

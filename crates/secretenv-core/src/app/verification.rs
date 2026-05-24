@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::io::verify_online::VerificationStatus;
+//! Application-facing online verification status.
+//! Keeps app and CLI DTOs independent from the online I/O implementation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum OnlineVerificationStatus {
@@ -16,12 +17,12 @@ impl OnlineVerificationStatus {
     }
 }
 
-impl From<VerificationStatus> for OnlineVerificationStatus {
-    fn from(value: VerificationStatus) -> Self {
+impl From<crate::io::verify_online::VerificationStatus> for OnlineVerificationStatus {
+    fn from(value: crate::io::verify_online::VerificationStatus) -> Self {
         match value {
-            VerificationStatus::NotConfigured => Self::NotConfigured,
-            VerificationStatus::Verified => Self::Verified,
-            VerificationStatus::Failed => Self::Failed,
+            crate::io::verify_online::VerificationStatus::NotConfigured => Self::NotConfigured,
+            crate::io::verify_online::VerificationStatus::Verified => Self::Verified,
+            crate::io::verify_online::VerificationStatus::Failed => Self::Failed,
         }
     }
 }

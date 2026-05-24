@@ -17,9 +17,11 @@ use crate::model::verified::VerifiedPrivateKey;
 use crate::Result;
 
 mod decryption_key;
+mod kem;
 mod loader;
 mod signing;
 
+pub use kem::decode_kem_secret_key;
 pub use loader::{
     build_local_key_access, build_verified_private_key_from_password,
     load_crypto_context_from_keystore,

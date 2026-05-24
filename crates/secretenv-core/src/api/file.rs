@@ -103,7 +103,7 @@ impl VerifiedFileEncArtifact {
         options: OperationOptions,
     ) -> Result<SecretBytes> {
         key_ctx
-            .enforce_decryption_key_not_expired(&self.inner().document.protected.wrap, options)?;
+            .enforce_decryption_key_not_expired(&self.inner().document().protected.wrap, options)?;
         decrypt_file_document_with_context(
             self.inner(),
             key_ctx.member_handle(),

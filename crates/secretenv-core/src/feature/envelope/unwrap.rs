@@ -3,10 +3,10 @@
 
 //! Unwrap operations for v3 encryption
 
-use crate::crypto::kem::{decode_kem_secret_key, open_base, X25519SecretKey};
+use crate::crypto::kem::{open_base, X25519SecretKey};
 use crate::crypto::types::data::{Aad, Info, Plaintext};
 use crate::crypto::types::keys::MasterKey;
-use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
+use crate::feature::context::crypto::{decode_kem_secret_key, CryptoContext, DecryptionResult};
 use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info};
 use crate::feature::envelope::wrap_set::{RecipientWrap, WrapSet};
 use crate::model::common::WrapItem;

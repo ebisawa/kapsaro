@@ -3,8 +3,9 @@
 
 use std::path::PathBuf;
 
-use crate::app::verification::OnlineVerificationStatus;
 use crate::model::ssh::SshDeterminismStatus;
+
+pub use crate::app::verification::OnlineVerificationStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationResult {

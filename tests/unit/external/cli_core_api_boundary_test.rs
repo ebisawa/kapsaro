@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 
 #[test]
 fn cli_api_test_support_is_hidden_and_feature_gated() {
-    let content =
-        fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api source");
-    let test_support = test_support_section(&content);
+    let root = cli_api_root_source();
+    let test_support = cli_api_test_support_source();
 
-    assert!(content.contains("#[cfg(any(feature = \"cli-test-support\", test))]"));
-    assert!(content.contains("pub mod test_support {"));
+    assert!(root.contains("#[cfg(any(feature = \"cli-test-support\", test))]"));
+    assert!(root.contains("#[doc(hidden)]"));
+    assert!(root.contains("pub mod test_support;"));
 
     for new_root in [
         "pub mod settings {",
@@ -31,20 +31,29 @@ fn cli_api_test_support_is_hidden_and_feature_gated() {
 
 #[test]
 fn cli_api_uses_explicit_allow_lists() {
-    let content =
-        fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api source");
+    let root = cli_api_root_source();
+    let app = cli_api_app_source();
+    let presentation = cli_api_presentation_source();
+    let test_support = cli_api_test_support_source();
+    let content = cli_api_combined_source();
 
-    assert!(content.contains("pub mod context {"));
-    assert!(content.contains("pub mod file {"));
-    assert!(content.contains("pub mod kv {"));
-    assert!(content.contains("pub mod trust {"));
-    assert!(content.contains("pub mod presentation {"));
-    assert!(content.contains("execute_decrypt_file_command"));
-    assert!(content.contains("execute_inspect_file_command"));
-    assert!(content.contains("InspectOutput, InspectSection"));
-    assert!(content.contains("pub use crate::support::fs::atomic::{save_bytes, save_text};"));
-    assert!(content.contains("pub mod test_support {"));
-    assert!(content.contains("pub mod app {"));
+    assert!(root.contains("pub mod app;"));
+    assert!(root.contains("pub mod presentation;"));
+    assert!(root.contains("pub mod test_support;"));
+    assert!(app.contains("pub mod context {"));
+    assert!(app.contains("pub mod file {"));
+    assert!(app.contains("pub mod kv {"));
+    assert!(app.contains("pub mod trust {"));
+    assert!(app.contains("execute_decrypt_file_command"));
+    assert!(app.contains("execute_inspect_file_command"));
+    assert!(app.contains("InspectOutput, InspectSection"));
+    assert!(presentation.contains("pub use crate::support::fs::atomic::{save_bytes, save_text};"));
+    assert!(test_support.contains("pub mod settings {"));
+    assert!(content.contains("pub use crate::app::kv::types::{"));
+    assert!(
+        content.contains("use crate::api::kv::KvInputEntry as ApiKvInputEntry;"),
+        "cli_api app set command bridge must take public api KV entries"
+    );
 }
 
 #[test]
@@ -60,37 +69,40 @@ fn api_module_does_not_flat_reexport_facades() {
 
 #[test]
 fn cli_api_test_support_keeps_single_canonical_paths() {
-    let content =
-        fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api source");
-    let test_support = test_support_section(&content);
+    let test_support = cli_api_test_support_source();
 
     assert_absent(
-        test_support,
+        &test_support,
         "pub mod signature_backend {",
         "SignatureBackend must be exposed only through storage::ssh::backend",
     );
     assert_absent(
-        test_support,
+        &test_support,
         "pub use crate::io::ssh::protocol::{",
         "SSH protocol helpers must be exposed through their purpose-specific modules",
     );
     assert_absent(
-        test_support,
+        &test_support,
         "pub use crate::io::ssh::protocol::build_sha256_fingerprint",
         "build_sha256_fingerprint must use storage::ssh::protocol::fingerprint",
     );
     assert_absent(
-        test_support,
+        &test_support,
         "pub use crate::io::ssh::protocol::SshKeyDescriptor",
         "SshKeyDescriptor must use storage::ssh::protocol::key_descriptor",
     );
     assert_absent(
-        test_support,
+        &test_support,
         "pub use crate::io::ssh::backend::signature_backend::SignatureBackend",
         "SignatureBackend must not be duplicated under signature_backend",
     );
     assert_absent(
-        test_support,
+        &test_support,
+        "pub mod bootstrap {",
+        "member handle validation must be exposed through helpers::validation",
+    );
+    assert_absent(
+        &test_support,
         "::*;",
         "test_support must use explicit re-export allow-lists",
     );
@@ -98,9 +110,7 @@ fn cli_api_test_support_keeps_single_canonical_paths() {
 
 #[test]
 fn cli_api_does_not_reintroduce_broad_test_support_exports() {
-    let content =
-        fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api source");
-    let test_support = test_support_section(&content);
+    let test_support = cli_api_test_support_source();
 
     for obsolete_export in [
         "build_crypto_operation_error",
@@ -135,7 +145,7 @@ fn cli_api_does_not_reintroduce_broad_test_support_exports() {
         "RecipientWrap",
     ] {
         assert_absent(
-            test_support,
+            &test_support,
             obsolete_export,
             "test_support must keep a narrow purpose-based allow-list",
         );
@@ -160,16 +170,7 @@ fn core_internal_roots_do_not_keep_dead_convenience_reexports() {
         ),
         (
             "crates/secretenv-core/src/io/workspace/detection.rs",
-            [
-                "resolve_optional_workspace,",
-                "resolve_workspace_with_base,",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-            ],
+            ["resolve_workspace_with_base,", "", "", "", "", "", "", ""],
         ),
         (
             "crates/secretenv-core/src/io/workspace/members.rs",
@@ -270,6 +271,137 @@ fn production_cli_uses_only_allowed_core_boundaries() {
 }
 
 #[test]
+fn secret_inputs_use_api_facade_boundary() {
+    let set = fs::read_to_string("src/cli/set.rs").expect("read set command source");
+    let key_operations =
+        fs::read_to_string("src/cli/key/operations.rs").expect("read key operations source");
+
+    for (display_path, content) in [
+        ("src/cli/set.rs", set.as_str()),
+        ("src/cli/key/operations.rs", key_operations.as_str()),
+    ] {
+        assert_absent(
+            content,
+            "cli_api::presentation::secret::SecretString",
+            "production CLI secret-bearing input must use the public API facade boundary",
+        );
+        assert!(
+            content.contains("api::secret::SecretString"),
+            "{display_path} must make the secret input boundary explicit"
+        );
+    }
+}
+
+#[test]
+fn cli_api_does_not_reexport_redundant_secret_or_kv_input_facades() {
+    let app = cli_api_app_source();
+    let presentation = cli_api_presentation_source();
+
+    assert_absent(
+        &presentation,
+        "pub mod secret",
+        "production CLI must use api::secret for secret-bearing input",
+    );
+    assert_absent(
+        &app,
+        "KvInputEntry,",
+        "cli_api::app::kv::types must not re-export KV input entries",
+    );
+    assert!(
+        app.contains("use crate::api::kv::KvInputEntry as ApiKvInputEntry;"),
+        "set command bridge must keep public api KV input as the boundary"
+    );
+}
+
+#[test]
+fn app_cli_boundary_does_not_expose_online_io_status() {
+    let cli_app = cli_api_app_source();
+    let key_types = fs::read_to_string("crates/secretenv-core/src/app/key/types.rs")
+        .expect("read app key types source");
+    let registration_types =
+        fs::read_to_string("crates/secretenv-core/src/app/registration/types.rs")
+            .expect("read app registration types source");
+
+    for (display_path, content) in [
+        ("crates/secretenv-core/src/cli_api/app.rs", cli_app.as_str()),
+        (
+            "crates/secretenv-core/src/app/key/types.rs",
+            key_types.as_str(),
+        ),
+        (
+            "crates/secretenv-core/src/app/registration/types.rs",
+            registration_types.as_str(),
+        ),
+    ] {
+        assert_absent(
+            content,
+            "crate::io::verify_online::VerificationStatus",
+            &format!("{display_path} must expose app-owned online verification status"),
+        );
+    }
+
+    assert_absent(
+        &cli_app,
+        "KeyRemoveResult, OnlineVerificationStatus",
+        "cli_api::app::key::types must not re-export online status when api::online owns the public path",
+    );
+    assert_absent(
+        &cli_app,
+        "MemberKeySetupResult, OnlineVerificationStatus",
+        "cli_api::app::registration::types must not re-export online status when api::online owns the public path",
+    );
+}
+
+#[test]
+fn production_cli_uses_api_online_status_boundary() {
+    let key_text =
+        fs::read_to_string("src/cli/common/output/text/key.rs").expect("read key text source");
+
+    assert!(
+        key_text.contains("use secretenv_core::api::online::OnlineVerificationStatus;"),
+        "key text output must use the public api::online status boundary"
+    );
+    assert_absent(
+        &key_text,
+        "cli_api::app::key::types::OnlineVerificationStatus",
+        "production CLI must not depend on cli_api online status re-exports",
+    );
+}
+
+#[test]
+fn feature_member_layer_does_not_own_file_or_online_io() {
+    let member_add = fs::read_to_string("crates/secretenv-core/src/feature/member/add.rs")
+        .expect("read feature member add source");
+    let member_verification =
+        fs::read_to_string("crates/secretenv-core/src/feature/member/verification.rs")
+            .expect("read feature member verification source");
+
+    for (display_path, content) in [
+        (
+            "crates/secretenv-core/src/feature/member/add.rs",
+            member_add.as_str(),
+        ),
+        (
+            "crates/secretenv-core/src/feature/member/verification.rs",
+            member_verification.as_str(),
+        ),
+    ] {
+        for forbidden in [
+            "load_text_with_limit",
+            "save_member_content",
+            "load_member_file_from_path",
+            "verify_github_account(",
+        ] {
+            assert_absent(
+                content,
+                forbidden,
+                &format!("{display_path} must keep file and online I/O in app/io"),
+            );
+        }
+    }
+}
+
+#[test]
 fn public_entrypoints_do_not_keep_redundant_modules() {
     let content =
         fs::read_to_string("crates/secretenv-core/src/lib.rs").expect("read core lib source");
@@ -292,25 +424,23 @@ fn public_entrypoints_do_not_keep_redundant_modules() {
 
 #[test]
 fn cli_api_app_does_not_reexport_feature_dtos() {
-    let content =
-        fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api source");
-    let app_section = cli_app_section(&content);
+    let app = cli_api_app_source();
 
     assert_absent(
-        app_section,
+        &app,
         "pub use crate::feature::kv::types::KvInputEntry",
         "cli_api::app must expose app-owned DTOs instead of feature DTOs",
     );
-    assert!(
-        content.contains("pub use crate::app::kv::types::{"),
-        "cli_api::app::kv::types must expose app-owned KV DTOs"
+    assert_absent(
+        &app,
+        "KvInputEntry,",
+        "cli_api::app::kv::types must not expose KV input DTOs; use api::kv::KvInputEntry",
     );
 }
 
 #[test]
 fn online_test_support_modules_are_feature_gated() {
-    let content =
-        fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api source");
+    let content = cli_api_test_support_source();
 
     assert!(
         module_is_feature_gated(&content, "pub mod account {"),
@@ -343,18 +473,32 @@ fn implementation_roots_stay_crate_private() {
     }
 }
 
-fn test_support_section(content: &str) -> &str {
-    content
-        .split("#[cfg(any(feature = \"cli-test-support\", test))]")
-        .nth(1)
-        .expect("test_support cfg section")
+fn cli_api_root_source() -> String {
+    fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api root source")
 }
 
-fn cli_app_section(content: &str) -> &str {
-    content
-        .split("pub mod presentation {")
-        .next()
-        .expect("cli_api app section")
+fn cli_api_app_source() -> String {
+    fs::read_to_string("crates/secretenv-core/src/cli_api/app.rs").expect("read cli_api app source")
+}
+
+fn cli_api_presentation_source() -> String {
+    fs::read_to_string("crates/secretenv-core/src/cli_api/presentation.rs")
+        .expect("read cli_api presentation source")
+}
+
+fn cli_api_test_support_source() -> String {
+    fs::read_to_string("crates/secretenv-core/src/cli_api/test_support.rs")
+        .expect("read cli_api test_support source")
+}
+
+fn cli_api_combined_source() -> String {
+    [
+        cli_api_root_source(),
+        cli_api_app_source(),
+        cli_api_presentation_source(),
+        cli_api_test_support_source(),
+    ]
+    .join("\n")
 }
 
 fn module_is_feature_gated(content: &str, module_header: &str) -> bool {

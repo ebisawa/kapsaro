@@ -3,8 +3,8 @@
 
 use std::collections::BTreeSet;
 
+use crate::app::member::verification::verify_member_public_keys;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
-use crate::feature::member::verification::verify_member_public_keys;
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::VerificationStatus;

@@ -3,15 +3,19 @@
 
 use std::path::Path;
 
-use crate::app::artifact::{
-    artifact_recipient_evidence, list_workspace_encrypted_artifacts, load_artifact_content,
-    verify_artifact_signature_for_operation,
-};
+use crate::app::artifact::{list_workspace_encrypted_artifacts, load_artifact_content};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::feature::member::add::add_member_from_file;
+use crate::feature::artifact::{
+    artifact_recipient_evidence, verify_artifact_signature_for_operation,
+};
+use crate::feature::member::add::build_member_addition_from_content;
 use crate::format::content::EncContent;
-use crate::io::workspace::members::remove_member as remove_member_file;
+use crate::io::workspace::members::{
+    remove_member as remove_member_file, save_member_content, MemberStatus,
+};
+use crate::support::fs::load_text_with_limit;
+use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use tracing::debug;
@@ -20,7 +24,19 @@ use super::types::{MemberRemovalReport, MemberRemoveResult};
 
 pub fn add_member(options: &CommonCommandOptions, filename: &Path, force: bool) -> Result<String> {
     let workspace = require_workspace(options, "member add")?;
-    add_member_from_file(&workspace.root_path, filename, force)
+    let content = load_text_with_limit(filename, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
+    let source_name = format_path_relative_to_cwd(filename);
+    let addition = build_member_addition_from_content(&content, &source_name, options.debug)?;
+
+    save_member_content(
+        &workspace.root_path,
+        MemberStatus::Incoming,
+        &addition.member_handle,
+        &content,
+        force,
+    )?;
+
+    Ok(addition.member_handle)
 }
 
 pub fn evaluate_member_removal(

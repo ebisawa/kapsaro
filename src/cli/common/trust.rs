@@ -3,6 +3,7 @@
 
 //! Shared CLI prompts for trust decisions.
 
+use crate::cli::common::output::text::layout;
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, print_trust_review_line,
 };
@@ -333,26 +334,32 @@ impl RecipientDisplayRow {
 }
 
 fn format_member_key_rows(rows: &[RecipientDisplayRow]) -> Vec<String> {
+    let member_width = recipient_member_width(rows, "  ");
+    let mut lines = vec![format!(
+        "  {:member_width$}  key id",
+        "member handle",
+        member_width = member_width
+    )];
+    lines.extend(rows.iter().flat_map(|row| {
+        layout::format_pair_row("  ", &row.member_handle, &row.key_id, member_width)
+    }));
+    lines
+}
+
+fn recipient_member_width(rows: &[RecipientDisplayRow], prefix: &str) -> usize {
     let member_width = rows
         .iter()
         .map(|row| row.member_handle.len())
         .max()
         .unwrap_or("member handle".len())
         .max("member handle".len());
-    let mut lines = vec![format!(
-        "  {:member_width$}  key id",
-        "member handle",
-        member_width = member_width
-    )];
-    lines.extend(rows.iter().map(|row| {
-        format!(
-            "  {:member_width$}  {}",
-            row.member_handle,
-            row.key_id,
-            member_width = member_width
-        )
-    }));
-    lines
+    let key_id_width = rows
+        .iter()
+        .map(|row| row.key_id.len())
+        .max()
+        .unwrap_or("key id".len())
+        .max("key id".len());
+    layout::capped_pair_left_width(member_width, prefix, key_id_width)
 }
 
 fn recipient_diff_marker(status: ArtifactRecipientReviewDiffStatus) -> &'static str {
@@ -385,28 +392,48 @@ fn format_recipient_diff_rows(rows: &[ArtifactRecipientReviewDiffRow]) -> Vec<St
             )
         })
         .collect::<Vec<_>>();
+    let member_width = recipient_diff_member_width(&rows);
+    let mut lines = vec![format!(
+        "  change  {:member_width$}  key id",
+        "member handle",
+        member_width = member_width
+    )];
+    lines.extend(
+        rows.iter()
+            .flat_map(|(status, row)| format_recipient_diff_row(*status, row, member_width)),
+    );
+    lines
+}
+
+fn format_recipient_diff_row(
+    status: ArtifactRecipientReviewDiffStatus,
+    row: &RecipientDisplayRow,
+    member_width: usize,
+) -> Vec<String> {
+    let marker = recipient_diff_marker(status);
+    let prefix = format!("  {marker} ");
+    layout::format_pair_row(&prefix, &row.member_handle, &row.key_id, member_width)
+        .into_iter()
+        .map(|line| style_recipient_diff_line(status, line))
+        .collect()
+}
+
+fn recipient_diff_member_width(
+    rows: &[(ArtifactRecipientReviewDiffStatus, RecipientDisplayRow)],
+) -> usize {
     let member_width = rows
         .iter()
         .map(|(_, row)| row.member_handle.len())
         .max()
         .unwrap_or("member handle".len())
         .max("member handle".len());
-    let mut lines = vec![format!(
-        "  change  {:member_width$}  key id",
-        "member handle",
-        member_width = member_width
-    )];
-    lines.extend(rows.iter().map(|(status, row)| {
-        let line = format!(
-            "  {} {:member_width$}  {}",
-            recipient_diff_marker(*status),
-            row.member_handle,
-            row.key_id,
-            member_width = member_width
-        );
-        style_recipient_diff_line(*status, line)
-    }));
-    lines
+    let key_id_width = rows
+        .iter()
+        .map(|(_, row)| row.key_id.len())
+        .max()
+        .unwrap_or("key id".len())
+        .max("key id".len());
+    layout::capped_pair_left_width(member_width, "  change  ", key_id_width)
 }
 
 #[cfg(test)]

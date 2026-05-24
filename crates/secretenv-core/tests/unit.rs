@@ -130,8 +130,6 @@ pub mod format_signature_test;
 pub mod format_token_encode_test;
 #[path = "unit/external/format_trust_store_test.rs"]
 pub mod format_trust_store_test;
-#[path = "unit/external/io_config_bootstrap_test.rs"]
-pub mod io_config_bootstrap_test;
 #[path = "unit/external/io_config_store_test.rs"]
 pub mod io_config_store_test;
 #[cfg(feature = "online")]
@@ -147,6 +145,8 @@ pub mod io_keystore_resolver_test;
 pub mod io_keystore_storage_permission_test;
 #[path = "unit/external/io_process_env_test.rs"]
 pub mod io_process_env_test;
+#[path = "unit/external/io_ssh_agent_validation_test.rs"]
+pub mod io_ssh_agent_validation_test;
 #[path = "unit/external/io_ssh_backend_test.rs"]
 pub mod io_ssh_backend_test;
 #[path = "unit/external/io_ssh_protocol_wire_test.rs"]

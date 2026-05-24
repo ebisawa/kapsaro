@@ -3,10 +3,10 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
+use crate::app::key::generate::{generate_and_save_key, AppKeyGenerationOptions};
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::verification::OnlineVerificationStatus;
-use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
 use crate::model::public_key::GithubAccount;
 use crate::Result;
 
@@ -148,9 +148,13 @@ fn resolve_generated_member_setup(
     let github_account = resolve_github_account(github_user, common.debug)?;
     let github_verification =
         resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref(), common.debug)?;
-    let mut key_result =
-        generate_member_key_result(common, member_handle, github_account, ssh_ctx)?;
-    key_result.github_verification = github_verification;
+    let key_result = generate_member_key_result(
+        common,
+        member_handle,
+        github_account,
+        github_verification,
+        ssh_ctx,
+    )?;
 
     Ok(build_generated_member_setup(member_handle, key_result))
 }
@@ -196,9 +200,7 @@ fn resolve_github_verification(
     verbose: bool,
 ) -> Result<OnlineVerificationStatus> {
     match github_account {
-        Some(account) => {
-            verify_preflight_github_binding(ssh_public_key, account, verbose).map(Into::into)
-        }
+        Some(account) => verify_preflight_github_binding(ssh_public_key, account, verbose),
         None => Ok(OnlineVerificationStatus::NotConfigured),
     }
 }
@@ -207,10 +209,11 @@ fn generate_member_key_result(
     common: &CommonCommandOptions,
     member_handle: &str,
     github_account: Option<GithubAccount>,
+    github_verification: OnlineVerificationStatus,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberKeySetupResult> {
     let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
-    let result = generate_key(KeyGenerationOptions {
+    let result = generate_and_save_key(AppKeyGenerationOptions {
         member_handle: member_handle.to_string(),
         home: common.home.clone(),
         created_at,
@@ -218,8 +221,8 @@ fn generate_member_key_result(
         no_activate: false,
         debug: common.debug,
         github_account,
-        verbose: common.verbose,
-        ssh_binding: ssh_ctx.into_ssh_binding(),
+        github_verification,
+        ssh_ctx,
     })?;
     Ok(MemberKeySetupResult {
         kid: result.kid,
@@ -227,7 +230,7 @@ fn generate_member_key_result(
         expires_at: result.expires_at,
         ssh_fingerprint: Some(result.ssh_fingerprint),
         ssh_determinism: Some(result.ssh_determinism),
-        github_verification: OnlineVerificationStatus::NotConfigured,
+        github_verification: result.github_verification,
     })
 }
 

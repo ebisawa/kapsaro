@@ -204,7 +204,7 @@ impl<'de> Deserialize<'de> for KeyPossessionProof {
 /// {
 ///   "alg": "eddsa-ed25519",
 ///   "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-///   "signer_pub": { /* PublicKey: secretenv:format:public-key@6 */ },
+///   "signer_pub": { /* PublicKey: secretenv:format:public-key@7 */ },
 ///   "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 ///   "sig": "SGVsbG8gV29ybGQ..."
 /// }

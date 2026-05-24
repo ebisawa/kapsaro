@@ -21,11 +21,10 @@ use uuid::Uuid;
 #[test]
 fn test_parse_public_key_str_with_schema() {
     let public_key = serde_json::json!({
-        "protected": {
-            "format": format::PUBLIC_KEY_V6,
-            "subject_handle": "alice@example.com",
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "identity": {
+            "protected": {
+                "format": format::PUBLIC_KEY_V7,
+                "subject_handle": "alice@example.com",
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "keys": {
                     "kem": {
                         "kty": "OKP",
@@ -43,11 +42,10 @@ fn test_parse_public_key_str_with_schema() {
                     "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
                 }
+    ,            "expires_at": "2027-01-01T00:00:00Z"
             },
-            "expires_at": "2027-01-01T00:00:00Z"
-        },
-        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    });
+            "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        });
 
     let parsed = parse_public_key_str(&public_key.to_string(), "inline public key").unwrap();
     assert_eq!(parsed.protected.subject_handle, "alice@example.com");

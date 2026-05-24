@@ -10,16 +10,38 @@ use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use secretenv_core::cli_api::test_support::domain::public_key::GithubAccount;
+use secretenv_core::cli_api::test_support::domain::public_key::{BindingClaims, GithubAccount};
+use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
 use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
-    build_public_key, PublicKeyDocumentParams,
+    build_attestation, build_public_key, PublicKeyDocumentParams,
 };
+use secretenv_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
 use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
 use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 use secretenv_core::cli_api::test_support::storage::workspace::members::load_member_file_from_path;
+use secretenv_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
 #[cfg(unix)]
 use std::process::Command as StdCommand;
+
+fn test_ssh_binding(temp_dir: &tempfile::TempDir) -> SshBindingContext {
+    let ssh_private_key = temp_dir.path().join(".ssh").join("test_ed25519");
+    let public_key = fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub"))
+        .unwrap()
+        .trim()
+        .to_string();
+    SshBindingContext {
+        fingerprint: build_sha256_fingerprint(&public_key).unwrap(),
+        public_key,
+        backend: Box::new(
+            crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_private_key)
+                .unwrap(),
+        ) as Box<dyn SignatureBackend>,
+        determinism: SshDeterminismStatus::Verified,
+    }
+}
 
 fn rewrite_member_with_github_binding(
     temp_dir: &tempfile::TempDir,
@@ -32,17 +54,33 @@ fn rewrite_member_with_github_binding(
     let existing = load_member_file_from_path(member_file).unwrap();
     let created_at = existing.protected.created_at.clone().unwrap();
     let expires_at = existing.protected.expires_at.clone();
-    let public_key = build_public_key(&PublicKeyDocumentParams {
-        member_handle,
-        identity: existing.protected.identity,
-        created_at: &created_at,
-        expires_at: &expires_at,
-        sig_sk: key_ctx.signing_key(),
-        debug: false,
+    let keys = existing.protected.keys;
+    let binding_claims = Some(BindingClaims {
         github_account: Some(GithubAccount {
             id,
             login: login.to_string(),
         }),
+    });
+    let attestation = build_attestation(
+        &test_ssh_binding(temp_dir),
+        &AttestationBodyInput {
+            subject_handle: member_handle,
+            keys: &keys,
+            binding_claims: binding_claims.as_ref(),
+            created_at: Some(&created_at),
+            expires_at: &expires_at,
+        },
+    )
+    .unwrap();
+    let public_key = build_public_key(&PublicKeyDocumentParams {
+        member_handle,
+        keys,
+        binding_claims,
+        attestation,
+        created_at: &created_at,
+        expires_at: &expires_at,
+        sig_sk: key_ctx.signing_key(),
+        debug: false,
     })
     .unwrap();
     fs::write(
@@ -63,14 +101,28 @@ fn rewrite_member_with_foreign_identity(
     let source = load_member_file_from_path(source_member_file).unwrap();
     let created_at = source.protected.created_at.clone().unwrap();
     let expires_at = source.protected.expires_at.clone();
+    let keys = source.protected.keys;
+    let binding_claims: Option<BindingClaims> = None;
+    let attestation = build_attestation(
+        &test_ssh_binding(temp_dir),
+        &AttestationBodyInput {
+            subject_handle: target_member_handle,
+            keys: &keys,
+            binding_claims: binding_claims.as_ref(),
+            created_at: Some(&created_at),
+            expires_at: &expires_at,
+        },
+    )
+    .unwrap();
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle: target_member_handle,
-        identity: source.protected.identity,
+        keys,
+        binding_claims,
+        attestation,
         created_at: &created_at,
         expires_at: &expires_at,
         sig_sk: key_ctx.signing_key(),
         debug: false,
-        github_account: None,
     })
     .unwrap();
     fs::write(

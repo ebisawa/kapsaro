@@ -7,7 +7,7 @@ use secretenv_core::cli_api::test_support::domain::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyProtected,
 };
 use secretenv_core::cli_api::test_support::domain::public_key::{
-    Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+    Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
 use secretenv_core::cli_api::test_support::storage::keystore::storage::{
     list_kids, load_private_key, load_public_key, save_key_pair_atomic,
@@ -57,11 +57,10 @@ fn test_save_and_load_private_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
+                            keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
@@ -80,7 +79,6 @@ fn test_save_and_load_private_key() {
                     pub_: "ssh-ed25519 AAAA...".to_string(),
                     sig: B64URL_64.to_string(),
                 },
-            },
             binding_claims: None,
             expires_at: "2025-01-01T00:00:00Z".to_string(),
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
@@ -121,11 +119,10 @@ fn test_save_and_load_public_key() {
 
     let public_key = PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6.to_string(),
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
+                            keys: IdentityKeys {
                     kem: JwkOkpPublicKey {
                         kty: "OKP".to_string(),
                         crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
@@ -144,7 +141,6 @@ fn test_save_and_load_public_key() {
                     pub_: "ssh-ed25519 AAAA...".to_string(),
                     sig: B64URL_64.to_string(),
                 },
-            },
             binding_claims: None,
             expires_at: "2025-01-01T00:00:00Z".to_string(),
             created_at: Some("2024-01-01T00:00:00Z".to_string()),

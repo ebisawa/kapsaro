@@ -8,12 +8,12 @@ use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
+use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
 use crate::model::public_key::{
-    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, PublicKey,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, PublicKey, PublicKeyParts,
 };
-use crate::model::wire::algorithm;
 use crate::support::kid::format_kid_display;
 use crate::Result;
 use ed25519_dalek::SigningKey;
@@ -23,12 +23,13 @@ use tracing::debug;
 /// Parameters for building a public key.
 pub struct PublicKeyDocumentParams<'a> {
     pub member_handle: &'a str,
-    pub identity: Identity,
+    pub keys: IdentityKeys,
+    pub binding_claims: Option<BindingClaims>,
+    pub attestation: Attestation,
     pub created_at: &'a str,
     pub expires_at: &'a str,
     pub sig_sk: &'a SigningKey,
     pub debug: bool,
-    pub github_account: Option<GithubAccount>,
 }
 
 #[derive(Serialize)]
@@ -36,42 +37,45 @@ pub struct PublicKeyDocumentParams<'a> {
 struct PublicKeyProtectedWithoutKid {
     format: String,
     subject_handle: String,
-    identity: Identity,
+    keys: IdentityKeys,
     #[serde(skip_serializing_if = "Option::is_none")]
     binding_claims: Option<BindingClaims>,
+    attestation: Attestation,
     expires_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     created_at: Option<String>,
 }
 
+pub fn build_binding_claims(github_account: Option<GithubAccount>) -> Option<BindingClaims> {
+    github_account.map(|github_account| BindingClaims {
+        github_account: Some(github_account),
+    })
+}
+
 /// Build public key with self-signature.
 pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKey> {
-    let binding_claims = params
-        .github_account
-        .clone()
-        .map(|github_account| BindingClaims {
-            github_account: Some(github_account),
-        });
     let protected_without_kid = PublicKeyProtectedWithoutKid {
-        format: crate::model::wire::format::PUBLIC_KEY_V6.to_string(),
+        format: crate::model::wire::format::PUBLIC_KEY_V7.to_string(),
         subject_handle: params.member_handle.to_string(),
-        identity: params.identity.clone(),
-        binding_claims: binding_claims.clone(),
+        keys: params.keys.clone(),
+        binding_claims: params.binding_claims.clone(),
+        attestation: params.attestation.clone(),
         expires_at: params.expires_at.to_string(),
         created_at: Some(params.created_at.to_string()),
     };
     let derived_kid = derive_public_key_kid(
         &serde_json::to_value(&protected_without_kid).map_err(crate::Error::from)?,
     )?;
-    let protected = PublicKey::new(
-        params.member_handle.to_string(),
-        derived_kid.clone(),
-        params.identity.clone(),
-        binding_claims,
-        params.expires_at.to_string(),
-        Some(params.created_at.to_string()),
-        String::new(),
-    )
+    let protected = PublicKey::new(PublicKeyParts {
+        subject_handle: params.member_handle.to_string(),
+        kid: derived_kid.clone(),
+        keys: params.keys.clone(),
+        binding_claims: params.binding_claims.clone(),
+        attestation: params.attestation.clone(),
+        expires_at: params.expires_at.to_string(),
+        created_at: Some(params.created_at.to_string()),
+        signature: String::new(),
+    })
     .protected;
 
     let protected_jcs = jcs::normalize(&protected)?;
@@ -93,17 +97,13 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
 /// Build attestation for identity keys.
 pub fn build_attestation(
     ssh_binding: &SshBindingContext,
-    identity_keys: &IdentityKeys,
+    input: &AttestationBodyInput<'_>,
 ) -> Result<Attestation> {
-    let identity_keys_jcs = jcs::normalize(identity_keys)?;
+    let body = build_attestation_body_bytes(input)?;
 
     let raw_sig = ssh_binding
         .backend
-        .sign_sshsig(
-            ssh::ATTESTATION_NAMESPACE,
-            &ssh_binding.public_key,
-            &identity_keys_jcs,
-        )
+        .sign_sshsig(ssh::ATTESTATION_NAMESPACE, &ssh_binding.public_key, &body)
         .map_err(|e| {
             crate::Error::from(SshError::build_operation_failed_error_with_source(
                 format!("Failed to sign attestation: {}", e),

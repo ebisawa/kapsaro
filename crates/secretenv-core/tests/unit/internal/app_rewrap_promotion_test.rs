@@ -10,7 +10,9 @@ use crate::app::rewrap::types::{
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::io::verify_online::VerifiedGithubIdentity;
-use crate::model::public_key::{Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey};
+use crate::model::public_key::{
+    Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyParts,
+};
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
 
 use super::{build_promotion_review_plan, build_promotion_review_session_with_verifier};
@@ -68,33 +70,31 @@ fn build_candidate(
         review,
         source_path: std::path::PathBuf::from(format!("members/incoming/{}.json", member_handle)),
         source_content: "{}".to_string(),
-        public_key: PublicKey::new(
-            member_handle.to_string(),
-            kid_for(member_handle).to_string(),
-            Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: encode_base64url_nopad(&[1u8; 32]),
-                    },
+        public_key: PublicKey::new(PublicKeyParts {
+            subject_handle: member_handle.to_string(),
+            kid: kid_for(member_handle).to_string(),
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 },
-                attestation: Attestation {
-                    method: "ssh".to_string(),
-                    pub_: "ssh-ed25519 AAAA test".to_string(),
-                    sig: "sig".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: encode_base64url_nopad(&[1u8; 32]),
                 },
             },
-            None,
-            "2030-01-01T00:00:00Z".to_string(),
-            None,
-            "signature".to_string(),
-        ),
+            binding_claims: None,
+            attestation: Attestation {
+                method: "ssh".to_string(),
+                pub_: "ssh-ed25519 AAAA test".to_string(),
+                sig: "sig".to_string(),
+            },
+            expires_at: "2030-01-01T00:00:00Z".to_string(),
+            created_at: None,
+            signature: "signature".to_string(),
+        }),
     }
 }
 

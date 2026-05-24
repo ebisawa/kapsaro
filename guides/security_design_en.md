@@ -464,11 +464,11 @@ SecretEnv does not provide a cryptographic revocation list in the CRL sense. To 
 
 #### 4.4.1 Immutability of Key Statement ID (kid)
 
-Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens. It is derived by taking the `PublicKey@6.protected` JSON object with the `kid` field removed (`protected_without_kid`), canonicalizing it to bytes with JCS (§3.6), hashing with SHA-256, taking the first 20 bytes of the digest, and encoding those bytes as unpadded Crockford Base32 (32 characters). In symbols: `kid = Encode_CrockfordBase32(SHA256(jcs(protected_without_kid))[0..20])`. The stored `protected.kid` must match this recomputed value.
+Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens. It is derived by taking the `PublicKey@7.protected` JSON object with the `kid` field removed (`protected_without_kid`), canonicalizing it to bytes with JCS (§3.6), hashing with SHA-256, taking the first 20 bytes of the digest, and encoding those bytes as unpadded Crockford Base32 (32 characters). In symbols: `kid = Encode_CrockfordBase32(SHA256(jcs(protected_without_kid))[0..20])`. The stored `protected.kid` must match this recomputed value.
 
 Crockford Base32 avoids visually confusable characters (such as I, L, O, and U in typical Base32), which reduces manual transcription errors and keeps canonical strings usable without hyphens in URLs and JSON.
 
-`kid` is a central identifier for context binding: it appears in HPKE seal/open `info` / AAD, signing payloads, CEK derivation, and related inputs in §8. Any meaningful change to the PublicKey document (key material, identity, `binding_claims`, `expires_at`, etc.) yields a different `kid`, so reuse of old wraps or signing contexts across the new statement does not verify.
+`kid` is a central identifier for context binding: it appears in HPKE seal/open `info` / AAD, signing payloads, CEK derivation, and related inputs in §8. Any meaningful change to the PublicKey document (key material, SSH attestation, `binding_claims`, `expires_at`, etc.) yields a different `kid`, so reuse of old wraps or signing contexts across the new statement does not verify.
 
 ### 4.5 Key Rotation
 
@@ -502,7 +502,7 @@ The main fields of `signature_v4` (artifact signature) are as follows.
 | --- | --- | --- | --- |
 | `alg` | string | Always `eddsa-ed25519` (PureEdDSA) | Unambiguous identification of the signature algorithm |
 | `kid` | Crockford Base32 (32 characters) | Signer's key statement ID | Binds the signing context of the artifact to the `signer_pub` generation (§4.4.1, §8) |
-| `signer_pub` | `PublicKey@6` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
+| `signer_pub` | `PublicKey@7` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
 | `mac` | `hmac-sha256:<base64url>` | Key-possession proof | HMAC used to verify that the artifact body, signer `kid`, and MAC key derived from the HPKE-opened MK correspond to each other |
 | `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact; the signed input is the signature domain plus a length-framed signature header derived from `alg` / `kid`, format-specific body bytes, and `mac` |
 
@@ -540,7 +540,7 @@ For file-enc and kv-enc, the Ed25519 verification key is always taken from the e
 
 Cryptographic verification of an artifact is organized into three layers (Layer A → Layer B → Layer C).
 
-- Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey@6` document and has not been tampered with
+- Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey@7` document and has not been tampered with
   - Structure and schema validation — Required fields and format constraints
   - Self-signature verification — §5.5; detects tampering with the public-key document
   - SSH attestation verification — §5.6; checks binding between the SecretEnv key and the SSH key
@@ -555,13 +555,15 @@ Local trust store exception: trust store documents have no embedded `signer_pub`
 
 ### 5.5 PublicKey Self-Signature
 
-`PublicKey@6` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
+`PublicKey@7` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
 
 What this establishes is key consistency in §1.6: evidence that the party who created this public-key document held the corresponding SecretEnv signing private key. An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
 
 ### 5.6 SSH Attestation
 
 SSH attestation shows that the SecretEnv key material (KEM / signing) inside `signer_pub` is cryptographically bound to a specific SSH Ed25519 key. The SSHSIG namespace is fixed to `secretenv-attestation` so `signed_data` does not collide with signatures for other purposes.
+
+The PublicKey attestation body signed by SSH is the JCS-normalized JSON object containing `p = secretenv:context:sshsig-message:public-key:attestation@7`, `subject_handle`, `keys`, optional `binding_claims`, optional `created_at`, and `expires_at`. It excludes `kid`, `attestation`, and `signature`. SSHSIG signed_data follows the OpenSSH `SSHSIG` format with namespace `secretenv-attestation`, empty reserved field, hash algorithm `sha256`, and message hash `SHA256(JCS(attestation_body))`.
 
 What is established is correspondence between the SecretEnv public key and the SSH public key. Who owns the SSH key (identity) is not determined by attestation alone. SSH signatures for PrivateKey protection use a different namespace (`secretenv-key-protection`), and the IKM derivation context is separated in §9.2.1.
 
@@ -634,7 +636,7 @@ The full document layout is as follows.
   "signature": {
     "alg": "eddsa-ed25519",
     "kid": "<signer kid>",
-    "signer_pub": { "...": "PublicKey@6" },
+    "signer_pub": { "...": "PublicKey@7" },
     "mac": "hmac-sha256:<b64url>",
     "sig": "<b64url>"
   }
@@ -1455,7 +1457,7 @@ graph TB
     end
 
     subgraph public_key["PublicKey (workspace)"]
-        PK_DOC["secretenv:format:public-key@6<br/>self-signature + SSH attestation"]
+        PK_DOC["secretenv:format:public-key@7<br/>self-signature + SSH attestation"]
     end
 
     subgraph private_key["PrivateKey (local keystore)"]

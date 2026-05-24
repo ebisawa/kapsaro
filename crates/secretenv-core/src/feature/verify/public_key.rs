@@ -9,10 +9,11 @@ use crate::feature::context::expiry::{
 use crate::format::codec::base64_public::{decode_base64url_nopad, decode_base64url_nopad_array};
 use crate::format::jcs;
 use crate::format::kid::derive_public_key_kid;
+use crate::format::public_key::AttestationBodyInput;
 use crate::io::ssh::verify::verify_attestation;
 use crate::model::public_key::{
-    AttestationProof, AttestedIdentity, PublicKey, VerifiedPublicKeyAttested, VerifiedRecipientKey,
-    VerifiedSigningPublicKey,
+    AttestationProof, AttestedKeyStatement, PublicKey, VerifiedPublicKeyAttested,
+    VerifiedRecipientKey, VerifiedSigningPublicKey,
 };
 use crate::model::verification::ExpiryProof;
 use crate::model::verification::SelfSignatureProof;
@@ -56,10 +57,8 @@ fn verify_public_key_self_signature_context(
     let protected_jcs = jcs::normalize(&public_key.protected).map_err(|e| {
         Error::build_crypto_error_with_source("Failed to normalize PublicKey protected", e)
     })?;
-    let verifying_key_bytes: [u8; 32] = decode_base64url_nopad_array(
-        &public_key.protected.identity.keys.sig.x,
-        "Ed25519 public key",
-    )?;
+    let verifying_key_bytes: [u8; 32] =
+        decode_base64url_nopad_array(&public_key.protected.keys.sig.x, "Ed25519 public key")?;
     let verifying_key = VerifyingKey::from_bytes(&verifying_key_bytes)
         .map_err(|e| Error::build_crypto_error_with_source("Invalid Ed25519 public key", e))?;
 
@@ -116,20 +115,27 @@ fn verify_signing_public_key_context(
     // Verify attestation
     log_public_key_verification(debug, public_key, context, "attestation");
     verify_attestation(
-        &public_key.protected.identity.keys,
-        &public_key.protected.identity.attestation.pub_,
-        &public_key.protected.identity.attestation.sig,
+        &AttestationBodyInput {
+            subject_handle: &public_key.protected.subject_handle,
+            keys: &public_key.protected.keys,
+            binding_claims: public_key.protected.binding_claims.as_ref(),
+            created_at: public_key.protected.created_at.as_deref(),
+            expires_at: &public_key.protected.expires_at,
+        },
+        &public_key.protected.attestation.method,
+        &public_key.protected.attestation.pub_,
+        &public_key.protected.attestation.sig,
     )?;
 
     let proof = AttestationProof {
-        method: public_key.protected.identity.attestation.method.clone(),
-        ssh_pub: public_key.protected.identity.attestation.pub_.clone(),
+        method: public_key.protected.attestation.method.clone(),
+        ssh_pub: public_key.protected.attestation.pub_.clone(),
         verified_at: None,
     };
-    let attested_identity = AttestedIdentity::new(public_key.protected.identity.clone(), proof);
+    let attested_statement = AttestedKeyStatement::new(public_key.protected.keys.clone(), proof);
 
     let attested =
-        VerifiedPublicKeyAttested::new(public_key.clone(), verified.proof, attested_identity);
+        VerifiedPublicKeyAttested::new(public_key.clone(), verified.proof, attested_statement);
 
     Ok(VerifiedSigningPublicKey::new(
         attested,

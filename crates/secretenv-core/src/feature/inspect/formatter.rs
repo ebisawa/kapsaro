@@ -80,7 +80,7 @@ pub(crate) fn append_signer_info(
     out: &mut String,
 ) {
     if let Some(signer_pub) = signer_pub {
-        let attestation = &signer_pub.protected.identity.attestation;
+        let attestation = &signer_pub.protected.attestation;
         append_line(
             out,
             format!(

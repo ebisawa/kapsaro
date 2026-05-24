@@ -4,7 +4,8 @@
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::io::verify_online::{VerificationResult, VerificationStatus, VerifiedGithubIdentity};
 use crate::model::public_key::{
-    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    PublicKeyParts,
 };
 
 use super::TrustApprovalCandidateBuilder;
@@ -21,33 +22,31 @@ fn build_public_key(github_binding_configured: bool) -> PublicKey {
         }),
     });
 
-    PublicKey::new(
-        MEMBER_HANDLE.to_string(),
-        KID.to_string(),
-        Identity {
-            keys: IdentityKeys {
-                kem: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: "X25519".to_string(),
-                    x: encode_base64url_nopad(&[2u8; 32]),
-                },
-                sig: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: "Ed25519".to_string(),
-                    x: encode_base64url_nopad(&[1u8; 32]),
-                },
+    PublicKey::new(PublicKeyParts {
+        subject_handle: MEMBER_HANDLE.to_string(),
+        kid: KID.to_string(),
+        keys: IdentityKeys {
+            kem: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: "X25519".to_string(),
+                x: encode_base64url_nopad(&[2u8; 32]),
             },
-            attestation: Attestation {
-                method: "ssh".to_string(),
-                pub_: ATTESTOR_PUB.to_string(),
-                sig: "sig".to_string(),
+            sig: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: "Ed25519".to_string(),
+                x: encode_base64url_nopad(&[1u8; 32]),
             },
         },
         binding_claims,
-        "2030-01-01T00:00:00Z".to_string(),
-        None,
-        "signature".to_string(),
-    )
+        attestation: Attestation {
+            method: "ssh".to_string(),
+            pub_: ATTESTOR_PUB.to_string(),
+            sig: "sig".to_string(),
+        },
+        expires_at: "2030-01-01T00:00:00Z".to_string(),
+        created_at: None,
+        signature: "signature".to_string(),
+    })
 }
 
 #[test]

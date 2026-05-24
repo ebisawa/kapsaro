@@ -1,19 +1,19 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! PublicKey model
+//! PublicKey model.
 //!
-//! Includes attested identity and verified public key types for functional domain modeling.
+//! Captures the signed public key statement and attestation metadata.
 
-use crate::model::wire::format::PUBLIC_KEY_V6;
+use crate::model::wire::format::PUBLIC_KEY_V7;
 use serde::{Deserialize, Serialize};
 
 pub use super::public_key_verified::{
-    AttestationProof, AttestedIdentity, VerifiedBindingClaims, VerifiedPublicKeyAttested,
+    AttestationProof, AttestedKeyStatement, VerifiedBindingClaims, VerifiedPublicKeyAttested,
     VerifiedRecipientKey, VerifiedSigningPublicKey,
 };
 
-/// PublicKey v6 document (signed container)
+/// PublicKey v7 document (signed container)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKey {
@@ -28,7 +28,7 @@ pub struct PublicKey {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicKeyProtected {
-    /// Format identifier: "secretenv:format:public-key@6"
+    /// Format identifier: "secretenv:format:public-key@7"
     pub format: String,
 
     /// Subject handle asserted by this key statement.
@@ -37,12 +37,15 @@ pub struct PublicKeyProtected {
     /// Statement ID (canonical Crockford Base32, 32 characters)
     pub kid: String,
 
-    /// Identity (Keys + Attestation)
-    pub identity: Identity,
+    /// SecretEnv public key material.
+    pub keys: IdentityKeys,
 
     /// Optional binding claims (external service bindings; verified online)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub binding_claims: Option<BindingClaims>,
+
+    /// SSH attestation over the public key statement body.
+    pub attestation: Attestation,
 
     /// Expiration timestamp (RFC 3339)
     pub expires_at: String,
@@ -52,15 +55,20 @@ pub struct PublicKeyProtected {
     pub created_at: Option<String>,
 }
 
-/// Identity (Keys + Attestation)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Identity {
+/// Construction input for a PublicKey document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicKeyParts {
+    pub subject_handle: String,
+    pub kid: String,
     pub keys: IdentityKeys,
+    pub binding_claims: Option<BindingClaims>,
     pub attestation: Attestation,
+    pub expires_at: String,
+    pub created_at: Option<String>,
+    pub signature: String,
 }
 
-/// Identity Keys (KEM + Sig)
+/// SecretEnv public keys (KEM + signature).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct IdentityKeys {
@@ -85,7 +93,7 @@ pub struct JwkOkpPublicKey {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Attestation {
-    /// Method: "ssh"
+    /// Method: "ssh-sign"
     pub method: String,
 
     /// SSH public key (OpenSSH format)
@@ -117,27 +125,20 @@ pub struct GithubAccount {
 }
 impl PublicKey {
     /// Create a new PublicKey with the given parameters
-    pub fn new(
-        subject_handle: String,
-        kid: String,
-        identity: Identity,
-        binding_claims: Option<BindingClaims>,
-        expires_at: String,
-        created_at: Option<String>,
-        signature: String,
-    ) -> Self {
+    pub fn new(parts: PublicKeyParts) -> Self {
         let protected = PublicKeyProtected {
-            format: PUBLIC_KEY_V6.to_string(),
-            subject_handle,
-            kid,
-            identity,
-            binding_claims,
-            expires_at,
-            created_at,
+            format: PUBLIC_KEY_V7.to_string(),
+            subject_handle: parts.subject_handle,
+            kid: parts.kid,
+            keys: parts.keys,
+            binding_claims: parts.binding_claims,
+            attestation: parts.attestation,
+            expires_at: parts.expires_at,
+            created_at: parts.created_at,
         };
         Self {
             protected,
-            signature,
+            signature: parts.signature,
         }
     }
 }

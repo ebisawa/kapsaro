@@ -8,11 +8,10 @@
 use super::protocol::parse::decode_ssh_public_key_blob;
 use super::protocol::{sshsig, wire};
 use crate::format::codec::base64_public::decode_base64url_nopad_array;
-use crate::format::jcs;
+use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
-use crate::model::public_key::IdentityKeys;
 use crate::Result;
 use ed25519_dalek::{Verifier, VerifyingKey};
 
@@ -55,19 +54,17 @@ pub fn verify_sshsig(
     ssh_keygen.verify(ssh_pubkey, ssh::ATTESTATION_NAMESPACE, message, signature)
 }
 
-/// Build signed data for attestation verification
-pub fn build_attestation_signed_data(identity_keys: &IdentityKeys) -> Result<Vec<u8>> {
-    // JCS normalize identity.keys
-    let identity_keys_jcs = jcs::normalize(identity_keys).map_err(|e| {
+/// Build signed data for PublicKey attestation verification.
+pub fn build_attestation_signed_data(input: &AttestationBodyInput<'_>) -> Result<Vec<u8>> {
+    let attestation_body = build_attestation_body_bytes(input).map_err(|e| {
         crate::Error::from(SshError::build_operation_failed_error_with_source(
-            format!("Failed to normalize identity.keys: {}", e),
+            format!("Failed to normalize PublicKey attestation body: {}", e),
             e,
         ))
     })?;
 
-    // Build signed_data with the attestation namespace
     Ok(sshsig::build_sshsig_signed_data(
-        &identity_keys_jcs,
+        &attestation_body,
         ssh::ATTESTATION_NAMESPACE,
     ))
 }
@@ -137,13 +134,14 @@ fn extract_ed25519_pubkey_from_ssh(ssh_pubkey: &str) -> Result<VerifyingKey> {
 /// Verify attestation signature.
 ///
 /// Verification steps:
-/// 1. Normalize the `identity.keys` object using JCS
-/// 2. Compute the SHA256 of the normalized bytes
-/// 3. Verify `sig` with `pub` using the attestation namespace
+/// 1. Build and normalize the PublicKey attestation body with JCS
+/// 2. Compute the SSHSIG signed_data with the attestation namespace
+/// 3. Verify `sig` with `pub`
 ///
 /// # Arguments
 ///
-/// * `identity_keys` - IdentityKeys object (JCS normalized bytes will be computed)
+/// * `input` - PublicKey statement data covered by attestation
+/// * `method` - Attestation method, currently only "ssh-sign"
 /// * `ssh_pubkey` - SSH public key in OpenSSH format (from attestation.pub)
 /// * `sig_b64url` - Base64url-encoded Ed25519 raw signature (64 bytes)
 ///
@@ -151,12 +149,21 @@ fn extract_ed25519_pubkey_from_ssh(ssh_pubkey: &str) -> Result<VerifyingKey> {
 ///
 /// Ok(()) if signature is valid, error otherwise
 pub fn verify_attestation(
-    identity_keys: &IdentityKeys,
+    input: &AttestationBodyInput<'_>,
+    method: &str,
     ssh_pubkey: &str,
     sig_b64url: &str,
 ) -> Result<()> {
+    if method != ssh::ATTESTATION_METHOD_SSH_SIGN {
+        return Err(SshError::build_operation_failed_error(format!(
+            "Unsupported attestation method: {}",
+            method
+        ))
+        .into());
+    }
+
     // Step 1: Build signed data
-    let signed_data = build_attestation_signed_data(identity_keys)?;
+    let signed_data = build_attestation_signed_data(input)?;
 
     // Step 2: Decode signature
     let sig = decode_attestation_signature(sig_b64url)?;

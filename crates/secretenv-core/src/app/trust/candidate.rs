@@ -57,7 +57,7 @@ impl TrustApprovalCandidateBuilder {
             &public_key.protected.kid,
         )
         .with_fingerprint(build_attestation_fingerprint(public_key))
-        .with_attestor_pub(Some(public_key.protected.identity.attestation.pub_.clone()))
+        .with_attestor_pub(Some(public_key.protected.attestation.pub_.clone()))
         .with_github_binding_configured(github_binding_configured(public_key))
         .with_public_key(Some(public_key.clone()))
     }
@@ -127,7 +127,7 @@ impl TrustApprovalCandidateBuilder {
 }
 
 fn build_attestation_fingerprint(public_key: &PublicKey) -> Option<String> {
-    build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_).ok()
+    build_sha256_fingerprint(&public_key.protected.attestation.pub_).ok()
 }
 
 fn github_binding_configured(public_key: &PublicKey) -> bool {

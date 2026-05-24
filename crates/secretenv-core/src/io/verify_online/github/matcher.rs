@@ -21,7 +21,7 @@ pub(super) fn compute_attestation_fingerprint(
         );
     }
 
-    match fingerprint::build_sha256_fingerprint(&public_key.protected.identity.attestation.pub_) {
+    match fingerprint::build_sha256_fingerprint(&public_key.protected.attestation.pub_) {
         Ok(fingerprint) => {
             if verbose {
                 debug!(

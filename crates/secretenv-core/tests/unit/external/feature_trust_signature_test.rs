@@ -22,7 +22,7 @@ fn build_self_signed_public_key(
     String,
 ) {
     use secretenv_core::cli_api::test_support::domain::public_key::{
-        Attestation, Identity, IdentityKeys, JwkOkpPublicKey,
+        Attestation, IdentityKeys, JwkOkpPublicKey,
     };
     use secretenv_core::cli_api::test_support::domain::wire::jwk;
     use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
@@ -58,11 +58,6 @@ fn build_self_signed_public_key(
         sig: "stub".to_string(),
     };
 
-    let identity = Identity {
-        keys: identity_keys,
-        attestation,
-    };
-
     let now = time::OffsetDateTime::now_utc();
     let created_at =
         secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)
@@ -75,12 +70,13 @@ fn build_self_signed_public_key(
 
     let public_key = build_public_key(&PublicKeyDocumentParams {
         member_handle,
-        identity,
+        keys: identity_keys,
+        binding_claims: None,
+        attestation,
         created_at: &created_at,
         expires_at: &expires_at,
         sig_sk: signing_key,
         debug: false,
-        github_account: None,
     })
     .unwrap();
 

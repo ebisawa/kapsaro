@@ -60,7 +60,6 @@ fn test_save_member_approvals_persists_only_manually_approved_candidates() {
             attestor_pub: Some(
                 find_member(&active_members, BOB_MEMBER_HANDLE)
                     .protected
-                    .identity
                     .attestation
                     .pub_,
             ),
@@ -115,7 +114,6 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
             attestor_pub: Some(
                 find_member(&active_members, BOB_MEMBER_HANDLE)
                     .protected
-                    .identity
                     .attestation
                     .pub_,
             ),
@@ -164,7 +162,7 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
-    let original_attestor_pub = bob.protected.identity.attestation.pub_.clone();
+    let original_attestor_pub = bob.protected.attestation.pub_.clone();
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
     let execution =
         build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
@@ -174,7 +172,7 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
         .join(format!("{}.json", BOB_MEMBER_HANDLE));
     let mut tampered: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&bob_file).unwrap()).unwrap();
-    tampered["protected"]["identity"]["attestation"]["pub"] =
+    tampered["protected"]["attestation"]["pub"] =
         serde_json::Value::String("ssh-ed25519 AAAA changed".to_string());
     fs::write(&bob_file, serde_json::to_string_pretty(&tampered).unwrap()).unwrap();
 
@@ -241,7 +239,7 @@ fn test_save_member_approvals_persists_verified_github_login_from_review() {
             github_id: Some(42),
             github_login: Some("current-login".to_string()),
             github_binding_configured: true,
-            attestor_pub: Some(bob.protected.identity.attestation.pub_.clone()),
+            attestor_pub: Some(bob.protected.attestation.pub_.clone()),
             verified_github: Some(VerifiedGithubIdentity::new(
                 42,
                 "current-login".to_string(),
@@ -302,7 +300,7 @@ fn test_evaluate_members_for_approval_surfaces_insecure_trust_store_warning() {
             github_id: None,
             github_login: None,
             github_binding_configured: false,
-            attestor_pub: Some(bob.protected.identity.attestation.pub_.clone()),
+            attestor_pub: Some(bob.protected.attestation.pub_.clone()),
             verified_github: None,
         }],
         &execution,

@@ -149,17 +149,17 @@ fn test_validate_public_key_rejects_wrong_crypto_field_lengths() {
     for (field, path, value) in [
         (
             "kem.x",
-            &["protected", "identity", "keys", "kem", "x"][..],
+            &["protected", "keys", "kem", "x"][..],
             "AAAAAAAAAAAAAAAAAAAAAA",
         ),
         (
             "sig.x",
-            &["protected", "identity", "keys", "sig", "x"][..],
+            &["protected", "keys", "sig", "x"][..],
             "AAAAAAAAAAAAAAAAAAAAAA",
         ),
         (
             "attestation.sig",
-            &["protected", "identity", "attestation", "sig"][..],
+            &["protected", "attestation", "sig"][..],
             "AAAAAAAAAAAAAAAAAAAAAA",
         ),
         ("signature", &["signature"][..], "AAAAAAAAAAAAAAAAAAAAAA"),
@@ -179,7 +179,7 @@ fn test_validate_public_key_rejects_non_canonical_fixed_length_tail_bits() {
     let mut public_key = build_public_key_with_github_login("alice-gh");
     set_json_path(
         &mut public_key,
-        &["protected", "identity", "keys", "kem", "x"],
+        &["protected", "keys", "kem", "x"],
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
     );
 
@@ -218,27 +218,25 @@ fn set_json_path(value: &mut serde_json::Value, path: &[&str], replacement: &str
 fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
     serde_json::json!({
         "protected": {
-            "format": secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6,
+            "format": secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "identity": {
-                "keys": {
-                    "kem": {
-                        "kty": "OKP",
-                        "crv": secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519,
-                        "x": B64URL_32
-                    },
-                    "sig": {
-                        "kty": "OKP",
-                        "crv": secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519,
-                        "x": B64URL_32
-                    }
+            "keys": {
+                "kem": {
+                    "kty": "OKP",
+                    "crv": secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519,
+                    "x": B64URL_32
                 },
-                "attestation": {
-                    "method": "ssh-sign",
-                    "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "sig": B64URL_64
+                "sig": {
+                    "kty": "OKP",
+                    "crv": secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519,
+                    "x": B64URL_32
                 }
+            },
+            "attestation": {
+                "method": "ssh-sign",
+                "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "sig": B64URL_64
             },
             "binding_claims": {
                 "github_account": {

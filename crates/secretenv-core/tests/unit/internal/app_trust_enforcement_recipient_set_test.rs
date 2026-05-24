@@ -14,7 +14,7 @@ use crate::feature::trust::judgment::SelfTrustSet;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::common::WrapItem;
 use crate::model::public_key::{
-    Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+    Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
 use crate::model::trust_store::RecipientSetRecord;
 use crate::Error;
@@ -206,19 +206,17 @@ fn trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustContext {
 fn active_member(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: public_key("X25519"),
-                    sig: public_key("Ed25519"),
-                },
-                attestation: Attestation {
-                    method: "ssh".to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey".to_string(),
-                    sig: "test-signature".to_string(),
-                },
+            keys: IdentityKeys {
+                kem: public_key("X25519"),
+                sig: public_key("Ed25519"),
+            },
+            attestation: Attestation {
+                method: "ssh".to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey".to_string(),
+                sig: "test-signature".to_string(),
             },
             binding_claims: None,
             expires_at: "2030-01-01T00:00:00Z".to_string(),

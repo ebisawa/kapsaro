@@ -98,7 +98,7 @@ fn find_incoming_candidate(
             fingerprint: None,
             verified_github: None,
             github_binding_configured: false,
-            attestor_pub: Some(public_key.protected.identity.attestation.pub_.clone()),
+            attestor_pub: Some(public_key.protected.attestation.pub_.clone()),
         },
         source_path,
         source_content,
@@ -497,7 +497,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
     let approvals = vec![ApprovedKnownKey::from_review(
         &bob.protected.subject_handle,
         &bob.protected.kid,
-        Some(bob.protected.identity.attestation.pub_.clone()),
+        Some(bob.protected.attestation.pub_.clone()),
         None,
     )];
     let mut expected_post_promotion_members = load_active_member_files(&workspace_dir).unwrap();
@@ -579,7 +579,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
     let approvals = vec![ApprovedKnownKey::from_review(
         &bob.protected.subject_handle,
         &bob.protected.kid,
-        Some(bob.protected.identity.attestation.pub_.clone()),
+        Some(bob.protected.attestation.pub_.clone()),
         None,
     )];
     let mut expected_post_promotion_members = load_active_member_files(&workspace_dir).unwrap();

@@ -6,7 +6,7 @@
 use crate::test_utils::save_public_key;
 use crate::test_utils::EnvGuard;
 use secretenv_core::cli_api::test_support::domain::public_key::{
-    Attestation, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+    Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
 use secretenv_core::cli_api::test_support::storage::config::paths::get_base_dir;
 use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
@@ -21,32 +21,28 @@ const B64URL_64: &str =
 fn dummy_public_key(member_handle: &str, kid: &str, created_at: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V6
+            format: secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7
                 .to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
-                            .to_string(),
-                        x: B64URL_32.to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv:
-                            secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
-                                .to_string(),
-                        x: B64URL_32.to_string(),
-                    },
-                },
-                attestation: Attestation {
-                    method: "ssh-sign".to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForTest test@test"
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
                         .to_string(),
-                    sig: B64URL_64.to_string(),
+                    x: B64URL_32.to_string(),
                 },
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
+                        .to_string(),
+                    x: B64URL_32.to_string(),
+                },
+            },
+            attestation: Attestation {
+                method: "ssh-sign".to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForTest test@test".to_string(),
+                sig: B64URL_64.to_string(),
             },
             binding_claims: None,
             expires_at: "2027-03-01T00:00:00Z".to_string(),

@@ -20,7 +20,7 @@ use crate::io::keystore::member::find_active_key_document;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::save_trust_store;
 use crate::model::public_key::{
-    Attestation, BindingClaims, GithubAccount, Identity, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyProtected,
 };
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
@@ -63,27 +63,25 @@ fn build_public_key(member_handle: &str, kid: &str, sig_x: &str) -> PublicKey {
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@6".to_string(),
+            format: "secretenv:format:public-key@7".to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-            identity: Identity {
-                keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "X25519".to_string(),
-                        x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: "Ed25519".to_string(),
-                        x: sig_x.to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "X25519".to_string(),
+                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
                 },
-                attestation: Attestation {
-                    method: "ssh".to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey".to_string(),
-                    sig: "test-signature".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: "Ed25519".to_string(),
+                    x: sig_x.to_string(),
                 },
+            },
+            attestation: Attestation {
+                method: "ssh".to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey".to_string(),
+                sig: "test-signature".to_string(),
             },
             binding_claims: Some(BindingClaims {
                 github_account: Some(GithubAccount {
@@ -172,7 +170,7 @@ fn test_command_trust_snapshot_loads_local_nonactive_self_key() {
         .expect("expected active key fixture")
         .public_key;
     local_nonactive.protected.kid = "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string();
-    local_nonactive.protected.identity.keys.sig.x =
+    local_nonactive.protected.keys.sig.x =
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
     save_public_key(
         &keystore_root,
@@ -241,7 +239,7 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
         .expect("expected active key fixture")
         .public_key;
     local_nonactive.protected.kid = "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string();
-    local_nonactive.protected.identity.keys.sig.x =
+    local_nonactive.protected.keys.sig.x =
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
     save_public_key(
         &keystore_root,
@@ -288,7 +286,7 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
         .expect("expected active key fixture")
         .public_key;
     local_nonactive.protected.kid = "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string();
-    local_nonactive.protected.identity.keys.sig.x =
+    local_nonactive.protected.keys.sig.x =
         "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI".to_string();
     save_public_key(
         &keystore_root,

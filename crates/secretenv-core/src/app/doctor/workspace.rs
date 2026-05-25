@@ -4,12 +4,14 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::config::resolution::workspace::resolve_optional_workspace_from_sources;
+use crate::config::resolution::workspace::{
+    resolve_optional_workspace_from_sources, resolve_workspace_path_from_sources,
+};
 use crate::io::config::paths::get_global_config_path_from_base;
 use crate::io::keystore::resolver::KeystoreResolver;
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::support::path::format_path_relative_to_cwd;
-use crate::Result;
+use crate::{Error, Result};
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
@@ -98,21 +100,11 @@ fn resolve_doctor_workspace(
     options: &CommonCommandOptions,
     base_dir: &Path,
 ) -> Result<Option<(WorkspaceRoot, &'static str)>> {
-    if let Some(path) = options.workspace.as_ref() {
-        let root_path = path.canonicalize().map_err(|error| {
-            crate::Error::build_config_error(format!(
-                "Invalid workspace path '{}': {}",
-                format_path_relative_to_cwd(path),
-                error
-            ))
-        })?;
-        return Ok(Some((
-            WorkspaceRoot {
-                has_marker_file: root_path.join(".secretenv-root").exists(),
-                root_path,
-            },
-            "command line",
-        )));
+    if let Some(path_resolution) =
+        resolve_workspace_path_from_sources(options.workspace.clone(), Some(base_dir))?
+    {
+        let workspace = canonicalize_doctor_workspace(path_resolution.path)?;
+        return Ok(Some((workspace, path_resolution.source.as_str())));
     }
 
     resolve_optional_workspace_from_sources(options.workspace.clone(), Some(base_dir)).map(
@@ -123,6 +115,20 @@ fn resolve_doctor_workspace(
             })
         },
     )
+}
+
+fn canonicalize_doctor_workspace(path: PathBuf) -> Result<WorkspaceRoot> {
+    let root_path = path.canonicalize().map_err(|error| {
+        Error::build_config_error(format!(
+            "Invalid workspace path '{}': {}",
+            format_path_relative_to_cwd(&path),
+            error
+        ))
+    })?;
+    Ok(WorkspaceRoot {
+        has_marker_file: root_path.join(".secretenv-root").exists(),
+        root_path,
+    })
 }
 
 fn workspace_structure_ok(workspace_root: &Path) -> bool {

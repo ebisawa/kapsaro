@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::config::resolution::workspace::resolve_optional_workspace_from_sources;
@@ -12,8 +12,14 @@ use tracing::debug;
 
 /// Resolve the workspace if one is explicitly configured or auto-detectable.
 pub fn load_optional_workspace(options: &CommonCommandOptions) -> Result<Option<WorkspaceRoot>> {
-    let base_dir = options.resolve_base_dir()?;
-    resolve_optional_workspace_from_sources(options.workspace.clone(), Some(&base_dir))
+    load_optional_workspace_with_base(options, None)
+}
+
+fn load_optional_workspace_with_base(
+    options: &CommonCommandOptions,
+    base_dir: Option<&Path>,
+) -> Result<Option<WorkspaceRoot>> {
+    resolve_optional_workspace_from_sources(options.workspace.clone(), base_dir)
         .map(|resolution| resolution.map(|workspace| workspace.root))
 }
 
@@ -32,10 +38,13 @@ pub struct CommandPathResolution {
 
 impl CommandPathResolution {
     pub fn load(options: &CommonCommandOptions) -> Result<Self> {
+        let base_dir = options.resolve_base_dir()?;
+        let keystore_root = options.resolve_keystore_root()?;
+        let workspace_root = load_optional_workspace_with_base(options, Some(&base_dir))?;
         let paths = Self {
-            base_dir: options.resolve_base_dir()?,
-            keystore_root: options.resolve_keystore_root()?,
-            workspace_root: load_optional_workspace(options)?,
+            base_dir,
+            keystore_root,
+            workspace_root,
         };
         log_path_resolution(options, &paths);
         Ok(paths)

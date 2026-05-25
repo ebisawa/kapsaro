@@ -3,6 +3,7 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::load_optional_workspace;
+use crate::test_utils::EnvGuard;
 
 use super::resolution::resolve_optional_workspace;
 use super::*;
@@ -150,6 +151,42 @@ fn app_context_explicit_option_takes_priority_over_config() {
             assert_eq!(result.root_path, explicit_ws_path.canonicalize().unwrap());
         },
     );
+}
+
+#[test]
+fn app_context_explicit_option_does_not_require_home() {
+    let _guard = EnvGuard::new(&["HOME", "SECRETENV_HOME", "SECRETENV_WORKSPACE"]);
+    let explicit_ws = tempfile::tempdir().unwrap();
+    let explicit_ws_path = explicit_ws.path().join(".secretenv");
+    fs::create_dir_all(explicit_ws_path.join("members").join("active")).unwrap();
+    fs::create_dir_all(explicit_ws_path.join("secrets")).unwrap();
+
+    std::env::remove_var("HOME");
+    std::env::remove_var("SECRETENV_HOME");
+    std::env::remove_var("SECRETENV_WORKSPACE");
+
+    let options = command_options(None, Some(explicit_ws_path.clone()));
+    let result = load_optional_workspace(&options).unwrap().unwrap();
+
+    assert_eq!(result.root_path, explicit_ws_path.canonicalize().unwrap());
+}
+
+#[test]
+fn app_context_env_workspace_does_not_require_home() {
+    let _guard = EnvGuard::new(&["HOME", "SECRETENV_HOME", "SECRETENV_WORKSPACE"]);
+    let env_ws = tempfile::tempdir().unwrap();
+    let env_ws_path = env_ws.path().join(".secretenv");
+    fs::create_dir_all(env_ws_path.join("members").join("active")).unwrap();
+    fs::create_dir_all(env_ws_path.join("secrets")).unwrap();
+
+    std::env::remove_var("HOME");
+    std::env::remove_var("SECRETENV_HOME");
+    std::env::set_var("SECRETENV_WORKSPACE", env_ws_path.to_str().unwrap());
+
+    let options = command_options(None, None);
+    let result = load_optional_workspace(&options).unwrap().unwrap();
+
+    assert_eq!(result.root_path, env_ws_path.canonicalize().unwrap());
 }
 
 #[test]

@@ -42,20 +42,18 @@ pub(crate) struct WorkspaceResolution {
     pub(crate) source: WorkspaceSource,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct WorkspacePathResolution {
+    pub(crate) path: PathBuf,
+    pub(crate) source: WorkspaceSource,
+}
+
 pub(crate) fn resolve_optional_workspace_from_sources(
     workspace_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<Option<WorkspaceResolution>> {
-    if let Some(path) = workspace_opt {
-        return resolve_workspace_from_path(path, WorkspaceSource::CommandLine).map(Some);
-    }
-
-    if let Some(path) = load_workspace_from_env()? {
-        return resolve_workspace_from_path(path, WorkspaceSource::Environment).map(Some);
-    }
-
-    if let Some(path) = resolve_workspace_from_config_base(base_dir)? {
-        return resolve_workspace_from_path(path, WorkspaceSource::GlobalConfig).map(Some);
+    if let Some(path_resolution) = resolve_workspace_path_from_sources(workspace_opt, base_dir)? {
+        return resolve_workspace_from_path(path_resolution.path, path_resolution.source).map(Some);
     }
 
     resolve_optional_workspace(None).map(|workspace| {
@@ -72,6 +70,34 @@ pub(crate) fn resolve_workspace_from_sources(
 ) -> Result<WorkspaceResolution> {
     resolve_optional_workspace_from_sources(workspace_opt, base_dir)?
         .ok_or_else(build_workspace_required_error)
+}
+
+pub(crate) fn resolve_workspace_path_from_sources(
+    workspace_opt: Option<PathBuf>,
+    base_dir: Option<&Path>,
+) -> Result<Option<WorkspacePathResolution>> {
+    if let Some(path) = workspace_opt {
+        return Ok(Some(WorkspacePathResolution {
+            path,
+            source: WorkspaceSource::CommandLine,
+        }));
+    }
+
+    if let Some(path) = load_workspace_from_env()? {
+        return Ok(Some(WorkspacePathResolution {
+            path,
+            source: WorkspaceSource::Environment,
+        }));
+    }
+
+    if let Some(path) = resolve_workspace_from_config_base(base_dir)? {
+        return Ok(Some(WorkspacePathResolution {
+            path,
+            source: WorkspaceSource::GlobalConfig,
+        }));
+    }
+
+    Ok(None)
 }
 
 pub(crate) fn resolve_workspace_from_config() -> Result<Option<PathBuf>> {

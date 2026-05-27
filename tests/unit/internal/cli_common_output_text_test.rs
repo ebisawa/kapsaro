@@ -44,3 +44,37 @@ fn test_format_warning_line_adds_ansi_color_when_stderr_colors_enabled() {
     assert!(rendered.starts_with("\u{1b}[33mWarning: test message"));
     assert!(rendered.ends_with("\u{1b}[0m"));
 }
+
+#[test]
+#[serial]
+fn test_format_warning_line_keeps_long_warning_inline() {
+    let _guard = StderrColorGuard::new(false);
+
+    let rendered = format_warning_line(
+        "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact.",
+    );
+
+    assert_eq!(
+        rendered,
+        "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact."
+    );
+}
+
+#[test]
+#[serial]
+fn test_format_warning_line_preserves_structured_details() {
+    let _guard = StderrColorGuard::new(false);
+
+    let rendered = format_warning_line(
+        "Warning: Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run secretenv rewrap.",
+    );
+
+    assert_eq!(
+        rendered,
+        concat!(
+            "Warning: Recipient kid is not active.\n",
+            "         Kid: KAD1-AAAA\n",
+            "         Action: Run secretenv rewrap."
+        )
+    );
+}

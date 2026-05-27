@@ -24,8 +24,8 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 const TEST_PASSWORD: &str = "cli-integration-test-password-42";
-const ENV_MODE_UNSUPPORTED_MESSAGE: &str =
-    "env mode only supports these commands: run, decrypt, get, list, doctor";
+const ENV_MODE_SUPPORTED_COMMANDS_MESSAGE: &str =
+    "Supported commands: run, decrypt, get, list, doctor";
 
 // ============================================================================
 // Setup Helper
@@ -321,7 +321,9 @@ fn test_env_key_mode_rejects_set() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("environment-variable key mode"))
-        .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
+        .stderr(predicate::str::contains(
+            ENV_MODE_SUPPORTED_COMMANDS_MESSAGE,
+        ));
 }
 
 #[test]
@@ -354,7 +356,9 @@ fn test_env_key_mode_rejects_rewrap_key_member_trust_and_unset() {
             .assert()
             .failure()
             .stderr(predicate::str::contains("environment-variable key mode"))
-            .stderr(predicate::str::contains(ENV_MODE_UNSUPPORTED_MESSAGE));
+            .stderr(predicate::str::contains(
+                ENV_MODE_SUPPORTED_COMMANDS_MESSAGE,
+            ));
     }
 }
 

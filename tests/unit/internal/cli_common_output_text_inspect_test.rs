@@ -5,7 +5,6 @@ use console::{colors_enabled, set_colors_enabled};
 use serial_test::serial;
 
 use super::{colorize_inspect_line, format_inspect_banner_lines, format_inspect_output};
-use crate::cli::common::output::text::layout::visible_width;
 use secretenv_core::cli_api::app::file::inspect::{InspectOutput, InspectSection};
 
 struct StdoutColorGuard {
@@ -53,7 +52,7 @@ fn test_colorize_inspect_line_keeps_ok_status_colored_when_stdout_colors_enabled
 
 #[test]
 #[serial]
-fn test_format_inspect_output_wraps_long_section_lines() {
+fn test_format_inspect_output_keeps_long_section_lines_inline() {
     let _guard = StdoutColorGuard::new(false);
     let output = InspectOutput {
         title: "File Encryption".to_string(),
@@ -68,13 +67,13 @@ fn test_format_inspect_output_wraps_long_section_lines() {
 
     let rendered = format_inspect_output(&output);
 
-    assert!(rendered.lines().all(|line| visible_width(line) <= 100));
     assert!(rendered.contains("  Warning:     PublicKey"));
+    assert!(rendered.contains("release.engineering."));
 }
 
 #[test]
 #[serial]
-fn test_format_inspect_banner_lines_wraps_long_input_display() {
+fn test_format_inspect_banner_lines_keeps_long_input_display_inline() {
     let _guard = StdoutColorGuard::new(false);
     let input_display = format!(
         "target/{}/secret.env.encrypted",
@@ -83,13 +82,14 @@ fn test_format_inspect_banner_lines_wraps_long_input_display() {
 
     let lines = format_inspect_banner_lines(&input_display);
 
-    assert_line_lengths_at_most(&lines, 100);
+    assert_eq!(lines.len(), 1);
     assert!(lines[0].starts_with("Inspecting: "));
+    assert!(lines[0].contains(&input_display));
 }
 
 #[test]
 #[serial]
-fn test_format_inspect_output_wraps_long_title_and_section_title() {
+fn test_format_inspect_output_keeps_long_title_and_section_title_inline() {
     let _guard = StdoutColorGuard::new(false);
     let output = InspectOutput {
         title: format!("File Encryption {}", "release engineering ".repeat(8)),
@@ -101,20 +101,8 @@ fn test_format_inspect_output_wraps_long_title_and_section_title() {
 
     let rendered = format_inspect_output(&output);
 
-    assert_line_lengths_at_most(
-        &rendered.lines().map(str::to_string).collect::<Vec<_>>(),
-        100,
-    );
     assert!(rendered.contains("File Encryption"));
     assert!(rendered.contains("Signature Verification"));
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
-    }
+    assert!(rendered.contains("release engineering"));
+    assert!(rendered.contains("long section title"));
 }

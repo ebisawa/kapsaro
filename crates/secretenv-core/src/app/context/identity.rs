@@ -33,19 +33,18 @@ pub fn resolve_github_user_input(
 
 pub fn build_missing_member_handle_error(include_prompt_hint: bool) -> Error {
     let prompt_hint = if include_prompt_hint {
-        "\n                  4. Run in an interactive terminal for prompt"
+        "\n4. Run in an interactive terminal for prompt"
     } else {
         ""
     };
 
     Error::build_config_error(format!(
         "member handle not configured.\n\
-             member handle is required but could not be determined.\n\
-             \n\
-             Options:\n\
-             1. Specify --member-handle <handle>\n\
-             2. Set environment variable: export SECRETENV_MEMBER_HANDLE=<handle>\n\
-             3. Set in config: secretenv config set member_handle <handle>{prompt_hint}"
+         Reason: member handle is required but could not be determined.\n\
+         Options:\n\
+         1. Specify --member-handle <handle>\n\
+         2. Set SECRETENV_MEMBER_HANDLE=<handle>\n\
+         3. Run secretenv config set member_handle <handle>{prompt_hint}"
     ))
 }
 

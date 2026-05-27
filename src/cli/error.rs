@@ -6,6 +6,8 @@
 use console::Style;
 use secretenv_core::Error;
 
+use crate::cli::common::output::text::layout;
+
 pub(crate) fn print_error(error: &Error) {
     eprintln!("{}", format_error_line(error));
 }
@@ -28,17 +30,19 @@ pub(crate) fn format_stderr_error_message(message: &str) -> String {
 }
 
 fn format_error_line(error: &Error) -> String {
-    let message = format!("Error: {}", error.format_user_message());
-    format_stderr_error_first_line(&message)
+    let lines = layout::format_diagnostic_lines("Error: ", error.format_user_message());
+    format_stderr_error_lines(lines).join("\n")
 }
 
-fn format_stderr_error_first_line(message: &str) -> String {
-    match message.split_once('\n') {
-        Some((first_line, rest)) => {
-            format!("{}\n{}", format_stderr_error_message(first_line), rest)
-        }
-        None => format_stderr_error_message(message),
-    }
+fn format_stderr_error_lines(lines: Vec<String>) -> Vec<String> {
+    let mut lines = lines.into_iter();
+    let Some(first_line) = lines.next() else {
+        return Vec::new();
+    };
+
+    let mut formatted = vec![format_stderr_error_message(&first_line)];
+    formatted.extend(lines);
+    formatted
 }
 
 #[cfg(test)]

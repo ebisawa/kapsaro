@@ -26,9 +26,9 @@ fn test_confirm_member_remove_with_reader_rejects_non_interactive_without_force(
     )
     .unwrap_err();
 
-    assert!(error
-        .format_user_message()
-        .contains("without --force in non-interactive mode"));
+    let message = error.format_user_message();
+    assert!(message.contains("Member removal requires --force."));
+    assert!(message.contains("Reason: non-interactive mode."));
 }
 
 #[test]

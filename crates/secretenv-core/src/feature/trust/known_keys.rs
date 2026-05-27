@@ -191,10 +191,16 @@ pub fn validate_kid_integrity(
 ) -> Result<()> {
     if let Some(existing) = find_known_key(keys, candidate_kid) {
         if existing.subject_handle != candidate_member_handle {
-            return Err(Error::build_verification_error("E_TRUST_KID_INTEGRITY_ANOMALY".to_string(), format!(
-                    "kid '{}' exists with subject_handle '{}' but candidate has subject_handle '{}'",
+            return Err(Error::build_verification_error(
+                "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
+                format!(
+                    "Known key kid has conflicting subject handle.\n\
+                     Kid: {}\n\
+                     Existing subject: {}\n\
+                     Candidate subject: {}",
                     candidate_kid, existing.subject_handle, candidate_member_handle
-                )));
+                ),
+            ));
         }
     }
     Ok(())

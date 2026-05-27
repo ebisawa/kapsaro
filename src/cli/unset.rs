@@ -118,7 +118,9 @@ fn unset_prompt(key: &str) -> String {
 
 fn unset_non_interactive_error(key: &str) -> String {
     format!(
-        "Refusing to unset '{}' without --force in non-interactive mode",
+        "Unset requires --force.\n\
+         Key: {}\n\
+         Reason: non-interactive mode.",
         key
     )
 }

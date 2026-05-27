@@ -27,24 +27,11 @@ pub(crate) fn print_member_sections(view: &MemberListView<'_>) {
 fn format_member_list_lines(view: &MemberListView<'_>) -> Vec<String> {
     let mut lines = Vec::new();
     let member_handle_width = member_list_id_width(view);
-    let kid_width = member_list_kid_width(view);
-    push_member_list_section(
-        &mut lines,
-        "Active:",
-        &view.active,
-        member_handle_width,
-        kid_width,
-    );
+    push_member_list_section(&mut lines, "Active:", &view.active, member_handle_width);
 
     if !view.incoming.is_empty() {
         lines.push(String::new());
-        push_member_list_section(
-            &mut lines,
-            "Incoming:",
-            &view.incoming,
-            member_handle_width,
-            kid_width,
-        );
+        push_member_list_section(&mut lines, "Incoming:", &view.incoming, member_handle_width);
     }
 
     lines
@@ -59,25 +46,13 @@ fn member_list_id_width(view: &MemberListView<'_>) -> usize {
         .unwrap_or(0)
 }
 
-fn member_list_kid_width(view: &MemberListView<'_>) -> usize {
-    view.active
-        .iter()
-        .chain(view.incoming.iter())
-        .map(|member| format_kid_display_lossy(member.kid).len())
-        .max()
-        .unwrap_or(0)
-}
-
 fn push_member_list_section(
     lines: &mut Vec<String>,
     title: &str,
     members: &[crate::cli::common::output::member::view::MemberListEntryView<'_>],
     member_handle_width: usize,
-    key_id_width: usize,
 ) {
     lines.push(title.to_string());
-    let member_handle_width =
-        layout::capped_pair_left_width(member_handle_width, "  ", key_id_width);
     for member in members {
         lines.extend(layout::format_pair_row(
             "  ",
@@ -233,11 +208,7 @@ fn format_member_show_header(member_handle: &str) -> String {
 }
 
 fn format_member_show_header_lines(member_handle: &str) -> Vec<String> {
-    let header = format_member_show_header(member_handle);
-    if layout::visible_width(&header) <= layout::TEXT_WIDTH {
-        return vec![header];
-    }
-    layout::format_value_lines(&format!("{MEMBER_SHOW_BULLET} "), member_handle)
+    vec![format_member_show_header(member_handle)]
 }
 
 fn format_key_section_title(kid: &str) -> String {

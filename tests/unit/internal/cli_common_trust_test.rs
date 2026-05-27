@@ -1,7 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli::common::output::text::layout::visible_width;
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, format_failed_promotion_review_lines,
 };
@@ -193,7 +192,7 @@ fn test_format_candidate_review_lines_no_verified_mark_without_online_verificati
 }
 
 #[test]
-fn test_format_candidate_review_lines_wraps_long_member_handles_and_hashes() {
+fn test_format_candidate_review_lines_keeps_long_member_handles_and_hashes_inline() {
     let candidate = TrustApprovalCandidate {
         member_handle: member_handle(format!("{}@example.com", "release.engineering.".repeat(4))),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -213,12 +212,15 @@ fn test_format_candidate_review_lines_wraps_long_member_handles_and_hashes() {
     };
 
     let lines = format_candidate_review_lines(&candidate);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
+    assert!(rendered.contains(candidate.member_handle.as_str()));
+    assert!(rendered.contains("abcdef0123456789"));
+    assert!(rendered.contains("github-response-fragment-"));
 }
 
 #[test]
-fn test_format_failed_promotion_review_lines_wraps_long_messages() {
+fn test_format_failed_promotion_review_lines_keeps_long_messages_inline() {
     let candidate = TrustApprovalCandidate {
         member_handle: member_handle(format!("{}@example.com", "release.engineering.".repeat(4))),
         kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
@@ -242,16 +244,8 @@ fn test_format_failed_promotion_review_lines_wraps_long_messages() {
     };
 
     let lines = format_failed_promotion_review_lines(&[failure]);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
-    }
+    assert!(rendered.contains("verification failed because"));
+    assert!(rendered.contains("a-long-review-diagnostic-fragment-"));
 }

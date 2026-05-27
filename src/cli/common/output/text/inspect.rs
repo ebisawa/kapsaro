@@ -45,8 +45,8 @@ fn push_inspect_section(out: &mut String, section: &InspectSection, section_styl
         out.push('\n');
     }
     for line in &section.lines {
-        for wrapped in format_inspect_line_lines(line) {
-            out.push_str(&wrapped);
+        for rendered in format_inspect_line_lines(line) {
+            out.push_str(&rendered);
             out.push('\n');
         }
     }

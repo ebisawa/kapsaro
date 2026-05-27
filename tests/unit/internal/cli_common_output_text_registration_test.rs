@@ -2,27 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{format_created_workspace_summary_lines, format_init_noop_summary_lines};
-use crate::cli::common::output::text::layout::visible_width;
 use std::path::PathBuf;
 
 #[test]
-fn test_format_created_workspace_summary_lines_wraps_long_workspace_path() {
+fn test_format_created_workspace_summary_lines_keeps_long_workspace_path_inline() {
     let workspace_path = long_workspace_path();
 
     let lines = format_created_workspace_summary_lines(&workspace_path);
 
-    assert_line_lengths_at_most(&lines, 100);
     assert!(lines[0].starts_with("Creating workspace "));
+    assert!(lines[0].contains(workspace_path.to_string_lossy().as_ref()));
 }
 
 #[test]
-fn test_format_init_noop_summary_lines_wraps_long_workspace_path() {
+fn test_format_init_noop_summary_lines_keeps_long_workspace_path_inline() {
     let workspace_path = long_workspace_path();
 
     let lines = format_init_noop_summary_lines(&workspace_path);
 
-    assert_line_lengths_at_most(&lines, 100);
     assert!(lines[0].starts_with("Workspace already initialized at "));
+    assert!(lines[0].contains(workspace_path.to_string_lossy().as_ref()));
     assert!(lines
         .iter()
         .any(|line| line.contains("only bootstraps a new workspace")));
@@ -33,14 +32,4 @@ fn long_workspace_path() -> PathBuf {
         "target/{}/.secretenv",
         "very-long-workspace-directory-name/".repeat(6)
     ))
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
-    }
 }

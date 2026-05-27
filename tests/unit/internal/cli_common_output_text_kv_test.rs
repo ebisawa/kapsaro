@@ -3,10 +3,9 @@
 
 use super::format_kv_key_list_lines;
 use crate::cli::common::output::kv::view::KvKeyView;
-use crate::cli::common::output::text::layout::visible_width;
 
 #[test]
-fn test_format_kv_key_list_lines_wraps_long_disclosed_key() {
+fn test_format_kv_key_list_lines_keeps_long_disclosed_key_inline() {
     let key = format!("SECRET_{}", "VERY_LONG_NAME_".repeat(12));
     let keys = [KvKeyView {
         key: &key,
@@ -15,12 +14,13 @@ fn test_format_kv_key_list_lines_wraps_long_disclosed_key() {
 
     let lines = format_kv_key_list_lines(&keys);
 
-    assert_line_lengths_at_most(&lines, 100);
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].contains(&key));
     assert!(lines.iter().any(|line| line.contains("[DISCLOSED]")));
 }
 
 #[test]
-fn test_format_kv_key_list_lines_wraps_long_plain_key() {
+fn test_format_kv_key_list_lines_keeps_long_plain_key_inline() {
     let key = format!("SECRET_{}", "VERY_LONG_NAME_".repeat(12));
     let keys = [KvKeyView {
         key: &key,
@@ -29,15 +29,5 @@ fn test_format_kv_key_list_lines_wraps_long_plain_key() {
 
     let lines = format_kv_key_list_lines(&keys);
 
-    assert_line_lengths_at_most(&lines, 100);
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
-    }
+    assert_eq!(lines, vec![key]);
 }

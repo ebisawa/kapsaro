@@ -44,9 +44,12 @@ fn verify_ssh_fingerprint_matches(private_key: &PrivateKey, ssh_pubkey: &str) ->
     }
 
     Err(Error::build_crypto_error(format!(
-            "E_PRIVATE_KEY_DECRYPT_FAILED: SSH public key fingerprint mismatch: expected '{}', got '{}'",
-            expected, actual
-        )))
+        "SSH public key fingerprint mismatch.\n\
+         Code: E_PRIVATE_KEY_DECRYPT_FAILED\n\
+         Expected: {}\n\
+         Actual: {}",
+        expected, actual
+    )))
 }
 
 fn validate_ssh_protection_algorithm(private_key: &PrivateKey) -> Result<()> {

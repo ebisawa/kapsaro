@@ -9,7 +9,6 @@ use crate::cli::common::output::member::view::{
     MemberApprovalItemView, MemberApprovalResultsView, MemberGithubClaimView, MemberListEntryView,
     MemberListView, MemberShowView, MemberVerificationItemView, MemberVerificationResultsView,
 };
-use crate::cli::common::output::text::layout::visible_width;
 use console::{colors_enabled, set_colors_enabled};
 use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
 use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
@@ -60,7 +59,7 @@ fn test_format_member_list_lines_renders_dashed_kids() {
 }
 
 #[test]
-fn test_format_member_list_lines_keeps_long_handles_within_terminal_width() {
+fn test_format_member_list_lines_keeps_long_handles_inline() {
     let document = json!({});
     let long_handle = format!("{}@example.com", "a".repeat(120));
     let view = MemberListView {
@@ -75,14 +74,13 @@ fn test_format_member_list_lines_keeps_long_handles_within_terminal_width() {
 
     let lines = format_member_list_lines(&view);
 
-    assert!(lines.iter().all(|line| visible_width(line) <= 100));
-    assert!(lines
-        .iter()
-        .any(|line| line.trim_start() == "KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
+    assert!(lines.iter().any(|line| {
+        line.contains(&long_handle) && line.contains("KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD")
+    }));
 }
 
 #[test]
-fn test_format_member_list_lines_wraps_long_member_handle_and_dashed_kid() {
+fn test_format_member_list_lines_keeps_long_member_handle_and_dashed_kid_inline() {
     let document = json!({});
     let member_handle = "avery.long.member.handle.for.release.engineering@example.com";
     let kid = "KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD";
@@ -99,12 +97,7 @@ fn test_format_member_list_lines_wraps_long_member_handle_and_dashed_kid() {
     let lines = format_member_list_lines(&view);
     let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
-    assert!(!rendered.contains(&format!("{member_handle}  {kid}")));
-    assert!(lines
-        .iter()
-        .any(|line| line == &format!("  {member_handle}")));
-    assert!(lines.iter().any(|line| line.trim_start() == kid));
+    assert!(rendered.contains(&format!("{member_handle}  {kid}")));
 }
 
 #[test]
@@ -184,7 +177,7 @@ fn test_format_member_show_lines_includes_github_binding_section() {
 
 #[test]
 #[serial]
-fn test_format_member_show_lines_wraps_long_rows() {
+fn test_format_member_show_lines_keeps_long_rows_inline() {
     let _guard = StdoutColorGuard::new(false);
     let long_fingerprint = format!("SHA256:{}", "abcdef0123456789".repeat(8));
     let view = MemberShowView {
@@ -207,17 +200,15 @@ fn test_format_member_show_lines_wraps_long_rows() {
     };
 
     let lines = format_member_show_lines(&view);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
     assert!(lines.iter().any(|line| line.starts_with("\u{25CF} ")));
-    assert!(lines
-        .iter()
-        .any(|line| line.starts_with("  Fingerprint : ")));
+    assert!(rendered.contains("  Fingerprint : SHA256:"));
 }
 
 #[test]
 #[serial]
-fn test_format_member_verification_results_wraps_long_handle_message_and_fingerprint() {
+fn test_format_member_verification_results_keeps_long_handle_message_and_fingerprint_inline() {
     let _guard = StdoutColorGuard::new(false);
     let member_handle = format!("{}@example.com", "release.engineering.".repeat(5));
     let message = format!(
@@ -236,17 +227,17 @@ fn test_format_member_verification_results_wraps_long_handle_message_and_fingerp
     };
 
     let lines = format_member_verification_results_lines(&view);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
-    assert!(lines
-        .iter()
-        .any(|line| line.trim_start().starts_with("SSH key fingerprint:")));
+    assert!(rendered.contains(&member_handle));
+    assert!(rendered.contains(&message));
+    assert!(rendered.contains(&fingerprint));
     assert!(lines.iter().any(|line| line == "Verified 0/1 members"));
 }
 
 #[test]
 #[serial]
-fn test_format_member_approval_results_wraps_long_handle_and_message() {
+fn test_format_member_approval_results_keeps_long_handle_and_message_inline() {
     let _guard = StdoutColorGuard::new(false);
     let member_handle = format!("{}@example.com", "incoming.release.".repeat(5));
     let message = format!(
@@ -259,8 +250,10 @@ fn test_format_member_approval_results_wraps_long_handle_and_message() {
     };
 
     let lines = format_member_approval_results_lines(&view);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
+    assert!(rendered.contains(&member_handle));
+    assert!(rendered.contains(&message));
     assert!(lines.iter().any(|line| line == "Approved 0/1 members"));
 }
 
@@ -315,15 +308,5 @@ fn build_member_approval_item_view<'a>(
         github_login: None,
         github_binding_configured: false,
         review_candidate,
-    }
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
     }
 }

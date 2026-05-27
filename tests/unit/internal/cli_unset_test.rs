@@ -18,9 +18,9 @@ fn test_confirm_unset_operation_with_reader_rejects_non_interactive_without_forc
         confirm_unset_operation_with_reader(false, "API_KEY", false, Cursor::new(Vec::<u8>::new()))
             .unwrap_err();
 
-    assert!(error
-        .format_user_message()
-        .contains("without --force in non-interactive mode"));
+    let message = error.format_user_message();
+    assert!(message.contains("Unset requires --force."));
+    assert!(message.contains("Reason: non-interactive mode."));
 }
 
 #[test]

@@ -1,7 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli::common::output::text::layout::visible_width;
 use crate::cli::common::trust::{
     format_member_key_review_lines, format_non_member_signer_review_lines,
     format_recipient_set_review_lines, format_signer_key_review_lines, recipient_set_review_prompt,
@@ -134,7 +133,7 @@ fn test_format_recipient_set_review_lines_uses_user_facing_copy_and_member_handl
 }
 
 #[test]
-fn test_format_recipient_set_review_lines_wraps_long_member_handle_and_dashed_kid() {
+fn test_format_recipient_set_review_lines_keeps_long_member_handle_and_dashed_kid_inline() {
     let member_handle = "avery.long.member.handle.for.release.engineering@example.com";
     let kid = "KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD";
     let current_kid = "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string();
@@ -148,12 +147,7 @@ fn test_format_recipient_set_review_lines_wraps_long_member_handle_and_dashed_ki
     let lines = format_recipient_set_review_lines(&review);
     let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
-    assert!(!rendered.contains(&format!("{member_handle}  {kid}")));
-    assert!(lines
-        .iter()
-        .any(|line| line == &format!("  {member_handle}")));
-    assert!(lines.iter().any(|line| line.trim_start() == kid));
+    assert!(rendered.contains(&format!("{member_handle}  {kid}")));
 }
 
 #[test]
@@ -189,7 +183,7 @@ fn test_format_recipient_set_review_lines_shows_colored_diff_for_changed_set() {
 
 #[test]
 #[serial]
-fn test_format_recipient_set_review_lines_wraps_colored_diff_after_stripping_ansi() {
+fn test_format_recipient_set_review_lines_keeps_colored_diff_inline_after_stripping_ansi() {
     let _guard = StderrColorGuard::new(true);
     let member_handle = "avery.long.member.handle.for.release.engineering@example.com";
     let current_kid = "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string();
@@ -204,18 +198,9 @@ fn test_format_recipient_set_review_lines_wraps_colored_diff_after_stripping_ans
 
     let rendered = format_recipient_set_review_lines(&review).join("\n");
     let plain = strip_ansi_codes(&rendered);
-    let plain_lines = plain.lines().map(str::to_string).collect::<Vec<_>>();
-
-    assert_line_lengths_at_most(&plain_lines, 100);
-    assert!(!plain.contains(&format!(
+    assert!(plain.contains(&format!(
         "{member_handle}  KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"
     )));
-    assert!(plain_lines
-        .iter()
-        .any(|line| line == &format!("  + {member_handle}")));
-    assert!(plain_lines
-        .iter()
-        .any(|line| line.trim_start() == "KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
 }
 
 #[test]
@@ -240,7 +225,7 @@ fn test_format_recipient_set_review_lines_keeps_diff_readable_without_color() {
 }
 
 #[test]
-fn test_format_recipient_set_review_lines_keeps_long_handles_within_terminal_width() {
+fn test_format_recipient_set_review_lines_keeps_long_handles_inline() {
     let current_kid = "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string();
     let long_handle = format!("{}@example.com", "a".repeat(120));
     let current = ArtifactRecipientSet::from_wrap_items(
@@ -250,9 +235,10 @@ fn test_format_recipient_set_review_lines_keeps_long_handles_within_terminal_wid
     .unwrap();
     let review = ArtifactRecipientSetReview::new(current, None);
 
-    let rendered = format_recipient_set_review_lines(&review);
+    let rendered = format_recipient_set_review_lines(&review).join("\n");
 
-    assert!(rendered.iter().all(|line| visible_width(line) <= 100));
+    assert!(rendered.contains(&long_handle));
+    assert!(rendered.contains("KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
 }
 
 fn recipient_set_record(kid: &str, hints: Option<Vec<RecipientHandleHint>>) -> RecipientSetRecord {
@@ -312,15 +298,5 @@ fn candidate_with_failed_github_verification() -> TrustApprovalCandidate {
         online_verification_message: Some("online verification failed".to_string()),
         public_key: None,
         requires_out_of_band_verification: true,
-    }
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
     }
 }

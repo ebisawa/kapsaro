@@ -6,7 +6,6 @@ use super::{
     is_online_verification_verified,
 };
 use crate::cli::common::output::key::view::{KeyInfoView, KeyListView, KeyMemberView};
-use crate::cli::common::output::text::layout::visible_width;
 use secretenv_core::api::online::OnlineVerificationStatus;
 use std::path::PathBuf;
 
@@ -37,7 +36,7 @@ fn test_is_online_verification_verified_only_accepts_verified_status() {
 }
 
 #[test]
-fn test_format_key_list_lines_wraps_long_member_handles_and_kids() {
+fn test_format_key_list_lines_keeps_long_member_handles_and_kids_inline() {
     let member_handle = format!("{}@example.com", "release.engineering.".repeat(4));
     let raw_kid = "invalid-kid-fragment".repeat(8);
     let view = KeyListView {
@@ -56,12 +55,14 @@ fn test_format_key_list_lines_wraps_long_member_handles_and_kids() {
     };
 
     let lines = format_key_list_lines(&view, true);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
+    assert!(rendered.contains(&member_handle));
+    assert!(rendered.contains(&raw_kid));
 }
 
 #[test]
-fn test_format_key_export_summary_lines_wraps_long_paths() {
+fn test_format_key_export_summary_lines_keeps_long_paths_inline() {
     let member_handle = format!("{}@example.com", "release.engineering.".repeat(4));
     let raw_kid = "invalid-kid-fragment".repeat(8);
     let path = PathBuf::from(format!(
@@ -70,16 +71,9 @@ fn test_format_key_export_summary_lines_wraps_long_paths() {
     ));
 
     let lines = format_key_export_summary_lines(&member_handle, &raw_kid, &path);
+    let rendered = lines.join("\n");
 
-    assert_line_lengths_at_most(&lines, 100);
-}
-
-fn assert_line_lengths_at_most(lines: &[String], max_width: usize) {
-    for line in lines {
-        assert!(
-            visible_width(line) <= max_width,
-            "expected line to fit within {max_width} columns, got {}: {line}",
-            visible_width(line)
-        );
-    }
+    assert!(rendered.contains(&member_handle));
+    assert!(rendered.contains(&raw_kid));
+    assert!(rendered.contains(path.to_string_lossy().as_ref()));
 }

@@ -54,12 +54,18 @@ impl<'a> AdditionalKnownKeyCache<'a> {
                 known_member_handle,
             } = self.judge_identity_match(recipient)
             {
-                return Err(Error::build_verification_error("E_TRUST_KID_INTEGRITY_ANOMALY".to_string(), format!(
-                        "kid '{}' exists with member_handle '{}' but candidate has member_handle '{}'",
+                return Err(Error::build_verification_error(
+                    "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
+                    format!(
+                        "Known key kid has conflicting member handle.\n\
+                         Kid: {}\n\
+                         Existing member: {}\n\
+                         Candidate member: {}",
                         recipient.kid(),
                         known_member_handle,
                         recipient.member_handle()
-                    )));
+                    ),
+                ));
             }
         }
         Ok(())

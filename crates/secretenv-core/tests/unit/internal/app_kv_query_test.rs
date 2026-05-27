@@ -86,8 +86,8 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
         .unwrap();
 
         assert!(command.warnings.iter().any(|warning| {
-            warning.contains("Artifact signing key has expired")
-                && warning.contains("continuing because expired key use was explicitly allowed")
+            warning.contains("Artifact signing key has expired.")
+                && warning.contains("Reason: expired key use was explicitly allowed.")
         }));
     });
 }

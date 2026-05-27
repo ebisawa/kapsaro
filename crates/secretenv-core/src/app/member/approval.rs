@@ -162,7 +162,9 @@ fn evaluate_candidate_with_snapshot(
         return Err(Error::build_verification_error(
             "E_KEY_EXPIRED".to_string(),
             format!(
-                "PublicKey has expired (expires_at: {}); expired member keys cannot be approved",
+                "PublicKey has expired.\n\
+                 Expires at: {}\n\
+                 Action: Rotate the member key before approval.",
                 pk.protected.expires_at
             ),
         ));

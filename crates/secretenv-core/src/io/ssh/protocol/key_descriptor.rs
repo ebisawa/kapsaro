@@ -80,10 +80,12 @@ impl SshKeyDescriptor {
         match self {
             Self::PrivateKey(pk) => Ok(pk),
             Self::PublicKey(pubk) => Err(Error::build_invalid_operation_error(format!(
-                    "Signing requires a private key, but a public key was provided: {}\n\
-                    Hint: Use the private key file (without .pub extension) for signing operations.",
-                    format_path_relative_to_cwd(&pubk.path)
-                ))),
+                "Signing requires a private key.\n\
+                 Reason: public key was provided.\n\
+                 Provided public key: {}\n\
+                 Action: Use the key file without the .pub extension.",
+                format_path_relative_to_cwd(&pubk.path)
+            ))),
         }
     }
 

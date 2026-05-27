@@ -112,7 +112,9 @@ pub fn build_password_strength_warning(password: &str) -> Option<String> {
     }
 
     Some(format!(
-        "Password accepted, but it is shorter than the recommended {} bytes for offline brute-force resistance.",
+        "Password accepted below the recommended length.\n\
+         Recommended: at least {} bytes\n\
+         Risk: weaker offline brute-force resistance.",
         RECOMMENDED_PASSWORD_LENGTH
     ))
 }

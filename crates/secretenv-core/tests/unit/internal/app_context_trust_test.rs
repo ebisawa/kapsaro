@@ -534,9 +534,16 @@ fn test_enforce_signer_trust_non_member_decrypt_requires_allowance() {
     .unwrap_err();
 
     assert!(error.to_string().contains("E_TRUST_NON_MEMBER"));
-    assert!(error
-        .to_string()
-        .contains("Run again with '--allow-non-member'"));
+    assert_eq!(
+        error.format_user_message(),
+        concat!(
+            "Signer is not in active members.\n",
+            "signer: ex-member@example.com\n",
+            "kid: KAD1AAAA1111BBBB2222CCCC3333DDDD\n",
+            "Run with '--allow-non-member' to enable one-shot non-member acceptance."
+        )
+    );
+    assert!(error.to_string().contains("Run with '--allow-non-member'"));
 }
 
 #[test]
@@ -556,7 +563,49 @@ fn test_enforce_signer_trust_non_member_forbidden_command_fails() {
 
     let error = result.unwrap_err();
     assert!(error.to_string().contains("E_TRUST_NON_MEMBER"));
+    assert_eq!(
+        error.format_user_message(),
+        concat!(
+            "Signer is not in active members.\n",
+            "signer: ex-member@example.com\n",
+            "kid: KAD1AAAA1111BBBB2222CCCC3333DDDD"
+        )
+    );
     assert!(!error.to_string().contains("--allow-non-member"));
+}
+
+#[test]
+fn test_enforce_signer_trust_non_member_requires_interactive_terminal() {
+    let ctx = build_test_trust_ctx_with_non_member(StrictKeyChecking::Yes, false, true);
+    let public_key = build_public_key(
+        "ex-member@example.com",
+        "KID1AAAA1111BBBB2222CCCC3333DDDD",
+        "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    );
+    let judgment = TrustJudgment::NonMember {
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
+        kid: kid(public_key.protected.kid.clone()),
+    };
+
+    let error = enforce_signer_trust(
+        &ctx,
+        &judgment,
+        &public_key,
+        CommandCapability::Decrypt,
+        &[],
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("E_TRUST_NON_MEMBER"));
+    assert_eq!(
+        error.format_user_message(),
+        concat!(
+            "Signer is not in active members.\n",
+            "signer: ex-member@example.com\n",
+            "kid: KAD1AAAA1111BBBB2222CCCC3333DDDD\n",
+            "Non-member acceptance requires an interactive terminal."
+        )
+    );
 }
 
 #[test]
@@ -704,7 +753,7 @@ fn test_enforce_recipients_trust_detects_kid_integrity_mismatch() {
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("candidate has member_handle 'bob@example.com'"));
+        .contains("Candidate member: bob@example.com"));
 }
 
 #[test]

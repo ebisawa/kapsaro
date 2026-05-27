@@ -6,7 +6,7 @@
 
 use console::strip_ansi_codes;
 
-pub(crate) const TEXT_WIDTH: usize = 100;
+pub(crate) const TEXT_WIDTH: usize = 80;
 const PAIR_SEPARATOR: &str = "  ";
 
 pub(crate) fn capped_pair_left_width(left_width: usize, prefix: &str, right_width: usize) -> usize {
@@ -45,6 +45,36 @@ pub(crate) fn format_value_lines_with_continuation(
     value: &str,
 ) -> Vec<String> {
     wrap_value(prefix, continuation, value, TEXT_WIDTH)
+}
+
+pub(crate) fn format_diagnostic_lines(prefix: &str, message: &str) -> Vec<String> {
+    let continuation = " ".repeat(visible_width(prefix));
+    let mut lines = Vec::new();
+    let mut first_content_line = true;
+
+    for raw_line in message.split('\n') {
+        if raw_line.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+
+        let line_prefix = if first_content_line {
+            first_content_line = false;
+            prefix
+        } else {
+            &continuation
+        };
+        lines.extend(format_value_lines_with_continuation(
+            line_prefix,
+            &continuation,
+            raw_line,
+        ));
+    }
+
+    if lines.is_empty() {
+        lines.push(prefix.trim_end().to_string());
+    }
+    lines
 }
 
 fn format_plain_line(prefix: &str, value: &str) -> Vec<String> {

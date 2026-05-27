@@ -276,7 +276,7 @@ fn test_key_export_private_warns_for_allowed_weak_password_to_file() {
         .success()
         .stderr(
             predicate::str::contains("Warning:")
-                .and(predicate::str::contains("recommended 20 bytes")),
+                .and(predicate::str::contains("Recommended: at least 20 bytes")),
         );
 
     assert!(export_file.exists(), "export should still succeed");
@@ -354,7 +354,7 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
         "stdout should contain only base64url text: {stdout:?}"
     );
     assert!(
-        stderr.contains("Warning:") && stderr.contains("recommended 20 bytes"),
+        stderr.contains("Warning:") && stderr.contains("Recommended: at least 20 bytes"),
         "stderr should contain password strength warning: {stderr}"
     );
     assert!(

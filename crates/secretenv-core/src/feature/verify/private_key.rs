@@ -3,10 +3,8 @@
 
 //! PrivateKey verification helpers.
 //!
-//! PrivateKey is authenticated via AEAD with AAD derived from `protected`, and its plaintext key
-//! material is validated separately. This module adds an additional invariant check for keystore
-//! usage: the PrivateKey stored under `keys/<member_handle>/<kid>/private.json` should correspond to
-//! the PublicKey stored under the same directory.
+//! PrivateKey is authenticated via AEAD with AAD derived from `protected`.
+//! This module also checks the local keystore PublicKey/PrivateKey pairing.
 
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
@@ -24,7 +22,9 @@ pub fn verify_private_key_matches_public_key(
         return Err(Error::build_verification_error(
             "V-PRIVATEKEY-PUBKEY-MISMATCH",
             format!(
-                "member_handle mismatch: private.protected.subject_handle '{}' != public.protected.subject_handle '{}'",
+                "PrivateKey subject does not match PublicKey subject.\n\
+                 Private subject: {}\n\
+                 Public subject: {}",
                 private_key.protected.subject_handle, public_key.protected.subject_handle
             ),
         ));

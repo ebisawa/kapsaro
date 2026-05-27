@@ -31,8 +31,11 @@ pub(super) fn check_ssh_signature_determinism(
         Ok(()) => Ok(SshDeterminismStatus::Verified),
         Err(error) if is_non_deterministic_signature_error(&error) => {
             Ok(SshDeterminismStatus::Failed {
-                message:
-                    "SSH signature determinism check failed. This SSH key cannot be used for key generation.".to_string(),
+                message: concat!(
+                    "SSH signature determinism check failed.\n",
+                    "Action: Use a deterministic SSH key for key generation."
+                )
+                .to_string(),
             })
         }
         Err(error) => Err(error),

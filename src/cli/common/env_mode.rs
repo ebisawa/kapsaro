@@ -22,8 +22,9 @@ pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> 
     debug!("[CLI] env-key mode rejected for {}", capability.label());
     Err(secretenv_core::Error::build_invalid_operation_error(
         format!(
-            "'{}' is unavailable in environment-variable key mode; env mode only supports \
-         these commands: run, decrypt, get, list, doctor.",
+            "Command unavailable in environment-variable key mode.\n\
+             Command: {}\n\
+             Supported commands: run, decrypt, get, list, doctor.",
             capability.label()
         ),
     ))

@@ -508,9 +508,8 @@ fn test_member_remove_without_force_in_non_interactive_mode_fails() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
-        .stderr(predicate::str::contains(
-            "without --force in non-interactive mode",
-        ));
+        .stderr(predicate::str::contains("Member removal requires --force."))
+        .stderr(predicate::str::contains("Reason: non-interactive mode."));
 
     cmd()
         .arg("member")

@@ -110,7 +110,9 @@ pub fn enforce_recipients_trust_with_additional(
         return Err(Error::build_verification_error(
             "E_TRUST_RECIPIENT_UNKNOWN".to_string(),
             format!(
-                "Unknown recipient kid(s): {}. Run 'member verify --approve' first.",
+                "Unknown recipient kid requires approval.\n\
+                 Recipients: {}\n\
+                 Action: Run secretenv member verify --approve first.",
                 kids.join(", ")
             ),
         ));
@@ -204,10 +206,15 @@ pub fn enforce_write_input_artifact_recipients(
         .iter()
         .find(|kid| !trust_ctx.active_members_by_kid.contains_key(*kid))
     {
-        return Err(Error::build_verification_error("E_ARTIFACT_RECIPIENT_NOT_ACTIVE".to_string(), format!(
-                "Artifact contains recipient kid '{}' that is not in current members/active. Run 'secretenv rewrap' before writing it.",
+        return Err(Error::build_verification_error(
+            "E_ARTIFACT_RECIPIENT_NOT_ACTIVE".to_string(),
+            format!(
+                "Artifact recipient kid is not active.\n\
+                 Kid: {}\n\
+                 Action: Run secretenv rewrap before writing.",
                 kid
-            )));
+            ),
+        ));
     }
 
     Ok(())
@@ -223,7 +230,10 @@ fn resolve_active_artifact_recipients(
         match trust_ctx.active_members_by_kid.get(kid) {
             Some(public_key) => recipients.push(public_key.clone()),
             None => warnings.push(format!(
-                "Recipient kid '{}' is not in current members/active; this artifact may contain a stale or historical recipient. Run 'secretenv rewrap' before writing it.",
+                "Recipient kid is not active.\n\
+                 Kid: {}\n\
+                 Reason: artifact may contain stale or historical recipient metadata.\n\
+                 Action: Run secretenv rewrap before writing.",
                 kid
             )),
         }
@@ -238,10 +248,16 @@ fn enforce_recipient_handle_consistency(
     if let Some(mismatch) =
         find_recipient_handle_mismatch(current, &trust_ctx.active_members_by_kid)
     {
-        return Err(Error::build_verification_error("E_RECIPIENT_SET_HANDLE_MISMATCH".to_string(), format!(
-                "Recipient kid '{}' is labeled as '{}' in artifact wrap, but members/active labels it as '{}'",
+        return Err(Error::build_verification_error(
+            "E_RECIPIENT_SET_HANDLE_MISMATCH".to_string(),
+            format!(
+                "Artifact recipient label differs from members/active.\n\
+                 Kid: {}\n\
+                 Artifact label: {}\n\
+                 Active label: {}",
                 mismatch.kid, mismatch.artifact_recipient_handle, mismatch.active_member_handle
-            )));
+            ),
+        ));
     }
     Ok(())
 }
@@ -266,12 +282,14 @@ fn enforce_artifact_recipient_review(
 
 fn recipient_set_review_required_message(rule: &str) -> &'static str {
     match rule {
-        "E_RECIPIENT_SET_CHANGED" => {
-            "This secret's member set has changed since the last review on this device. Run the command interactively to review it first."
-        }
-        _ => {
-            "This secret's member set has not been reviewed on this device. Run the command interactively to review it first."
-        }
+        "E_RECIPIENT_SET_CHANGED" => concat!(
+            "This secret's member set changed since local review.\n",
+            "Action: Run the command interactively to review it first."
+        ),
+        _ => concat!(
+            "This secret's member set has not been reviewed locally.\n",
+            "Action: Run the command interactively to review it first."
+        ),
     }
 }
 
@@ -352,23 +370,22 @@ fn format_non_member_error_message(
     member_handle: &MemberHandle,
     kid: &Kid,
 ) -> String {
-    let message = format!(
-        "Signer '{}' (kid: {}) is not in active members",
-        member_handle, kid
-    );
+    let mut lines = vec![
+        "Signer is not in active members.".to_string(),
+        format!("signer: {}", member_handle),
+        format!("kid: {}", kid),
+    ];
     if !capability.allows_non_member_acceptance() {
-        return message;
+        return lines.join("\n");
     }
     if !trust_ctx.allow_non_member {
-        return format!(
-            "{}. Run again with '--allow-non-member' to start one-shot non-member acceptance.",
-            message
+        lines.push(
+            "Run with '--allow-non-member' to enable one-shot non-member acceptance.".to_string(),
         );
+        return lines.join("\n");
     }
-    format!(
-        "{}. Non-member acceptance requires an interactive terminal.",
-        message
-    )
+    lines.push("Non-member acceptance requires an interactive terminal.".to_string());
+    lines.join("\n")
 }
 
 pub fn build_trust_approval_candidate(public_key: &PublicKey) -> TrustApprovalCandidate {

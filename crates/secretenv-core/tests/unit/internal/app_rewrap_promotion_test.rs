@@ -225,7 +225,7 @@ fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_p
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("candidate has subject_handle 'alice'"));
+        .contains("Candidate subject: alice"));
 }
 
 #[test]
@@ -376,5 +376,5 @@ fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candida
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("candidate has subject_handle 'alice'"));
+        .contains("Candidate subject: alice"));
 }

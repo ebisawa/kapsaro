@@ -5,7 +5,7 @@ use console::{colors_enabled, set_colors_enabled};
 use serial_test::serial;
 
 use super::{colorize_inspect_line, format_inspect_banner_lines, format_inspect_output};
-use crate::cli::common::output::text::layout::visible_width;
+use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 use secretenv_core::cli_api::app::file::inspect::{InspectOutput, InspectSection};
 
 struct StdoutColorGuard {
@@ -68,7 +68,9 @@ fn test_format_inspect_output_wraps_long_section_lines() {
 
     let rendered = format_inspect_output(&output);
 
-    assert!(rendered.lines().all(|line| visible_width(line) <= 100));
+    assert!(rendered
+        .lines()
+        .all(|line| visible_width(line) <= TEXT_WIDTH));
     assert!(rendered.contains("  Warning:     PublicKey"));
 }
 

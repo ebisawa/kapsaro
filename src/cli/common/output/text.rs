@@ -25,11 +25,7 @@ pub(crate) fn print_optional_status(message: Option<&str>, quiet: bool) {
 }
 
 pub(crate) fn format_warning_line(message: &str) -> String {
-    Style::new()
-        .yellow()
-        .for_stderr()
-        .apply_to(message)
-        .to_string()
+    format_warning_lines(message).join("\n")
 }
 
 pub(crate) fn print_warning_line(message: &str) {
@@ -37,13 +33,38 @@ pub(crate) fn print_warning_line(message: &str) {
 }
 
 pub(crate) fn print_warning(message: &str) {
-    print_warning_line(&format!("Warning: {}", message));
+    eprintln!("{}", format_warning_text(message));
 }
 
 pub(crate) fn print_warnings(warnings: &[String]) {
     for warning in warnings {
         print_warning(warning);
     }
+}
+
+fn format_warning_text(message: &str) -> String {
+    format_stderr_warning_lines(layout::format_diagnostic_lines("Warning: ", message)).join("\n")
+}
+
+fn format_warning_lines(message: &str) -> Vec<String> {
+    let lines = match message.strip_prefix("Warning: ") {
+        Some(body) => layout::format_diagnostic_lines("Warning: ", body),
+        None => layout::format_value_lines("", message),
+    };
+    format_stderr_warning_lines(lines)
+}
+
+fn format_stderr_warning_lines(lines: Vec<String>) -> Vec<String> {
+    lines
+        .into_iter()
+        .map(|line| {
+            Style::new()
+                .yellow()
+                .for_stderr()
+                .apply_to(line)
+                .to_string()
+        })
+        .collect()
 }
 
 #[cfg(test)]

@@ -81,8 +81,9 @@ pub fn enforce_key_not_expired_for_signing(expires_at: &VerifiedExpiresAt) -> Re
         KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
             "key-expiry".to_string(),
             format!(
-                "Private key has expired (expires_at: {}). \
-                 Expired keys cannot be used for encryption or signing.",
+                "Private key has expired.\n\
+                 Expires at: {}\n\
+                 Action: Rotate the key before encryption or signing.",
                 expires_at
             ),
         )),
@@ -99,11 +100,11 @@ pub fn build_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Result<Option
             expires_at,
             days_remaining,
         } => Ok(Some(format!(
-            "Private key expires in {} days (expires_at: {})",
+            "Private key expires in {} days.\nExpires at: {}",
             days_remaining, expires_at
         ))),
         KeyExpiryStatus::Expired { expires_at } => Ok(Some(format!(
-            "Private key has expired (expires_at: {})",
+            "Private key has expired.\nExpires at: {}",
             expires_at
         ))),
     }
@@ -121,20 +122,22 @@ pub(crate) fn enforce_expired_key_usage(
             expires_at,
             days_remaining,
         } => Ok(Some(format!(
-            "{} expires in {} days (expires_at: {})",
+            "{} expires in {} days.\nExpires at: {}",
             key_label,
             days_remaining,
             sanitize_display_field(&expires_at)
         ))),
         KeyExpiryStatus::Expired { expires_at } if allow_expired_key => Ok(Some(format!(
-            "{} has expired (expires_at: {}); continuing because expired key use was explicitly allowed",
+            "{} has expired.\nExpires at: {}\nReason: expired key use was explicitly allowed.",
             key_label,
             sanitize_display_field(&expires_at)
         ))),
         KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
             "E_KEY_EXPIRED".to_string(),
             format!(
-                "{} has expired (expires_at: {}). Use --allow-expired-key or set allow_expired_key=yes only for explicit recovery.",
+                "{} has expired.\n\
+                 Expires at: {}\n\
+                 Action: Use --allow-expired-key only for explicit recovery.",
                 key_label,
                 sanitize_display_field(&expires_at)
             ),
@@ -150,7 +153,7 @@ pub fn build_signing_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Resul
             expires_at,
             days_remaining,
         } => Ok(Some(format!(
-            "Private key expires in {} days (expires_at: {})",
+            "Private key expires in {} days.\nExpires at: {}",
             days_remaining, expires_at
         ))),
     }
@@ -170,7 +173,7 @@ pub fn build_recipient_key_expiry_warning(
             expires_at,
             days_remaining,
         } => Ok(Some(format!(
-            "Recipient public key for '{}' expires in {} days (expires_at: {})",
+            "Recipient public key for '{}' expires in {} days.\nExpires at: {}",
             sanitize_display_field(&doc.protected.subject_handle),
             days_remaining,
             sanitize_display_field(&expires_at)
@@ -199,8 +202,10 @@ pub fn enforce_recipient_key_not_expired(doc: &VerifiedPublicKeyAttested) -> Res
         KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
             "key-expiry".to_string(),
             format!(
-                "Recipient public key for '{}' has expired (expires_at: {}). \
-                 Expired keys cannot be used as encryption recipients.",
+                "Recipient public key has expired.\n\
+                 Member: {}\n\
+                 Expires at: {}\n\
+                 Action: Rotate the recipient key before encryption.",
                 sanitize_display_field(&doc.protected.subject_handle),
                 sanitize_display_field(&expires_at)
             ),

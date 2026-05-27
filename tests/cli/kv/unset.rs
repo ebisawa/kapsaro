@@ -74,9 +74,8 @@ fn test_unset_non_interactive_without_force_fails() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
-        .stderr(predicate::str::contains(
-            "without --force in non-interactive mode",
-        ));
+        .stderr(predicate::str::contains("Unset requires --force."))
+        .stderr(predicate::str::contains("Reason: non-interactive mode."));
 }
 
 #[test]
@@ -98,6 +97,6 @@ fn test_unset_requires_member_handle_before_confirmation() {
         .failure()
         .stderr(
             predicate::str::contains("member handle not configured")
-                .and(predicate::str::contains("without --force in non-interactive mode").not()),
+                .and(predicate::str::contains("Unset requires --force.").not()),
         );
 }

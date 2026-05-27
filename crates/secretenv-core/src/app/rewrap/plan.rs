@@ -47,8 +47,11 @@ pub fn build_rewrap_batch_plan(
     .trust_ctx;
     let incoming_report = build_incoming_report(&incoming_index, options.debug)?;
     if artifact_paths.is_empty() {
-        return Err(Error::build_not_found_error("No encrypted files found in workspace secrets/ and no explicit rewrap targets were provided"
-                    .to_string()));
+        return Err(Error::build_not_found_error(
+            "No encrypted files found for rewrap.\n\
+             Searched: workspace secrets/\n\
+             Action: Pass --target <path> for an explicit file.",
+        ));
     }
 
     Ok(RewrapBatchPlan {

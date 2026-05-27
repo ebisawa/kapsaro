@@ -6,6 +6,7 @@ use secretenv_core::Error;
 use serial_test::serial;
 
 use super::format_error_line;
+use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 
 struct StderrColorGuard {
     enabled: bool,
@@ -74,4 +75,76 @@ fn test_format_error_line_colors_only_first_line_for_multiline_errors() {
         !body.contains("\u{1b}[31m"),
         "body should not start a red ANSI span: {rendered}"
     );
+}
+
+#[test]
+#[serial]
+fn test_format_error_line_wraps_long_error_to_80_columns() {
+    let _guard = StderrColorGuard::new(false);
+    let error = Error::build_invalid_operation_error(
+        "Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact.",
+    );
+
+    let rendered = format_error_line(&error);
+
+    assert_eq!(
+        rendered,
+        concat!(
+            "Error: Recipient kid is not active in this workspace. Run secretenv rewrap\n",
+            "       before writing this artifact."
+        )
+    );
+    assert!(rendered
+        .lines()
+        .all(|line| visible_width(line) <= TEXT_WIDTH));
+}
+
+#[test]
+#[serial]
+fn test_format_error_line_preserves_structured_details() {
+    let _guard = StderrColorGuard::new(false);
+    let error = Error::build_invalid_operation_error(
+        "Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run secretenv rewrap.",
+    );
+
+    let rendered = format_error_line(&error);
+
+    assert_eq!(
+        rendered,
+        concat!(
+            "Error: Recipient kid is not active.\n",
+            "       Kid: KAD1-AAAA\n",
+            "       Action: Run secretenv rewrap."
+        )
+    );
+}
+
+#[test]
+#[serial]
+fn test_format_error_line_keeps_non_member_signer_summary_short() {
+    let _guard = StderrColorGuard::new(false);
+    let error = Error::build_verification_error(
+        "E_TRUST_NON_MEMBER",
+        concat!(
+            "Signer is not in active members.\n",
+            "signer: ex-member@example.com\n",
+            "kid: KAD1AAAA1111BBBB2222CCCC3333DDDD\n",
+            "Run with '--allow-non-member' to enable one-shot non-member acceptance."
+        ),
+    );
+
+    let rendered = format_error_line(&error);
+
+    assert_eq!(
+        rendered,
+        concat!(
+            "Error: Signer is not in active members.\n",
+            "       signer: ex-member@example.com\n",
+            "       kid: KAD1AAAA1111BBBB2222CCCC3333DDDD\n",
+            "       Run with '--allow-non-member' to enable one-shot non-member acceptance."
+        )
+    );
+    assert!(rendered
+        .lines()
+        .all(|line| visible_width(line) <= TEXT_WIDTH));
 }

@@ -9,7 +9,7 @@ use crate::cli::common::output::member::view::{
     MemberApprovalItemView, MemberApprovalResultsView, MemberGithubClaimView, MemberListEntryView,
     MemberListView, MemberShowView, MemberVerificationItemView, MemberVerificationResultsView,
 };
-use crate::cli::common::output::text::layout::visible_width;
+use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 use console::{colors_enabled, set_colors_enabled};
 use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
 use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
@@ -75,7 +75,7 @@ fn test_format_member_list_lines_keeps_long_handles_within_terminal_width() {
 
     let lines = format_member_list_lines(&view);
 
-    assert!(lines.iter().all(|line| visible_width(line) <= 100));
+    assert!(lines.iter().all(|line| visible_width(line) <= TEXT_WIDTH));
     assert!(lines
         .iter()
         .any(|line| line.trim_start() == "KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::output::text::doctor::format_doctor_report;
-use crate::cli::common::output::text::layout::visible_width;
+use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 use secretenv_core::cli_api::app::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
 };
@@ -88,5 +88,5 @@ fn test_doctor_text_output_wraps_long_messages_and_paths() {
 
     let output = format_doctor_report(&report, true);
 
-    assert!(output.lines().all(|line| visible_width(line) <= 100));
+    assert!(output.lines().all(|line| visible_width(line) <= TEXT_WIDTH));
 }

@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli::common::output::text::layout::visible_width;
+use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 use crate::cli::common::trust::{
     format_member_key_review_lines, format_non_member_signer_review_lines,
     format_recipient_set_review_lines, format_signer_key_review_lines, recipient_set_review_prompt,
@@ -252,7 +252,9 @@ fn test_format_recipient_set_review_lines_keeps_long_handles_within_terminal_wid
 
     let rendered = format_recipient_set_review_lines(&review);
 
-    assert!(rendered.iter().all(|line| visible_width(line) <= 100));
+    assert!(rendered
+        .iter()
+        .all(|line| visible_width(line) <= TEXT_WIDTH));
 }
 
 fn recipient_set_record(kid: &str, hints: Option<Vec<RecipientHandleHint>>) -> RecipientSetRecord {

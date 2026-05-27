@@ -93,9 +93,11 @@ pub fn validate_workspace_exists(workspace_path: &Path) -> Result<()> {
         && is_real_dir(&secrets_dir))
     {
         return Err(Error::build_config_error(format!(
-                "Workspace not found or incomplete: {}. Run 'secretenv init' to create a new workspace.",
-                format_path_relative_to_cwd(workspace_path)
-            )));
+            "Workspace not found or incomplete.\n\
+             Path: {}\n\
+             Action: Run secretenv init to create a workspace.",
+            format_path_relative_to_cwd(workspace_path)
+        )));
     }
 
     Ok(())

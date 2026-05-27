@@ -91,7 +91,9 @@ fn member_remove_prompt(member_handle: &str) -> String {
 
 fn member_remove_non_interactive_error(member_handle: &str) -> String {
     format!(
-        "Refusing to remove member '{}' without --force in non-interactive mode",
+        "Member removal requires --force.\n\
+         Member: {}\n\
+         Reason: non-interactive mode.",
         member_handle
     )
 }

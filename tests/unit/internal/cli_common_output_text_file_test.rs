@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::format_output_notice_lines;
-use crate::cli::common::output::text::layout::visible_width;
+use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 use std::path::PathBuf;
 
 #[test]
@@ -14,7 +14,7 @@ fn test_format_output_notice_lines_wraps_long_output_path() {
 
     let lines = format_output_notice_lines("Encrypted to", &output_path);
 
-    assert!(lines.iter().all(|line| visible_width(line) <= 100));
+    assert!(lines.iter().all(|line| visible_width(line) <= TEXT_WIDTH));
     assert!(lines[0].starts_with("Encrypted to: "));
     assert!(lines
         .iter()

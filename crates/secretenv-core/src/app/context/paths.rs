@@ -4,7 +4,10 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::config::resolution::workspace::resolve_optional_workspace_from_sources;
+use crate::config::resolution::workspace::{
+    resolve_optional_workspace_from_sources,
+    resolve_optional_workspace_from_sources_with_base_resolver,
+};
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -12,7 +15,10 @@ use tracing::debug;
 
 /// Resolve the workspace if one is explicitly configured or auto-detectable.
 pub fn load_optional_workspace(options: &CommonCommandOptions) -> Result<Option<WorkspaceRoot>> {
-    load_optional_workspace_with_base(options, None)
+    resolve_optional_workspace_from_sources_with_base_resolver(options.workspace.clone(), || {
+        options.resolve_base_dir().map(Some)
+    })
+    .map(|resolution| resolution.map(|workspace| workspace.root))
 }
 
 fn load_optional_workspace_with_base(

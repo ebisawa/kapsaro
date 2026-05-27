@@ -5,7 +5,11 @@ use std::env;
 use std::fs;
 
 use crate::app_test_utils::build_test_command_options;
-use crate::cli::common::command::resolve_required_member_handle_with_prompt;
+use crate::cli::common::command::{
+    resolve_options_with_allow_expired_key, resolve_options_with_read_trust_allowances,
+    resolve_required_member_handle_with_prompt,
+};
+use crate::cli::options::CommonOptions;
 use crate::test_utils::EnvGuard;
 use tempfile::TempDir;
 
@@ -91,4 +95,48 @@ fn test_resolve_required_member_handle_with_prompt_errors_with_hint_when_prompt_
     assert!(error
         .format_user_message()
         .contains("Run in an interactive terminal for prompt"));
+}
+
+#[test]
+fn test_resolve_options_with_allow_expired_key_ignores_allow_non_member_config() {
+    let _guard = EnvGuard::new(&[
+        "SECRETENV_HOME",
+        "SECRETENV_ALLOW_EXPIRED_KEY",
+        "SECRETENV_ALLOW_NON_MEMBER",
+    ]);
+    let home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", home.path());
+    env::set_var("SECRETENV_ALLOW_NON_MEMBER", "maybe");
+    let options = common_options(home.path());
+
+    let resolved = resolve_options_with_allow_expired_key(&options, false).unwrap();
+
+    assert!(!resolved.allow_expired_key);
+    assert!(!resolved.allow_non_member);
+}
+
+#[test]
+fn test_resolve_options_with_read_trust_allowances_rejects_invalid_allow_non_member_config() {
+    let _guard = EnvGuard::new(&[
+        "SECRETENV_HOME",
+        "SECRETENV_ALLOW_EXPIRED_KEY",
+        "SECRETENV_ALLOW_NON_MEMBER",
+    ]);
+    let home = TempDir::new().unwrap();
+    env::set_var("SECRETENV_HOME", home.path());
+    env::set_var("SECRETENV_ALLOW_NON_MEMBER", "maybe");
+    let options = common_options(home.path());
+
+    let error = resolve_options_with_read_trust_allowances(&options, false, false).unwrap_err();
+
+    assert!(error
+        .format_user_message()
+        .contains("Invalid allow_non_member value"));
+}
+
+fn common_options(home: &std::path::Path) -> CommonOptions {
+    CommonOptions {
+        home: Some(home.to_path_buf()),
+        ..Default::default()
+    }
 }

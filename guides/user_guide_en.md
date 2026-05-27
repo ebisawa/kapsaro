@@ -1236,11 +1236,11 @@ Accepted options differ by command. These options are shared by multiple command
 |---------|-------------|
 | `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> <VALUE>` | Add or update an entry |
 | `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> --stdin` | Read value from stdin and set it |
-| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] <KEY>` | Retrieve and display a specific key's value |
-| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] --all` | Retrieve and display all entries |
-| `secretenv get [-n <name>] [--all] --with-key` | Output in `KEY="VALUE"` format |
+| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] <KEY>` | Retrieve and display a specific key's value |
+| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] --all` | Retrieve and display all entries |
+| `secretenv get [-n <name>] [--all] [--allow-non-member] --with-key` | Output in `KEY="VALUE"` format |
 | `secretenv unset [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
-| `secretenv list [-n <name>] [-m <handle>] [--allow-expired-key] [--json]` | List key names (values not displayed) |
+| `secretenv list [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] [--json]` | List key names (values not displayed) |
 | `secretenv import [-n <name>] [-m <handle>] [--allow-expired-key] <file> [--json]` | Bulk import a `.env` file |
 | `secretenv run [-n <name>] [-m <handle>] [--allow-expired-key] -- <command> [args...]` | Run a command with secrets injected as environment variables |
 
@@ -1250,8 +1250,8 @@ Accepted options differ by command. These options are shared by multiple command
 |---------|-------------|
 | `secretenv encrypt [-m <handle>] <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
 | `secretenv encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] <file> (--out <path> \| --stdout)` | Decrypt a file |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] <file> (--out <path> \| --stdout)` | Decrypt a file |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
 | `secretenv inspect <file> [--json] [--verbose]` | Display encrypted file metadata (no decryption needed) |
 
 ### Diagnostics
@@ -1269,7 +1269,7 @@ Accepted options differ by command. These options are shared by multiple command
 | `secretenv member verify [-m <handle>] [--approve] [<member_handle>...] [--json]` | Verify active member public keys and optionally save approvals in the local trust store |
 | `secretenv member add <file> [--force]` | Add a member's public key file to incoming |
 | `secretenv member remove <member_handle> [--force] [--allow-expired-key]` | Remove a member from the Workspace. Non-interactive use requires `--force` |
-| `secretenv rewrap [-m <handle>] [--allow-expired-key] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
+| `secretenv rewrap [-m <handle>] [--allow-expired-key] [--allow-non-member] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
 
 When `--target` is omitted, `rewrap` processes all encrypted files in the workspace. When `--target` is provided, only the specified files are processed.
 
@@ -1293,7 +1293,7 @@ When `--target` is omitted, `rewrap` processes all encrypted files in the worksp
 | `secretenv key activate [-m <handle>] [<kid>]` | Activate a specific key. If `kid` is omitted, the newest valid key is selected |
 | `secretenv key remove [-m <handle>] <kid> [--force]` | Remove a key. Removing the active key requires `--force` |
 | `secretenv key export [-m <handle>] [<kid>] --out <path>` | Export public key |
-| `secretenv key export --private [-m <handle>] [<kid>] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
+| `secretenv key export --private [-m <handle>] [<kid>] [--allow-weak-password] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
 
 ### Configuration
 

@@ -10,6 +10,7 @@
 //! 4. Default values
 
 pub(crate) mod allow_expired_key;
+pub(crate) mod allow_non_member;
 pub(crate) mod common;
 pub(crate) mod github_user;
 pub(crate) mod global;

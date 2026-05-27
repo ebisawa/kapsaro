@@ -8,10 +8,12 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, run_read_command_with_recovery, ReadCommandLabels,
+    resolve_options_with_read_trust_allowances, run_read_command_with_recovery, ReadCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
-use crate::cli::options::{AllowExpiredKeyOption, MemberHandleOption, SigningQuietOptions};
+use crate::cli::options::{
+    AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOptions,
+};
 use secretenv_core::cli_api::app::file::decrypt::{
     execute_decrypt_file_command, resolve_decrypt_file_command, validate_decrypt_file_input,
 };
@@ -31,6 +33,9 @@ pub(crate) struct DecryptArgs {
 
     #[command(flatten)]
     pub allow_expired_key: AllowExpiredKeyOption,
+
+    #[command(flatten)]
+    pub allow_non_member: AllowNonMemberOption,
 
     /// Key ID to use [default: auto-select]
     #[arg(long, short = 'k')]
@@ -65,9 +70,10 @@ pub(crate) fn run(args: DecryptArgs) -> Result<()> {
     let content = resolve_decrypt_input_content(args.input.as_ref(), args.stdin)?;
     validate_decrypt_file_input(&content, source_name.clone())?;
     let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
-    let options = resolve_options_with_allow_expired_key(
+    let options = resolve_options_with_read_trust_allowances(
         &args.common,
         args.allow_expired_key.allow_expired_key,
+        args.allow_non_member.allow_non_member,
     )?;
     let plaintext_bytes = run_read_command_with_recovery(
         &options,
@@ -75,7 +81,7 @@ pub(crate) fn run(args: DecryptArgs) -> Result<()> {
         ReadCommandLabels {
             context: "decrypt signer",
             subject: "signer",
-            allow_non_member: true,
+            allow_non_member: options.allow_non_member,
         },
         |ssh_ctx| {
             resolve_decrypt_file_command(

@@ -6,11 +6,12 @@
 use clap::Args;
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, run_read_command_with_recovery, ReadCommandLabels,
+    resolve_options_with_read_trust_allowances, run_read_command_with_recovery, ReadCommandLabels,
 };
 use crate::cli::common::output::kv::print_kv_read_result;
 use crate::cli::options::{
-    AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOutputOptions,
+    AllowExpiredKeyOption, AllowNonMemberOption, KvStoreNameOption, MemberHandleOption,
+    SigningOutputOptions,
 };
 use secretenv_core::cli_api::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
 use secretenv_core::cli_api::app::kv::types::KvReadMode;
@@ -25,6 +26,9 @@ pub(crate) struct GetArgs {
 
     #[command(flatten)]
     pub allow_expired_key: AllowExpiredKeyOption,
+
+    #[command(flatten)]
+    pub allow_non_member: AllowNonMemberOption,
 
     /// Output all entries
     #[arg(long, short = 'a')]
@@ -46,9 +50,10 @@ pub(crate) struct GetArgs {
 
 pub(crate) fn run(args: GetArgs) -> Result<()> {
     let read_mode = resolve_get_read_mode(args.all, args.key.as_deref())?;
-    let options = resolve_options_with_allow_expired_key(
+    let options = resolve_options_with_read_trust_allowances(
         &args.common,
         args.allow_expired_key.allow_expired_key,
+        args.allow_non_member.allow_non_member,
     )?;
     let kv_map = run_read_command_with_recovery(
         &options,
@@ -56,7 +61,7 @@ pub(crate) fn run(args: GetArgs) -> Result<()> {
         ReadCommandLabels {
             context: "get signer",
             subject: "signer",
-            allow_non_member: true,
+            allow_non_member: options.allow_non_member,
         },
         |ssh_ctx| {
             resolve_kv_read_command::<GetPolicy>(

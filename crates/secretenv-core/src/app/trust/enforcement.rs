@@ -330,7 +330,10 @@ fn enforce_non_member(
     candidate: TrustApprovalCandidate,
     current_recipients: &[String],
 ) -> Result<SignerTrustOutcome> {
-    if capability.allows_non_member_acceptance() && trust_ctx.is_interactive {
+    if capability.allows_non_member_acceptance()
+        && trust_ctx.allow_non_member
+        && trust_ctx.is_interactive
+    {
         Ok(SignerTrustOutcome::NeedsNonMemberAcceptance {
             candidate,
             current_recipients: current_recipients.to_vec(),
@@ -338,12 +341,34 @@ fn enforce_non_member(
     } else {
         Err(Error::build_verification_error(
             "E_TRUST_NON_MEMBER".to_string(),
-            format!(
-                "Signer '{}' (kid: {}) is not in active members",
-                member_handle, kid
-            ),
+            format_non_member_error_message(trust_ctx, capability, member_handle, kid),
         ))
     }
+}
+
+fn format_non_member_error_message(
+    trust_ctx: &TrustContext,
+    capability: CommandCapability,
+    member_handle: &MemberHandle,
+    kid: &Kid,
+) -> String {
+    let message = format!(
+        "Signer '{}' (kid: {}) is not in active members",
+        member_handle, kid
+    );
+    if !capability.allows_non_member_acceptance() {
+        return message;
+    }
+    if !trust_ctx.allow_non_member {
+        return format!(
+            "{}. Run again with '--allow-non-member' to start one-shot non-member acceptance.",
+            message
+        );
+    }
+    format!(
+        "{}. Non-member acceptance requires an interactive terminal.",
+        message
+    )
 }
 
 pub fn build_trust_approval_candidate(public_key: &PublicKey) -> TrustApprovalCandidate {

@@ -37,6 +37,7 @@ impl DoctorRequest {
             workspace: self.workspace.clone(),
             ssh_signing_method: None,
             allow_expired_key: false,
+            allow_non_member: false,
         }
     }
 }

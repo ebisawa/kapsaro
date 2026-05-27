@@ -355,7 +355,7 @@ fn test_trust_remove_requires_member_handle_when_keystore_is_ambiguous() {
     install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
-    cmd()
+    let assert = cmd()
         .arg("trust")
         .arg("keys")
         .arg("remove")
@@ -364,9 +364,22 @@ fn test_trust_remove_requires_member_handle_when_keystore_is_ambiguous() {
         .arg(home.path())
         .arg("--ssh-identity")
         .arg(home.path().join(".ssh").join("test_ed25519"))
+        .env("CLICOLOR_FORCE", "1")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("member handle not configured"));
+        .failure();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    let (first_line, body) = stderr
+        .split_once('\n')
+        .expect("member handle error should render as multiple lines");
+    assert_eq!(
+        first_line,
+        "\u{1b}[31mError: member handle not configured.\u{1b}[0m"
+    );
+    assert!(
+        !body.contains("\u{1b}[31m"),
+        "follow-up guidance should not be colored red: {stderr}"
+    );
 }
 
 #[test]

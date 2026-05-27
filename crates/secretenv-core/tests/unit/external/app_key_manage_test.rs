@@ -32,6 +32,7 @@ fn build_options(home: &Path) -> CommonCommandOptions {
         workspace: None,
         ssh_signing_method: None,
         allow_expired_key: false,
+        allow_non_member: false,
     }
 }
 

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::api::operation::OperationOptions;
 use crate::config::resolution::allow_expired_key::resolve_allow_expired_key;
+use crate::config::resolution::allow_non_member::resolve_allow_non_member;
 use crate::config::types::SshSigningMethod;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::resolver::KeystoreResolver;
@@ -20,6 +21,7 @@ pub struct CommonCommandOptions {
     pub workspace: Option<PathBuf>,
     pub ssh_signing_method: Option<SshSigningMethod>,
     pub allow_expired_key: bool,
+    pub allow_non_member: bool,
 }
 
 pub fn resolve_allow_expired_key_option(
@@ -27,6 +29,13 @@ pub fn resolve_allow_expired_key_option(
     options: &CommonCommandOptions,
 ) -> Result<bool> {
     resolve_allow_expired_key(cli_value, options.home.as_deref())
+}
+
+pub fn resolve_allow_non_member_option(
+    cli_value: Option<bool>,
+    options: &CommonCommandOptions,
+) -> Result<bool> {
+    resolve_allow_non_member(cli_value, options.home.as_deref())
 }
 
 impl CommonCommandOptions {

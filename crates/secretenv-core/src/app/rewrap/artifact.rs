@@ -293,6 +293,7 @@ fn load_rewrap_signer_trust_context(
     .trust_ctx;
     trust_ctx.active_members_by_kid = plan.pre_promotion_trust.active_members_by_kid.clone();
     trust_ctx.is_interactive = plan.pre_promotion_trust.is_interactive;
+    trust_ctx.allow_non_member = plan.pre_promotion_trust.allow_non_member;
     Ok(trust_ctx)
 }
 

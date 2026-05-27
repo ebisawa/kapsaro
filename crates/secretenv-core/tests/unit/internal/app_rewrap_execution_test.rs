@@ -232,6 +232,7 @@ fn test_execute_reviewed_rewrap_artifacts_bubbles_trust_store_reset_required_err
     fs::write(&secret_path, &encrypted).unwrap();
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     plan.pre_promotion_trust.is_interactive = true;
+    plan.pre_promotion_trust.allow_non_member = true;
     let request = RewrapBatchRequest {
         options,
         rotate_key: true,
@@ -1064,6 +1065,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
 
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     plan.pre_promotion_trust.is_interactive = true;
+    plan.pre_promotion_trust.allow_non_member = true;
     let bob_candidate = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
     let bob_public = load_member_file_from_path(&bob_incoming).unwrap();
     let request = RewrapBatchRequest {

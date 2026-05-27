@@ -35,6 +35,14 @@ use crate::test_utils::{
 const VALID_TEST_KID: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 
 fn build_test_trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustContext {
+    build_test_trust_ctx_with_non_member(strict, interactive, false)
+}
+
+fn build_test_trust_ctx_with_non_member(
+    strict: StrictKeyChecking,
+    interactive: bool,
+    allow_non_member: bool,
+) -> TrustContext {
     TrustContext {
         known_keys: Vec::new(),
         recipient_sets: Vec::new(),
@@ -42,6 +50,7 @@ fn build_test_trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustCo
         self_trust: SelfTrustSet::default(),
         strict_key_checking: StrictKeyCheckingResolution::explicit(strict),
         is_interactive: interactive,
+        allow_non_member,
         permission_warnings: Vec::new(),
     }
 }
@@ -466,7 +475,7 @@ fn test_enforce_signer_trust_strict_no_write_path_fails() {
 
 #[test]
 fn test_enforce_signer_trust_non_member_decrypt_interactive() {
-    let ctx = build_test_trust_ctx(StrictKeyChecking::Yes, true);
+    let ctx = build_test_trust_ctx_with_non_member(StrictKeyChecking::Yes, true, true);
     let public_key = build_public_key(
         "ex-member@example.com",
         "KID1AAAA1111BBBB2222CCCC3333DDDD",
@@ -503,8 +512,36 @@ fn test_enforce_signer_trust_non_member_decrypt_interactive() {
 }
 
 #[test]
-fn test_enforce_signer_trust_non_member_forbidden_command_fails() {
+fn test_enforce_signer_trust_non_member_decrypt_requires_allowance() {
     let ctx = build_test_trust_ctx(StrictKeyChecking::Yes, true);
+    let public_key = build_public_key(
+        "ex-member@example.com",
+        "KID1AAAA1111BBBB2222CCCC3333DDDD",
+        "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    );
+    let judgment = TrustJudgment::NonMember {
+        member_handle: member_handle(public_key.protected.subject_handle.clone()),
+        kid: kid(public_key.protected.kid.clone()),
+    };
+
+    let error = enforce_signer_trust(
+        &ctx,
+        &judgment,
+        &public_key,
+        CommandCapability::Decrypt,
+        &[],
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("E_TRUST_NON_MEMBER"));
+    assert!(error
+        .to_string()
+        .contains("Run again with '--allow-non-member'"));
+}
+
+#[test]
+fn test_enforce_signer_trust_non_member_forbidden_command_fails() {
+    let ctx = build_test_trust_ctx_with_non_member(StrictKeyChecking::Yes, true, true);
     let public_key = build_public_key(
         "ex-member@example.com",
         "KID1AAAA1111BBBB2222CCCC3333DDDD",
@@ -517,12 +554,14 @@ fn test_enforce_signer_trust_non_member_forbidden_command_fails() {
 
     let result = enforce_signer_trust(&ctx, &judgment, &public_key, CommandCapability::Run, &[]);
 
-    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("E_TRUST_NON_MEMBER"));
+    assert!(!error.to_string().contains("--allow-non-member"));
 }
 
 #[test]
 fn test_evaluate_signer_trust_with_proof_uses_embedded_signer_public_key() {
-    let ctx = build_test_trust_ctx(StrictKeyChecking::Yes, true);
+    let ctx = build_test_trust_ctx_with_non_member(StrictKeyChecking::Yes, true, true);
     let public_key = build_public_key(
         "ex-member@example.com",
         "KID1AAAA1111BBBB2222CCCC3333DDDD",

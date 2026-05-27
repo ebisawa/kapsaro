@@ -256,5 +256,6 @@ fn command_options(
         workspace,
         ssh_signing_method: None,
         allow_expired_key: false,
+        allow_non_member: false,
     }
 }

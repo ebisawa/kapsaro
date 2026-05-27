@@ -33,7 +33,7 @@ pub mod context {
 
     pub mod options {
         pub use crate::app::context::options::{
-            resolve_allow_expired_key_option, CommonCommandOptions,
+            resolve_allow_expired_key_option, resolve_allow_non_member_option, CommonCommandOptions,
         };
     }
 

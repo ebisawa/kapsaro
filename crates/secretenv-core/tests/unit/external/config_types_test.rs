@@ -41,6 +41,7 @@ fn test_config_key_supported_names_match_global_config_surface() {
             "ssh_signing_method",
             "github_user",
             "allow_expired_key",
+            "allow_non_member",
         ]
     );
 }
@@ -60,4 +61,5 @@ fn test_config_key_error_lists_supported_names() {
     assert!(message.contains("invalid key 'unknown'"));
     assert!(message.contains("member_handle"));
     assert!(message.contains("allow_expired_key"));
+    assert!(message.contains("allow_non_member"));
 }

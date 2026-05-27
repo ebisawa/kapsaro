@@ -113,6 +113,34 @@ fn test_ssh_options_are_limited_to_signing_commands() {
 }
 
 #[test]
+fn test_allow_non_member_is_limited_to_non_member_review_commands() {
+    for args in [
+        &["secretenv", "run", "--allow-non-member", "--", "env"][..],
+        &["secretenv", "set", "--allow-non-member", "KEY", "VALUE"][..],
+        &["secretenv", "encrypt", "--allow-non-member", "plain.txt"][..],
+        &["secretenv", "inspect", "--allow-non-member", "secret.enc"][..],
+    ] {
+        let err = parse_error(args);
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    for args in [
+        &[
+            "secretenv",
+            "decrypt",
+            "--allow-non-member",
+            "secret.enc",
+            "--stdout",
+        ][..],
+        &["secretenv", "get", "--allow-non-member", "KEY"][..],
+        &["secretenv", "list", "--allow-non-member"][..],
+        &["secretenv", "rewrap", "--allow-non-member"][..],
+    ] {
+        Cli::try_parse_from(args).expect("command should accept --allow-non-member");
+    }
+}
+
+#[test]
 fn test_allow_weak_password_is_limited_to_private_key_export() {
     let err = parse_error(&[
         "secretenv",

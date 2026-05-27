@@ -1181,7 +1181,7 @@ For incoming members or unreviewed keys, the user reviews key-statement informat
 
 Limited exceptions do not permanently change normal trust decisions. They let the user proceed with a specific operation after reviewing the context. Applying an exception does not restore a signer to current membership or implicitly update the local approval cache.
 
-Non-member acceptance is allowed only for `decrypt`, `get`, `list`, and `rewrap`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
+Non-member acceptance is allowed only for `decrypt`, `get`, `list`, and `rewrap`. The confirmation flow starts only for interactive runs with explicit allowance through `--allow-non-member`, `SECRETENV_ALLOW_NON_MEMBER=yes`, or `allow_non_member="yes"`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
 
 For `rewrap`, this exception converts an input from a non-current signer into output by the current signer, so the user is shown the signer information and target current recipient set before approval.
 

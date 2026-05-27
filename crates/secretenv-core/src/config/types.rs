@@ -23,10 +23,11 @@ pub enum ConfigKey {
     SshSigningMethod,
     GithubUser,
     AllowExpiredKey,
+    AllowNonMember,
 }
 
 impl ConfigKey {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::MemberHandle,
         Self::Workspace,
         Self::SshIdentity,
@@ -35,6 +36,7 @@ impl ConfigKey {
         Self::SshSigningMethod,
         Self::GithubUser,
         Self::AllowExpiredKey,
+        Self::AllowNonMember,
     ];
 
     /// Return the canonical global config.toml key names.
@@ -48,6 +50,7 @@ impl ConfigKey {
             "ssh_signing_method",
             "github_user",
             "allow_expired_key",
+            "allow_non_member",
         ]
     }
 
@@ -74,6 +77,7 @@ impl ConfigKey {
             Self::SshSigningMethod => "ssh_signing_method",
             Self::GithubUser => "github_user",
             Self::AllowExpiredKey => "allow_expired_key",
+            Self::AllowNonMember => "allow_non_member",
         }
     }
 }

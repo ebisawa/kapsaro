@@ -1306,7 +1306,7 @@ When `--target` is omitted, `rewrap` processes all encrypted files in the worksp
 
 Configuration commands do not require a workspace. They operate on the global config file.
 
-Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `ssh_keygen_command`, `ssh_add_command`, `github_user`, `allow_expired_key`
+Configuration keys: `member_handle`, `workspace`, `ssh_signing_method` (`auto` / `ssh-agent` / `ssh-keygen`), `ssh_identity`, `ssh_keygen_command`, `ssh_add_command`, `github_user`, `allow_expired_key`, `allow_non_member`
 
 ---
 
@@ -1337,6 +1337,9 @@ secretenv config set ssh_identity ~/.ssh/id_ed25519_work
 
 # Keep expired-key recovery disabled unless you are doing emergency recovery
 secretenv config set allow_expired_key no
+
+# Keep non-member signer acceptance disabled unless you are reviewing one artifact
+secretenv config set allow_non_member no
 ```
 
 The configuration file is located at `~/.config/secretenv/config.toml`.
@@ -1366,6 +1369,7 @@ The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~
 | `ssh_add_command` | Path to `ssh-add` command | `ssh-add` | — | — |
 | `github_user` | Default GitHub login name for `key new` | (none) | `--github-user` | `SECRETENV_GITHUB_USER` |
 | `allow_expired_key` | Whether to allow recovery decryption and operational artifact signature verification with expired keys. Value is `yes` or `no` | `no` | `--allow-expired-key` | `SECRETENV_ALLOW_EXPIRED_KEY` |
+| `allow_non_member` | Whether to enable the one-shot interactive confirmation flow for artifacts signed by non-members. Value is `yes` or `no` | `no` | `--allow-non-member` | `SECRETENV_ALLOW_NON_MEMBER` |
 
 Example:
 
@@ -1376,6 +1380,7 @@ ssh_identity = "~/.ssh/id_ed25519"
 ssh_signing_method = "auto"
 github_user = "alice-gh"
 allow_expired_key = "no"
+allow_non_member = "no"
 ```
 
 If the config file does not exist, secretenv falls back to environment variables and default values without error. If the file exists but contains syntax errors, secretenv reports an error. `config get`, `config set`, `config unset`, and `config list` operate on the global config file and do not check whether the configured workspace exists.
@@ -1392,6 +1397,7 @@ If the config file does not exist, secretenv falls back to environment variables
 | `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected) |
 | `SECRETENV_STRICT_KEY_CHECKING` | Whether to check local approval history during read operations: `yes`, `no` | `yes` |
 | `SECRETENV_ALLOW_EXPIRED_KEY` | Whether to allow recovery decryption and operational artifact signature verification with expired keys: `yes`, `no` | `no` |
+| `SECRETENV_ALLOW_NON_MEMBER` | Whether to enable the one-shot interactive confirmation flow for artifacts signed by non-members: `yes`, `no` | `no` |
 | `SECRETENV_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
 | `SECRETENV_KEY_PASSWORD` | Password for `SECRETENV_PRIVATE_KEY` (CI/CD) | (none) |
 
@@ -1400,6 +1406,7 @@ If the config file does not exist, secretenv falls back to environment variables
 - `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 13](#13-cicd-integration) for details.
 - `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
 - `SECRETENV_ALLOW_EXPIRED_KEY=yes` is not a way to return expired keys to normal use. Set it only for the target emergency recovery command or step, then unset it afterward.
+- `SECRETENV_ALLOW_NON_MEMBER=yes` enables the one-shot non-member signer confirmation flow only for interactive `decrypt`, `get`, `list`, and `rewrap` runs. It has no effect for non-interactive execution or `run`.
 - `SECRETENV_WORKSPACE` overrides automatic workspace detection. Useful when running commands outside the Git repository tree or when using a workspace outside the current directory.
 
 ---

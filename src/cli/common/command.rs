@@ -72,7 +72,10 @@ pub(crate) fn resolve_options_with_allow_expired_key(
     common: &impl ToCommonOptions,
     allow_expired_key: bool,
 ) -> Result<CommonCommandOptions> {
-    resolve_options_with_read_trust_allowances(common, allow_expired_key, false)
+    let mut options = resolve_options(common);
+    options.allow_expired_key =
+        resolve_allow_expired_key_option(Some(allow_expired_key), &options)?;
+    Ok(options)
 }
 
 pub(crate) fn resolve_options_with_read_trust_allowances(

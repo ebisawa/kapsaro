@@ -3,7 +3,7 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::load_optional_workspace;
-use crate::test_utils::EnvGuard;
+use crate::test_utils::{with_temp_cwd, EnvGuard};
 
 use super::resolution::resolve_optional_workspace;
 use super::*;
@@ -65,6 +65,30 @@ fn app_context_resolves_workspace_from_config_toml() {
             assert_eq!(result.root_path, ws_path.canonicalize().unwrap());
         },
     );
+}
+
+#[test]
+#[serial]
+fn app_context_resolves_workspace_from_options_home_config_without_secret_env_home() {
+    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_WORKSPACE"]);
+    let tmp = tempfile::tempdir().unwrap();
+    let ws_path = tmp.path().join(".secretenv");
+    fs::create_dir_all(ws_path.join("members").join("active")).unwrap();
+    fs::create_dir_all(ws_path.join("secrets")).unwrap();
+
+    let config_dir = tempfile::tempdir().unwrap();
+    let config_content = format!("workspace = \"{}\"\n", ws_path.display());
+    fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
+    std::env::remove_var("SECRETENV_HOME");
+    std::env::remove_var("SECRETENV_WORKSPACE");
+
+    let cwd = tempfile::tempdir().unwrap();
+    let result = with_temp_cwd(cwd.path(), || {
+        let options = command_options(Some(config_dir.path().to_path_buf()), None);
+        load_optional_workspace(&options).unwrap().unwrap()
+    });
+
+    assert_eq!(result.root_path, ws_path.canonicalize().unwrap());
 }
 
 #[test]

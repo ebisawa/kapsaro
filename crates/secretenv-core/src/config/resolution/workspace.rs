@@ -52,7 +52,21 @@ pub(crate) fn resolve_optional_workspace_from_sources(
     workspace_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<Option<WorkspaceResolution>> {
-    if let Some(path_resolution) = resolve_workspace_path_from_sources(workspace_opt, base_dir)? {
+    resolve_optional_workspace_from_sources_with_base_resolver(workspace_opt, || {
+        Ok(base_dir.map(Path::to_path_buf))
+    })
+}
+
+pub(crate) fn resolve_optional_workspace_from_sources_with_base_resolver<F>(
+    workspace_opt: Option<PathBuf>,
+    resolve_base_dir: F,
+) -> Result<Option<WorkspaceResolution>>
+where
+    F: FnOnce() -> Result<Option<PathBuf>>,
+{
+    if let Some(path_resolution) =
+        resolve_workspace_path_from_sources_with_base_resolver(workspace_opt, resolve_base_dir)?
+    {
         return resolve_workspace_from_path(path_resolution.path, path_resolution.source).map(Some);
     }
 
@@ -76,6 +90,18 @@ pub(crate) fn resolve_workspace_path_from_sources(
     workspace_opt: Option<PathBuf>,
     base_dir: Option<&Path>,
 ) -> Result<Option<WorkspacePathResolution>> {
+    resolve_workspace_path_from_sources_with_base_resolver(workspace_opt, || {
+        Ok(base_dir.map(Path::to_path_buf))
+    })
+}
+
+fn resolve_workspace_path_from_sources_with_base_resolver<F>(
+    workspace_opt: Option<PathBuf>,
+    resolve_base_dir: F,
+) -> Result<Option<WorkspacePathResolution>>
+where
+    F: FnOnce() -> Result<Option<PathBuf>>,
+{
     if let Some(path) = workspace_opt {
         return Ok(Some(WorkspacePathResolution {
             path,
@@ -90,7 +116,8 @@ pub(crate) fn resolve_workspace_path_from_sources(
         }));
     }
 
-    if let Some(path) = resolve_workspace_from_config_base(base_dir)? {
+    let base_dir = resolve_base_dir()?;
+    if let Some(path) = resolve_workspace_from_config_base(base_dir.as_deref())? {
         return Ok(Some(WorkspacePathResolution {
             path,
             source: WorkspaceSource::GlobalConfig,

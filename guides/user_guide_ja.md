@@ -1237,11 +1237,11 @@ SSH 鍵が同じ入力に対して2回連続で異なる署名を生成したこ
 |---------|------|
 | `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> <VALUE>` | エントリを追加・更新 |
 | `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> --stdin` | 標準入力から値を読み込んでセット |
-| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] <KEY>` | 特定キーの値を取得・表示 |
-| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] --all` | 全エントリを取得・表示 |
-| `secretenv get [-n <name>] [--all] --with-key` | `KEY="VALUE"` 形式で出力 |
+| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] <KEY>` | 特定キーの値を取得・表示 |
+| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] --all` | 全エントリを取得・表示 |
+| `secretenv get [-n <name>] [--all] [--allow-non-member] --with-key` | `KEY="VALUE"` 形式で出力 |
 | `secretenv unset [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> [--force]` | エントリを削除。非対話環境では `--force` が必要 |
-| `secretenv list [-n <name>] [-m <handle>] [--allow-expired-key] [--json]` | キー名の一覧を表示（値は表示しない） |
+| `secretenv list [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] [--json]` | キー名の一覧を表示（値は表示しない） |
 | `secretenv import [-n <name>] [-m <handle>] [--allow-expired-key] <file> [--json]` | `.env` ファイルを一括インポート |
 | `secretenv run [-n <name>] [-m <handle>] [--allow-expired-key] -- <command> [args...]` | 秘密情報を環境変数として注入してコマンドを実行 |
 
@@ -1251,8 +1251,8 @@ SSH 鍵が同じ入力に対して2回連続で異なる署名を生成したこ
 |---------|------|
 | `secretenv encrypt [-m <handle>] <file> [--out <path> \| --stdout]` | ファイルを暗号化（ファイル暗号化形式、file-enc） |
 | `secretenv encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | 標準入力をファイル暗号化形式（file-enc）として暗号化 |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] <file> (--out <path> \| --stdout)` | ファイルを復号 |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] --stdin (--out <path> \| --stdout)` | 標準入力からファイル暗号化 JSON（file-enc）を読み込んで復号 |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] <file> (--out <path> \| --stdout)` | ファイルを復号 |
+| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] --stdin (--out <path> \| --stdout)` | 標準入力からファイル暗号化 JSON（file-enc）を読み込んで復号 |
 | `secretenv inspect <file> [--json] [--verbose]` | 暗号ファイルのメタデータを表示（復号不要） |
 
 ### 診断
@@ -1270,7 +1270,7 @@ SSH 鍵が同じ入力に対して2回連続で異なる署名を生成したこ
 | `secretenv member verify [-m <handle>] [--approve] [<member_handle>...] [--json]` | active メンバーの公開鍵を検証し、必要ならローカル信頼ストアに承認結果を保存 |
 | `secretenv member add <file> [--force]` | メンバーの公開鍵ファイルを incoming に追加 |
 | `secretenv member remove <member_handle> [--force] [--allow-expired-key]` | メンバーをワークスペースから削除。非対話環境では `--force` が必要 |
-| `secretenv rewrap [-m <handle>] [--allow-expired-key] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | 承認待ちメンバーを有効化し、暗号ファイルの受信者情報を更新 |
+| `secretenv rewrap [-m <handle>] [--allow-expired-key] [--allow-non-member] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | 承認待ちメンバーを有効化し、暗号ファイルの受信者情報を更新 |
 
 `rewrap` は `--target` 未指定時にワークスペースの全暗号ファイルを処理します。`--target` を指定した場合は、その対象ファイルだけを処理します。
 
@@ -1294,7 +1294,7 @@ SSH 鍵が同じ入力に対して2回連続で異なる署名を生成したこ
 | `secretenv key activate [-m <handle>] [<kid>]` | 特定の鍵を active にする。`kid` 省略時は最新の有効な鍵を選択 |
 | `secretenv key remove [-m <handle>] <kid> [--force]` | 鍵を削除。active 鍵の削除には `--force` が必要 |
 | `secretenv key export [-m <handle>] [<kid>] --out <path>` | 公開鍵をエクスポート |
-| `secretenv key export --private [-m <handle>] [<kid>] (--stdout \| --out <path>)` | 秘密鍵をエクスポート（パスワード保護、CI/CD 用） |
+| `secretenv key export --private [-m <handle>] [<kid>] [--allow-weak-password] (--stdout \| --out <path>)` | 秘密鍵をエクスポート（パスワード保護、CI/CD 用） |
 
 ### 設定
 

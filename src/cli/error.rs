@@ -29,7 +29,16 @@ pub(crate) fn format_stderr_error_message(message: &str) -> String {
 
 fn format_error_line(error: &Error) -> String {
     let message = format!("Error: {}", error.format_user_message());
-    format_stderr_error_message(&message)
+    format_stderr_error_first_line(&message)
+}
+
+fn format_stderr_error_first_line(message: &str) -> String {
+    match message.split_once('\n') {
+        Some((first_line, rest)) => {
+            format!("{}\n{}", format_stderr_error_message(first_line), rest)
+        }
+        None => format_stderr_error_message(message),
+    }
 }
 
 #[cfg(test)]

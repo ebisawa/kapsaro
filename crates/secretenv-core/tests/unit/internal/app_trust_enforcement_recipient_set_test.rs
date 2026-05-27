@@ -199,6 +199,7 @@ fn trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustContext {
         self_trust: SelfTrustSet::default(),
         strict_key_checking: StrictKeyCheckingResolution::explicit(strict),
         is_interactive: interactive,
+        allow_non_member: false,
         permission_warnings: Vec::new(),
     }
 }

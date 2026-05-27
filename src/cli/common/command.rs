@@ -18,7 +18,7 @@ use secretenv_core::cli_api::app::context::identity::{
 };
 use secretenv_core::cli_api::app::context::member::resolve_required_member;
 use secretenv_core::cli_api::app::context::options::{
-    resolve_allow_expired_key_option, CommonCommandOptions,
+    resolve_allow_expired_key_option, resolve_allow_non_member_option, CommonCommandOptions,
 };
 use secretenv_core::cli_api::app::context::ssh::SshSigningContextResolution;
 use secretenv_core::cli_api::app::file::decrypt::DecryptFileCommand;
@@ -72,9 +72,18 @@ pub(crate) fn resolve_options_with_allow_expired_key(
     common: &impl ToCommonOptions,
     allow_expired_key: bool,
 ) -> Result<CommonCommandOptions> {
+    resolve_options_with_read_trust_allowances(common, allow_expired_key, false)
+}
+
+pub(crate) fn resolve_options_with_read_trust_allowances(
+    common: &impl ToCommonOptions,
+    allow_expired_key: bool,
+    allow_non_member: bool,
+) -> Result<CommonCommandOptions> {
     let mut options = resolve_options(common);
     options.allow_expired_key =
         resolve_allow_expired_key_option(Some(allow_expired_key), &options)?;
+    options.allow_non_member = resolve_allow_non_member_option(Some(allow_non_member), &options)?;
     Ok(options)
 }
 

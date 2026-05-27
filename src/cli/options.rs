@@ -108,6 +108,13 @@ pub(crate) struct AllowExpiredKeyOption {
 }
 
 #[derive(Debug, Clone, Args, Default)]
+pub(crate) struct AllowNonMemberOption {
+    /// Enable one-shot interactive acceptance for non-member artifact signers
+    #[arg(long)]
+    pub(crate) allow_non_member: bool,
+}
+
+#[derive(Debug, Clone, Args, Default)]
 pub(crate) struct LocalOptions {
     #[command(flatten)]
     pub(crate) home: HomeOption,
@@ -382,6 +389,7 @@ impl From<&CommonOptions> for CommonCommandOptions {
             workspace: value.workspace.clone(),
             ssh_signing_method: value.ssh_signing_method(),
             allow_expired_key: false,
+            allow_non_member: false,
         }
     }
 }

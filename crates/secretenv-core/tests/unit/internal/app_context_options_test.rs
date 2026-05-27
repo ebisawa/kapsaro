@@ -15,6 +15,7 @@ fn test_operation_options_copies_non_secret_operation_controls() {
         workspace: None,
         ssh_signing_method: None,
         allow_expired_key: true,
+        allow_non_member: false,
     };
 
     let operation_options = options.operation_options();

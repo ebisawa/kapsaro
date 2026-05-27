@@ -34,6 +34,7 @@ pub struct TrustContext {
     pub self_trust: SelfTrustSet,
     pub strict_key_checking: StrictKeyCheckingResolution,
     pub is_interactive: bool,
+    pub allow_non_member: bool,
     pub permission_warnings: Vec<String>,
 }
 
@@ -92,9 +93,10 @@ pub(super) fn load_trust_context(
 
     if options.debug {
         debug!(
-            "[TRUST] context: strict_key_checking={}, interactive={}, active_members={}, known_keys={}, recipient_sets={}",
+            "[TRUST] context: strict_key_checking={}, interactive={}, allow_non_member={}, active_members={}, known_keys={}, recipient_sets={}",
             format_strict_key_checking(strict_key_checking),
             is_interactive,
+            options.allow_non_member,
             active_members_by_kid.len(),
             known_keys.len(),
             recipient_sets.len()
@@ -108,6 +110,7 @@ pub(super) fn load_trust_context(
         self_trust,
         strict_key_checking,
         is_interactive,
+        allow_non_member: options.allow_non_member,
         permission_warnings,
     })
 }

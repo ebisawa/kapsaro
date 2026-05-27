@@ -4,10 +4,12 @@
 //! rewrap command - recipient management for encrypted files
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, resolve_trust_store_owner_member,
+    resolve_options_with_read_trust_allowances, resolve_trust_store_owner_member,
 };
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use crate::cli::options::{AllowExpiredKeyOption, MemberHandleOption, SigningQuietOutputOptions};
+use crate::cli::options::{
+    AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOutputOptions,
+};
 use clap::Args;
 use secretenv_core::Result;
 use std::path::PathBuf;
@@ -23,6 +25,9 @@ pub(crate) struct RewrapArgs {
 
     #[command(flatten)]
     pub allow_expired_key: AllowExpiredKeyOption,
+
+    #[command(flatten)]
+    pub allow_non_member: AllowNonMemberOption,
 
     /// Clear removed_recipients history
     #[arg(long)]
@@ -41,9 +46,10 @@ pub(crate) struct RewrapArgs {
 }
 
 pub(crate) fn run(args: RewrapArgs) -> Result<()> {
-    let options = resolve_options_with_allow_expired_key(
+    let options = resolve_options_with_read_trust_allowances(
         &args.common,
         args.allow_expired_key.allow_expired_key,
+        args.allow_non_member.allow_non_member,
     )?;
     run_with_trust_store_reset_recovery(
         &options,

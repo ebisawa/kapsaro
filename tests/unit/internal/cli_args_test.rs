@@ -113,6 +113,31 @@ fn test_ssh_options_are_limited_to_signing_commands() {
 }
 
 #[test]
+fn test_allow_weak_password_is_limited_to_private_key_export() {
+    let err = parse_error(&[
+        "secretenv",
+        "key",
+        "export",
+        "--allow-weak-password",
+        "--out",
+        "key.json",
+    ]);
+    assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+
+    Cli::try_parse_from([
+        "secretenv",
+        "key",
+        "export",
+        "--private",
+        "--allow-weak-password",
+        "--stdout",
+        "--member-handle",
+        "alice@example.com",
+    ])
+    .expect("private key export should accept --allow-weak-password");
+}
+
+#[test]
 fn test_trust_purge_accepts_force_short_option() {
     for args in [
         &[

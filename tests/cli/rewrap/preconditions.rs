@@ -6,6 +6,7 @@ use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
+use console::strip_ansi_codes;
 
 #[cfg(unix)]
 use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
@@ -70,6 +71,41 @@ fn test_rewrap_nonexistent_workspace_fails() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
+}
+
+#[test]
+fn test_rewrap_quiet_keeps_failed_file_details_on_stderr() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) =
+        setup_workspace_with_kv_entries(&[("BROKEN_KEY", "broken_value")]);
+    let kv_path = workspace_dir.path().join("secrets").join("default.kvenc");
+    tamper_kv_signature(&kv_path);
+
+    let assert = cmd()
+        .arg("rewrap")
+        .arg("--quiet")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("CLICOLOR_FORCE", "1")
+        .assert()
+        .failure();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("\u{1b}[31mError processing "),
+        "expected colored failed file detail in stderr, got: {stderr}"
+    );
+    assert!(
+        strip_ansi_codes(&stderr).contains("Signature verification failed"),
+        "expected failure detail after stripping ANSI, got: {stderr}"
+    );
+    assert!(
+        strip_ansi_codes(&stderr).contains("Failed to rewrap 1 file(s). See errors above."),
+        "expected top-level rewrap failure after stripping ANSI, got: {stderr}"
+    );
 }
 
 #[cfg(unix)]

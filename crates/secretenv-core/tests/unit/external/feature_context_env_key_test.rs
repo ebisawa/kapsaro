@@ -13,7 +13,9 @@ use secretenv_core::cli_api::test_support::operations::context::env_key::{
 use secretenv_core::cli_api::test_support::operations::key::material::{
     build_private_key_plaintext, generate_keypairs,
 };
-use secretenv_core::cli_api::test_support::operations::key::portable_export::export_private_key_portable;
+use secretenv_core::cli_api::test_support::operations::key::portable_export::{
+    export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
+};
 
 use crate::test_utils::EnvGuard;
 
@@ -40,7 +42,7 @@ fn build_exported_key(plaintext: &PrivateKeyPlaintext, password: &str) -> String
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &password,
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     )
     .expect("export should succeed")
     .into_plain_string_for_output()
@@ -77,7 +79,7 @@ fn test_is_env_key_mode_when_unset() {
 fn test_decode_env_private_key() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
     let plaintext = build_test_plaintext();
-    let password = "strong-password-42";
+    let password = "strong-password-42-xx";
     let exported = build_exported_key(&plaintext, password);
 
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
@@ -101,7 +103,7 @@ fn test_decode_env_private_key() {
 fn test_env_key_missing_password_error() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
     let plaintext = build_test_plaintext();
-    let exported = build_exported_key(&plaintext, "strong-password-42");
+    let exported = build_exported_key(&plaintext, "strong-password-42-xx");
 
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
     std::env::remove_var(ENV_KEY_PASSWORD);
@@ -120,7 +122,7 @@ fn test_env_key_missing_password_error() {
 fn test_env_key_invalid_base64_error() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
     std::env::set_var(ENV_PRIVATE_KEY, "not-valid-base64!!!");
-    std::env::set_var(ENV_KEY_PASSWORD, "strong-password-42");
+    std::env::set_var(ENV_KEY_PASSWORD, "strong-password-42-xx");
 
     let result = load_private_key_from_env(false);
     assert!(result.is_err());
@@ -131,7 +133,7 @@ fn test_env_key_invalid_base64_error() {
 fn test_env_vars_cleared_after_successful_load() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
     let plaintext = build_test_plaintext();
-    let password = "strong-password-42";
+    let password = "strong-password-42-xx";
     let exported = build_exported_key(&plaintext, password);
 
     std::env::set_var(ENV_PRIVATE_KEY, &exported);

@@ -134,7 +134,8 @@ pub mod operations {
         }
         pub mod portable_export {
             pub use crate::feature::key::portable_export::{
-                build_password_strength_warning, export_private_key_portable,
+                build_password_strength_warning, export_private_key_portable, ExportPasswordPolicy,
+                PortableExportOptions,
             };
         }
         pub mod protection {

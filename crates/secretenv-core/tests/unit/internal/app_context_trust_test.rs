@@ -9,7 +9,7 @@ use crate::app::trust::{
     build_signer_identity, enforce_policy_strict_key_checking, enforce_recipients_trust,
     enforce_signer_trust, evaluate_signer_trust_with_proof, load_read_trust_context,
     CommandCapability, CommandTrustSnapshot, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy,
-    RecipientTrustOutcome, RewrapInputPolicy, RunPolicy, SetPolicy, SignerTrustOutcome,
+    ListPolicy, RecipientTrustOutcome, RewrapInputPolicy, RunPolicy, SetPolicy, SignerTrustOutcome,
     TrustContext, UnsetPolicy,
 };
 use crate::app_test_utils::build_test_command_options;
@@ -672,6 +672,7 @@ fn test_enforce_recipients_trust_detects_kid_integrity_mismatch() {
 fn test_non_member_acceptance_allowed_commands() {
     assert!(CommandCapability::Decrypt.allows_non_member_acceptance());
     assert!(CommandCapability::Get.allows_non_member_acceptance());
+    assert!(CommandCapability::List.allows_non_member_acceptance());
     assert!(CommandCapability::Rewrap.allows_non_member_acceptance());
 }
 
@@ -687,11 +688,13 @@ fn test_non_member_acceptance_forbidden_commands() {
 fn test_policy_strict_key_checking_no_allowed_for_read_paths() {
     assert!(CommandCapability::Decrypt.allows_strict_key_checking_no());
     assert!(CommandCapability::Get.allows_strict_key_checking_no());
+    assert!(CommandCapability::List.allows_strict_key_checking_no());
     assert!(CommandCapability::Run.allows_strict_key_checking_no());
     let strict_no = StrictKeyCheckingResolution::explicit(StrictKeyChecking::No);
 
     enforce_policy_strict_key_checking::<DecryptPolicy>(strict_no).unwrap();
     enforce_policy_strict_key_checking::<GetPolicy>(strict_no).unwrap();
+    enforce_policy_strict_key_checking::<ListPolicy>(strict_no).unwrap();
     enforce_policy_strict_key_checking::<RunPolicy>(strict_no).unwrap();
 }
 

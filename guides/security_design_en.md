@@ -1149,7 +1149,7 @@ The local trust store is a per-user approval cache. `known_keys` records key own
 
 The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. SecretEnv does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-HPKE-open key-possession proof verification have completed.
 
-Successful signature verification is not enough to accept an artifact. On read paths, SecretEnv checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`. If the signer key or the private key used for decryption is expired, `decrypt`, `get`, and `run` fail by default and continue with a warning only when explicit expired-key recovery is enabled.
+Successful signature verification is not enough to accept an artifact. On read paths, SecretEnv checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`. If the signer key or the private key used to recover the MK is expired, `decrypt`, `get`, `run`, and `list` fail by default and continue with a warning only when explicit expired-key recovery is enabled.
 
 Read paths do not use `recipient_sets` to re-approve the entire artifact sharing set. Historical artifacts may still contain recipients that no longer resolve to current `members/active`. Such recipients are surfaced to the user as warnings, preserving readability of historical artifacts while keeping the difference from current state visible.
 
@@ -1181,7 +1181,7 @@ For incoming members or unreviewed keys, the user reviews key-statement informat
 
 Limited exceptions do not permanently change normal trust decisions. They let the user proceed with a specific operation after reviewing the context. Applying an exception does not restore a signer to current membership or implicitly update the local approval cache.
 
-Non-member acceptance is allowed only for `decrypt`, `get`, and `rewrap`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
+Non-member acceptance is allowed only for `decrypt`, `get`, `list`, and `rewrap`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
 
 For `rewrap`, this exception converts an input from a non-current signer into output by the current signer, so the user is shown the signer information and target current recipient set before approval.
 
@@ -1189,7 +1189,7 @@ The self historical exception is limited to self keys and rests on the fact that
 
 `SECRETENV_STRICT_KEY_CHECKING=no` relaxes only local key-owner approval checks on explicitly requested read paths. Signature verification, current authorization through `members/active`, recipient-handle consistency, and key-possession proof verification still apply. This setting does not apply to write paths and does not implicitly update `known_keys` or `recipient_sets`. If used in CI or similar automation, the execution context itself must be trusted by the user.
 
-Expired-key recovery is a limited exception for reading historical encrypted artifacts or completing operational artifact signature verification. It is enabled explicitly through `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`. It applies only to `decrypt`, `get`, `run`, `set`, `unset`, `import`, `rewrap`, and `member remove`, and does not apply to encryption, signing, or approval of expired PublicKeys.
+Expired-key recovery is a limited exception for reading historical encrypted artifacts, checking key names, or completing operational artifact signature verification. It is enabled explicitly through `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`. It applies only to `decrypt`, `get`, `run`, `list`, `set`, `unset`, `import`, `rewrap`, and `member remove`, and does not apply to encryption, signing, or approval of expired PublicKeys.
 
 ### 10.6 Freshness and Repository Governance
 

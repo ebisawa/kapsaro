@@ -36,6 +36,7 @@ fn test_unset_existing_key_with_force() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("KEY2"))

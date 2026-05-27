@@ -8,6 +8,8 @@ use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::{
     evaluate_read_artifact_trust, ReadTrustPolicy, RecipientTrustOutcome, SignerTrustOutcome,
 };
+use crate::feature::envelope::key_possession::verify_kv_key_possession;
+use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
@@ -22,7 +24,7 @@ use crate::support::warning::push_unique_warning;
 use crate::Result;
 use tracing::debug;
 
-use super::session::{KvCommandSession, KvFileSession};
+use super::session::KvCommandSession;
 use super::types::{KvDisclosedEntry, KvReadMode, KvReadResult};
 
 pub struct KvReadCommand {
@@ -33,15 +35,6 @@ pub struct KvReadCommand {
     pub recipient_trust_outcome: RecipientTrustOutcome,
     pub warnings: Vec<String>,
     target_path: std::path::PathBuf,
-}
-
-pub fn list_kv_command(
-    options: &CommonCommandOptions,
-    file_name: Option<&str>,
-) -> Result<Vec<KvDisclosedEntry>> {
-    let session = KvFileSession::load(options, file_name)?;
-    list_kv_keys_with_disclosed(&session.kv_content())
-        .map(|entries| entries.into_iter().map(Into::into).collect())
 }
 
 pub fn resolve_kv_read_command<P>(
@@ -98,6 +91,22 @@ where
         warnings,
         target_path: file.target.file_path,
     })
+}
+
+pub fn execute_kv_list_command(
+    command: &KvReadCommand,
+    debug_enabled: bool,
+) -> Result<Vec<KvDisclosedEntry>> {
+    let doc = command.verified_doc.document();
+    let master_key = unwrap_master_key_for_kv_with_context(
+        &doc.head().sid,
+        &doc.wrap().wrap,
+        &command.execution.member_handle,
+        &command.execution.key_ctx,
+        debug_enabled,
+    )?;
+    verify_kv_key_possession(&command.verified_doc, master_key.value, debug_enabled)?;
+    Ok(command.disclosed.clone())
 }
 
 pub fn execute_kv_read_command(

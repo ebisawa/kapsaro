@@ -55,11 +55,11 @@ impl CommandCapability {
     }
 
     pub fn allows_non_member_acceptance(self) -> bool {
-        matches!(self, Self::Decrypt | Self::Get | Self::Rewrap)
+        matches!(self, Self::Decrypt | Self::Get | Self::List | Self::Rewrap)
     }
 
     pub fn allows_strict_key_checking_no(self) -> bool {
-        matches!(self, Self::Decrypt | Self::Get | Self::Run)
+        matches!(self, Self::Decrypt | Self::Get | Self::List | Self::Run)
     }
 }
 
@@ -76,6 +76,9 @@ pub struct DecryptPolicy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GetPolicy;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListPolicy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunPolicy;
@@ -107,6 +110,12 @@ impl TrustPolicy for GetPolicy {
 }
 
 impl ReadTrustPolicy for GetPolicy {}
+
+impl TrustPolicy for ListPolicy {
+    const CAPABILITY: CommandCapability = CommandCapability::List;
+}
+
+impl ReadTrustPolicy for ListPolicy {}
 
 impl TrustPolicy for RunPolicy {
     const CAPABILITY: CommandCapability = CommandCapability::Run;

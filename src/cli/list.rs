@@ -5,24 +5,55 @@
 
 use clap::Args;
 
-use crate::cli::common::command::resolve_options;
+use crate::cli::common::command::{
+    resolve_options_with_allow_expired_key, run_read_command_with_recovery, ReadCommandLabels,
+};
 use crate::cli::common::output::kv::print_kv_key_list;
-use crate::cli::options::{KvStoreNameOption, WorkspaceOutputOptions};
-use secretenv_core::cli_api::app::kv::query::list_kv_command;
+use crate::cli::options::{
+    AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOutputOptions,
+};
+use secretenv_core::cli_api::app::kv::query::{execute_kv_list_command, resolve_kv_read_command};
+use secretenv_core::cli_api::app::trust::ListPolicy;
 use secretenv_core::Result;
 
 #[derive(Args)]
 pub(crate) struct ListArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: WorkspaceOutputOptions,
+    pub common: SigningOutputOptions,
+
+    #[command(flatten)]
+    pub allow_expired_key: AllowExpiredKeyOption,
+
+    #[command(flatten)]
+    pub member: MemberHandleOption,
 
     #[command(flatten)]
     pub store: KvStoreNameOption,
 }
 
 pub(crate) fn run(args: ListArgs) -> Result<()> {
-    let options = resolve_options(&args.common);
-    let keys_with_disclosed = list_kv_command(&options, args.store.name.as_deref())?;
+    let options = resolve_options_with_allow_expired_key(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+    )?;
+    let keys_with_disclosed = run_read_command_with_recovery(
+        &options,
+        args.member.member_handle.clone(),
+        ReadCommandLabels {
+            context: "list signer",
+            subject: "signer",
+            allow_non_member: true,
+        },
+        |ssh_ctx| {
+            resolve_kv_read_command::<ListPolicy>(
+                &options,
+                args.member.member_handle.clone(),
+                args.store.name.as_deref(),
+                ssh_ctx,
+            )
+        },
+        |command| execute_kv_list_command(command, args.common.debug.debug),
+    )?;
     print_kv_key_list(&keys_with_disclosed, args.common.json.json)
 }

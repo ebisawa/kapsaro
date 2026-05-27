@@ -3,12 +3,15 @@
 
 use std::collections::HashMap;
 
-use crate::app::trust::GetPolicy;
+use crate::app::trust::{GetPolicy, ListPolicy};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
+use crate::crypto::types::keys::MacKey;
 use crate::feature::context::crypto::SigningContext;
+use crate::feature::envelope::signature::sign_kv_document;
 use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
 use crate::format::token::TokenCodec;
+use crate::io::keystore::active::set_active_kid;
 use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
@@ -150,4 +153,78 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
             expired_active_ctx.kid().to_string()
         );
     });
+}
+
+#[test]
+fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    let keystore_root = temp_dir.path().join("keys");
+    let kid = key_ctx.kid().to_string();
+    set_active_kid(ALICE_MEMBER_HANDLE, &kid, &keystore_root).unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
+    let encrypted = encrypt_kv_document(
+        &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
+        &recipients,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: &kid,
+            signer_pub: public_key,
+            debug: false,
+        },
+        TokenCodec::JsonJcs,
+    )
+    .unwrap();
+    let unsigned = strip_kv_signature(&encrypted);
+    let signed_with_wrong_mac = sign_kv_document(
+        &unsigned,
+        &MacKey::new([9u8; 32]),
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: &kid,
+            signer_pub: load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap(),
+            debug: false,
+        },
+        TokenCodec::JsonJcs,
+        "kv_list_command_rejects_invalid_key_possession_without_decrypting_entries",
+    )
+    .unwrap();
+    std::fs::write(
+        workspace_dir
+            .join("secrets")
+            .join(format!("{DEFAULT_KV_ENC_BASENAME}{KV_ENC_EXTENSION}")),
+        signed_with_wrong_mac,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+
+    with_temp_cwd(temp_dir.path(), || {
+        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
+        let command = super::resolve_kv_read_command::<ListPolicy>(
+            &options,
+            Some(ALICE_MEMBER_HANDLE.to_string()),
+            None,
+            ssh_ctx,
+        )
+        .unwrap();
+
+        let error = super::execute_kv_list_command(&command, false).unwrap_err();
+        assert!(error.to_string().contains("E_KEY_POSSESSION_MAC_INVALID"));
+    });
+}
+
+fn strip_kv_signature(content: &str) -> String {
+    content
+        .lines()
+        .take_while(|line| !line.starts_with(":SIG "))
+        .map(|line| format!("{line}\n"))
+        .collect()
 }

@@ -435,7 +435,7 @@ secretenv list
 secretenv list -n staging
 ```
 
-`list` shows only key names without decrypting anything. Use `get` to retrieve values.
+`list` does not decrypt values. It verifies the encrypted file's signature, trust decision, and key-possession proof before showing key names. Use `get` to retrieve values.
 
 ### Running Commands with Secrets Injected as Environment Variables
 
@@ -1187,7 +1187,7 @@ Run `ssh-add -l` to check. If empty, add your key with `ssh-add ~/.ssh/id_ed2551
 
 Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 12](#12-key-management-and-rotation): generate a new key with `secretenv key new`, stage it with `secretenv join`, then run `secretenv rewrap` after the PR is merged.
 
-If `decrypt`, `get`, `run`, `set`, `unset`, `import`, `rewrap`, or `member remove` fails with `E_KEY_EXPIRED`, normally finish rotation and `rewrap` first. If you need emergency recovery for older secrets, pass `--allow-expired-key` to that command. To allow several commands temporarily, set `SECRETENV_ALLOW_EXPIRED_KEY=yes` only for that shell or CI step, or use `secretenv config set allow_expired_key yes` only with a clear plan to set it back afterward.
+If `decrypt`, `get`, `run`, `list`, `set`, `unset`, `import`, `rewrap`, or `member remove` fails with `E_KEY_EXPIRED`, normally finish rotation and `rewrap` first. If you need emergency recovery for older secrets, pass `--allow-expired-key` to that command. To allow several commands temporarily, set `SECRETENV_ALLOW_EXPIRED_KEY=yes` only for that shell or CI step, or use `secretenv config set allow_expired_key yes` only with a clear plan to set it back afterward.
 
 `member verify --approve` does not approve expired PublicKeys. `--allow-expired-key` and `SECRETENV_ALLOW_EXPIRED_KEY=yes` do not save expired member keys to the local trust store.
 
@@ -1240,7 +1240,7 @@ Accepted options differ by command. These options are shared by multiple command
 | `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] --all` | Retrieve and display all entries |
 | `secretenv get [-n <name>] [--all] --with-key` | Output in `KEY="VALUE"` format |
 | `secretenv unset [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
-| `secretenv list [-n <name>] [--json]` | List key names (values not displayed) |
+| `secretenv list [-n <name>] [-m <handle>] [--allow-expired-key] [--json]` | List key names (values not displayed) |
 | `secretenv import [-n <name>] [-m <handle>] [--allow-expired-key] <file> [--json]` | Bulk import a `.env` file |
 | `secretenv run [-n <name>] [-m <handle>] [--allow-expired-key] -- <command> [args...]` | Run a command with secrets injected as environment variables |
 

@@ -157,7 +157,8 @@ pub mod kv {
 
     pub mod query {
         pub use crate::app::kv::query::{
-            execute_kv_read_command, list_kv_command, resolve_kv_read_command, KvReadCommand,
+            execute_kv_list_command, execute_kv_read_command, resolve_kv_read_command,
+            KvReadCommand,
         };
     }
 
@@ -243,7 +244,7 @@ pub mod run {
 
 pub mod trust {
     pub use crate::app::trust::{
-        ArtifactRecipientTrustOutcome, CommandCapability, GetPolicy, ImportPolicy,
+        ArtifactRecipientTrustOutcome, CommandCapability, GetPolicy, ImportPolicy, ListPolicy,
         RecipientTrustOutcome, RunPolicy, SetPolicy, SignerTrustOutcome, TrustApprovalCandidate,
         UnsetPolicy, WriteTrustPolicy,
     };

@@ -28,8 +28,8 @@ pub use outcome::{
     ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome,
 };
 pub use policy::{
-    CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ReadTrustPolicy,
-    RunPolicy, SetPolicy, UnsetPolicy, WriteTrustPolicy,
+    CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ListPolicy,
+    ReadTrustPolicy, RunPolicy, SetPolicy, UnsetPolicy, WriteTrustPolicy,
 };
 pub use snapshot::{
     load_read_trust_context, TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,

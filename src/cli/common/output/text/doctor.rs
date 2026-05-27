@@ -20,7 +20,7 @@ pub(crate) fn format_doctor_report(report: &DoctorReport, verbose: bool) -> Stri
 
 fn push_summary(out: &mut String, report: &DoctorReport) {
     out.push_str(&format!("Status: {}\n", report.overall_status().as_str()));
-    push_wrapped_value(out, "Workspace: ", report.workspace_display());
+    push_value(out, "Workspace: ", report.workspace_display());
     out.push_str(&format!(
         "Checks: {} OK, {} WARN, {} FAIL, {} SKIP\n",
         report.count(DoctorStatus::Ok),
@@ -47,7 +47,7 @@ fn push_next_actions(out: &mut String, report: &DoctorReport) {
     }
     for (index, action) in actions.iter().enumerate() {
         let prefix = format!("{}. ", index + 1);
-        push_wrapped_value(out, &prefix, action);
+        push_value(out, &prefix, action);
     }
 }
 
@@ -65,19 +65,19 @@ fn push_findings(out: &mut String, report: &DoctorReport, verbose: bool) {
 
 fn push_finding(out: &mut String, check: &DoctorCheck, verbose: bool) {
     let prefix = format!("{}  ", color_status(check.status));
-    push_wrapped_value(out, &prefix, &check.message);
+    push_value(out, &prefix, &check.message);
     if verbose {
-        push_wrapped_value(out, "      Check: ", check.id);
+        push_value(out, "      Check: ", check.id);
         if let Some(rule) = check.rule.as_deref() {
-            push_wrapped_value(out, "      Rule: ", rule);
+            push_value(out, "      Rule: ", rule);
         }
     }
-    push_wrapped_value(out, "      Target: ", check.subject.as_str());
+    push_value(out, "      Target: ", check.subject.as_str());
     if let Some(reason) = check.reason.as_deref() {
-        push_wrapped_value(out, "      Reason: ", reason);
+        push_value(out, "      Reason: ", reason);
     }
     if let Some(next) = check.next_action.as_deref() {
-        push_wrapped_value(out, "      Next: ", next);
+        push_value(out, "      Next: ", next);
     }
     out.push('\n');
 }
@@ -90,17 +90,17 @@ fn push_healthy_areas(out: &mut String, report: &DoctorReport) {
         return;
     }
     for category in categories {
-        push_wrapped_value(out, "OK  ", category.title());
+        push_value(out, "OK  ", category.title());
     }
 }
 
 fn push_details(out: &mut String, report: &DoctorReport) {
     out.push_str("\nDetails\n");
-    push_wrapped_value(out, "Workspace: ", report.workspace_display());
+    push_value(out, "Workspace: ", report.workspace_display());
     out.push_str(&format!("Checks: {}\n", report.checks().len()));
 }
 
-fn push_wrapped_value(out: &mut String, prefix: &str, value: &str) {
+fn push_value(out: &mut String, prefix: &str, value: &str) {
     for line in layout::format_value_lines(prefix, value) {
         out.push_str(&line);
         out.push('\n');

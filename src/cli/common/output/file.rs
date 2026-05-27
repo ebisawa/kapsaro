@@ -4,7 +4,6 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::cli::common::output::text::layout;
 use secretenv_core::cli_api::presentation::fs::{save_bytes, save_text};
 use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
 use secretenv_core::{Error, Result};
@@ -119,32 +118,7 @@ fn print_output_notice(label: &str, output_path: &Path, quiet: bool) {
 fn format_output_notice_lines(label: &str, output_path: &Path) -> Vec<String> {
     let prefix = format!("{label}: ");
     let display_path = format_path_relative_to_cwd(output_path);
-    if layout::visible_width(&format!("{prefix}{display_path}")) <= layout::TEXT_WIDTH {
-        return vec![format!("{prefix}{display_path}")];
-    }
-
-    format_path_notice_lines(&prefix, &display_path)
-        .unwrap_or_else(|| layout::format_value_lines(&prefix, &display_path))
-}
-
-fn format_path_notice_lines(prefix: &str, display_path: &str) -> Option<Vec<String>> {
-    let separator = display_path.rfind('/')?;
-    let (parent, file_name) = display_path.split_at(separator + 1);
-    if file_name.is_empty() || !file_name_fits_continuation(prefix, file_name) {
-        return None;
-    }
-
-    let continuation = " ".repeat(layout::visible_width(prefix));
-    let mut lines = layout::format_value_lines(prefix, parent);
-    lines.push(format!("{continuation}{file_name}"));
-    Some(lines)
-}
-
-fn file_name_fits_continuation(prefix: &str, file_name: &str) -> bool {
-    let width = layout::TEXT_WIDTH
-        .saturating_sub(layout::visible_width(prefix))
-        .max(1);
-    layout::visible_width(file_name) <= width
+    vec![format!("{prefix}{display_path}")]
 }
 
 #[cfg(test)]

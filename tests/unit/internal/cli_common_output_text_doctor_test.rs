@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::output::text::doctor::format_doctor_report;
-use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 use secretenv_core::cli_api::app::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
 };
@@ -63,7 +62,7 @@ fn test_doctor_report_exit_code_fails_only_on_fail() {
 }
 
 #[test]
-fn test_doctor_text_output_wraps_long_messages_and_paths() {
+fn test_doctor_text_output_keeps_long_messages_and_paths_inline() {
     let workspace = format!("/workspace/{}", "nested-directory/".repeat(8));
     let subject = format!("secrets/{}.kvenc", "long-path-segment".repeat(10));
     let message = format!(
@@ -88,5 +87,8 @@ fn test_doctor_text_output_wraps_long_messages_and_paths() {
 
     let output = format_doctor_report(&report, true);
 
-    assert!(output.lines().all(|line| visible_width(line) <= TEXT_WIDTH));
+    assert!(output.contains("/workspace/nested-directory/"));
+    assert!(output.contains("alice.release.engineering."));
+    assert!(output.contains("abcdef0123456789"));
+    assert!(output.contains("run secretenv rewrap --target secrets/"));
 }

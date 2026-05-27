@@ -6,7 +6,6 @@ use secretenv_core::Error;
 use serial_test::serial;
 
 use super::format_error_line;
-use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 
 struct StderrColorGuard {
     enabled: bool,
@@ -79,7 +78,7 @@ fn test_format_error_line_colors_only_first_line_for_multiline_errors() {
 
 #[test]
 #[serial]
-fn test_format_error_line_wraps_long_error_to_80_columns() {
+fn test_format_error_line_keeps_long_error_inline() {
     let _guard = StderrColorGuard::new(false);
     let error = Error::build_invalid_operation_error(
         "Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact.",
@@ -89,14 +88,8 @@ fn test_format_error_line_wraps_long_error_to_80_columns() {
 
     assert_eq!(
         rendered,
-        concat!(
-            "Error: Recipient kid is not active in this workspace. Run secretenv rewrap\n",
-            "       before writing this artifact."
-        )
+        "Error: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact."
     );
-    assert!(rendered
-        .lines()
-        .all(|line| visible_width(line) <= TEXT_WIDTH));
 }
 
 #[test]
@@ -144,7 +137,4 @@ fn test_format_error_line_keeps_non_member_signer_summary_short() {
             "       Run with '--allow-non-member' to enable one-shot non-member acceptance."
         )
     );
-    assert!(rendered
-        .lines()
-        .all(|line| visible_width(line) <= TEXT_WIDTH));
 }

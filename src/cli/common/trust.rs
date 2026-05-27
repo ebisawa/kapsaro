@@ -334,7 +334,7 @@ impl RecipientDisplayRow {
 }
 
 fn format_member_key_rows(rows: &[RecipientDisplayRow]) -> Vec<String> {
-    let member_width = recipient_member_width(rows, "  ");
+    let member_width = recipient_member_width(rows);
     let mut lines = vec![format!(
         "  {:member_width$}  key id",
         "member handle",
@@ -346,20 +346,12 @@ fn format_member_key_rows(rows: &[RecipientDisplayRow]) -> Vec<String> {
     lines
 }
 
-fn recipient_member_width(rows: &[RecipientDisplayRow], prefix: &str) -> usize {
-    let member_width = rows
-        .iter()
+fn recipient_member_width(rows: &[RecipientDisplayRow]) -> usize {
+    rows.iter()
         .map(|row| row.member_handle.len())
         .max()
         .unwrap_or("member handle".len())
-        .max("member handle".len());
-    let key_id_width = rows
-        .iter()
-        .map(|row| row.key_id.len())
-        .max()
-        .unwrap_or("key id".len())
-        .max("key id".len());
-    layout::capped_pair_left_width(member_width, prefix, key_id_width)
+        .max("member handle".len())
 }
 
 fn recipient_diff_marker(status: ArtifactRecipientReviewDiffStatus) -> &'static str {
@@ -421,19 +413,11 @@ fn format_recipient_diff_row(
 fn recipient_diff_member_width(
     rows: &[(ArtifactRecipientReviewDiffStatus, RecipientDisplayRow)],
 ) -> usize {
-    let member_width = rows
-        .iter()
+    rows.iter()
         .map(|(_, row)| row.member_handle.len())
         .max()
         .unwrap_or("member handle".len())
-        .max("member handle".len());
-    let key_id_width = rows
-        .iter()
-        .map(|(_, row)| row.key_id.len())
-        .max()
-        .unwrap_or("key id".len())
-        .max("key id".len());
-    layout::capped_pair_left_width(member_width, "  change  ", key_id_width)
+        .max("member handle".len())
 }
 
 #[cfg(test)]

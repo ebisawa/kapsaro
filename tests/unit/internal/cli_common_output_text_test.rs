@@ -5,7 +5,6 @@ use console::{colors_enabled_stderr, set_colors_enabled_stderr};
 use serial_test::serial;
 
 use crate::cli::common::output::text::format_warning_line;
-use crate::cli::common::output::text::layout::{visible_width, TEXT_WIDTH};
 
 struct StderrColorGuard {
     enabled: bool,
@@ -48,7 +47,7 @@ fn test_format_warning_line_adds_ansi_color_when_stderr_colors_enabled() {
 
 #[test]
 #[serial]
-fn test_format_warning_line_wraps_long_warning_to_80_columns() {
+fn test_format_warning_line_keeps_long_warning_inline() {
     let _guard = StderrColorGuard::new(false);
 
     let rendered = format_warning_line(
@@ -57,14 +56,8 @@ fn test_format_warning_line_wraps_long_warning_to_80_columns() {
 
     assert_eq!(
         rendered,
-        concat!(
-            "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap\n",
-            "         before writing this artifact."
-        )
+        "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact."
     );
-    assert!(rendered
-        .lines()
-        .all(|line| visible_width(line) <= TEXT_WIDTH));
 }
 
 #[test]

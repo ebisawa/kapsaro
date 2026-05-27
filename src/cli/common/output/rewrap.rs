@@ -44,7 +44,7 @@ pub(crate) fn print_rewrap_batch_outcome(
         json_output,
         || print_rewrap_batch_json(&view),
         || {
-            if !quiet {
+            if !quiet || !view.failed_files.is_empty() {
                 print_rewrap_batch_text(&view);
             }
         },

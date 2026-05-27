@@ -4,6 +4,8 @@
 //! Integration tests for `key new` command
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+#[cfg(unix)]
+use crate::cli::common::{run_command_with_pty_script, secretenv_std_cmd};
 use crate::cli::key::find_kid_in_member_dir;
 use predicates::prelude::*;
 use secretenv_core::cli_api::test_support::domain::private_key::PrivateKey;
@@ -25,9 +27,63 @@ fn test_key_new_requires_member_handle_before_ssh_resolution() {
         .failure()
         .stderr(
             predicate::str::contains("member handle not configured")
+                .and(predicate::str::contains(
+                    "Run in an interactive terminal for prompt",
+                ))
                 .and(predicate::str::contains("SSH key").not())
                 .and(predicate::str::contains("GitHub username").not()),
         );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_key_new_prompts_for_member_handle_when_unconfigured() {
+    let temp_dir = TempDir::new().unwrap();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+
+    let mut command = secretenv_std_cmd();
+    command
+        .arg("key")
+        .arg("new")
+        .arg("-i")
+        .arg(ssh_priv.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env_remove("CI")
+        .env_remove("SECRETENV_GITHUB_USER")
+        .env_remove("SECRETENV_MEMBER_HANDLE");
+
+    let member_handle_input = format!("{TEST_MEMBER_HANDLE}\r");
+    let result = run_command_with_pty_script(
+        &mut command,
+        &[
+            ("Enter your member handle", member_handle_input.as_bytes()),
+            ("Enter your GitHub username", b"\r"),
+        ],
+    );
+
+    assert!(
+        result.status.success(),
+        "key new should succeed after member handle prompt:\n{}",
+        result.output
+    );
+
+    let keystore_root = temp_dir.path().join("keys");
+    let member_dir = keystore_root.join(TEST_MEMBER_HANDLE);
+    assert!(
+        member_dir.exists(),
+        "Member directory should be created: {}",
+        member_dir.display()
+    );
+
+    let kid = find_kid_in_member_dir(&member_dir);
+    let private_key_path = member_dir.join(&kid).join("private.json");
+    let private_json = fs::read_to_string(&private_key_path).unwrap();
+    let private_key: PrivateKey =
+        serde_json::from_str(&private_json).expect("Should parse as PrivateKey");
+
+    assert_eq!(private_key.protected.subject_handle, TEST_MEMBER_HANDLE);
+
+    drop(ssh_temp);
 }
 
 #[test]

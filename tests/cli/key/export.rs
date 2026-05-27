@@ -186,7 +186,7 @@ fn test_key_export_accepts_display_kid() {
 }
 
 #[test]
-fn test_key_export_private_warns_for_accepted_short_password_to_file() {
+fn test_key_export_private_rejects_short_password_by_default() {
     let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
@@ -197,6 +197,74 @@ fn test_key_export_private_warns_for_accepted_short_password_to_file() {
         .arg("key")
         .arg("export")
         .arg("--private")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin("12345678\n12345678\n")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("at least 20 bytes")
+                .and(predicate::str::contains("Warning:").not()),
+        );
+
+    assert!(!export_file.exists(), "export file should not be written");
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_colors_short_password_error_when_forced() {
+    let temp_dir = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
+    let export_file = temp_dir.path().join("portable-private-key.txt");
+
+    let assert = cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("SECRETENV_HOME", temp_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("CLICOLOR_FORCE", "1")
+        .write_stdin("12345678\n12345678\n")
+        .assert()
+        .failure();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("\u{1b}[31mError: Password must be at least 20 bytes"),
+        "expected ANSI-colored error in stderr, got: {stderr}"
+    );
+    assert!(
+        strip_ansi_codes(&stderr).contains("Error: Password must be at least 20 bytes"),
+        "expected error text after stripping ANSI, got: {stderr}"
+    );
+
+    assert!(!export_file.exists(), "export file should not be written");
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_private_warns_for_allowed_weak_password_to_file() {
+    let temp_dir = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
+    let export_file = temp_dir.path().join("portable-private-key.txt");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--allow-weak-password")
         .arg("--member-handle")
         .arg(member_handle)
         .arg("--out")
@@ -227,6 +295,7 @@ fn test_key_export_private_colors_short_password_warning_when_forced() {
         .arg("key")
         .arg("export")
         .arg("--private")
+        .arg("--allow-weak-password")
         .arg("--member-handle")
         .arg(member_handle)
         .arg("--out")
@@ -262,6 +331,7 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
         .arg("key")
         .arg("export")
         .arg("--private")
+        .arg("--allow-weak-password")
         .arg("--stdout")
         .arg("--member-handle")
         .arg(member_handle)
@@ -350,7 +420,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         .arg(export_file.to_str().unwrap())
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin("strong-password-42\nstrong-password-42\n")
+        .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
         .assert()
         .success();
 
@@ -392,7 +462,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         .arg(member_handle)
         .env("SECRETENV_HOME", temp_dir.path())
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin("strong-password-42\nstrong-password-42\n")
+        .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
         .assert()
         .success()
         .get_output()

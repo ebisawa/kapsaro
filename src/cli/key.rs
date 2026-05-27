@@ -142,6 +142,10 @@ pub(crate) struct ExportArgs {
     #[arg(long, requires = "private", conflicts_with = "out")]
     pub stdout: bool,
 
+    /// Allow export passwords below the recommended 20-byte minimum
+    #[arg(long, requires = "private")]
+    pub allow_weak_password: bool,
+
     /// Export password-protected portable private key
     #[arg(long)]
     pub private: bool,

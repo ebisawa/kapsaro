@@ -116,7 +116,13 @@ enum Commands {
 }
 
 pub(crate) fn parse() -> Cli {
-    Cli::parse()
+    match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            let code = error::print_clap_error(&error);
+            std::process::exit(code);
+        }
+    }
 }
 
 pub(crate) fn debug_enabled(cli: &Cli) -> bool {

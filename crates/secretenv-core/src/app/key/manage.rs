@@ -16,7 +16,8 @@ use crate::app::key::types::{
 };
 use crate::feature::key::material::validate_private_key_material;
 use crate::feature::key::portable_export::{
-    build_password_strength_warning, export_private_key_portable,
+    build_password_strength_warning, export_private_key_portable, validate_export_password,
+    ExportPasswordPolicy, PortableExportOptions,
 };
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
@@ -124,8 +125,12 @@ pub fn export_private_key_command(
     member_handle: String,
     kid: Option<String>,
     password: &SecretString,
+    allow_weak_password: bool,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<KeyExportPrivateResult> {
+    let password_policy = export_password_policy(allow_weak_password);
+    validate_export_password(password.as_str(), password_policy)?;
+
     let keystore_root = options.resolve_keystore_root()?;
     let kid = resolve_active_kid(&keystore_root, &member_handle, kid)?;
     let loaded = load_private_key_export_material(
@@ -144,16 +149,30 @@ pub fn export_private_key_command(
         &loaded.created_at,
         &loaded.expires_at,
         password,
-        options.debug,
+        PortableExportOptions::new(password_policy, options.debug),
     )?;
 
     Ok(crate::feature::key::portable_export::PortableExportOutput {
         member_handle: loaded.member_handle,
         kid: loaded.kid,
         encoded_key,
-        password_warning: build_password_strength_warning(password.as_str()),
+        password_warning: build_export_password_warning(password.as_str(), allow_weak_password),
     }
     .into())
+}
+
+fn export_password_policy(allow_weak_password: bool) -> ExportPasswordPolicy {
+    if allow_weak_password {
+        ExportPasswordPolicy::AllowWeak
+    } else {
+        ExportPasswordPolicy::Recommended
+    }
+}
+
+fn build_export_password_warning(password: &str, allow_weak_password: bool) -> Option<String> {
+    allow_weak_password
+        .then(|| build_password_strength_warning(password))
+        .flatten()
 }
 
 struct PrivateKeyExportMaterial {

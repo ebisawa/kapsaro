@@ -5,6 +5,7 @@
 
 use crate::cli::common::output::rewrap::RewrapBatchView;
 use crate::cli::common::output::text::layout;
+use crate::cli::error::format_stderr_error_message;
 
 pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) {
     for line in format_rewrap_batch_outcome_lines(outcome) {
@@ -18,10 +19,7 @@ fn format_rewrap_batch_outcome_lines(outcome: &RewrapBatchView) -> Vec<String> {
         lines.extend(layout::format_value_lines("Rewrapped: ", file));
     }
     for file in &outcome.failed_files {
-        lines.extend(layout::format_value_lines(
-            "Error processing ",
-            &format!("{}: {}", file.path, file.error),
-        ));
+        lines.extend(format_rewrap_failure_lines(file));
     }
     lines.push(String::new());
     lines.push(format!(
@@ -30,6 +28,18 @@ fn format_rewrap_batch_outcome_lines(outcome: &RewrapBatchView) -> Vec<String> {
         outcome.failed_files.len()
     ));
     lines
+}
+
+fn format_rewrap_failure_lines(
+    file: &crate::cli::common::output::rewrap::RewrapFailureView,
+) -> Vec<String> {
+    layout::format_value_lines(
+        "Error processing ",
+        &format!("{}: {}", file.path, file.error),
+    )
+    .into_iter()
+    .map(|line| format_stderr_error_message(&line))
+    .collect()
 }
 
 #[cfg(test)]

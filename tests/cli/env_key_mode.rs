@@ -13,7 +13,9 @@ use crate::cli::common::{
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
 use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
-use secretenv_core::cli_api::test_support::operations::key::portable_export::export_private_key_portable;
+use secretenv_core::cli_api::test_support::operations::key::portable_export::{
+    export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
+};
 use secretenv_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
 use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use secretenv_core::cli_api::test_support::storage::keystore::storage::load_private_key;
@@ -68,7 +70,7 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
         &private_key.protected.created_at,
         &private_key.protected.expires_at,
         &password,
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     )
     .expect("should export private key")
     .into_plain_string_for_output();

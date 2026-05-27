@@ -99,6 +99,7 @@ pub mod key {
             member_handle: String,
             kid: Option<String>,
             password: &SecretString,
+            allow_weak_password: bool,
             ssh_ctx: SshSigningContextResolution,
         ) -> Result<KeyExportPrivateResult> {
             crate::app::key::manage::export_private_key_command(
@@ -106,6 +107,7 @@ pub mod key {
                 member_handle,
                 kid,
                 password.as_inner(),
+                allow_weak_password,
                 ssh_ctx,
             )
         }

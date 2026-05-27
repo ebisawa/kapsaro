@@ -87,6 +87,7 @@ pub(super) fn run_export_private(args: ExportArgs) -> Result<()> {
         member_handle,
         args.kid.clone(),
         &password,
+        args.allow_weak_password,
         ssh_ctx,
     )?;
 

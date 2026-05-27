@@ -141,6 +141,7 @@ fn test_export_private_key_command_reencrypts_active_key() {
         ALICE_MEMBER_HANDLE.to_string(),
         None,
         &password,
+        false,
         ssh_ctx,
     )
     .unwrap();

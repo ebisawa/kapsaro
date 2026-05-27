@@ -8,7 +8,8 @@
 use crate::cli::common::{
     append_common_command_args, cmd, default_common_options, encrypt_file_with_member_set_review,
     generate_temp_ssh_keypair, set_ssh_key_from_temp_dir, set_value_with_member_set_review,
-    setup_workspace, CommonOptions, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, CommonOptions,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::setup_test_workspace;
 use predicates::prelude::*;

@@ -8,7 +8,8 @@ use secretenv_core::cli_api::test_support::operations::key::material::{
     build_private_key_plaintext, generate_keypairs,
 };
 use secretenv_core::cli_api::test_support::operations::key::portable_export::{
-    build_password_strength_warning, export_private_key_portable,
+    build_password_strength_warning, export_private_key_portable, ExportPasswordPolicy,
+    PortableExportOptions,
 };
 use secretenv_core::cli_api::test_support::operations::key::protection::password_encryption::decrypt_private_key_with_password;
 
@@ -35,8 +36,8 @@ fn test_export_produces_valid_base64url() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        &secret("strong-password-42"),
-        false,
+        &secret("strong-password-42-xx"),
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     )
     .expect("export should succeed");
 
@@ -64,7 +65,7 @@ fn test_export_produces_valid_base64url() {
 #[test]
 fn test_export_roundtrip() {
     let plaintext = build_test_plaintext();
-    let password = secret("strong-password-42");
+    let password = secret("strong-password-42-xx");
 
     let exported = export_private_key_portable(
         &plaintext,
@@ -73,7 +74,7 @@ fn test_export_roundtrip() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &password,
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     )
     .expect("export should succeed");
 
@@ -106,8 +107,8 @@ fn test_export_preserves_metadata() {
         kid,
         created_at,
         expires_at,
-        &secret("strong-password-42"),
-        false,
+        &secret("strong-password-42-xx"),
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     )
     .expect("export should succeed");
 
@@ -133,10 +134,13 @@ fn test_export_password_too_short_fails() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &secret("short"),
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     );
 
-    assert!(result.is_err(), "password shorter than 8 chars should fail");
+    assert!(
+        result.is_err(),
+        "password shorter than 20 bytes should fail"
+    );
     let err = result.unwrap_err().to_string();
     assert!(
         err.contains("password") || err.contains("Password"),
@@ -146,7 +150,7 @@ fn test_export_password_too_short_fails() {
 }
 
 #[test]
-fn test_export_password_7_chars_fails() {
+fn test_export_password_19_bytes_fails_by_default() {
     let plaintext = build_test_plaintext();
 
     let result = export_private_key_portable(
@@ -155,15 +159,32 @@ fn test_export_password_7_chars_fails() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
-        &secret("1234567"),
-        false,
+        &secret("1234567890123456789"),
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
     );
 
-    assert!(result.is_err(), "7-char password should fail");
+    assert!(result.is_err(), "19-byte password should fail by default");
 }
 
 #[test]
-fn test_export_password_8_chars_succeeds() {
+fn test_export_password_20_bytes_succeeds_by_default() {
+    let plaintext = build_test_plaintext();
+
+    let result = export_private_key_portable(
+        &plaintext,
+        "alice@example.com",
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        "2026-01-01T00:00:00Z",
+        "2027-01-01T00:00:00Z",
+        &secret("12345678901234567890"),
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
+    );
+
+    assert!(result.is_ok(), "20-byte password should succeed by default");
+}
+
+#[test]
+fn test_export_password_8_bytes_succeeds_when_weak_passwords_are_allowed() {
     let plaintext = build_test_plaintext();
 
     let result = export_private_key_portable(
@@ -173,14 +194,17 @@ fn test_export_password_8_chars_succeeds() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &secret("12345678"),
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::AllowWeak, false),
     );
 
-    assert!(result.is_ok(), "8-char password should succeed");
+    assert!(
+        result.is_ok(),
+        "8-byte password should succeed when explicitly allowed"
+    );
 }
 
 #[test]
-fn test_export_password_7_utf8_bytes_fails() {
+fn test_export_password_7_utf8_bytes_fails_even_when_weak_passwords_are_allowed() {
     let plaintext = build_test_plaintext();
 
     let result = export_private_key_portable(
@@ -190,14 +214,14 @@ fn test_export_password_7_utf8_bytes_fails() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &secret("あいa"),
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::AllowWeak, false),
     );
 
     assert!(result.is_err(), "7 UTF-8 bytes should fail");
 }
 
 #[test]
-fn test_export_password_9_utf8_bytes_succeeds() {
+fn test_export_password_9_utf8_bytes_succeeds_when_weak_passwords_are_allowed() {
     let plaintext = build_test_plaintext();
 
     let result = export_private_key_portable(
@@ -207,10 +231,13 @@ fn test_export_password_9_utf8_bytes_succeeds() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &secret("あいう"),
-        false,
+        PortableExportOptions::new(ExportPasswordPolicy::AllowWeak, false),
     );
 
-    assert!(result.is_ok(), "9 UTF-8 bytes should succeed");
+    assert!(
+        result.is_ok(),
+        "9 UTF-8 bytes should succeed when explicitly allowed"
+    );
 }
 
 #[test]

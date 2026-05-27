@@ -22,6 +22,27 @@ pub(crate) struct PortableExportOutput {
     pub(crate) password_warning: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExportPasswordPolicy {
+    Recommended,
+    AllowWeak,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PortableExportOptions {
+    pub password_policy: ExportPasswordPolicy,
+    pub debug: bool,
+}
+
+impl PortableExportOptions {
+    pub fn new(password_policy: ExportPasswordPolicy, debug: bool) -> Self {
+        Self {
+            password_policy,
+            debug,
+        }
+    }
+}
+
 const MIN_PASSWORD_LENGTH: usize = 8;
 const RECOMMENDED_PASSWORD_LENGTH: usize = 20;
 
@@ -36,9 +57,9 @@ pub fn export_private_key_portable(
     created_at: &str,
     expires_at: &str,
     password: &SecretString,
-    debug: bool,
+    options: PortableExportOptions,
 ) -> Result<SecretString> {
-    validate_password_length(password.as_str())?;
+    validate_export_password(password.as_str(), options.password_policy)?;
 
     let private_key = encrypt_private_key_with_password(
         plaintext,
@@ -47,22 +68,41 @@ pub fn export_private_key_portable(
         created_at,
         expires_at,
         password,
-        debug,
+        options.debug,
     )?;
 
     let jcs_bytes = SecretBytes::new(jcs::normalize(&private_key)?);
     Ok(encode_base64url_nopad_secret_bytes(&jcs_bytes))
 }
 
-/// Validate that the password meets minimum length requirements.
-fn validate_password_length(password: &str) -> Result<()> {
-    if password.len() < MIN_PASSWORD_LENGTH {
-        return Err(Error::build_invalid_argument_error(format!(
-            "Password must be at least {} bytes",
-            MIN_PASSWORD_LENGTH
-        )));
+pub fn validate_export_password(
+    password: &str,
+    password_policy: ExportPasswordPolicy,
+) -> Result<()> {
+    match password_policy {
+        ExportPasswordPolicy::Recommended => enforce_recommended_password_length(password),
+        ExportPasswordPolicy::AllowWeak => enforce_weak_password_floor(password),
     }
-    Ok(())
+}
+
+fn enforce_recommended_password_length(password: &str) -> Result<()> {
+    if password.len() >= RECOMMENDED_PASSWORD_LENGTH {
+        return Ok(());
+    }
+    Err(Error::build_invalid_argument_error(format!(
+        "Password must be at least {} bytes",
+        RECOMMENDED_PASSWORD_LENGTH
+    )))
+}
+
+fn enforce_weak_password_floor(password: &str) -> Result<()> {
+    if password.len() >= MIN_PASSWORD_LENGTH {
+        return Ok(());
+    }
+    Err(Error::build_invalid_argument_error(format!(
+        "Password must be at least {} bytes",
+        MIN_PASSWORD_LENGTH
+    )))
 }
 
 /// Build a non-fatal warning for accepted passwords below the recommended length.

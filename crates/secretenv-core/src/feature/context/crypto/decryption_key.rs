@@ -43,8 +43,10 @@ impl CryptoContext {
                     private_key: &self.private_key,
                     info: DecryptionKeyInfo {
                         kid: kid.to_string(),
-                        expires_at: self.expires_at.as_str().to_string(),
+                        expires_at: self.local_key_expiry.primary_expires_at().to_string(),
                         used_fallback: false,
+                        key_identity: self.local_key_identity.clone(),
+                        key_expiry: self.local_key_expiry.clone(),
                     },
                 });
             }
@@ -84,8 +86,10 @@ impl CryptoContext {
                         private_key: Box::new(loaded.private_key),
                         info: DecryptionKeyInfo {
                             kid: kid.to_string(),
-                            expires_at: loaded.expires_at.as_str().to_string(),
+                            expires_at: loaded.key_expiry.primary_expires_at().to_string(),
                             used_fallback: true,
+                            key_identity: loaded.key_identity,
+                            key_expiry: loaded.key_expiry,
                         },
                     });
                 }

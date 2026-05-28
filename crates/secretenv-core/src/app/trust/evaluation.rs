@@ -12,12 +12,14 @@ use crate::app::trust::enforcement::{
 use crate::app::trust::policy::{CommandCapability, ReadTrustPolicy, TrustPolicy};
 use crate::app::trust::snapshot::{load_read_trust_context, TrustContext};
 use crate::app::trust::{ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome};
+use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::feature::trust::judgment::{
     judge_signer_trust_with_additional, AdditionalKnownKeyCache,
 };
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::verification::SignatureVerificationProof;
 use crate::support::kid::format_kid_half_display_lossy;
+use crate::support::warning::push_unique_warning;
 use crate::Result;
 use tracing::debug;
 
@@ -48,6 +50,7 @@ where
         &workspace.root_path,
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
+        Some(execution.key_ctx.local_key_identity()),
         options.debug,
     )?;
     let trust_ctx = &loaded.trust_ctx;
@@ -100,6 +103,21 @@ pub fn evaluate_signer_trust_with_proof(
     )
 }
 
+pub(crate) fn push_signature_verification_warnings(
+    warnings: &mut Vec<String>,
+    proof: &SignatureVerificationProof,
+    local_key_identity: Option<&LocalKeyIdentity>,
+) -> Result<()> {
+    let suppress_local_signer_expiry = matches_local_signer_identity(proof, local_key_identity)?;
+    for warning in &proof.warnings {
+        if suppress_local_signer_expiry && is_signer_key_expiry_warning(warning) {
+            continue;
+        }
+        push_unique_warning(warnings, warning.clone());
+    }
+    Ok(())
+}
+
 pub fn evaluate_output_recipient_set_trust(
     trust_ctx: &TrustContext,
     recipient_set: &ArtifactRecipientSet,
@@ -113,6 +131,23 @@ pub fn evaluate_output_recipient_set_trust(
         describe_artifact_recipient_outcome(&outcome)
     );
     Ok(outcome)
+}
+
+fn matches_local_signer_identity(
+    proof: &SignatureVerificationProof,
+    local_key_identity: Option<&LocalKeyIdentity>,
+) -> Result<bool> {
+    let (Some(identity), Some(signer_public_key)) = (local_key_identity, &proof.signer_public_key)
+    else {
+        return Ok(false);
+    };
+    identity.matches_public_key(signer_public_key)
+}
+
+fn is_signer_key_expiry_warning(warning: &str) -> bool {
+    warning.starts_with("Artifact signing key expires in ")
+        || warning.starts_with("Artifact signing key has expired.")
+        || warning.starts_with("PublicKey for ")
 }
 
 pub fn enforce_policy_strict_key_checking<P>(

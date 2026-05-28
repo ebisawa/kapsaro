@@ -6,9 +6,8 @@
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 
-use crate::feature::context::expiry::{
-    build_signing_key_expiry_warning, enforce_key_not_expired_for_signing, VerifiedExpiresAt,
-};
+use crate::feature::context::expiry::{LocalKeyPairExpiry, VerifiedExpiresAt};
+use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::model::identity::{Kid, MemberHandle};
@@ -43,10 +42,17 @@ pub struct CryptoContext {
     workspace_path: Option<PathBuf>,
     private_key: VerifiedPrivateKey,
     signing_key: SigningKey,
-    /// Key expiration timestamp (RFC 3339) from PrivateKeyProtected
-    expires_at: VerifiedExpiresAt,
+    local_key_identity: LocalKeyIdentity,
+    local_key_expiry: LocalKeyPairExpiry,
     selected_kid_override: Option<Kid>,
     local_key_access: Option<LocalKeyAccess>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LocalKeyIdentity {
+    member_handle: MemberHandle,
+    kid: Kid,
+    sig_x: [u8; 32],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,6 +60,8 @@ pub struct DecryptionKeyInfo {
     pub kid: String,
     pub expires_at: String,
     pub used_fallback: bool,
+    pub(crate) key_identity: LocalKeyIdentity,
+    pub(crate) key_expiry: LocalKeyPairExpiry,
 }
 
 pub struct DecryptionResult<T> {
@@ -63,7 +71,8 @@ pub struct DecryptionResult<T> {
 
 pub(crate) struct PrivateKeyLoadResult {
     pub(crate) private_key: VerifiedPrivateKey,
-    pub(crate) expires_at: VerifiedExpiresAt,
+    pub(crate) key_identity: LocalKeyIdentity,
+    pub(crate) key_expiry: LocalKeyPairExpiry,
 }
 
 pub(crate) enum DecryptionKeyResolution<'a> {
@@ -91,6 +100,38 @@ impl LocalKeyAccess {
     }
 }
 
+impl LocalKeyIdentity {
+    pub(crate) fn new(member_handle: MemberHandle, kid: Kid, sig_x: [u8; 32]) -> Self {
+        Self {
+            member_handle,
+            kid,
+            sig_x,
+        }
+    }
+
+    pub(crate) fn matches_public_key(&self, public_key: &PublicKey) -> Result<bool> {
+        if public_key.protected.subject_handle != self.member_handle.as_str() {
+            return Ok(false);
+        }
+        if public_key.protected.kid != self.kid.as_str() {
+            return Ok(false);
+        }
+        let public_sig_x =
+            decode_base64url_nopad_array(&public_key.protected.keys.sig.x, "Ed25519 public key")?;
+        Ok(public_sig_x == self.sig_x)
+    }
+
+    pub(crate) fn from_public_key(public_key: &PublicKey) -> Result<Self> {
+        let sig_x =
+            decode_base64url_nopad_array(&public_key.protected.keys.sig.x, "Ed25519 public key")?;
+        Ok(Self::new(
+            MemberHandle::try_from(public_key.protected.subject_handle.clone())?,
+            Kid::try_from(public_key.protected.kid.clone())?,
+            sig_x,
+        ))
+    }
+}
+
 impl<'a> DecryptionKeyResolution<'a> {
     pub(crate) fn private_key(&self) -> &VerifiedPrivateKey {
         match self {
@@ -108,15 +149,20 @@ impl<'a> DecryptionKeyResolution<'a> {
 }
 
 impl CryptoContext {
-    pub fn new(
+    pub(crate) fn new(
         member_handle: MemberHandle,
         kid: Kid,
         pub_key_source: Box<dyn PublicKeySource>,
         workspace_path: Option<PathBuf>,
         private_key: VerifiedPrivateKey,
         signing_key: SigningKey,
-        expires_at: VerifiedExpiresAt,
+        local_key_expiry: LocalKeyPairExpiry,
     ) -> Self {
+        let local_key_identity = LocalKeyIdentity::new(
+            member_handle.clone(),
+            kid.clone(),
+            derive_signing_public_key_x(&signing_key),
+        );
         Self {
             member_handle,
             kid,
@@ -124,7 +170,8 @@ impl CryptoContext {
             workspace_path,
             private_key,
             signing_key,
-            expires_at,
+            local_key_identity,
+            local_key_expiry,
             selected_kid_override: None,
             local_key_access: None,
         }
@@ -161,7 +208,7 @@ impl CryptoContext {
     }
 
     pub fn expires_at(&self) -> &str {
-        self.expires_at.as_str()
+        self.local_key_expiry.primary_expires_at()
     }
 
     pub fn load_signer_public_key(&self) -> Result<PublicKey> {
@@ -173,16 +220,19 @@ impl CryptoContext {
     }
 
     pub(crate) fn self_signature_public_key_x(&self) -> [u8; 32] {
-        let verifying_key: ed25519_dalek::VerifyingKey = (&self.signing_key).into();
-        verifying_key.to_bytes()
+        self.local_key_identity.sig_x
+    }
+
+    pub(crate) fn local_key_identity(&self) -> &LocalKeyIdentity {
+        &self.local_key_identity
     }
 
     pub(crate) fn enforce_signing_key_not_expired(&self) -> Result<()> {
-        enforce_key_not_expired_for_signing(&self.expires_at)
+        self.local_key_expiry.enforce_not_expired_for_signing()
     }
 
     pub(crate) fn build_signing_key_expiry_warning(&self) -> Result<Option<String>> {
-        build_signing_key_expiry_warning(&self.expires_at)
+        self.local_key_expiry.build_signing_warning()
     }
 
     pub(crate) fn local_keystore_root(&self) -> Option<&Path> {
@@ -190,4 +240,9 @@ impl CryptoContext {
             .as_ref()
             .map(|access| access.keystore_root.as_path())
     }
+}
+
+fn derive_signing_public_key_x(signing_key: &SigningKey) -> [u8; 32] {
+    let verifying_key: ed25519_dalek::VerifyingKey = signing_key.into();
+    verifying_key.to_bytes()
 }

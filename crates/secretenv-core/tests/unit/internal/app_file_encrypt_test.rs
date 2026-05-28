@@ -11,7 +11,10 @@ use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::FileEncContent;
 use crate::io::keystore::active::set_active_kid;
 use crate::io::keystore::storage::list_kids;
-use crate::test_utils::{setup_test_workspace_from_fixtures, EnvGuard};
+use crate::test_utils::{
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace,
+    setup_test_workspace_from_fixtures, update_active_private_key_expires_at, EnvGuard,
+};
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
 
@@ -43,4 +46,34 @@ fn test_encrypt_output_member_set_auto_accepts_self_only_non_interactive() {
     let outcome = evaluate_encrypt_output_recipient_set(&command, &recipient_set).unwrap();
 
     assert_eq!(outcome, ArtifactRecipientTrustOutcome::Accepted);
+}
+
+#[test]
+fn test_encrypt_command_coalesces_local_key_pair_expiry_warning() {
+    let _guard = EnvGuard::new(&["SECRETENV_STRICT_KEY_CHECKING"]);
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
+        .unwrap();
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+
+    let command = resolve_encrypt_file_command(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        b"secret".to_vec(),
+        Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE)),
+    )
+    .unwrap();
+
+    let expiry_warning_count = command
+        .warnings
+        .iter()
+        .filter(|warning| warning.contains(&expires_at))
+        .count();
+    assert_eq!(expiry_warning_count, 1, "{:?}", command.warnings);
+    assert!(command
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("Local key expires in")));
 }

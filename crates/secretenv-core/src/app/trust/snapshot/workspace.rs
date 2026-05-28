@@ -7,7 +7,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
+use crate::feature::context::crypto::LocalKeyIdentity;
+use crate::feature::context::expiry::collect_recipient_key_expiry_warnings_excluding_local_key;
 use crate::feature::trust::judgment::build_active_members_by_kid;
 use crate::io::workspace::members::load_active_member_files;
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
@@ -20,7 +21,6 @@ pub struct WorkspaceMemberSnapshot {
     active_members_by_kid: BTreeMap<String, PublicKey>,
     member_handles: Vec<String>,
     verified_recipients: Vec<VerifiedRecipientKey>,
-    recipient_expiry_warnings: Vec<String>,
 }
 
 impl WorkspaceMemberSnapshot {
@@ -59,15 +59,12 @@ impl WorkspaceMemberSnapshot {
             &active_members,
             debug,
         )?;
-        let recipient_expiry_warnings =
-            collect_recipient_key_expiry_warnings(&verified_recipients)?;
 
         Ok(Self {
             active_members,
             active_members_by_kid,
             member_handles,
             verified_recipients,
-            recipient_expiry_warnings,
         })
     }
 
@@ -91,7 +88,13 @@ impl WorkspaceMemberSnapshot {
         &self.verified_recipients
     }
 
-    pub fn recipient_expiry_warnings(&self) -> &[String] {
-        &self.recipient_expiry_warnings
+    pub(crate) fn recipient_expiry_warnings_excluding_local_key(
+        &self,
+        local_key_identity: Option<&LocalKeyIdentity>,
+    ) -> Result<Vec<String>> {
+        collect_recipient_key_expiry_warnings_excluding_local_key(
+            &self.verified_recipients,
+            local_key_identity,
+        )
     }
 }

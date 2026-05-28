@@ -6,13 +6,16 @@
 
 use std::marker::PhantomData;
 
-use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
+use crate::app::context::execution::{
+    evaluate_selected_decryption_key_expiry, ExecutionContext, SelectedDecryptionKeyExpiry,
+};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::enforcement::enforce_write_input_artifact_recipients;
 use crate::app::trust::{
-    evaluate_signer_trust_with_proof, CommandCapability, RecipientTrustOutcome, SignerTrustOutcome,
-    TrustContext, WriteRecipientTrustPlan, WriteTrustPolicy,
+    evaluate_signer_trust_with_proof, push_signature_verification_warnings, CommandCapability,
+    RecipientTrustOutcome, SignerTrustOutcome, TrustContext, WriteRecipientTrustPlan,
+    WriteTrustPolicy,
 };
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::trust::recipient_sets::kv_recipient_evidence;
@@ -53,6 +56,7 @@ where
         &command.target.workspace_root.root_path,
         &command.execution.member_handle,
         Some(command.execution.key_ctx.self_signature_public_key_x()),
+        Some(command.execution.key_ctx.local_key_identity()),
         options.debug,
     )?;
     let review = MutationReviewSnapshot::build(
@@ -61,20 +65,24 @@ where
         allow_missing,
     )?;
     let mut warnings = command.warnings;
+    let existing_key_expiry = evaluate_existing_decryption_key_expiry(
+        review.existing_content(),
+        &command.execution,
+        operation_options.allow_expired_key(),
+        operation_options.debug(),
+    )?;
     let signer_trust = evaluate_signer_trust(
         review.existing_content(),
         recipient_review.trust_context(),
+        existing_key_expiry
+            .as_ref()
+            .map(|expiry| &expiry.key_identity),
         operation_options.debug(),
         operation_options.allow_expired_key(),
         P::CAPABILITY,
         &mut warnings,
     )?;
-    if let Some(warning) = build_existing_decryption_key_warning(
-        review.existing_content(),
-        &command.execution,
-        operation_options.allow_expired_key(),
-        operation_options.debug(),
-    )? {
+    if let Some(warning) = existing_key_expiry.and_then(|expiry| expiry.warning) {
         push_unique_warning(&mut warnings, warning);
     }
     warnings.extend(recipient_review.warnings().iter().cloned());
@@ -92,23 +100,25 @@ where
     })
 }
 
-fn build_existing_decryption_key_warning(
+fn evaluate_existing_decryption_key_expiry(
     reviewed_file: Option<&KvEncContent>,
     execution: &ExecutionContext,
     allow_expired_key: bool,
     debug: bool,
-) -> Result<Option<String>> {
+) -> Result<Option<SelectedDecryptionKeyExpiry>> {
     let Some(content) = reviewed_file else {
         return Ok(None);
     };
     let doc = content.parse()?;
     let wrap_set = WrapSet::parse(&doc.wrap().wrap, "Document")?;
-    enforce_selected_decryption_key_expiry(execution, &wrap_set, allow_expired_key, debug)
+    evaluate_selected_decryption_key_expiry(execution, &wrap_set, allow_expired_key, debug)
+        .map(Some)
 }
 
 fn evaluate_signer_trust(
     reviewed_file: Option<&KvEncContent>,
     trust_ctx: &TrustContext,
+    local_key_identity: Option<&crate::feature::context::crypto::LocalKeyIdentity>,
     verbose: bool,
     allow_expired_key: bool,
     capability: CommandCapability,
@@ -119,9 +129,7 @@ fn evaluate_signer_trust(
     };
 
     let verified_doc = verify_kv_content_for_operation(content, verbose, allow_expired_key)?;
-    for warning in &verified_doc.proof().warnings {
-        push_unique_warning(warnings, warning.clone());
-    }
+    push_signature_verification_warnings(warnings, verified_doc.proof(), local_key_identity)?;
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
     enforce_write_input_artifact_recipients(trust_ctx, &recipient_evidence.recipient_set)?;
     let outcome =

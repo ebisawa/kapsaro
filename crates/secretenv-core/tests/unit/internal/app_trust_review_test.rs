@@ -3,11 +3,13 @@
 
 use super::{
     enforce_read_trust_member_eligibility, execute_read_with_signer_trust,
-    review_recipient_trust_with_confirmation, review_recipient_trust_with_confirmation_verifier,
+    execute_write_with_recipient_trust, review_recipient_trust_with_confirmation,
+    review_recipient_trust_with_confirmation_verifier,
     review_rewrap_input_trust_requirements_with_confirmation,
     review_rewrap_input_trust_requirements_with_confirmation_verifier,
     review_signer_trust_with_confirmation, review_signer_trust_with_confirmation_verifier,
     ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext,
+    WriteRecipientTrustReviewPlan,
 };
 use crate::app::rewrap::types::RewrapInputTrustRequirement;
 use crate::app::trust::approval::ApprovedKnownKey;
@@ -153,6 +155,57 @@ fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review()
     .unwrap();
 
     assert_eq!(reviewed_count, 1);
+}
+
+#[test]
+fn test_execute_write_with_recipient_trust_reuses_signer_key_approval_for_recipient() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
+    let signer_outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone());
+    let recipient_outcome = RecipientTrustOutcome::NeedsManualApproval(vec![candidate.clone()]);
+    let mut signer_prompt_count = 0usize;
+    let mut recipient_prompt_count = 0usize;
+    let mut executed = false;
+
+    execute_write_with_recipient_trust(
+        TrustExecutionContext {
+            options: &options,
+            execution: &execution_context,
+            warnings: &[],
+        },
+        WriteRecipientTrustReviewPlan {
+            signer_trust: Some((
+                &signer_outcome,
+                SignerTrustLabels {
+                    context: "import input signer",
+                    subject: "input signer",
+                },
+            )),
+            recipient_trust: &recipient_outcome,
+            recipient_context_label: "import recipients",
+        },
+        |_warnings| {},
+        |_candidate, _context_label| {
+            signer_prompt_count += 1;
+            Ok(true)
+        },
+        |_candidate, _context_label, _recipients| Ok(false),
+        |candidates, _context_label| {
+            recipient_prompt_count += candidates.len();
+            Ok(candidates.to_vec())
+        },
+        || {
+            executed = true;
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    assert_eq!(signer_prompt_count, 1);
+    assert_eq!(recipient_prompt_count, 0);
+    assert!(executed);
 }
 
 #[test]

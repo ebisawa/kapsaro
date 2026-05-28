@@ -12,6 +12,7 @@ use crate::app::trust::store::load_optional_trust_store_for_member;
 use crate::config::types::{
     StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
 };
+use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::feature::trust::judgment::{
     build_active_members_by_kid, ActiveMemberSnapshot, SelfTrustSet,
 };
@@ -54,9 +55,11 @@ pub fn load_read_trust_context(
     workspace_path: &Path,
     self_member_handle: &str,
     self_sig_x: Option<[u8; 32]>,
+    local_key_identity: Option<&LocalKeyIdentity>,
     debug: bool,
 ) -> Result<ReadTrustContextLoadResult> {
-    let verified_active_members = load_active_member_index_for_read_trust(workspace_path, debug)?;
+    let verified_active_members =
+        load_active_member_index_for_read_trust(workspace_path, local_key_identity, debug)?;
     let trust_ctx = load_trust_context(
         options,
         verified_active_members.active_members_by_kid,
@@ -131,6 +134,7 @@ struct VerifiedActiveMemberIndex {
 
 fn load_active_member_index_for_read_trust(
     workspace_path: &Path,
+    local_key_identity: Option<&LocalKeyIdentity>,
     debug: bool,
 ) -> Result<VerifiedActiveMemberIndex> {
     let active_members = load_active_member_files(workspace_path)?;
@@ -148,7 +152,10 @@ fn load_active_member_index_for_read_trust(
             debug,
             WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
         )?;
-        warnings.extend(verified.warnings);
+        if !matches_local_key_identity(verified.verified_public_key.document(), local_key_identity)?
+        {
+            warnings.extend(verified.warnings);
+        }
         verified_members.push(verified.verified_public_key.document().clone());
     }
     let active_members_by_kid = build_active_members_by_kid(&verified_members)?;
@@ -157,6 +164,16 @@ fn load_active_member_index_for_read_trust(
         active_members_by_kid,
         warnings,
     })
+}
+
+fn matches_local_key_identity(
+    public_key: &PublicKey,
+    local_key_identity: Option<&LocalKeyIdentity>,
+) -> Result<bool> {
+    let Some(identity) = local_key_identity else {
+        return Ok(false);
+    };
+    identity.matches_public_key(public_key)
 }
 
 fn load_self_trust(

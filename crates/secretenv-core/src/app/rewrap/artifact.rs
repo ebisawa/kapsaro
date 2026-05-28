@@ -288,6 +288,7 @@ fn load_rewrap_signer_trust_context(
         &plan.workspace_root,
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
+        Some(execution.key_ctx.local_key_identity()),
         request.options.debug,
     )?
     .trust_ctx;

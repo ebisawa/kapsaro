@@ -337,10 +337,9 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
         &encrypted_file,
         TEST_MEMBER_HANDLE,
     );
-    assert!(
-        output.contains("Warning: Private key expires in"),
-        "{output}"
-    );
+    assert!(output.contains("Warning: Local key expires in"), "{output}");
+    assert!(output.contains(". Expires at: "), "{output}");
+    assert!(!output.contains("\n         Expires at: "), "{output}");
 
     cmd()
         .arg("decrypt")
@@ -355,7 +354,7 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stderr(predicate::str::contains("Warning: Private key expires in"));
+        .stderr(predicate::str::contains("Warning: Local key expires in"));
 }
 
 #[test]

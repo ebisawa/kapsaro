@@ -1,12 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::context::execution::enforce_selected_decryption_key_expiry;
+use crate::app::context::execution::evaluate_selected_decryption_key_expiry;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::{
-    evaluate_read_artifact_trust, ReadTrustPolicy, RecipientTrustOutcome, SignerTrustOutcome,
+    evaluate_read_artifact_trust, push_signature_verification_warnings, ReadTrustPolicy,
+    RecipientTrustOutcome, SignerTrustOutcome,
 };
 use crate::feature::envelope::key_possession::verify_kv_key_possession;
 use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
@@ -59,16 +60,19 @@ where
         operation_options.debug(),
         operation_options.allow_expired_key(),
     )?;
-    for warning in &verified_doc.proof().warnings {
-        push_unique_warning(&mut command.warnings, warning.clone());
-    }
     let wrap_set = WrapSet::parse(&verified_doc.document().wrap().wrap, "Document")?;
-    if let Some(warning) = enforce_selected_decryption_key_expiry(
+    let selected_key_expiry = evaluate_selected_decryption_key_expiry(
         &command.execution,
         &wrap_set,
         operation_options.allow_expired_key(),
         operation_options.debug(),
-    )? {
+    )?;
+    push_signature_verification_warnings(
+        &mut command.warnings,
+        verified_doc.proof(),
+        Some(&selected_key_expiry.key_identity),
+    )?;
+    if let Some(warning) = selected_key_expiry.warning {
         push_unique_warning(&mut command.warnings, warning);
     }
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
@@ -80,7 +84,9 @@ where
         &recipient_evidence.recipient_handles,
     )?;
     let mut warnings = command.warnings;
-    warnings.extend(trust_plan.warnings);
+    for warning in trust_plan.warnings {
+        push_unique_warning(&mut warnings, warning);
+    }
 
     Ok(KvReadCommand {
         execution: command.execution,

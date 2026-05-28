@@ -8,6 +8,7 @@ use tracing::debug;
 use crate::feature::context::crypto::{
     build_signing_key, load_crypto_context_from_keystore, CryptoContext,
 };
+use crate::feature::context::expiry::LocalKeyPairExpiry;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::paths::get_keystore_root_from_base;
 use crate::io::keystore::public_key_source::WorkspacePublicKeySource;
@@ -51,7 +52,7 @@ pub fn load_crypto_context_from_env(
         Some(workspace_path),
         result.verified_key,
         signing_key,
-        result.expires_at,
+        LocalKeyPairExpiry::from_private_key(result.expires_at),
     );
     Ok(context.with_local_key_access(None, None))
 }

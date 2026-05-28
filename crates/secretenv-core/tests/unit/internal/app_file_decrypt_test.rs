@@ -7,7 +7,7 @@ use crate::feature::encrypt::file::encrypt_file_document;
 use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
-    save_active_public_key_to_workspace, setup_member_key_context,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at, with_temp_cwd, ALICE_MEMBER_HANDLE,
 };
@@ -77,6 +77,195 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
             warning.contains("Artifact signing key has expired.")
                 && warning.contains("Reason: expired key use was explicitly allowed.")
         }));
+    });
+}
+
+#[test]
+fn decrypt_command_coalesces_local_key_pair_expiry_warning() {
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
+        .unwrap();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    let kid = key_ctx.kid().to_string();
+    let keystore_root = temp_dir.path().join("keys");
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
+    let doc = encrypt_file_document(
+        b"secret",
+        &[ALICE_MEMBER_HANDLE.to_string()],
+        &recipients,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: &kid,
+            signer_pub: public_key,
+            debug: false,
+        },
+    )
+    .unwrap();
+    let content = serde_json::to_string(&doc).unwrap();
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+
+    with_temp_cwd(temp_dir.path(), || {
+        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
+        let command = super::resolve_decrypt_file_command(
+            &options,
+            Some(ALICE_MEMBER_HANDLE.to_string()),
+            None,
+            content,
+            "test.fileenc",
+            ssh_ctx,
+        )
+        .unwrap();
+
+        let expiry_warning_count = command
+            .warnings
+            .iter()
+            .filter(|warning| warning.contains(&expires_at))
+            .count();
+        assert_eq!(expiry_warning_count, 1, "{:?}", command.warnings);
+        assert!(command
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Local key expires in")));
+    });
+}
+
+#[test]
+fn decrypt_command_preserves_historical_signer_expiry_warning_with_same_expires_at() {
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
+    let historical_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    let historical_kid = historical_key_ctx.kid().to_string();
+    let keystore_root = temp_dir.path().join("keys");
+    let historical_public_key =
+        load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &historical_kid).unwrap();
+
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
+        .unwrap();
+    let current_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    let current_kid = current_key_ctx.kid().to_string();
+    let current_public_key =
+        load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &current_kid).unwrap();
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &current_key_ctx,
+    );
+
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&current_public_key));
+    let doc = encrypt_file_document(
+        b"secret",
+        &[ALICE_MEMBER_HANDLE.to_string()],
+        &recipients,
+        &SigningContext {
+            signing_key: historical_key_ctx.signing_key(),
+            signer_kid: &historical_kid,
+            signer_pub: historical_public_key,
+            debug: false,
+        },
+    )
+    .unwrap();
+    let content = serde_json::to_string(&doc).unwrap();
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+
+    with_temp_cwd(temp_dir.path(), || {
+        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
+        let command = super::resolve_decrypt_file_command(
+            &options,
+            Some(ALICE_MEMBER_HANDLE.to_string()),
+            None,
+            content,
+            "test.fileenc",
+            ssh_ctx,
+        )
+        .unwrap();
+
+        assert!(command
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Local key expires in")));
+        assert!(command
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Artifact signing key expires in")));
+    });
+}
+
+#[test]
+fn decrypt_command_coalesces_selected_fallback_key_pair_expiry_warning() {
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let expires_at = build_expiring_soon_timestamp(15);
+    update_active_private_key_expires_at(temp_dir.path(), ALICE_MEMBER_HANDLE, &expires_at);
+    let old_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    let old_kid = old_key_ctx.kid().to_string();
+    let keystore_root = temp_dir.path().join("keys");
+    let old_public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &old_kid).unwrap();
+
+    update_active_private_key_expires_at(
+        temp_dir.path(),
+        ALICE_MEMBER_HANDLE,
+        "2028-01-01T00:00:00Z",
+    );
+    save_active_public_key_to_workspace(temp_dir.path(), &workspace_dir, ALICE_MEMBER_HANDLE)
+        .unwrap();
+    let current_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &current_key_ctx,
+    );
+
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&old_public_key));
+    let doc = encrypt_file_document(
+        b"secret",
+        &[ALICE_MEMBER_HANDLE.to_string()],
+        &recipients,
+        &SigningContext {
+            signing_key: old_key_ctx.signing_key(),
+            signer_kid: &old_kid,
+            signer_pub: old_public_key,
+            debug: false,
+        },
+    )
+    .unwrap();
+    let content = serde_json::to_string(&doc).unwrap();
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+
+    with_temp_cwd(temp_dir.path(), || {
+        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
+        let command = super::resolve_decrypt_file_command(
+            &options,
+            Some(ALICE_MEMBER_HANDLE.to_string()),
+            None,
+            content,
+            "test.fileenc",
+            ssh_ctx,
+        )
+        .unwrap();
+
+        let expiry_warning_count = command
+            .warnings
+            .iter()
+            .filter(|warning| warning.contains(&expires_at))
+            .count();
+        assert_eq!(expiry_warning_count, 1, "{:?}", command.warnings);
+        assert!(command
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Local key expires in")));
     });
 }
 

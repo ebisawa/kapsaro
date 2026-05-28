@@ -19,6 +19,7 @@ pub(crate) mod types;
 
 pub use candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 pub use enforcement::enforce_recipients_trust_with_additional;
+pub(crate) use evaluation::push_signature_verification_warnings;
 pub use evaluation::{
     derive_self_sig_x, evaluate_output_recipient_set_trust, evaluate_read_artifact_trust,
     evaluate_signer_trust_with_proof,

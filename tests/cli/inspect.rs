@@ -72,7 +72,7 @@ fn test_inspect_file_enc_shows_metadata() {
 }
 
 #[test]
-fn test_inspect_file_enc_json_output_has_sections() {
+fn test_inspect_file_enc_json_output_is_structured() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
     let input_file = home_dir.path().join("json_secret.txt");
     fs::write(&input_file, b"json inspect data").unwrap();
@@ -101,16 +101,31 @@ fn test_inspect_file_enc_json_output_has_sections() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("inspect --json should output valid JSON");
 
-    assert_eq!(parsed["title"], "File-Enc v7 Metadata");
-    let sections = parsed["sections"]
-        .as_array()
-        .expect("sections should be an array");
-    assert!(sections
-        .iter()
-        .any(|section| section["title"] == "Wrap Data"));
-    assert!(sections
-        .iter()
-        .any(|section| section["title"] == "Signature Verification"));
+    assert_eq!(parsed["format"], "file-enc");
+    assert_eq!(parsed["version"], 7);
+    assert_eq!(parsed["header"]["format"], "secretenv:format:file-enc@7");
+    assert!(parsed["header"]["sid"].as_str().is_some());
+    assert_eq!(parsed["wrap_data"]["recipients"][0], TEST_MEMBER_HANDLE);
+    assert_eq!(
+        parsed["wrap_data"]["wrap_items"][0]["recipient_handle"],
+        TEST_MEMBER_HANDLE
+    );
+    assert!(parsed["wrap_data"]["wrap_items"][0]["enc"]
+        .as_str()
+        .is_some_and(|value| !value.is_empty()));
+    assert!(parsed["wrap_data"]["wrap_items"][0]["ct"]
+        .as_str()
+        .is_some_and(|value| !value.is_empty()));
+    assert!(parsed["payload"]["encrypted"]["ct"]
+        .as_str()
+        .is_some_and(|value| !value.is_empty()));
+    assert_eq!(
+        parsed["signature"]["signer_pub"]["protected"]["subject_handle"],
+        TEST_MEMBER_HANDLE
+    );
+    assert_eq!(parsed["signature_verification"]["verified"], true);
+    assert_eq!(parsed["signature_verification"]["status"], "ok");
+    assert_eq!(parsed["online_verification"], serde_json::Value::Null);
 }
 
 #[test]
@@ -157,6 +172,55 @@ fn test_inspect_kv_enc_shows_metadata() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Attestation:"));
+}
+
+#[test]
+fn test_inspect_kv_enc_json_output_is_structured() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DB_URL",
+        "pg://host",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
+
+    let encrypted_kv = workspace_dir.path().join("secrets").join("default.kvenc");
+
+    let assert = cmd()
+        .arg("inspect")
+        .arg(&encrypted_kv)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--json")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("inspect --json should output valid JSON");
+
+    assert_eq!(parsed["format"], "kv-enc");
+    assert_eq!(parsed["version"], 9);
+    assert_eq!(parsed["header"]["alg"]["aead"], "xchacha20-poly1305");
+    assert_eq!(parsed["wrap_data"]["recipients"][0], TEST_MEMBER_HANDLE);
+    assert_eq!(parsed["entries"][0]["key"], "DB_URL");
+    assert!(parsed["entries"][0]["nonce"]
+        .as_str()
+        .is_some_and(|value| !value.is_empty()));
+    assert!(parsed["entries"][0]["ct"]
+        .as_str()
+        .is_some_and(|value| !value.is_empty()));
+    assert_eq!(parsed["entries"][0]["disclosed"], false);
+    assert_eq!(parsed["summary"]["total_entries"], 1);
+    assert_eq!(parsed["signature_verification"]["verified"], true);
+    assert_eq!(parsed["signature_verification"]["status"], "ok");
+    assert_eq!(parsed["online_verification"], serde_json::Value::Null);
 }
 
 #[test]

@@ -16,8 +16,19 @@ struct KvKeyListOutput<'a> {
 
 #[derive(Serialize)]
 struct ImportOutput<'a> {
+    success: bool,
+    summary: ImportSummaryOutput<'a>,
+}
+
+#[derive(Serialize)]
+struct ImportSummaryOutput<'a> {
     imported: usize,
     file: &'a str,
+}
+
+#[derive(Serialize)]
+struct KvValuesOutput<'a> {
+    values: BTreeMap<&'a str, &'a str>,
 }
 
 pub(crate) fn print_kv_key_list(keys: &[KvKeyView<'_>]) -> Result<()> {
@@ -28,21 +39,24 @@ pub(crate) fn print_kv_key_list(keys: &[KvKeyView<'_>]) -> Result<()> {
 
 pub(crate) fn print_kv_import_result(entry_count: usize, store_name: &str) -> Result<()> {
     print_json_output(&ImportOutput {
-        imported: entry_count,
-        file: store_name,
+        success: true,
+        summary: ImportSummaryOutput {
+            imported: entry_count,
+            file: store_name,
+        },
     })
 }
 
 pub(crate) fn print_all_kv_values(entries: &[KvEntryView<'_>]) -> Result<()> {
-    let map: BTreeMap<&str, &str> = entries
+    let values = entries
         .iter()
         .map(|entry| (entry.key, entry.value))
         .collect();
-    print_json_output(&map)
+    print_json_output(&KvValuesOutput { values })
 }
 
 pub(crate) fn print_single_kv_value(key: &str, value: &str) -> Result<()> {
-    let mut map = BTreeMap::new();
-    map.insert(key, value);
-    print_json_output(&map)
+    let mut values = BTreeMap::new();
+    values.insert(key, value);
+    print_json_output(&KvValuesOutput { values })
 }

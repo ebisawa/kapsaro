@@ -8,10 +8,9 @@ pub(crate) mod view;
 use crate::cli::common::output::json::member::{
     print_empty_member_list as print_empty_member_list_json,
     print_member_approval_results as print_member_approval_results_json,
-    print_member_list as print_member_list_json,
+    print_member_list as print_member_list_json, print_member_show as print_member_show_json,
     print_member_verification_results as print_member_verification_results_json,
 };
-use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::text::member::{
     print_empty_member_approval_results, print_empty_member_list as print_empty_member_list_text,
     print_empty_member_verification_results,
@@ -78,7 +77,7 @@ pub(crate) fn print_member_show(json_output: bool, result: &MemberShowResult) ->
     print_json_or_text_with_warnings(
         json_output,
         view.verification_warnings,
-        || print_json_output(view.document),
+        || print_member_show_json(view.document),
         || print_member_show_text(&view),
     )
 }

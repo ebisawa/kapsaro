@@ -11,6 +11,11 @@ use serde::Serialize;
 #[derive(Serialize)]
 struct RewrapBatchResultOutput<'a> {
     success: bool,
+    summary: RewrapBatchSummaryOutput<'a>,
+}
+
+#[derive(Serialize)]
+struct RewrapBatchSummaryOutput<'a> {
     processed_files: Vec<&'a str>,
     failed_files: Vec<RewrapBatchFailureOutput<'a>>,
 }
@@ -29,15 +34,17 @@ pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) -> Result<()
 fn build_rewrap_batch_result_output(outcome: &RewrapBatchView) -> RewrapBatchResultOutput<'_> {
     RewrapBatchResultOutput {
         success: outcome.failed_files.is_empty(),
-        processed_files: outcome.processed_files.iter().map(String::as_str).collect(),
-        failed_files: outcome
-            .failed_files
-            .iter()
-            .map(|file| RewrapBatchFailureOutput {
-                path: &file.path,
-                error: &file.error,
-            })
-            .collect(),
+        summary: RewrapBatchSummaryOutput {
+            processed_files: outcome.processed_files.iter().map(String::as_str).collect(),
+            failed_files: outcome
+                .failed_files
+                .iter()
+                .map(|file| RewrapBatchFailureOutput {
+                    path: &file.path,
+                    error: &file.error,
+                })
+                .collect(),
+        },
     }
 }
 

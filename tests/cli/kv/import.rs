@@ -159,8 +159,12 @@ fn test_import_with_json_output() {
         &env_file,
         true,
     );
-    assert!(output.contains("\"imported\""), "{output}");
-    assert!(output.contains("\"file\""), "{output}");
+    let json_start = output.find('{').expect("import output should include JSON");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&output[json_start..]).expect("import JSON should parse");
+    assert_eq!(parsed["success"], true);
+    assert_eq!(parsed["summary"]["imported"], 2);
+    assert_eq!(parsed["summary"]["file"], "default");
 }
 
 #[cfg(unix)]

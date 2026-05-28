@@ -33,7 +33,7 @@ pub(crate) fn run(args: InspectArgs) -> Result<()> {
     let prepared = execute_inspect_file_command(&options, &args.input)?;
 
     if args.common.json.json {
-        print_json_output(&prepared.output)?;
+        print_json_output(&prepared.json_output)?;
     } else {
         print_inspect_banner(&prepared.input_display);
         print!("{}", format_inspect_command_output(&prepared));

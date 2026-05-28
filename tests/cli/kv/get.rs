@@ -87,7 +87,7 @@ fn test_get_with_json_output() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_key();
 
     // Get the key with JSON output
-    cmd()
+    let output = cmd()
         .arg("get")
         .arg("TEST_KEY")
         .arg("--json")
@@ -97,8 +97,12 @@ fn test_get_with_json_output() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"TEST_KEY\""))
-        .stdout(predicate::str::contains("\"test_value\""));
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["values"]["TEST_KEY"], "test_value");
 }
 
 #[test]
@@ -309,7 +313,7 @@ fn test_get_without_key_and_all_fails() {
 fn test_get_all_json() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_multiple_keys();
 
-    cmd()
+    let output = cmd()
         .arg("get")
         .arg("--all")
         .arg("--json")
@@ -319,8 +323,11 @@ fn test_get_all_json() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"ANOTHER_KEY\""))
-        .stdout(predicate::str::contains("\"TEST_KEY\""))
-        .stdout(predicate::str::contains("\"test_value\""))
-        .stdout(predicate::str::contains("\"another_value\""));
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["values"]["TEST_KEY"], "test_value");
+    assert_eq!(parsed["values"]["ANOTHER_KEY"], "another_value");
 }

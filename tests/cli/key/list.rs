@@ -100,26 +100,18 @@ fn test_key_list_json_output() {
     let json: serde_json::Value =
         serde_json::from_str(&stdout).expect("Output should be valid JSON");
 
-    // Verify structure
+    let keys = json["keys"].as_array().expect("keys should be an array");
+    assert!(!keys.is_empty(), "Should have at least one key");
+    let first_key = &keys[0];
+    assert!(first_key.get("kid").is_some(), "Should have kid field");
     assert!(
-        json.is_array() || json.is_object(),
-        "JSON output should be array or object"
+        first_key.get("expires_at").is_some(),
+        "Should have expires_at field"
     );
-
-    // If array, verify first item has expected fields
-    if let Some(keys) = json.as_array() {
-        assert!(!keys.is_empty(), "Should have at least one key");
-        let first_key = &keys[0];
-        assert!(first_key.get("kid").is_some(), "Should have kid field");
-        assert!(
-            first_key.get("expires_at").is_some(),
-            "Should have expires_at field"
-        );
-        assert!(
-            first_key.get("member_handle").is_some(),
-            "Should have member_handle field"
-        );
-    }
+    assert!(
+        first_key.get("member_handle").is_some(),
+        "Should have member_handle field"
+    );
 
     // Keep temp directories alive
     drop(ssh_temp);

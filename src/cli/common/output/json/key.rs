@@ -9,6 +9,11 @@ use secretenv_core::Result;
 use serde::Serialize;
 
 #[derive(Serialize)]
+struct KeyListOutput {
+    keys: Vec<KeyInfoJsonView>,
+}
+
+#[derive(Serialize)]
 struct KeyInfoJsonView {
     kid: String,
     member_handle: String,
@@ -19,16 +24,16 @@ struct KeyInfoJsonView {
 }
 
 pub(crate) fn print_empty_key_list() -> Result<()> {
-    print_json_output(&Vec::<serde_json::Value>::new())
+    print_json_output(&KeyListOutput { keys: Vec::new() })
 }
 
 pub(crate) fn print_key_list(result: &KeyListView<'_>) -> Result<()> {
-    let flattened = result
+    let keys = result
         .entries
         .iter()
         .flat_map(|entry| entry.keys.iter().map(build_key_info_json_view))
         .collect::<Vec<_>>();
-    print_json_output(&flattened)
+    print_json_output(&KeyListOutput { keys })
 }
 
 fn build_key_info_json_view(key: &KeyInfoView<'_>) -> KeyInfoJsonView {

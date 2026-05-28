@@ -69,7 +69,7 @@ fn test_doctor_json_missing_trust_store_warns_but_exits_success() {
         .clone();
 
     let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(value["status"], "WARN");
+    assert_eq!(value["status"], "warn");
     assert_eq!(value["exit_code"], 0);
     assert!(value["summary"]["warn"].as_u64().unwrap() > 0);
     assert!(value["checks"]
@@ -122,11 +122,11 @@ fn test_doctor_json_incomplete_workspace_fails_with_json() {
         .clone();
 
     let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(value["status"], "FAIL");
+    assert_eq!(value["status"], "fail");
     assert_eq!(value["exit_code"], 1);
     assert!(value["checks"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|check| { check["id"] == "workspace.structure" && check["status"] == "FAIL" }));
+        .any(|check| { check["id"] == "workspace.structure" && check["status"] == "fail" }));
 }

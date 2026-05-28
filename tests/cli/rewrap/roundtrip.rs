@@ -94,3 +94,42 @@ fn test_rewrap_kv_enc_roundtrip() {
         .success()
         .stdout(predicate::str::contains("supersecretvalue"));
 }
+
+#[test]
+fn test_rewrap_json_output_uses_operation_outcome_shape() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "MY_SECRET",
+        "supersecretvalue",
+        Some(TEST_MEMBER_HANDLE),
+        None,
+    );
+
+    let output = cmd()
+        .arg("rewrap")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--json")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(parsed["success"], true);
+    assert!(parsed["summary"]["processed_files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|path| path.as_str().unwrap().ends_with("default.kvenc")));
+    assert_eq!(parsed["summary"]["failed_files"], serde_json::json!([]));
+}

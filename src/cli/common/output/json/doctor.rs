@@ -43,7 +43,7 @@ struct DoctorCheckOutput<'a> {
 
 pub(crate) fn print_doctor_report(report: &DoctorReport) -> Result<()> {
     let output = DoctorReportOutput {
-        status: report.overall_status().as_str(),
+        status: status_name(report.overall_status()),
         exit_code: report.exit_code(),
         workspace: report.workspace_display(),
         summary: DoctorSummaryOutput {
@@ -69,13 +69,22 @@ impl<'a> From<&'a DoctorCheck> for DoctorCheckOutput<'a> {
         Self {
             id: check.id,
             category: category_name(check.category),
-            status: check.status.as_str(),
+            status: status_name(check.status),
             subject: check.subject.as_str(),
             message: &check.message,
             reason: check.reason.as_deref(),
             next_action: check.next_action.as_deref(),
             rule: check.rule.as_deref(),
         }
+    }
+}
+
+fn status_name(status: DoctorStatus) -> &'static str {
+    match status {
+        DoctorStatus::Ok => "ok",
+        DoctorStatus::Warn => "warn",
+        DoctorStatus::Fail => "fail",
+        DoctorStatus::Skip => "skip",
     }
 }
 

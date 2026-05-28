@@ -43,7 +43,7 @@ fn test_list_with_json_output() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_keys();
 
     // List keys with JSON output
-    cmd()
+    let output = cmd()
         .arg("list")
         .arg("--json")
         .arg("--workspace")
@@ -52,10 +52,15 @@ fn test_list_with_json_output() {
         .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"keys\""))
-        .stdout(predicate::str::contains("DATABASE_URL"))
-        .stdout(predicate::str::contains("API_KEY"))
-        .stdout(predicate::str::contains("SECRET_TOKEN"));
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(
+        parsed["keys"],
+        serde_json::json!(["API_KEY", "DATABASE_URL", "SECRET_TOKEN"])
+    );
 }
 
 #[test]

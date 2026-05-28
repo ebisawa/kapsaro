@@ -12,6 +12,11 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 struct MemberListOutput<'a> {
+    members: MemberGroupsOutput<'a>,
+}
+
+#[derive(Serialize)]
+struct MemberGroupsOutput<'a> {
     active: Vec<&'a serde_json::Value>,
     incoming: Vec<&'a serde_json::Value>,
 }
@@ -49,18 +54,31 @@ struct MemberApprovalJsonItem<'a> {
     github_binding_configured: bool,
 }
 
+#[derive(Serialize)]
+struct MemberShowOutput<'a> {
+    member: &'a serde_json::Value,
+}
+
 pub(crate) fn print_member_list(view: &MemberListView<'_>) -> Result<()> {
     print_json_output(&MemberListOutput {
-        active: view.active.iter().map(|member| member.document).collect(),
-        incoming: view.incoming.iter().map(|member| member.document).collect(),
+        members: MemberGroupsOutput {
+            active: view.active.iter().map(|member| member.document).collect(),
+            incoming: view.incoming.iter().map(|member| member.document).collect(),
+        },
     })
 }
 
 pub(crate) fn print_empty_member_list() -> Result<()> {
     print_json_output(&serde_json::json!({
-        "active": [],
-        "incoming": [],
+        "members": {
+            "active": [],
+            "incoming": [],
+        },
     }))
+}
+
+pub(crate) fn print_member_show(document: &serde_json::Value) -> Result<()> {
+    print_json_output(&MemberShowOutput { member: document })
 }
 
 pub(crate) fn print_member_verification_results(

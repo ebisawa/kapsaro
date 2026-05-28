@@ -89,13 +89,9 @@ fn test_member_list_json_output() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("member list --json should output valid JSON");
 
-    assert!(
-        parsed.get("active").is_some(),
-        "JSON should have 'active' key"
-    );
-    let active = parsed["active"]
+    let active = parsed["members"]["active"]
         .as_array()
-        .expect("active should be an array");
+        .expect("members.active should be an array");
     assert!(
         !active.is_empty(),
         "active array should contain the initialized member"
@@ -147,8 +143,8 @@ fn test_member_list_json_empty_workspace_outputs_empty_arrays() {
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
     let parsed: Value = serde_json::from_str(&stdout).expect("member list JSON should parse");
 
-    assert_eq!(parsed["active"].as_array().unwrap().len(), 0);
-    assert_eq!(parsed["incoming"].as_array().unwrap().len(), 0);
+    assert_eq!(parsed["members"]["active"].as_array().unwrap().len(), 0);
+    assert_eq!(parsed["members"]["incoming"].as_array().unwrap().len(), 0);
 }
 
 #[test]
@@ -180,7 +176,7 @@ fn test_member_list_json_skips_invalid_member_file() {
 
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    let incoming = parsed["incoming"].as_array().unwrap();
+    let incoming = parsed["members"]["incoming"].as_array().unwrap();
     assert!(incoming.is_empty());
 
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
@@ -243,6 +239,32 @@ fn test_member_show_reports_verification_warning() {
         .success()
         .stdout(predicate::str::contains("Verification: expired"))
         .stderr(predicate::str::contains("has expired"));
+}
+
+#[test]
+fn test_member_show_json_wraps_public_key_document() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+
+    let assert = cmd()
+        .arg("member")
+        .arg("show")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--json")
+        .env("SECRETENV_HOME", home_dir.path())
+        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let parsed: Value = serde_json::from_str(&stdout).expect("member show JSON should parse");
+
+    assert_eq!(
+        parsed["member"]["protected"]["subject_handle"],
+        TEST_MEMBER_HANDLE
+    );
+    assert!(parsed["member"]["protected"]["kid"].as_str().is_some());
 }
 
 #[test]

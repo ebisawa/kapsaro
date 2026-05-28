@@ -15,10 +15,10 @@ fn test_build_rewrap_batch_result_output_success() {
 
     assert!(output.success);
     assert_eq!(
-        output.processed_files,
+        output.summary.processed_files,
         vec!["secrets/app.env.encrypted".to_string()]
     );
-    assert!(output.failed_files.is_empty());
+    assert!(output.summary.failed_files.is_empty());
 }
 
 #[test]
@@ -35,12 +35,15 @@ fn test_build_rewrap_batch_result_output_failure() {
 
     assert!(!output.success);
     assert_eq!(
-        output.processed_files,
+        output.summary.processed_files,
         vec!["secrets/ok.env.encrypted".to_string()]
     );
-    assert_eq!(output.failed_files[0].path, "secrets/bad.env.encrypted");
     assert_eq!(
-        output.failed_files[0].error,
+        output.summary.failed_files[0].path,
+        "secrets/bad.env.encrypted"
+    );
+    assert_eq!(
+        output.summary.failed_files[0].error,
         "signature verification failed"
     );
 }

@@ -12,6 +12,7 @@ use crate::app::trust::enforcement::enforce_recipients_trust;
 use crate::app::trust::evaluation::enforce_policy_strict_key_checking;
 use crate::app::trust::policy::{TrustPolicy, WriteTrustPolicy};
 use crate::app::trust::RecipientTrustOutcome;
+use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::Result;
 
 use super::context::{load_trust_context, TrustContext};
@@ -83,6 +84,7 @@ where
         workspace_path: &Path,
         self_member_handle: &str,
         self_sig_x: Option<[u8; 32]>,
+        local_key_identity: Option<&LocalKeyIdentity>,
         debug: bool,
     ) -> Result<Self> {
         let trust_snapshot = CommandTrustSnapshot::<P>::load(
@@ -100,9 +102,7 @@ where
         warnings.extend(
             trust_snapshot
                 .workspace_members()
-                .recipient_expiry_warnings()
-                .iter()
-                .cloned(),
+                .recipient_expiry_warnings_excluding_local_key(local_key_identity)?,
         );
         Ok(Self {
             trust_snapshot,

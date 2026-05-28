@@ -42,6 +42,7 @@ pub fn build_rewrap_batch_plan(
         &workspace.root_path,
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
+        Some(execution.key_ctx.local_key_identity()),
         options.debug,
     )?
     .trust_ctx;

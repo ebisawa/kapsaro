@@ -436,7 +436,7 @@ fn test_resolve_mutation_write_plan_includes_private_key_expiry_warning() {
         assert!(plan
             .warnings
             .iter()
-            .any(|warning| warning.contains("Private key expires in")));
+            .any(|warning| warning.contains("Local key expires in")));
     });
 }
 

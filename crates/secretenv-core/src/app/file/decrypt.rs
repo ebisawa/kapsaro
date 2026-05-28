@@ -4,12 +4,13 @@
 use zeroize::Zeroizing;
 
 use crate::app::context::execution::{
-    enforce_selected_decryption_key_expiry, resolve_read_execution, ExecutionContext,
+    evaluate_selected_decryption_key_expiry, resolve_read_execution, ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::{
-    evaluate_read_artifact_trust, DecryptPolicy, RecipientTrustOutcome, SignerTrustOutcome,
+    evaluate_read_artifact_trust, push_signature_verification_warnings, DecryptPolicy,
+    RecipientTrustOutcome, SignerTrustOutcome,
 };
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::envelope::wrap_set::WrapSet;
@@ -46,16 +47,19 @@ pub fn resolve_decrypt_file_command(
         operation_options.debug(),
         operation_options.allow_expired_key(),
     )?;
-    for warning in &verified_doc.proof().warnings {
-        push_unique_warning(&mut warnings, warning.clone());
-    }
     let wrap_set = WrapSet::parse(&verified_doc.document().protected.wrap, "Document")?;
-    if let Some(warning) = enforce_selected_decryption_key_expiry(
+    let selected_key_expiry = evaluate_selected_decryption_key_expiry(
         &execution,
         &wrap_set,
         operation_options.allow_expired_key(),
         operation_options.debug(),
-    )? {
+    )?;
+    push_signature_verification_warnings(
+        &mut warnings,
+        verified_doc.proof(),
+        Some(&selected_key_expiry.key_identity),
+    )?;
+    if let Some(warning) = selected_key_expiry.warning {
         push_unique_warning(&mut warnings, warning);
     }
     let recipient_evidence = file_recipient_evidence(verified_doc.document())?;
@@ -67,7 +71,9 @@ pub fn resolve_decrypt_file_command(
         &recipient_evidence.recipient_set,
         &recipient_evidence.recipient_handles,
     )?;
-    warnings.extend(trust_plan.warnings);
+    for warning in trust_plan.warnings {
+        push_unique_warning(&mut warnings, warning);
+    }
 
     Ok(DecryptFileCommand {
         execution,

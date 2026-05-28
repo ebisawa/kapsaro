@@ -8,14 +8,15 @@
 
 use time::OffsetDateTime;
 
+use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::model::public_key::{VerifiedPublicKeyAttested, VerifiedRecipientKey};
 use crate::support::display::sanitize_display_field;
 use crate::{Error, Result};
 
 const EXPIRY_WARNING_DAYS: i64 = 30;
 
-/// Expiration timestamp whose source private-key metadata has already been integrity-checked by
-/// the relevant key loading flow.
+/// Expiration timestamp whose source key metadata has already been integrity-checked by the
+/// relevant key loading flow.
 ///
 /// This type does **not** mean the key is currently valid (not expired). Expiry policy must be
 /// applied separately via functions like `enforce_key_not_expired_for_signing`.
@@ -27,8 +28,90 @@ impl VerifiedExpiresAt {
         Self(value)
     }
 
+    pub(crate) fn from_verified_public_key_metadata(value: String) -> Self {
+        Self(value)
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+/// Expiration metadata for a local PrivateKey and its sibling PublicKey.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LocalKeyPairExpiry {
+    private_expires_at: VerifiedExpiresAt,
+    public_expires_at: Option<VerifiedExpiresAt>,
+}
+
+impl LocalKeyPairExpiry {
+    pub(crate) fn from_private_key(private_expires_at: VerifiedExpiresAt) -> Self {
+        Self {
+            private_expires_at,
+            public_expires_at: None,
+        }
+    }
+
+    pub(crate) fn from_private_and_public_key(
+        private_expires_at: VerifiedExpiresAt,
+        public_expires_at: VerifiedExpiresAt,
+    ) -> Self {
+        Self {
+            private_expires_at,
+            public_expires_at: Some(public_expires_at),
+        }
+    }
+
+    pub(crate) fn primary_expires_at(&self) -> &str {
+        self.private_expires_at.as_str()
+    }
+
+    pub(crate) fn enforce_not_expired_for_signing(&self) -> Result<()> {
+        match self.select_status(OffsetDateTime::now_utc())? {
+            KeyExpiryStatus::Valid | KeyExpiryStatus::ExpiringSoon { .. } => Ok(()),
+            KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
+                "key-expiry".to_string(),
+                format!(
+                    "Local key has expired.\n\
+                     Expires at: {}\n\
+                     Action: Rotate the key before encryption or signing.",
+                    expires_at
+                ),
+            )),
+        }
+    }
+
+    pub(crate) fn enforce_expired_usage(&self, allow_expired_key: bool) -> Result<Option<String>> {
+        enforce_selected_status_usage(
+            self.select_status(OffsetDateTime::now_utc())?,
+            allow_expired_key,
+            "Local key",
+        )
+    }
+
+    pub(crate) fn build_signing_warning(&self) -> Result<Option<String>> {
+        match self.select_status(OffsetDateTime::now_utc())? {
+            KeyExpiryStatus::Valid | KeyExpiryStatus::Expired { .. } => Ok(None),
+            KeyExpiryStatus::ExpiringSoon {
+                expires_at,
+                days_remaining,
+            } => Ok(Some(format_expiring_key_warning(
+                "Local key",
+                days_remaining,
+                &expires_at,
+            ))),
+        }
+    }
+
+    fn select_status(&self, now: OffsetDateTime) -> Result<KeyExpiryStatus> {
+        let mut status = check_key_expiry(self.private_expires_at.as_str(), now)?;
+        if let Some(public_expires_at) = &self.public_expires_at {
+            status = select_stricter_key_expiry_status(
+                status,
+                check_key_expiry(public_expires_at.as_str(), now)?,
+            );
+        }
+        Ok(status)
     }
 }
 
@@ -99,14 +182,14 @@ pub fn build_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Result<Option
         KeyExpiryStatus::ExpiringSoon {
             expires_at,
             days_remaining,
-        } => Ok(Some(format!(
-            "Private key expires in {} days.\nExpires at: {}",
-            days_remaining, expires_at
+        } => Ok(Some(format_expiring_key_warning(
+            "Private key",
+            days_remaining,
+            &expires_at,
         ))),
-        KeyExpiryStatus::Expired { expires_at } => Ok(Some(format!(
-            "Private key has expired.\nExpires at: {}",
-            expires_at
-        ))),
+        KeyExpiryStatus::Expired { expires_at } => {
+            Ok(Some(format_expired_key_warning("Private key", &expires_at)))
+        }
     }
 }
 
@@ -116,21 +199,31 @@ pub(crate) fn enforce_expired_key_usage(
     allow_expired_key: bool,
     key_label: &str,
 ) -> Result<Option<String>> {
-    match check_key_expiry(expires_at, OffsetDateTime::now_utc())? {
+    enforce_selected_status_usage(
+        check_key_expiry(expires_at, OffsetDateTime::now_utc())?,
+        allow_expired_key,
+        key_label,
+    )
+}
+
+fn enforce_selected_status_usage(
+    status: KeyExpiryStatus,
+    allow_expired_key: bool,
+    key_label: &str,
+) -> Result<Option<String>> {
+    match status {
         KeyExpiryStatus::Valid => Ok(None),
         KeyExpiryStatus::ExpiringSoon {
             expires_at,
             days_remaining,
-        } => Ok(Some(format!(
-            "{} expires in {} days.\nExpires at: {}",
+        } => Ok(Some(format_expiring_key_warning(
             key_label,
             days_remaining,
-            sanitize_display_field(&expires_at)
+            &sanitize_display_field(&expires_at),
         ))),
         KeyExpiryStatus::Expired { expires_at } if allow_expired_key => Ok(Some(format!(
-            "{} has expired.\nExpires at: {}\nReason: expired key use was explicitly allowed.",
-            key_label,
-            sanitize_display_field(&expires_at)
+            "{} Reason: expired key use was explicitly allowed.",
+            format_expired_key_warning(key_label, &sanitize_display_field(&expires_at))
         ))),
         KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
             "E_KEY_EXPIRED".to_string(),
@@ -152,9 +245,10 @@ pub fn build_signing_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Resul
         KeyExpiryStatus::ExpiringSoon {
             expires_at,
             days_remaining,
-        } => Ok(Some(format!(
-            "Private key expires in {} days.\nExpires at: {}",
-            days_remaining, expires_at
+        } => Ok(Some(format_expiring_key_warning(
+            "Private key",
+            days_remaining,
+            &expires_at,
         ))),
     }
 }
@@ -172,11 +266,13 @@ pub fn build_recipient_key_expiry_warning(
         KeyExpiryStatus::ExpiringSoon {
             expires_at,
             days_remaining,
-        } => Ok(Some(format!(
-            "Recipient public key for '{}' expires in {} days.\nExpires at: {}",
-            sanitize_display_field(&doc.protected.subject_handle),
+        } => Ok(Some(format_expiring_key_warning(
+            &format!(
+                "Recipient public key for '{}'",
+                sanitize_display_field(&doc.protected.subject_handle)
+            ),
             days_remaining,
-            sanitize_display_field(&expires_at)
+            &sanitize_display_field(&expires_at),
         ))),
     }
 }
@@ -185,6 +281,22 @@ pub fn collect_recipient_key_expiry_warnings(keys: &[VerifiedRecipientKey]) -> R
     keys.iter()
         .filter_map(|key| build_recipient_key_expiry_warning(key.attested()).transpose())
         .collect()
+}
+
+pub(crate) fn collect_recipient_key_expiry_warnings_excluding_local_key(
+    keys: &[VerifiedRecipientKey],
+    local_key_identity: Option<&LocalKeyIdentity>,
+) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+    for key in keys {
+        if matches_local_key_identity(key.attested(), local_key_identity)? {
+            continue;
+        }
+        if let Some(warning) = build_recipient_key_expiry_warning(key.attested())? {
+            warnings.push(warning);
+        }
+    }
+    Ok(warnings)
 }
 
 /// Enforce that a recipient public key is not expired for wrap operations.
@@ -223,6 +335,54 @@ fn parse_expires_at(expires_at: &str) -> Result<OffsetDateTime> {
             e,
         )
     })
+}
+
+fn matches_local_key_identity(
+    public_key: &VerifiedPublicKeyAttested,
+    local_key_identity: Option<&LocalKeyIdentity>,
+) -> Result<bool> {
+    let Some(identity) = local_key_identity else {
+        return Ok(false);
+    };
+    identity.matches_public_key(public_key.document())
+}
+
+fn select_stricter_key_expiry_status(
+    left: KeyExpiryStatus,
+    right: KeyExpiryStatus,
+) -> KeyExpiryStatus {
+    match (left, right) {
+        (KeyExpiryStatus::Expired { .. }, KeyExpiryStatus::Expired { expires_at })
+        | (KeyExpiryStatus::Valid, KeyExpiryStatus::Expired { expires_at })
+        | (KeyExpiryStatus::ExpiringSoon { .. }, KeyExpiryStatus::Expired { expires_at }) => {
+            KeyExpiryStatus::Expired { expires_at }
+        }
+        (KeyExpiryStatus::Expired { expires_at }, _) => KeyExpiryStatus::Expired { expires_at },
+        (
+            KeyExpiryStatus::ExpiringSoon {
+                expires_at: _,
+                days_remaining,
+            },
+            KeyExpiryStatus::ExpiringSoon {
+                expires_at: right_expires_at,
+                days_remaining: right_days_remaining,
+            },
+        ) if right_days_remaining < days_remaining => KeyExpiryStatus::ExpiringSoon {
+            expires_at: right_expires_at,
+            days_remaining: right_days_remaining,
+        },
+        (status @ KeyExpiryStatus::ExpiringSoon { .. }, _) => status,
+        (_, status @ KeyExpiryStatus::ExpiringSoon { .. }) => status,
+        (KeyExpiryStatus::Valid, KeyExpiryStatus::Valid) => KeyExpiryStatus::Valid,
+    }
+}
+
+fn format_expiring_key_warning(key_label: &str, days_remaining: i64, expires_at: &str) -> String {
+    format!("{key_label} expires in {days_remaining} days. Expires at: {expires_at}")
+}
+
+fn format_expired_key_warning(key_label: &str, expires_at: &str) -> String {
+    format!("{key_label} has expired. Expires at: {expires_at}")
 }
 
 #[cfg(test)]
@@ -273,7 +433,9 @@ mod tests {
             VerifiedExpiresAt::from_verified_private_key_metadata(rfc3339(past_time(1)));
         let warning = build_key_expiry_warning(&expires_at).unwrap();
         assert!(warning.is_some());
-        assert!(warning.unwrap().contains("expired"));
+        let warning = warning.unwrap();
+        assert!(warning.contains("expired"));
+        assert!(!warning.contains('\n'));
     }
 
     #[test]
@@ -282,7 +444,9 @@ mod tests {
             VerifiedExpiresAt::from_verified_private_key_metadata(rfc3339(future_time(15)));
         let warning = build_key_expiry_warning(&expires_at).unwrap();
         assert!(warning.is_some());
-        assert!(warning.unwrap().contains("expir"));
+        let warning = warning.unwrap();
+        assert!(warning.contains("expir"));
+        assert!(!warning.contains('\n'));
     }
 
     #[test]
@@ -299,7 +463,9 @@ mod tests {
             VerifiedExpiresAt::from_verified_private_key_metadata(rfc3339(future_time(15)));
         let warning = build_signing_key_expiry_warning(&expires_at).unwrap();
         assert!(warning.is_some());
-        assert!(warning.unwrap().contains("expir"));
+        let warning = warning.unwrap();
+        assert!(warning.contains("expir"));
+        assert!(!warning.contains('\n'));
     }
 
     #[test]

@@ -147,10 +147,9 @@ fn test_encrypt_surfaces_private_key_expiry_warning_on_stderr() {
         &output_path,
         ALICE_MEMBER_HANDLE,
     );
-    assert!(
-        output.contains("Warning: Private key expires in"),
-        "{output}"
-    );
+    assert!(output.contains("Warning: Local key expires in"), "{output}");
+    assert!(output.contains(". Expires at: "), "{output}");
+    assert!(!output.contains("\n         Expires at: "), "{output}");
 }
 
 #[test]
@@ -185,4 +184,6 @@ fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
         output.contains("Warning: Recipient public key for 'bob@example.com' expires in"),
         "{output}"
     );
+    assert!(output.contains(". Expires at: "), "{output}");
+    assert!(!output.contains("\n         Expires at: "), "{output}");
 }

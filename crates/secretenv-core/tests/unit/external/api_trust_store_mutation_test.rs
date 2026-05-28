@@ -262,8 +262,7 @@ fn apply_approvals_rejects_expired_signing_key() {
 
     assert_eq!(err.kind(), ErrorKind::Verify);
     assert!(
-        err.format_user_message()
-            .contains("Private key has expired"),
+        err.format_user_message().contains("Local key has expired"),
         "unexpected error: {}",
         err.format_user_message()
     );

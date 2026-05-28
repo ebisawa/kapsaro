@@ -6,8 +6,7 @@ use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::CommandPathResolution;
 use crate::app::context::ssh::SshSigningContextResolution;
-use crate::feature::context::crypto::CryptoContext;
-use crate::feature::context::expiry::enforce_expired_key_usage;
+use crate::feature::context::crypto::{CryptoContext, LocalKeyIdentity};
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::model::identity::MemberHandle;
 use crate::{Error, Result};
@@ -18,6 +17,11 @@ pub struct ExecutionContext {
     pub member_handle: MemberHandle,
     pub key_ctx: CryptoContext,
     pub workspace_root: Option<crate::io::workspace::detection::WorkspaceRoot>,
+}
+
+pub(crate) struct SelectedDecryptionKeyExpiry {
+    pub(crate) warning: Option<String>,
+    pub(crate) key_identity: LocalKeyIdentity,
 }
 
 impl ExecutionContext {
@@ -107,16 +111,33 @@ pub fn enforce_selected_decryption_key_expiry(
     allow_expired_key: bool,
     debug_enabled: bool,
 ) -> Result<Option<String>> {
+    Ok(evaluate_selected_decryption_key_expiry(
+        execution,
+        wrap_set,
+        allow_expired_key,
+        debug_enabled,
+    )?
+    .warning)
+}
+
+pub(crate) fn evaluate_selected_decryption_key_expiry(
+    execution: &ExecutionContext,
+    wrap_set: &WrapSet,
+    allow_expired_key: bool,
+    debug_enabled: bool,
+) -> Result<SelectedDecryptionKeyExpiry> {
     let selected = execution.key_ctx.select_local_decryption_key(
         wrap_set,
         execution.member_handle.as_str(),
         debug_enabled,
     )?;
-    enforce_expired_key_usage(
-        &selected.info().expires_at,
-        allow_expired_key,
-        "Private key",
-    )
+    Ok(SelectedDecryptionKeyExpiry {
+        warning: selected
+            .info()
+            .key_expiry
+            .enforce_expired_usage(allow_expired_key)?,
+        key_identity: selected.info().key_identity.clone(),
+    })
 }
 
 fn resolve_env_execution(

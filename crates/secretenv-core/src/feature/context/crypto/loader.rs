@@ -7,8 +7,8 @@ use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
-use super::{CryptoContext, LocalKeyAccess, PrivateKeyLoadResult};
-use crate::feature::context::expiry::VerifiedExpiresAt;
+use super::{CryptoContext, LocalKeyAccess, LocalKeyIdentity, PrivateKeyLoadResult};
+use crate::feature::context::expiry::{LocalKeyPairExpiry, VerifiedExpiresAt};
 use crate::feature::key::material::validate_private_key_material;
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
@@ -102,7 +102,7 @@ pub fn load_crypto_context_from_keystore(
         workspace_path,
         loaded.private_key,
         signing_key,
-        loaded.expires_at,
+        loaded.key_expiry,
     );
     Ok(context.with_local_key_access(
         selected_kid_override,
@@ -156,8 +156,14 @@ pub(crate) fn load_verified_private_key_from_keystore(
 
     Ok(PrivateKeyLoadResult {
         private_key,
-        expires_at: VerifiedExpiresAt::from_verified_private_key_metadata(
-            encrypted_private_key.protected.expires_at.clone(),
+        key_identity: LocalKeyIdentity::from_public_key(verified_public_key.document())?,
+        key_expiry: LocalKeyPairExpiry::from_private_and_public_key(
+            VerifiedExpiresAt::from_verified_private_key_metadata(
+                encrypted_private_key.protected.expires_at.clone(),
+            ),
+            VerifiedExpiresAt::from_verified_public_key_metadata(
+                verified_public_key.document().protected.expires_at.clone(),
+            ),
         ),
     })
 }

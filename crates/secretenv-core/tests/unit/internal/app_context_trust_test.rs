@@ -341,7 +341,8 @@ fn test_load_read_trust_context_allows_expired_active_member_with_warning() {
     let options = build_test_command_options(dir.path(), Some(&workspace));
 
     let loaded =
-        load_read_trust_context(&options, &workspace, ALICE_MEMBER_HANDLE, None, false).unwrap();
+        load_read_trust_context(&options, &workspace, ALICE_MEMBER_HANDLE, None, None, false)
+            .unwrap();
 
     assert_eq!(loaded.trust_ctx.active_members_by_kid.len(), 1);
     assert!(loaded

@@ -5,10 +5,12 @@ use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use std::collections::BTreeSet;
 
+use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{
     evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome, CommandCapability,
     RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate, TrustContext,
 };
+use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::Result;
 
@@ -114,7 +116,7 @@ where
 
     let candidates = collect_read_key_candidates(review.signer_outcome, review.recipient_outcome);
     approvals.extend(review_recipient_trust_with_confirmation_verifier(
-        &build_read_key_outcome(candidates),
+        &build_recipient_key_outcome(candidates),
         review.context_label,
         |candidate| super::online_verification::verify_trust_candidate_online(candidate, verbose),
         confirm_recipients,
@@ -149,7 +151,7 @@ fn push_unique_candidate(
     }
 }
 
-fn build_read_key_outcome(candidates: Vec<TrustApprovalCandidate>) -> RecipientTrustOutcome {
+fn build_recipient_key_outcome(candidates: Vec<TrustApprovalCandidate>) -> RecipientTrustOutcome {
     if candidates.is_empty() {
         RecipientTrustOutcome::Accepted
     } else {
@@ -229,36 +231,90 @@ where
     Execute: FnOnce() -> Result<T>,
 {
     emit_warnings(execution.warnings);
-    let mut approvals = match trust_plan.signer_trust {
-        Some((trust_outcome, labels)) => review_signer_trust_with_confirmation_verifier(
-            trust_outcome,
-            labels.context,
-            labels.subject,
-            |candidate| {
-                super::online_verification::verify_trust_candidate_online(
-                    candidate,
-                    execution.options.debug,
-                )
-            },
-            confirm_known,
-            confirm_non_member,
-        )?,
-        None => Vec::new(),
-    };
-    approvals.extend(review_recipient_trust_with_confirmation_verifier(
-        trust_plan.recipient_trust,
-        trust_plan.recipient_context_label,
-        |candidate| {
-            super::online_verification::verify_trust_candidate_online(
-                candidate,
-                execution.options.debug,
-            )
-        },
+    let mut approvals = review_write_signer_trust_with_confirmation_verifier(
+        trust_plan,
+        execution.options.debug,
+        confirm_known,
+        confirm_non_member,
+    )?;
+    approvals.extend(review_write_recipient_trust_with_confirmation_verifier(
+        trust_plan,
+        approvals.as_slice(),
+        execution.options.debug,
         confirm_recipients,
     )?);
     save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
     let result = execute()?;
     Ok(result)
+}
+
+fn review_write_signer_trust_with_confirmation_verifier<ConfirmKnown, ConfirmNonMember>(
+    trust_plan: WriteRecipientTrustReviewPlan<'_>,
+    verbose: bool,
+    confirm_known: ConfirmKnown,
+    confirm_non_member: ConfirmNonMember,
+) -> Result<Vec<ApprovedKnownKey>>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+{
+    let Some((trust_outcome, labels)) = trust_plan.signer_trust else {
+        return Ok(Vec::new());
+    };
+    review_signer_trust_with_confirmation_verifier(
+        trust_outcome,
+        labels.context,
+        labels.subject,
+        |candidate| super::online_verification::verify_trust_candidate_online(candidate, verbose),
+        confirm_known,
+        confirm_non_member,
+    )
+}
+
+fn review_write_recipient_trust_with_confirmation_verifier<ConfirmRecipients>(
+    trust_plan: WriteRecipientTrustReviewPlan<'_>,
+    approved_keys: &[ApprovedKnownKey],
+    verbose: bool,
+    confirm_recipients: ConfirmRecipients,
+) -> Result<Vec<ApprovedKnownKey>>
+where
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
+{
+    let recipient_trust =
+        build_write_recipient_key_outcome(trust_plan.recipient_trust, approved_keys);
+    review_recipient_trust_with_confirmation_verifier(
+        &recipient_trust,
+        trust_plan.recipient_context_label,
+        |candidate| super::online_verification::verify_trust_candidate_online(candidate, verbose),
+        confirm_recipients,
+    )
+}
+
+fn build_write_recipient_key_outcome(
+    recipient_trust: &RecipientTrustOutcome,
+    approved_keys: &[ApprovedKnownKey],
+) -> RecipientTrustOutcome {
+    let RecipientTrustOutcome::NeedsManualApproval(candidates) = recipient_trust else {
+        return RecipientTrustOutcome::Accepted;
+    };
+    let candidates = candidates
+        .iter()
+        .filter(|candidate| !is_approved_candidate(candidate, approved_keys))
+        .cloned()
+        .collect();
+    build_recipient_key_outcome(candidates)
+}
+
+fn is_approved_candidate(
+    candidate: &TrustApprovalCandidate,
+    approved_keys: &[ApprovedKnownKey],
+) -> bool {
+    approved_keys.iter().any(|approval| {
+        let identity = KnownKeyIdentity::from(approval);
+        identity.member_handle() == candidate.member_handle.as_str()
+            && identity.kid() == candidate.kid.as_str()
+    })
 }
 
 pub fn review_artifact_recipient_set_trust<ConfirmRecipientSet>(

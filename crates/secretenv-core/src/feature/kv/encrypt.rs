@@ -21,19 +21,6 @@ use uuid::Uuid;
 
 use super::entry_codec::encode_kv_entries_to_tokens;
 
-pub trait KvValueRef {
-    fn as_kv_value(&self) -> &str;
-}
-
-impl<T> KvValueRef for T
-where
-    T: AsRef<str>,
-{
-    fn as_kv_value(&self) -> &str {
-        self.as_ref()
-    }
-}
-
 /// Build KV encryption context: generate master key, create HEAD/WRAP structures
 pub(crate) fn build_kv_encryption(
     members: &[VerifiedRecipientKey],
@@ -74,7 +61,7 @@ pub(crate) fn encrypt_kv_entries<V>(
     disclosed: bool,
 ) -> Result<Vec<(String, KvEntryValue)>>
 where
-    V: KvValueRef,
+    V: AsRef<str>,
 {
     let key_schedule = KvKeySchedule::extract(master_key, sid)?;
     let mut entries: Vec<_> = kv_map
@@ -82,7 +69,7 @@ where
         .map(|(key, value)| {
             encrypt_entry(
                 key,
-                value.as_kv_value(),
+                value.as_ref(),
                 &key_schedule,
                 sid,
                 debug,
@@ -117,7 +104,7 @@ pub fn encrypt_kv_document<V>(
     token_codec: TokenCodec,
 ) -> Result<String>
 where
-    V: KvValueRef,
+    V: AsRef<str>,
 {
     encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
 }
@@ -131,7 +118,7 @@ pub(crate) fn encrypt_kv_document_with_disclosed<V>(
     disclosed: bool,
 ) -> Result<String>
 where
-    V: KvValueRef,
+    V: AsRef<str>,
 {
     encrypt_kv_map_with_wrap_mutation(kv_map, members, signing, token_codec, disclosed, |_| Ok(()))
 }
@@ -145,7 +132,7 @@ pub fn encrypt_kv_map_with_wrap_mutation<V, F>(
     mutate_wrap: F,
 ) -> Result<String>
 where
-    V: KvValueRef,
+    V: AsRef<str>,
     F: FnOnce(&mut KvWrap) -> Result<()>,
 {
     let timestamp = crate::support::time::generate_current_timestamp()?;

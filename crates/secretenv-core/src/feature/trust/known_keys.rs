@@ -3,6 +3,7 @@
 
 //! Known keys CRUD operations and integrity checks.
 
+use crate::feature::trust::judgment::{IntoKid, IntoMemberHandle};
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::KnownKey;
 use crate::support::kid::resolve_unique_kid;
@@ -25,16 +26,16 @@ pub struct KnownKeyIdentity {
 impl KnownKeyIdentity {
     pub fn new<M, K>(member_handle: M, kid: K) -> Self
     where
-        M: IntoKnownMemberHandle,
-        K: IntoKnownKid,
+        M: IntoMemberHandle,
+        K: IntoKid,
     {
         Self::try_new(member_handle, kid).expect("known key identity inputs must be valid")
     }
 
     pub fn try_new<M, K>(member_handle: M, kid: K) -> Result<Self>
     where
-        M: IntoKnownMemberHandle,
-        K: IntoKnownKid,
+        M: IntoMemberHandle,
+        K: IntoKid,
     {
         Ok(Self {
             member_handle: member_handle.into_member_handle()?,
@@ -56,50 +57,6 @@ impl KnownKeyIdentity {
 
     pub fn kid_value(&self) -> &Kid {
         &self.kid
-    }
-}
-
-pub trait IntoKnownMemberHandle {
-    fn into_member_handle(self) -> Result<MemberHandle>;
-}
-
-impl IntoKnownMemberHandle for MemberHandle {
-    fn into_member_handle(self) -> Result<MemberHandle> {
-        Ok(self)
-    }
-}
-
-impl IntoKnownMemberHandle for String {
-    fn into_member_handle(self) -> Result<MemberHandle> {
-        MemberHandle::try_from(self)
-    }
-}
-
-impl IntoKnownMemberHandle for &str {
-    fn into_member_handle(self) -> Result<MemberHandle> {
-        MemberHandle::try_from(self)
-    }
-}
-
-pub trait IntoKnownKid {
-    fn into_kid(self) -> Result<Kid>;
-}
-
-impl IntoKnownKid for Kid {
-    fn into_kid(self) -> Result<Kid> {
-        Ok(self)
-    }
-}
-
-impl IntoKnownKid for String {
-    fn into_kid(self) -> Result<Kid> {
-        Kid::try_from(self)
-    }
-}
-
-impl IntoKnownKid for &str {
-    fn into_kid(self) -> Result<Kid> {
-        Kid::try_from(self)
     }
 }
 

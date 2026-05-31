@@ -21,15 +21,15 @@ use crate::cli::common::trust::{
     confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
 };
 use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
-use secretenv_core::cli_api::app::file::encrypt::{
+use kapsaro_core::cli_api::app::file::encrypt::{
     execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
 };
-use secretenv_core::cli_api::presentation::fs::load_bytes;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::presentation::fs::load_bytes;
+use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
 #[command(
-    override_usage = "secretenv encrypt [OPTIONS] <INPUT>\n       secretenv encrypt [OPTIONS] --stdin (--out <path> | --stdout)"
+    override_usage = "kapsaro encrypt [OPTIONS] <INPUT>\n       kapsaro encrypt [OPTIONS] --stdin (--out <path> | --stdout)"
 )]
 pub(crate) struct EncryptArgs {
     /// Common options shared across commands

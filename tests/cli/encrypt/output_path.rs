@@ -8,8 +8,8 @@ use crate::cli::common::{
     setup_workspace, ALICE_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{setup_test_workspace, with_temp_cwd};
+use kapsaro_core::cli_api::test_support::domain::wire::format;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::domain::wire::format;
 use std::fs;
 
 fn parse_json_from_transcript(transcript: &str) -> serde_json::Value {
@@ -44,7 +44,7 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
 
         let content = fs::read_to_string(&expected).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V7);
+        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
     })
 }
 
@@ -85,7 +85,7 @@ fn test_encrypt_stdin_with_out_option_writes_encrypted_file() {
 
     let content = fs::read_to_string(&output_file).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V7);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_encrypt_stdin_with_stdout_writes_json_to_stdout() {
     );
     assert!(!output.contains("Encrypted to:"), "{output}");
     let parsed = parse_json_from_transcript(&output);
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V7);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn test_encrypt_file_with_stdout_writes_json_to_stdout() {
     let input_file = home_dir.path().join("data.txt");
     fs::write(&input_file, b"secret").unwrap();
 
-    let mut command = crate::cli::common::secretenv_std_cmd();
+    let mut command = crate::cli::common::kapsaro_std_cmd();
     command
         .arg("encrypt")
         .arg(&input_file)
@@ -121,12 +121,12 @@ fn test_encrypt_file_with_stdout_writes_json_to_stdout() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", &ssh_priv);
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_priv);
     let output = crate::cli::common::assert_member_set_review_success(&mut command);
     assert!(!output.contains("Encrypted to:"), "{output}");
     let parsed = parse_json_from_transcript(&output);
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V7);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
 }
 
 #[test]
@@ -140,8 +140,8 @@ fn test_encrypt_stdin_requires_out_or_stdout() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("secret from stdin")
         .assert()
         .failure()
@@ -167,8 +167,8 @@ fn test_encrypt_rejects_stdout_and_out_together() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("--stdout").and(predicate::str::contains("--out")));
@@ -187,8 +187,8 @@ fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin(plaintext.clone())
         .assert()
         .success()
@@ -204,8 +204,8 @@ fn test_encrypt_stdin_stdout_roundtrip_preserves_binary_bytes() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin(encrypted_output)
         .assert()
         .success()
@@ -229,8 +229,8 @@ fn test_encrypt_rejects_control_character_input_filename_for_default_output() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("E_NAME_INVALID"));
@@ -243,7 +243,7 @@ fn test_encrypt_quiet_suppresses_output_path_notice() {
     let output_file = home_dir.path().join("quiet.txt.encrypted");
     fs::write(&input_file, b"quiet secret").unwrap();
 
-    let mut command = crate::cli::common::secretenv_std_cmd();
+    let mut command = crate::cli::common::kapsaro_std_cmd();
     command
         .arg("encrypt")
         .arg(&input_file)
@@ -254,8 +254,8 @@ fn test_encrypt_quiet_suppresses_output_path_notice() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", &ssh_priv);
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_priv);
 
     let output = crate::cli::common::assert_member_set_review_success(&mut command);
 

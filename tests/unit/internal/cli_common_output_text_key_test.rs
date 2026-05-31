@@ -6,7 +6,7 @@ use super::{
     is_online_verification_verified,
 };
 use crate::cli::common::output::key::view::{KeyInfoView, KeyListView, KeyMemberView};
-use secretenv_core::api::online::OnlineVerificationStatus;
+use kapsaro_core::api::online::OnlineVerificationStatus;
 use std::path::PathBuf;
 
 #[test]
@@ -48,7 +48,7 @@ fn test_format_key_list_lines_keeps_long_member_handles_and_kids_inline() {
                 created_at: "2026-05-01T00:00:00Z",
                 expires_at: "2027-05-01T00:00:00Z",
                 active: true,
-                format: "secretenv-public-key-v5",
+                format: "kapsaro-public-key-v5",
             }],
         }],
         total_keys: 1,

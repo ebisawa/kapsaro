@@ -4,8 +4,8 @@
 //! Shared interactive prompts for CLI commands.
 
 use dialoguer::Confirm;
-use secretenv_core::cli_api::presentation::tty;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::presentation::tty;
+use kapsaro_core::{Error, Result};
 #[cfg(test)]
 use std::io::BufRead;
 

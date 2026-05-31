@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
-const ARCHIVE: &str = "secretenv-v1.2.3-x86_64-unknown-linux-gnu.tar.gz";
+const ARCHIVE: &str = "kapsaro-v1.2.3-x86_64-unknown-linux-gnu.tar.gz";
 
 #[test]
 fn test_install_script_installs_archive_after_sha256_verification() {
@@ -27,7 +27,7 @@ fn test_install_script_installs_archive_after_sha256_verification() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
-        fs::read_to_string(fixture.install_dir.path().join("secretenv")).unwrap(),
+        fs::read_to_string(fixture.install_dir.path().join("kapsaro")).unwrap(),
         "installed binary\n"
     );
 }
@@ -43,7 +43,7 @@ fn test_install_script_rejects_archive_with_sha256_mismatch() {
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("SHA256 mismatch"));
-    assert!(!fixture.install_dir.path().join("secretenv").exists());
+    assert!(!fixture.install_dir.path().join("kapsaro").exists());
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn test_install_script_rejects_checksums_without_target_archive() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
     fixture.save_checksums(&format!(
-        "{}  secretenv-v1.2.3-aarch64-unknown-linux-gnu.tar.gz\n",
+        "{}  kapsaro-v1.2.3-aarch64-unknown-linux-gnu.tar.gz\n",
         fixture.archive_hash()
     ));
     fixture.save_fake_commands(true);
@@ -60,7 +60,7 @@ fn test_install_script_rejects_checksums_without_target_archive() {
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("Checksum not found"));
-    assert!(!fixture.install_dir.path().join("secretenv").exists());
+    assert!(!fixture.install_dir.path().join("kapsaro").exists());
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn test_install_script_rejects_environment_without_sha256_command() {
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("No SHA256 command found"));
-    assert!(!fixture.install_dir.path().join("secretenv").exists());
+    assert!(!fixture.install_dir.path().join("kapsaro").exists());
 }
 
 struct InstallFixture {
@@ -89,7 +89,7 @@ impl InstallFixture {
         let install_dir = TempDir::new().unwrap();
         let bin_dir = root.path().join("bin");
         fs::create_dir(&bin_dir).unwrap();
-        fs::write(root.path().join("secretenv"), "installed binary\n").unwrap();
+        fs::write(root.path().join("kapsaro"), "installed binary\n").unwrap();
 
         Self {
             root,
@@ -170,7 +170,7 @@ case "$url" in
   *SHA256SUMS)
     /bin/cp "${FIXTURE_DIR}/SHA256SUMS" "$out"
     ;;
-  *secretenv-v1.2.3-x86_64-unknown-linux-gnu.tar.gz)
+  *kapsaro-v1.2.3-x86_64-unknown-linux-gnu.tar.gz)
     /bin/cp "${FIXTURE_DIR}/archive.tar.gz" "$out"
     ;;
   *)
@@ -198,7 +198,7 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-/bin/cp "${FIXTURE_DIR}/secretenv" "${out}/secretenv"
+/bin/cp "${FIXTURE_DIR}/kapsaro" "${out}/kapsaro"
 "#,
         );
     }

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 
 pub(crate) fn build_test_command_options(
     home: &Path,

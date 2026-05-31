@@ -3,7 +3,7 @@
 
 //! View builders for KV command output.
 
-use secretenv_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
+use kapsaro_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
 use std::collections::BTreeMap;
 
 pub(crate) struct KvKeyView<'a> {

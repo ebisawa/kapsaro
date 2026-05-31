@@ -1,0 +1,535 @@
+// Copyright 2026 Satoshi Ebisawa
+// SPDX-License-Identifier: Apache-2.0
+
+//! Unit tests for feature/decrypt/unwrap error paths
+//!
+//! Tests error cases and edge cases in decrypt/unwrap operations.
+//! The happy path is covered by usecase_decrypt_test.rs; this file focuses on
+//! error paths such as wrong kid, empty entries, and recipient handle mismatch scenarios.
+
+use crate::keygen_helpers::{
+    build_verified_private_key, build_verified_recipient_key, build_verified_recipient_keys,
+};
+use crate::test_utils::ALICE_MEMBER_HANDLE;
+use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use ed25519_dalek::SigningKey;
+use kapsaro_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
+use kapsaro_core::cli_api::test_support::domain::verification::{
+    SignatureVerificationProof, VerifyingKeySource,
+};
+use kapsaro_core::cli_api::test_support::operations::context::crypto::decode_kem_secret_key;
+use kapsaro_core::cli_api::test_support::operations::context::crypto::CryptoContext;
+use kapsaro_core::cli_api::test_support::operations::context::crypto::SigningContext;
+use kapsaro_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
+use kapsaro_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
+use kapsaro_core::cli_api::test_support::operations::envelope::binding::build_file_wrap_info;
+use kapsaro_core::cli_api::test_support::operations::envelope::unwrap::{
+    unwrap_master_key, unwrap_master_key_for_file,
+};
+use kapsaro_core::cli_api::test_support::operations::envelope::wrap::build_wrap_item_for_file;
+use kapsaro_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
+use kapsaro_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
+use kapsaro_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
+use kapsaro_core::cli_api::test_support::operations::verify::file::verify_file_document;
+use kapsaro_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
+use kapsaro_core::cli_api::test_support::primitives::types::keys::MasterKey;
+use kapsaro_core::cli_api::test_support::storage::keystore::storage::{
+    list_kids, load_private_key, load_public_key,
+};
+use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use kapsaro_core::cli_api::test_support::wire::kv::document::parse_kv_document;
+use kapsaro_core::cli_api::test_support::wire::kv::dotenv::parse_dotenv;
+use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
+use tempfile::TempDir;
+use uuid::Uuid;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Encrypt a file and return (verified_doc, key_ctx, kid, _temp_dir)
+///
+/// The returned TempDir must be kept alive for the duration of the test
+/// to prevent premature cleanup of keystore and workspace files.
+fn encrypt_file_for_test(
+    content: &[u8],
+) -> (
+    kapsaro_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument,
+    CryptoContext,
+    String,
+    TempDir,
+) {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
+    let kid = kids.first().unwrap().clone();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
+
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
+
+    let file_enc_doc = encrypt_file_document(
+        content,
+        &recipient_handles,
+        &members,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: &kid,
+            signer_pub: public_key.clone(),
+            debug: false,
+        },
+    )
+    .unwrap();
+
+    let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
+
+    (verified_doc, key_ctx, kid, temp_dir)
+}
+
+/// Encrypt KV content and return (verified_doc, key_ctx, kid, _temp_dir)
+///
+/// The returned TempDir must be kept alive for the duration of the test
+/// to prevent premature cleanup of keystore and workspace files.
+fn encrypt_kv_for_test(
+    dotenv_content: &str,
+) -> (
+    kapsaro_core::cli_api::test_support::domain::kv_enc::verified::VerifiedKvEncDocument,
+    CryptoContext,
+    String,
+    TempDir,
+) {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
+    let kid = kids.first().unwrap().clone();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
+
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+
+    let kv_map = parse_dotenv(dotenv_content).unwrap();
+    let signer_pub = public_key.clone();
+    let members = vec![public_key];
+    let verified_members = build_verified_recipient_keys(&members);
+
+    let encrypted = encrypt_kv_document(
+        &kv_map,
+        &verified_members,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: &kid,
+            signer_pub,
+            debug: false,
+        },
+        TokenCodec::JsonJcs,
+    )
+    .unwrap();
+
+    let doc = parse_kv_document(&encrypted).unwrap();
+    let verified_doc = verify_kv_document(&doc, false).unwrap();
+
+    (verified_doc, key_ctx, kid, temp_dir)
+}
+
+// ============================================================================
+// Test: wrap selection by kid (tested indirectly through public APIs)
+// ============================================================================
+
+/// Test that decryption succeeds when the correct kid is used.
+#[test]
+fn test_decrypt_file_selects_wrap_by_kid() {
+    let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_file_for_test(b"test content");
+
+    // Decryption with correct kid should succeed
+    let result = decrypt_file_document(
+        &verified_doc,
+        ALICE_MEMBER_HANDLE,
+        &kid,
+        key_ctx.private_key(),
+        false,
+    );
+
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().as_ref() as &[u8], b"test content");
+}
+
+/// Test that a non-existent kid produces an error containing "No wrap found".
+#[test]
+fn test_decrypt_file_reports_missing_wrap_kid() {
+    let (verified_doc, key_ctx, _kid, _temp_dir) = encrypt_file_for_test(b"test content");
+
+    let nonexistent_kid = "00000000000000000000000000";
+    let result = decrypt_file_document(
+        &verified_doc,
+        ALICE_MEMBER_HANDLE,
+        nonexistent_kid,
+        key_ctx.private_key(),
+        false,
+    );
+
+    assert!(result.is_err());
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(
+        err_msg.contains("No wrap found"),
+        "Error should mention 'No wrap found', got: {}",
+        err_msg
+    );
+}
+
+/// Test that kid matches but the recipient handle label doesn't match member_handle.
+#[test]
+fn test_decrypt_file_rejects_recipient_handle_mismatch() {
+    let (verified_doc, key_ctx, kid, _temp_dir) =
+        encrypt_file_for_test(b"recipient handle mismatch test");
+
+    // Use a different member_handle with the correct kid and private key.
+    let different_member_handle = "different@example.com";
+    let result = decrypt_file_document(
+        &verified_doc,
+        different_member_handle,
+        &kid,
+        key_ctx.private_key(),
+        false,
+    );
+
+    assert!(
+        result.is_err(),
+        "Decryption should fail when member_handle doesn't match rh"
+    );
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(
+        err_msg.contains("does not match member_handle"),
+        "Error should mention rh mismatch, got: {}",
+        err_msg
+    );
+    assert!(
+        err_msg.contains(different_member_handle),
+        "Error should mention requested member_handle '{}', got: {}",
+        different_member_handle,
+        err_msg
+    );
+}
+
+/// Test that kv decryption fails when the located wrap's rh does not match member_handle.
+#[test]
+fn test_decrypt_kv_document_rh_mismatch_fails() {
+    let dotenv = "SECRET_KEY=my-secret-value\n";
+    let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_kv_for_test(dotenv);
+
+    let different_member_handle = "different@example.com";
+    let result = decrypt_kv_document(
+        &verified_doc,
+        different_member_handle,
+        &kid,
+        key_ctx.private_key(),
+        false,
+    );
+
+    assert!(
+        result.is_err(),
+        "KV decryption should fail when member_handle doesn't match rh"
+    );
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(
+        err_msg.contains("does not match member_handle"),
+        "Error should mention rh mismatch, got: {}",
+        err_msg
+    );
+    assert!(
+        err_msg.contains(different_member_handle),
+        "Error should mention requested member_handle '{}', got: {}",
+        different_member_handle,
+        err_msg
+    );
+}
+
+// ============================================================================
+// Test: decrypt_kv_entries edge cases (tested through decrypt_kv_document)
+// ============================================================================
+
+/// Test that encrypting an empty KV map produces an empty decrypted map.
+#[test]
+fn test_decrypt_kv_entries_empty() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
+    let kid = kids.first().unwrap().clone();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
+
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+
+    // Create empty KV map
+    let kv_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let signer_pub = public_key.clone();
+    let members = vec![public_key];
+    let verified_members = build_verified_recipient_keys(&members);
+
+    let encrypted = encrypt_kv_document(
+        &kv_map,
+        &verified_members,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: &kid,
+            signer_pub,
+            debug: false,
+        },
+        TokenCodec::JsonJcs,
+    )
+    .unwrap();
+
+    let doc = parse_kv_document(&encrypted).unwrap();
+    let verified_doc = verify_kv_document(&doc, false).unwrap();
+
+    let decrypted = decrypt_kv_document(
+        &verified_doc,
+        ALICE_MEMBER_HANDLE,
+        &kid,
+        key_ctx.private_key(),
+        false,
+    )
+    .unwrap();
+
+    assert!(
+        decrypted.is_empty(),
+        "Decrypting empty entries should produce empty map"
+    );
+}
+
+/// Test that multiple KV entries are all decrypted correctly.
+#[test]
+fn test_decrypt_kv_entries_multiple() {
+    let dotenv = "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=admin\nDB_PASS=secret\n";
+    let (verified_doc, key_ctx, kid, _temp_dir) = encrypt_kv_for_test(dotenv);
+
+    let decrypted = decrypt_kv_document(
+        &verified_doc,
+        ALICE_MEMBER_HANDLE,
+        &kid,
+        key_ctx.private_key(),
+        false,
+    )
+    .unwrap();
+
+    assert_eq!(decrypted.len(), 4, "Should have 4 decrypted entries");
+
+    let expected = [
+        ("DB_HOST", "localhost"),
+        ("DB_PORT", "5432"),
+        ("DB_USER", "admin"),
+        ("DB_PASS", "secret"),
+    ];
+
+    for (key, expected_value) in &expected {
+        let value = decrypted
+            .get(*key)
+            .unwrap_or_else(|| panic!("{} should exist in decrypted map", key));
+        assert_eq!(
+            String::from_utf8(value.to_vec()).unwrap(),
+            *expected_value,
+            "Value for {} should match",
+            key
+        );
+    }
+}
+
+// ============================================================================
+// Tests merged from services_enc_unwrap_test.rs
+// ============================================================================
+
+/// Generate Ed25519 signing key from seed for tests
+fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
+    SigningKey::from_bytes(&seed)
+}
+
+fn build_test_master_key() -> MasterKey {
+    let key_bytes = [1u8; 32];
+    MasterKey::new(key_bytes)
+}
+
+#[test]
+fn test_unwrap_master_key_for_file() {
+    // Setup test keystore
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
+    let kid = kids.first().unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+
+    // Decrypt private key
+    let ssh_pub =
+        std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub")).unwrap();
+    let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
+        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
+    ));
+    let private_key =
+        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
+
+    let signing_key = generate_ed25519_keypair([2u8; 32]);
+    let content = b"Hello, World!";
+    let recipient_handles = vec![ALICE_MEMBER_HANDLE.to_string()];
+    let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
+
+    let file_enc_doc = encrypt_file_document(
+        content,
+        &recipient_handles,
+        &members,
+        &SigningContext {
+            signing_key: &signing_key,
+            signer_kid: kid,
+            signer_pub: public_key.clone(),
+            debug: false,
+        },
+    )
+    .unwrap();
+
+    // Wrap private key in Decrypted for unwrap API
+    let decrypted_key =
+        build_verified_private_key(&private_key, ALICE_MEMBER_HANDLE, kid, "SHA256:test");
+
+    // Wrap in VerifiedFileEncDocument (tests use freshly encrypted content, treated as verified)
+    let proof = SignatureVerificationProof::new(
+        ALICE_MEMBER_HANDLE.to_string(),
+        kid.to_string(),
+        VerifyingKeySource::SignerPubEmbedded,
+        Vec::new(),
+    );
+    let verified = VerifiedFileEncDocument::new(file_enc_doc, proof);
+
+    // Unwrap master key
+    let unwrapped_key =
+        unwrap_master_key_for_file(&verified, ALICE_MEMBER_HANDLE, kid, &decrypted_key, false)
+            .unwrap();
+
+    // Verify unwrapped key is valid
+    assert_eq!(unwrapped_key.as_bytes().len(), 32);
+}
+
+#[test]
+fn test_unwrap_master_key_from_wrap_item() {
+    // Setup test keystore
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
+    let kid = kids.first().unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+
+    // Decrypt private key first (we'll need it for unwrap)
+    let ssh_pub =
+        std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub")).unwrap();
+    let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
+        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
+    ));
+    let private_key_plaintext =
+        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
+
+    let sid = Uuid::new_v4();
+    let master_key = build_test_master_key();
+
+    // Extract kid from public key for kids list
+    // Create wrap item (wrap in Attested for API)
+    let attested_pubkey = build_verified_recipient_key(public_key.clone());
+    let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
+
+    // Unwrap master key using the same private key that matches the public key used to create wrap
+    // Note: build_wrap_item_for_file uses hpke_info::file, so we need to use unwrap_master_key_base
+    // with hpke_info::file instead of unwrap_master_key_from_wrap_item (which uses hpke_info::kv_file)
+    let decrypted_key = build_verified_private_key(
+        &private_key_plaintext,
+        ALICE_MEMBER_HANDLE,
+        &public_key.protected.kid,
+        "SHA256:test",
+    );
+    let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
+    let wrap_set =
+        kapsaro_core::cli_api::test_support::operations::envelope::wrap_set::WrapSet::parse(
+            &[wrap_item],
+            "Document",
+        )
+        .unwrap();
+    let parsed_wrap_item = wrap_set
+        .find_by_kid_for_member(&public_key.protected.kid, ALICE_MEMBER_HANDLE)
+        .unwrap();
+    let unwrapped_key = unwrap_master_key(
+        parsed_wrap_item,
+        &sid,
+        &kem_secret_key,
+        build_file_wrap_info,
+        false,
+        "test_unwrap_master_key_from_wrap_item",
+    )
+    .unwrap();
+
+    // Verify unwrapped key matches original
+    assert_eq!(unwrapped_key.as_bytes(), master_key.as_bytes());
+}
+
+/// Test defence-in-depth: HPKE AAD binding (aad=info) prevents unwrap with wrong AAD
+#[test]
+fn test_hpke_aad_binding_defence_in_depth() {
+    // Setup test keystore
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+    let kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
+    let kid = kids.first().unwrap();
+    let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+    let encrypted_private_key = load_private_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
+
+    // Decrypt private key
+    let ssh_pub =
+        std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub")).unwrap();
+    let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
+        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
+    ));
+    let private_key_plaintext =
+        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
+
+    let sid = Uuid::new_v4();
+    let master_key = build_test_master_key();
+
+    // Create wrap item (uses aad=info) - wrap in Attested for API
+    let attested_pubkey = build_verified_recipient_key(public_key.clone());
+    let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
+
+    // Try to unwrap with empty AAD. This demonstrates that aad=info binding is enforced.
+    let decrypted_key = build_verified_private_key(
+        &private_key_plaintext,
+        ALICE_MEMBER_HANDLE,
+        &public_key.protected.kid,
+        "SHA256:test",
+    );
+    let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
+
+    // Attempt unwrap with wrong AAD (empty instead of info)
+    // This should fail because the wrap was created with aad=info
+    use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
+    use kapsaro_core::cli_api::test_support::primitives::kem::open_base;
+    use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Ciphertext, Enc};
+
+    let enc_bytes = decode_base64url_nopad(&wrap_item.enc, "enc").unwrap();
+    let enc = Enc::from(enc_bytes);
+    let ct_bytes = decode_base64url_nopad(&wrap_item.ct, "ct").unwrap();
+    let ct = Ciphertext::from(ct_bytes);
+
+    let info = build_file_wrap_info(&sid, kid).unwrap();
+    let wrong_aad = Aad::empty(); // Wrong AAD (empty instead of info)
+
+    let result = open_base(&kem_secret_key, &enc, &info, &wrong_aad, &ct);
+
+    // Should fail because AAD doesn't match (defence-in-depth)
+    assert!(
+        result.is_err(),
+        "Unwrap with wrong AAD (empty instead of info) should fail"
+    );
+}

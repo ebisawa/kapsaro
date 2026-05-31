@@ -5,11 +5,11 @@
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 #[cfg(unix)]
-use crate::cli::common::{run_command_with_pty_script, secretenv_std_cmd};
+use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script};
 use crate::cli::key::find_kid_in_member_dir;
+use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKey;
+use kapsaro_core::cli_api::test_support::domain::wire::format;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::domain::private_key::PrivateKey;
-use secretenv_core::cli_api::test_support::domain::wire::format;
 use std::fs;
 use tempfile::TempDir;
 
@@ -22,7 +22,7 @@ fn test_key_new_requires_member_handle_before_ssh_resolution() {
         .arg("new")
         .arg("--valid-for")
         .arg("1d")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .failure()
         .stderr(
@@ -41,16 +41,16 @@ fn test_key_new_prompts_for_member_handle_when_unconfigured() {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("key")
         .arg("new")
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .env_remove("CI")
-        .env_remove("SECRETENV_GITHUB_USER")
-        .env_remove("SECRETENV_MEMBER_HANDLE");
+        .env_remove("KAPSARO_GITHUB_USER")
+        .env_remove("KAPSARO_MEMBER_HANDLE");
 
     let member_handle_input = format!("{TEST_MEMBER_HANDLE}\r");
     let result = run_command_with_pty_script(
@@ -101,7 +101,7 @@ fn test_key_new_generates_private_key() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -135,8 +135,8 @@ fn test_key_new_generates_private_key() {
     // Verify fields
     assert_eq!(
         private_key.protected.format,
-        format::PRIVATE_KEY_V7,
-        "Format should be secretenv:format:private-key@7"
+        format::PRIVATE_KEY_V1,
+        "Format should be kapsaro:format:private-key@1"
     );
     assert_eq!(
         private_key.protected.subject_handle, member_handle,
@@ -177,7 +177,7 @@ fn test_key_new_expires_at_option() {
         .arg(ssh_priv.to_str().unwrap())
         .arg("--expires-at")
         .arg(expires_at)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -224,7 +224,7 @@ fn test_key_new_valid_for_1y() {
         .arg(ssh_priv.to_str().unwrap())
         .arg("--valid-for")
         .arg("1y")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -275,7 +275,7 @@ fn test_key_new_valid_for_6m() {
         .arg(ssh_priv.to_str().unwrap())
         .arg("--valid-for")
         .arg("6m")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -326,7 +326,7 @@ fn test_key_new_valid_for_30d() {
         .arg(ssh_priv.to_str().unwrap())
         .arg("--valid-for")
         .arg("30d")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -376,7 +376,7 @@ fn test_key_new_no_activate_option() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -414,7 +414,7 @@ fn test_key_new_default_activate() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -424,7 +424,7 @@ fn test_key_new_default_activate() {
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Verify active file is created
-    use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+    use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
     let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert_eq!(
         active_kid,

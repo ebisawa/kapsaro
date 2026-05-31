@@ -7,7 +7,7 @@ use std::env;
 use std::fs;
 
 use crate::test_utils::EnvGuard;
-use secretenv_core::cli_api::app::context::ssh::SshKeyCandidateView;
+use kapsaro_core::cli_api::app::context::ssh::SshKeyCandidateView;
 use serial_test::serial;
 use tempfile::TempDir;
 
@@ -93,8 +93,7 @@ fn test_select_ssh_key_multiple_candidates_non_tty_fails() {
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("Multiple Ed25519 keys found")
-            && err_msg.contains("SECRETENV_SSH_IDENTITY"),
+        err_msg.contains("Multiple Ed25519 keys found") && err_msg.contains("KAPSARO_SSH_IDENTITY"),
         "unexpected error: {err_msg}"
     );
 }
@@ -102,10 +101,10 @@ fn test_select_ssh_key_multiple_candidates_non_tty_fails() {
 #[test]
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_returns_none_when_key_reuse() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
     let temp_home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
-    env::set_var("SECRETENV_GITHUB_USER", "env-user");
+    env::set_var("KAPSARO_HOME", temp_home.path());
+    env::set_var("KAPSARO_GITHUB_USER", "env-user");
 
     let mut prompted = false;
     let result = resolve_key_generation_github_user_with_prompt(
@@ -127,9 +126,9 @@ fn test_resolve_key_generation_github_user_with_prompt_returns_none_when_key_reu
 #[test]
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_prefers_config_before_prompt() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
     let temp_home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("KAPSARO_HOME", temp_home.path());
     fs::write(
         temp_home.path().join("config.toml"),
         "github_user = \"config-user\"\n",
@@ -156,9 +155,9 @@ fn test_resolve_key_generation_github_user_with_prompt_prefers_config_before_pro
 #[test]
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_uses_prompt_when_tty_and_unset() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
     let temp_home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("KAPSARO_HOME", temp_home.path());
 
     let mut prompted = false;
     let result = resolve_key_generation_github_user_with_prompt(
@@ -180,9 +179,9 @@ fn test_resolve_key_generation_github_user_with_prompt_uses_prompt_when_tty_and_
 #[test]
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_returns_none_without_tty() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
     let temp_home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("KAPSARO_HOME", temp_home.path());
 
     let mut prompted = false;
     let result = resolve_key_generation_github_user_with_prompt(
@@ -204,9 +203,9 @@ fn test_resolve_key_generation_github_user_with_prompt_returns_none_without_tty(
 #[test]
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_allows_empty_prompt_input() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
     let temp_home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("KAPSARO_HOME", temp_home.path());
 
     let result = resolve_key_generation_github_user_with_prompt(
         true,
@@ -223,9 +222,9 @@ fn test_resolve_key_generation_github_user_with_prompt_allows_empty_prompt_input
 #[test]
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_rejects_invalid_prompt_input() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_GITHUB_USER"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
     let temp_home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", temp_home.path());
+    env::set_var("KAPSARO_HOME", temp_home.path());
 
     let result = resolve_key_generation_github_user_with_prompt(
         true,

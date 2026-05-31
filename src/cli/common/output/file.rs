@@ -4,9 +4,9 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use secretenv_core::cli_api::presentation::fs::{save_bytes, save_text};
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::presentation::fs::{save_bytes, save_text};
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::{Error, Result};
 
 pub(crate) fn resolve_encrypted_output_path(
     explicit_out: Option<&PathBuf>,

@@ -7,11 +7,11 @@ use std::path::Path;
 
 use crate::cli::common::output::key::view::{KeyInfoView, KeyListView};
 use crate::cli::common::output::text::layout;
-use secretenv_core::api::online::OnlineVerificationStatus;
-use secretenv_core::cli_api::presentation::kid::format_kid_display;
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::cli_api::presentation::ssh::SshDeterminismStatus;
-use secretenv_core::{Error, Result};
+use kapsaro_core::api::online::OnlineVerificationStatus;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::cli_api::presentation::ssh::SshDeterminismStatus;
+use kapsaro_core::{Error, Result};
 
 const KEY_INFO_LABEL_WIDTH: usize = "Member Handle".len();
 

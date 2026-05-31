@@ -6,7 +6,7 @@
 use console::Style;
 
 use crate::cli::common::output::text::layout;
-use secretenv_core::cli_api::app::file::inspect::{InspectCommand, InspectOutput, InspectSection};
+use kapsaro_core::cli_api::app::file::inspect::{InspectCommand, InspectOutput, InspectSection};
 
 pub(crate) fn print_inspect_banner(input_display: &str) {
     for line in format_inspect_banner_lines(input_display) {

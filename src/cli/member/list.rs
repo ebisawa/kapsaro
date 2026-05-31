@@ -3,8 +3,8 @@
 
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::member::print_member_list;
-use secretenv_core::cli_api::app::member::query::list_members;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::member::query::list_members;
+use kapsaro_core::Error;
 
 use super::ListArgs;
 

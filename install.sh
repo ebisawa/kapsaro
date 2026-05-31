@@ -1,11 +1,11 @@
 #!/bin/sh
-# secretenv installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/ebisawa/secretenv/main/install.sh | sh
+# kapsaro installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/ebisawa/kapsaro/main/install.sh | sh
 
 set -eu
 
-REPO="ebisawa/secretenv"
-BIN_NAME="secretenv"
+REPO="ebisawa/kapsaro"
+BIN_NAME="kapsaro"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 compute_sha256() {
@@ -129,5 +129,5 @@ else
 fi
 
 echo ""
-echo "secretenv ${TAG} installed to ${INSTALL_DIR}/${BIN_NAME}"
-echo "Run 'secretenv --help' to get started."
+echo "kapsaro ${TAG} installed to ${INSTALL_DIR}/${BIN_NAME}"
+echo "Run 'kapsaro --help' to get started."

@@ -5,7 +5,7 @@
 
 use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::trust::view::{RecipientSetListItemView, TrustListItemView};
-use secretenv_core::Result;
+use kapsaro_core::Result;
 use serde::Serialize;
 
 #[derive(Serialize)]

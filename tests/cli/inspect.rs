@@ -7,7 +7,7 @@
 //! invalid inputs, and signature verification display.
 
 use crate::cli::common::{
-    assert_member_set_review_success, cmd, encrypt_file_with_member_set_review, secretenv_std_cmd,
+    assert_member_set_review_success, cmd, encrypt_file_with_member_set_review, kapsaro_std_cmd,
     set_value_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
     TEST_MEMBER_HANDLE,
 };
@@ -47,8 +47,8 @@ fn test_inspect_file_enc_shows_metadata() {
         .arg(encrypted_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("File-Enc v7 Metadata"))
@@ -64,8 +64,8 @@ fn test_inspect_file_enc_shows_metadata() {
         .arg(encrypted_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("Attestation:"));
@@ -92,8 +92,8 @@ fn test_inspect_file_enc_json_output_is_structured() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -103,7 +103,7 @@ fn test_inspect_file_enc_json_output_is_structured() {
 
     assert_eq!(parsed["format"], "file-enc");
     assert_eq!(parsed["version"], 7);
-    assert_eq!(parsed["header"]["format"], "secretenv:format:file-enc@7");
+    assert_eq!(parsed["header"]["format"], "kapsaro:format:file-enc@1");
     assert!(parsed["header"]["sid"].as_str().is_some());
     assert_eq!(parsed["wrap_data"]["recipients"][0], TEST_MEMBER_HANDLE);
     assert_eq!(
@@ -152,8 +152,8 @@ fn test_inspect_kv_enc_shows_metadata() {
         .arg(encrypted_kv.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("KV-Enc Metadata"))
@@ -167,8 +167,8 @@ fn test_inspect_kv_enc_shows_metadata() {
         .arg(encrypted_kv.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("Attestation:"));
@@ -196,8 +196,8 @@ fn test_inspect_kv_enc_json_output_is_structured() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -206,7 +206,7 @@ fn test_inspect_kv_enc_json_output_is_structured() {
         serde_json::from_str(&stdout).expect("inspect --json should output valid JSON");
 
     assert_eq!(parsed["format"], "kv-enc");
-    assert_eq!(parsed["version"], 9);
+    assert_eq!(parsed["version"], 1);
     assert_eq!(parsed["header"]["alg"]["aead"], "xchacha20-poly1305");
     assert_eq!(parsed["wrap_data"]["recipients"][0], TEST_MEMBER_HANDLE);
     assert_eq!(parsed["entries"][0]["key"], "DB_URL");
@@ -236,8 +236,8 @@ fn test_inspect_invalid_format_fails() {
         .arg(plain_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -279,8 +279,8 @@ fn test_inspect_shows_signature_verification() {
         .arg(encrypted_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("Signature Verification"))
@@ -311,8 +311,8 @@ fn test_inspect_kv_shows_entry_count() {
         .arg(encrypted_kv.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("Total Entries: 1"));
@@ -372,8 +372,8 @@ fn test_inspect_ignores_trust_store_and_strict_key_checking() {
     cmd()
         .arg("inspect")
         .arg(encrypted_file.to_str().unwrap())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
         .assert()
         .success()
         .stdout(predicate::str::contains("Signature Verification"))
@@ -414,8 +414,8 @@ fn test_inspect_colors_public_key_expiry_warning_when_forced() {
         .arg(encrypted_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env("CLICOLOR_FORCE", "1")
         .assert()
         .success();
@@ -462,15 +462,15 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
     )
     .unwrap();
 
-    let mut rewrap_cmd = secretenv_std_cmd();
+    let mut rewrap_cmd = kapsaro_std_cmd();
     rewrap_cmd
         .arg("rewrap")
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", &ssh_identity);
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_identity);
     assert_member_set_review_success(&mut rewrap_cmd);
 
     let encrypted_kv = workspace_dir.join("secrets").join("disclosed.kvenc");
@@ -479,8 +479,8 @@ fn test_inspect_colors_disclosed_rotation_warning_when_forced() {
         .arg(&encrypted_kv)
         .arg("--workspace")
         .arg(&workspace_dir)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", &ssh_identity)
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_identity)
         .env("CLICOLOR_FORCE", "1")
         .assert()
         .success();

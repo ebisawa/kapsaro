@@ -11,14 +11,14 @@ use crate::cli::common::{
     TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
-use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::helpers::secret::SecretString;
-use secretenv_core::cli_api::test_support::operations::key::portable_export::{
+use kapsaro_core::cli_api::test_support::helpers::secret::SecretString;
+use kapsaro_core::cli_api::test_support::operations::key::portable_export::{
     export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
 };
-use secretenv_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
-use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
-use secretenv_core::cli_api::test_support::storage::keystore::storage::load_private_key;
+use kapsaro_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
+use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::cli_api::test_support::storage::keystore::storage::load_private_key;
+use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -84,12 +84,12 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
 /// after the subcommand arg by the caller.
 fn env_key_cmd(home: &TempDir, exported_key: &str, password: &str) -> assert_cmd::Command {
     let mut c = cmd();
-    c.env("SECRETENV_HOME", home.path())
-        .env("SECRETENV_PRIVATE_KEY", exported_key)
-        .env("SECRETENV_KEY_PASSWORD", password);
+    c.env("KAPSARO_HOME", home.path())
+        .env("KAPSARO_PRIVATE_KEY", exported_key)
+        .env("KAPSARO_KEY_PASSWORD", password);
     // Remove SSH_AUTH_SOCK to ensure env key mode is used
     c.env_remove("SSH_AUTH_SOCK");
-    c.env_remove("SECRETENV_SSH_IDENTITY");
+    c.env_remove("KAPSARO_SSH_IDENTITY");
     c
 }
 
@@ -187,8 +187,8 @@ fn test_env_key_run_roundtrip() {
         .arg("sh")
         .arg("-c")
         .arg(
-            "test -z \"$SECRETENV_PRIVATE_KEY\" && \
-             test -z \"$SECRETENV_KEY_PASSWORD\" && \
+            "test -z \"$KAPSARO_PRIVATE_KEY\" && \
+             test -z \"$KAPSARO_KEY_PASSWORD\" && \
              printf %s \"$APP_TOKEN\"",
         )
         .assert()
@@ -267,13 +267,13 @@ fn test_env_key_missing_password_fails() {
         None,
     );
 
-    // Set SECRETENV_PRIVATE_KEY but NOT SECRETENV_KEY_PASSWORD
+    // Set KAPSARO_PRIVATE_KEY but NOT KAPSARO_KEY_PASSWORD
     let mut c = cmd();
-    c.env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_PRIVATE_KEY", &exported_key)
-        .env_remove("SECRETENV_KEY_PASSWORD")
+    c.env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_PRIVATE_KEY", &exported_key)
+        .env_remove("KAPSARO_KEY_PASSWORD")
         .env_remove("SSH_AUTH_SOCK")
-        .env_remove("SECRETENV_SSH_IDENTITY");
+        .env_remove("KAPSARO_SSH_IDENTITY");
 
     c.arg("get")
         .arg("SOME_KEY")
@@ -281,7 +281,7 @@ fn test_env_key_missing_password_fails() {
         .arg(workspace_dir.path())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("SECRETENV_KEY_PASSWORD"));
+        .stderr(predicate::str::contains("KAPSARO_KEY_PASSWORD"));
 }
 
 #[test]

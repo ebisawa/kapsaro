@@ -51,12 +51,12 @@ fn test_format_warning_line_keeps_long_warning_inline() {
     let _guard = StderrColorGuard::new(false);
 
     let rendered = format_warning_line(
-        "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact.",
+        "Warning: Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact.",
     );
 
     assert_eq!(
         rendered,
-        "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact."
+        "Warning: Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact."
     );
 }
 
@@ -66,7 +66,7 @@ fn test_format_warning_line_preserves_structured_details() {
     let _guard = StderrColorGuard::new(false);
 
     let rendered = format_warning_line(
-        "Warning: Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run secretenv rewrap.",
+        "Warning: Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run kapsaro rewrap.",
     );
 
     assert_eq!(
@@ -74,7 +74,7 @@ fn test_format_warning_line_preserves_structured_details() {
         concat!(
             "Warning: Recipient kid is not active.\n",
             "         Kid: KAD1-AAAA\n",
-            "         Action: Run secretenv rewrap."
+            "         Action: Run kapsaro rewrap."
         )
     );
 }

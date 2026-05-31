@@ -11,8 +11,8 @@ use crate::test_utils::{
     save_active_public_key_to_workspace, setup_member_key_context, setup_test_workspace,
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
+use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
 use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
@@ -62,8 +62,8 @@ fn test_member_list_shows_initialized_member() {
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_HANDLE))
@@ -80,8 +80,8 @@ fn test_member_list_json_output() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -117,7 +117,7 @@ fn test_member_list_empty_workspace() {
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("No members found"));
@@ -136,7 +136,7 @@ fn test_member_list_json_empty_workspace_outputs_empty_arrays() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -169,8 +169,8 @@ fn test_member_list_json_skips_invalid_member_file() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -197,8 +197,8 @@ fn test_member_show_displays_public_key() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(format!(
@@ -233,8 +233,8 @@ fn test_member_show_reports_verification_warning() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success()
         .stdout(predicate::str::contains("Verification: expired"))
@@ -252,8 +252,8 @@ fn test_member_show_json_wraps_public_key_document() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -277,8 +277,8 @@ fn test_member_show_unknown_member_fails() {
         .arg("nonexistent@example.com")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -301,8 +301,8 @@ fn test_member_show_invalid_member_fails() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -318,9 +318,9 @@ fn test_member_verify_approve_requires_manual_confirmation_non_interactive() {
         .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"));
@@ -339,9 +339,9 @@ fn test_member_verify_approve_debug_logs_candidate_verification() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stdout(predicate::str::contains(
@@ -365,9 +365,9 @@ fn test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner
         .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
-        .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
-        .env_remove("SECRETENV_MEMBER_HANDLE")
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path().to_str().unwrap())
+        .env_remove("KAPSARO_MEMBER_HANDLE")
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("Specify --member-handle"));
@@ -381,9 +381,9 @@ fn test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner
         .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
-        .env("SECRETENV_HOME", temp_dir.path().to_str().unwrap())
-        .env_remove("SECRETENV_MEMBER_HANDLE")
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path().to_str().unwrap())
+        .env_remove("KAPSARO_MEMBER_HANDLE")
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"))
@@ -408,9 +408,9 @@ fn test_member_verify_approve_hides_already_known_results() {
         .arg(BOB_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(&workspace_dir)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success()
         .stderr(predicate::str::contains("No members require approval"))
@@ -438,9 +438,9 @@ fn test_member_verify_approve_json_skips_already_known_results() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--json")
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .success();
 
@@ -475,8 +475,8 @@ fn test_member_remove_removes_from_workspace() {
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
@@ -489,8 +489,8 @@ fn test_member_remove_removes_from_workspace() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--force")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -500,8 +500,8 @@ fn test_member_remove_removes_from_workspace() {
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -526,8 +526,8 @@ fn test_member_remove_without_force_in_non_interactive_mode_fails() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("Member removal requires --force."))
@@ -538,8 +538,8 @@ fn test_member_remove_without_force_in_non_interactive_mode_fails() {
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
@@ -556,8 +556,8 @@ fn test_member_remove_nonexistent_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--force")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -598,8 +598,8 @@ fn test_member_remove_warns_on_tampered_artifact_but_continues() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--force")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("member-remove.json"))
@@ -635,8 +635,8 @@ fn test_member_remove_debug_logs_artifact_scan() {
         .arg(workspace_dir.path())
         .arg("--force")
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(
@@ -666,8 +666,8 @@ fn test_member_add_places_in_incoming() {
         .arg(&temp_key_file)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Added member"));
@@ -687,8 +687,8 @@ fn test_member_add_invalid_file_fails() {
         .arg(&temp_key_file)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -708,8 +708,8 @@ fn test_member_add_duplicate_without_force_fails() {
         .arg(&temp_key_file)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -720,8 +720,8 @@ fn test_member_add_duplicate_without_force_fails() {
         .arg(&temp_key_file)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -748,8 +748,8 @@ fn test_member_verify_reports_offline_invalid_member() {
         .arg("broken@example.com")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found in active/"));
@@ -777,8 +777,8 @@ fn test_member_verify_ignores_invalid_incoming_member_when_verifying_all() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

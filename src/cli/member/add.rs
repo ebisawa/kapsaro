@@ -3,8 +3,8 @@
 
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::member::print_member_add_summary;
-use secretenv_core::cli_api::app::member::mutation::add_member;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::member::mutation::add_member;
+use kapsaro_core::Error;
 
 use super::AddArgs;
 

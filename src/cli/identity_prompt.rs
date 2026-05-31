@@ -8,10 +8,10 @@ use std::io::IsTerminal;
 use std::path::Path;
 
 use crate::cli::common::prompt::prompt_yes_no;
-use secretenv_core::cli_api::app::context::identity::resolve_github_user_input;
-use secretenv_core::cli_api::app::context::ssh::SshKeyCandidateView;
-use secretenv_core::cli_api::presentation::validation;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::app::context::identity::resolve_github_user_input;
+use kapsaro_core::cli_api::app::context::ssh::SshKeyCandidateView;
+use kapsaro_core::cli_api::presentation::validation;
+use kapsaro_core::{Error, Result};
 
 pub(crate) fn confirm_member_overwrite(member_handle: &str) -> Result<bool> {
     prompt_yes_no(
@@ -45,7 +45,7 @@ pub(crate) fn select_ssh_key(candidates: &[SshKeyCandidateView]) -> Result<usize
         return Err(Error::build_config_error(
             "Multiple Ed25519 keys found in ssh-agent.\n\
                       Specify which key to use with -i <path>, --ssh-identity <path>, or \
-                      SECRETENV_SSH_IDENTITY environment variable."
+                      KAPSARO_SSH_IDENTITY environment variable."
                 .to_string(),
         ));
     }

@@ -3,7 +3,7 @@
 
 //! JSON output utilities for CLI commands.
 
-use secretenv_core::{Error, Result};
+use kapsaro_core::{Error, Result};
 use serde::Serialize;
 
 pub(crate) mod doctor;

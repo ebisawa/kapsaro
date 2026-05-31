@@ -14,7 +14,7 @@ use crate::test_utils::{
 use std::fs;
 
 #[cfg(unix)]
-use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_encrypt_rejects_filename_content_mismatch() {
@@ -64,9 +64,9 @@ fn test_encrypt_rejects_filename_content_mismatch() {
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .env(
-            "SECRETENV_SSH_IDENTITY",
+            "KAPSARO_SSH_IDENTITY",
             temp_dir.path().join(".ssh").join("test_ed25519"),
         )
         .output()

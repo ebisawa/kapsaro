@@ -19,10 +19,10 @@ use crate::cli::common::command::{
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOptions,
 };
-use secretenv_core::cli_api::app::kv::query::resolve_kv_read_command;
-use secretenv_core::cli_api::app::run::execute_run_command;
-use secretenv_core::cli_api::app::trust::RunPolicy;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::kv::query::resolve_kv_read_command;
+use kapsaro_core::cli_api::app::run::execute_run_command;
+use kapsaro_core::cli_api::app::trust::RunPolicy;
+use kapsaro_core::Result;
 
 #[derive(Args)]
 pub(crate) struct RunArgs {

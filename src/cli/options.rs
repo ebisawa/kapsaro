@@ -4,8 +4,8 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
-use secretenv_core::cli_api::presentation::config::SshSigningMethod;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::presentation::config::SshSigningMethod;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CommonOptions {
@@ -24,7 +24,7 @@ pub(crate) trait ToCommonOptions {
 
 #[derive(Debug, Clone, Args, Default)]
 pub(crate) struct HomeOption {
-    /// Base directory for secretenv
+    /// Base directory for kapsaro
     #[arg(long)]
     pub(crate) home: Option<PathBuf>,
 }

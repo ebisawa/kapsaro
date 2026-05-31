@@ -13,15 +13,15 @@ use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtu
 use assert_cmd::cargo;
 #[cfg(unix)]
 use console::strip_ansi_codes;
-use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::domain::trust_store::{
+use kapsaro_core::cli_api::test_support::domain::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
-use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
-use secretenv_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
-use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
-use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-use secretenv_core::cli_api::test_support::storage::trust::store::save_trust_store;
+use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
+use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
+use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
+use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::cli_api::test_support::storage::trust::store::save_trust_store;
+use predicates::prelude::*;
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -73,7 +73,7 @@ fn save_signed_trust_store_with_recipient_sets(
 ) {
     let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
     let protected = TrustStoreProtected {
-        format: LOCAL_TRUST_V5.to_string(),
+        format: LOCAL_TRUST_V1.to_string(),
         owner_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at: "2026-03-29T12:34:56Z".to_string(),
         updated_at: "2026-03-29T12:34:56Z".to_string(),
@@ -110,13 +110,13 @@ fn test_trust_list_succeeds_without_ssh_agent() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
-    let assert = cargo::cargo_bin_cmd!("secretenv")
+    let assert = cargo::cargo_bin_cmd!("kapsaro")
         .arg("trust")
         .arg("keys")
         .arg("list")
         .arg("--home")
         .arg(home.path())
-        .env("SECRETENV_SSH_SIGNING_METHOD", "ssh-agent")
+        .env("KAPSARO_SSH_SIGNING_METHOD", "ssh-agent")
         .env_remove("SSH_AUTH_SOCK")
         .assert()
         .success();
@@ -148,7 +148,7 @@ fn test_trust_list_json_keeps_canonical_kid() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
 
-    let assert = cargo::cargo_bin_cmd!("secretenv")
+    let assert = cargo::cargo_bin_cmd!("kapsaro")
         .arg("trust")
         .arg("keys")
         .arg("list")

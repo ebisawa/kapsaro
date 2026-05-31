@@ -14,11 +14,11 @@ use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOutputOptions,
 };
-use secretenv_core::cli_api::app::kv::mutation::import_kv_command_with_recipient_set_confirmation;
-use secretenv_core::cli_api::app::trust::ImportPolicy;
-use secretenv_core::cli_api::presentation::fs::load_text_with_limit;
-use secretenv_core::cli_api::presentation::limits::MAX_KV_ENC_FILE_SIZE;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::kv::mutation::import_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::cli_api::app::trust::ImportPolicy;
+use kapsaro_core::cli_api::presentation::fs::load_text_with_limit;
+use kapsaro_core::cli_api::presentation::limits::MAX_KV_ENC_FILE_SIZE;
+use kapsaro_core::Result;
 
 #[derive(Args)]
 pub(crate) struct ImportArgs {

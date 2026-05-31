@@ -8,17 +8,17 @@ use crate::cli::common::output::text::registration::print_init_noop_summary;
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
-use output::{print_missing_key_notice, print_registration_outcome};
-use secretenv_core::cli_api::app::registration::command::{
+use kapsaro_core::cli_api::app::registration::command::{
     evaluate_registration_decision, execute_registration_decision, resolve_registration_command,
     RegistrationDecision,
 };
-use secretenv_core::cli_api::app::registration::key_plan::resolve_registration_key_plan;
-use secretenv_core::cli_api::app::registration::types::{RegistrationCommand, RegistrationMode};
-use secretenv_core::cli_api::app::registration::{
+use kapsaro_core::cli_api::app::registration::key_plan::resolve_registration_key_plan;
+use kapsaro_core::cli_api::app::registration::types::{RegistrationCommand, RegistrationMode};
+use kapsaro_core::cli_api::app::registration::{
     ensure_init_workspace_structure, evaluate_init_workspace_status, InitWorkspaceState,
 };
-use secretenv_core::Error;
+use kapsaro_core::Error;
+use output::{print_missing_key_notice, print_registration_outcome};
 
 pub(crate) fn run_registration_command(
     common: impl ToCommonOptions,
@@ -73,7 +73,7 @@ fn resolve_registration_decision(
                 Ok(RegistrationDecision::Apply { overwrite: true })
             } else {
                 Ok(RegistrationDecision::Return(
-                    secretenv_core::cli_api::app::registration::types::RegistrationResult::AlreadyExists,
+                    kapsaro_core::cli_api::app::registration::types::RegistrationResult::AlreadyExists,
                 ))
             }
         }
@@ -84,7 +84,7 @@ fn resolve_registration_decision(
 fn resolve_registration_github_user(
     needs_new_key: bool,
     github_user: Option<String>,
-    options: &secretenv_core::cli_api::app::context::options::CommonCommandOptions,
+    options: &kapsaro_core::cli_api::app::context::options::CommonCommandOptions,
 ) -> Result<Option<String>, Error> {
     identity_prompt::resolve_key_generation_github_user(
         needs_new_key,
@@ -95,9 +95,8 @@ fn resolve_registration_github_user(
 
 fn resolve_registration_ssh_context(
     needs_new_key: bool,
-    options: &secretenv_core::cli_api::app::context::options::CommonCommandOptions,
-) -> Result<Option<secretenv_core::cli_api::app::context::ssh::SshSigningContextResolution>, Error>
-{
+    options: &kapsaro_core::cli_api::app::context::options::CommonCommandOptions,
+) -> Result<Option<kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution>, Error> {
     if needs_new_key {
         Ok(Some(resolve_ssh_context(options)?))
     } else {

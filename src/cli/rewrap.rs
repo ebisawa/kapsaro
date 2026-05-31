@@ -11,7 +11,7 @@ use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOutputOptions,
 };
 use clap::Args;
-use secretenv_core::Result;
+use kapsaro_core::Result;
 use std::path::PathBuf;
 
 mod batch;

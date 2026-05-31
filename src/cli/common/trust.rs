@@ -9,12 +9,12 @@ use crate::cli::common::output::trust::review::{
 };
 use crate::cli::common::prompt::prompt_yes_no;
 use console::Style;
-use secretenv_core::cli_api::app::trust::enforcement::{
+use kapsaro_core::cli_api::app::trust::enforcement::{
     ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
 };
-use secretenv_core::cli_api::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
-use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
+use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
+use kapsaro_core::Result;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod recovery;

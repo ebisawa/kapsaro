@@ -20,9 +20,9 @@ fn save_global_config(temp_home: &TempDir, lines: &[&str]) {
 
 #[test]
 fn test_resolve_required_member_handle_with_prompt_uses_config_without_prompt() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", home.path());
+    env::set_var("KAPSARO_HOME", home.path());
     save_global_config(&home, &["member_handle = \"config-member\""]);
     let options = build_test_command_options(home.path(), None);
 
@@ -40,9 +40,9 @@ fn test_resolve_required_member_handle_with_prompt_uses_config_without_prompt() 
 
 #[test]
 fn test_resolve_required_member_handle_with_prompt_uses_prompt_when_enabled() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", home.path());
+    env::set_var("KAPSARO_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
 
     let mut prompted = false;
@@ -59,9 +59,9 @@ fn test_resolve_required_member_handle_with_prompt_uses_prompt_when_enabled() {
 
 #[test]
 fn test_resolve_required_member_handle_with_prompt_errors_when_prompt_disabled() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", home.path());
+    env::set_var("KAPSARO_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
 
     let error = resolve_required_member_handle_with_prompt(&options, None, false, true, || {
@@ -79,9 +79,9 @@ fn test_resolve_required_member_handle_with_prompt_errors_when_prompt_disabled()
 
 #[test]
 fn test_resolve_required_member_handle_with_prompt_errors_with_hint_when_prompt_unavailable() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME", "SECRETENV_MEMBER_HANDLE"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
     let home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", home.path());
+    env::set_var("KAPSARO_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
 
     let error = resolve_required_member_handle_with_prompt(&options, None, true, false, || {
@@ -100,13 +100,13 @@ fn test_resolve_required_member_handle_with_prompt_errors_with_hint_when_prompt_
 #[test]
 fn test_resolve_options_with_allow_expired_key_ignores_allow_non_member_config() {
     let _guard = EnvGuard::new(&[
-        "SECRETENV_HOME",
-        "SECRETENV_ALLOW_EXPIRED_KEY",
-        "SECRETENV_ALLOW_NON_MEMBER",
+        "KAPSARO_HOME",
+        "KAPSARO_ALLOW_EXPIRED_KEY",
+        "KAPSARO_ALLOW_NON_MEMBER",
     ]);
     let home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", home.path());
-    env::set_var("SECRETENV_ALLOW_NON_MEMBER", "maybe");
+    env::set_var("KAPSARO_HOME", home.path());
+    env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
     let options = common_options(home.path());
 
     let resolved = resolve_options_with_allow_expired_key(&options, false).unwrap();
@@ -118,13 +118,13 @@ fn test_resolve_options_with_allow_expired_key_ignores_allow_non_member_config()
 #[test]
 fn test_resolve_options_with_read_trust_allowances_rejects_invalid_allow_non_member_config() {
     let _guard = EnvGuard::new(&[
-        "SECRETENV_HOME",
-        "SECRETENV_ALLOW_EXPIRED_KEY",
-        "SECRETENV_ALLOW_NON_MEMBER",
+        "KAPSARO_HOME",
+        "KAPSARO_ALLOW_EXPIRED_KEY",
+        "KAPSARO_ALLOW_NON_MEMBER",
     ]);
     let home = TempDir::new().unwrap();
-    env::set_var("SECRETENV_HOME", home.path());
-    env::set_var("SECRETENV_ALLOW_NON_MEMBER", "maybe");
+    env::set_var("KAPSARO_HOME", home.path());
+    env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
     let options = common_options(home.path());
 
     let error = resolve_options_with_read_trust_allowances(&options, false, false).unwrap_err();

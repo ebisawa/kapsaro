@@ -12,14 +12,14 @@ use crate::cli::common::output::text::print_warning;
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
-use secretenv_core::cli_api::app::trust::recovery::{
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::app::trust::recovery::{
     build_trust_store_reset_plan, execute_trust_store_reset, requires_trust_store_reset,
     TrustStoreResetPlan,
 };
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::cli_api::presentation::tty;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::cli_api::presentation::tty;
+use kapsaro_core::{Error, Result};
 
 pub(crate) fn run_with_trust_store_reset_recovery<T, ResolveOwner, Run>(
     options: &CommonCommandOptions,

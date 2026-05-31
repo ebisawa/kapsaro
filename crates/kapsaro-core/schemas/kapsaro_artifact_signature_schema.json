@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kapsaro.artifact.signature.schema.json",
+  "title": "kapsaro artifact signature schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "alg": { "$ref": "kapsaro_common_schema.json#/$defs/sig_alg" },
+    "kid": { "$ref": "kapsaro_common_schema.json#/$defs/kid" },
+    "signer_pub": { "$ref": "kapsaro_public_key_schema.json" },
+    "mac": {
+      "type": "string",
+      "pattern": "^hmac-sha256:[A-Za-z0-9_-]{43}$",
+      "description": "Key possession proof: HMAC-SHA256 tag encoded as hmac-sha256:<base64url-no-pad 32-byte tag>"
+    },
+    "sig": {
+      "$ref": "kapsaro_common_schema.json#/$defs/b64url_64",
+      "description": "Ed25519 raw signature 64 bytes encoded as base64url (no padding, 86 characters)"
+    }
+  },
+  "required": ["alg", "kid", "signer_pub", "mac", "sig"]
+}

@@ -8,11 +8,11 @@ use crate::cli::common::output::text::print_warning_line;
 use crate::cli::common::output::text::registration::{
     print_created_workspace_summary, print_registration_next_steps,
 };
-use secretenv_core::cli_api::app::registration::types::{
+use kapsaro_core::cli_api::app::registration::types::{
     MemberKeySetupResult, RegistrationOutcome, RegistrationResult,
 };
-use secretenv_core::cli_api::presentation::kid::format_kid_display;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::Error;
 
 pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Result<(), Error> {
     match outcome.result {

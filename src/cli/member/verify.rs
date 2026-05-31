@@ -8,13 +8,13 @@ use crate::cli::common::output::member::print_member_approval_results;
 use crate::cli::common::output::member::print_member_verification_results;
 use crate::cli::common::output::text;
 use crate::cli::common::trust::{confirm_member_key_approval, run_with_trust_store_reset_recovery};
-use secretenv_core::cli_api::app::member::approval::{
+use kapsaro_core::cli_api::app::member::approval::{
     evaluate_members_for_approval, save_member_approvals,
 };
-use secretenv_core::cli_api::app::member::verification::verify_members;
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
-use secretenv_core::cli_api::presentation::tty;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::member::verification::verify_members;
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::presentation::tty;
+use kapsaro_core::Error;
 
 use super::VerifyArgs;
 
@@ -67,7 +67,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
 }
 
 fn review_approval_candidates(
-    results: &mut [secretenv_core::cli_api::app::member::approval::MemberApprovalResult],
+    results: &mut [kapsaro_core::cli_api::app::member::approval::MemberApprovalResult],
 ) -> Result<(), Error> {
     let requires_review = results.iter().any(|r| r.review_required);
     if !requires_review {

@@ -11,10 +11,10 @@ use crate::cli::common::output::text::trust::{
     print_recipient_set_remove_summary, print_trust_remove_summary,
 };
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use secretenv_core::cli_api::app::trust::management::{
+use kapsaro_core::cli_api::app::trust::management::{
     remove_known_key_command, remove_recipient_set_command,
 };
-use secretenv_core::Error;
+use kapsaro_core::Error;
 
 use super::{RecipientRemoveArgs, RemoveArgs};
 

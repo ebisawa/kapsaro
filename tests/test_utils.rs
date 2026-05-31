@@ -25,10 +25,10 @@ pub use fixture::{
     generate_temp_ssh_keypair_in_dir, setup_test_keystore, setup_test_keystore_from_fixtures,
     setup_test_workspace, setup_test_workspace_from_fixtures,
 };
+use kapsaro_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
+use kapsaro_core::Error;
 #[allow(unused_imports)]
 pub use keygen_helpers::keygen_test;
-use secretenv_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
-use secretenv_core::Error;
 
 /// Set up a trust store that approves all active members in a workspace.
 ///
@@ -38,16 +38,16 @@ pub fn setup_trust_store_for_workspace(
     home: &std::path::Path,
     workspace_path: &std::path::Path,
     owner_handle: &str,
-    key_ctx: &secretenv_core::cli_api::test_support::operations::context::crypto::CryptoContext,
+    key_ctx: &kapsaro_core::cli_api::test_support::operations::context::crypto::CryptoContext,
 ) {
-    use secretenv_core::cli_api::test_support::domain::trust_store::{
+    use kapsaro_core::cli_api::test_support::domain::trust_store::{
         KnownKey, KnownKeyApprovalVia, TrustStoreProtected,
     };
-    use secretenv_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V5;
-    use secretenv_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
-    use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-    use secretenv_core::cli_api::test_support::storage::trust::store::save_trust_store;
-    use secretenv_core::cli_api::test_support::storage::workspace::members::load_active_member_files;
+    use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
+    use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
+    use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+    use kapsaro_core::cli_api::test_support::storage::trust::store::save_trust_store;
+    use kapsaro_core::cli_api::test_support::storage::workspace::members::load_active_member_files;
     use std::collections::BTreeMap;
 
     let active_members = load_active_member_files(workspace_path).unwrap();
@@ -65,7 +65,7 @@ pub fn setup_trust_store_for_workspace(
 
     let now = "2026-01-01T00:00:00Z".to_string();
     let protected = TrustStoreProtected {
-        format: LOCAL_TRUST_V5.to_string(),
+        format: LOCAL_TRUST_V1.to_string(),
         owner_handle: owner_handle.to_string(),
         created_at: now.clone(),
         updated_at: now,
@@ -80,27 +80,26 @@ pub fn setup_trust_store_for_workspace(
 
 /// Generate and activate a new test key for a member with the requested expires_at.
 pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, expires_at: &str) {
-    use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-    use secretenv_core::cli_api::test_support::operations::key::generate::{
+    use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
+    use kapsaro_core::cli_api::test_support::operations::key::generate::{
         generate_key, KeyGenerationOptions,
     };
-    use secretenv_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
-    use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
-    use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-    use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-    use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-    use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+    use kapsaro_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
+    use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+    use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+    use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+    use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+    use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 
     let ssh_key_path = home.join(".ssh").join("test_ed25519");
     let ssh_pubkey = std::fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
         .unwrap()
         .trim()
         .to_string();
-    let created_at =
-        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
-            time::OffsetDateTime::now_utc(),
-        )
-        .unwrap();
+    let created_at = kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+        time::OffsetDateTime::now_utc(),
+    )
+    .unwrap();
     let ssh_binding = SshBindingContext {
         public_key: ssh_pubkey.clone(),
         fingerprint: build_sha256_fingerprint(&ssh_pubkey).unwrap(),
@@ -121,7 +120,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
     })
     .map(|result| {
         let keystore_root = home.join("keys");
-        secretenv_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
+        kapsaro_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
             &keystore_root,
             member_handle,
             &result.kid,
@@ -129,7 +128,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
             &result.public_key,
         )
         .unwrap();
-        secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid(
+        kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid(
             member_handle,
             &result.kid,
             &keystore_root,
@@ -141,7 +140,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
 
 pub fn build_expiring_soon_timestamp(days_from_now: i64) -> String {
     let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(days_from_now);
-    secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(expires_at)
+    kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(expires_at)
         .unwrap()
 }
 

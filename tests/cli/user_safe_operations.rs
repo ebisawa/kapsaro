@@ -5,9 +5,9 @@
 
 use crate::cli::common::{
     assert_member_set_review_success, cmd, copy_dir_all, encrypt_file_with_member_set_review,
-    import_file_with_member_set_review, make_secret_home, run_command_with_pty,
-    run_command_with_pty_script, secretenv_std_cmd, set_value_with_member_set_review,
-    setup_workspace, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    import_file_with_member_set_review, kapsaro_std_cmd, make_secret_home, run_command_with_pty,
+    run_command_with_pty_script, set_value_with_member_set_review, setup_workspace,
+    BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
@@ -67,8 +67,8 @@ fn test_user_safe_daily_kv_and_run_flow_e2e() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -77,8 +77,8 @@ fn test_user_safe_daily_kv_and_run_flow_e2e() {
         .arg("OLD_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 
@@ -90,8 +90,8 @@ fn test_user_safe_daily_kv_and_run_flow_e2e() {
         .arg("sh")
         .arg("-c")
         .arg("printf %s \"$APP_TOKEN\"")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("run-token"));
@@ -138,8 +138,8 @@ fn test_user_safe_member_add_offboarding_and_secret_rotation_e2e() {
         .arg("--force")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -152,9 +152,9 @@ fn test_user_safe_member_add_offboarding_and_secret_rotation_e2e() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(BOB_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
         .assert()
         .failure();
 
@@ -182,8 +182,8 @@ fn test_user_safe_member_add_offboarding_and_secret_rotation_e2e() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 }
@@ -262,7 +262,7 @@ fn add_bob_to_incoming(
         .arg(BOB_MEMBER_HANDLE)
         .arg("-i")
         .arg(ssh_priv)
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -273,7 +273,7 @@ fn add_bob_to_incoming(
         .arg(BOB_MEMBER_HANDLE)
         .arg("--out")
         .arg(bob_public_key)
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -283,8 +283,8 @@ fn add_bob_to_incoming(
         .arg(bob_public_key)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 }
@@ -317,7 +317,7 @@ fn approve_member_key(
     owner_handle: &str,
     subject_handle: &str,
 ) {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("member")
         .arg("verify")
@@ -327,8 +327,8 @@ fn approve_member_key(
         .arg(subject_handle)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env_remove("CI");
     let result = run_command_with_pty(&mut command, "Approve this key?", b"y\r");
     assert!(
@@ -346,7 +346,7 @@ fn rotate_self_key(workspace_dir: &TempDir, home_dir: &TempDir, ssh_priv: &Path)
         .arg(TEST_MEMBER_HANDLE)
         .arg("-i")
         .arg(ssh_priv)
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -356,8 +356,8 @@ fn rotate_self_key(workspace_dir: &TempDir, home_dir: &TempDir, ssh_priv: &Path)
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -373,8 +373,8 @@ fn export_private_key_to_stdout(home_dir: &TempDir, ssh_priv: &Path) -> String {
         .arg("--stdout")
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin(format!("{CI_KEY_PASSWORD}\n{CI_KEY_PASSWORD}\n"))
         .assert()
         .success()
@@ -448,12 +448,12 @@ fn assert_ci_read_commands(
 fn ci_cmd(home_dir: &TempDir, exported_key: &str) -> assert_cmd::Command {
     let mut command = cmd();
     command
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_PRIVATE_KEY", exported_key)
-        .env("SECRETENV_KEY_PASSWORD", CI_KEY_PASSWORD)
-        .env("SECRETENV_STRICT_KEY_CHECKING", "no")
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_PRIVATE_KEY", exported_key)
+        .env("KAPSARO_KEY_PASSWORD", CI_KEY_PASSWORD)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
         .env_remove("SSH_AUTH_SOCK")
-        .env_remove("SECRETENV_SSH_IDENTITY");
+        .env_remove("KAPSARO_SSH_IDENTITY");
     command
 }
 
@@ -489,8 +489,8 @@ fn assert_get_as_member_contains(
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(value));
@@ -501,23 +501,23 @@ fn assert_list_contains(workspace_dir: &TempDir, home_dir: &TempDir, ssh_priv: &
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(key));
 }
 
 fn rewrap_std_command(workspace: &Path, home: &Path, ssh_priv: &Path) -> StdCommand {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("rewrap")
         .arg("--workspace")
         .arg(workspace)
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home)
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env_remove("CI");
     command
 }

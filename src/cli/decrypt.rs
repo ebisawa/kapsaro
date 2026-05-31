@@ -14,17 +14,17 @@ use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decry
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOptions,
 };
-use secretenv_core::cli_api::app::file::decrypt::{
+use kapsaro_core::cli_api::app::file::decrypt::{
     execute_decrypt_file_command, resolve_decrypt_file_command, validate_decrypt_file_input,
 };
-use secretenv_core::cli_api::presentation::fs::load_text_with_limit;
-use secretenv_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::presentation::fs::load_text_with_limit;
+use kapsaro_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
 #[command(
-    override_usage = "secretenv decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       secretenv decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)"
+    override_usage = "kapsaro decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       kapsaro decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)"
 )]
 pub(crate) struct DecryptArgs {
     /// Common options shared across commands

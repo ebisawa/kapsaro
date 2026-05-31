@@ -4,9 +4,9 @@
 use crate::cli::common::output::member::view::{
     build_member_approval_results_view, build_member_list_view,
 };
-use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
-use secretenv_core::cli_api::app::member::types::{MemberListEntry, MemberListResult};
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
+use kapsaro_core::cli_api::app::member::types::{MemberListEntry, MemberListResult};
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 
 #[test]
 fn test_build_member_list_view_preserves_kid() {

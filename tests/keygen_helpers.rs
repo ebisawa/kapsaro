@@ -6,7 +6,7 @@
 //! All test keys are generated with proper SSH attestation (via ssh-keygen) and
 //! encrypted with real SSH key protection. No test-only bypasses in production code.
 
-use secretenv_core::cli_api::test_support::domain::{
+use kapsaro_core::cli_api::test_support::domain::{
     private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyPlaintext},
     public_key::{
         AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey, PublicKey,
@@ -17,27 +17,27 @@ use secretenv_core::cli_api::test_support::domain::{
     verification::{ExpiryProof, SelfSignatureProof},
     verified::{DecryptionProof, VerifiedPrivateKey},
 };
-use secretenv_core::cli_api::test_support::helpers::codec::base64_public::{
+use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::{
     decode_base64url_nopad_array, encode_base64url_nopad,
 };
-use secretenv_core::cli_api::test_support::helpers::codec::base64_secret::encode_base64url_nopad_secret_32;
-use secretenv_core::cli_api::test_support::helpers::secret::SecretArray;
-use secretenv_core::cli_api::test_support::operations::key::material::generate_keypairs;
-use secretenv_core::cli_api::test_support::operations::key::protection::encryption::{
+use kapsaro_core::cli_api::test_support::helpers::codec::base64_secret::encode_base64url_nopad_secret_32;
+use kapsaro_core::cli_api::test_support::helpers::secret::SecretArray;
+use kapsaro_core::cli_api::test_support::operations::key::material::generate_keypairs;
+use kapsaro_core::cli_api::test_support::operations::key::protection::encryption::{
     encrypt_private_key, PrivateKeyEncryptionParams,
 };
-use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
+use kapsaro_core::cli_api::test_support::operations::key::public_key_document::{
     build_attestation, build_public_key, PublicKeyDocumentParams,
 };
-use secretenv_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
-use secretenv_core::cli_api::test_support::primitives::kem::generate_keypair as generate_kem_material;
-use secretenv_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
-use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use secretenv_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-use secretenv_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use secretenv_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
+use kapsaro_core::cli_api::test_support::primitives::kem::generate_keypair as generate_kem_material;
+use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use kapsaro_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
+use kapsaro_core::{Error, Result};
 use std::path::Path;
 use time::OffsetDateTime;
 
@@ -80,7 +80,7 @@ fn generate_kem_keypair() -> (JwkOkpPrivateKey, String) {
     let pub_key = b64(pk.as_bytes());
     let keypair = JwkOkpPrivateKey {
         kty: "OKP".to_string(),
-        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
+        crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
         x: pub_key.clone(),
         d: encode_base64url_nopad_secret_32(&SecretArray::new(*sk.as_bytes()))
             .into_plain_string_for_output(),
@@ -98,7 +98,7 @@ fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
     let pub_key = b64(&pk.to_bytes());
     let keypair = JwkOkpPrivateKey {
         kty: "OKP".to_string(),
-        crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
+        crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
         x: pub_key.clone(),
         d: encode_base64url_nopad_secret_32(&SecretArray::new(sk.to_bytes()))
             .into_plain_string_for_output(),
@@ -125,11 +125,10 @@ pub fn keygen_test(
 
     let now = OffsetDateTime::now_utc();
     let created_at =
-        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)?;
-    let expires_at =
-        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
-            now + time::Duration::days(365),
-        )?;
+        kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)?;
+    let expires_at = kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+        now + time::Duration::days(365),
+    )?;
 
     // Extract signing key from keypair before moving it
     let sig_key_bytes = decode_base64url_nopad_array(&sig_keypair.d, "signing key")
@@ -146,13 +145,12 @@ pub fn keygen_test(
     let keys = IdentityKeys {
         kem: JwkOkpPublicKey {
             kty: "OKP".to_string(),
-            crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
+            crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
             x: kem_pub,
         },
         sig: JwkOkpPublicKey {
             kty: "OKP".to_string(),
-            crv: secretenv_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
-                .to_string(),
+            crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
             x: sig_pub,
         },
     };
@@ -202,11 +200,10 @@ pub fn build_test_private_key(
 
     let now = OffsetDateTime::now_utc();
     let created_at =
-        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)?;
-    let expires_at =
-        secretenv_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
-            now + time::Duration::days(365),
-        )?;
+        kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(now)?;
+    let expires_at = kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+        now + time::Duration::days(365),
+    )?;
 
     encrypt_private_key(&PrivateKeyEncryptionParams {
         plaintext,
@@ -294,13 +291,13 @@ pub fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPubl
 /// Uses placeholder values for all fields. Not suitable for cryptographic
 /// verification — use `keygen_test()` when real key material is needed.
 pub fn build_dummy_public_key(kid: &str) -> PublicKey {
-    use secretenv_core::cli_api::test_support::domain::public_key::{
+    use kapsaro_core::cli_api::test_support::domain::public_key::{
         Attestation, PublicKeyProtected,
     };
 
     PublicKey {
         protected: PublicKeyProtected {
-            format: "secretenv:format:public-key@7".to_string(),
+            format: "kapsaro:format:public-key@1".to_string(),
             subject_handle: "signer@test".to_string(),
             kid: kid.to_string(),
             keys: IdentityKeys {

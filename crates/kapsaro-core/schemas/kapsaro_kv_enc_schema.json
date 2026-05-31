@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kapsaro.kv.enc.schema.json",
+  "title": "kapsaro kv enc schema",
+  "$defs": {
+    "head": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "HEAD line token for kv-enc v1",
+      "properties": {
+        "sid": { "$ref": "kapsaro_common_schema.json#/$defs/uuid" },
+        "alg": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aead": { "$ref": "kapsaro_common_schema.json#/$defs/payload_aead" }
+          },
+          "required": ["aead"]
+        },
+        "created_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" },
+        "updated_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" }
+      },
+      "required": ["sid", "alg", "created_at", "updated_at"]
+    },
+    "wrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "WRAP line token for kv-enc v1",
+      "properties": {
+        "wrap": {
+          "type": "array",
+          "items": { "$ref": "kapsaro_common_schema.json#/$defs/wrap_item" },
+          "minItems": 1,
+          "maxItems": 1000
+        },
+        "removed_recipients": {
+          "type": "array",
+          "items": { "$ref": "kapsaro_common_schema.json#/$defs/removed_recipient_item" },
+          "description": "History of removed recipients for disclosure tracking"
+        }
+      },
+      "required": ["wrap"]
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Entry token for kv-enc v1 (no key, AEAD, or wrap field)",
+      "properties": {
+        "nonce": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_24" },
+        "ct": { "$ref": "kapsaro_common_schema.json#/$defs/b64url" },
+        "disclosed": {
+          "type": "boolean",
+          "description": "When true, indicates this entry was potentially disclosed to a removed recipient and its secret value should be rotated. Omitted when false."
+        }
+      },
+      "required": ["nonce", "ct"]
+    },
+    "signature": { "$ref": "kapsaro_artifact_signature_schema.json" }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/head" },
+    { "$ref": "#/$defs/wrap" },
+    { "$ref": "#/$defs/value" },
+    { "$ref": "#/$defs/signature" }
+  ]
+}

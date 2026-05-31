@@ -9,8 +9,8 @@ use crate::cli::common::output::text::key::{
 };
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt::resolve_key_generation_github_user;
-use secretenv_core::cli_api::app::key::generate::generate_key_command;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::key::generate::generate_key_command;
+use kapsaro_core::Result;
 
 use super::NewArgs;
 

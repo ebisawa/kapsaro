@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! CLI commands for secretenv v3
+//! CLI commands for kapsaro v3
 
 // Common utilities (enabled for v3)
 pub(crate) mod common;
@@ -48,12 +48,12 @@ use unset::UnsetArgs;
 use clap::{Parser, Subcommand};
 
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
-use secretenv_core::cli_api::app::trust::CommandCapability;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::trust::CommandCapability;
+use kapsaro_core::Error;
 use tracing::debug;
 
 #[derive(Parser)]
-#[command(name = "secretenv")]
+#[command(name = "kapsaro")]
 #[command(version)]
 #[command(disable_help_subcommand = true)]
 pub(crate) struct Cli {

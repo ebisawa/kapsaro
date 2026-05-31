@@ -5,7 +5,7 @@ use console::{colors_enabled, set_colors_enabled};
 use serial_test::serial;
 
 use super::{colorize_inspect_line, format_inspect_banner_lines, format_inspect_output};
-use secretenv_core::cli_api::app::file::inspect::{InspectOutput, InspectSection};
+use kapsaro_core::cli_api::app::file::inspect::{InspectOutput, InspectSection};
 
 struct StdoutColorGuard {
     enabled: bool,

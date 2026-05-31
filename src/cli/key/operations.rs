@@ -10,13 +10,13 @@ use crate::cli::common::output::text::key::{
 };
 use crate::cli::common::output::text::print_warning;
 use crate::cli::common::ssh::resolve_ssh_context_for_active_key;
-use secretenv_core::api::secret::SecretString;
-use secretenv_core::cli_api::app::key::manage::{
+use kapsaro_core::api::secret::SecretString;
+use kapsaro_core::cli_api::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, remove_key_command,
     validate_kid,
 };
-use secretenv_core::cli_api::presentation::fs::save_text;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::presentation::fs::save_text;
+use kapsaro_core::Result;
 use std::io::IsTerminal;
 use std::io::{self, BufRead};
 use zeroize::Zeroizing;
@@ -51,7 +51,7 @@ pub(super) fn run_remove(args: RemoveArgs) -> Result<()> {
 /// Main entry point for public key export
 pub(super) fn run_export(args: ExportArgs) -> Result<()> {
     let out = args.out.as_ref().ok_or_else(|| {
-        secretenv_core::Error::build_invalid_argument_error(
+        kapsaro_core::Error::build_invalid_argument_error(
             "--out is required for public key export".to_string(),
         )
     })?;
@@ -70,7 +70,7 @@ pub(super) fn run_export(args: ExportArgs) -> Result<()> {
 /// Main entry point for private key export (password-protected portable format)
 pub(super) fn run_export_private(args: ExportArgs) -> Result<()> {
     if args.out.is_none() && !args.stdout {
-        return Err(secretenv_core::Error::build_invalid_argument_error(
+        return Err(kapsaro_core::Error::build_invalid_argument_error(
             "--private export requires either --out or --stdout".to_string(),
         ));
     }
@@ -114,7 +114,7 @@ fn prompt_export_password() -> Result<SecretString> {
             .with_confirmation("Confirm password", "Passwords do not match")
             .interact()
             .map_err(|e| {
-                secretenv_core::Error::build_io_error(format!("Failed to read password: {}", e))
+                kapsaro_core::Error::build_io_error(format!("Failed to read password: {}", e))
             })?;
         return Ok(SecretString::new(password));
     }
@@ -125,20 +125,17 @@ fn prompt_export_password() -> Result<SecretString> {
     let mut confirmation = Zeroizing::new(String::new());
 
     reader.read_line(&mut password).map_err(|e| {
-        secretenv_core::Error::build_io_error(format!("Failed to read password: {}", e))
+        kapsaro_core::Error::build_io_error(format!("Failed to read password: {}", e))
     })?;
     reader.read_line(&mut confirmation).map_err(|e| {
-        secretenv_core::Error::build_io_error(format!(
-            "Failed to read password confirmation: {}",
-            e
-        ))
+        kapsaro_core::Error::build_io_error(format!("Failed to read password confirmation: {}", e))
     })?;
 
     normalize_line_ending(&mut password);
     normalize_line_ending(&mut confirmation);
 
     if password.as_str() != confirmation.as_str() {
-        return Err(secretenv_core::Error::build_invalid_argument_error(
+        return Err(kapsaro_core::Error::build_invalid_argument_error(
             "Passwords do not match".to_string(),
         ));
     }

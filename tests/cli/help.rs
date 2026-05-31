@@ -13,7 +13,7 @@ fn test_top_level_help_shows_usage() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Usage: secretenv <COMMAND>"));
+        .stdout(predicate::str::contains("Usage: kapsaro <COMMAND>"));
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn test_top_level_help_is_not_colored_as_error_when_forced() {
 
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
-    assert!(stdout.contains("Usage: secretenv <COMMAND>"));
+    assert!(stdout.contains("Usage: kapsaro <COMMAND>"));
     assert!(
         !stdout.contains("\u{1b}[31m"),
         "help must not be rendered as an error: {stdout}"
@@ -54,7 +54,7 @@ fn test_top_level_parse_error_is_colored_when_forced() {
         "expected ANSI-colored clap error in stderr, got: {stderr}"
     );
     assert!(
-        strip_ansi_codes(&stderr).contains("Usage: secretenv <COMMAND>"),
+        strip_ansi_codes(&stderr).contains("Usage: kapsaro <COMMAND>"),
         "expected usage after stripping ANSI, got: {stderr}"
     );
 }

@@ -3,7 +3,7 @@
 
 use super::build_member_approval_results_output;
 use crate::cli::common::output::member::view::build_member_approval_results_view;
-use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
+use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
 
 #[test]
 fn test_member_approval_json_output_omits_already_known_field() {

@@ -7,14 +7,14 @@ use crate::cli::common::trust::{
 };
 use crate::test_utils::{kid as test_kid, member_handle};
 use console::{colors_enabled_stderr, set_colors_enabled_stderr, strip_ansi_codes};
-use secretenv_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
-use secretenv_core::cli_api::test_support::domain::common::WrapItem;
-use secretenv_core::cli_api::test_support::domain::trust_store::{
+use kapsaro_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
+use kapsaro_core::cli_api::test_support::domain::trust_store::{
     RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord,
 };
-use secretenv_core::cli_api::test_support::operations::trust::recipient_sets::ArtifactRecipientSet;
-use secretenv_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
+use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::ArtifactRecipientSet;
+use kapsaro_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
 use serial_test::serial;
 use uuid::Uuid;
 

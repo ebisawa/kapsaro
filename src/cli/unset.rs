@@ -19,9 +19,9 @@ use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
-use secretenv_core::cli_api::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
-use secretenv_core::cli_api::app::trust::UnsetPolicy;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::cli_api::app::trust::UnsetPolicy;
+use kapsaro_core::Result;
 
 #[derive(Args)]
 pub(crate) struct UnsetArgs {

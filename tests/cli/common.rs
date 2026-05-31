@@ -11,9 +11,9 @@ pub use crate::test_utils::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use assert_cmd::{cargo, Command};
-use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use secretenv_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
-use secretenv_core::cli_api::test_support::wire::token::TokenCodec;
+use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use kapsaro_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
+use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
 #[cfg(unix)]
 use std::fs::File;
 #[cfg(unix)]
@@ -42,12 +42,12 @@ pub struct CommonOptions {
 // Test Binary Helper
 // ============================================================================
 
-/// Helper to get the secretenv test binary command.
+/// Helper to get the kapsaro test binary command.
 ///
-/// Sets `SECRETENV_SSH_SIGNING_METHOD=ssh-keygen` for CLI integration tests.
+/// Sets `KAPSARO_SSH_SIGNING_METHOD=ssh-keygen` for CLI integration tests.
 pub fn cmd() -> Command {
-    let mut c = cargo::cargo_bin_cmd!("secretenv");
-    c.env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
+    let mut c = cargo::cargo_bin_cmd!("kapsaro");
+    c.env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen");
     c
 }
 
@@ -79,17 +79,17 @@ pub struct PtyCommandResult {
 }
 
 #[cfg(unix)]
-pub fn secretenv_bin() -> PathBuf {
+pub fn kapsaro_bin() -> PathBuf {
     PathBuf::from(
-        std::env::var_os("CARGO_BIN_EXE_secretenv")
-            .expect("CARGO_BIN_EXE_secretenv must be set for integration tests"),
+        std::env::var_os("CARGO_BIN_EXE_kapsaro")
+            .expect("CARGO_BIN_EXE_kapsaro must be set for integration tests"),
     )
 }
 
 #[cfg(unix)]
-pub fn secretenv_std_cmd() -> StdCommand {
-    let mut command = StdCommand::new(secretenv_bin());
-    command.env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen");
+pub fn kapsaro_std_cmd() -> StdCommand {
+    let mut command = StdCommand::new(kapsaro_bin());
+    command.env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen");
     command
 }
 
@@ -329,15 +329,15 @@ pub fn set_value_with_member_set_review(
     member_handle: Option<&str>,
     name: Option<&str>,
 ) {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("set")
         .arg(key)
         .arg(value)
         .arg("--workspace")
         .arg(workspace)
-        .env("SECRETENV_HOME", home)
-        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity);
     if let Some(member_handle) = member_handle {
         command.arg("--member-handle").arg(member_handle);
     }
@@ -357,15 +357,15 @@ pub fn set_stdin_with_member_set_review(
     member_handle: Option<&str>,
     name: Option<&str>,
 ) {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("set")
         .arg(key)
         .arg("--stdin")
         .arg("--workspace")
         .arg(workspace)
-        .env("SECRETENV_HOME", home)
-        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity);
     if let Some(member_handle) = member_handle {
         command.arg("--member-handle").arg(member_handle);
     }
@@ -384,7 +384,7 @@ pub fn encrypt_file_with_member_set_review(
     output: &Path,
     member_handle: &str,
 ) -> String {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("encrypt")
         .arg(input)
@@ -394,8 +394,8 @@ pub fn encrypt_file_with_member_set_review(
         .arg(member_handle)
         .arg("--workspace")
         .arg(workspace)
-        .env("SECRETENV_HOME", home)
-        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity);
     assert_member_set_review_success(&mut command)
 }
 
@@ -409,7 +409,7 @@ pub fn encrypt_stdin_with_member_set_review(
     stdout: bool,
     member_handle: &str,
 ) -> String {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("encrypt")
         .arg("--stdin")
@@ -417,8 +417,8 @@ pub fn encrypt_stdin_with_member_set_review(
         .arg(member_handle)
         .arg("--workspace")
         .arg(workspace)
-        .env("SECRETENV_HOME", home)
-        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity);
     if let Some(output) = output {
         command.arg("--out").arg(output);
     }
@@ -436,14 +436,14 @@ pub fn import_file_with_member_set_review(
     input: &Path,
     json: bool,
 ) -> String {
-    let mut command = secretenv_std_cmd();
+    let mut command = kapsaro_std_cmd();
     command
         .arg("import")
         .arg(input)
         .arg("--workspace")
         .arg(workspace)
-        .env("SECRETENV_HOME", home)
-        .env("SECRETENV_SSH_IDENTITY", ssh_identity);
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity);
     if json {
         command.arg("--json");
     }
@@ -490,10 +490,10 @@ pub fn append_common_command_args(command: &mut StdCommand, common_opts: &Common
         command.arg("--quiet");
     }
     if let Some(home) = &common_opts.home {
-        command.env("SECRETENV_HOME", home);
+        command.env("KAPSARO_HOME", home);
     }
     if let Some(identity) = &common_opts.identity {
-        command.env("SECRETENV_SSH_IDENTITY", identity);
+        command.env("KAPSARO_SSH_IDENTITY", identity);
     }
 }
 
@@ -559,8 +559,8 @@ pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .output()
         .unwrap();
 

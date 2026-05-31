@@ -6,8 +6,8 @@
 use std::path::Path;
 
 use crate::cli::common::output::text::layout;
-use secretenv_core::cli_api::app::registration::types::RegistrationMode;
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::cli_api::app::registration::types::RegistrationMode;
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
 
 pub(crate) fn print_created_workspace_summary(workspace_path: &Path) {
     print_stderr_lines(format_created_workspace_summary_lines(workspace_path));
@@ -23,7 +23,7 @@ pub(crate) fn print_init_noop_summary(workspace_path: &Path) {
 pub(crate) fn print_registration_next_steps(mode: RegistrationMode, is_new_workspace: bool) {
     match mode {
         RegistrationMode::Init if is_new_workspace => {
-            eprintln!("Ready! Commit .secretenv/ to your repository.");
+            eprintln!("Ready! Commit .kapsaro/ to your repository.");
         }
         RegistrationMode::Init | RegistrationMode::Join => {
             eprintln!("Ready! Create a PR to share your public key with the team.");
@@ -49,11 +49,11 @@ fn format_init_noop_summary_lines(workspace_path: &Path) -> Vec<String> {
     );
     lines.extend(layout::format_value_lines(
         "",
-        "`secretenv init` only bootstraps a new workspace and first member.",
+        "`kapsaro init` only bootstraps a new workspace and first member.",
     ));
     lines.extend(layout::format_value_lines(
         "",
-        "Use `secretenv join` to submit a key to an existing workspace.",
+        "Use `kapsaro join` to submit a key to an existing workspace.",
     ));
     lines
 }

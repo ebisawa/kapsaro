@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kapsaro.public.key.schema.json",
+  "title": "kapsaro public key schema",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "PublicKey v7 document (signed container)",
+  "properties": {
+    "protected": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "PublicKey protected (signed payload)",
+      "properties": {
+        "format": { "const": "kapsaro:format:public-key@1" },
+        "subject_handle": { "$ref": "kapsaro_common_schema.json#/$defs/member_handle" },
+        "kid": { "$ref": "kapsaro_common_schema.json#/$defs/kid" },
+        "keys": { "$ref": "kapsaro_common_schema.json#/$defs/identity_keys" },
+        "binding_claims": { "$ref": "kapsaro_common_schema.json#/$defs/binding_claims" },
+        "attestation": { "$ref": "kapsaro_common_schema.json#/$defs/attestation_v7" },
+        "expires_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" },
+        "created_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" }
+      },
+      "required": ["format", "subject_handle", "kid", "keys", "attestation", "expires_at"]
+    },
+    "signature": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_64" }
+  },
+  "required": ["protected", "signature"]
+}

@@ -1,0 +1,203 @@
+// Copyright 2026 Satoshi Ebisawa
+// SPDX-License-Identifier: Apache-2.0
+
+//! File payload encryption operations
+
+use crate::crypto::rng::fill_secret_array;
+use crate::crypto::types::data::Plaintext;
+use crate::crypto::types::keys::{MacKey, MasterKey, XChaChaKey};
+use crate::feature::context::crypto::SigningContext;
+use crate::feature::envelope::key_schedule::FileKeySchedule;
+use crate::feature::envelope::payload::encrypt_file_payload_content;
+use crate::feature::envelope::signature::sign_file_document;
+use crate::feature::envelope::wrap::{build_wraps_for_recipients, WrapFormat};
+use crate::model::common::WrapItem;
+use crate::model::file_enc::{
+    FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
+    FilePayloadCiphertext, FilePayloadHeader,
+};
+use crate::model::public_key::VerifiedRecipientKey;
+use crate::model::wire::{algorithm, format};
+use crate::support::time::generate_current_timestamp;
+use crate::Result;
+use uuid::Uuid;
+use zeroize::Zeroizing;
+
+fn validate_recipient_members(
+    recipient_handles: &[String],
+    members: &[VerifiedRecipientKey],
+) -> Result<()> {
+    if recipient_handles.len() != members.len() {
+        return Err(crate::Error::build_invalid_argument_error(format!(
+            "Recipients count ({}) does not match public keys ({})",
+            recipient_handles.len(),
+            members.len()
+        )));
+    }
+
+    for (recipient_handle, member) in recipient_handles.iter().zip(members.iter()) {
+        let member_handle = &member.document().protected.subject_handle;
+        if recipient_handle != member_handle {
+            return Err(crate::Error::build_invalid_argument_error(format!(
+                "Recipient '{}' does not match member '{}'",
+                recipient_handle, member_handle
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Build encryption context: generate content key, create XChaChaKey
+///
+/// Returns plaintext wrapped in Zeroizing to ensure it's zeroed after encryption.
+fn build_encrypt_context(content: &[u8]) -> Result<(MasterKey, Zeroizing<Vec<u8>>)> {
+    let master_key_bytes = fill_secret_array::<32>()?;
+    let master_key = MasterKey::from_zeroizing(master_key_bytes);
+    Ok((master_key, Zeroizing::new(content.to_vec())))
+}
+
+/// Encrypt payload with XChaCha20-Poly1305
+///
+/// Takes Zeroizing<Vec<u8>> to ensure plaintext is zeroed after encryption.
+fn encrypt_payload(
+    plaintext: &Zeroizing<Vec<u8>>,
+    key: &XChaChaKey,
+    sid: &Uuid,
+    debug: bool,
+    caller: &str,
+) -> Result<(FilePayloadHeader, FilePayloadCiphertext)> {
+    let payload_protected = FilePayloadHeader {
+        format: format::FILE_PAYLOAD_V1.to_string(),
+        sid: *sid,
+        alg: FileEncAlgorithm {
+            aead: algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
+        },
+    };
+
+    let plaintext_obj = Plaintext::from(plaintext.as_slice());
+    let encrypted =
+        encrypt_file_payload_content(&plaintext_obj, key, &payload_protected, debug, caller)?;
+
+    Ok((payload_protected, encrypted))
+}
+
+/// Create wrap items for recipients from verified members.
+///
+/// # Arguments
+/// * `members` - Verified public keys with attested identity
+/// * `sid` - Session ID (UUID)
+/// * `content_key` - Master key to wrap
+fn build_recipient_wraps(
+    members: &[VerifiedRecipientKey],
+    sid: &Uuid,
+    master_key: &MasterKey,
+    debug: bool,
+) -> Result<Vec<WrapItem>> {
+    build_wraps_for_recipients(members, sid, master_key, WrapFormat::File, debug)
+}
+
+/// Build FileEncDocumentProtected structure
+fn build_file_enc_document_protected(
+    sid: Uuid,
+    wrap: Vec<WrapItem>,
+    payload: FilePayload,
+    timestamp: String,
+) -> FileEncDocumentProtected {
+    FileEncDocumentProtected {
+        format: format::FILE_ENC_V1.to_string(),
+        sid,
+        wrap,
+        removed_recipients: None,
+        payload,
+        created_at: timestamp.clone(),
+        updated_at: timestamp,
+    }
+}
+
+/// Encrypt file content to file-enc v7 format.
+///
+/// # Arguments
+/// * `content` - File content bytes to encrypt
+/// * `recipient_handles` - Normalized list of recipient member handles (order must match members)
+/// * `members` - Verified public keys with attested identity
+/// * `signing` - Signing context (signing_key, signer_kid, signer_pub, debug)
+///
+/// # Returns
+/// FileEncDocument structure
+pub fn encrypt_file_document(
+    content: &[u8],
+    recipient_handles: &[String],
+    members: &[VerifiedRecipientKey],
+    signing: &SigningContext<'_>,
+) -> Result<FileEncDocument> {
+    validate_recipient_members(recipient_handles, members)?;
+    let sid = Uuid::new_v4();
+    let timestamp = generate_current_timestamp()?;
+    let (master_key, payload, mac_key) =
+        encrypt_content_into_payload(content, &sid, signing.debug, "encrypt_file_document")?;
+    let protected =
+        assemble_file_enc_protected(sid, &master_key, members, payload, timestamp, signing.debug)?;
+    finalize_file_document_signature(protected, &mac_key, signing)
+}
+
+/// Build encryption context and produce a ready `FilePayload`.
+///
+/// The plaintext is held inside a `Zeroizing` buffer and zeroed before this
+/// helper returns.
+fn encrypt_content_into_payload(
+    content: &[u8],
+    sid: &Uuid,
+    debug: bool,
+    caller: &str,
+) -> Result<(MasterKey, FilePayload, MacKey)> {
+    let (master_key, bytes_to_encrypt) = build_encrypt_context(content)?;
+    let schedule = FileKeySchedule::extract(&master_key, sid)?;
+    let xchacha_key = schedule.derive_content_key()?;
+    let mac_key = schedule.derive_mac_key()?;
+    let (payload_protected, payload_encrypted) =
+        encrypt_payload(&bytes_to_encrypt, &xchacha_key, sid, debug, caller)?;
+    Ok((
+        master_key,
+        FilePayload {
+            protected: payload_protected,
+            encrypted: payload_encrypted,
+        },
+        mac_key,
+    ))
+}
+
+/// Wrap the content key for each recipient and assemble the protected header.
+fn assemble_file_enc_protected(
+    sid: Uuid,
+    master_key: &MasterKey,
+    members: &[VerifiedRecipientKey],
+    payload: FilePayload,
+    timestamp: String,
+    debug: bool,
+) -> Result<FileEncDocumentProtected> {
+    let wrap = build_recipient_wraps(members, &sid, master_key, debug)?;
+    Ok(build_file_enc_document_protected(
+        sid, wrap, payload, timestamp,
+    ))
+}
+
+/// Sign the protected header and produce the final `FileEncDocument`.
+fn finalize_file_document_signature(
+    protected: FileEncDocumentProtected,
+    mac_key: &MacKey,
+    signing: &SigningContext<'_>,
+) -> Result<FileEncDocument> {
+    let signature = sign_file_document(
+        &protected,
+        mac_key,
+        signing.signing_key,
+        signing.signer_kid,
+        signing.signer_pub.clone(),
+        signing.debug,
+    )?;
+    Ok(FileEncDocument {
+        protected,
+        signature,
+    })
+}

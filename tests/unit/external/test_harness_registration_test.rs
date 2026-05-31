@@ -17,9 +17,9 @@ fn test_unit_external_files_are_registered_once() {
     assert_registered_once(&external_files, &registrations);
 
     let core_external_files =
-        collect_test_files(&root.join("crates/secretenv-core/tests/unit/external"));
+        collect_test_files(&root.join("crates/kapsaro-core/tests/unit/external"));
     let core_registrations =
-        collect_unit_harness_paths(&root.join("crates/secretenv-core/tests/unit.rs"));
+        collect_unit_harness_paths(&root.join("crates/kapsaro-core/tests/unit.rs"));
 
     assert_registered_once(&core_external_files, &core_registrations);
 }
@@ -33,9 +33,9 @@ fn test_unit_internal_files_are_registered_once() {
     assert_registered_once(&internal_files, &registrations);
 
     let core_internal_files =
-        collect_test_files(&root.join("crates/secretenv-core/tests/unit/internal"));
+        collect_test_files(&root.join("crates/kapsaro-core/tests/unit/internal"));
     let core_registrations =
-        collect_internal_harness_paths(&[root.join("crates/secretenv-core/src")]);
+        collect_internal_harness_paths(&[root.join("crates/kapsaro-core/src")]);
 
     assert_registered_once(&core_internal_files, &core_registrations);
 }

@@ -2217,7 +2217,7 @@ dependencies = [
 
 [[package]]
 name = "secretenv"
-version = "0.9.1-alpha"
+version = "0.10.1-alpha"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -2243,7 +2243,7 @@ dependencies = [
 
 [[package]]
 name = "secretenv-core"
-version = "0.9.1-alpha"
+version = "0.10.1-alpha"
 dependencies = [
  "argon2",
  "chacha20poly1305",

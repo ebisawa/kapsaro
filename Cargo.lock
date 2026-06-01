@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "kapsaro"
-version = "0.99.0-beta"
+version = "0.99.1-beta"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -1423,7 +1423,7 @@ dependencies = [
 
 [[package]]
 name = "kapsaro-core"
-version = "0.99.0-beta"
+version = "0.99.1-beta"
 dependencies = [
  "argon2",
  "chacha20poly1305",

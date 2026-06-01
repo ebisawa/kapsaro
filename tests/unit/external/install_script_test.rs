@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Unit tests for install.sh.
+//! Exercises installer download, provenance verification, and install paths.
 
-use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,13 +11,16 @@ use std::process::Command;
 use tempfile::TempDir;
 
 const ARCHIVE: &str = "kapsaro-v1.2.3-x86_64-unknown-linux-gnu.tar.gz";
+const BUNDLE: &str = "kapsaro-v1.2.3.sigstore.jsonl";
 
 #[test]
-fn test_install_script_installs_archive_after_sha256_verification() {
+fn test_install_script_installs_archive_after_provenance_verification() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
-    fixture.save_checksums(&format!("{}  {}\n", fixture.archive_hash(), ARCHIVE));
-    fixture.save_fake_commands(true);
+    fixture.save_attestation_bundle();
+    fixture.save_fake_commands(GhCommand::Available {
+        verify_success: true,
+    });
 
     let output = fixture.run_installer();
 
@@ -30,51 +33,67 @@ fn test_install_script_installs_archive_after_sha256_verification() {
         fs::read_to_string(fixture.install_dir.path().join("kapsaro")).unwrap(),
         "installed binary\n"
     );
+    let invocation = fixture.gh_invocation();
+    assert!(invocation.contains("attestation verify"));
+    assert!(invocation.contains(ARCHIVE));
+    assert!(invocation.contains(BUNDLE));
+    assert!(invocation.contains("--repo ebisawa/kapsaro"));
 }
 
 #[test]
-fn test_install_script_rejects_archive_with_sha256_mismatch() {
-    let fixture = InstallFixture::new();
-    fixture.save_archive(b"tampered archive bytes");
-    fixture.save_checksums(&format!("{}  {}\n", "0".repeat(64), ARCHIVE));
-    fixture.save_fake_commands(true);
-
-    let output = fixture.run_installer();
-
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("SHA256 mismatch"));
-    assert!(!fixture.install_dir.path().join("kapsaro").exists());
-}
-
-#[test]
-fn test_install_script_rejects_checksums_without_target_archive() {
+fn test_install_script_rejects_archive_when_provenance_verification_fails() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
-    fixture.save_checksums(&format!(
-        "{}  kapsaro-v1.2.3-aarch64-unknown-linux-gnu.tar.gz\n",
-        fixture.archive_hash()
-    ));
-    fixture.save_fake_commands(true);
+    fixture.save_attestation_bundle();
+    fixture.save_fake_commands(GhCommand::Available {
+        verify_success: false,
+    });
 
     let output = fixture.run_installer();
 
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("Checksum not found"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Provenance verification failed"));
     assert!(!fixture.install_dir.path().join("kapsaro").exists());
 }
 
 #[test]
-fn test_install_script_rejects_environment_without_sha256_command() {
+fn test_install_script_rejects_environment_without_gh_command() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
-    fixture.save_checksums(&format!("{}  {}\n", fixture.archive_hash(), ARCHIVE));
-    fixture.save_fake_commands(false);
+    fixture.save_attestation_bundle();
+    fixture.save_fake_commands(GhCommand::Missing);
 
     let output = fixture.run_installer();
 
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("No SHA256 command found"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("GitHub CLI (gh) is required"));
     assert!(!fixture.install_dir.path().join("kapsaro").exists());
+}
+
+#[test]
+fn test_install_script_installs_archive_without_provenance_when_insecure() {
+    let fixture = InstallFixture::new();
+    fixture.save_archive(b"release archive bytes");
+    fixture.save_fake_commands(GhCommand::Missing);
+
+    let output = fixture.run_installer_with_env(&[("KAPSARO_INSECURE", "1")]);
+
+    assert!(
+        output.status.success(),
+        "installer failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("KAPSARO_INSECURE=1"));
+    assert_eq!(
+        fs::read_to_string(fixture.install_dir.path().join("kapsaro")).unwrap(),
+        "installed binary\n"
+    );
+    assert!(!fixture.root.path().join("gh-invocation").exists());
+}
+
+enum GhCommand {
+    Available { verify_success: bool },
+    Missing,
 }
 
 struct InstallFixture {
@@ -102,17 +121,11 @@ impl InstallFixture {
         fs::write(self.root.path().join("archive.tar.gz"), content).unwrap();
     }
 
-    fn archive_hash(&self) -> String {
-        let archive = fs::read(self.root.path().join("archive.tar.gz")).unwrap();
-        let digest = Sha256::digest(archive);
-        hex::encode(digest)
+    fn save_attestation_bundle(&self) {
+        fs::write(self.root.path().join(BUNDLE), "sigstore bundle\n").unwrap();
     }
 
-    fn save_checksums(&self, content: &str) {
-        fs::write(self.root.path().join("SHA256SUMS"), content).unwrap();
-    }
-
-    fn save_fake_commands(&self, include_checksum: bool) {
+    fn save_fake_commands(&self, gh_command: GhCommand) {
         self.save_uname();
         self.save_curl();
         self.save_tar();
@@ -122,9 +135,8 @@ impl InstallFixture {
         self.save_passthrough("chmod", "/bin/chmod");
         self.link_system_command("grep");
         self.link_system_command("sed");
-        self.link_system_command("awk");
-        if include_checksum {
-            self.link_first_existing_command(&["sha256sum", "shasum", "openssl"]);
+        if let GhCommand::Available { verify_success } = gh_command {
+            self.save_gh(verify_success);
         }
     }
 
@@ -167,8 +179,8 @@ case "$url" in
   *api.github.com*)
     printf '{"tag_name":"v1.2.3"}\n'
     ;;
-  *SHA256SUMS)
-    /bin/cp "${FIXTURE_DIR}/SHA256SUMS" "$out"
+  *kapsaro-v1.2.3.sigstore.jsonl)
+    /bin/cp "${FIXTURE_DIR}/kapsaro-v1.2.3.sigstore.jsonl" "$out"
     ;;
   *kapsaro-v1.2.3-x86_64-unknown-linux-gnu.tar.gz)
     /bin/cp "${FIXTURE_DIR}/archive.tar.gz" "$out"
@@ -180,6 +192,54 @@ case "$url" in
 esac
 "#,
         );
+    }
+
+    fn save_gh(&self, verify_success: bool) {
+        let exit_code = if verify_success { "0" } else { "46" };
+        let script = r#"#!/bin/sh
+printf '%s\n' "$*" > "${FIXTURE_DIR}/gh-invocation"
+if [ "$1" != "attestation" ] || [ "$2" != "verify" ]; then
+  printf 'unexpected gh command: %s\n' "$*" >&2
+  exit 45
+fi
+
+archive="$3"
+shift 3
+bundle=''
+repo=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --bundle)
+      bundle="$2"
+      shift 2
+      ;;
+    --repo)
+      repo="$2"
+      shift 2
+      ;;
+    *)
+      printf 'unexpected gh argument: %s\n' "$1" >&2
+      exit 45
+      ;;
+  esac
+done
+
+if [ ! -f "$archive" ] || [ ! -f "$bundle" ]; then
+  printf 'missing attestation input\n' >&2
+  exit 45
+fi
+if [ "$repo" != "ebisawa/kapsaro" ]; then
+  printf 'unexpected repo: %s\n' "$repo" >&2
+  exit 45
+fi
+if [ "__VERIFY_EXIT__" = "0" ]; then
+  exit 0
+fi
+printf 'attestation failed\n' >&2
+exit __VERIFY_EXIT__
+"#
+        .replace("__VERIFY_EXIT__", exit_code);
+        self.save_executable("gh", &script);
     }
 
     fn save_tar(&self) {
@@ -229,23 +289,26 @@ printf '%s\n' "$dir"
         link_command(&target, &self.bin_dir.join(name));
     }
 
-    fn link_first_existing_command(&self, candidates: &[&str]) {
-        let (name, target) = candidates
-            .iter()
-            .find_map(|candidate| find_command(candidate).map(|target| (*candidate, target)))
-            .unwrap_or_else(|| panic!("one SHA256 command must be available"));
-        link_command(&target, &self.bin_dir.join(name));
+    fn run_installer(&self) -> std::process::Output {
+        self.run_installer_with_env(&[])
     }
 
-    fn run_installer(&self) -> std::process::Output {
-        Command::new("/bin/sh")
+    fn run_installer_with_env(&self, envs: &[(&str, &str)]) -> std::process::Output {
+        let mut command = Command::new("/bin/sh");
+        command
             .arg("install.sh")
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .env("PATH", &self.bin_dir)
             .env("FIXTURE_DIR", self.root.path())
-            .env("INSTALL_DIR", self.install_dir.path())
-            .output()
-            .unwrap()
+            .env("INSTALL_DIR", self.install_dir.path());
+        for (key, value) in envs {
+            command.env(key, value);
+        }
+        command.output().unwrap()
+    }
+
+    fn gh_invocation(&self) -> String {
+        fs::read_to_string(self.root.path().join("gh-invocation")).unwrap()
     }
 }
 

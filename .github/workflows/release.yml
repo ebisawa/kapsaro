@@ -220,20 +220,32 @@ jobs:
     permissions: {}
     env:
       TAG: ${{ needs.verify-release-input.outputs.tag }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Download SHA256SUMS
         run: |
           sleep 10
           curl -fsSL \
-            "https://github.com/ebisawa/kapsaro/releases/download/${TAG}/SHA256SUMS" \
+            "https://github.com/${RELEASE_REPOSITORY}/releases/download/${TAG}/SHA256SUMS" \
             -o SHA256SUMS
           cat SHA256SUMS
 
       - name: Extract hashes
         run: |
-          SHA256_LINUX_X86="$(grep "x86_64-unknown-linux-gnu" SHA256SUMS | awk '{print $1}')"
-          SHA256_LINUX_ARM="$(grep "aarch64-unknown-linux-gnu" SHA256SUMS | awk '{print $1}')"
-          SHA256_MACOS_ARM="$(grep "aarch64-apple-darwin" SHA256SUMS | awk '{print $1}')"
+          extract_sha256() {
+            local archive="$1"
+            local value
+            value="$(awk -v archive="${archive}" '$2 == archive { print $1 }' SHA256SUMS)"
+            if [ -z "${value}" ]; then
+              echo "::error::Missing SHA256SUMS entry for ${archive}"
+              exit 1
+            fi
+            printf '%s' "${value}"
+          }
+
+          SHA256_LINUX_X86="$(extract_sha256 "kapsaro-${TAG}-x86_64-unknown-linux-gnu.tar.gz")"
+          SHA256_LINUX_ARM="$(extract_sha256 "kapsaro-${TAG}-aarch64-unknown-linux-gnu.tar.gz")"
+          SHA256_MACOS_ARM="$(extract_sha256 "kapsaro-${TAG}-aarch64-apple-darwin.tar.gz")"
           echo "SHA256_LINUX_X86=${SHA256_LINUX_X86}" >> "$GITHUB_ENV"
           echo "SHA256_LINUX_ARM=${SHA256_LINUX_ARM}" >> "$GITHUB_ENV"
           echo "SHA256_MACOS_ARM=${SHA256_MACOS_ARM}" >> "$GITHUB_ENV"
@@ -242,6 +254,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           TAG: ${{ needs.verify-release-input.outputs.tag }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
           SHA256_LINUX_X86: ${{ env.SHA256_LINUX_X86 }}
           SHA256_LINUX_ARM: ${{ env.SHA256_LINUX_ARM }}
           SHA256_MACOS_ARM: ${{ env.SHA256_MACOS_ARM }}
@@ -249,15 +262,16 @@ jobs:
           github-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           script: |
             const tag = process.env.TAG;
+            const releaseRepository = process.env.RELEASE_REPOSITORY;
             const ver = tag.replace(/^v/, '');
-            const base = `https://github.com/ebisawa/kapsaro/releases/download/${tag}`;
+            const base = `https://github.com/${releaseRepository}/releases/download/${tag}`;
 
             const formula = `# typed: false
             # frozen_string_literal: true
 
             class Kapsaro < Formula
               desc "Offline-first CLI for encrypted secret sharing in Git"
-              homepage "https://github.com/ebisawa/kapsaro"
+              homepage "https://github.com/${releaseRepository}"
               version "${ver}"
               license "Apache-2.0"
 

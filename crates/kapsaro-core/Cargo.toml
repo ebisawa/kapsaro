@@ -1,6 +1,6 @@
 [package]
 name = "kapsaro-core"
-version = "0.9.1-alpha"
+version = "0.99.0-beta"
 edition = "2021"
 authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
 description = "Core library APIs for Kapsaro encrypted artifacts and local state"

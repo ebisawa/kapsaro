@@ -11,7 +11,7 @@ It fits teams that already use Git and pull-request review as their daily workfl
 
 No dedicated cloud service, SaaS secret platform, or always-on server is required. Encryption, decryption, verification, and recipient updates work locally and offline, while Git remains the shared transport and review layer.
 
-This project is currently in alpha. Feedback from trials, design reviews, and realistic team workflows is welcome before production adoption.
+This project is currently in beta. Feedback from trials, design reviews, and realistic team workflows is welcome before production adoption.
 
 ## What You Can Do First
 
@@ -146,7 +146,7 @@ If you want the security model and design details:
 
 ## Status
 
-This project is currently in alpha. Specification work and implementation are still evolving together.
+This project is currently in beta. During the beta stage, external specifications such as file formats are kept fixed unless a significant problem requires changing them, and the remaining work toward the stable release focuses on bug fixes and UI refinements.
 
 ## License
 

@@ -169,6 +169,8 @@ jobs:
     environment: release-publish
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -186,6 +188,18 @@ jobs:
           sha256sum kapsaro-*.tar.gz > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: 'artifacts/kapsaro-*.tar.gz'
+
+      - name: Stage attestation bundle
+        env:
+          TAG: ${{ needs.verify-release-input.outputs.tag }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "${BUNDLE_PATH}" "artifacts/kapsaro-${TAG}.sigstore.jsonl"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
         with:
@@ -193,6 +207,7 @@ jobs:
           files: |
             artifacts/kapsaro-*.tar.gz
             artifacts/SHA256SUMS
+            artifacts/*.sigstore.jsonl
           generate_release_notes: true
 
   update-homebrew-tap:

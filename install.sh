@@ -8,36 +8,6 @@ REPO="ebisawa/kapsaro"
 BIN_NAME="kapsaro"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
-compute_sha256() {
-  file="$1"
-
-  if command -v sha256sum >/dev/null 2>&1; then
-    hash="$(sha256sum "${file}" 2>/dev/null | awk '{print $1}')"
-    if [ -n "${hash}" ]; then
-      printf '%s\n' "${hash}"
-      return 0
-    fi
-  fi
-
-  if command -v shasum >/dev/null 2>&1; then
-    hash="$(shasum -a 256 "${file}" 2>/dev/null | awk '{print $1}')"
-    if [ -n "${hash}" ]; then
-      printf '%s\n' "${hash}"
-      return 0
-    fi
-  fi
-
-  if command -v openssl >/dev/null 2>&1; then
-    hash="$(openssl dgst -sha256 "${file}" 2>/dev/null | awk '{print $NF}')"
-    if [ -n "${hash}" ]; then
-      printf '%s\n' "${hash}"
-      return 0
-    fi
-  fi
-
-  return 1
-}
-
 # Detect OS
 OS="$(uname -s)"
 case "${OS}" in
@@ -84,38 +54,40 @@ if [ -z "${TAG}" ]; then
 fi
 echo "Latest version: ${TAG}"
 
-# Download and extract
+# Download and verify
 ARCHIVE="${BIN_NAME}-${TAG}-${TARGET}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ARCHIVE}"
-CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/SHA256SUMS"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
 echo "Downloading ${URL}..."
 curl -fsSL "${URL}" -o "${TMP_DIR}/${ARCHIVE}"
 
-echo "Downloading ${CHECKSUMS_URL}..."
-curl -fsSL "${CHECKSUMS_URL}" -o "${TMP_DIR}/SHA256SUMS"
-
-EXPECTED_SHA256="$(awk -v archive="${ARCHIVE}" '$2 == archive { print $1; exit }' "${TMP_DIR}/SHA256SUMS")"
-if [ -z "${EXPECTED_SHA256}" ]; then
-  echo "Checksum not found for ${ARCHIVE}" >&2
+# Verify the archive's build provenance via GitHub Artifact Attestations.
+# The attestation bundle is shipped with the release, so verification works
+# offline and needs no gh authentication. Verification is required by default.
+# Opt out of it only when gh is unavailable or when explicitly skipping, by
+# setting KAPSARO_INSECURE=1.
+if [ "${KAPSARO_INSECURE:-}" = "1" ]; then
+  echo "WARNING: KAPSARO_INSECURE=1 set; installing without provenance verification." >&2
+elif command -v gh >/dev/null 2>&1; then
+  BUNDLE="${BIN_NAME}-${TAG}.sigstore.jsonl"
+  BUNDLE_URL="https://github.com/${REPO}/releases/download/${TAG}/${BUNDLE}"
+  echo "Downloading attestation bundle..."
+  curl -fsSL "${BUNDLE_URL}" -o "${TMP_DIR}/${BUNDLE}"
+  echo "Verifying build provenance..."
+  if ! gh attestation verify "${TMP_DIR}/${ARCHIVE}" --bundle "${TMP_DIR}/${BUNDLE}" --repo "${REPO}"; then
+    echo "Provenance verification failed for ${ARCHIVE}." >&2
+    exit 1
+  fi
+  echo "Provenance verified."
+else
+  echo "GitHub CLI (gh) is required to verify build provenance but was not found." >&2
+  echo "Install it from https://cli.github.com and retry," >&2
+  echo "or set KAPSARO_INSECURE=1 to install without verification." >&2
   exit 1
 fi
 
-if ! ACTUAL_SHA256="$(compute_sha256 "${TMP_DIR}/${ARCHIVE}")"; then
-  echo "No SHA256 command found. Please install sha256sum, shasum, or openssl." >&2
-  exit 1
-fi
-
-if [ "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]; then
-  echo "SHA256 mismatch for ${ARCHIVE}" >&2
-  echo "Expected: ${EXPECTED_SHA256}" >&2
-  echo "Actual:   ${ACTUAL_SHA256}" >&2
-  exit 1
-fi
-
-echo "SHA256 verified."
 tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
 
 # Install binary

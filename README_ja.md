@@ -71,6 +71,8 @@ brew install kapsaro
 curl -fsSL https://raw.githubusercontent.com/ebisawa/kapsaro/main/install.sh | sh
 ```
 
+インストーラは、各リリースアーカイブのビルド来歴を GitHub Artifact Attestations で検証します。検証には GitHub CLI (`gh`) を使い、既定で検証が必須です。`gh` が未インストールの場合、または意図的に検証を省略する場合は、`KAPSARO_INSECURE=1` を設定すると検証なしでインストールします。
+
 ### ソースからビルド
 
 ```bash

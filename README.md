@@ -71,6 +71,8 @@ brew install kapsaro
 curl -fsSL https://raw.githubusercontent.com/ebisawa/kapsaro/main/install.sh | sh
 ```
 
+The installer verifies each release archive's build provenance with GitHub Artifact Attestations using the GitHub CLI (`gh`), and verification is required by default. If `gh` is not installed, or to skip verification deliberately, set `KAPSARO_INSECURE=1` to install without it.
+
 ### Build from source
 
 ```bash

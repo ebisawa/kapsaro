@@ -24,7 +24,7 @@ fn test_config_set_and_get() {
         .arg("set")
         .arg("member_handle")
         .arg("test@example.com")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -33,7 +33,7 @@ fn test_config_set_and_get() {
         .arg("config")
         .arg("get")
         .arg("member_handle")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("test@example.com"));
@@ -47,8 +47,8 @@ fn test_config_set_and_get_workspace() {
         .arg("config")
         .arg("set")
         .arg("workspace")
-        .arg("~/projects/demo/.secretenv")
-        .env("SECRETENV_HOME", home_dir.path())
+        .arg("~/projects/demo/.kapsaro")
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -56,10 +56,10 @@ fn test_config_set_and_get_workspace() {
         .arg("config")
         .arg("get")
         .arg("workspace")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("~/projects/demo/.secretenv"));
+        .stdout(predicate::str::contains("~/projects/demo/.kapsaro"));
 }
 
 // ============================================================================
@@ -76,7 +76,7 @@ fn test_config_set_and_list() {
         .arg("set")
         .arg("member_handle")
         .arg("test@example.com")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -84,7 +84,7 @@ fn test_config_set_and_list() {
     cmd()
         .arg("config")
         .arg("list")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("member_handle"));
@@ -98,19 +98,19 @@ fn test_config_list_includes_workspace() {
         .arg("config")
         .arg("set")
         .arg("workspace")
-        .arg("/tmp/secretenv/.secretenv")
-        .env("SECRETENV_HOME", home_dir.path())
+        .arg("/tmp/kapsaro/.kapsaro")
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
     cmd()
         .arg("config")
         .arg("list")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("workspace"))
-        .stdout(predicate::str::contains("/tmp/secretenv/.secretenv"));
+        .stdout(predicate::str::contains("/tmp/kapsaro/.kapsaro"));
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn test_workspace_config_is_used_for_workspace_commands() {
         .arg("set")
         .arg("workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -131,8 +131,8 @@ fn test_workspace_config_is_used_for_workspace_commands() {
         .arg("member")
         .arg("list")
         .current_dir(outside_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
@@ -145,7 +145,7 @@ fn test_config_set_creates_home_dir_if_missing() {
 
     assert!(
         !home_dir.exists(),
-        "Precondition: SECRETENV_HOME directory must not exist"
+        "Precondition: KAPSARO_HOME directory must not exist"
     );
 
     cmd()
@@ -153,11 +153,11 @@ fn test_config_set_creates_home_dir_if_missing() {
         .arg("set")
         .arg("github_user")
         .arg("ebisawa")
-        .env("SECRETENV_HOME", &home_dir)
+        .env("KAPSARO_HOME", &home_dir)
         .assert()
         .success();
 
-    assert!(home_dir.exists(), "Expected SECRETENV_HOME to be created");
+    assert!(home_dir.exists(), "Expected KAPSARO_HOME to be created");
     assert!(
         home_dir.join("config.toml").exists(),
         "Expected config.toml to be written"
@@ -179,7 +179,7 @@ fn test_config_set_rejects_symlinked_lock_file() {
         .arg("set")
         .arg("member_handle")
         .arg("test@example.com")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .failure()
         .stderr(predicate::str::contains("symlink"));
@@ -199,7 +199,7 @@ fn test_config_get_nonexistent_key() {
         .arg("config")
         .arg("get")
         .arg("member_handle")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .failure();
 }
@@ -216,7 +216,7 @@ fn test_config_invalid_key_fails() {
         .arg("config")
         .arg("get")
         .arg("invalid_key")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .failure()
         .stderr(predicate::str::contains("invalid key").or(predicate::str::contains("Invalid")));
@@ -236,7 +236,7 @@ fn test_config_unset_removes_value() {
         .arg("set")
         .arg("member_handle")
         .arg("test@example.com")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -245,7 +245,7 @@ fn test_config_unset_removes_value() {
         .arg("config")
         .arg("get")
         .arg("member_handle")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("test@example.com"));
@@ -255,7 +255,7 @@ fn test_config_unset_removes_value() {
         .arg("config")
         .arg("unset")
         .arg("member_handle")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -264,7 +264,7 @@ fn test_config_unset_removes_value() {
         .arg("config")
         .arg("get")
         .arg("member_handle")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .failure();
 }
@@ -277,8 +277,8 @@ fn test_config_unset_removes_workspace_value() {
         .arg("config")
         .arg("set")
         .arg("workspace")
-        .arg("/tmp/secretenv/.secretenv")
-        .env("SECRETENV_HOME", home_dir.path())
+        .arg("/tmp/kapsaro/.kapsaro")
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -286,7 +286,7 @@ fn test_config_unset_removes_workspace_value() {
         .arg("config")
         .arg("unset")
         .arg("workspace")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
@@ -294,7 +294,7 @@ fn test_config_unset_removes_workspace_value() {
         .arg("config")
         .arg("get")
         .arg("workspace")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .failure();
 }

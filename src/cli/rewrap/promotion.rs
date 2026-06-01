@@ -9,8 +9,8 @@ use crate::cli::common::output::trust::review::{
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use secretenv_core::cli_api::app::rewrap::promotion::{PromotionReviewPrompt, PromotionReviewView};
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::rewrap::promotion::{PromotionReviewPrompt, PromotionReviewView};
+use kapsaro_core::Result;
 #[cfg(test)]
 use std::io::BufRead;
 

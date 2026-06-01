@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::output::text::doctor::format_doctor_report;
-use secretenv_core::cli_api::app::doctor::types::{
+use kapsaro_core::cli_api::app::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
 };
 
@@ -13,7 +13,7 @@ fn test_doctor_text_output_orders_sections() {
         "workspace.resolve",
         DoctorCategory::Workspace,
         DoctorStatus::Ok,
-        DoctorSubject::Path(".secretenv".into()),
+        DoctorSubject::Path(".kapsaro".into()),
         "Workspace resolved",
     )]);
     report.extend([DoctorCheck::new(
@@ -24,7 +24,7 @@ fn test_doctor_text_output_orders_sections() {
         "Local trust store is missing",
     )
     .with_reason("approval cache is not available")
-    .with_next_action("run secretenv member verify --approve")]);
+    .with_next_action("run kapsaro member verify --approve")]);
 
     let output = format_doctor_report(&report, false);
 
@@ -36,7 +36,7 @@ fn test_doctor_text_output_orders_sections() {
     assert!(findings < healthy);
     assert!(healthy < details);
     assert!(output.contains("Status: WARN"));
-    assert!(output.contains("run secretenv member verify --approve"));
+    assert!(output.contains("run kapsaro member verify --approve"));
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn test_doctor_text_output_keeps_long_messages_and_paths_inline() {
         "recipient hash {} could not be matched to current members",
         "abcdef0123456789".repeat(8)
     );
-    let next_action = format!("run secretenv rewrap --target {subject}");
+    let next_action = format!("run kapsaro rewrap --target {subject}");
     let mut report = DoctorReport::new(workspace);
     report.extend([DoctorCheck::new(
         "artifact.recipient_handle",
@@ -90,5 +90,5 @@ fn test_doctor_text_output_keeps_long_messages_and_paths_inline() {
     assert!(output.contains("/workspace/nested-directory/"));
     assert!(output.contains("alice.release.engineering."));
     assert!(output.contains("abcdef0123456789"));
-    assert!(output.contains("run secretenv rewrap --target secrets/"));
+    assert!(output.contains("run kapsaro rewrap --target secrets/"));
 }

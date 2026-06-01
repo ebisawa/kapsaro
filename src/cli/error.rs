@@ -4,7 +4,7 @@
 //! Top-level CLI error presentation.
 
 use console::Style;
-use secretenv_core::Error;
+use kapsaro_core::Error;
 
 use crate::cli::common::output::text::layout;
 

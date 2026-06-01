@@ -4,7 +4,7 @@
 //! Minimal helpers for CLI internal unit tests.
 //! These helpers avoid pulling the full integration-test fixture module into the library test target.
 
-use secretenv_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
+use kapsaro_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
 use std::sync::{Mutex, MutexGuard};
 
 pub(crate) fn member_handle(value: impl Into<String>) -> MemberHandle {

@@ -10,10 +10,10 @@ use crate::cli::common::{
     TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
+use kapsaro_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
+use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use kapsaro_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
-use secretenv_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use secretenv_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use std::fs;
 use tempfile::TempDir;
 
@@ -33,7 +33,7 @@ fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> st
     let private_json = format!(
         r#"{{
     "protected": {{
-        "format": "secretenv:format:private-key@7",
+        "format": "kapsaro:format:private-key@1",
         "subject_handle": "{}",
         "kid": "{}",
         "alg": {{
@@ -62,12 +62,12 @@ fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> st
 fn save_test_encrypted_file(path: &std::path::Path) {
     let content = r#"{
   "protected": {
-    "format": "secretenv:format:file-enc@7",
+    "format": "kapsaro:format:file-enc@1",
     "sid": "550e8400-e29b-41d4-a716-446655440000",
     "wrap": [],
     "payload": {
       "protected": {
-        "format": "secretenv:format:file-enc:payload@7",
+        "format": "kapsaro:format:file-enc:payload@1",
         "sid": "550e8400-e29b-41d4-a716-446655440000",
         "alg": {
           "aead": "xchacha20-poly1305"
@@ -98,7 +98,7 @@ fn test_decrypt_help_aligns_multiline_usage() {
         .assert()
         .success()
         .stdout(predicate::str::contains(
-            "Usage: secretenv decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       secretenv decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)",
+            "Usage: kapsaro decrypt [OPTIONS] <INPUT> (--out <OUT> | --stdout)\n       kapsaro decrypt [OPTIONS] --stdin (--out <OUT> | --stdout)",
         ));
 }
 
@@ -124,7 +124,7 @@ fn test_decrypt_rejects_kv_enc_format() {
     let test_dir = temp_dir.path();
 
     let encrypted_path = test_dir.join("test.kv");
-    let content = r#":SECRETENV_KV 9
+    let content = r#":KAPSARO_KV 1
 :HEAD eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMS0wMVQwMDowMDowMFoifQ
 :WRAP eyJ3cmFwIjpbeyJtX2lkIjoiYWxpY2VAZXhhbXBsZS5jb20iLCJraWQiOiIwMUhURVNUIiwiZW5jX2NrIjoiZHVtbXkifV19
 DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
@@ -144,7 +144,7 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
         .arg(test_dir.join("out.dat").to_str().unwrap())
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", test_dir.to_str().unwrap())
+        .env("KAPSARO_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("Expected file-enc format"));
@@ -173,7 +173,7 @@ fn test_decrypt_rejects_unknown_format() {
         .arg(unknown_path.to_str().unwrap())
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", test_dir.to_str().unwrap())
+        .env("KAPSARO_HOME", test_dir.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("Expected file-enc format"));
@@ -218,8 +218,8 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--debug")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(
@@ -234,7 +234,7 @@ fn test_decrypt_file_enc_roundtrip_with_out() {
         .stdout(predicate::str::contains(
             "[CRYPTO] HMAC-SHA256: key possession: verify tag format=file",
         ))
-        .stdout(predicate::str::contains("domain=secretenv:context").not())
+        .stdout(predicate::str::contains("domain=kapsaro:context").not())
         .stdout(predicate::str::contains("body_bytes_len=").not())
         .stdout(predicate::str::contains("expected_tag_len=").not())
         .stdout(predicate::str::contains("SECRET_VALUE=hello_world").not())
@@ -285,8 +285,8 @@ fn test_decrypt_rejects_tampered_file_enc_signature() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("Signature verification failed"));
@@ -350,8 +350,8 @@ fn test_decrypt_surfaces_private_key_expiry_warning_on_stderr() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Warning: Local key expires in"));
@@ -391,8 +391,8 @@ fn test_decrypt_file_with_stdout_writes_bytes_to_stdout() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Decrypted to:").not());
@@ -429,8 +429,8 @@ fn test_decrypt_stdin_with_out_writes_decrypted_file() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin(encrypted)
         .assert()
         .success()
@@ -464,8 +464,8 @@ fn test_decrypt_stdin_with_stdout_writes_bytes_to_stdout() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin(fs::read_to_string(&encrypted_file).unwrap())
         .assert()
         .success()
@@ -498,8 +498,8 @@ fn test_decrypt_file_requires_out_or_stdout() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains(

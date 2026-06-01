@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use secretenv_core::cli_api::app::kv::types::KvReadMode;
+use kapsaro_core::cli_api::app::kv::types::KvReadMode;
 
 use super::resolve_get_read_mode;
 

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kapsaro.private.key.schema.json",
+  "title": "kapsaro private key schema",
+  "$defs": {
+    "private_key_algorithm_v7": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kdf": { "type": "string", "enum": ["sshsig-ed25519-hkdf-sha256"] },
+            "fpr": { "type": "string", "pattern": "^[sS][hH][aA]256:[a-zA-Z0-9+/]+$" },
+            "ikm_salt": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_32" },
+            "hkdf_salt": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_32" },
+            "aead": { "$ref": "kapsaro_common_schema.json#/$defs/payload_aead" }
+          },
+          "required": ["kdf", "fpr", "ikm_salt", "hkdf_salt", "aead"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kdf": { "type": "string", "enum": ["argon2id-m64t3p4-hkdf-sha256"] },
+            "ikm_salt": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_32" },
+            "hkdf_salt": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_32" },
+            "aead": { "$ref": "kapsaro_common_schema.json#/$defs/payload_aead" }
+          },
+          "required": ["kdf", "ikm_salt", "hkdf_salt", "aead"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "description": "PrivateKey v7 - SSH Ed25519 encrypted private key storage (external format)",
+  "additionalProperties": false,
+  "properties": {
+    "protected": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "PrivateKey protected header (AAD source)",
+      "properties": {
+        "format": { "const": "kapsaro:format:private-key@1" },
+        "subject_handle": { "$ref": "kapsaro_common_schema.json#/$defs/member_handle" },
+        "kid": { "$ref": "kapsaro_common_schema.json#/$defs/kid" },
+        "alg": { "$ref": "#/$defs/private_key_algorithm_v7" },
+        "created_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" },
+        "expires_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" }
+      },
+      "required": ["format", "subject_handle", "kid", "alg", "created_at", "expires_at"]
+    },
+    "encrypted": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "PrivateKey encrypted data",
+      "properties": {
+        "nonce": {
+          "$ref": "kapsaro_common_schema.json#/$defs/b64url_24",
+          "description": "AEAD nonce (base64url, 24 bytes)"
+        },
+        "ct": {
+          "$ref": "kapsaro_common_schema.json#/$defs/b64url",
+          "description": "Ciphertext (base64url)"
+        }
+      },
+      "required": ["nonce", "ct"]
+    }
+  },
+  "required": ["protected", "encrypted"]
+}

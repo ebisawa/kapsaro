@@ -1,12 +1,12 @@
 # Windows / WSL2 Supplemental Guide
 
-On Windows, you can install and use secretenv in a **WSL2 (Windows Subsystem for Linux)** environment just like on a normal Linux system.
+On Windows, you can install and use kapsaro in a **WSL2 (Windows Subsystem for Linux)** environment just like on a normal Linux system.
 
 This document is intended as a **supplement** to `guides/user_guide_en.md` / `guides/user_guide_ja.md`, and summarizes Windows/WSL2-specific notes and recommended configuration examples.
 
 ## Using the 1Password SSH agent on WSL2
 
-If you want to use the 1Password SSH agent from WSL2, configure secretenv as follows:
+If you want to use the 1Password SSH agent from WSL2, configure kapsaro as follows:
 
 ```toml
 ssh_identity = "/home/<username>/.ssh/<your-ssh-public-key>.pub"
@@ -16,14 +16,14 @@ ssh_signing_method = "ssh-keygen"
 
 *(Replace `username` and the file name to match your environment.)*
 
-### Example: applying the recommended settings via `secretenv config set`
+### Example: applying the recommended settings via `kapsaro config set`
 
 Below is an example of setting the recommended values via the CLI.
 
 ```bash
-secretenv config set ssh_identity ~/.ssh/<your-ssh-public-key>.pub
-secretenv config set ssh_keygen_command ssh-keygen.exe
-secretenv config set ssh_signing_method ssh-keygen
+kapsaro config set ssh_identity ~/.ssh/<your-ssh-public-key>.pub
+kapsaro config set ssh_keygen_command ssh-keygen.exe
+kapsaro config set ssh_signing_method ssh-keygen
 ```
 
 ### Key points

@@ -19,11 +19,11 @@ use crate::cli::common::output::text::trust::{
     print_recipient_set_purge_candidates, print_recipient_set_purge_summary,
     print_trust_purge_candidates, print_trust_purge_summary,
 };
-use secretenv_core::cli_api::app::trust::list::{RecipientSetListResult, TrustListResult};
-use secretenv_core::cli_api::app::trust::management::{
+use kapsaro_core::cli_api::app::trust::list::{RecipientSetListResult, TrustListResult};
+use kapsaro_core::cli_api::app::trust::management::{
     PurgeKnownKeysResult, PurgeRecipientSetsResult,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 
 pub(crate) fn print_trust_list(json_output: bool, result: &TrustListResult) -> Result<()> {
     let items = view::build_trust_list_views(&result.items);

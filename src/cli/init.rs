@@ -14,8 +14,8 @@ use clap::Args;
 
 use crate::cli::options::{MemberHandleOption, SigningOptions};
 use crate::cli::registration::run_registration_command;
-use secretenv_core::cli_api::app::registration::types::RegistrationMode;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::registration::types::RegistrationMode;
+use kapsaro_core::Error;
 
 #[derive(Args)]
 pub(crate) struct InitArgs {

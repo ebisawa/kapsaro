@@ -1,4 +1,4 @@
-# secretenv User Guide
+# kapsaro User Guide
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@
 
 ## 1. Introduction
 
-### What is secretenv?
+### What is kapsaro?
 
 Team development requires sharing secrets — database passwords, API keys, certificates — among multiple members. Common approaches are often problematic:
 
@@ -31,7 +31,7 @@ Team development requires sharing secrets — database passwords, API keys, cert
 - Leaving real values as comments in `.env.example`
 - Former members retaining passwords that were shared with them
 
-secretenv is a CLI tool that solves these problems by **managing encrypted secrets in a Git repository**, allowing teams to share secrets safely and traceably.
+kapsaro is a CLI tool that solves these problems by **managing encrypted secrets in a Git repository**, allowing teams to share secrets safely and traceably.
 
 ### What it solves
 
@@ -42,7 +42,7 @@ secretenv is a CLI tool that solves these problems by **managing encrypted secre
 
 ### What it does not solve
 
-secretenv is not a complete solution to every security problem. It does not automatically solve what happens after decryption, how to revoke values that were already seen, or how to protect compromised machines and keys. See [Chapter 4](#4-security-basics-for-users) for these assumptions and limits.
+kapsaro is not a complete solution to every security problem. It does not automatically solve what happens after decryption, how to revoke values that were already seen, or how to protect compromised machines and keys. See [Chapter 4](#4-security-basics-for-users) for these assumptions and limits.
 
 ---
 
@@ -50,7 +50,7 @@ secretenv is not a complete solution to every security problem. It does not auto
 
 ### Start with the big picture
 
-It helps to think about secretenv in this order:
+It helps to think about kapsaro in this order:
 
 1. The team shares encrypted secrets and member information in a workspace inside the Git repository
 2. Each user has their own public key and private key
@@ -60,10 +60,10 @@ The next sections explain the tool in that order.
 
 ### Share the workspace through Git
 
-The workspace is the `.secretenv/` directory in your Git repository. This is where the team shares secrets and member information.
+The workspace is the `.kapsaro/` directory in your Git repository. This is where the team shares secrets and member information.
 
 ```
-.secretenv/
+.kapsaro/
 ├── members/
 │   ├── active/
 │   └── incoming/
@@ -75,7 +75,7 @@ The workspace is the `.secretenv/` directory in your Git repository. This is whe
 - `members/incoming/`: public keys waiting for approval or rotation
 - `secrets/`: encrypted secrets
 
-`.secretenv/` is part of normal operation, so do not add it to `.gitignore`.
+`.kapsaro/` is part of normal operation, so do not add it to `.gitignore`.
 
 ### Understand the role of the keys first
 
@@ -84,7 +84,7 @@ Each user has their own key pair.
 - A **public key** can be shared with the team
 - A **private key** must stay with that user
 
-The basic idea of public-key encryption is simple: **encrypt with a public key, decrypt with the matching private key**. In secretenv, secrets are encrypted for recipients' public keys, so only users with the matching private keys can decrypt them. In other words, it does not depend on securely distributing one team-wide shared secret key.
+The basic idea of public-key encryption is simple: **encrypt with a public key, decrypt with the matching private key**. In kapsaro, secrets are encrypted for recipients' public keys, so only users with the matching private keys can decrypt them. In other words, it does not depend on securely distributing one team-wide shared secret key.
 
 With shared-key encryption, everyone who needs access must somehow receive the same secret key securely, so **how to distribute that shared secret** becomes an operational problem in itself. With public-key encryption, you only distribute public keys, so you do not need to distribute the secret material that must remain private.
 
@@ -96,7 +96,7 @@ The difficult part is **knowing whose public key it really is**. A public key ca
 
 ### How a member becomes usable
 
-New members and rotated keys first go into `members/incoming/`. They become usable recipients only after an existing member reviews the PR and runs `secretenv rewrap`.
+New members and rotated keys first go into `members/incoming/`. They become usable recipients only after an existing member reviews the PR and runs `kapsaro rewrap`.
 
 In practice, **PR review is part of member approval**. During review, you are not only checking that "a public key was added" but also deciding whether that key should be trusted as belonging to that person. Do not merge unfamiliar public keys casually.
 
@@ -113,7 +113,7 @@ For operations, see [Chapter 8](#8-daily-usage-kv-store) and [Chapter 9](#9-file
 
 ### Workspace
 
-The workspace is the `.secretenv/` directory. When you run secretenv inside a Git repository, it usually finds the workspace automatically. In a layout without `.git`, it also auto-detects `.secretenv/` directly under the current directory. If the workspace is elsewhere, specify it explicitly with `-w` / `--workspace`.
+The workspace is the `.kapsaro/` directory. When you run kapsaro inside a Git repository, it usually finds the workspace automatically. In a layout without `.git`, it also auto-detects `.kapsaro/` directly under the current directory. If the workspace is elsewhere, specify it explicitly with `-w` / `--workspace`.
 
 ### `active` / `incoming`
 
@@ -126,7 +126,7 @@ The operation that updates recipient information after a member change or key ro
 
 ### `member handle`
 
-A self-asserted handle that a user keeps using across SecretEnv workspaces. It often looks like an email address, but it does not have to be a real email address or a verified external identifier.
+A self-asserted handle that a user keeps using across Kapsaro workspaces. It often looks like an email address, but it does not have to be a real email address or a verified external identifier.
 
 ### `kid`
 
@@ -134,17 +134,17 @@ An ID that identifies a key. A single member can have multiple keys, so `kid` te
 
 ### Local trust store
 
-The local record of approved keys under `~/.config/secretenv/trust/`. Commands such as `member verify --approve` store approvals there so you are not asked the same question repeatedly.
+The local record of approved keys under `~/.config/kapsaro/trust/`. Commands such as `member verify --approve` store approvals there so you are not asked the same question repeatedly.
 
 ---
 
 ## 4. Security Basics for Users
 
-### What secretenv protects
+### What kapsaro protects
 
 Secrets stored in Git are encrypted, and signatures are verified. Even if the repository is shared, the content cannot be read without the right private key.
 
-### What secretenv does not automatically protect
+### What kapsaro does not automatically protect
 
 - What legitimate members do after they decrypt a secret
 - Copies or memories of values that were already seen
@@ -154,7 +154,7 @@ Removing a member does not erase secrets they already saw. If needed, rotate the
 
 ### What remains visible as plaintext metadata
 
-What secretenv protects cryptographically is the secret value or the file content in file-enc. Some metadata remains visible in plaintext because it is needed for operation and audit.
+What kapsaro protects cryptographically is the secret value or the file content in file-enc. Some metadata remains visible in plaintext because it is needed for operation and audit.
 
 - kv-enc key names
 - Recipient lists (`member_handle` / `kid`)
@@ -166,7 +166,7 @@ This is why `list` can show key names without decryption and `inspect` can show 
 
 ### Role of the SSH key
 
-The SSH Ed25519 key is not the key that directly decrypts workspace secrets. It is used to protect the local secretenv private key and to show which SSH key is backing that secretenv key.
+The SSH Ed25519 key is not the key that directly decrypts workspace secrets. It is used to protect the local kapsaro private key and to show which SSH key is backing that kapsaro key.
 
 In workflows that use GitHub-backed online verify, the tool also checks whether `attestation.pub` is still present in that GitHub account's **current** SSH public-key list. Removing an SSH public key from GitHub therefore stops future online verification that depends on that key. This does not erase existing attestation, but it is a practical way to stop future approvals or trust updates that rely on that key.
 
@@ -191,8 +191,8 @@ If you need the deeper design background, see [Security Design](security_design_
 ### Install via Homebrew (Recommended)
 
 ```bash
-brew tap ebisawa/secretenv
-brew install secretenv
+brew tap ebisawa/kapsaro
+brew install kapsaro
 ```
 
 ### Install from Source (Alternative)
@@ -200,16 +200,16 @@ brew install secretenv
 If you prefer to build from source, a Rust toolchain (`cargo`) is required.
 
 ```bash
-git clone <secretenv-repo>
-cd secretenv
+git clone <kapsaro-repo>
+cd kapsaro
 cargo install --path .
 ```
 
-After installation, run `secretenv --help` to see the list of commands.
+After installation, run `kapsaro --help` to see the list of commands.
 
 ### Verify SSH Agent
 
-secretenv uses SSH keys to protect private keys. Verify that your SSH agent is running.
+kapsaro uses SSH keys to protect private keys. Verify that your SSH agent is running.
 
 ```bash
 # Check SSH agent
@@ -230,11 +230,11 @@ ssh-keygen -t ed25519 -C "your@email.com"
 
 ## 6. Quick Start (Team Leader)
 
-Follow these steps when introducing secretenv to your team for the first time.
+Follow these steps when introducing kapsaro to your team for the first time.
 
 ### Step 1: Prepare a repository
 
-Workspace auto-detection works inside a Git repository. In a layout without `.git`, it auto-detects only `.secretenv/` directly under the current directory. Start by navigating to the directory that contains the workspace.
+Workspace auto-detection works inside a Git repository. In a layout without `.git`, it auto-detects only `.kapsaro/` directly under the current directory. Start by navigating to the directory that contains the workspace.
 
 ```bash
 # Start with an existing repository
@@ -248,13 +248,13 @@ cd my-project
 ### Step 2: Initialize the Workspace
 
 ```bash
-secretenv init --member-handle alice@example.com
+kapsaro init --member-handle alice@example.com
 ```
 
 Output:
 
 ```
-Creating workspace .secretenv/
+Creating workspace .kapsaro/
   Created members/active/
   Created members/incoming/
   Created secrets/
@@ -268,7 +268,7 @@ Added 'alice@example.com' to members/active/
 
 `init` automatically:
 
-- Creates the `.secretenv/` directory structure
+- Creates the `.kapsaro/` directory structure
 - Generates your local key pair in the keystore
 - Registers your public key at `members/active/alice@example.com.json`
 
@@ -278,19 +278,19 @@ If the workspace already exists with active members, `init` exits without change
 
 ```bash
 # Add secrets in KV format
-secretenv set DATABASE_URL "postgres://user:pass@localhost/mydb"
-secretenv set API_KEY "sk-your-api-key"
+kapsaro set DATABASE_URL "postgres://user:pass@localhost/mydb"
+kapsaro set API_KEY "sk-your-api-key"
 
 # Or bulk-import an existing .env file
-secretenv import .env
+kapsaro import .env
 ```
 
 ### Step 4: Verify the added secrets
 
 ```bash
-secretenv list
-secretenv get DATABASE_URL
-secretenv run -- env | grep DATABASE_URL
+kapsaro list
+kapsaro get DATABASE_URL
+kapsaro run -- env | grep DATABASE_URL
 ```
 
 At this point, confirm that the key name is listed, the value can be read, and the value can be injected into a child process as an environment variable. See [Chapter 8](#8-daily-usage-kv-store) for the full `list`, `get`, and `run` usage.
@@ -298,8 +298,8 @@ At this point, confirm that the key name is listed, the value can be read, and t
 ### Step 5: Commit to Git
 
 ```bash
-git add .secretenv/
-git commit -m "Initialize secretenv workspace"
+git add .kapsaro/
+git commit -m "Initialize kapsaro workspace"
 ```
 
 ### Step 6: Have team members join
@@ -316,7 +316,7 @@ Follow these steps to join an existing Workspace.
 
 ### Step 1: Clone the repository
 
-Clone the repository and navigate into the directory. This allows secretenv to auto-detect the workspace.
+Clone the repository and navigate into the directory. This allows kapsaro to auto-detect the workspace.
 
 ```bash
 git clone <repo-url>
@@ -326,7 +326,7 @@ cd my-project
 ### Step 2: Submit a join request
 
 ```bash
-secretenv join --member-handle bob@example.com
+kapsaro join --member-handle bob@example.com
 ```
 
 Output:
@@ -347,8 +347,8 @@ Unlike `init`, `join` does not create a Workspace — it only places your public
 
 ```bash
 git checkout -b join/bob
-git add .secretenv/members/incoming/bob@example.com.json
-git commit -m "Add bob to secretenv (incoming)"
+git add .kapsaro/members/incoming/bob@example.com.json
+git commit -m "Add bob to kapsaro (incoming)"
 git push origin join/bob
 ```
 
@@ -356,7 +356,7 @@ Create a PR on GitHub (or your Git hosting service) and request a review from ex
 
 ### Step 4: Ask an existing member to run rewrap
 
-After the PR is merged, an existing member runs `secretenv rewrap` to approve you. Once rewrap is committed, you will be able to access secrets.
+After the PR is merged, an existing member runs `kapsaro rewrap` to approve you. Once rewrap is committed, you will be able to access secrets.
 
 ### Step 5: Verify access and trust existing members
 
@@ -365,11 +365,11 @@ After the PR is merged, an existing member runs `secretenv rewrap` to approve yo
 git pull
 
 # Verify access
-secretenv get DATABASE_URL
-secretenv run -- env | grep MY_APP
+kapsaro get DATABASE_URL
+kapsaro run -- env | grep MY_APP
 
 # Register existing members' keys in your local trust store
-secretenv member verify --approve
+kapsaro member verify --approve
 ```
 
 The last command registers the team's existing keys in your local trust store, preventing approval prompts during future operations.
@@ -382,57 +382,57 @@ The last command registers the team's existing keys in your local trust store, p
 
 ```bash
 # Basic usage
-secretenv set DATABASE_URL "postgres://user:pass@localhost/db"
+kapsaro set DATABASE_URL "postgres://user:pass@localhost/db"
 
 # Save to a different store (with -n option)
-secretenv set -n staging DATABASE_URL "postgres://user:pass@staging/db"
-secretenv set -n prod DATABASE_URL "postgres://user:pass@prod/db"
+kapsaro set -n staging DATABASE_URL "postgres://user:pass@staging/db"
+kapsaro set -n prod DATABASE_URL "postgres://user:pass@prod/db"
 ```
 
-If no store is specified, the value is saved to `default` (`.secretenv/secrets/default.kvenc`).
+If no store is specified, the value is saved to `default` (`.kapsaro/secrets/default.kvenc`).
 
 To avoid leaving passwords or tokens in shell history, do not write the value as a command-line argument. Use `--stdin` and enter the value through stdin instead.
 
 ```bash
 # Interactive input (for passwords)
-secretenv set SECRET_TOKEN --stdin
+kapsaro set SECRET_TOKEN --stdin
 # → Waits for input. Press Ctrl+D to confirm.
 ```
 
 ### Removing Entries
 
 ```bash
-secretenv unset OLD_KEY
-secretenv unset -n staging OLD_KEY
+kapsaro unset OLD_KEY
+kapsaro unset -n staging OLD_KEY
 ```
 
 ### Retrieving Entries
 
 ```bash
 # Get a specific key's value
-secretenv get DATABASE_URL
+kapsaro get DATABASE_URL
 
 # Output in KEY="VALUE" format
-secretenv get --with-key DATABASE_URL
+kapsaro get --with-key DATABASE_URL
 
 # Get all entries
-secretenv get --all
+kapsaro get --all
 
 # Get all entries in KEY="VALUE" format
-secretenv get --all --with-key
+kapsaro get --all --with-key
 
 # Get from a different store
-secretenv get -n staging DATABASE_URL
+kapsaro get -n staging DATABASE_URL
 ```
 
 ### Listing Keys
 
 ```bash
 # List key names (values are not displayed)
-secretenv list
+kapsaro list
 
 # List keys from a different store
-secretenv list -n staging
+kapsaro list -n staging
 ```
 
 `list` does not decrypt values. It verifies the encrypted file's signature, trust decision, and key-possession proof before showing key names. Use `get` to retrieve values.
@@ -441,25 +441,25 @@ secretenv list -n staging
 
 ```bash
 # Inject all secrets from the default store as environment variables
-secretenv run -- ./my-app
+kapsaro run -- ./my-app
 
 # Use a different store
-secretenv run -n staging -- ./my-app
+kapsaro run -n staging -- ./my-app
 
 # Pass multiple arguments
-secretenv run -- python manage.py runserver
+kapsaro run -- python manage.py runserver
 ```
 
-`run` inherits the parent process environment. However, parent environment variables whose names start with `SECRETENV_` are not passed to the child process. Decrypted secret values are applied last, so they override any parent environment variable with the same name.
+`run` inherits the parent process environment. However, parent environment variables whose names start with `KAPSARO_` are not passed to the child process. Decrypted secret values are applied last, so they override any parent environment variable with the same name.
 
 ### Bulk Importing a .env File
 
 ```bash
 # Import .env into the default store
-secretenv import .env
+kapsaro import .env
 
 # Import into a different store
-secretenv import -n staging staging.env
+kapsaro import -n staging staging.env
 ```
 
 Existing keys are overwritten.
@@ -474,45 +474,45 @@ Use `encrypt` / `decrypt` for secrets that don't fit the KV format, such as cert
 
 ```bash
 # Encrypt a file (generates <filename>.encrypted in the current directory)
-secretenv encrypt certs/ca.pem
+kapsaro encrypt certs/ca.pem
 # → ./ca.pem.encrypted
 
 # Specify an output path
-secretenv encrypt certs/ca.pem --out .secretenv/secrets/ca.pem.encrypted
+kapsaro encrypt certs/ca.pem --out .kapsaro/secrets/ca.pem.encrypted
 
 # Encrypt from stdin and save to a file
-cat certs/ca.pem | secretenv encrypt --stdin --out .secretenv/secrets/ca.pem.encrypted
+cat certs/ca.pem | kapsaro encrypt --stdin --out .kapsaro/secrets/ca.pem.encrypted
 
 # Encrypt from stdin and emit file-enc JSON to stdout
-cat certs/ca.pem | secretenv encrypt --stdin --stdout > ca.pem.encrypted
+cat certs/ca.pem | kapsaro encrypt --stdin --stdout > ca.pem.encrypted
 ```
 
 A signature is attached automatically during encryption.
 
-Batch `rewrap` automatically covers files under `.secretenv/secrets/` only when `--target` is not provided. If you want to rewrap only a specific file-enc artifact, use `secretenv rewrap --target <path>` so only the specified file is processed.
+Batch `rewrap` automatically covers files under `.kapsaro/secrets/` only when `--target` is not provided. If you want to rewrap only a specific file-enc artifact, use `kapsaro rewrap --target <path>` so only the specified file is processed.
 
 ### Decrypting
 
 ```bash
 # Signature verification is performed before decryption
-secretenv decrypt ca.pem.encrypted --out certs/ca.pem
+kapsaro decrypt ca.pem.encrypted --out certs/ca.pem
 
 # Write decrypted output to stdout
-secretenv decrypt ca.pem.encrypted --stdout > certs/ca.pem
+kapsaro decrypt ca.pem.encrypted --stdout > certs/ca.pem
 
 # Read file-enc JSON from stdin and decrypt it
-cat ca.pem.encrypted | secretenv decrypt --stdin --stdout > certs/ca.pem
+cat ca.pem.encrypted | kapsaro decrypt --stdin --stdout > certs/ca.pem
 ```
 
-Do not manage decrypted plaintext files in Git. `.secretenv/` belongs in Git, but decrypted `.env` files, certificates, and other plaintext outputs should be covered by `.gitignore`.
+Do not manage decrypted plaintext files in Git. `.kapsaro/` belongs in Git, but decrypted `.env` files, certificates, and other plaintext outputs should be covered by `.gitignore`.
 
 ### Inspecting Metadata
 
 You can examine an encrypted file's metadata without decrypting it.
 
 ```bash
-secretenv inspect .secretenv/secrets/default.kvenc
-secretenv inspect ca.pem.encrypted
+kapsaro inspect .kapsaro/secrets/default.kvenc
+kapsaro inspect ca.pem.encrypted
 ```
 
 Information displayed:
@@ -539,19 +539,19 @@ Information displayed:
 
 ## 10. Workspace Health Checks
 
-`secretenv doctor` is a read-only command for checking whether the current workspace and local state are ready to use safely. Start with the default output for the overall status, then use `--verbose` when you need lower-level reasons.
+`kapsaro doctor` is a read-only command for checking whether the current workspace and local state are ready to use safely. Start with the default output for the overall status, then use `--verbose` when you need lower-level reasons.
 
 ```bash
-secretenv doctor
-secretenv doctor --verbose
-secretenv doctor --workspace .secretenv --home ~/.config/secretenv
+kapsaro doctor
+kapsaro doctor --verbose
+kapsaro doctor --workspace .kapsaro --home ~/.config/kapsaro
 ```
 
 Run it before or after work such as:
 
 - Reviewing a new member join request
 - Running `rewrap` or completing key rotation
-- Configuring `SECRETENV_PRIVATE_KEY` for CI/CD
+- Configuring `KAPSARO_PRIVATE_KEY` for CI/CD
 - Release preparation or periodic workspace audits
 - Investigating trust, recipient, signature, key-expiry, or GitHub verification warnings
 - Moving to another workstation, importing keys, or recovering local state
@@ -562,8 +562,8 @@ Run it before or after work such as:
 - Active and incoming member files, key expiry, duplicate `kid` values, and GitHub binding or verification state
 - Local keystore availability and active private key readiness
 - Local trust store approvals for active members
-- Encrypted artifacts under `.secretenv/secrets/`
-- CI environment-key readiness when `SECRETENV_PRIVATE_KEY` is set
+- Encrypted artifacts under `.kapsaro/secrets/`
+- CI environment-key readiness when `KAPSARO_PRIVATE_KEY` is set
 
 Artifact checks verify metadata, signatures, recipients, and disclosure history while secret payloads remain encrypted.
 
@@ -591,7 +591,7 @@ Interpret `Status` as follows.
 
 The command exits with status 1 only when a FAIL finding exists. WARN and SKIP findings exit with status 0 so local troubleshooting flows can continue while you review the details. In CI, use `--json` and inspect `status`, `next_actions`, and `checks` if the workflow needs its own policy for allowing WARN or SKIP results.
 
-`secretenv doctor` does not prompt for approval. If it recommends trusting a key, approving a recipient set, or running `rewrap`, run the command shown in the next-action line after reviewing the finding.
+`kapsaro doctor` does not prompt for approval. If it recommends trusting a key, approving a recipient set, or running `rewrap`, run the command shown in the next-action line after reviewing the finding.
 
 ---
 
@@ -599,7 +599,7 @@ The command exits with status 1 only when a FAIL finding exists. WARN and SKIP f
 
 ### Member Addition Git Workflow
 
-When a new member submits a PR via `secretenv join`, follow this flow to approve them.
+When a new member submits a PR via `kapsaro join`, follow this flow to approve them.
 
 **Why PR review matters**: Reviewing and merging a PR is the decision to "trust this person's public key." Merging a PR from an unknown person without review means adding them as a recipient of your secrets.
 
@@ -608,7 +608,7 @@ When a new member submits a PR via `secretenv join`, follow this flow to approve
 git pull
 
 # 2. Run rewrap and review the displayed key information
-secretenv rewrap
+kapsaro rewrap
 
 # Example:
 # Member bob@example.com
@@ -617,7 +617,7 @@ secretenv rewrap
 # Approve? [y/N]: y    ← verify this is really their key before pressing y
 
 # 3. Commit and push changes
-git add .secretenv/
+git add .kapsaro/
 git commit -m "Approve bob and rewrap secrets"
 git push
 ```
@@ -629,7 +629,7 @@ After `rewrap` completes:
 **Recommended**: After rewrap, register the new member's key in your local trust store to avoid approval prompts on future operations:
 
 ```bash
-secretenv member verify --approve
+kapsaro member verify --approve
 ```
 
 When incoming members exist, `rewrap` asks for interactive approval. Review the displayed key information and approve it only after deciding that the public key really belongs to that person. If there are no incoming members, `rewrap` usually runs non-interactively because it only needs to synchronize recipient data.
@@ -642,11 +642,11 @@ Use `member add` when an administrator needs to add a public key file that was r
 
 ```bash
 # Add the public key file to incoming
-secretenv member add bob.public.json
+kapsaro member add bob.public.json
 
 # Send the added incoming member file for review
-git add .secretenv/members/incoming/bob@example.com.json
-git commit -m "Add bob to secretenv (incoming)"
+git add .kapsaro/members/incoming/bob@example.com.json
+git commit -m "Add bob to kapsaro (incoming)"
 git push
 ```
 
@@ -656,10 +656,10 @@ git push
 
 ```bash
 # Show all members (active + incoming)
-secretenv member list
+kapsaro member list
 
 # Show details for a specific member
-secretenv member show bob@example.com
+kapsaro member show bob@example.com
 ```
 
 The default `member list` output shows each member handle and `kid`. Use this when checking multiple key generations or confirming the state before and after `rewrap`.
@@ -668,16 +668,16 @@ The default `member list` output shows each member handle and `kid`. Use this wh
 
 ```bash
 # Verify public keys for active members (with online verification)
-secretenv member verify
+kapsaro member verify
 
 # Verify specific active members only
-secretenv member verify alice@example.com bob@example.com
+kapsaro member verify alice@example.com bob@example.com
 
 # Verify active members and persist approvals in the local trust store
-secretenv member verify --approve
+kapsaro member verify --approve
 
 # Restrict approval to specific active members
-secretenv member verify --approve alice@example.com bob@example.com
+kapsaro member verify --approve alice@example.com bob@example.com
 ```
 
 `member verify --approve` is the command you use to review the keys of current active members and save the result on your machine. The command shows identifying information for each key so you can decide whether "this public key really belongs to this person" before approving it. Approved keys are stored in your local trust store, so later operations no longer need to ask for the same confirmation again.
@@ -692,22 +692,22 @@ In normal use, approvals are usually recorded automatically through `member veri
 
 ```bash
 # List approved keys
-secretenv trust keys list
+kapsaro trust keys list
 
 # Remove one kid from the local trust store
-secretenv trust keys remove <kid>
+kapsaro trust keys remove <kid>
 
 # List reviewed artifact member sets
-secretenv trust recipients list
+kapsaro trust recipients list
 
 # Remove one reviewed artifact member set
-secretenv trust recipients remove <sid>
+kapsaro trust recipients remove <sid>
 
 # Purge old key approvals in bulk
-secretenv trust keys purge --older-than 180d --force
+kapsaro trust keys purge --older-than 180d --force
 
 # Purge old member set reviews in bulk
-secretenv trust recipients purge --older-than 180d --force
+kapsaro trust recipients purge --older-than 180d --force
 ```
 
 `trust keys ...` and `trust recipients ...` change only the records on your own machine. They do not modify workspace membership or recipients in encrypted files. In other words, these commands do not change who is in the team; they change how much you will be asked to re-confirm on later operations.
@@ -720,14 +720,14 @@ Use this when you no longer want a member to read future versions of your secret
 
 ```bash
 # 1. Remove the member from the workspace member list
-secretenv member remove alice@example.com
+kapsaro member remove alice@example.com
 
 # 2. Update recipient information in encrypted files
-secretenv rewrap
+kapsaro rewrap
 
 # 3. Commit the change
-git add .secretenv/
-git commit -m "Remove alice from secretenv"
+git add .kapsaro/
+git commit -m "Remove alice from kapsaro"
 ```
 
 Before removal, `member remove` previews encrypted files that still include the member as a recipient and warns that `rewrap` is required. If broken artifacts or signature-invalid artifacts are found during the preview, they are shown as warnings and excluded from the list; the removal itself can still proceed. In non-interactive environments, removal requires `--force`.
@@ -739,19 +739,19 @@ At this point, what has changed is **future access**. The secret values themselv
 Removing the member and running `rewrap` is not enough by itself. Any values the removed member may already know should be changed if they still matter.
 
 ```bash
-secretenv set API_KEY "new-api-key"
-secretenv set DATABASE_PASSWORD "new-password"
+kapsaro set API_KEY "new-api-key"
+kapsaro set DATABASE_PASSWORD "new-password"
 ```
 
-Then use `secretenv inspect` to see which files still show disclosure history for that member. This helps you decide which secrets need rotation.
+Then use `kapsaro inspect` to see which files still show disclosure history for that member. This helps you decide which secrets need rotation.
 
 After you finish updating the values, you can clear the disclosure history if needed.
 
 ```bash
-secretenv rewrap --clear-disclosure-history
+kapsaro rewrap --clear-disclosure-history
 ```
 
-In practice, member removal is not complete until you have handled the **secret values that person may already know**, not just the membership records. At the same time, review access in the real services outside secretenv as well, such as GitHub, AWS, databases, and SaaS tools.
+In practice, member removal is not complete until you have handled the **secret values that person may already know**, not just the membership records. At the same time, review access in the real services outside kapsaro as well, such as GitHub, AWS, databases, and SaaS tools.
 
 ---
 
@@ -763,8 +763,8 @@ This chapter is about keeping your own keys usable and safe over time. You will 
 
 At minimum, follow these rules:
 
-- **Public keys may be shared, private keys must not**: only public keys belong in PRs. Private keys stay in your local `~/.config/secretenv/keys/` and must not be committed to Git or sent through chat
-- **You are also responsible for the SSH key that protects the private key**: the secretenv private key is protected by your SSH Ed25519 key, so careless copying or use on unsafe machines is a real risk
+- **Public keys may be shared, private keys must not**: only public keys belong in PRs. Private keys stay in your local `~/.config/kapsaro/keys/` and must not be committed to Git or sent through chat
+- **You are also responsible for the SSH key that protects the private key**: the kapsaro private key is protected by your SSH Ed25519 key, so careless copying or use on unsafe machines is a real risk
 - **Device security is part of key management**: screen lock, disk encryption, account protection, and backup hygiene all matter because they protect the keys indirectly
 - **Rotate immediately if compromise or loss is suspected**: if your private key, SSH key, or machine may be unsafe, run `key new` → `join` → `rewrap` and rotate secret values when needed
 
@@ -778,12 +778,12 @@ At minimum, follow these rules:
 
 In everyday use, only the `active` key is used for new encryption and signing. `available` or `expired` keys may still remain because older secrets may still need them for decryption.
 
-Do not use expired keys in normal operation. Rotate before expiration whenever possible. If you must recover older secrets, pass `--allow-expired-key` to the target command, or temporarily set `SECRETENV_ALLOW_EXPIRED_KEY=yes` or `allow_expired_key="yes"`. This allowance only applies to decryption and operational artifact signature verification. It does not allow encryption, signing, or approval of expired PublicKeys with `member verify --approve`.
+Do not use expired keys in normal operation. Rotate before expiration whenever possible. If you must recover older secrets, pass `--allow-expired-key` to the target command, or temporarily set `KAPSARO_ALLOW_EXPIRED_KEY=yes` or `allow_expired_key="yes"`. This allowance only applies to decryption and operational artifact signature verification. It does not allow encryption, signing, or approval of expired PublicKeys with `member verify --approve`.
 
 ### Listing Keys
 
 ```bash
-secretenv key list
+kapsaro key list
 ```
 
 Use `key list` when you want to check which key is currently active, whether old keys are still present, or whether an expiration date is approaching. It is a good first step before rotation or cleanup.
@@ -792,29 +792,29 @@ The CLI may show kids with hyphens, but commands such as `key activate`, `key re
 
 ### Key Backup and Workstation Migration
 
-Your local secretenv private keys are stored under `<SECRETENV_HOME>/keys/`. By default, that is `~/.config/secretenv/keys/`. When moving to a new workstation, restore this `keys/` directory from a protected backup to the same location on the new machine.
+Your local kapsaro private keys are stored under `<KAPSARO_HOME>/keys/`. By default, that is `~/.config/kapsaro/keys/`. When moving to a new workstation, restore this `keys/` directory from a protected backup to the same location on the new machine.
 
-The new machine must also be able to use the same SSH Ed25519 key that protected the secretenv private key on the old machine. If you use multiple SSH keys, specify the same key with the `-i` option or the `ssh_identity` configuration.
+The new machine must also be able to use the same SSH Ed25519 key that protected the kapsaro private key on the old machine. If you use multiple SSH keys, specify the same key with the `-i` option or the `ssh_identity` configuration.
 
 On Unix-like systems, check the restored local directory and file permissions.
 
 ```bash
-chmod 700 ~/.config/secretenv ~/.config/secretenv/keys
-find ~/.config/secretenv/keys -type d -exec chmod 700 {} \;
-find ~/.config/secretenv/keys -type f -exec chmod 600 {} \;
+chmod 700 ~/.config/kapsaro ~/.config/kapsaro/keys
+find ~/.config/kapsaro/keys -type d -exec chmod 700 {} \;
+find ~/.config/kapsaro/keys -type f -exec chmod 600 {} \;
 ```
 
 First verify that the restored local keys are visible.
 
 ```bash
-secretenv key list
+kapsaro key list
 ```
 
 If you have already checked out an existing workspace, also confirm that you can read and inject a secret.
 
 ```bash
-secretenv get DATABASE_URL
-secretenv run -- env | grep DATABASE_URL
+kapsaro get DATABASE_URL
+kapsaro run -- env | grep DATABASE_URL
 ```
 
 If a workstation was lost, an SSH key may have leaked, or the backup storage may have been exposed, do not continue operating only from the restored backup. Follow the rotation procedure below to switch to a new key, and rotate actual secret values in their issuing systems when needed.
@@ -829,31 +829,31 @@ Keys expire one year after generation by default. Warnings appear starting 30 da
 
 ```bash
 # 1. Generate a new local key (it becomes active automatically)
-secretenv key new
+kapsaro key new
 
 # Specify an expiration date
-secretenv key new --expires-at 2028-01-01T00:00:00Z
-secretenv key new --valid-for 2y    # 2 years
-secretenv key new --valid-for 180d  # 180 days
+kapsaro key new --expires-at 2028-01-01T00:00:00Z
+kapsaro key new --valid-for 2y    # 2 years
+kapsaro key new --valid-for 180d  # 180 days
 
 # 2. Submit the new public key to the workspace
-secretenv join
+kapsaro join
 
 # 3. Create a PR and get it reviewed/merged
-git add .secretenv/members/incoming/alice@example.com.json
+git add .kapsaro/members/incoming/alice@example.com.json
 git commit -m "Rotate alice's key"
 git push
 
 # 4. After merge, switch secret recipient data to the new key
-secretenv rewrap
+kapsaro rewrap
 
 # 5. Commit that change
-git add .secretenv/secrets/
+git add .kapsaro/secrets/
 git commit -m "Rewrap secrets for alice's new key"
 git push
 
 # 6. Keep the old key for a while, then remove it later
-secretenv key remove <old_kid>
+kapsaro key remove <old_kid>
 ```
 
 The important point is that `key new` alone changes only your local machine. The workspace does not start using the new key until you share it with `join` and update recipients with `rewrap`.
@@ -869,7 +869,7 @@ Create and share the new key first, then run `rewrap` after the PR is merged so 
 Finally, remove the compromised old key from your local machine:
 
 ```bash
-secretenv key remove <compromised_old_kid>
+kapsaro key remove <compromised_old_kid>
 ```
 
 This avoids leaving the leaked key on your machine as one of your retained old keys. During a normal scheduled rotation you may keep an old key for a while, but suspected compromise should be handled differently.
@@ -881,7 +881,7 @@ If the suspected compromise involves the SSH attestor key, removing it locally i
 Separately from member key rotation, you can also rotate the content keys (MK/DEK) of the encrypted files themselves. Use this when a member was removed or when you suspect leakage and want the files themselves rebuilt with fresh key material.
 
 ```bash
-secretenv rewrap --rotate-key
+kapsaro rewrap --rotate-key
 ```
 
 This regenerates the MK/DEK for all files, so old content keys no longer work against the new file versions. It does not erase plaintext that someone already decrypted and copied elsewhere.
@@ -891,7 +891,7 @@ This regenerates the MK/DEK for all files, so old content keys no longer work ag
 Use this when you have multiple local keys and want to switch which one will be used for future encryption and signing. This changes **only your local machine**; it does not update recipients in the workspace by itself.
 
 ```bash
-secretenv key activate <kid>
+kapsaro key activate <kid>
 ```
 
 ### Recommended Old Key Retention Period
@@ -907,15 +907,15 @@ As a guideline, retain old keys for 1–3 months after rewrap completion.
 
 ## 13. CI/CD Integration
 
-secretenv supports CI/CD environments through portable private key export and environment variable-based key loading, **but only in trusted CI contexts**. This eliminates the need for SSH keys, `ssh-agent`, or a local keystore in CI runners.
+kapsaro supports CI/CD environments through portable private key export and environment variable-based key loading, **but only in trusted CI contexts**. This eliminates the need for SSH keys, `ssh-agent`, or a local keystore in CI runners.
 
 ### Overview
 
 Read this chapter only if your CI system needs to **read secrets**. The intended model is not to manage keys or run `rewrap` from CI. Instead, create a dedicated CI key on a developer machine, give that key to CI securely, and use CI only for read-only commands such as `get`, `run`, or `decrypt`.
 
-In CI environments, secretenv reads the private key and password from environment variables instead of the local keystore. Environment variable-based key loading guarantees read-only commands: `run`, `decrypt`, `get`, and `list` are supported.
+In CI environments, kapsaro reads the private key and password from environment variables instead of the local keystore. Environment variable-based key loading guarantees read-only commands: `run`, `decrypt`, `get`, and `list` are supported.
 
-CI runners are usually temporary environments and do not keep a local trust store (`~/.config/secretenv/trust/`). For trusted CI jobs that need to read secrets signed by other members, set `SECRETENV_STRICT_KEY_CHECKING=no`. This skips only read-path key approval checks that depend on your machine's saved approval history. Current member checks, recipient-label consistency checks, signer-recipient consistency checks, and signature verification still remain in place.
+CI runners are usually temporary environments and do not keep a local trust store (`~/.config/kapsaro/trust/`). For trusted CI jobs that need to read secrets signed by other members, set `KAPSARO_STRICT_KEY_CHECKING=no`. This skips only read-path key approval checks that depend on your machine's saved approval history. Current member checks, recipient-label consistency checks, signer-recipient consistency checks, and signature verification still remain in place.
 
 Even so, you should not treat the checked-out workspace as trusted by default. Limit environment variable-based key loading to jobs that run on trusted workflows, trusted refs, and trusted runners.
 
@@ -937,13 +937,13 @@ Even so, you should not treat the checked-out workspace as trusted by default. L
 
 Only three things are needed in a trusted CI context. In other words, you do not need to reproduce a developer machine's SSH or local-keystore setup inside CI:
 
-1. `SECRETENV_PRIVATE_KEY` environment variable — the exported private key (Base64url-encoded)
-2. `SECRETENV_KEY_PASSWORD` environment variable — the password used during export
-3. A workspace (Git repository containing `.secretenv/` directory)
+1. `KAPSARO_PRIVATE_KEY` environment variable — the exported private key (Base64url-encoded)
+2. `KAPSARO_KEY_PASSWORD` environment variable — the password used during export
+3. A workspace (Git repository containing `.kapsaro/` directory)
 
-No `SECRETENV_HOME`, local keystore, SSH key, or config file is required.
+No `KAPSARO_HOME`, local keystore, SSH key, or config file is required.
 
-If a trusted CI job has no local trust store and must run read commands against artifacts signed by other active members, set `SECRETENV_STRICT_KEY_CHECKING=no` only for that job. This skips read-path `known_keys` checks. It does not skip current member checks, recipient-label consistency checks, signer-recipient consistency checks, or signature verification, and it does not update the trust store without explicit review or approval.
+If a trusted CI job has no local trust store and must run read commands against artifacts signed by other active members, set `KAPSARO_STRICT_KEY_CHECKING=no` only for that job. This skips read-path `known_keys` checks. It does not skip current member checks, recipient-label consistency checks, signer-recipient consistency checks, or signature verification, and it does not update the trust store without explicit review or approval.
 
 ### Setup Workflow
 
@@ -953,20 +953,20 @@ Create a dedicated member for CI (do not reuse a human member's key).
 
 ```bash
 # On a developer machine with SSH key access
-secretenv key new --member-handle ci@example.com
-secretenv join --member-handle ci@example.com
+kapsaro key new --member-handle ci@example.com
+kapsaro join --member-handle ci@example.com
 ```
 
 #### Step 2: Add the CI Member to Recipients
 
 ```bash
-git add .secretenv/members/incoming/ci@example.com.json
+git add .kapsaro/members/incoming/ci@example.com.json
 git commit -m "Add CI member"
 git push
 
 # After merge: promote the incoming key and add the CI member to all encrypted files
-secretenv rewrap
-git add .secretenv/secrets/
+kapsaro rewrap
+git add .kapsaro/secrets/
 git commit -m "Rewrap secrets for CI member"
 git push
 ```
@@ -975,7 +975,7 @@ git push
 
 ```bash
 # Run this on a developer machine with SSH signer and local keystore access
-secretenv key export --private --member-handle ci@example.com --out ci-key.txt
+kapsaro key export --private --member-handle ci@example.com --out ci-key.txt
 # You will be prompted to enter and confirm a password (minimum 20 UTF-8 bytes)
 ```
 
@@ -989,8 +989,8 @@ Register two secret variables in your CI platform:
 
 | Variable | Value |
 |----------|-------|
-| `SECRETENV_PRIVATE_KEY` | Contents of `ci-key.txt` |
-| `SECRETENV_KEY_PASSWORD` | The password you entered during export |
+| `KAPSARO_PRIVATE_KEY` | Contents of `ci-key.txt` |
+| `KAPSARO_KEY_PASSWORD` | The password you entered during export |
 
 After registering, securely delete the `ci-key.txt` file. Do not relay the private key through CI job logs, stdout, or ad-hoc artifacts.
 
@@ -1012,29 +1012,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install secretenv
+      - name: Install kapsaro
         run: cargo install --path .
 
       - name: Run with secrets
         env:
-          SECRETENV_PRIVATE_KEY: ${{ secrets.SECRETENV_PRIVATE_KEY }}
-          SECRETENV_KEY_PASSWORD: ${{ secrets.SECRETENV_KEY_PASSWORD }}
-          SECRETENV_STRICT_KEY_CHECKING: no
-        run: secretenv run -- ./deploy.sh
+          KAPSARO_PRIVATE_KEY: ${{ secrets.KAPSARO_PRIVATE_KEY }}
+          KAPSARO_KEY_PASSWORD: ${{ secrets.KAPSARO_KEY_PASSWORD }}
+          KAPSARO_STRICT_KEY_CHECKING: no
+        run: kapsaro run -- ./deploy.sh
 ```
 
 ### Example: Generic CI Configuration
 
 ```bash
 # Any CI platform with secret environment variables
-export SECRETENV_PRIVATE_KEY="<registered secret>"
-export SECRETENV_KEY_PASSWORD="<registered secret>"
-export SECRETENV_STRICT_KEY_CHECKING=no
+export KAPSARO_PRIVATE_KEY="<registered secret>"
+export KAPSARO_KEY_PASSWORD="<registered secret>"
+export KAPSARO_STRICT_KEY_CHECKING=no
 
 # Only commands supporting environment variable-based key loading work
-secretenv get DATABASE_URL
-secretenv run -- ./my-app
-secretenv decrypt ca.pem.encrypted --out ca.pem
+kapsaro get DATABASE_URL
+kapsaro run -- ./my-app
+kapsaro decrypt ca.pem.encrypted --out ca.pem
 ```
 
 ### Supported Operations
@@ -1053,9 +1053,9 @@ All other commands remain unavailable when loading keys via environment variable
 
 ### Security Considerations
 
-- **Password exposure**: `SECRETENV_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
+- **Password exposure**: `KAPSARO_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
 - **Trusted CI only**: Follow the allowed and forbidden CI contexts described earlier in this chapter. Attacker-controlled checkouts must not be used as signature-verification input.
-- **Scope of `SECRETENV_STRICT_KEY_CHECKING=no`**: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not update local approval history without explicit review or approval. Non-interactive write commands fail before saving output when the output member set still needs review.
+- **Scope of `KAPSARO_STRICT_KEY_CHECKING=no`**: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not update local approval history without explicit review or approval. Non-interactive write commands fail before saving output when the output member set still needs review.
 - **Dedicated CI member**: Use the dedicated CI member created in the setup steps; do not reuse a human member's key. This allows independent rotation and revocation.
 - **Key rotation**: Re-export and secret-store updates should be done on a developer machine with SSH signer and local keystore access, just like the initial setup. Do not perform this inside CI jobs.
 - **Least privilege**: Only add the CI member to the secrets it actually needs access to.
@@ -1068,11 +1068,11 @@ All other commands remain unavailable when loading keys via environment variable
 
 ### Q: Is a server required?
 
-No. secretenv operates without a server. All core operations — encryption, decryption, signature verification — work entirely locally. Online verification via the GitHub API is an optional additional check.
+No. kapsaro operates without a server. All core operations — encryption, decryption, signature verification — work entirely locally. Online verification via the GitHub API is an optional additional check.
 
 ### Q: Do I need GPG?
 
-No. secretenv works with SSH keys (Ed25519) only. No GPG or PGP key management required.
+No. kapsaro works with SSH keys (Ed25519) only. No GPG or PGP key management required.
 
 ### Q: Do I need a cloud Secrets Manager?
 
@@ -1080,13 +1080,13 @@ No. Encryption, decryption, and key management all happen locally. There is no d
 
 ### Q: Do I need to manage a shared secret key for the team?
 
-No. secretenv uses public-key cryptography, so there is no shared secret key for the whole team. Secrets are encrypted separately for each member's public key, which removes the need to distribute, manage, or rotate a common password or shared key.
+No. kapsaro uses public-key cryptography, so there is no shared secret key for the whole team. Secrets are encrypted separately for each member's public key, which removes the need to distribute, manage, or rotate a common password or shared key.
 
 ### Q: Is it safe to commit public key files to GitHub?
 
 Yes. `members/active/*.json` contains public keys (the encryption public key and the SSH public key fingerprint), but no private keys whatsoever. Public keys are, by definition, safe to share publicly.
 
-Decrypting secrets requires the private key stored locally at `~/.config/secretenv/keys/`. This private key is never included in Git.
+Decrypting secrets requires the private key stored locally at `~/.config/kapsaro/keys/`. This private key is never included in Git.
 
 ### Q: Is it safe to make the repository public if secrets are encrypted?
 
@@ -1100,43 +1100,43 @@ If you already have an Ed25519 key (e.g., for GitHub), you can reuse it. Otherwi
 
 ### Q: Why is the SSH agent needed?
 
-secretenv private keys are protected by an SSH Ed25519 key instead of a passphrase. Every secretenv operation requires decryption using that SSH key, so using an SSH agent is convenient if you want to avoid entering credentials repeatedly.
+kapsaro private keys are protected by an SSH Ed25519 key instead of a passphrase. Every kapsaro operation requires decryption using that SSH key, so using an SSH agent is convenient if you want to avoid entering credentials repeatedly.
 
 In environments where an SSH agent is unavailable, you can switch to signing with the `ssh-keygen` command using the `--ssh-keygen` option.
 
 When multiple keys are loaded in the SSH agent, you can explicitly specify which key to use with the `-i` option or the `ssh_identity` configuration:
 
 ```bash
-secretenv encrypt -i ~/.ssh/id_ed25519_work secret.env
+kapsaro encrypt -i ~/.ssh/id_ed25519_work secret.env
 ```
 
 ### Q: Does it work with 1Password's SSH agent?
 
-Yes. secretenv supports signing via ssh-agent, including 1Password's SSH agent. See the [WSL User Guide](wsl_user_guide_en.md) for Windows/WSL2-specific configuration.
+Yes. kapsaro supports signing via ssh-agent, including 1Password's SSH agent. See the [WSL User Guide](wsl_user_guide_en.md) for Windows/WSL2-specific configuration.
 
 ### Daily Usage
 
 ### Q: Can I migrate from an existing .env file?
 
-Yes. `secretenv import .env` imports everything at once. Then use `secretenv run` to execute commands with decrypted secrets injected as environment variables.
+Yes. `kapsaro import .env` imports everything at once. Then use `kapsaro run` to execute commands with decrypted secrets injected as environment variables.
 
 ### Q: Can I encrypt files other than .env?
 
-Yes. Certificates, configuration files, and arbitrary binaries can be handled with `secretenv encrypt` / `secretenv decrypt`. See [Chapter 9](#9-file-encryption-and-decryption).
+Yes. Certificates, configuration files, and arbitrary binaries can be handled with `kapsaro encrypt` / `kapsaro decrypt`. See [Chapter 9](#9-file-encryption-and-decryption).
 
 ### Q: Can I manage multiple environments (dev / staging / prod)?
 
 Yes. Use the `-n` option to create separate stores for each environment:
 
 ```bash
-secretenv set -n staging DATABASE_URL "postgres://..."
-secretenv set -n prod DATABASE_URL "postgres://..."
-secretenv run -n staging -- ./my-app
+kapsaro set -n staging DATABASE_URL "postgres://..."
+kapsaro set -n prod DATABASE_URL "postgres://..."
+kapsaro run -n staging -- ./my-app
 ```
 
-### Q: Should I use `secretenv run` or manually load a `.env` file?
+### Q: Should I use `kapsaro run` or manually load a `.env` file?
 
-`secretenv run` is recommended for these reasons:
+`kapsaro run` is recommended for these reasons:
 
 - No plaintext `.env` file is left on disk
 - The latest secrets are decrypted on each run, so value updates take effect immediately
@@ -1145,13 +1145,13 @@ secretenv run -n staging -- ./my-app
 
 ### Q: How do I manage separate secrets for multiple projects?
 
-Each Git repository can have its own independent `.secretenv/`. Run `secretenv init` in each project to manage them as independent Workspaces.
+Each Git repository can have its own independent `.kapsaro/`. Run `kapsaro init` in each project to manage them as independent Workspaces.
 
 Even if the same member participates in multiple projects, their public key is registered independently in each workspace.
 
 ### Q: Can I control sharing per encrypted file?
 
-Not in the usual single-workspace setup. In secretenv, encrypted files are shared with all members in that workspace's `members/active`.
+Not in the usual single-workspace setup. In kapsaro, encrypted files are shared with all members in that workspace's `members/active`.
 
 If you need different sharing groups, the practical approach is to **use multiple workspaces**. Because you can switch the target workspace with `-w` / `--workspace`, you can operate separate workspaces for groups such as "whole development team," "production operators only," or "members of one specific project." In that model, the workspace itself becomes the sharing group.
 
@@ -1159,7 +1159,7 @@ This is a more exceptional operating pattern, so it is easier to think in terms 
 
 ### Q: What happens if encrypted files conflict in Git?
 
-secretenv encrypts each `.env` key individually, so changes to different keys rarely conflict. If the same key is modified simultaneously, resolve the conflict by choosing one side, just like any other Git conflict.
+kapsaro encrypts each `.env` key individually, so changes to different keys rarely conflict. If the same key is modified simultaneously, resolve the conflict by choosing one side, just like any other Git conflict.
 
 ### Membership and Keys
 
@@ -1171,11 +1171,11 @@ To eliminate the risk of exposure after removal, always rotate the values (API k
 
 ### Q: Is key rotation supported?
 
-Yes. `secretenv rewrap --rotate-key` regenerates encryption keys and re-encrypts everything. This supports both member changes and periodic rotation. See [Chapter 12](#12-key-management-and-rotation).
+Yes. `kapsaro rewrap --rotate-key` regenerates encryption keys and re-encrypts everything. This supports both member changes and periodic rotation. See [Chapter 12](#12-key-management-and-rotation).
 
 ### Q: Does it work in CI/CD environments?
 
-Yes. `secretenv run` and `secretenv get` work non-interactively via environment variable-based key loading. See [Chapter 13](#13-cicd-integration) for setup details, allowed contexts, and security considerations.
+Yes. `kapsaro run` and `kapsaro get` work non-interactively via environment variable-based key loading. See [Chapter 13](#13-cicd-integration) for setup details, allowed contexts, and security considerations.
 
 ### Troubleshooting
 
@@ -1185,19 +1185,19 @@ Run `ssh-add -l` to check. If empty, add your key with `ssh-add ~/.ssh/id_ed2551
 
 ### Q: "Key expired" warnings or errors
 
-Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 12](#12-key-management-and-rotation): generate a new key with `secretenv key new`, stage it with `secretenv join`, then run `secretenv rewrap` after the PR is merged.
+Keys expire one year after generation by default. Follow the rotation procedure in [Chapter 12](#12-key-management-and-rotation): generate a new key with `kapsaro key new`, stage it with `kapsaro join`, then run `kapsaro rewrap` after the PR is merged.
 
-If `decrypt`, `get`, `run`, `list`, `set`, `unset`, `import`, `rewrap`, or `member remove` fails with `E_KEY_EXPIRED`, normally finish rotation and `rewrap` first. If you need emergency recovery for older secrets, pass `--allow-expired-key` to that command. To allow several commands temporarily, set `SECRETENV_ALLOW_EXPIRED_KEY=yes` only for that shell or CI step, or use `secretenv config set allow_expired_key yes` only with a clear plan to set it back afterward.
+If `decrypt`, `get`, `run`, `list`, `set`, `unset`, `import`, `rewrap`, or `member remove` fails with `E_KEY_EXPIRED`, normally finish rotation and `rewrap` first. If you need emergency recovery for older secrets, pass `--allow-expired-key` to that command. To allow several commands temporarily, set `KAPSARO_ALLOW_EXPIRED_KEY=yes` only for that shell or CI step, or use `kapsaro config set allow_expired_key yes` only with a clear plan to set it back afterward.
 
-`member verify --approve` does not approve expired PublicKeys. `--allow-expired-key` and `SECRETENV_ALLOW_EXPIRED_KEY=yes` do not save expired member keys to the local trust store.
+`member verify --approve` does not approve expired PublicKeys. `--allow-expired-key` and `KAPSARO_ALLOW_EXPIRED_KEY=yes` do not save expired member keys to the local trust store.
 
 ### Q: Unexpected approval prompts when decrypting
 
-This occurs when the signer's `kid` or an active recipient `kid` in the artifact has not been reviewed on your machine. Run `secretenv member verify --approve` to review and approve current active members. If a read command warns that a recipient kid is no longer in `members/active`, the artifact may still contain stale recipient metadata. Run `secretenv rewrap` before writing it.
+This occurs when the signer's `kid` or an active recipient `kid` in the artifact has not been reviewed on your machine. Run `kapsaro member verify --approve` to review and approve current active members. If a read command warns that a recipient kid is no longer in `members/active`, the artifact may still contain stale recipient metadata. Run `kapsaro rewrap` before writing it.
 
 ### Q: "Non-deterministic SSH signature" error
 
-This means your SSH key produced different signatures for the same input on two consecutive attempts. This can happen with FIDO2/hardware tokens (Ed25519-SK). secretenv requires deterministic Ed25519 signatures. Use a standard software Ed25519 key instead.
+This means your SSH key produced different signatures for the same input on two consecutive attempts. This can happen with FIDO2/hardware tokens (Ed25519-SK). kapsaro requires deterministic Ed25519 signatures. Use a standard software Ed25519 key instead.
 
 ---
 
@@ -1209,7 +1209,7 @@ Accepted options differ by command. These options are shared by multiple command
 
 | Option | Description |
 |--------|-------------|
-| `--home <path>` | Specify the local secretenv state directory (default: `~/.config/secretenv/`) |
+| `--home <path>` | Specify the local kapsaro state directory (default: `~/.config/kapsaro/`) |
 | `-w` / `--workspace <path>` | Specify Workspace Root |
 | `-m` / `--member-handle <handle>` | Specify the member handle to use |
 | `-i` / `--ssh-identity <path>` | Specify SSH key file path. Also used for key selection with ssh-agent |
@@ -1227,49 +1227,49 @@ Accepted options differ by command. These options are shared by multiple command
 
 | Command | Description |
 |---------|-------------|
-| `secretenv init [-m <handle>] [-w <path>] [--github-user <login>]` | Bootstrap a new Workspace and register the first member in active |
-| `secretenv join [-m <handle>] [-w <path>] [--github-user <login>] [--force]` | Request to join an existing Workspace or stage a rotated key in incoming |
+| `kapsaro init [-m <handle>] [-w <path>] [--github-user <login>]` | Bootstrap a new Workspace and register the first member in active |
+| `kapsaro join [-m <handle>] [-w <path>] [--github-user <login>] [--force]` | Request to join an existing Workspace or stage a rotated key in incoming |
 
 ### KV Operations
 
 | Command | Description |
 |---------|-------------|
-| `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> <VALUE>` | Add or update an entry |
-| `secretenv set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> --stdin` | Read value from stdin and set it |
-| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] <KEY>` | Retrieve and display a specific key's value |
-| `secretenv get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] --all` | Retrieve and display all entries |
-| `secretenv get [-n <name>] [--all] [--allow-non-member] --with-key` | Output in `KEY="VALUE"` format |
-| `secretenv unset [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
-| `secretenv list [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] [--json]` | List key names (values not displayed) |
-| `secretenv import [-n <name>] [-m <handle>] [--allow-expired-key] <file> [--json]` | Bulk import a `.env` file |
-| `secretenv run [-n <name>] [-m <handle>] [--allow-expired-key] -- <command> [args...]` | Run a command with secrets injected as environment variables |
+| `kapsaro set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> <VALUE>` | Add or update an entry |
+| `kapsaro set [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> --stdin` | Read value from stdin and set it |
+| `kapsaro get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] <KEY>` | Retrieve and display a specific key's value |
+| `kapsaro get [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] --all` | Retrieve and display all entries |
+| `kapsaro get [-n <name>] [--all] [--allow-non-member] --with-key` | Output in `KEY="VALUE"` format |
+| `kapsaro unset [-n <name>] [-m <handle>] [--allow-expired-key] <KEY> [--force]` | Remove an entry. Non-interactive use requires `--force` |
+| `kapsaro list [-n <name>] [-m <handle>] [--allow-expired-key] [--allow-non-member] [--json]` | List key names (values not displayed) |
+| `kapsaro import [-n <name>] [-m <handle>] [--allow-expired-key] <file> [--json]` | Bulk import a `.env` file |
+| `kapsaro run [-n <name>] [-m <handle>] [--allow-expired-key] -- <command> [args...]` | Run a command with secrets injected as environment variables |
 
 ### File Operations
 
 | Command | Description |
 |---------|-------------|
-| `secretenv encrypt [-m <handle>] <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
-| `secretenv encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] <file> (--out <path> \| --stdout)` | Decrypt a file |
-| `secretenv decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
-| `secretenv inspect <file> [--json] [--verbose]` | Display encrypted file metadata (no decryption needed) |
+| `kapsaro encrypt [-m <handle>] <file> [--out <path> \| --stdout]` | Encrypt a file (file-enc) |
+| `kapsaro encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
+| `kapsaro decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] <file> (--out <path> \| --stdout)` | Decrypt a file |
+| `kapsaro decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
+| `kapsaro inspect <file> [--json] [--verbose]` | Display encrypted file metadata (no decryption needed) |
 
 ### Diagnostics
 
 | Command | Description |
 |---------|-------------|
-| `secretenv doctor [-w <path>] [--home <path>] [-m <handle>] [--json] [--verbose] [--debug]` | Run read-only health checks for workspace structure, members, local trust state, encrypted artifacts, and CI environment-key readiness |
+| `kapsaro doctor [-w <path>] [--home <path>] [-m <handle>] [--json] [--verbose] [--debug]` | Run read-only health checks for workspace structure, members, local trust state, encrypted artifacts, and CI environment-key readiness |
 
 ### Member Management
 
 | Command | Description |
 |---------|-------------|
-| `secretenv member list [--json] [--verbose]` | List all members and each `kid` |
-| `secretenv member show <member_handle> [--json] [--verbose]` | Show details for a specific member |
-| `secretenv member verify [-m <handle>] [--approve] [<member_handle>...] [--json]` | Verify active member public keys and optionally save approvals in the local trust store |
-| `secretenv member add <file> [--force]` | Add a member's public key file to incoming |
-| `secretenv member remove <member_handle> [--force] [--allow-expired-key]` | Remove a member from the Workspace. Non-interactive use requires `--force` |
-| `secretenv rewrap [-m <handle>] [--allow-expired-key] [--allow-non-member] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
+| `kapsaro member list [--json] [--verbose]` | List all members and each `kid` |
+| `kapsaro member show <member_handle> [--json] [--verbose]` | Show details for a specific member |
+| `kapsaro member verify [-m <handle>] [--approve] [<member_handle>...] [--json]` | Verify active member public keys and optionally save approvals in the local trust store |
+| `kapsaro member add <file> [--force]` | Add a member's public key file to incoming |
+| `kapsaro member remove <member_handle> [--force] [--allow-expired-key]` | Remove a member from the Workspace. Non-interactive use requires `--force` |
+| `kapsaro rewrap [-m <handle>] [--allow-expired-key] [--allow-non-member] [--rotate-key] [--clear-disclosure-history] [--target <path>...] [--json]` | Activate pending members and update recipient information in encrypted files |
 
 When `--target` is omitted, `rewrap` processes all encrypted files in the workspace. When `--target` is provided, only the specified files are processed.
 
@@ -1277,32 +1277,32 @@ When `--target` is omitted, `rewrap` processes all encrypted files in the worksp
 
 | Command | Description |
 |---------|-------------|
-| `secretenv trust keys list [-m <handle>] [--json] [--verbose]` | List approved keys saved in the local trust store |
-| `secretenv trust keys remove [-m <handle>] <kid>` | Remove the approval record for a specific key from the local trust store |
-| `secretenv trust keys purge [-m <handle>] --older-than <duration> [--force]` | Remove key approval records older than the given duration |
-| `secretenv trust recipients list [-m <handle>] [--json] [--verbose]` | List reviewed artifact member sets saved in the local trust store |
-| `secretenv trust recipients remove [-m <handle>] <sid>` | Remove the review record for a specific artifact member set |
-| `secretenv trust recipients purge [-m <handle>] --older-than <duration> [--force]` | Remove artifact member set review records older than the given duration |
+| `kapsaro trust keys list [-m <handle>] [--json] [--verbose]` | List approved keys saved in the local trust store |
+| `kapsaro trust keys remove [-m <handle>] <kid>` | Remove the approval record for a specific key from the local trust store |
+| `kapsaro trust keys purge [-m <handle>] --older-than <duration> [--force]` | Remove key approval records older than the given duration |
+| `kapsaro trust recipients list [-m <handle>] [--json] [--verbose]` | List reviewed artifact member sets saved in the local trust store |
+| `kapsaro trust recipients remove [-m <handle>] <sid>` | Remove the review record for a specific artifact member set |
+| `kapsaro trust recipients purge [-m <handle>] --older-than <duration> [--force]` | Remove artifact member set review records older than the given duration |
 
 ### Key Management
 
 | Command | Description |
 |---------|-------------|
-| `secretenv key new [-m <handle>] [--github-user <login>] [--no-activate] [--expires-at <datetime> \| --valid-for <duration>]` | Generate a new key. The generated key becomes active by default |
-| `secretenv key list [-m <handle>] [--json] [--verbose]` | List keys |
-| `secretenv key activate [-m <handle>] [<kid>]` | Activate a specific key. If `kid` is omitted, the newest valid key is selected |
-| `secretenv key remove [-m <handle>] <kid> [--force]` | Remove a key. Removing the active key requires `--force` |
-| `secretenv key export [-m <handle>] [<kid>] --out <path>` | Export public key |
-| `secretenv key export --private [-m <handle>] [<kid>] [--allow-weak-password] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
+| `kapsaro key new [-m <handle>] [--github-user <login>] [--no-activate] [--expires-at <datetime> \| --valid-for <duration>]` | Generate a new key. The generated key becomes active by default |
+| `kapsaro key list [-m <handle>] [--json] [--verbose]` | List keys |
+| `kapsaro key activate [-m <handle>] [<kid>]` | Activate a specific key. If `kid` is omitted, the newest valid key is selected |
+| `kapsaro key remove [-m <handle>] <kid> [--force]` | Remove a key. Removing the active key requires `--force` |
+| `kapsaro key export [-m <handle>] [<kid>] --out <path>` | Export public key |
+| `kapsaro key export --private [-m <handle>] [<kid>] [--allow-weak-password] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
 
 ### Configuration
 
 | Command | Description |
 |---------|-------------|
-| `secretenv config set <key> <value>` | Set a configuration value |
-| `secretenv config get <key>` | Get a configuration value |
-| `secretenv config list` | List all configuration values |
-| `secretenv config unset <key>` | Remove a configuration value |
+| `kapsaro config set <key> <value>` | Set a configuration value |
+| `kapsaro config get <key>` | Get a configuration value |
+| `kapsaro config list` | List all configuration values |
+| `kapsaro config unset <key>` | Remove a configuration value |
 
 Configuration commands do not require a workspace. They operate on the global config file.
 
@@ -1318,64 +1318,64 @@ You only need these settings if you want to avoid typing the same options repeat
 
 ```bash
 # Set default member handle (allows omitting --member-handle going forward)
-secretenv config set member_handle alice@example.com
+kapsaro config set member_handle alice@example.com
 
 # Set GitHub account (for online verification)
-secretenv config set github_user alice-gh
+kapsaro config set github_user alice-gh
 
 # Set default workspace (useful when running outside the Git repository)
-secretenv config set workspace ~/src/project/.secretenv
+kapsaro config set workspace ~/src/project/.kapsaro
 
 # Set SSH signing method (default "auto" works for most cases)
 # auto: tries ssh-agent first, then ssh-keygen
 # ssh-agent: use SSH agent
 # ssh-keygen: use ssh-keygen command
-secretenv config set ssh_signing_method auto
+kapsaro config set ssh_signing_method auto
 
 # Set SSH key (select a specific key when multiple keys are loaded in ssh-agent)
-secretenv config set ssh_identity ~/.ssh/id_ed25519_work
+kapsaro config set ssh_identity ~/.ssh/id_ed25519_work
 
 # Keep expired-key recovery disabled unless you are doing emergency recovery
-secretenv config set allow_expired_key no
+kapsaro config set allow_expired_key no
 
 # Keep non-member signer acceptance disabled unless you are reviewing one artifact
-secretenv config set allow_non_member no
+kapsaro config set allow_non_member no
 ```
 
-The configuration file is located at `~/.config/secretenv/config.toml`.
+The configuration file is located at `~/.config/kapsaro/config.toml`.
 
-secretenv resolves configuration values from multiple sources in the following priority order:
+kapsaro resolves configuration values from multiple sources in the following priority order:
 
 1. **CLI options** (highest priority)
 2. **Environment variables**
-3. **Config file** (`<SECRETENV_HOME>/config.toml`)
+3. **Config file** (`<KAPSARO_HOME>/config.toml`)
 4. **Default values** (lowest priority)
 
 When a higher-priority source provides a value, lower-priority sources are ignored.
 
-Workspace Root is resolved in this order: `--workspace`, `SECRETENV_WORKSPACE`, `workspace` in the config file, then automatic detection from the current directory.
+Workspace Root is resolved in this order: `--workspace`, `KAPSARO_WORKSPACE`, `workspace` in the config file, then automatic detection from the current directory.
 
 ### Config File
 
-The global config file is located at `<SECRETENV_HOME>/config.toml` (default: `~/.config/secretenv/config.toml`). It uses flat TOML key-value format.
+The global config file is located at `<KAPSARO_HOME>/config.toml` (default: `~/.config/kapsaro/config.toml`). It uses flat TOML key-value format.
 
 | Key | Description | Default | CLI Option | Environment Variable |
 |-----|-------------|---------|------------|---------------------|
-| `member_handle` | Default member handle (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-handle` | `SECRETENV_MEMBER_HANDLE` |
-| `workspace` | Default Workspace Root path. Supports tilde expansion (`~/...`) | (none; auto-detected when unset) | `-w` / `--workspace` | `SECRETENV_WORKSPACE` |
-| `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `SECRETENV_SSH_IDENTITY` |
-| `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `SECRETENV_SSH_SIGNING_METHOD` |
+| `member_handle` | Default member handle (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-handle` | `KAPSARO_MEMBER_HANDLE` |
+| `workspace` | Default Workspace Root path. Supports tilde expansion (`~/...`) | (none; auto-detected when unset) | `-w` / `--workspace` | `KAPSARO_WORKSPACE` |
+| `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `KAPSARO_SSH_IDENTITY` |
+| `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `KAPSARO_SSH_SIGNING_METHOD` |
 | `ssh_keygen_command` | Path to `ssh-keygen` command | `ssh-keygen` | — | — |
 | `ssh_add_command` | Path to `ssh-add` command | `ssh-add` | — | — |
-| `github_user` | Default GitHub login name for `key new` | (none) | `--github-user` | `SECRETENV_GITHUB_USER` |
-| `allow_expired_key` | Whether to allow recovery decryption and operational artifact signature verification with expired keys. Value is `yes` or `no` | `no` | `--allow-expired-key` | `SECRETENV_ALLOW_EXPIRED_KEY` |
-| `allow_non_member` | Whether to enable the one-shot interactive confirmation flow for artifacts signed by non-members. Value is `yes` or `no` | `no` | `--allow-non-member` | `SECRETENV_ALLOW_NON_MEMBER` |
+| `github_user` | Default GitHub login name for `key new` | (none) | `--github-user` | `KAPSARO_GITHUB_USER` |
+| `allow_expired_key` | Whether to allow recovery decryption and operational artifact signature verification with expired keys. Value is `yes` or `no` | `no` | `--allow-expired-key` | `KAPSARO_ALLOW_EXPIRED_KEY` |
+| `allow_non_member` | Whether to enable the one-shot interactive confirmation flow for artifacts signed by non-members. Value is `yes` or `no` | `no` | `--allow-non-member` | `KAPSARO_ALLOW_NON_MEMBER` |
 
 Example:
 
 ```toml
 member_handle = "alice@example.com"
-workspace = "~/src/project/.secretenv"
+workspace = "~/src/project/.kapsaro"
 ssh_identity = "~/.ssh/id_ed25519"
 ssh_signing_method = "auto"
 github_user = "alice-gh"
@@ -1383,32 +1383,32 @@ allow_expired_key = "no"
 allow_non_member = "no"
 ```
 
-If the config file does not exist, secretenv falls back to environment variables and default values without error. If the file exists but contains syntax errors, secretenv reports an error. `config get`, `config set`, `config unset`, and `config list` operate on the global config file and do not check whether the configured workspace exists.
+If the config file does not exist, kapsaro falls back to environment variables and default values without error. If the file exists but contains syntax errors, kapsaro reports an error. `config get`, `config set`, `config unset`, and `config list` operate on the global config file and do not check whether the configured workspace exists.
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SECRETENV_HOME` | Base directory for secretenv configuration and keys | `~/.config/secretenv/` |
-| `SECRETENV_MEMBER_HANDLE` | Default member handle | (none) |
-| `SECRETENV_SSH_IDENTITY` | Path to SSH private key file (Ed25519) | `~/.ssh/id_ed25519` |
-| `SECRETENV_SSH_SIGNING_METHOD` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
-| `SECRETENV_GITHUB_USER` | Default GitHub login name for `key new` | (none) |
-| `SECRETENV_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected) |
-| `SECRETENV_STRICT_KEY_CHECKING` | Whether to check local approval history during read operations: `yes`, `no` | `yes` |
-| `SECRETENV_ALLOW_EXPIRED_KEY` | Whether to allow recovery decryption and operational artifact signature verification with expired keys: `yes`, `no` | `no` |
-| `SECRETENV_ALLOW_NON_MEMBER` | Whether to enable the one-shot interactive confirmation flow for artifacts signed by non-members: `yes`, `no` | `no` |
-| `SECRETENV_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
-| `SECRETENV_KEY_PASSWORD` | Password for `SECRETENV_PRIVATE_KEY` (CI/CD) | (none) |
+| `KAPSARO_HOME` | Base directory for kapsaro configuration and keys | `~/.config/kapsaro/` |
+| `KAPSARO_MEMBER_HANDLE` | Default member handle | (none) |
+| `KAPSARO_SSH_IDENTITY` | Path to SSH private key file (Ed25519) | `~/.ssh/id_ed25519` |
+| `KAPSARO_SSH_SIGNING_METHOD` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` |
+| `KAPSARO_GITHUB_USER` | Default GitHub login name for `key new` | (none) |
+| `KAPSARO_WORKSPACE` | Workspace directory path (overrides auto-detection) | (auto-detected) |
+| `KAPSARO_STRICT_KEY_CHECKING` | Whether to check local approval history during read operations: `yes`, `no` | `yes` |
+| `KAPSARO_ALLOW_EXPIRED_KEY` | Whether to allow recovery decryption and operational artifact signature verification with expired keys: `yes`, `no` | `no` |
+| `KAPSARO_ALLOW_NON_MEMBER` | Whether to enable the one-shot interactive confirmation flow for artifacts signed by non-members: `yes`, `no` | `no` |
+| `KAPSARO_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
+| `KAPSARO_KEY_PASSWORD` | Password for `KAPSARO_PRIVATE_KEY` (CI/CD) | (none) |
 
 **Notes:**
 
-- `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `SECRETENV_PRIVATE_KEY` is set, `SECRETENV_KEY_PASSWORD` is required. See [Chapter 13](#13-cicd-integration) for details.
-- `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
-- `SECRETENV_ALLOW_EXPIRED_KEY=yes` is not a way to return expired keys to normal use. Set it only for the target emergency recovery command or step, then unset it afterward.
-- `SECRETENV_ALLOW_NON_MEMBER=yes` enables the one-shot non-member signer confirmation flow only for interactive `decrypt`, `get`, `list`, and `rewrap` runs. It has no effect for non-interactive execution or `run`.
-- `SECRETENV_WORKSPACE` overrides automatic workspace detection. Useful when running commands outside the Git repository tree or when using a workspace outside the current directory.
+- `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `KAPSARO_PRIVATE_KEY` is set, `KAPSARO_KEY_PASSWORD` is required. See [Chapter 13](#13-cicd-integration) for details.
+- `KAPSARO_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.
+- `KAPSARO_ALLOW_EXPIRED_KEY=yes` is not a way to return expired keys to normal use. Set it only for the target emergency recovery command or step, then unset it afterward.
+- `KAPSARO_ALLOW_NON_MEMBER=yes` enables the one-shot non-member signer confirmation flow only for interactive `decrypt`, `get`, `list`, and `rewrap` runs. It has no effect for non-interactive execution or `run`.
+- `KAPSARO_WORKSPACE` overrides automatic workspace detection. Useful when running commands outside the Git repository tree or when using a workspace outside the current directory.
 
 ---
 
-*This guide covers what most users need for day-to-day secretenv usage. If you need deeper design background, refer to the related design documents.*
+*This guide covers what most users need for day-to-day kapsaro usage. If you need deeper design background, refer to the related design documents.*

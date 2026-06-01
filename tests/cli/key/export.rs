@@ -6,12 +6,12 @@
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use console::strip_ansi_codes;
+use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKey;
+use kapsaro_core::cli_api::test_support::domain::public_key::PublicKey;
+use kapsaro_core::cli_api::test_support::domain::wire::format;
+use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
+use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::domain::private_key::PrivateKey;
-use secretenv_core::cli_api::test_support::domain::public_key::PublicKey;
-use secretenv_core::cli_api::test_support::domain::wire::format;
-use secretenv_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
-use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
 use std::fs;
 use tempfile::TempDir;
 
@@ -27,7 +27,7 @@ fn generate_exportable_private_key(
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 }
@@ -47,7 +47,7 @@ fn test_key_export_explicit_kid() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -67,7 +67,7 @@ fn test_key_export_explicit_kid() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -86,7 +86,7 @@ fn test_key_export_explicit_kid() {
     );
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V7,
+        format::PUBLIC_KEY_V1,
         "Exported format should be v6"
     );
 
@@ -109,7 +109,7 @@ fn test_key_export_active() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -123,7 +123,7 @@ fn test_key_export_active() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -136,7 +136,7 @@ fn test_key_export_active() {
 
     assert_eq!(
         exported.protected.format,
-        format::PUBLIC_KEY_V7,
+        format::PUBLIC_KEY_V1,
         "Exported format should be v6"
     );
 
@@ -157,7 +157,7 @@ fn test_key_export_accepts_display_kid() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -174,7 +174,7 @@ fn test_key_export_accepts_display_kid() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -201,8 +201,8 @@ fn test_key_export_private_rejects_short_password_by_default() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("12345678\n12345678\n")
         .assert()
         .failure()
@@ -231,8 +231,8 @@ fn test_key_export_private_colors_short_password_error_when_forced() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env("CLICOLOR_FORCE", "1")
         .write_stdin("12345678\n12345678\n")
         .assert()
@@ -269,8 +269,8 @@ fn test_key_export_private_warns_for_allowed_weak_password_to_file() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("12345678\n12345678\n")
         .assert()
         .success()
@@ -300,8 +300,8 @@ fn test_key_export_private_colors_short_password_warning_when_forced() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env("CLICOLOR_FORCE", "1")
         .write_stdin("12345678\n12345678\n")
         .assert()
@@ -335,8 +335,8 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
         .arg("--stdout")
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("12345678\n12345678\n")
         .assert()
         .success()
@@ -381,8 +381,8 @@ fn test_key_export_private_does_not_warn_for_recommended_password() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
         .assert()
         .success()
@@ -404,7 +404,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -418,8 +418,8 @@ fn test_key_export_private_writes_password_protected_key_file() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
         .assert()
         .success();
@@ -431,7 +431,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
         serde_json::from_slice(&json).expect("Should deserialize as PrivateKey");
 
     assert_eq!(private_key.protected.subject_handle, member_handle);
-    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V7);
+    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V1);
 
     drop(ssh_temp);
 }
@@ -449,7 +449,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -460,8 +460,8 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         .arg("--stdout")
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
         .assert()
         .success()
@@ -479,7 +479,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
         serde_json::from_slice(&json).expect("Should deserialize stdout as PrivateKey");
 
     assert_eq!(private_key.protected.subject_handle, member_handle);
-    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V7);
+    assert_eq!(private_key.protected.format, format::PRIVATE_KEY_V1);
 
     drop(ssh_temp);
 }
@@ -493,7 +493,7 @@ fn test_key_export_private_requires_member_handle_before_password_input() {
         .arg("export")
         .arg("--private")
         .arg("--stdout")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .write_stdin("strong-password-42\n")
         .assert()
         .failure()
@@ -516,7 +516,7 @@ fn test_key_export_private_requires_explicit_output_destination() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -526,8 +526,8 @@ fn test_key_export_private_requires_explicit_output_destination() {
         .arg("--private")
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stdout(predicates::prelude::predicate::str::is_empty())
@@ -551,7 +551,7 @@ fn test_key_export_private_rejects_stdout_and_out_together() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -566,8 +566,8 @@ fn test_key_export_private_rejects_stdout_and_out_together() {
         .arg(member_handle)
         .arg("--out")
         .arg(export_file.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicates::prelude::predicate::str::contains(

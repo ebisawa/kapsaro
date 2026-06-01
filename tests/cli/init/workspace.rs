@@ -14,8 +14,8 @@ fn test_init_creates_workspace() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -46,8 +46,8 @@ fn test_init_completes_incomplete_workspace_structure() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

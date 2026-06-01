@@ -5,7 +5,7 @@
 
 use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::kv::view::{KvEntryView, KvKeyView};
-use secretenv_core::Result;
+use kapsaro_core::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
 

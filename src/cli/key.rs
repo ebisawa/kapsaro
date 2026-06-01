@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use crate::cli::options::{
     ForceOption, LocalOptions, LocalOutputOptions, MemberHandleOption, SigningOptions,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 
 mod list;
 mod new;
@@ -121,8 +121,8 @@ pub(crate) struct RemoveArgs {
 
 #[derive(Args)]
 #[command(override_usage = "\
-secretenv key export [OPTIONS] -o <OUT> [KID]
-       secretenv key export --private [OPTIONS] [--stdout] [KID]")]
+kapsaro key export [OPTIONS] -o <OUT> [KID]
+       kapsaro key export --private [OPTIONS] [--stdout] [KID]")]
 pub(crate) struct ExportArgs {
     /// Common options shared across commands
     #[command(flatten)]

@@ -7,7 +7,7 @@ use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::member::view::{
     MemberApprovalResultsView, MemberListView, MemberVerificationResultsView,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 use serde::Serialize;
 
 #[derive(Serialize)]

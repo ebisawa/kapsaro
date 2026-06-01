@@ -10,10 +10,10 @@ use crate::cli::common::{
 use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
 };
+use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
+use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
-use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
-use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use std::fs;
 use tempfile::TempDir;
 
@@ -64,8 +64,8 @@ fn test_set_updates_existing_key() {
         .arg("updated_value")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -75,8 +75,8 @@ fn test_set_updates_existing_key() {
         .arg("API_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("updated_value"));
@@ -103,9 +103,9 @@ fn test_set_debug_does_not_log_secret_value() {
         .arg("--debug")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("[CLI] command=set"))
@@ -134,8 +134,8 @@ fn test_set_multiple_keys() {
         .arg("value2")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -144,8 +144,8 @@ fn test_set_multiple_keys() {
         .arg("list")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("KEY1"))
@@ -161,7 +161,7 @@ fn test_set_without_workspace_fails() {
         .arg("set")
         .arg("DATABASE_URL")
         .arg("postgres://localhost/db")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .current_dir("/tmp")
         .assert()
         .failure()
@@ -199,8 +199,8 @@ fn test_set_stdin_creates_new_file() {
         .arg("SECRET_TOKEN")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("super-secret-token"));
@@ -216,7 +216,7 @@ fn test_set_stdin_and_value_arg_conflicts() {
         .arg("KEY")
         .arg("some_value")
         .arg("--stdin")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .current_dir("/tmp")
         .write_stdin("stdin_value")
         .assert()
@@ -231,7 +231,7 @@ fn test_set_without_stdin_and_without_value_fails() {
     cmd()
         .arg("set")
         .arg("KEY")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .current_dir("/tmp")
         .assert()
         .failure();

@@ -14,6 +14,6 @@ fn test_encrypt_help_aligns_multiline_usage() {
         .assert()
         .success()
         .stdout(predicate::str::contains(
-            "Usage: secretenv encrypt [OPTIONS] <INPUT>\n       secretenv encrypt [OPTIONS] --stdin (--out <path> | --stdout)",
+            "Usage: kapsaro encrypt [OPTIONS] <INPUT>\n       kapsaro encrypt [OPTIONS] --stdin (--out <path> | --stdout)",
         ));
 }

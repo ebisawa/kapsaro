@@ -15,8 +15,8 @@ fn test_init_registers_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -26,13 +26,13 @@ fn test_init_registers_member() {
     assert!(member_file.exists());
 
     let member_json = fs::read_to_string(&member_file).unwrap();
-    let public_key: secretenv_core::cli_api::test_support::domain::public_key::PublicKey =
+    let public_key: kapsaro_core::cli_api::test_support::domain::public_key::PublicKey =
         serde_json::from_str(&member_json).unwrap();
 
     assert_eq!(public_key.protected.subject_handle, TEST_MEMBER_HANDLE);
     assert_eq!(
         public_key.protected.format,
-        secretenv_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V7
+        kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1
     );
 }
 
@@ -47,8 +47,8 @@ fn test_init_existing_workspace_does_not_register_new_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -58,7 +58,7 @@ fn test_init_existing_workspace_does_not_register_new_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(BOB_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir2.path())
+        .env("KAPSARO_HOME", home_dir2.path())
         .assert()
         .success();
 

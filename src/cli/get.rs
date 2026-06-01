@@ -13,10 +13,10 @@ use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, KvStoreNameOption, MemberHandleOption,
     SigningOutputOptions,
 };
-use secretenv_core::cli_api::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
-use secretenv_core::cli_api::app::kv::types::KvReadMode;
-use secretenv_core::cli_api::app::trust::GetPolicy;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
+use kapsaro_core::cli_api::app::kv::types::KvReadMode;
+use kapsaro_core::cli_api::app::trust::GetPolicy;
+use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
 pub(crate) struct GetArgs {

@@ -22,11 +22,11 @@ use crate::cli::common::output::{
     print_empty_or_json_or_text, print_empty_or_json_or_text_with_warnings,
     print_json_or_text_with_warnings,
 };
-use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
-use secretenv_core::cli_api::app::member::types::{
+use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
+use kapsaro_core::cli_api::app::member::types::{
     MemberListResult, MemberShowResult, MemberVerificationResult,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 
 pub(crate) fn print_member_verification_results(
     json_output: bool,

@@ -12,9 +12,9 @@ fn test_init_with_env_member_handle() {
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

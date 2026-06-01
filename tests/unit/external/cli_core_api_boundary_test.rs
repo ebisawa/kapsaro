@@ -59,7 +59,7 @@ fn cli_api_uses_explicit_allow_lists() {
 #[test]
 fn api_module_does_not_flat_reexport_facades() {
     let content =
-        fs::read_to_string("crates/secretenv-core/src/api/mod.rs").expect("read api source");
+        fs::read_to_string("crates/kapsaro-core/src/api/mod.rs").expect("read api source");
 
     assert!(
         !content.contains("pub use "),
@@ -138,7 +138,7 @@ fn cli_api_does_not_reintroduce_broad_test_support_exports() {
         "verify_github_account;",
         "normalize_recipients",
         "decode_base64url_nopad_ciphertext",
-        "SecretEnvMap",
+        "SecretEnvironmentMap",
         "PortableExportOutput",
         "ActiveKeyDocument",
         "TrustStoreLoadResult",
@@ -156,7 +156,7 @@ fn cli_api_does_not_reintroduce_broad_test_support_exports() {
 fn core_internal_roots_do_not_keep_dead_convenience_reexports() {
     let cases = [
         (
-            "crates/secretenv-core/src/feature/trust/judgment.rs",
+            "crates/kapsaro-core/src/feature/trust/judgment.rs",
             [
                 "CurrentMemberMatch",
                 "KnownKeyMatch",
@@ -169,11 +169,11 @@ fn core_internal_roots_do_not_keep_dead_convenience_reexports() {
             ],
         ),
         (
-            "crates/secretenv-core/src/io/workspace/detection.rs",
+            "crates/kapsaro-core/src/io/workspace/detection.rs",
             ["resolve_workspace_with_base,", "", "", "", "", "", "", ""],
         ),
         (
-            "crates/secretenv-core/src/io/workspace/members.rs",
+            "crates/kapsaro-core/src/io/workspace/members.rs",
             [
                 "promote_incoming_members,",
                 "find_active_member_by_kid,",
@@ -186,7 +186,7 @@ fn core_internal_roots_do_not_keep_dead_convenience_reexports() {
             ],
         ),
         (
-            "crates/secretenv-core/src/io/workspace/members/store.rs",
+            "crates/kapsaro-core/src/io/workspace/members/store.rs",
             [
                 "find_active_member_by_kid,",
                 "list_member_file_paths,",
@@ -199,7 +199,7 @@ fn core_internal_roots_do_not_keep_dead_convenience_reexports() {
             ],
         ),
         (
-            "crates/secretenv-core/src/support/fs.rs",
+            "crates/kapsaro-core/src/support/fs.rs",
             [
                 "check_permission,",
                 "load_bytes_with_limit,",
@@ -231,7 +231,7 @@ fn core_internal_roots_do_not_keep_dead_convenience_reexports() {
 #[test]
 fn internal_helper_results_are_not_public_surface() {
     let cases = [(
-        "crates/secretenv-core/src/feature/key/portable_export.rs",
+        "crates/kapsaro-core/src/feature/key/portable_export.rs",
         "pub struct PortableExportOutput",
     )];
 
@@ -252,14 +252,14 @@ fn production_cli_uses_only_allowed_core_boundaries() {
         let display_path = path.display();
 
         assert!(
-            !content.contains("secretenv_core::cli_api::test_support"),
+            !content.contains("kapsaro_core::cli_api::test_support"),
             "{display_path} must not use hidden test support"
         );
 
         for root in [
             "app", "config", "crypto", "feature", "format", "io", "model", "support",
         ] {
-            let direct_path = format!("secretenv_core::{root}::");
+            let direct_path = format!("kapsaro_core::{root}::");
             assert!(
                 !content.contains(&direct_path),
                 "{display_path} must use cli_api/app or cli_api/presentation instead of {direct_path}"
@@ -316,20 +316,20 @@ fn cli_api_does_not_reexport_redundant_secret_or_kv_input_facades() {
 #[test]
 fn app_cli_boundary_does_not_expose_online_io_status() {
     let cli_app = cli_api_app_source();
-    let key_types = fs::read_to_string("crates/secretenv-core/src/app/key/types.rs")
+    let key_types = fs::read_to_string("crates/kapsaro-core/src/app/key/types.rs")
         .expect("read app key types source");
     let registration_types =
-        fs::read_to_string("crates/secretenv-core/src/app/registration/types.rs")
+        fs::read_to_string("crates/kapsaro-core/src/app/registration/types.rs")
             .expect("read app registration types source");
 
     for (display_path, content) in [
-        ("crates/secretenv-core/src/cli_api/app.rs", cli_app.as_str()),
+        ("crates/kapsaro-core/src/cli_api/app.rs", cli_app.as_str()),
         (
-            "crates/secretenv-core/src/app/key/types.rs",
+            "crates/kapsaro-core/src/app/key/types.rs",
             key_types.as_str(),
         ),
         (
-            "crates/secretenv-core/src/app/registration/types.rs",
+            "crates/kapsaro-core/src/app/registration/types.rs",
             registration_types.as_str(),
         ),
     ] {
@@ -358,7 +358,7 @@ fn production_cli_uses_api_online_status_boundary() {
         fs::read_to_string("src/cli/common/output/text/key.rs").expect("read key text source");
 
     assert!(
-        key_text.contains("use secretenv_core::api::online::OnlineVerificationStatus;"),
+        key_text.contains("use kapsaro_core::api::online::OnlineVerificationStatus;"),
         "key text output must use the public api::online status boundary"
     );
     assert_absent(
@@ -370,19 +370,19 @@ fn production_cli_uses_api_online_status_boundary() {
 
 #[test]
 fn feature_member_layer_does_not_own_file_or_online_io() {
-    let member_add = fs::read_to_string("crates/secretenv-core/src/feature/member/add.rs")
+    let member_add = fs::read_to_string("crates/kapsaro-core/src/feature/member/add.rs")
         .expect("read feature member add source");
     let member_verification =
-        fs::read_to_string("crates/secretenv-core/src/feature/member/verification.rs")
+        fs::read_to_string("crates/kapsaro-core/src/feature/member/verification.rs")
             .expect("read feature member verification source");
 
     for (display_path, content) in [
         (
-            "crates/secretenv-core/src/feature/member/add.rs",
+            "crates/kapsaro-core/src/feature/member/add.rs",
             member_add.as_str(),
         ),
         (
-            "crates/secretenv-core/src/feature/member/verification.rs",
+            "crates/kapsaro-core/src/feature/member/verification.rs",
             member_verification.as_str(),
         ),
     ] {
@@ -404,7 +404,7 @@ fn feature_member_layer_does_not_own_file_or_online_io() {
 #[test]
 fn public_entrypoints_do_not_keep_redundant_modules() {
     let content =
-        fs::read_to_string("crates/secretenv-core/src/lib.rs").expect("read core lib source");
+        fs::read_to_string("crates/kapsaro-core/src/lib.rs").expect("read core lib source");
 
     assert!(
         content.contains("\nmod error;"),
@@ -455,7 +455,7 @@ fn online_test_support_modules_are_feature_gated() {
 #[test]
 fn implementation_roots_stay_crate_private() {
     let content =
-        fs::read_to_string("crates/secretenv-core/src/lib.rs").expect("read core lib source");
+        fs::read_to_string("crates/kapsaro-core/src/lib.rs").expect("read core lib source");
 
     assert!(content.contains("\nmod app;"));
 
@@ -474,20 +474,20 @@ fn implementation_roots_stay_crate_private() {
 }
 
 fn cli_api_root_source() -> String {
-    fs::read_to_string("crates/secretenv-core/src/cli_api.rs").expect("read cli_api root source")
+    fs::read_to_string("crates/kapsaro-core/src/cli_api.rs").expect("read cli_api root source")
 }
 
 fn cli_api_app_source() -> String {
-    fs::read_to_string("crates/secretenv-core/src/cli_api/app.rs").expect("read cli_api app source")
+    fs::read_to_string("crates/kapsaro-core/src/cli_api/app.rs").expect("read cli_api app source")
 }
 
 fn cli_api_presentation_source() -> String {
-    fs::read_to_string("crates/secretenv-core/src/cli_api/presentation.rs")
+    fs::read_to_string("crates/kapsaro-core/src/cli_api/presentation.rs")
         .expect("read cli_api presentation source")
 }
 
 fn cli_api_test_support_source() -> String {
-    fs::read_to_string("crates/secretenv-core/src/cli_api/test_support.rs")
+    fs::read_to_string("crates/kapsaro-core/src/cli_api/test_support.rs")
         .expect("read cli_api test_support source")
 }
 
@@ -561,8 +561,8 @@ fn core_aliases(content: &str) -> Vec<&str> {
         .filter_map(|line| {
             let trimmed = line.trim();
             let alias = trimmed
-                .strip_prefix("use secretenv_core as ")
-                .or_else(|| trimmed.strip_prefix("extern crate secretenv_core as "))?;
+                .strip_prefix("use kapsaro_core as ")
+                .or_else(|| trimmed.strip_prefix("extern crate kapsaro_core as "))?;
             alias.trim_end_matches(';').split_whitespace().next()
         })
         .collect()

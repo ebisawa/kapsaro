@@ -1,12 +1,12 @@
 # Windows / WSL2 ユーザー向け補足ガイド
 
-secretenv は、Windows 環境において **WSL2 (Windows Subsystem for Linux)** を利用することで、通常の Linux と同様にインストールおよび利用が可能です。
+kapsaro は、Windows 環境において **WSL2 (Windows Subsystem for Linux)** を利用することで、通常の Linux と同様にインストールおよび利用が可能です。
 
 本ドキュメントは、主に `guides/user_guide_ja.md` / `guides/user_guide_en.md` を補足する目的で、Windows / WSL2 特有の注意点と推奨設定の例をまとめたものです。
 
 ## WSL2 で 1Password の SSH agent を利用する
 
-WSL2 環境において 1Password の SSH agent を利用する場合、secretenv の設定で以下のように指定します。
+WSL2 環境において 1Password の SSH agent を利用する場合、kapsaro の設定で以下のように指定します。
 
 ```toml
 ssh_identity = "/home/<username>/.ssh/<your-ssh-public-key>.pub"
@@ -16,14 +16,14 @@ ssh_signing_method = "ssh-keygen"
 
 *(※ `username` やファイル名は実際の環境に合わせて変更してください。)*
 
-### `secretenv config set` で推奨設定を投入する例
+### `kapsaro config set` で推奨設定を投入する例
 
 以下は、上記の推奨設定を CLI から投入する例です。
 
 ```bash
-secretenv config set ssh_identity ~/.ssh/<your-ssh-public-key>.pub
-secretenv config set ssh_keygen_command ssh-keygen.exe
-secretenv config set ssh_signing_method ssh-keygen
+kapsaro config set ssh_identity ~/.ssh/<your-ssh-public-key>.pub
+kapsaro config set ssh_keygen_command ssh-keygen.exe
+kapsaro config set ssh_signing_method ssh-keygen
 ```
 
 ### 設定のポイント

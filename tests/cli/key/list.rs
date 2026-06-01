@@ -21,7 +21,7 @@ fn test_key_list_basic() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -32,7 +32,7 @@ fn test_key_list_basic() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -42,7 +42,7 @@ fn test_key_list_basic() {
         .arg("list")
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -79,7 +79,7 @@ fn test_key_list_json_output() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -90,7 +90,7 @@ fn test_key_list_json_output() {
         .arg("--member-handle")
         .arg(member_handle)
         .arg("--json")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -131,7 +131,7 @@ fn test_key_list_verbose_aligns_field_values() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -141,7 +141,7 @@ fn test_key_list_verbose_aligns_field_values() {
         .arg("--member-handle")
         .arg(member_handle)
         .arg("--verbose")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -175,7 +175,7 @@ fn test_key_list_empty() {
         .arg("list")
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -208,7 +208,7 @@ fn test_key_list_auto_resolve_member_handle() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -216,7 +216,7 @@ fn test_key_list_auto_resolve_member_handle() {
     let output = cmd()
         .arg("key")
         .arg("list")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 

@@ -10,9 +10,9 @@ use crate::cli::common::output::text::{print_warning, print_warning_line};
 use crate::cli::common::prompt::confirm_destructive_action;
 #[cfg(test)]
 use crate::cli::common::prompt::confirm_destructive_action_with_reader;
-use secretenv_core::cli_api::app::member::mutation::{evaluate_member_removal, remove_member};
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::member::mutation::{evaluate_member_removal, remove_member};
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::Error;
 
 use super::RemoveArgs;
 
@@ -31,7 +31,7 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
 }
 
 fn print_member_remove_preview(
-    preview: &secretenv_core::cli_api::app::member::types::MemberRemovalReport,
+    preview: &kapsaro_core::cli_api::app::member::types::MemberRemovalReport,
 ) {
     for warning in &preview.warnings {
         print_warning(warning);
@@ -50,7 +50,7 @@ fn print_member_remove_preview(
         eprintln!("  {}", format_path_relative_to_cwd(artifact));
     }
     print_warning_line(
-        "Run `secretenv rewrap` after removal to update recipients in encrypted artifacts.",
+        "Run `kapsaro rewrap` after removal to update recipients in encrypted artifacts.",
     );
 }
 

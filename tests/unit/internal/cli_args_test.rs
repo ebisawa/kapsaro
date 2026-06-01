@@ -14,7 +14,7 @@ fn parse_error(args: &[&str]) -> clap::Error {
 
 #[test]
 fn test_cli_doctor_parses_debug_option() {
-    let cli = Cli::try_parse_from(["secretenv", "doctor", "--debug"]).unwrap();
+    let cli = Cli::try_parse_from(["kapsaro", "doctor", "--debug"]).unwrap();
 
     match cli.command {
         Commands::Doctor(args) => assert!(args.common.debug.debug),
@@ -25,7 +25,7 @@ fn test_cli_doctor_parses_debug_option() {
 #[test]
 fn test_cli_rewrap_parses_target_options() {
     let cli = Cli::try_parse_from([
-        "secretenv",
+        "kapsaro",
         "rewrap",
         "--target",
         "../certs/ca.pem.encrypted",
@@ -49,7 +49,7 @@ fn test_cli_rewrap_parses_target_options() {
 
 #[test]
 fn test_workspace_remains_subcommand_option() {
-    let err = parse_error(&["secretenv", "--workspace", ".secretenv", "list"]);
+    let err = parse_error(&["kapsaro", "--workspace", ".kapsaro", "list"]);
 
     assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
 }
@@ -57,22 +57,22 @@ fn test_workspace_remains_subcommand_option() {
 #[test]
 fn test_quiet_is_limited_to_status_message_commands() {
     for args in [
-        &["secretenv", "get", "--quiet", "KEY"][..],
-        &["secretenv", "list", "--quiet"][..],
-        &["secretenv", "config", "list", "--quiet"][..],
-        &["secretenv", "trust", "keys", "list", "--quiet"][..],
+        &["kapsaro", "get", "--quiet", "KEY"][..],
+        &["kapsaro", "list", "--quiet"][..],
+        &["kapsaro", "config", "list", "--quiet"][..],
+        &["kapsaro", "trust", "keys", "list", "--quiet"][..],
     ] {
         let err = parse_error(args);
         assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     for args in [
-        &["secretenv", "encrypt", "--quiet", "plain.txt"][..],
-        &["secretenv", "decrypt", "--quiet", "secret.enc", "--stdout"][..],
-        &["secretenv", "set", "--quiet", "KEY", "VALUE"][..],
-        &["secretenv", "unset", "--quiet", "--force", "KEY"][..],
-        &["secretenv", "import", "--quiet", ".env"][..],
-        &["secretenv", "rewrap", "--quiet"][..],
+        &["kapsaro", "encrypt", "--quiet", "plain.txt"][..],
+        &["kapsaro", "decrypt", "--quiet", "secret.enc", "--stdout"][..],
+        &["kapsaro", "set", "--quiet", "KEY", "VALUE"][..],
+        &["kapsaro", "unset", "--quiet", "--force", "KEY"][..],
+        &["kapsaro", "import", "--quiet", ".env"][..],
+        &["kapsaro", "rewrap", "--quiet"][..],
     ] {
         Cli::try_parse_from(args).expect("command should accept --quiet");
     }
@@ -81,32 +81,32 @@ fn test_quiet_is_limited_to_status_message_commands() {
 #[test]
 fn test_ssh_options_are_limited_to_signing_commands() {
     for args in [
-        &["secretenv", "doctor", "--ssh-identity", "id_ed25519"][..],
-        &["secretenv", "inspect", "--ssh-keygen", "secret.enc"][..],
-        &["secretenv", "member", "list", "--ssh-agent"][..],
-        &["secretenv", "config", "list", "--ssh-keygen"][..],
+        &["kapsaro", "doctor", "--ssh-identity", "id_ed25519"][..],
+        &["kapsaro", "inspect", "--ssh-keygen", "secret.enc"][..],
+        &["kapsaro", "member", "list", "--ssh-agent"][..],
+        &["kapsaro", "config", "list", "--ssh-keygen"][..],
     ] {
         let err = parse_error(args);
         assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     for args in [
-        &["secretenv", "encrypt", "--ssh-keygen", "plain.txt"][..],
+        &["kapsaro", "encrypt", "--ssh-keygen", "plain.txt"][..],
         &[
-            "secretenv",
+            "kapsaro",
             "decrypt",
             "--ssh-identity",
             "id_ed25519",
             "secret.enc",
             "--stdout",
         ][..],
-        &["secretenv", "get", "--ssh-agent", "KEY"][..],
-        &["secretenv", "list", "--ssh-keygen"][..],
-        &["secretenv", "list", "--member-handle", "alice@example.com"][..],
-        &["secretenv", "list", "--allow-expired-key"][..],
-        &["secretenv", "set", "--ssh-keygen", "KEY", "VALUE"][..],
-        &["secretenv", "run", "--ssh-keygen", "--", "env"][..],
-        &["secretenv", "rewrap", "--ssh-keygen"][..],
+        &["kapsaro", "get", "--ssh-agent", "KEY"][..],
+        &["kapsaro", "list", "--ssh-keygen"][..],
+        &["kapsaro", "list", "--member-handle", "alice@example.com"][..],
+        &["kapsaro", "list", "--allow-expired-key"][..],
+        &["kapsaro", "set", "--ssh-keygen", "KEY", "VALUE"][..],
+        &["kapsaro", "run", "--ssh-keygen", "--", "env"][..],
+        &["kapsaro", "rewrap", "--ssh-keygen"][..],
     ] {
         Cli::try_parse_from(args).expect("command should accept SSH signing options");
     }
@@ -115,10 +115,10 @@ fn test_ssh_options_are_limited_to_signing_commands() {
 #[test]
 fn test_allow_non_member_is_limited_to_non_member_review_commands() {
     for args in [
-        &["secretenv", "run", "--allow-non-member", "--", "env"][..],
-        &["secretenv", "set", "--allow-non-member", "KEY", "VALUE"][..],
-        &["secretenv", "encrypt", "--allow-non-member", "plain.txt"][..],
-        &["secretenv", "inspect", "--allow-non-member", "secret.enc"][..],
+        &["kapsaro", "run", "--allow-non-member", "--", "env"][..],
+        &["kapsaro", "set", "--allow-non-member", "KEY", "VALUE"][..],
+        &["kapsaro", "encrypt", "--allow-non-member", "plain.txt"][..],
+        &["kapsaro", "inspect", "--allow-non-member", "secret.enc"][..],
     ] {
         let err = parse_error(args);
         assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
@@ -126,15 +126,15 @@ fn test_allow_non_member_is_limited_to_non_member_review_commands() {
 
     for args in [
         &[
-            "secretenv",
+            "kapsaro",
             "decrypt",
             "--allow-non-member",
             "secret.enc",
             "--stdout",
         ][..],
-        &["secretenv", "get", "--allow-non-member", "KEY"][..],
-        &["secretenv", "list", "--allow-non-member"][..],
-        &["secretenv", "rewrap", "--allow-non-member"][..],
+        &["kapsaro", "get", "--allow-non-member", "KEY"][..],
+        &["kapsaro", "list", "--allow-non-member"][..],
+        &["kapsaro", "rewrap", "--allow-non-member"][..],
     ] {
         Cli::try_parse_from(args).expect("command should accept --allow-non-member");
     }
@@ -143,7 +143,7 @@ fn test_allow_non_member_is_limited_to_non_member_review_commands() {
 #[test]
 fn test_allow_weak_password_is_limited_to_private_key_export() {
     let err = parse_error(&[
-        "secretenv",
+        "kapsaro",
         "key",
         "export",
         "--allow-weak-password",
@@ -153,7 +153,7 @@ fn test_allow_weak_password_is_limited_to_private_key_export() {
     assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
 
     Cli::try_parse_from([
-        "secretenv",
+        "kapsaro",
         "key",
         "export",
         "--private",
@@ -169,7 +169,7 @@ fn test_allow_weak_password_is_limited_to_private_key_export() {
 fn test_trust_purge_accepts_force_short_option() {
     for args in [
         &[
-            "secretenv",
+            "kapsaro",
             "trust",
             "keys",
             "purge",
@@ -178,7 +178,7 @@ fn test_trust_purge_accepts_force_short_option() {
             "-f",
         ][..],
         &[
-            "secretenv",
+            "kapsaro",
             "trust",
             "recipients",
             "purge",

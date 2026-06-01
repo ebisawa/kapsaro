@@ -29,7 +29,7 @@ fn test_format_init_noop_summary_lines_keeps_long_workspace_path_inline() {
 
 fn long_workspace_path() -> PathBuf {
     PathBuf::from(format!(
-        "target/{}/.secretenv",
+        "target/{}/.kapsaro",
         "very-long-workspace-directory-name/".repeat(6)
     ))
 }

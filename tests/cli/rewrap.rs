@@ -12,8 +12,8 @@ use crate::cli::common::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::setup_test_workspace;
+use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use temp_env::with_vars;
@@ -36,7 +36,7 @@ fn run_rewrap_with_member_set_review_args(
     member_handle: &str,
     extra_args: &[&str],
 ) {
-    let mut command = crate::cli::common::secretenv_std_cmd();
+    let mut command = crate::cli::common::kapsaro_std_cmd();
     command
         .arg("rewrap")
         .arg("--member-handle")
@@ -53,7 +53,7 @@ fn run_rewrap_command(
     member_handle: &str,
     extra_args: &[&str],
 ) -> std::process::Output {
-    let mut command = crate::cli::common::secretenv_std_cmd();
+    let mut command = crate::cli::common::kapsaro_std_cmd();
     command
         .arg("rewrap")
         .arg("--member-handle")

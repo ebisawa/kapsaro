@@ -5,8 +5,8 @@
 
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::key::print_key_list;
-use secretenv_core::cli_api::app::key::manage::list_keys_command;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::key::manage::list_keys_command;
+use kapsaro_core::Result;
 
 use super::ListArgs;
 

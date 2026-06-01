@@ -6,9 +6,9 @@
 use crate::cli::common::output::json::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_json;
 use crate::cli::common::output::print_json_or_text;
 use crate::cli::common::output::text::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_text;
-use secretenv_core::cli_api::app::rewrap::types::RewrapBatchOutcome;
-use secretenv_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use secretenv_core::{Error, Result};
+use kapsaro_core::cli_api::app::rewrap::types::RewrapBatchOutcome;
+use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::{Error, Result};
 
 pub(crate) struct RewrapFailureView {
     pub(crate) path: String,

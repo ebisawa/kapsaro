@@ -8,8 +8,8 @@ use clap::Args;
 use crate::cli::common::output::json::doctor::print_doctor_report;
 use crate::cli::common::output::text::doctor::format_doctor_report;
 use crate::cli::options::{MemberHandleOption, WorkspaceOutputOptions};
-use secretenv_core::cli_api::app::doctor::{execute_doctor_command, DoctorRequest};
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::doctor::{execute_doctor_command, DoctorRequest};
+use kapsaro_core::Result;
 
 #[derive(Debug, Clone, Args)]
 pub(crate) struct DoctorArgs {

@@ -31,8 +31,8 @@ fn test_rewrap_file_enc_roundtrip() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -45,8 +45,8 @@ fn test_rewrap_file_enc_roundtrip() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -78,8 +78,8 @@ fn test_rewrap_kv_enc_roundtrip() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -88,8 +88,8 @@ fn test_rewrap_kv_enc_roundtrip() {
         .arg("MY_SECRET")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("supersecretvalue"));
@@ -116,8 +116,8 @@ fn test_rewrap_json_output_uses_operation_outcome_shape() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .arg("--json")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .get_output()

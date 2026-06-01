@@ -5,9 +5,9 @@
 
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::text::print_warning_line;
-use secretenv_core::cli_api::app::rewrap::promotion::PromotionReviewFailure;
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
-use secretenv_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::cli_api::app::rewrap::promotion::PromotionReviewFailure;
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 
 const REVIEW_LABEL_WIDTH: usize = 19;
 

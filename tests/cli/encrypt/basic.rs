@@ -5,7 +5,7 @@
 
 use crate::cli::common::{cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE};
 use crate::test_utils::{setup_test_keystore, setup_test_workspace};
-use secretenv_core::cli_api::test_support::domain::wire::format;
+use kapsaro_core::cli_api::test_support::domain::wire::format;
 use std::fs;
 
 #[test]
@@ -29,7 +29,7 @@ fn test_encrypt_file_with_workspace() {
     assert!(output_path.exists());
     let content = fs::read_to_string(&output_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V7);
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
 }
 
 #[test]
@@ -54,9 +54,9 @@ fn test_encrypt_no_active_members_error() {
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", keystore_tmp.path())
+        .env("KAPSARO_HOME", keystore_tmp.path())
         .env(
-            "SECRETENV_SSH_IDENTITY",
+            "KAPSARO_SSH_IDENTITY",
             keystore_tmp.path().join(".ssh").join("test_ed25519"),
         )
         .output()

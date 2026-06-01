@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! secretenv CLI entry point.
+//! kapsaro CLI entry point.
 
 mod cli;
 

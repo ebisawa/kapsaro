@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use console::{colors_enabled_stderr, set_colors_enabled_stderr};
-use secretenv_core::Error;
+use kapsaro_core::Error;
 use serial_test::serial;
 
 use super::format_error_line;
@@ -57,8 +57,8 @@ fn test_format_error_line_colors_only_first_line_for_multiline_errors() {
          member handle is required but could not be determined.\n\n\
          Options:\n\
          1. Specify --member-handle <handle>\n\
-         2. Set environment variable: export SECRETENV_MEMBER_HANDLE=<handle>\n\
-         3. Set in config: secretenv config set member_handle <handle>",
+         2. Set environment variable: export KAPSARO_MEMBER_HANDLE=<handle>\n\
+         3. Set in config: kapsaro config set member_handle <handle>",
     );
 
     let rendered = format_error_line(&error);
@@ -81,14 +81,14 @@ fn test_format_error_line_colors_only_first_line_for_multiline_errors() {
 fn test_format_error_line_keeps_long_error_inline() {
     let _guard = StderrColorGuard::new(false);
     let error = Error::build_invalid_operation_error(
-        "Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact.",
+        "Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact.",
     );
 
     let rendered = format_error_line(&error);
 
     assert_eq!(
         rendered,
-        "Error: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact."
+        "Error: Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact."
     );
 }
 
@@ -97,7 +97,7 @@ fn test_format_error_line_keeps_long_error_inline() {
 fn test_format_error_line_preserves_structured_details() {
     let _guard = StderrColorGuard::new(false);
     let error = Error::build_invalid_operation_error(
-        "Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run secretenv rewrap.",
+        "Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run kapsaro rewrap.",
     );
 
     let rendered = format_error_line(&error);
@@ -107,7 +107,7 @@ fn test_format_error_line_preserves_structured_details() {
         concat!(
             "Error: Recipient kid is not active.\n",
             "       Kid: KAD1-AAAA\n",
-            "       Action: Run secretenv rewrap."
+            "       Action: Run kapsaro rewrap."
         )
     );
 }

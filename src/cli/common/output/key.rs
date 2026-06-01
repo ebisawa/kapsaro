@@ -12,8 +12,8 @@ use crate::cli::common::output::print_empty_or_json_or_text;
 use crate::cli::common::output::text::key::{
     print_empty_key_list as print_empty_key_list_text, print_key_list as print_key_list_text,
 };
-use secretenv_core::cli_api::app::key::types::KeyListResult;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::key::types::KeyListResult;
+use kapsaro_core::Result;
 
 pub(crate) fn print_key_list(
     json_output: bool,

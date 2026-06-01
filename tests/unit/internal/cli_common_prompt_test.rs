@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{prompt_yes_no, prompt_yes_no_with_reader};
-use secretenv_core::cli_api::test_support::helpers::tty;
+use kapsaro_core::cli_api::test_support::helpers::tty;
 use std::io::Cursor;
 use std::io::{BufReader, Write};
 use std::os::unix::net::UnixStream;

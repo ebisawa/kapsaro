@@ -3,11 +3,11 @@
 
 //! View builders for member command output.
 
-use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
-use secretenv_core::cli_api::app::member::types::{
+use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
+use kapsaro_core::cli_api::app::member::types::{
     MemberListResult, MemberShowResult, MemberVerificationResult,
 };
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 
 pub(crate) struct MemberListEntryView<'a> {
     pub(crate) member_handle: &'a str,

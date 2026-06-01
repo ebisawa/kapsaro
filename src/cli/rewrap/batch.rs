@@ -12,9 +12,9 @@ use crate::cli::common::trust::{
     confirm_non_member_acceptance, confirm_recipient_approvals, confirm_recipient_set_approval,
     confirm_signer_key_approval,
 };
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
-use secretenv_core::cli_api::app::rewrap::{execute_rewrap_batch_command, RewrapBatchCommandInput};
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::app::rewrap::{execute_rewrap_batch_command, RewrapBatchCommandInput};
+use kapsaro_core::Result;
 
 pub(crate) fn run_batch_rewrap(args: &RewrapArgs, options: &CommonCommandOptions) -> Result<()> {
     let execution = resolve_write_execution_input(options, args.member.member_handle.clone())?;

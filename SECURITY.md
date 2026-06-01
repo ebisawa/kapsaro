@@ -8,7 +8,7 @@ Older releases and non-current branches may not receive security updates.
 
 ## Operational Diagnostics
 
-Use `secretenv doctor` to review workspace structure, member keys, local trust state, encrypted artifact metadata, and CI environment-key readiness before onboarding, CI rollout, or release work.
+Use `kapsaro doctor` to review workspace structure, member keys, local trust state, encrypted artifact metadata, and CI environment-key readiness before onboarding, CI rollout, or release work.
 
 The command is read-only for workspace files and local configuration. Secret payloads remain encrypted during artifact checks.
 

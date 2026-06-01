@@ -13,9 +13,9 @@ use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, KvStoreNameOption, MemberHandleOption,
     SigningOutputOptions,
 };
-use secretenv_core::cli_api::app::kv::query::{execute_kv_list_command, resolve_kv_read_command};
-use secretenv_core::cli_api::app::trust::ListPolicy;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::kv::query::{execute_kv_list_command, resolve_kv_read_command};
+use kapsaro_core::cli_api::app::trust::ListPolicy;
+use kapsaro_core::Result;
 
 #[derive(Args)]
 pub(crate) struct ListArgs {

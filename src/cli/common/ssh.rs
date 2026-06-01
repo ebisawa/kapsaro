@@ -4,13 +4,13 @@
 //! Shared SSH signing context resolution for CLI commands.
 
 use crate::cli::identity_prompt::select_ssh_key;
-use secretenv_core::cli_api::app::context::env_key::is_env_key_mode;
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
-use secretenv_core::cli_api::app::context::ssh::{
+use kapsaro_core::cli_api::app::context::env_key::is_env_key_mode;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::app::context::ssh::{
     build_ssh_signing_context, resolve_ssh_context_by_active_key, resolve_ssh_key_candidates,
     SshSigningContextResolution,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 use tracing::debug;
 
 /// Run the 3-phase SSH signing context resolution for key generation.
@@ -38,7 +38,7 @@ pub(crate) fn resolve_ssh_context_for_active_key(
 
 /// Resolve SSH context if needed, skipping in env-var key mode.
 ///
-/// Returns `None` when `SECRETENV_PRIVATE_KEY` is set (CI mode),
+/// Returns `None` when `KAPSARO_PRIVATE_KEY` is set (CI mode),
 /// causing the app layer to use environment variable key loading.
 pub(crate) fn resolve_ssh_context_optional(
     options: &CommonCommandOptions,

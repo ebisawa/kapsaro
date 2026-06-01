@@ -16,7 +16,7 @@ use crate::cli::options::{
     AllowExpiredKeyOption, ForceOption, MemberHandleOption, SigningOutputOptions, WorkspaceOptions,
     WorkspaceOutputOptions,
 };
-use secretenv_core::Error;
+use kapsaro_core::Error;
 
 mod add;
 mod list;

@@ -5,7 +5,7 @@
 
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::trust::view::{RecipientSetListItemView, TrustListItemView};
-use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 pub(crate) fn print_known_key_list(items: &[TrustListItemView<'_>]) {
     print_lines(format_known_key_list_lines(items));

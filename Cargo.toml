@@ -1,6 +1,6 @@
 [package]
-name = "secretenv"
-version = "0.10.1-alpha"
+name = "kapsaro"
+version = "0.99.0-beta"
 edition = "2021"
 authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
 description = "Offline-first CLI for sharing encrypted .env files and other secrets through Git"
@@ -8,10 +8,10 @@ license = "Apache-2.0"
 autotests = false
 
 [workspace]
-members = ["crates/secretenv-core"]
+members = ["crates/kapsaro-core"]
 
 [dependencies]
-secretenv-core = { version = "0.10.1-alpha", path = "crates/secretenv-core", default-features = false, features = ["cli-internal"] }
+kapsaro-core = { version = "0.99.0-beta", path = "crates/kapsaro-core", default-features = false, features = ["cli-internal"] }
 
 # CLI framework
 clap = { version = "4", features = ["derive"] }
@@ -34,10 +34,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 default = ["online"]
-online = ["secretenv-core/online"]
+online = ["kapsaro-core/online"]
 
 [dev-dependencies]
-secretenv-core = { version = "0.10.1-alpha", path = "crates/secretenv-core", default-features = false, features = ["cli-internal", "cli-test-support"] }
+kapsaro-core = { version = "0.99.0-beta", path = "crates/kapsaro-core", default-features = false, features = ["cli-internal", "cli-test-support"] }
 
 # CLI testing
 assert_cmd = "2"
@@ -51,8 +51,6 @@ serial_test = "3"
 # Environment variable manipulation for tests
 temp-env = "0.3"
 ed25519-dalek = "2"
-hex = "0.4"
-sha2 = "0.11"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [[test]]

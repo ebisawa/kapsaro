@@ -9,7 +9,7 @@ use crate::test_utils::{
 use console::strip_ansi_codes;
 
 #[cfg(unix)]
-use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_rewrap_requires_workspace() {
@@ -23,7 +23,7 @@ fn test_rewrap_requires_workspace() {
     let invalid_workspace = temp_dir.path().join("workspace-does-not-exist");
     let output = with_vars(
         [(
-            "SECRETENV_WORKSPACE",
+            "KAPSARO_WORKSPACE",
             Some(invalid_workspace.to_str().expect("invalid path as str")),
         )],
         || run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]),
@@ -64,11 +64,11 @@ fn test_rewrap_nonexistent_workspace_fails() {
     cmd()
         .arg("rewrap")
         .arg("--workspace")
-        .arg("/tmp/nonexistent_workspace_secretenv_test")
+        .arg("/tmp/nonexistent_workspace_kapsaro_test")
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -87,8 +87,8 @@ fn test_rewrap_quiet_keeps_failed_file_details_on_stderr() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .env("CLICOLOR_FORCE", "1")
         .assert()
         .failure();
@@ -146,8 +146,8 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains("Insecure permissions"));
@@ -189,8 +189,8 @@ fn test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr() {
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_key)
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_key)
         .assert()
         .success()
         .stderr(predicate::str::contains(

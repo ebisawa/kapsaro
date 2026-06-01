@@ -21,9 +21,7 @@ fn test_doctor_missing_trust_store_warns_but_exits_success() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Status: WARN"))
-        .stdout(predicate::str::contains(
-            "secretenv member verify --approve",
-        ));
+        .stdout(predicate::str::contains("kapsaro member verify --approve"));
 }
 
 #[test]
@@ -46,7 +44,7 @@ fn test_doctor_debug_logs_local_state_without_password_env_name() {
         .stdout(predicate::str::contains(
             "[DOCTOR] local state: inspect active key",
         ))
-        .stdout(predicate::str::contains("SECRETENV_KEY_PASSWORD").not());
+        .stdout(predicate::str::contains("KAPSARO_KEY_PASSWORD").not());
 }
 
 #[test]

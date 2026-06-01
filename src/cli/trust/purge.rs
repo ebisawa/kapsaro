@@ -15,13 +15,13 @@ use crate::cli::common::output::trust::{
 };
 use crate::cli::common::prompt::confirm_destructive_action_or_cancel;
 use crate::cli::common::trust::run_with_trust_store_reset_recovery;
-use secretenv_core::cli_api::app::context::execution::ExecutionContext;
-use secretenv_core::cli_api::app::context::options::CommonCommandOptions;
-use secretenv_core::cli_api::app::trust::management::{
+use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::app::trust::management::{
     execute_purge, execute_recipient_set_purge, list_purge_candidates,
     list_recipient_set_purge_candidates,
 };
-use secretenv_core::Error;
+use kapsaro_core::Error;
 use time::OffsetDateTime;
 
 use super::PurgeArgs;
@@ -93,12 +93,12 @@ where
 }
 
 /// Parse duration string (e.g. "180d") to a UTC threshold timestamp.
-fn parse_duration_to_threshold(duration: &str) -> secretenv_core::Result<OffsetDateTime> {
+fn parse_duration_to_threshold(duration: &str) -> kapsaro_core::Result<OffsetDateTime> {
     let days = parse_days(duration)?;
     Ok(time::OffsetDateTime::now_utc() - time::Duration::days(days))
 }
 
-fn parse_days(duration: &str) -> secretenv_core::Result<i64> {
+fn parse_days(duration: &str) -> kapsaro_core::Result<i64> {
     let s = duration.trim();
     if let Some(num_str) = s.strip_suffix('d') {
         let days = num_str.parse::<i64>().map_err(|_| {

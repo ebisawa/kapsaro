@@ -22,21 +22,21 @@ fn test_format_pair_row_keeps_long_pair_inline() {
 
 #[test]
 fn test_format_diagnostic_lines_keeps_long_message_inline() {
-    let message = "Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact.";
+    let message = "Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact.";
 
     let lines = format_diagnostic_lines("Warning: ", message);
 
     assert_eq!(
         lines,
         vec![
-            "Warning: Recipient kid is not active in this workspace. Run secretenv rewrap before writing this artifact."
+            "Warning: Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact."
         ]
     );
 }
 
 #[test]
 fn test_format_diagnostic_lines_keeps_explicit_detail_lines() {
-    let message = "Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run secretenv rewrap.";
+    let message = "Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run kapsaro rewrap.";
 
     let lines = format_diagnostic_lines("Error: ", message);
 
@@ -45,7 +45,7 @@ fn test_format_diagnostic_lines_keeps_explicit_detail_lines() {
         vec![
             "Error: Recipient kid is not active.",
             "       Kid: KAD1-AAAA",
-            "       Action: Run secretenv rewrap.",
+            "       Action: Run kapsaro rewrap.",
         ]
     );
 }

@@ -2,27 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::cli::common::{
-    encrypt_file_with_member_set_review, run_command_with_pty, secretenv_bin,
-};
+use crate::cli::common::{encrypt_file_with_member_set_review, kapsaro_bin, run_command_with_pty};
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
     setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use secretenv_core::cli_api::test_support::domain::public_key::{BindingClaims, GithubAccount};
-use secretenv_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-use secretenv_core::cli_api::test_support::operations::key::public_key_document::{
+use kapsaro_core::cli_api::test_support::domain::public_key::{BindingClaims, GithubAccount};
+use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
+use kapsaro_core::cli_api::test_support::operations::key::public_key_document::{
     build_attestation, build_public_key, PublicKeyDocumentParams,
 };
-use secretenv_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
-use secretenv_core::cli_api::test_support::storage::keystore::active::set_active_kid;
-use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
-use secretenv_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use secretenv_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-use secretenv_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-use secretenv_core::cli_api::test_support::storage::workspace::members::load_member_file_from_path;
-use secretenv_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
+use kapsaro_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
+use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
+use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::cli_api::test_support::storage::workspace::members::load_member_file_from_path;
+use kapsaro_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
 #[cfg(unix)]
 use std::process::Command as StdCommand;
 
@@ -363,19 +361,19 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
         &[("KEY", "value")],
     );
 
-    let mut command = StdCommand::new(secretenv_bin());
+    let mut command = StdCommand::new(kapsaro_bin());
     command
         .arg("rewrap")
         .arg("--workspace")
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .env(
-            "SECRETENV_SSH_IDENTITY",
+            "KAPSARO_SSH_IDENTITY",
             temp_dir.path().join(".ssh").join("test_ed25519"),
         )
-        .env("SECRETENV_SSH_SIGNING_METHOD", "ssh-keygen")
+        .env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen")
         .env_remove("CI");
 
     let result = run_command_with_pty(&mut command, "Trust this member set", b"y\r");
@@ -657,9 +655,9 @@ fn test_rewrap_rejects_duplicate_kid_workspace_before_processing() {
         .arg(&workspace_dir)
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .env(
-            "SECRETENV_SSH_IDENTITY",
+            "KAPSARO_SSH_IDENTITY",
             temp_dir.path().join(".ssh").join("test_ed25519"),
         )
         .assert()

@@ -6,11 +6,11 @@
 use crate::cli::common::{
     cmd, setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
-use predicates::prelude::*;
-use secretenv_core::cli_api::test_support::helpers::kid::{
+use kapsaro_core::cli_api::test_support::helpers::kid::{
     format_kid_display, format_kid_half_display,
 };
-use secretenv_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use predicates::prelude::*;
 use tempfile::TempDir;
 
 /// Helper to create a workspace with initialized member and a key
@@ -40,8 +40,8 @@ fn test_get_existing_key() {
         .arg("TEST_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("test_value"));
@@ -58,8 +58,8 @@ fn test_get_rejects_tampered_kv_signature() {
         .arg("TEST_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("Signature verification failed"));
@@ -75,8 +75,8 @@ fn test_get_nonexistent_key() {
         .arg("NONEXISTENT_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -93,8 +93,8 @@ fn test_get_with_json_output() {
         .arg("--json")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .get_output()
@@ -115,8 +115,8 @@ fn test_get_error_when_file_not_exists() {
         .arg("TEST_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -133,8 +133,8 @@ fn test_get_all() {
         .arg("--all")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("test_value"))
@@ -151,9 +151,9 @@ fn test_get_all_debug_logs_public_key_verification_contexts() {
         .arg("--debug")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("[CLI] command=get"))
@@ -178,9 +178,9 @@ fn test_get_all_debug_uses_half_kid_for_high_frequency_traces() {
         .arg("--debug")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains(format!(
@@ -231,9 +231,9 @@ fn test_get_all_verbose_does_not_log_public_key_verification_contexts() {
         .arg("--verbose")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("[CLI] command=get").not())
@@ -254,8 +254,8 @@ fn test_get_all_with_key() {
         .arg("--with-key")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("ANOTHER_KEY=\"another_value\""))
@@ -272,8 +272,8 @@ fn test_get_with_key_format() {
         .arg("TEST_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("TEST_KEY=\"test_value\""));
@@ -289,8 +289,8 @@ fn test_get_all_with_key_arg_fails() {
         .arg("TEST_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -303,8 +303,8 @@ fn test_get_without_key_and_all_fails() {
         .arg("get")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -319,8 +319,8 @@ fn test_get_all_json() {
         .arg("--json")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .get_output()

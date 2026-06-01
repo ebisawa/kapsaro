@@ -1,4 +1,4 @@
-# SecretEnv Security Design
+# Kapsaro Security Design
 
 ---
 
@@ -6,7 +6,7 @@
 
 ### Purpose of This Document
 
-This document presents SecretEnv's security claims, the conditions required for those claims to hold, design-level verification points, residual risks, and explicit non-goals.
+This document presents Kapsaro's security claims, the conditions required for those claims to hold, design-level verification points, residual risks, and explicit non-goals.
 
 Each section shows which design decisions support which security claims, and where operational assumptions and constraints remain.
 
@@ -15,26 +15,26 @@ Each section shows which design decisions support which security claims, and whe
 | Audience | Primary sections | Purpose |
 |----------|-----------------|---------|
 | Security reviewers / auditors | §1 (claims and boundaries), §2 (threat model), §3 (primitives), §5 (signature architecture), §6–§8 (file-enc / kv-enc / context binding), §11 (attack scenarios), §12 (checkpoints) | Evaluate the security claims, assumptions, residual risks, and review points |
-| Users / operators / decision makers | §1 (claims and boundaries), §2.1–§2.4 (threat model and trust boundary), §9.4–§10 (PrivateKey protection and trust policy), §13 (limitations), Appendix B (operations checklist) | Decide whether SecretEnv can be operated safely in their environment and what limits they must accept |
+| Users / operators / decision makers | §1 (claims and boundaries), §2.1–§2.4 (threat model and trust boundary), §9.4–§10 (PrivateKey protection and trust policy), §13 (limitations), Appendix B (operations checklist) | Decide whether Kapsaro can be operated safely in their environment and what limits they must accept |
 
 ---
 
 
 ## 1. Security Claims and Boundaries
 
-This chapter explains the design problem SecretEnv addresses and the boundary of its security claims. It starts with the design starting point, then separates what SecretEnv guarantees, what depends on operational assumptions, and what it deliberately does not guarantee.
+This chapter explains the design problem Kapsaro addresses and the boundary of its security claims. It starts with the design starting point, then separates what Kapsaro guarantees, what depends on operational assumptions, and what it deliberately does not guarantee.
 
 Later chapters justify these claims through the threat model, trust boundary, cryptographic primitives, signature verification, concrete file-enc / kv-enc structures, context binding, trust policy, and attack scenarios.
 
 ### 1.1 Design Starting Point
 
-SecretEnv is an offline-first CLI for helping teams manage secret values such as `.env` files, certificates, and API keys through Git review and history. The motivating problem is that plaintext chat handoffs and manual distribution leave values behind, make it hard to know who could read what at a given time, and make member changes or CI access changes easy to miss.
+Kapsaro is an offline-first CLI for helping teams manage secret values such as `.env` files, certificates, and API keys through Git review and history. The motivating problem is that plaintext chat handoffs and manual distribution leave values behind, make it hard to know who could read what at a given time, and make member changes or CI access changes easy to miss.
 
 At the same time, the Git repository is not a cryptographic trust anchor. Git is useful for replication, history, diff review, and visibility into membership changes, but a developer with write access, compromised CI, or an unauthorized push path can rewrite files in the repository. A design that trusts repository contents at face value would place cryptographic trust in a region that attackers may be able to tamper with.
 
-SecretEnv's answer is to use Git as the distribution medium while keeping cryptographic trust out of repository state itself. Secrets are encrypted for each recipient's key, and encrypted artifacts carry enough structure to be verified through signatures and context binding. Each user's private keys, local keystore, local trust store, and SSH signing capability live in the local trusted area, while workspace member data and encrypted artifacts are treated as inputs that must be verified before use.
+Kapsaro's answer is to use Git as the distribution medium while keeping cryptographic trust out of repository state itself. Secrets are encrypted for each recipient's key, and encrypted artifacts carry enough structure to be verified through signatures and context binding. Each user's private keys, local keystore, local trust store, and SSH signing capability live in the local trusted area, while workspace member data and encrypted artifacts are treated as inputs that must be verified before use.
 
-This separation makes SecretEnv treat "whether the artifact was tampered with," "which key signed it," "who may decrypt in the current workspace," and "whether the user has reviewed that key owner" as different questions. A cryptographically valid signature does not by itself prove that the artifact should be accepted in the current operational state. This premise drives the threat model and trust boundary in §2 and the trust policy in §10.
+This separation makes Kapsaro treat "whether the artifact was tampered with," "which key signed it," "who may decrypt in the current workspace," and "whether the user has reviewed that key owner" as different questions. A cryptographically valid signature does not by itself prove that the artifact should be accepted in the current operational state. This premise drives the threat model and trust boundary in §2 and the trust policy in §10.
 
 ### 1.2 Guaranteed by Design
 
@@ -81,7 +81,7 @@ The following claims hold when the implementation preserves the invariants in §
 | Resolve file-enc / kv-enc signature verification keys only from the embedded signer public key (implemented as `signer_pub`) | Self-contained verification, consistent acceptance behavior across implementations |
 | Keep the roles of the active member list (`members/active`), key-owner approval cache (`known_keys`), and recipient-set approval cache (`recipient_sets`) distinct | Separation between current authorization and user approval history |
 | Limit expired-key recovery to decryption and operational artifact signature verification, and do not apply it to encryption, signing, or approval of expired PublicKeys | Key-expiry boundary and meaning of the local approval cache |
-| Limit `SECRETENV_STRICT_KEY_CHECKING=no` to approval-cache decisions on explicitly requested read paths | Key approval, artifact member set review, and cryptographic verification semantics |
+| Limit `KAPSARO_STRICT_KEY_CHECKING=no` to approval-cache decisions on explicitly requested read paths | Key approval, artifact member set review, and cryptographic verification semantics |
 
 ### 1.6 Terminology Used Here
 
@@ -89,7 +89,7 @@ The following claims hold when the implementation preserves the invariants in §
 |------|--------------------------|
 | Embedded signer public key | The signer's public-key document carried inside each signed artifact (implemented as `signature.signer_pub`; see §5). This is the sole source of the signature verification key, and lookup never falls back to external key servers or other files |
 | Key consistency | Evidence that the same private-key holder created the corresponding public-key document; not identity by itself |
-| Key-statement ID | An ID for the generation of a SecretEnv key pair and public-key document (implemented as `kid`; see §4.4.1). It distinguishes which key is used for signing, decryption, and key delivery |
+| Key-statement ID | An ID for the generation of a Kapsaro key pair and public-key document (implemented as `kid`; see §4.4.1). It distinguishes which key is used for signing, decryption, and key delivery |
 | Active member list | The data treated as the authorization basis for the current member / recipient set in the workspace (implemented as `members/active`; see §10) |
 | Incoming member candidates | Members who applied to join the workspace but have not yet been promoted (implemented as `members/incoming`; see §10) |
 | Local approval cache | A local cache that lets a user skip re-review for a key they have already confirmed, or for a write-path artifact member set they have already reviewed (implemented as `known_keys` and `recipient_sets`; see §10.4) |
@@ -105,32 +105,32 @@ The following claims hold when the implementation preserves the invariants in §
 
 ## 2. Threat Model and Trust Boundary
 
-SecretEnv's threat model follows from the §1 starting point: Git is useful as a distribution medium, but repository contents are not trusted as-is. The protected assets are secret-value confidentiality, encrypted-artifact integrity, member and key decisions, and the user's local approval history.
+Kapsaro's threat model follows from the §1 starting point: Git is useful as a distribution medium, but repository contents are not trusted as-is. The protected assets are secret-value confidentiality, encrypted-artifact integrity, member and key decisions, and the user's local approval history.
 
 This chapter first states which inputs attackers are assumed to be able to manipulate, then explains the operational assumptions required around those inputs. It then separates the local trusted area from repository data that must be verified, and finally explains the layered separation between cryptographic verification, current authorization, user approval, and identity-supporting evidence.
 
 ### 2.1 Attacker Model
 
-The main attacks SecretEnv accounts for target repository data, public-key acceptance, components inside encrypted artifacts, first approval, or local approval history. The table below organizes attackers by which boundary they can influence. Attackers who break repository governance or local trusted-area protection are treated as cases where the operational assumptions in §2.2 no longer hold.
+The main attacks Kapsaro accounts for target repository data, public-key acceptance, components inside encrypted artifacts, first approval, or local approval history. The table below organizes attackers by which boundary they can influence. Attackers who break repository governance or local trusted-area protection are treated as cases where the operational assumptions in §2.2 no longer hold.
 
 | Attacker | Capability | Assumed Scenario |
 |----------|-----------|----------------|
-| Repository tamperer | Can arbitrarily tamper with files under `.secretenv/` | Malicious CI, compromised Git server, unauthorized push |
+| Repository tamperer | Can arbitrarily tamper with files under `.kapsaro/` | Malicious CI, compromised Git server, unauthorized push |
 | Public key substituter | Can replace public-key documents in the active member list (`members/active/`) or among incoming candidates (`members/incoming/`) with forged ones | MITM during new member addition, unauthorized commit to repository |
 | Key rotation attacker | Retains key-distribution data produced for an old key generation and attempts decryption with a new key | Exploiting weaknesses in the key update process |
 | Context confusion attacker | Swaps ciphertext components between different secrets | Copy-and-paste across encrypted files |
 | First-contact MITM | Replaces bootstrap-time key-statement information, GitHub account information, or attestation fingerprint with attacker-controlled values | First clone, first encounter with a signer |
-| Local trust store tamperer | Can write to or roll back the local trust store (`<SECRETENV_HOME>/trust/`) | Replacing the local approval cache, rewinding approval history |
+| Local trust store tamperer | Can write to or roll back the local trust store (`<KAPSARO_HOME>/trust/`) | Replacing the local approval cache, rewinding approval history |
 
 ### 2.2 Operational Assumptions
 
-Some decisions cannot be completed by the cryptographic construction alone and depend on user or organizational operation. The important point is not to confuse these operational assumptions with cryptographic trust anchors. SecretEnv verifies tamperable inputs and combines those verification results with operational approval.
+Some decisions cannot be completed by the cryptographic construction alone and depend on user or organizational operation. The important point is not to confuse these operational assumptions with cryptographic trust anchors. Kapsaro verifies tamperable inputs and combines those verification results with operational approval.
 
 Repository write control assumes changes to `members/active/` are checked through PR review. The active member list is the authorization source for the current member set / current recipient set, but it is not a cryptographic trust anchor.
 
-Repository-level rollback: a repository-level rollback where an attacker or insider with write access restores a historically valid encrypted file to the current HEAD cannot be detected or prevented by SecretEnv's context bindings alone. Those bindings guarantee artifact integrity and context consistency, not freshness or monotonicity against Git history. Read-path trust review reviews the key owners for the signer and active-resolvable artifact recipients; unresolved recipient `kid`s are reported as warnings. Write paths are stricter: an input artifact with a recipient `kid` that no longer resolves to current `members/active` must be rewrapped before writing. The operational assumption is that protected branches, required review, change management, and pre-deployment checks prevent old secret artifacts from being promoted back to current HEAD.
+Repository-level rollback: a repository-level rollback where an attacker or insider with write access restores a historically valid encrypted file to the current HEAD cannot be detected or prevented by Kapsaro's context bindings alone. Those bindings guarantee artifact integrity and context consistency, not freshness or monotonicity against Git history. Read-path trust review reviews the key owners for the signer and active-resolvable artifact recipients; unresolved recipient `kid`s are reported as warnings. Write paths are stricter: an input artifact with a recipient `kid` that no longer resolves to current `members/active` must be rewrapped before writing. The operational assumption is that protected branches, required review, change management, and pre-deployment checks prevent old secret artifacts from being promoted back to current HEAD.
 
-Local trusted-area protection assumes the user's workstation, local keystore, local trust store (`<SECRETENV_HOME>/trust/`), SSH key, and SSH signing inputs are protected under the user's control. Signatures on the local trust store are used for integrity checks, corruption detection, and format validation, but they do not fully protect against consistent replacement or rollback inside that area.
+Local trusted-area protection assumes the user's workstation, local keystore, local trust store (`<KAPSARO_HOME>/trust/`), SSH key, and SSH signing inputs are protected under the user's control. Signatures on the local trust store are used for integrity checks, corruption detection, and format validation, but they do not fully protect against consistent replacement or rollback inside that area.
 
 TOFU bootstrap limits: initial bootstrap and first-seen-key approval rely on TOFU. First-contact MITM and whole-workspace substitution are outside the scope of cryptographic prevention.
 
@@ -140,14 +140,14 @@ TOFU bootstrap limits: initial bootstrap and first-seen-key approval rely on TOF
 graph TB
     subgraph trusted["Trusted"]
         LocalTerminal[Local machine]
-        LocalKeystore["Local key storage<br/>~/.config/secretenv/keys/"]
-        LocalTrustStore["Local trust store<br/>~/.config/secretenv/trust/"]
+        LocalKeystore["Local key storage<br/>~/.config/kapsaro/keys/"]
+        LocalTrustStore["Local trust store<br/>~/.config/kapsaro/trust/"]
         SSHKey[SSH Ed25519 private key]
     end
 
     subgraph untrusted["Untrusted (potentially tampered)"]
-        MembersDir[".secretenv/members/<br/>PublicKey files"]
-        SecretsDir[".secretenv/secrets/<br/>Encrypted files"]
+        MembersDir[".kapsaro/members/<br/>PublicKey files"]
+        SecretsDir[".kapsaro/secrets/<br/>Encrypted files"]
     end
 
     subgraph external["External evidence sources (optional)"]
@@ -168,8 +168,8 @@ graph TB
 
 Trusted elements:
 
-- Local machine and local key storage (`~/.config/secretenv/keys/`)
-- Local trust store (`~/.config/secretenv/trust/`), but only as a user-local approval cache, not as the authority for current trust
+- Local machine and local key storage (`~/.config/kapsaro/keys/`)
+- Local trust store (`~/.config/kapsaro/trust/`), but only as a user-local approval cache, not as the authority for current trust
 - User's SSH Ed25519 private key
 
 External supplementary evidence sources:
@@ -181,13 +181,13 @@ Untrusted elements:
 - The workspace's active member list (`members/active/`) and incoming candidates (`members/incoming/`) — untrusted repository data. Each public-key document is verified by self-signature and attestation, while use of these directories as the authority for current membership depends on repo governance
 - Workspace `secrets/` directory — verified by signatures
 
-Within this trust boundary, the SSH private key serves two roles: it binds a SecretEnv public key to an SSH key through attestation, and it derives—on each decrypt—the symmetric key that protects the PrivateKey file (`private.json`) in the local keystore from an SSH signature (details in §9.2).
+Within this trust boundary, the SSH private key serves two roles: it binds a Kapsaro public key to an SSH key through attestation, and it derives—on each decrypt—the symmetric key that protects the PrivateKey file (`private.json`) in the local keystore from an SSH signature (details in §9.2).
 
-Decrypting a SecretEnv key requires both reach to the corresponding `private.json` in the local keystore and the ability to produce an SSH signature over the message derived from that file's contents. Device compromise and simultaneous capture of `private.json` and SSH signing capability are discussed under the trust assumptions in §9.4.
+Decrypting a Kapsaro key requires both reach to the corresponding `private.json` in the local keystore and the ability to produce an SSH signature over the message derived from that file's contents. Device compromise and simultaneous capture of `private.json` and SSH signing capability are discussed under the trust assumptions in §9.4.
 
 ### 2.4 Trust Model Overview
 
-SecretEnv's trust model intentionally separates cryptographic verification, current-membership decisions, and user approval across four layers applied in order. Read-path and write-path acceptance rules, exceptional acceptance, and the effect of `SECRETENV_STRICT_KEY_CHECKING` are covered in §10.
+Kapsaro's trust model intentionally separates cryptographic verification, current-membership decisions, and user approval across four layers applied in order. Read-path and write-path acceptance rules, exceptional acceptance, and the effect of `KAPSARO_STRICT_KEY_CHECKING` are covered in §10.
 
 | Layer | Mechanism | What it establishes | What it does NOT establish |
 |-------|-----------|---------------------|---------------------------|
@@ -200,7 +200,7 @@ Layer 1 obtains the signature verification key from the embedded `signer_pub` an
 
 Online verification checks whether the SSH public key used for attestation is currently present in the GitHub account's SSH key set. It is a present-time check, not a historical proof, and does not automatically revoke existing local approvals or workspace membership.
 
-The limited exceptions are non-member acceptance, expired-key recovery, and `SECRETENV_STRICT_KEY_CHECKING=no`. Non-member acceptance is an interactive, one-shot, artifact-scoped exception that does not restore current membership or update the local approval cache. Expired-key recovery applies only to decryption and operational artifact signature verification. `SECRETENV_STRICT_KEY_CHECKING=no` skips only read-path key-owner approval checks; it does not skip active-member authorization, recipient-handle consistency, cryptographic signature verification, key-possession proof verification, or expiry gates.
+The limited exceptions are non-member acceptance, expired-key recovery, and `KAPSARO_STRICT_KEY_CHECKING=no`. Non-member acceptance is an interactive, one-shot, artifact-scoped exception that does not restore current membership or update the local approval cache. Expired-key recovery applies only to decryption and operational artifact signature verification. `KAPSARO_STRICT_KEY_CHECKING=no` skips only read-path key-owner approval checks; it does not skip active-member authorization, recipient-handle consistency, cryptographic signature verification, key-possession proof verification, or expiry gates.
 
 Stronger confidence in key identity depends on these layers working together. Compromise of an attestation SSH key, GitHub account, or local trust store weakens the corresponding operational layer rather than the artifact signature mechanism itself.
 
@@ -268,7 +268,7 @@ Comparison with alternatives:
 | AES-256-GCM-SIV | Nonce misuse resistance is appealing, but rejected due to implementation complexity and limited adoption |
 
 Known limitations (primitive specification level):
-- Nonce reuse under the same key is catastrophic (an AEAD assumption). How SecretEnv satisfies this assumption in design is covered in §3.8
+- Nonce reuse under the same key is catastrophic (an AEAD assumption). How Kapsaro satisfies this assumption in design is covered in §3.8
 - Compression before encryption is prohibited (to avoid compression oracle attacks CRIME/BREACH)
 
 ### 3.4 Ed25519 (RFC 8032 PureEdDSA)
@@ -324,18 +324,18 @@ Known limitations:
 
 ### 3.7 Security Guarantees and Limits Inherited from Standard Cryptographic Primitives
 
-| Primitive | Assumed security property | Implication for SecretEnv |
+| Primitive | Assumed security property | Implication for Kapsaro |
 |-----------|-------------------------------------------|----------------------------|
 | HPKE Base mode (RFC 9180) | Provides confidentiality for recipient-specific key delivery, but does not provide sender authentication | Confidentiality of each recipient wrap depends on this, while producer authenticity and insider-attack resistance depend on Ed25519 signatures |
-| XChaCha20-Poly1305 | Provides confidentiality and tamper detection as an AEAD, assuming nonces are not reused | As a primitive, it does not tolerate nonce reuse under the same key (§3.3). SecretEnv's current design meets nonce uniqueness structurally as described in §3.8 |
+| XChaCha20-Poly1305 | Provides confidentiality and tamper detection as an AEAD, assuming nonces are not reused | As a primitive, it does not tolerate nonce reuse under the same key (§3.3). Kapsaro's current design meets nonce uniqueness structurally as described in §3.8 |
 | Ed25519 (PureEdDSA) | Provides unforgeability and tamper detection as long as the signing private key remains secret | Authenticity of encrypted files and PublicKey documents depends on this, and that guarantee collapses if the signing private key is compromised |
 | HKDF-SHA256 | Can derive pseudorandom, purpose-separated keys from input key material with sufficient entropy | Key separation for CEKs and `enc_key` depends on this, but HKDF does not turn low-entropy input into high-entropy key material |
 
 ### 3.8 Nonce Safety Margin
 
-Relative to the AEAD assumption in §3.3 (nonce uniqueness under a single key), SecretEnv satisfies the keying lifecycle requirements as follows.
+Relative to the AEAD assumption in §3.3 (nonce uniqueness under a single key), Kapsaro satisfies the keying lifecycle requirements as follows.
 
-XChaCha20-Poly1305 uses a 24-byte (192-bit) nonce. In SecretEnv's design, there are no cases where the same symmetric key is used for multiple encryptions. MK (file-enc), CEK (kv-enc entry), and enc_key (PrivateKey protection) are each uniquely generated or derived per encryption, so the risk of nonce collision is structurally eliminated.
+XChaCha20-Poly1305 uses a 24-byte (192-bit) nonce. In Kapsaro's design, there are no cases where the same symmetric key is used for multiple encryptions. MK (file-enc), CEK (kv-enc entry), and enc_key (PrivateKey protection) are each uniquely generated or derived per encryption, so the risk of nonce collision is structurally eliminated.
 
 The choice of 192-bit nonce space serves as a safety net in case future design changes introduce same-key reuse.
 
@@ -349,7 +349,7 @@ The choice of 192-bit nonce space serves as a safety net in case future design c
 | ChaCha20-Poly1305 | Key 256 bits | 256 bits | HPKE internal AEAD |
 | HKDF-SHA256 | Output 256 bits | 256 bits | Based on hash function preimage resistance |
 
-The security of the overall system is constrained by the weakest link in the chain of cryptographic primitives. In SecretEnv, X25519 (HPKE) and Ed25519 both provide 128-bit security, so the overall classical security level is 128 bits (equivalent to AES-128). The 256-bit symmetric keys do not elevate the system-wide security level.
+The security of the overall system is constrained by the weakest link in the chain of cryptographic primitives. In Kapsaro, X25519 (HPKE) and Ed25519 both provide 128-bit security, so the overall classical security level is 128 bits (equivalent to AES-128). The 256-bit symmetric keys do not elevate the system-wide security level.
 
 ---
 
@@ -362,14 +362,14 @@ This chapter organizes key material by type, role, and lifecycle within the trus
 
 | Key category | Ownership / origin | Lifetime | Primary use | See |
 | --- | --- | --- | --- | --- |
-| SSH Ed25519 key | User-owned (outside SecretEnv) | Long-term | attestation, PrivateKey protection (`enc_key` derivation) | §5.6, §9.2 |
-| SecretEnv key pair (X25519 + Ed25519) | Created with `key new`, versioned by `kid` | Long-term (active until `expires_at`) | HPKE seal/open, Ed25519 signing and verification | §5, §6, §7 |
+| SSH Ed25519 key | User-owned (outside Kapsaro) | Long-term | attestation, PrivateKey protection (`enc_key` derivation) | §5.6, §9.2 |
+| Kapsaro key pair (X25519 + Ed25519) | Created with `key new`, versioned by `kid` | Long-term (active until `expires_at`) | HPKE seal/open, Ed25519 signing and verification | §5, §6, §7 |
 | MK / CEK / enc_key | Generated per operation via CSPRNG or HKDF | Short-term (within the operation or session) | file-enc / kv-enc payloads, PrivateKey AEAD | §6.3, §7.3, §9.2.1 |
 
 ```mermaid
 graph TB
     SSHKey["SSH Ed25519 key<br/>(user-owned)"]
-    SecretEnvKP["SecretEnv key pair<br/>kid: statement ID"]
+    KapsaroKP["Kapsaro key pair<br/>kid: statement ID"]
     KEM_PK["X25519 public key<br/>(KEM)"]
     KEM_SK["X25519 private key<br/>(KEM)"]
     SIG_PK["Ed25519 public key<br/>(signing)"]
@@ -378,12 +378,12 @@ graph TB
     KV_MK["kv-enc MK<br/>32 bytes"]
     CEK["CEK<br/>32 bytes"]
 
-    SSHKey -->|"attestation<br/>(identity support)"| SecretEnvKP
+    SSHKey -->|"attestation<br/>(identity support)"| KapsaroKP
     SSHKey -->|"PrivateKey protection<br/>(IKM derivation)"| SIG_SK
-    SecretEnvKP --> KEM_PK
-    SecretEnvKP --> KEM_SK
-    SecretEnvKP --> SIG_PK
-    SecretEnvKP --> SIG_SK
+    KapsaroKP --> KEM_PK
+    KapsaroKP --> KEM_SK
+    KapsaroKP --> SIG_PK
+    KapsaroKP --> SIG_SK
     KEM_PK -->|"HPKE seal"| FILE_MK
     KEM_PK -->|"HPKE seal"| KV_MK
     SIG_SK -->|"Ed25519 sign"| FILE_MK
@@ -396,7 +396,7 @@ graph TB
     style CEK fill:#90EE90
 ```
 
-The SSH key is external to SecretEnv and has two roles: attestation (namespace `secretenv-attestation`) and PrivateKey protection (namespace `secretenv-key-protection`). Even when the same SSH key is reused for both roles, the signature contexts are separated by namespace. See §9.1.1 for the full relationship between the SSH key and the SecretEnv key pair.
+The SSH key is external to Kapsaro and has two roles: attestation (namespace `kapsaro-attestation`) and PrivateKey protection (namespace `kapsaro-key-protection`). Even when the same SSH key is reused for both roles, the signature contexts are separated by namespace. See §9.1.1 for the full relationship between the SSH key and the Kapsaro key pair.
 
 ### 4.2 Key Parameter Summary
 
@@ -415,7 +415,7 @@ The SSH key is external to SecretEnv and has two roles: attestation (namespace `
 Notes:
 
 - `enc_key` is not a stored or pre-existing key; it is a transient symmetric key derived from SSH signing output each time
-- The same SSH key can protect multiple SecretEnv key statements, but different `kid` / `salt` values produce different `enc_key` values
+- The same SSH key can protect multiple Kapsaro key statements, but different `kid` / `salt` values produce different `enc_key` values
 - In the Zeroization required column, MUST states a design policy for symmetric and signing secret material (implementations attempt to zero buffers after use). Complete erasure from process memory is not guaranteed, as described in §12.3.
 
 ### 4.3 Recipient Eligibility
@@ -426,7 +426,7 @@ Promoting incoming to active is a recipient add; per §7.8 both file-enc and kv-
 
 ### 4.4 Key Lifecycle
 
-A SecretEnv key pair transitions through a lifecycle from creation to expiration, and may be replaced through key rotation.
+A Kapsaro key pair transitions through a lifecycle from creation to expiration, and may be replaced through key rotation.
 
 ```
 creation → active → expired
@@ -441,15 +441,15 @@ creation → active → expired
 
 Active indicates whether new cryptographic operations are allowed for that key generation. Whether an artifact may be accepted in the workspace is separate: embedded `signer_pub` verification and the trust policy in §10 are orthogonal to this state label.
 
-After expired, ciphertext created earlier under that key does not automatically lose cryptographic integrity or context binding. Expiry is an operational boundary for rejecting new wraps and new signatures; using an expired key for decryption or operational artifact signature verification still requires explicit recovery through `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`.
+After expired, ciphertext created earlier under that key does not automatically lose cryptographic integrity or context binding. Expiry is an operational boundary for rejecting new wraps and new signatures; using an expired key for decryption or operational artifact signature verification still requires explicit recovery through `--allow-expired-key`, `KAPSARO_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`.
 
 Rotate makes a new `kid` the operational current key. Deleting the old `kid`'s `private.json` from the local keystore prevents HPKE open and decryption for that generation (keystore layout: §9.1.2).
 
-SecretEnv does not provide a cryptographic revocation list in the CRL sense. To stop trusting a key operationally requires workspace updates, re-encryption of artifacts where needed, and manual review of `known_keys` (§13.4).
+Kapsaro does not provide a cryptographic revocation list in the CRL sense. To stop trusting a key operationally requires workspace updates, re-encryption of artifacts where needed, and manual review of `known_keys` (§13.4).
 
 #### 4.4.1 Immutability of Key Statement ID (kid)
 
-Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens. It is derived by taking the `PublicKey@7.protected` JSON object with the `kid` field removed (`protected_without_kid`), canonicalizing it to bytes with JCS (§3.6), hashing with SHA-256, taking the first 20 bytes of the digest, and encoding those bytes as unpadded Crockford Base32 (32 characters). In symbols: `kid = Encode_CrockfordBase32(SHA256(jcs(protected_without_kid))[0..20])`. The stored `protected.kid` must match this recomputed value.
+Each key pair is associated with a `kid` (key statement ID). The `kid` is a 32-character Crockford Base32 string without hyphens. It is derived by taking the `PublicKey.protected` JSON object with the `kid` field removed (`protected_without_kid`), canonicalizing it to bytes with JCS (§3.6), hashing with SHA-256, taking the first 20 bytes of the digest, and encoding those bytes as unpadded Crockford Base32 (32 characters). In symbols: `kid = Encode_CrockfordBase32(SHA256(jcs(protected_without_kid))[0..20])`. The stored `protected.kid` must match this recomputed value.
 
 Crockford Base32 avoids visually confusable characters (such as I, L, O, and U in typical Base32), which reduces manual transcription errors and keeps canonical strings usable without hyphens in URLs and JSON.
 
@@ -479,7 +479,7 @@ file-enc and kv-enc artifact signatures share the same `signature_v4` structure 
 - Include `mac` so the verifier can later check that the signed artifact body, signer `kid`, and HPKE-opened content key correspond to each other
 - Treat validation of the signer key and verification of the artifact signature as one continuous chain (§5.4)
 
-The local trust store (`secretenv:format:local-trust@5`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
+The local trust store (`kapsaro:format:local-trust@1`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
 
 The main fields of `signature_v4` (artifact signature) are as follows.
 
@@ -487,11 +487,11 @@ The main fields of `signature_v4` (artifact signature) are as follows.
 | --- | --- | --- | --- |
 | `alg` | string | Always `eddsa-ed25519` (PureEdDSA) | Unambiguous identification of the signature algorithm |
 | `kid` | Crockford Base32 (32 characters) | Signer's key statement ID | Binds the signing context of the artifact to the `signer_pub` generation (§4.4.1, §8) |
-| `signer_pub` | `PublicKey@7` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
+| `signer_pub` | `PublicKey` document | Embedded signer public key | Sole source of the verification key; self-signature and attestation are checked on this document |
 | `mac` | `hmac-sha256:<base64url>` | Key-possession proof | HMAC used to verify that the artifact body, signer `kid`, and MAC key derived from the HPKE-opened MK correspond to each other |
 | `sig` | base64url (no padding) | Ed25519 signature bytes | Tamper detection for the artifact; the signed input is the signature domain plus a length-framed signature header derived from `alg` / `kid`, format-specific body bytes, and `mac` |
 
-file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. SecretEnv does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §1.5 invariant on where the signing key is resolved.
+file-enc and kv-enc artifacts that omit `signer_pub` are rejected fail-closed. Kapsaro does not use workspace `members/active` or the local keystore as lookup sources for the signer key. Allowing alternate lookup would shift acceptance conditions across implementations and attack surfaces and would violate the §1.5 invariant on where the signing key is resolved.
 
 ### 5.1 Comparison of Signing Methods
 
@@ -505,7 +505,7 @@ Both file-enc and kv-enc use the `signature_v4` format above. What differs is on
 | Signature algorithm | `eddsa-ed25519` (PureEdDSA) | `eddsa-ed25519` (PureEdDSA) |
 | Signature format | `signature_v4` format | `signature_v4` format |
 
-The key-possession proof HMAC is computed under the MAC domain `secretenv:context:mac-domain:key-possession@2` over length-framed format-specific body bytes and `signature.kid`. Artifact signatures use a separate domain, `secretenv:context:sig-domain:artifact-signature@2`, over a length-framed `signature_header` derived from `signature.alg` / `signature.kid`, body bytes, and `signature.mac`. file-enc and kv-enc both derive a purpose-separated MAC key from the artifact MK and use that derived key as the HMAC key. Because verification also checks that `signature.kid` matches `signer_pub.protected.kid`, the HMAC binds content-key possession to the signer's key statement. It does not include a hash of the full `signer_pub`.
+The key-possession proof HMAC is computed under the MAC domain `kapsaro:mac:key-possession@1` over length-framed format-specific body bytes and `signature.kid`. Artifact signatures use a separate domain, `kapsaro:sig:artifact-signature@1`, over a length-framed `signature_header` derived from `signature.alg` / `signature.kid`, body bytes, and `signature.mac`. file-enc and kv-enc both derive a purpose-separated MAC key from the artifact MK and use that derived key as the HMAC key. Because verification also checks that `signature.kid` matches `signer_pub.protected.kid`, the HMAC binds content-key possession to the signer's key statement. It does not include a hash of the full `signer_pub`.
 
 ### 5.2 file-enc Signature
 
@@ -515,7 +515,7 @@ The top-level `signature` object sits outside `protected` and is not signed as a
 
 ### 5.3 kv-enc Signature
 
-In kv-enc, the signed data is built under the signature domain from a length-framed `signature_header` derived from `signature.alg` / `signature.kid`, canonical_bytes, and the ASCII bytes of `signature.mac`. canonical_bytes is the document body with each real data line terminated by LF, excluding the `:SIG` line (§7.1). The signed scope includes the `:SECRETENV_KV` version line, the `:HEAD` token line, the `:WRAP` token line, every `KEY` line, the `alg` / `kid` signature metadata, and the key-possession proof. The signature bytes themselves remain outside the signed scope.
+In kv-enc, the signed data is built under the signature domain from a length-framed `signature_header` derived from `signature.alg` / `signature.kid`, canonical_bytes, and the ASCII bytes of `signature.mac`. canonical_bytes is the document body with each real data line terminated by LF, excluding the `:SIG` line (§7.1). The signed scope includes the `:KAPSARO_KV` version line, the `:HEAD` token line, the `:WRAP` token line, every `KEY` line, the `alg` / `kid` signature metadata, and the key-possession proof. The signature bytes themselves remain outside the signed scope.
 
 Thus the signature binds the entire interpretable document body and the key-possession proof, not a subset of metadata.
 
@@ -525,14 +525,14 @@ For file-enc and kv-enc, the Ed25519 verification key is always taken from the e
 
 Cryptographic verification of an artifact is organized into three layers (Layer A → Layer B → Layer C).
 
-- Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey@7` document and has not been tampered with
+- Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey` document and has not been tampered with
   - Structure and schema validation — Required fields and format constraints
   - Self-signature verification — §5.5; detects tampering with the public-key document
-  - SSH attestation verification — §5.6; checks binding between the SecretEnv key and the SSH key
+  - SSH attestation verification — §5.6; checks binding between the Kapsaro key and the SSH key
 - Layer B. Binding the key generation to the artifact — The artifact's `signature.kid` matches `signer_pub.protected.kid` (consistent with the derivation rule in §4.4.1)
 - Layer C. Tamper detection for the artifact body and key-possession proof — Verify `sig` over the signed payload defined in §5.1, using the signing public key from `signer_pub`
 
-HPKE open proceeds only after Layer C succeeds, consistent with the §1.5 invariant do not decrypt before signature verification. After HPKE open, SecretEnv derives the artifact MAC key from the resulting MK, recomputes `signature.mac`, and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
+HPKE open proceeds only after Layer C succeeds, consistent with the §1.5 invariant do not decrypt before signature verification. After HPKE open, Kapsaro derives the artifact MAC key from the resulting MK, recomputes `signature.mac`, and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
 
 Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Details are consolidated in §4.4 and §10.
 
@@ -540,17 +540,17 @@ Local trust store exception: trust store documents have no embedded `signer_pub`
 
 ### 5.5 PublicKey Self-Signature
 
-`PublicKey@7` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
+`PublicKey` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
 
-What this establishes is key consistency in §1.6: evidence that the party who created this public-key document held the corresponding SecretEnv signing private key. An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
+What this establishes is key consistency in §1.6: evidence that the party who created this public-key document held the corresponding Kapsaro signing private key. An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
 
 ### 5.6 SSH Attestation
 
-SSH attestation shows that the SecretEnv key material (KEM / signing) inside `signer_pub` is cryptographically bound to a specific SSH Ed25519 key. The SSHSIG namespace is fixed to `secretenv-attestation` so `signed_data` does not collide with signatures for other purposes.
+SSH attestation shows that the Kapsaro key material (KEM / signing) inside `signer_pub` is cryptographically bound to a specific SSH Ed25519 key. The SSHSIG namespace is fixed to `kapsaro-attestation` so `signed_data` does not collide with signatures for other purposes.
 
-The PublicKey attestation body signed by SSH is the JCS-normalized JSON object containing `p = secretenv:context:sshsig-message:public-key:attestation@7`, `subject_handle`, `keys`, optional `binding_claims`, optional `created_at`, and `expires_at`. It excludes `kid`, `attestation`, and `signature`. SSHSIG signed_data follows the OpenSSH `SSHSIG` format with namespace `secretenv-attestation`, empty reserved field, hash algorithm `sha256`, and message hash `SHA256(JCS(attestation_body))`.
+The PublicKey attestation body signed by SSH is the JCS-normalized JSON object containing `p = kapsaro:sshsig:public-key:attestation@1`, `subject_handle`, `keys`, optional `binding_claims`, optional `created_at`, and `expires_at`. It excludes `kid`, `attestation`, and `signature`. SSHSIG signed_data follows the OpenSSH `SSHSIG` format with namespace `kapsaro-attestation`, empty reserved field, hash algorithm `sha256`, and message hash `SHA256(JCS(attestation_body))`.
 
-What is established is correspondence between the SecretEnv public key and the SSH public key. Who owns the SSH key (identity) is not determined by attestation alone. SSH signatures for PrivateKey protection use a different namespace (`secretenv-key-protection`), and the IKM derivation context is separated in §9.2.1.
+What is established is correspondence between the Kapsaro public key and the SSH public key. Who owns the SSH key (identity) is not determined by attestation alone. SSH signatures for PrivateKey protection use a different namespace (`kapsaro-key-protection`), and the IKM derivation context is separated in §9.2.1.
 
 ### 5.7 Online Verification (GitHub)
 
@@ -586,7 +586,7 @@ The full document layout is as follows.
 ```json
 {
   "protected": {
-    "format": "secretenv:format:file-enc@7",
+    "format": "kapsaro:format:file-enc@1",
     "sid": "<UUID>",
     "wrap": [
       {
@@ -606,7 +606,7 @@ The full document layout is as follows.
     ],
     "payload": {
       "protected": {
-        "format": "secretenv:format:file-enc:payload@7",
+        "format": "kapsaro:format:file-enc:payload@1",
         "sid": "<UUID>",
         "alg": { "aead": "xchacha20-poly1305" }
       },
@@ -621,7 +621,7 @@ The full document layout is as follows.
   "signature": {
     "alg": "eddsa-ed25519",
     "kid": "<signer kid>",
-    "signer_pub": { "...": "PublicKey@7" },
+    "signer_pub": { "...": "PublicKey" },
     "mac": "hmac-sha256:<b64url>",
     "sig": "<b64url>"
   }
@@ -687,13 +687,13 @@ This order keeps key delivery, payload binding, and document integrity as distin
 ### 6.4 HPKE Seal/Open
 
 - The HPKE suite is `hpke-32-1-3`; the relevant parameters are described in §3.1 and §3.2.
-- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = secretenv:context:hpke-info:file-enc:wrap@7`, and the file identifier `sid`.
+- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = kapsaro:hpke-info:file:wrap@1`, and the file identifier `sid`.
 - HPKE `info` and `AAD` use the same JCS-canonicalized context bytes. This keeps the key-schedule path and AEAD-verification path aligned and makes implementation drift surface early as HPKE open failure.
 - The recipient member handle remains operationally important, but cryptographic HPKE seal/open binding is keyed by `kid`.
 
 ### 6.5 Payload Encryption
 
-- The payload header carries `format = secretenv:format:file-enc:payload@7`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
+- The payload header carries `format = kapsaro:format:file-enc:payload@1`, the same `sid` as the outer container, and the AEAD identifier `xchacha20-poly1305`.
 - `jcs(payload.protected)` is used as AAD, with a random 24-byte nonce for XChaCha20-Poly1305.
 - Keeping `sid` at the payload layer binds the payload to the file context independently of the outer signature.
 
@@ -707,7 +707,7 @@ This order keeps key delivery, payload binding, and document integrity as distin
 6. Use `jcs(payload.protected)` as AAD and perform AEAD decryption.
 7. Reject fail-closed on any mismatch or verification failure.
 
-The key invariant is that SecretEnv never proceeds to plaintext decryption before signature verification, the trust-policy decision, format-specific reference consistency checks, and key-possession proof verification have all passed.
+The key invariant is that Kapsaro never proceeds to plaintext decryption before signature verification, the trust-policy decision, format-specific reference consistency checks, and key-possession proof verification have all passed.
 
 ---
 
@@ -722,7 +722,7 @@ kv-enc is a line-based signed document. The structures that matter most for revi
 
 | Line type | Content | Security role |
 | --- | --- | --- |
-| `:SECRETENV_KV 9` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
+| `:KAPSARO_KV 1` | Format and version marker | Being part of the signed body helps prevent downgrade attacks |
 | `:HEAD` | File context such as `sid`, AEAD, and timestamps | Binds wraps and entries to a single file context |
 | `:WRAP` | HPKE-sealed MK ciphertext and removal history | Represents recipient state and key-distribution state |
 | `KEY` lines | Per-entry ciphertext | Encrypted units made from the line key plus token nonce and ciphertext |
@@ -733,7 +733,7 @@ Each token is represented as a JCS-canonicalized JSON object encoded in base64ur
 The full document layout is as follows.
 
 ```text
-:SECRETENV_KV 9
+:KAPSARO_KV 1
 :HEAD <token>
 :WRAP <token>
 <KEY> <token>
@@ -816,7 +816,7 @@ graph TB
     style CEK2 fill:#90EE90
 ```
 
-On encryption, SecretEnv first generates the MK and performs HPKE seal for each recipient. It then builds the artifact key schedule once, generates a nonce for each entry, derives a CEK using HKDF with `sid`, the KEY line prefix, and the nonce in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
+On encryption, Kapsaro first generates the MK and performs HPKE seal for each recipient. It then builds the artifact key schedule once, generates a nonce for each entry, derives a CEK using HKDF with `sid`, the KEY line prefix, and the nonce in the context, encrypts the entry with AEAD, and finally signs the full document body except `:SIG`.
 
 On decryption, it verifies the signature including `signature.mac`, applies the trust policy from §10, performs HPKE open to recover the MK, verifies the key-possession proof by recomputing `signature.mac` with the derived MAC key, and derives CEKs only for the entries that need to be read. Each entry is then decrypted with AAD that includes the KEY line prefix, `sid`, and `p`.
 
@@ -824,20 +824,20 @@ As with file-enc, signature verification always precedes decryption.
 
 ### 7.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = secretenv:context:hkdf-info:kv-enc:cek@9`, `sid`, the KEY line prefix, and the entry nonce.
-- The artifact PRK is extracted once per kv-enc document from the MK and the JCS salt `secretenv:context:hkdf-salt:kv-enc@9` plus `sid`.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = kapsaro:hkdf-info:kv:cek@1`, `sid`, the KEY line prefix, and the entry nonce.
+- The artifact PRK is extracted once per kv-enc document from the MK and the JCS salt `kapsaro:hkdf-salt:kv@1` plus `sid`.
 - Including `sid`, the KEY line prefix, and the nonce in the derivation context ensures that copying an entry to a different file or another KEY does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
-- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = secretenv:context:aad:kv-enc:entry-payload@9`.
+- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = kapsaro:aad:kv:entry-payload@1`.
 - Including the KEY line prefix prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - The nonce is already consumed by CEK derivation, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 7.5 HPKE Seal/Open (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = secretenv:context:hpke-info:kv-enc:wrap@9`.
+- kv-enc wraps also include `kid`, `sid`, and `p = kapsaro:hpke-info:kv:wrap@1`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into HPKE open failure.
 
@@ -878,7 +878,7 @@ In kv-enc, the MK is always regenerated and all entries are re-encrypted. This i
 
 ## 8. Context Binding and Defence-in-Depth
 
-SecretEnv cryptographically binds each encrypted artifact to its context (which file, which key generation, which entry, which protocol) so that components cannot be swapped, reused, or mixed between different contexts. This is achieved by embedding the file identifier (`sid`), key statement ID (`kid`), KV entry key (`k`), and protocol identifier (`p`) into both the key derivation inputs and the authenticated data, providing multiple independent layers of protection.
+Kapsaro cryptographically binds each encrypted artifact to its context (which file, which key generation, which entry, which protocol) so that components cannot be swapped, reused, or mixed between different contexts. This is achieved by embedding the file identifier (`sid`), key statement ID (`kid`), KV entry key (`k`), and protocol identifier (`p`) into both the key derivation inputs and the authenticated data, providing multiple independent layers of protection.
 
 ### 8.1 System of Binding Elements
 
@@ -889,9 +889,9 @@ SecretEnv cryptographically binds each encrypted artifact to its context (which 
 | `k` | dotenv KEY | Swapping entries within the same kv-enc |
 | `p` | Protocol identifier | Reusing data across different protocols |
 
-### 8.2 Binding Inputs Used by SecretEnv
+### 8.2 Binding Inputs Used by Kapsaro
 
-SecretEnv distributes context-binding elements across the key schedule, AEAD authenticated data, and signed bytes. Each input protects a different layer.
+Kapsaro distributes context-binding elements across the key schedule, AEAD authenticated data, and signed bytes. Each input protects a different layer.
 
 | Input | Role | Main use |
 |-------|------|----------|
@@ -908,7 +908,7 @@ These inputs are not aliases for the same parameter inside one primitive. HPKE `
 In file-enc / kv-enc HPKE seal/open, the same bytes are used for HPKE info and AAD. Example for file-enc:
 
 ```
-info_bytes = jcs({"kid": ..., "p": "secretenv:context:hpke-info:file-enc:wrap@6", "sid": ...})
+info_bytes = jcs({"kid": ..., "p": "kapsaro:hpke-info:file:wrap@1", "sid": ...})
 aad_bytes  = info_bytes
 ```
 
@@ -975,7 +975,7 @@ Implementation note: Preserve each binding point and compare canonicalized bytes
 
 ### 9.1 Overview
 
-SecretEnv's PrivateKey (KEM private key + signing private key) is stored in the user's local keystore (`~/.config/secretenv/keys/`) as an independent file `private.json`, one per key generation. HPKE open and Ed25519 signing operate on the PrivateKey material extracted from that file.
+Kapsaro's PrivateKey (KEM private key + signing private key) is stored in the user's local keystore (`~/.config/kapsaro/keys/`) as an independent file `private.json`, one per key generation. HPKE open and Ed25519 signing operate on the PrivateKey material extracted from that file.
 
 PrivateKey protection is designed as a two-layer structure.
 
@@ -984,34 +984,34 @@ PrivateKey protection is designed as a two-layer structure.
 
 Two modes re-derive that Layer-2 symmetric key. The PrivateKey material's format and storage location are shared between both modes: they use the same local keystore layout (§9.1.2) and the same ciphertext field. However, the SSH-based and password-based modes use different derivation procedures and different HKDF info strings, so a key derived for one mode cannot be reused as if it belonged to the other.
 
-- SSH-based protection (§9.2): derives the symmetric key from a signature produced by the user's existing SSH Ed25519 key. Intended for normal interactive use and eliminates the need to manage a SecretEnv-specific password.
+- SSH-based protection (§9.2): derives the symmetric key from a signature produced by the user's existing SSH Ed25519 key. Intended for normal interactive use and eliminates the need to manage a Kapsaro-specific password.
 - Password-based protection (§9.3): derives the symmetric key from a user-supplied password via Argon2id + HKDF. Intended for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
 
 Trust assumptions common to both are covered in §9.4.
 
-### 9.1.1 Relationship Between the SSH Key and the SecretEnv Key Pair
+### 9.1.1 Relationship Between the SSH Key and the Kapsaro Key Pair
 
-The SSH key is an existing user-owned authentication key outside SecretEnv; the SecretEnv key pair is an application-specific key pair managed per `kid`. On the PublicKey side, the SSH key appears in attestation. On the PrivateKey side, the same SSH key protects the encrypted SecretEnv private key stored in the local keystore. One SSH key may protect multiple generations of SecretEnv keys, while actual file-enc / kv-enc cryptographic operations are performed by the SecretEnv key pair after it has been decrypted. See §4.1 for the key hierarchy diagram.
+The SSH key is an existing user-owned authentication key outside Kapsaro; the Kapsaro key pair is an application-specific key pair managed per `kid`. On the PublicKey side, the SSH key appears in attestation. On the PrivateKey side, the same SSH key protects the encrypted Kapsaro private key stored in the local keystore. One SSH key may protect multiple generations of Kapsaro keys, while actual file-enc / kv-enc cryptographic operations are performed by the Kapsaro key pair after it has been decrypted. See §4.1 for the key hierarchy diagram.
 
 ### 9.1.2 Local Keystore Layout
 
 Each `kid` directory in the local keystore (a key-statement directory) contains two files.
 
 - `public.json`: a PublicKey document that can be distributed to the workspace
-- `private.json`: an encrypted SecretEnv private key document
+- `private.json`: an encrypted Kapsaro private key document
 
-When loading keys from the local keystore, if `private.json` is used, the sibling `public.json` in the same directory is also loaded and verified as a PublicKey, and the implementation confirms `private.protected.subject_handle == public.protected.subject_handle` and `private.protected.kid == public.protected.kid`. This is a local keystore invariant intended to detect swapped public/private pairs or other broken local state early. When loading keys via the `SECRETENV_PRIVATE_KEY` environment variable, this sibling `public.json` check is intentionally not assumed.
+When loading keys from the local keystore, if `private.json` is used, the sibling `public.json` in the same directory is also loaded and verified as a PublicKey, and the implementation confirms `private.protected.subject_handle == public.protected.subject_handle` and `private.protected.kid == public.protected.kid`. This is a local keystore invariant intended to detect swapped public/private pairs or other broken local state early. When loading keys via the `KAPSARO_PRIVATE_KEY` environment variable, this sibling `public.json` check is intentionally not assumed.
 
 `private.json` itself has two layers.
 
 - `protected`: header fields such as `member_handle`, `kid`, `alg.fpr`, `alg.ikm_salt`, `alg.hkdf_salt`, `created_at`, and `expires_at`; these define the decryption conditions and tamper-detection scope
-- `encrypted`: the ciphertext containing the actual SecretEnv private key material
+- `encrypted`: the ciphertext containing the actual Kapsaro private key material
 
 Here `alg.fpr` is only an identifier for the SSH key used to protect that key generation. It is not the SSH private key itself.
 
 ### 9.2 SSH-Based Protection
 
-SSH-based protection re-derives the symmetric key that encrypts the contents of the PrivateKey file (`private.json`) from an SSH signature each time the PrivateKey file has to be read. This is how the scheme keeps the PrivateKey file encrypted without any SecretEnv-specific password.
+SSH-based protection re-derives the symmetric key that encrypts the contents of the PrivateKey file (`private.json`) from an SSH signature each time the PrivateKey file has to be read. This is how the scheme keeps the PrivateKey file encrypted without any Kapsaro-specific password.
 
 The symmetric key used to encrypt the file contents (`enc_key`) is a separate, HKDF-derived key built from the SSH signature's output, distinct from the SSH private key itself. `enc_key` is treated as a per-use ephemeral value and is re-derived by repeating the same procedure whenever the PrivateKey file is opened. Re-deriving `enc_key` requires both the SSH key's signing capability and the target `private.json`'s `protected` header.
 
@@ -1021,15 +1021,15 @@ The protection path is a three-stage pipeline.
 
 | Stage | Input | Output | Security role |
 | --- | --- | --- | --- |
-| SSHSIG signing | Sign message (`secretenv:context:sshsig-message:private-key:protection@7` and `ikm_salt`), namespace `secretenv-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
-| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `secretenv:context:hkdf-info:private-key:sshsig@7:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
+| SSHSIG signing | Sign message (`kapsaro:sshsig:private-key:protection@1` and `ikm_salt`), namespace `kapsaro-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
+| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `kapsaro:hkdf-info:private-key:sshsig@1:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
 | XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Encrypts the private key material and makes tampering in the `protected` header fail at decryption time |
 
 The following diagram visualizes this derivation path.
 
 ```mermaid
 graph LR
-    Msg["Sign message<br/>(prefix + ikm_salt)"] -->|"SSHSIG signature<br/>(namespace: secretenv-key-protection)"| SSHSign["SSH Ed25519 signature"]
+    Msg["Sign message<br/>(prefix + ikm_salt)"] -->|"SSHSIG signature<br/>(namespace: kapsaro-key-protection)"| SSHSign["SSH Ed25519 signature"]
     SSHKey["SSH private key<br/>(identified by alg.fpr)"] --> SSHSign
     SSHSign -->|"raw signature<br/>64 bytes"| IKM["IKM"]
     IKM --> HKDF["HKDF-SHA256"]
@@ -1041,15 +1041,15 @@ graph LR
     AEAD --> CT["encrypted.ct"]
 ```
 
-The `enc_key` produced by this pipeline is the symmetric key used to encrypt and decrypt `encrypted.ct` in `private.json`. If AEAD decryption succeeds, the inner SecretEnv private key material is recovered.
+The `enc_key` produced by this pipeline is the symmetric key used to encrypt and decrypt `encrypted.ct` in `private.json`. If AEAD decryption succeeds, the inner Kapsaro private key material is recovered.
 
-Signatures follow OpenSSH `PROTOCOL.sshsig`. The `secretenv-key-protection` namespace is separate from the attestation namespace `secretenv-attestation`, so SSH signatures used for attestation and for PrivateKey protection cannot be confused. `kid` is not part of the SSH sign message itself; it is placed in the HKDF info string so that the same SSH key still yields different `enc_key` values for different key generations.
+Signatures follow OpenSSH `PROTOCOL.sshsig`. The `kapsaro-key-protection` namespace is separate from the attestation namespace `kapsaro-attestation`, so SSH signatures used for attestation and for PrivateKey protection cannot be confused. `kid` is not part of the SSH sign message itself; it is placed in the HKDF info string so that the same SSH key still yields different `enc_key` values for different key generations.
 
 AAD is `jcs(protected)`. This makes the entire `protected` header part of tamper detection during decryption. `enc_key` is not a stored fixed key; it is re-derived from SSH signing capability during both encryption and decryption.
 
 ### 9.2.2 Determinism Check
 
-Ed25519 (RFC 8032 PureEdDSA) is expected to be deterministic. During encryption, SecretEnv signs the same signed_data twice and confirms that the extracted raw signature bytes match. If they do not, processing aborts.
+Ed25519 (RFC 8032 PureEdDSA) is expected to be deterministic. During encryption, Kapsaro signs the same signed_data twice and confirms that the extracted raw signature bytes match. If they do not, processing aborts.
 
 The reason is that using the signature value as IKM makes non-determinism fatal: encryption and decryption would derive different `enc_key` values and decryption would fail. This check also serves to exclude non-deterministic signers such as FIDO2 Ed25519-SK tokens from this mode early.
 
@@ -1078,15 +1078,15 @@ Accordingly, the symmetric key that decrypts the PrivateKey file is reconstructe
 
 ### 9.3 Password-Based Protection
 
-As an alternative to SSH-based protection, SecretEnv supports password-based private key protection using `argon2id-m64t3p4-hkdf-sha256`. This scheme is designed for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
+As an alternative to SSH-based protection, Kapsaro supports password-based private key protection using `argon2id-m64t3p4-hkdf-sha256`. This scheme is designed for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
 
 ### 9.3.1 Use Case
 
-Many CI platforms provide "secret variables" that are stored securely and exposed as environment variables at runtime. This protection scheme enables exporting a SecretEnv private key in a portable, password-protected format that can be registered as a CI secret variable and used without any SSH infrastructure.
+Many CI platforms provide "secret variables" that are stored securely and exposed as environment variables at runtime. This protection scheme enables exporting a Kapsaro private key in a portable, password-protected format that can be registered as a CI secret variable and used without any SSH infrastructure.
 
 ### 9.3.2 Key Derivation Pipeline
 
-In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `secretenv:context:hkdf-info:private-key:password@7:{kid}`, which is intentionally distinct from the SSH-based path (`secretenv:context:hkdf-info:private-key:sshsig@7:{kid}`) for domain separation.
+In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `kapsaro:hkdf-info:private-key:password@1:{kid}`, which is intentionally distinct from the SSH-based path (`kapsaro:hkdf-info:private-key:sshsig@1:{kid}`) for domain separation.
 
 `ikm_salt` is reserved for Argon2id and `hkdf_salt` for HKDF so that the two derivation steps remain clearly separated.
 
@@ -1104,12 +1104,12 @@ Environment variable-based key loading is intended only for read-oriented execut
 This mode is acceptable only in trusted CI contexts where:
 
 - the workflow or job definition is maintainer-controlled and cannot be modified or triggered from attacker-controlled PR content
-- the checkout consumed by SecretEnv is a protected branch, protected tag, post-merge ref, or equivalent trusted ref
+- the checkout consumed by Kapsaro is a protected branch, protected tag, post-merge ref, or equivalent trusted ref
 - the runner handling secrets is trusted and is not shared with untrusted workloads
 
 This mode must not be used in attacker-controlled CI contexts.
 
-As a security trade-off, environment variables remain exposed to process-memory and CI-runtime handling, so password-based protection mainly adds value when the exported blob leaks by itself. If `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are stored in the same secret backend, the password offers little independent protection against compromise of that backend. Its value becomes meaningfully higher only when the two can be placed in separate trust domains.
+As a security trade-off, environment variables remain exposed to process-memory and CI-runtime handling, so password-based protection mainly adds value when the exported blob leaks by itself. If `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` are stored in the same secret backend, the password offers little independent protection against compromise of that backend. Its value becomes meaningfully higher only when the two can be placed in separate trust domains.
 
 ### 9.4 Trust Assumptions
 
@@ -1118,7 +1118,7 @@ SSH-based PrivateKey protection re-derives `enc_key` from SSH signing capability
 Re-deriving `enc_key` and decrypting the PrivateKey requires that all three of the following be available to the same actor:
 
 1. the target private.json `protected` header
-2. authority to request SSH signatures in the `secretenv-key-protection` namespace
+2. authority to request SSH signatures in the `kapsaro-key-protection` namespace
 3. `encrypted.ct`
 
 Under normal operation all three elements reside together on the user's device, so the legitimate user naturally has them all. Whether an attacker can likewise assemble all three after compromising the device depends on how the SSH key is operated.
@@ -1128,18 +1128,18 @@ Under normal operation all three elements reside together on the user's device, 
 
 Access to SSH signing capability alone — connecting to an ssh-agent, or supplying signatures via agent forwarding — is not by itself a threat to PrivateKey protection. Decryption only succeeds when the attacker can also reach `private.json`; both are required.
 
-Maintaining the device itself (OS / filesystem access controls, device hygiene, protection of the key-storage area) and the SSH key's operational hygiene (passphrase, agent confirmation mode) are responsibilities outside SecretEnv itself. Given those responsibilities are upheld, the effective strength of this scheme rests on preventing simultaneous possession of the three elements above.
+Maintaining the device itself (OS / filesystem access controls, device hygiene, protection of the key-storage area) and the SSH key's operational hygiene (passphrase, agent confirmation mode) are responsibilities outside Kapsaro itself. Given those responsibilities are upheld, the effective strength of this scheme rests on preventing simultaneous possession of the three elements above.
 
 ---
 
 
 ## 10. Trust Policy and Approval Model
 
-SecretEnv does not collapse cryptographic authenticity, current authorization, user approval, and limited exceptions into one mechanism. `signer_pub`, `members/active`, and the local trust store's `known_keys` and `recipient_sets` each answer a different question (§2.4).
+Kapsaro does not collapse cryptographic authenticity, current authorization, user approval, and limited exceptions into one mechanism. `signer_pub`, `members/active`, and the local trust store's `known_keys` and `recipient_sets` each answer a different question (§2.4).
 
 ### 10.1 Design Rationale for Role Separation
 
-`signer_pub` answers which key signed this encrypted artifact. By carrying the signature verification key inside the encrypted artifact, SecretEnv does not need to search for signer keys in the workspace member list or in the local keystore. A cryptographically valid `signer_pub` does not by itself establish the key holder's human identity or whether the artifact should be accepted now.
+`signer_pub` answers which key signed this encrypted artifact. By carrying the signature verification key inside the encrypted artifact, Kapsaro does not need to search for signer keys in the workspace member list or in the local keystore. A cryptographically valid `signer_pub` does not by itself establish the key holder's human identity or whether the artifact should be accepted now.
 
 `members/active` is the authorization input for deciding who the current workspace treats as members and recipients. It is repository data maintained through repository governance, not a cryptographic trust anchor.
 
@@ -1147,9 +1147,9 @@ The local trust store is a per-user approval cache. `known_keys` records key own
 
 ### 10.2 Read-Path Trust Decision
 
-The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. SecretEnv does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-HPKE-open key-possession proof verification have completed.
+The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. Kapsaro does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-HPKE-open key-possession proof verification have completed.
 
-Successful signature verification is not enough to accept an artifact. On read paths, SecretEnv checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`. If the signer key or the private key used to recover the MK is expired, `decrypt`, `get`, `run`, and `list` fail by default and continue with a warning only when explicit expired-key recovery is enabled.
+Successful signature verification is not enough to accept an artifact. On read paths, Kapsaro checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`. If the signer key or the private key used to recover the MK is expired, `decrypt`, `get`, `run`, and `list` fail by default and continue with a warning only when explicit expired-key recovery is enabled.
 
 Read paths do not use `recipient_sets` to re-approve the entire artifact sharing set. Historical artifacts may still contain recipients that no longer resolve to current `members/active`. Such recipients are surfaced to the user as warnings, preserving readability of historical artifacts while keeping the difference from current state visible.
 
@@ -1159,7 +1159,7 @@ At the same time, recipient handles displayed by the artifact must remain consis
 
 Write paths create new encrypted artifacts or updated encrypted artifacts, so they act as a stricter normalization point than read paths. For `encrypt`, `set`, `unset`, `import`, and `rewrap`, the output recipient set is derived from current `members/active`.
 
-This design avoids silently carrying stale recipients or historical sharing state into new output. Before writing, SecretEnv checks key-owner approval for each recipient through `known_keys` and checks the output recipient set through `recipient_sets`. If a key or recipient set has not been reviewed, the write path asks for the user's judgment before persisting output.
+This design avoids silently carrying stale recipients or historical sharing state into new output. Before writing, Kapsaro checks key-owner approval for each recipient through `known_keys` and checks the output recipient set through `recipient_sets`. If a key or recipient set has not been reviewed, the write path asks for the user's judgment before persisting output.
 
 When a write operation reads an input artifact, it first applies the read-path trust decision to that input. If an ordinary write operation sees recipients that no longer resolve to current `members/active`, it does not carry that state forward into a new encrypted artifact; the user must first synchronize the artifact through `rewrap`. `rewrap` is the remediation flow for this case: it can read the historical input and write a new artifact based on current `members/active`.
 
@@ -1181,21 +1181,21 @@ For incoming members or unreviewed keys, the user reviews key-statement informat
 
 Limited exceptions do not permanently change normal trust decisions. They let the user proceed with a specific operation after reviewing the context. Applying an exception does not restore a signer to current membership or implicitly update the local approval cache.
 
-Non-member acceptance is allowed only for `decrypt`, `get`, `list`, and `rewrap`. The confirmation flow starts only for interactive runs with explicit allowance through `--allow-non-member`, `SECRETENV_ALLOW_NON_MEMBER=yes`, or `allow_non_member="yes"`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
+Non-member acceptance is allowed only for `decrypt`, `get`, `list`, and `rewrap`. The confirmation flow starts only for interactive runs with explicit allowance through `--allow-non-member`, `KAPSARO_ALLOW_NON_MEMBER=yes`, or `allow_non_member="yes"`. `inspect` is an observational command that displays metadata and signature verification results, and does not apply trust-policy acceptance decisions, so this exception does not apply to it. It also does not apply to ordinary write-path or execution-path use where new secret state is being authored or plaintext is being consumed operationally.
 
 For `rewrap`, this exception converts an input from a non-current signer into output by the current signer, so the user is shown the signer information and target current recipient set before approval.
 
 The self historical exception is limited to self keys and rests on the fact that the corresponding self key in the local keystore belongs to the local trust boundary. It does not replace approval of other members' keys or current-member authorization.
 
-`SECRETENV_STRICT_KEY_CHECKING=no` relaxes only local key-owner approval checks on explicitly requested read paths. Signature verification, current authorization through `members/active`, recipient-handle consistency, and key-possession proof verification still apply. This setting does not apply to write paths and does not implicitly update `known_keys` or `recipient_sets`. If used in CI or similar automation, the execution context itself must be trusted by the user.
+`KAPSARO_STRICT_KEY_CHECKING=no` relaxes only local key-owner approval checks on explicitly requested read paths. Signature verification, current authorization through `members/active`, recipient-handle consistency, and key-possession proof verification still apply. This setting does not apply to write paths and does not implicitly update `known_keys` or `recipient_sets`. If used in CI or similar automation, the execution context itself must be trusted by the user.
 
-Expired-key recovery is a limited exception for reading historical encrypted artifacts, checking key names, or completing operational artifact signature verification. It is enabled explicitly through `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`. It applies only to `decrypt`, `get`, `run`, `list`, `set`, `unset`, `import`, `rewrap`, and `member remove`, and does not apply to encryption, signing, or approval of expired PublicKeys.
+Expired-key recovery is a limited exception for reading historical encrypted artifacts, checking key names, or completing operational artifact signature verification. It is enabled explicitly through `--allow-expired-key`, `KAPSARO_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`. It applies only to `decrypt`, `get`, `run`, `list`, `set`, `unset`, `import`, `rewrap`, and `member remove`, and does not apply to encryption, signing, or approval of expired PublicKeys.
 
 ### 10.6 Freshness and Repository Governance
 
 The trust policy decides whether an input encrypted artifact may be accepted in the current workspace. It does not prove that the artifact is fresh, or that an older encrypted artifact from Git history has not been restored to current HEAD.
 
-An artifact that was legitimately signed in the past and remains consistent with the recipients and context bindings from that time can still be cryptographically consistent today. SecretEnv can observe it as an older valid encrypted artifact, but deciding whether repository state should accept that version as current belongs to repository governance: access control, review process, protected branches, and equivalent controls.
+An artifact that was legitimately signed in the past and remains consistent with the recipients and context bindings from that time can still be cryptographically consistent today. Kapsaro can observe it as an older valid encrypted artifact, but deciding whether repository state should accept that version as current belongs to repository governance: access control, review process, protected branches, and equivalent controls.
 
 ## 11. Major Attack Scenarios
 
@@ -1205,7 +1205,7 @@ For concrete attack analysis, the tables in this chapter directly use the contex
 
 | Item | Content |
 |------|---------|
-| Attack | An attacker tampers with encrypted files under `.secretenv/secrets/` |
+| Attack | An attacker tampers with encrypted files under `.kapsaro/secrets/` |
 | Capability | Write access to the repository |
 | Primary defense | Ed25519 signature verification detects tampering with `protected` (file-enc) or the entire file (kv-enc) |
 | When it weakens | The implementation does not perform signature verification before decryption |
@@ -1227,7 +1227,7 @@ For concrete attack analysis, the tables in this chapter directly use the contex
 
 | Item | Content |
 |------|---------|
-| Attack | An attacker creates their own SecretEnv key and SSH key and places the result in `members/incoming/` |
+| Attack | An attacker creates their own Kapsaro key and SSH key and places the result in `members/incoming/` |
 | Capability | Write access to the repository plus their own SSH Ed25519 key |
 | Self-signature / attestation | The attacker can generate a valid self-signature and attestation with their own keys |
 | Primary defense | (1) TOFU-based manual review (2) supplementary evidence from online verify (3) integrity anomaly detection for `known_keys` and `kid` collisions |
@@ -1240,7 +1240,7 @@ Important: Self-signature prevents tampering with an existing PublicKey, but it 
 
 | Item | Content |
 |------|---------|
-| Attack | An attacker coherently replaces or rolls back `<SECRETENV_HOME>/trust/<owner_handle>.json` |
+| Attack | An attacker coherently replaces or rolls back `<KAPSARO_HOME>/trust/<owner_handle>.json` |
 | Capability | Write access to the user's local trust directory |
 | Primary defense | (1) Local trusted area assumption (2) trust-store signature for corruption detection (3) atomic update and permission management |
 | When it weakens | OS or filesystem access control is broken |
@@ -1319,9 +1319,9 @@ Auditors should treat structural validation -> `signer_pub` validation -> artifa
 | Duplicate JSON member names | Reject duplicate member names in raw JSON artifacts, PublicKeys, PrivateKeys, local trust stores, and kv-enc token payloads before typed model conversion or JCS normalization | Different parsers may apply last-wins interpretation and diverge on what was signed or validated |
 | PublicKey verification | Both `signer_pub` and workspace PublicKeys are verified for self-signature and attestation | A tampered PublicKey could be accepted |
 | Trust-source separation | `members/active` is treated as the authorization source, while `known_keys` is treated as key-owner approval and `recipient_sets` as write-path artifact member set approval | Current-member checks, key-owner approval, and write-path artifact member set review may become conflated |
-| Expired-key recovery scope | `--allow-expired-key`, `SECRETENV_ALLOW_EXPIRED_KEY=yes`, and `allow_expired_key="yes"` apply only to decryption and operational artifact signature verification, not to encryption, signing, or approval of expired PublicKeys with `member verify --approve` | Expired keys may return to normal operation or become fixed in the approval cache |
-| `STRICT_KEY_CHECKING` scope | `SECRETENV_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths or key-possession proof verification | The approval cache may be unintentionally disabled in CI or daily operation |
-| Secret-output boundary | Do not expose MK, CEK, PrivateKey-protection IKM, raw SSH signatures, plaintext, `SECRETENV_PRIVATE_KEY`, or `SECRETENV_KEY_PASSWORD` through `--debug`, normal errors, tracing, panic output, or test snapshots | Diagnostic paths or test artifacts may leak secrets |
+| Expired-key recovery scope | `--allow-expired-key`, `KAPSARO_ALLOW_EXPIRED_KEY=yes`, and `allow_expired_key="yes"` apply only to decryption and operational artifact signature verification, not to encryption, signing, or approval of expired PublicKeys with `member verify --approve` | Expired keys may return to normal operation or become fixed in the approval cache |
+| `STRICT_KEY_CHECKING` scope | `KAPSARO_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths or key-possession proof verification | The approval cache may be unintentionally disabled in CI or daily operation |
+| Secret-output boundary | Do not expose MK, CEK, PrivateKey-protection IKM, raw SSH signatures, plaintext, `KAPSARO_PRIVATE_KEY`, or `KAPSARO_KEY_PASSWORD` through `--debug`, normal errors, tracing, panic output, or test snapshots | Diagnostic paths or test artifacts may leak secrets |
 | Constant-time comparison | Do not use early-exit comparison for MACs, AEAD tags, signatures, or secret-derived digests | Match position or matching prefix length may leak secret-derived information |
 | Local keystore permissions | Check permissions during key load and abort if `private.json` is readable by other users | Leakage of local private-key files may be missed |
 | Environment variable-based key loading | Used only in trusted CI contexts, never in fork PRs, untrusted PRs, `pull_request_target`, attacker-controlled checkouts, or untrusted runners; key loading never performs workspace lookup for the self PublicKey | Private keys may be misused in attacker-controlled checkouts or runners |
@@ -1337,9 +1337,9 @@ The implementation is expected to apply conservative limits to input size, wrap 
 
 ### 12.3 Memory Handling of Secrets
 
-KEM private keys, signing private keys, MK / CEK values, decrypted plaintext, and the raw Ed25519 signature value used as IKM in SSHSIG-based PrivateKey protection should be zeroized after use as far as the type system allows. At minimum, the design should avoid leaving secret values in long-lived buffers, normal logs, `--debug` output, tracing, panic output, or test snapshots. The values of `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` are also SecretEnv credentials and must not leak through diagnostics or child-process environments.
+KEM private keys, signing private keys, MK / CEK values, decrypted plaintext, and the raw Ed25519 signature value used as IKM in SSHSIG-based PrivateKey protection should be zeroized after use as far as the type system allows. At minimum, the design should avoid leaving secret values in long-lived buffers, normal logs, `--debug` output, tracing, panic output, or test snapshots. The values of `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` are also Kapsaro credentials and must not leak through diagnostics or child-process environments.
 
-SecretEnv does not guarantee complete erasure from process memory. Memory zeroization is treated as best-effort defence-in-depth rather than as an absolute guarantee.
+Kapsaro does not guarantee complete erasure from process memory. Memory zeroization is treated as best-effort defence-in-depth rather than as an absolute guarantee.
 
 ---
 
@@ -1351,20 +1351,20 @@ SecretEnv does not guarantee complete erasure from process memory. Memory zeroiz
 | Area | Limitation or non-goal |
 | --- | --- |
 | Key compromise and forward secrecy | If a recipient's long-term private key is compromised, existing wraps for that recipient become decryptable |
-| PrivateKey protection | If the SSH key or equivalent signing authority used for PrivateKey protection is compromised together with `private.json`, the protected SecretEnv private key must be treated as compromised |
+| PrivateKey protection | If the SSH key or equivalent signing authority used for PrivateKey protection is compromised together with `private.json`, the protected Kapsaro private key must be treated as compromised |
 | Past disclosure | Content that was previously decryptable cannot be cryptographically reclaimed after recipient removal |
 | Git-history rollback | An encrypted artifact that was valid at a historical point is not detected as a freshness violation by context binding alone |
 | TOFU and identity review | First-contact MITM and whole-workspace substitution cannot be prevented cryptographically |
 | Local trusted area | Coherent replacement or rollback of the local trust store remains a compromise of the local trust boundary |
-| Post-decryption use | SecretEnv cannot prevent legitimate recipients from misusing plaintext after decryption |
-| Distribution policy | SecretEnv does not provide a central policy for who should hold which secret |
+| Post-decryption use | Kapsaro cannot prevent legitimate recipients from misusing plaintext after decryption |
+| Distribution policy | Kapsaro does not provide a central policy for who should hold which secret |
 | Compression | Compression before encryption is not performed |
 
 ### 13.2 Key Compromise and Forward Secrecy
 
-HPKE Base mode provides ephemeral-key isolation per wrap via ephemeral keys. However, if a recipient's long-term private key is compromised, all existing wraps for that recipient can be opened. SecretEnv does not claim strong system-wide forward secrecy.
+HPKE Base mode provides ephemeral-key isolation per wrap via ephemeral keys. However, if a recipient's long-term private key is compromised, all existing wraps for that recipient can be opened. Kapsaro does not claim strong system-wide forward secrecy.
 
-If the SSH private key used for PrivateKey protection, or equivalent SSH signing authority, is compromised together with access to the corresponding `private.json` record in the local keystore, the SecretEnv private key protected by that SSH key must be treated as effectively compromised. Because the same SSH key can protect multiple SecretEnv keys, running `rewrap --rotate-key` only for affected artifacts is not sufficient by itself.
+If the SSH private key used for PrivateKey protection, or equivalent SSH signing authority, is compromised together with access to the corresponding `private.json` record in the local keystore, the Kapsaro private key protected by that SSH key must be treated as effectively compromised. Because the same SSH key can protect multiple Kapsaro keys, running `rewrap --rotate-key` only for affected artifacts is not sufficient by itself.
 
 `rewrap --rotate-key` is a post-compromise damage-limitation measure, not a mechanism that restores protection for historical data. If key compromise is suspected, run it on affected files and also rotate the underlying secret values (database passwords, API keys, etc.) in the external systems that consume them. When the compromised material is the SSH key used for PrivateKey protection, pair that response with migration to a different SSH key or protection method.
 
@@ -1388,15 +1388,15 @@ At first approval, confirm the key-statement information and the SSH key fingerp
 
 ### 13.5 Local Trusted Area
 
-The signature on the local trust store is effective for integrity checks, corruption detection, and malformed-format detection. However, against an attacker who can write to or roll back the local trust store (`<SECRETENV_HOME>/trust/`), SecretEnv cannot completely prevent injection of a coherently replaced trust store. SecretEnv treats this as a residual risk outside the local trusted area assumption.
+The signature on the local trust store is effective for integrity checks, corruption detection, and malformed-format detection. However, against an attacker who can write to or roll back the local trust store (`<KAPSARO_HOME>/trust/`), Kapsaro cannot completely prevent injection of a coherently replaced trust store. Kapsaro treats this as a residual risk outside the local trusted area assumption.
 
-Ensure proper OS-level access control on the local machine. Verify the local trust store permission chain from `<SECRETENV_HOME>/` through `trust/<owner_handle>.json`: directories should be owner-only (`0700` on Unix), and trust store files should be owner-only (`0600` on Unix).
+Ensure proper OS-level access control on the local machine. Verify the local trust store permission chain from `<KAPSARO_HOME>/` through `trust/<owner_handle>.json`: directories should be owner-only (`0700` on Unix), and trust store files should be owner-only (`0600` on Unix).
 
 ### 13.6 Post-Decryption Control and Distribution Policy
 
-SecretEnv cannot prevent a workspace member who legitimately decrypted content from misusing it. SecretEnv provides confidential distribution and tamper detection, but control after decryption depends on another control layer. Limit workspace membership to those who need access. Use separate workspaces for secrets of different sensitivity levels.
+Kapsaro cannot prevent a workspace member who legitimately decrypted content from misusing it. Kapsaro provides confidential distribution and tamper detection, but control after decryption depends on another control layer. Limit workspace membership to those who need access. Use separate workspaces for secrets of different sensitivity levels.
 
-SecretEnv does not provide a central policy that defines who should hold which secret. The soundness of the cryptographic design and the organization's approval and distribution process should be evaluated separately.
+Kapsaro does not provide a central policy that defines who should hold which secret. The soundness of the cryptographic design and the organization's approval and distribution process should be evaluated separately.
 
 Compression before encryption is not performed. This is an intentional design decision to avoid compression-oracle attacks in the CRIME/BREACH class.
 
@@ -1434,7 +1434,7 @@ graph TB
         SSH["SSH Ed25519 key"]
     end
 
-    subgraph secretenv_keys["SecretEnv key pair (kid: statement ID)"]
+    subgraph kapsaro_keys["Kapsaro key pair (kid: statement ID)"]
         KEM_PK["X25519 public key"]
         KEM_SK["X25519 private key"]
         SIG_PK["Ed25519 public key"]
@@ -1442,11 +1442,11 @@ graph TB
     end
 
     subgraph public_key["PublicKey (workspace)"]
-        PK_DOC["secretenv:format:public-key@7<br/>self-signature + SSH attestation"]
+        PK_DOC["kapsaro:format:public-key@1<br/>self-signature + SSH attestation"]
     end
 
     subgraph private_key["PrivateKey (local keystore)"]
-        PK_ENC["secretenv:format:private-key@7<br/>SSH signature-based encryption"]
+        PK_ENC["kapsaro:format:private-key@1<br/>SSH signature-based encryption"]
     end
 
     subgraph file_enc["file-enc"]
@@ -1504,8 +1504,8 @@ Adoption Fit Check
 
 SSH Key Management (§9)
 
-- Set a passphrase on all SSH Ed25519 private keys used with SecretEnv
-- Understand that protecting the device and local key-storage area is a precondition for SecretEnv's protection, and manage them accordingly (§9.4)
+- Set a passphrase on all SSH Ed25519 private keys used with Kapsaro
+- Understand that protecting the device and local key-storage area is a precondition for Kapsaro's protection, and manage them accordingly (§9.4)
 - For CI/CD, use the password-based exported-key model from §9.3 rather than SSH-based key protection
 
 Workspace Governance (§2.2, §10)
@@ -1529,14 +1529,14 @@ Key Rotation and Member Removal (§7.8, §13.2, §13.3)
 
 CI/CD Security (§9.3)
 
-- Place `SECRETENV_PRIVATE_KEY` and `SECRETENV_KEY_PASSWORD` in separate trust domains when possible (§9.3.4)
+- Place `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` in separate trust domains when possible (§9.3.4)
 - Use environment variable-based key loading only in trusted CI contexts (§9.3.4)
-- Do not inject `SECRETENV_PRIVATE_KEY` or `SECRETENV_KEY_PASSWORD` into fork PRs, untrusted PRs, `pull_request_target`, attacker-controlled checkouts, or untrusted runners
+- Do not inject `KAPSARO_PRIVATE_KEY` or `KAPSARO_KEY_PASSWORD` into fork PRs, untrusted PRs, `pull_request_target`, attacker-controlled checkouts, or untrusted runners
 - Do not checkout an attacker-controlled ref after secrets have been injected
 
 Local Keystore and Local Trust Store (§9, §10.4, §13.5)
 
-- Verify the local keystore and local trust store permission chain: directories under `<SECRETENV_HOME>/` use `0700`, and files use `0600`
+- Verify the local keystore and local trust store permission chain: directories under `<KAPSARO_HOME>/` use `0700`, and files use `0600`
 - Do not operate with a `private.json` that is readable by other users. If detected, abort key loading and repair permissions
 - Ensure proper OS-level access control on the local machine
 - Run `member verify` periodically to re-validate workspace members

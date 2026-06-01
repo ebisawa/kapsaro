@@ -11,30 +11,30 @@ use crate::cli::common::trust::{
 };
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
-use secretenv_core::cli_api::app::context::env_key::is_env_key_mode;
-use secretenv_core::cli_api::app::context::execution::{resolve_write_execution, ExecutionContext};
-use secretenv_core::cli_api::app::context::identity::{
+use kapsaro_core::cli_api::app::context::env_key::is_env_key_mode;
+use kapsaro_core::cli_api::app::context::execution::{resolve_write_execution, ExecutionContext};
+use kapsaro_core::cli_api::app::context::identity::{
     build_missing_member_handle_error, resolve_member_handle_input,
 };
-use secretenv_core::cli_api::app::context::member::resolve_required_member;
-use secretenv_core::cli_api::app::context::options::{
+use kapsaro_core::cli_api::app::context::member::resolve_required_member;
+use kapsaro_core::cli_api::app::context::options::{
     resolve_allow_expired_key_option, resolve_allow_non_member_option, CommonCommandOptions,
 };
-use secretenv_core::cli_api::app::context::ssh::SshSigningContextResolution;
-use secretenv_core::cli_api::app::file::decrypt::DecryptFileCommand;
-use secretenv_core::cli_api::app::file::encrypt::EncryptFileCommand;
-use secretenv_core::cli_api::app::kv::mutation::{
+use kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution;
+use kapsaro_core::cli_api::app::file::decrypt::DecryptFileCommand;
+use kapsaro_core::cli_api::app::file::encrypt::EncryptFileCommand;
+use kapsaro_core::cli_api::app::kv::mutation::{
     resolve_mutation_write_plan, MutationWriteTrustPlan,
 };
-use secretenv_core::cli_api::app::kv::query::KvReadCommand;
-use secretenv_core::cli_api::app::trust::review::{
+use kapsaro_core::cli_api::app::kv::query::KvReadCommand;
+use kapsaro_core::cli_api::app::trust::review::{
     execute_read_with_signer_trust, execute_write_with_recipient_trust, ReadSignerTrustReviewPlan,
     SignerTrustLabels, TrustExecutionContext, WriteRecipientTrustReviewPlan,
 };
-use secretenv_core::cli_api::app::trust::{
+use kapsaro_core::cli_api::app::trust::{
     RecipientTrustOutcome, SignerTrustOutcome, WriteTrustPolicy,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 use tracing::debug;
 
 #[derive(Clone, Copy)]

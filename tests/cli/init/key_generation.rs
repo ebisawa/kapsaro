@@ -17,8 +17,8 @@ fn test_init_generates_key_if_missing() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -44,9 +44,9 @@ fn test_init_with_debug_option_logs_crypto_trace() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg("debug@example.com")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("[CRYPTO] SSH: sign_sshsig"));
@@ -63,9 +63,9 @@ fn test_init_with_verbose_option_does_not_log_crypto_trace() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg("verbose@example.com")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("[CRYPTO] SSH: sign_sshsig").not());
@@ -73,7 +73,7 @@ fn test_init_with_verbose_option_does_not_log_crypto_trace() {
 
 #[test]
 fn test_init_uses_existing_key() {
-    let _guard = EnvGuard::new(&["SECRETENV_HOME"]);
+    let _guard = EnvGuard::new(&["KAPSARO_HOME"]);
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
     cmd()
@@ -83,15 +83,15 @@ fn test_init_uses_existing_key() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .success();
 
-    std::env::set_var("SECRETENV_HOME", home_dir.path().to_str().unwrap());
+    std::env::set_var("KAPSARO_HOME", home_dir.path().to_str().unwrap());
     let base_dir =
-        secretenv_core::cli_api::test_support::storage::config::paths::get_base_dir().unwrap();
+        kapsaro_core::cli_api::test_support::storage::config::paths::get_base_dir().unwrap();
     let member_dir =
-        secretenv_core::cli_api::test_support::storage::keystore::paths::get_keystore_root_from_base(
+        kapsaro_core::cli_api::test_support::storage::keystore::paths::get_keystore_root_from_base(
             &base_dir,
         )
         .join(TEST_MEMBER_HANDLE);
@@ -110,8 +110,8 @@ fn test_init_uses_existing_key() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 

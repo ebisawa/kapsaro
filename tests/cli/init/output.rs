@@ -24,8 +24,8 @@ fn test_init_new_workspace_new_key_output() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Creating workspace"))
@@ -40,7 +40,7 @@ fn test_init_new_workspace_new_key_output() {
             TEST_MEMBER_HANDLE
         )))
         .stderr(predicate::str::contains(
-            "Ready! Commit .secretenv/ to your repository.",
+            "Ready! Commit .kapsaro/ to your repository.",
         ));
 
     assert_stderr_order(
@@ -71,8 +71,8 @@ fn test_init_existing_workspace_noop_output() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(ALICE_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -82,14 +82,14 @@ fn test_init_existing_workspace_noop_output() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(BOB_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir2.path())
+        .env("KAPSARO_HOME", home_dir2.path())
         .assert()
         .success()
         .stderr(predicate::str::contains("Workspace already initialized"))
         .stderr(predicate::str::contains(
-            "`secretenv init` only bootstraps a new workspace",
+            "`kapsaro init` only bootstraps a new workspace",
         ))
-        .stderr(predicate::str::contains("Use `secretenv join`"))
+        .stderr(predicate::str::contains("Use `kapsaro join`"))
         .stderr(predicate::str::contains("Added").not())
         .stderr(predicate::str::contains("Using SSH key:").not());
 }
@@ -104,8 +104,8 @@ fn test_init_already_member_ci_output() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -113,10 +113,10 @@ fn test_init_already_member_ci_output() {
         .arg("init")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .env("CI", "true")
         .assert()
         .success()
         .stderr(predicate::str::contains("Workspace already initialized"))
-        .stderr(predicate::str::contains("Use `secretenv join`"));
+        .stderr(predicate::str::contains("Use `kapsaro join`"));
 }

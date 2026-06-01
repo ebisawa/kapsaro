@@ -4,8 +4,8 @@
 //! Integration tests for `key activate` command
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
-use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
-use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use std::fs;
 use tempfile::TempDir;
 
@@ -24,7 +24,7 @@ fn test_key_activate_explicit_kid() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -35,7 +35,7 @@ fn test_key_activate_explicit_kid() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -59,7 +59,7 @@ fn test_key_activate_explicit_kid() {
         .arg(first_kid)
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -87,7 +87,7 @@ fn test_key_activate_latest() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -101,7 +101,7 @@ fn test_key_activate_latest() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -111,7 +111,7 @@ fn test_key_activate_latest() {
         .arg("activate")
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -137,7 +137,7 @@ fn test_key_activate_accepts_display_kid() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -149,7 +149,7 @@ fn test_key_activate_accepts_display_kid() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -169,7 +169,7 @@ fn test_key_activate_accepts_display_kid() {
         .arg(format_kid_display(&target).unwrap())
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 

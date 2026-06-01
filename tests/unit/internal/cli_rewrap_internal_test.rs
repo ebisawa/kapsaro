@@ -4,10 +4,10 @@
 use std::io::Cursor;
 
 use crate::test_utils::{kid as test_kid, member_handle as test_member_handle};
-use secretenv_core::cli_api::app::rewrap::promotion::{
+use kapsaro_core::cli_api::app::rewrap::promotion::{
     PromotionReviewFailure, PromotionReviewPrompt, PromotionReviewView,
 };
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 
 use super::{confirm_incoming_promotions_with_reader, promotion_prompt_label};
 

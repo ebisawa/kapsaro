@@ -15,8 +15,8 @@ use crate::cli::common::output::text::inspect::{
     format_inspect_command_output, print_inspect_banner,
 };
 use crate::cli::options::WorkspaceOutputOptions;
-use secretenv_core::cli_api::app::file::inspect::execute_inspect_file_command;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::file::inspect::execute_inspect_file_command;
+use kapsaro_core::Result;
 
 #[derive(Args)]
 pub(crate) struct InspectArgs {

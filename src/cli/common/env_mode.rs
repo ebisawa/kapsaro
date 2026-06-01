@@ -3,9 +3,9 @@
 
 //! Guards for commands that are unavailable in environment-variable key mode.
 
-use secretenv_core::cli_api::app::context::env_key::is_env_key_mode;
-use secretenv_core::cli_api::app::trust::CommandCapability;
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::context::env_key::is_env_key_mode;
+use kapsaro_core::cli_api::app::trust::CommandCapability;
+use kapsaro_core::Result;
 use tracing::debug;
 
 pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> Result<()> {
@@ -20,12 +20,10 @@ pub(crate) fn ensure_env_mode_command_allowed(capability: CommandCapability) -> 
     }
 
     debug!("[CLI] env-key mode rejected for {}", capability.label());
-    Err(secretenv_core::Error::build_invalid_operation_error(
-        format!(
-            "Command unavailable in environment-variable key mode.\n\
+    Err(kapsaro_core::Error::build_invalid_operation_error(format!(
+        "Command unavailable in environment-variable key mode.\n\
              Command: {}\n\
              Supported commands: run, decrypt, get, list, doctor.",
-            capability.label()
-        ),
-    ))
+        capability.label()
+    )))
 }

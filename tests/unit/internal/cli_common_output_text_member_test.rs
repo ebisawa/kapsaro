@@ -10,8 +10,8 @@ use crate::cli::common::output::member::view::{
     MemberListView, MemberShowView, MemberVerificationItemView, MemberVerificationResultsView,
 };
 use console::{colors_enabled, set_colors_enabled};
-use secretenv_core::cli_api::app::member::approval::MemberApprovalResult;
-use secretenv_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
+use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 use serde_json::json;
 use serial_test::serial;
 

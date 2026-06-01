@@ -16,11 +16,11 @@ use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
-use secretenv_core::api::kv::KvInputEntry;
-use secretenv_core::api::secret::SecretString;
-use secretenv_core::cli_api::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
-use secretenv_core::cli_api::app::trust::SetPolicy;
-use secretenv_core::{Error, Result};
+use kapsaro_core::api::kv::KvInputEntry;
+use kapsaro_core::api::secret::SecretString;
+use kapsaro_core::cli_api::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::cli_api::app::trust::SetPolicy;
+use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
 pub(crate) struct SetArgs {

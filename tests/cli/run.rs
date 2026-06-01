@@ -43,8 +43,8 @@ fn test_run_error_when_workspace_not_found() {
         .arg("--")
         .arg("echo")
         .arg("test")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(
@@ -73,8 +73,8 @@ fn test_run_error_when_default_file_not_exists() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -86,8 +86,8 @@ fn test_run_error_when_default_file_not_exists() {
         .arg("--")
         .arg("echo")
         .arg("test")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found").or(predicate::str::contains("default")));
@@ -106,8 +106,8 @@ fn test_run_with_multiple_env_vars() {
         .arg("postgres://localhost")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -117,8 +117,8 @@ fn test_run_with_multiple_env_vars() {
         .arg("secret123")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -144,8 +144,8 @@ fn test_run_with_multiple_env_vars() {
         run_cmd.arg(arg);
     }
     run_cmd
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(
@@ -166,8 +166,8 @@ fn test_run_debug_logs_decryption_without_secret_values() {
         .arg("run-debug-secret-value")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -181,8 +181,8 @@ fn test_run_debug_logs_decryption_without_secret_values() {
         .arg("-c")
         .arg("true")
         .env("RUST_LOG", "warn")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("[KV] env command: decrypt values"))
@@ -204,7 +204,7 @@ fn test_run_debug_logs_decryption_without_secret_values() {
         .stdout(predicate::str::contains(
             "[CRYPTO] HMAC-SHA256: key possession: verify tag format=kv",
         ))
-        .stdout(predicate::str::contains("domain=secretenv:context").not())
+        .stdout(predicate::str::contains("domain=kapsaro:context").not())
         .stdout(predicate::str::contains("body_bytes_len=").not())
         .stdout(predicate::str::contains("expected_tag_len=").not())
         .stdout(predicate::str::contains("run-debug-secret-value").not());
@@ -225,8 +225,8 @@ fn test_run_rejects_tampered_kv_signature() {
         .arg("sh")
         .arg("-c")
         .arg("echo should-not-run")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stdout(predicate::str::contains("should-not-run").not())
@@ -243,8 +243,8 @@ fn test_run_nonexistent_command_fails() {
         .arg(workspace_dir.path())
         .arg("--")
         .arg("nonexistent_command_xyz_12345")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -258,8 +258,8 @@ fn test_run_no_command_fails() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -276,8 +276,8 @@ fn test_run_preserves_exit_code() {
         .arg("sh")
         .arg("-c")
         .arg("exit 42")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .code(42);
 }
@@ -296,8 +296,8 @@ fn test_run_inherits_nonstandard_parent_env() {
         .arg("-c")
         .arg("printf %s \"$LEAK_ME\"")
         .env("LEAK_ME", "top-secret")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("top-secret"));
@@ -305,7 +305,7 @@ fn test_run_inherits_nonstandard_parent_env() {
 
 #[cfg(unix)]
 #[test]
-fn test_run_does_not_inherit_secretenv_parent_env() {
+fn test_run_does_not_inherit_kapsaro_parent_env() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
 
     cmd()
@@ -316,15 +316,15 @@ fn test_run_does_not_inherit_secretenv_parent_env() {
         .arg("sh")
         .arg("-c")
         .arg(
-            "test -z \"$SECRETENV_HOME\" && \
-             test -z \"$SECRETENV_SSH_IDENTITY\" && \
-             test -z \"$SECRETENV_SSH_SIGNING_METHOD\" && \
-             test -z \"$SECRETENV_CUSTOM\" && \
+            "test -z \"$KAPSARO_HOME\" && \
+             test -z \"$KAPSARO_SSH_IDENTITY\" && \
+             test -z \"$KAPSARO_SSH_SIGNING_METHOD\" && \
+             test -z \"$KAPSARO_CUSTOM\" && \
              echo absent",
         )
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .env("SECRETENV_CUSTOM", "parent-secret")
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_CUSTOM", "parent-secret")
         .assert()
         .success()
         .stdout(predicate::str::contains("absent"));
@@ -343,8 +343,8 @@ fn test_run_preserves_standard_env_vars() {
         .arg("sh")
         .arg("-c")
         .arg("test -n \"$PATH\" && test -n \"$HOME\" && echo ok")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("ok"));
@@ -352,7 +352,7 @@ fn test_run_preserves_standard_env_vars() {
 
 #[cfg(unix)]
 #[test]
-fn test_run_secret_env_overrides_standard_env_vars() {
+fn test_run_kapsaro_overrides_standard_env_vars() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
 
     cmd()
@@ -361,8 +361,8 @@ fn test_run_secret_env_overrides_standard_env_vars() {
         .arg("secret_path")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -374,8 +374,8 @@ fn test_run_secret_env_overrides_standard_env_vars() {
         .arg("/bin/sh")
         .arg("-c")
         .arg("printf %s \"$PATH\"")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("secret_path"));

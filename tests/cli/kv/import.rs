@@ -42,8 +42,8 @@ fn test_import_dotenv_file() {
             .arg(key)
             .arg("--workspace")
             .arg(workspace_dir.path())
-            .env("SECRETENV_HOME", home_dir.path())
-            .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+            .env("KAPSARO_HOME", home_dir.path())
+            .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
             .assert()
             .success()
             .stdout(predicate::str::contains(*expected_value));
@@ -74,8 +74,8 @@ fn test_import_overwrites_existing_keys() {
         .arg(env_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -85,8 +85,8 @@ fn test_import_overwrites_existing_keys() {
         .arg("API_KEY")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stdout(predicate::str::contains("new_value"));
@@ -104,8 +104,8 @@ fn test_import_invalid_dotenv_fails() {
         .arg(env_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("missing '=' separator"));
@@ -120,8 +120,8 @@ fn test_import_nonexistent_file_fails() {
         .arg("/nonexistent/path/test.env")
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -138,8 +138,8 @@ fn test_import_empty_file_fails() {
         .arg(env_file.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("No valid entries found"));
@@ -183,8 +183,8 @@ fn test_import_rejects_symlink_input_file() {
         .arg(symlink_env.to_str().unwrap())
         .arg("--workspace")
         .arg(workspace_dir.path())
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
         .stderr(predicate::str::contains("symlink"));

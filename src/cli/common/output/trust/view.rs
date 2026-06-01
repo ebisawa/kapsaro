@@ -19,7 +19,7 @@ pub(crate) struct RecipientSetListItemView<'a> {
 }
 
 pub(super) fn build_trust_list_views<'a>(
-    items: &'a [secretenv_core::cli_api::app::trust::list::TrustListItem],
+    items: &'a [kapsaro_core::cli_api::app::trust::list::TrustListItem],
 ) -> Vec<TrustListItemView<'a>> {
     items
         .iter()
@@ -33,7 +33,7 @@ pub(super) fn build_trust_list_views<'a>(
 }
 
 pub(super) fn build_recipient_set_list_views<'a>(
-    items: &'a [secretenv_core::cli_api::app::trust::list::RecipientSetListItem],
+    items: &'a [kapsaro_core::cli_api::app::trust::list::RecipientSetListItem],
 ) -> Vec<RecipientSetListItemView<'a>> {
     items
         .iter()

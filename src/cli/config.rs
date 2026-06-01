@@ -10,8 +10,8 @@ use crate::cli::common::output::config::{
     print_config_list, print_config_set_result, print_config_unset_result, print_config_value,
 };
 use crate::cli::options::LocalOptions;
-use secretenv_core::cli_api::app::config;
-use secretenv_core::Error;
+use kapsaro_core::cli_api::app::config;
+use kapsaro_core::Error;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]

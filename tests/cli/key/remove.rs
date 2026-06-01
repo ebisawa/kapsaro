@@ -5,8 +5,8 @@
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
-use secretenv_core::cli_api::test_support::helpers::kid::format_kid_display;
-use secretenv_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use std::fs;
 use tempfile::TempDir;
 
@@ -25,7 +25,7 @@ fn test_key_remove_non_active() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -37,7 +37,7 @@ fn test_key_remove_non_active() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -66,7 +66,7 @@ fn test_key_remove_non_active() {
         .arg(non_active_kid)
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -99,7 +99,7 @@ fn test_key_remove_active_without_force() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -115,7 +115,7 @@ fn test_key_remove_active_without_force() {
         .arg(&kid)
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .failure();
 
@@ -145,7 +145,7 @@ fn test_key_remove_active_with_force() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -162,7 +162,7 @@ fn test_key_remove_active_with_force() {
         .arg("--member-handle")
         .arg(member_handle)
         .arg("--force")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -194,7 +194,7 @@ fn test_key_remove_accepts_unique_prefix_without_member_handle() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -206,7 +206,7 @@ fn test_key_remove_accepts_unique_prefix_without_member_handle() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -227,7 +227,7 @@ fn test_key_remove_accepts_unique_prefix_without_member_handle() {
         .arg("key")
         .arg("remove")
         .arg(&non_active_kid[..4])
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -249,7 +249,7 @@ fn test_key_remove_accepts_display_kid() {
         .arg(member_handle)
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -261,7 +261,7 @@ fn test_key_remove_accepts_display_kid() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .arg("--no-activate")
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 
@@ -284,7 +284,7 @@ fn test_key_remove_accepts_display_kid() {
         .arg(format_kid_display(&non_active_kid).unwrap())
         .arg("--member-handle")
         .arg(member_handle)
-        .env("SECRETENV_HOME", temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
         .assert()
         .success();
 

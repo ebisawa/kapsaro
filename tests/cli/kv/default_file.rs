@@ -15,7 +15,7 @@ fn test_error_when_workspace_not_found() {
     cmd()
         .arg("get")
         .arg("TEST_KEY")
-        .env("SECRETENV_HOME", home_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
         .current_dir("/tmp") // Ensure we're not in a workspace
         .assert()
         .failure()

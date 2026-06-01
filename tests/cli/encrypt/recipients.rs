@@ -69,9 +69,9 @@ fn test_encrypt_workspace_required() {
             .arg(test_dir.join("out.encrypted"))
             .arg("--member-handle")
             .arg(ALICE_MEMBER_HANDLE)
-            .env("SECRETENV_HOME", temp_dir.path())
+            .env("KAPSARO_HOME", temp_dir.path())
             .env(
-                "SECRETENV_SSH_IDENTITY",
+                "KAPSARO_SSH_IDENTITY",
                 temp_dir.path().join(".ssh").join("test_ed25519"),
             )
             .assert()

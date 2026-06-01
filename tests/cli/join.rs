@@ -46,8 +46,8 @@ fn test_join_existing_workspace() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains(&missing_key_message))
@@ -104,8 +104,8 @@ fn test_join_force_overwrites_existing_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -117,8 +117,8 @@ fn test_join_force_overwrites_existing_member() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .arg("--force")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(
@@ -143,8 +143,8 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -156,9 +156,9 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--force")
         .arg("--github-user")
-        .arg("definitely-not-a-real-github-user-for-secretenv-tests")
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .arg("definitely-not-a-real-github-user-for-kapsaro-tests")
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains("Using existing key for"));
@@ -177,11 +177,11 @@ fn test_join_nonexistent_workspace_fails() {
     cmd()
         .arg("join")
         .arg("--workspace")
-        .arg("/tmp/secretenv-nonexistent-workspace-xyz-99999")
+        .arg("/tmp/kapsaro-nonexistent-workspace-xyz-99999")
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 }
@@ -200,8 +200,8 @@ fn test_join_incomplete_workspace_fails() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure();
 
@@ -232,8 +232,8 @@ fn test_init_then_join_different_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg("alice@example.com")
-        .env("SECRETENV_HOME", home_dir_alice.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv_alice.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir_alice.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv_alice.to_str().unwrap())
         .assert()
         .success();
 
@@ -244,8 +244,8 @@ fn test_init_then_join_different_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg("bob@example.com")
-        .env("SECRETENV_HOME", home_dir_bob.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv_bob.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir_bob.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv_bob.to_str().unwrap())
         .assert()
         .success();
 
@@ -280,8 +280,8 @@ fn test_join_stages_new_generation_for_existing_active_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -296,8 +296,8 @@ fn test_join_stages_new_generation_for_existing_active_member() {
         .arg("new")
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success();
 
@@ -316,8 +316,8 @@ fn test_join_stages_new_generation_for_existing_active_member() {
         .arg(workspace_dir.path())
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
-        .env("SECRETENV_HOME", home_dir.path())
-        .env("SECRETENV_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .success()
         .stderr(predicate::str::contains(format!(

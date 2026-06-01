@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kapsaro.file.enc.schema.json",
+  "title": "kapsaro file enc schema",
+  "$defs": {
+    "file_payload_protected_v7": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "file-enc payload protected header",
+      "properties": {
+        "format": { "const": "kapsaro:format:file-enc:payload@1" },
+        "sid": { "$ref": "kapsaro_common_schema.json#/$defs/uuid" },
+        "alg": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aead": { "const": "xchacha20-poly1305" }
+          },
+          "required": ["aead"]
+        }
+      },
+      "required": ["format", "sid", "alg"]
+    },
+    "file_payload_encrypted_v7": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "file-enc payload encrypted data",
+      "properties": {
+        "nonce": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_24" },
+        "ct": { "$ref": "kapsaro_common_schema.json#/$defs/b64url" }
+      },
+      "required": ["nonce", "ct"]
+    },
+    "file_payload_envelope_v7": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "file-enc payload envelope structure",
+      "properties": {
+        "protected": { "$ref": "#/$defs/file_payload_protected_v7" },
+        "encrypted": { "$ref": "#/$defs/file_payload_encrypted_v7" }
+      },
+      "required": ["protected", "encrypted"]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "description": "file-enc v7 - top-level structure",
+  "properties": {
+    "protected": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "file-enc v7 - protected object (signature target)",
+      "properties": {
+        "format": { "const": "kapsaro:format:file-enc@1" },
+        "sid": { "$ref": "kapsaro_common_schema.json#/$defs/uuid" },
+        "removed_recipients": {
+          "type": "array",
+          "items": { "$ref": "kapsaro_common_schema.json#/$defs/removed_recipient_item" },
+          "description": "History of removed recipients for disclosure tracking"
+        },
+        "payload": { "$ref": "#/$defs/file_payload_envelope_v7" },
+        "wrap": {
+          "type": "array",
+          "items": { "$ref": "kapsaro_common_schema.json#/$defs/wrap_item" },
+          "minItems": 1,
+          "maxItems": 1000
+        },
+        "created_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" },
+        "updated_at": { "$ref": "kapsaro_common_schema.json#/$defs/iso8601" }
+      },
+      "required": ["format", "sid", "payload", "wrap", "created_at", "updated_at"]
+    },
+    "signature": { "$ref": "kapsaro_artifact_signature_schema.json" }
+  },
+  "required": ["protected", "signature"]
+}

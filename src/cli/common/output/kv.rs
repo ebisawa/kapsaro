@@ -18,8 +18,8 @@ use crate::cli::common::output::text::kv::{
     print_single_kv_value as print_single_kv_value_text,
 };
 use crate::cli::common::output::text::print_warning_line;
-use secretenv_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
-use secretenv_core::Result;
+use kapsaro_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
+use kapsaro_core::Result;
 
 pub(crate) fn print_kv_key_list(keys: &[KvDisclosedEntry], json_output: bool) -> Result<()> {
     let key_views = view::build_kv_key_views(keys);

@@ -13,7 +13,7 @@ use crate::cli::common::output::text::layout;
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, print_trust_review_line,
 };
-use secretenv_core::cli_api::presentation::kid::format_kid_display_lossy;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
 const MEMBER_SHOW_BULLET: &str = "\u{25CF}";

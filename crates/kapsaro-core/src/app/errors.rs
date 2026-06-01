@@ -1,0 +1,59 @@
+// Copyright 2026 Satoshi Ebisawa
+// SPDX-License-Identifier: Apache-2.0
+
+//! Application-layer error helpers.
+
+use crate::feature::kv::error::is_key_not_found_error;
+use crate::support::path::format_path_relative_to_cwd;
+use crate::Error;
+use std::path::Path;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/app_errors_test.rs"]
+mod tests;
+
+/// Build a KV key-not-found error with file path context when applicable.
+pub fn build_kv_key_not_found_error(error: Error, input_path: &Path, key: &str) -> Error {
+    if is_key_not_found_error(&error, key) {
+        return build_kv_key_file_not_found_error(error.format_user_message(), input_path);
+    }
+    error
+}
+
+fn build_kv_key_file_not_found_error(message: &str, input_path: &Path) -> Error {
+    Error::build_not_found_error(format!(
+        "{} in {}",
+        message,
+        format_path_relative_to_cwd(input_path)
+    ))
+}
+
+/// Serialize a value to `serde_json::Value`, mapping the error to `Error::Parse`.
+pub fn serialize_to_json_value<T: serde::Serialize>(value: &T) -> crate::Result<serde_json::Value> {
+    serde_json::to_value(value).map_err(|e| {
+        crate::Error::build_parse_error_with_source(
+            format!("Failed to serialize member document: {}", e),
+            e,
+        )
+    })
+}
+
+/// Build the default missing KV file error shown by KV commands.
+pub fn build_default_kv_file_not_found_error(file_path: &Path) -> Error {
+    Error::build_not_found_error(format!(
+        "Default kv file not found: {}. Use 'kapsaro set' to create it.",
+        format_path_relative_to_cwd(file_path)
+    ))
+}
+
+/// Wrap any local trust store load/verification failure into a reset-required error.
+pub fn build_invalid_trust_store_error(path: &Path, error: Error) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_STORE_RESET_REQUIRED".to_string(),
+        format!(
+            "Local trust store '{}' is invalid and must be reset: {}",
+            format_path_relative_to_cwd(path),
+            error.format_user_message()
+        ),
+    )
+}

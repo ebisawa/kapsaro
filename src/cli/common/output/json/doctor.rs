@@ -4,10 +4,10 @@
 use serde::Serialize;
 
 use crate::cli::common::output::json::print_json_output;
-use secretenv_core::cli_api::app::doctor::types::{
+use kapsaro_core::cli_api::app::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus,
 };
-use secretenv_core::Result;
+use kapsaro_core::Result;
 
 #[derive(Serialize)]
 struct DoctorReportOutput<'a> {

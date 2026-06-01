@@ -29,7 +29,7 @@ fn test_build_file_wrap_info_uses_jcs_golden_bytes() {
         bytes_to_string(info.as_bytes()),
         concat!(
             r#"{"kid":"7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD","#,
-            r#""p":"kapsaro:context:hpke-info:file-enc:wrap@1","#,
+            r#""p":"kapsaro:hpke-info:file:wrap@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
@@ -43,7 +43,7 @@ fn test_build_kv_wrap_info_uses_jcs_golden_bytes() {
         bytes_to_string(info.as_bytes()),
         concat!(
             r#"{"kid":"7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD","#,
-            r#""p":"kapsaro:context:hpke-info:kv-enc:wrap@1","#,
+            r#""p":"kapsaro:hpke-info:kv:wrap@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
@@ -78,7 +78,7 @@ fn test_build_kv_entry_aad_uses_jcs_golden_bytes() {
         bytes_to_string(aad.as_bytes()),
         concat!(
             r#"{"k":"DATABASE_URL","#,
-            r#""p":"kapsaro:context:aad:kv-enc:entry-payload@1","#,
+            r#""p":"kapsaro:aad:kv:entry-payload@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
@@ -89,21 +89,21 @@ fn test_build_file_key_schedule_context_uses_jcs_golden_bytes() {
     assert_eq!(
         bytes_to_string(&build_file_key_schedule_salt(&sid()).unwrap()),
         concat!(
-            r#"{"p":"kapsaro:context:hkdf-salt:file-enc@1","#,
+            r#"{"p":"kapsaro:hkdf-salt:file@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
     assert_eq!(
         bytes_to_string(build_file_content_key_info(&sid()).unwrap().as_bytes()),
         concat!(
-            r#"{"p":"kapsaro:context:hkdf-info:file-enc:content-key@1","#,
+            r#"{"p":"kapsaro:hkdf-info:file:content-key@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
     assert_eq!(
         bytes_to_string(build_file_mac_key_info(&sid()).unwrap().as_bytes()),
         concat!(
-            r#"{"p":"kapsaro:context:hkdf-info:file-enc:mac-key@1","#,
+            r#"{"p":"kapsaro:hkdf-info:file:mac-key@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
@@ -114,7 +114,7 @@ fn test_build_kv_key_schedule_context_uses_jcs_golden_bytes() {
     assert_eq!(
         bytes_to_string(&build_kv_key_schedule_salt(&sid()).unwrap()),
         concat!(
-            r#"{"p":"kapsaro:context:hkdf-salt:kv-enc@1","#,
+            r#"{"p":"kapsaro:hkdf-salt:kv@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
@@ -122,14 +122,14 @@ fn test_build_kv_key_schedule_context_uses_jcs_golden_bytes() {
         bytes_to_string(build_kv_cek_info(&sid(), KEY, NONCE).unwrap().as_bytes()),
         concat!(
             r#"{"k":"DATABASE_URL","nonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","#,
-            r#""p":"kapsaro:context:hkdf-info:kv-enc:cek@1","#,
+            r#""p":"kapsaro:hkdf-info:kv:cek@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );
     assert_eq!(
         bytes_to_string(build_kv_mac_key_info(&sid()).unwrap().as_bytes()),
         concat!(
-            r#"{"p":"kapsaro:context:hkdf-info:kv-enc:mac-key@1","#,
+            r#"{"p":"kapsaro:hkdf-info:kv:mac-key@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
         )
     );

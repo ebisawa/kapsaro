@@ -13,7 +13,7 @@ use kapsaro_core::cli_api::test_support::primitives::types::primitives::XChaChaN
 #[test]
 fn test_xchacha20_encrypt_decrypt_roundtrip() {
     let key = XChaChaKey::new([0x42u8; 32]);
-    let aad = Aad::from(b"kapsaro:context:aad:kv-enc:entry-payload@1|kid|key" as &[u8]);
+    let aad = Aad::from(b"kapsaro:aad:kv:entry-payload@1|kid|key" as &[u8]);
     let plaintext = Plaintext::from(b"DATABASE_URL=postgresql://localhost/db" as &[u8]);
 
     let (ciphertext, nonce) =

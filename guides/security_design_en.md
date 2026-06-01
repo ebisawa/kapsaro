@@ -505,7 +505,7 @@ Both file-enc and kv-enc use the `signature_v4` format above. What differs is on
 | Signature algorithm | `eddsa-ed25519` (PureEdDSA) | `eddsa-ed25519` (PureEdDSA) |
 | Signature format | `signature_v4` format | `signature_v4` format |
 
-The key-possession proof HMAC is computed under the MAC domain `kapsaro:context:mac-domain:key-possession@1` over length-framed format-specific body bytes and `signature.kid`. Artifact signatures use a separate domain, `kapsaro:context:sig-domain:artifact-signature@1`, over a length-framed `signature_header` derived from `signature.alg` / `signature.kid`, body bytes, and `signature.mac`. file-enc and kv-enc both derive a purpose-separated MAC key from the artifact MK and use that derived key as the HMAC key. Because verification also checks that `signature.kid` matches `signer_pub.protected.kid`, the HMAC binds content-key possession to the signer's key statement. It does not include a hash of the full `signer_pub`.
+The key-possession proof HMAC is computed under the MAC domain `kapsaro:mac:key-possession@1` over length-framed format-specific body bytes and `signature.kid`. Artifact signatures use a separate domain, `kapsaro:sig:artifact-signature@1`, over a length-framed `signature_header` derived from `signature.alg` / `signature.kid`, body bytes, and `signature.mac`. file-enc and kv-enc both derive a purpose-separated MAC key from the artifact MK and use that derived key as the HMAC key. Because verification also checks that `signature.kid` matches `signer_pub.protected.kid`, the HMAC binds content-key possession to the signer's key statement. It does not include a hash of the full `signer_pub`.
 
 ### 5.2 file-enc Signature
 
@@ -548,7 +548,7 @@ What this establishes is key consistency in §1.6: evidence that the party who c
 
 SSH attestation shows that the Kapsaro key material (KEM / signing) inside `signer_pub` is cryptographically bound to a specific SSH Ed25519 key. The SSHSIG namespace is fixed to `kapsaro-attestation` so `signed_data` does not collide with signatures for other purposes.
 
-The PublicKey attestation body signed by SSH is the JCS-normalized JSON object containing `p = kapsaro:context:sshsig-message:public-key:attestation@1`, `subject_handle`, `keys`, optional `binding_claims`, optional `created_at`, and `expires_at`. It excludes `kid`, `attestation`, and `signature`. SSHSIG signed_data follows the OpenSSH `SSHSIG` format with namespace `kapsaro-attestation`, empty reserved field, hash algorithm `sha256`, and message hash `SHA256(JCS(attestation_body))`.
+The PublicKey attestation body signed by SSH is the JCS-normalized JSON object containing `p = kapsaro:sshsig:public-key:attestation@1`, `subject_handle`, `keys`, optional `binding_claims`, optional `created_at`, and `expires_at`. It excludes `kid`, `attestation`, and `signature`. SSHSIG signed_data follows the OpenSSH `SSHSIG` format with namespace `kapsaro-attestation`, empty reserved field, hash algorithm `sha256`, and message hash `SHA256(JCS(attestation_body))`.
 
 What is established is correspondence between the Kapsaro public key and the SSH public key. Who owns the SSH key (identity) is not determined by attestation alone. SSH signatures for PrivateKey protection use a different namespace (`kapsaro-key-protection`), and the IKM derivation context is separated in §9.2.1.
 
@@ -687,7 +687,7 @@ This order keeps key delivery, payload binding, and document integrity as distin
 ### 6.4 HPKE Seal/Open
 
 - The HPKE suite is `hpke-32-1-3`; the relevant parameters are described in §3.1 and §3.2.
-- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = kapsaro:context:hpke-info:file-enc:wrap@1`, and the file identifier `sid`.
+- The wrap context includes the recipient key generation `kid`, the protocol identifier `p = kapsaro:hpke-info:file:wrap@1`, and the file identifier `sid`.
 - HPKE `info` and `AAD` use the same JCS-canonicalized context bytes. This keeps the key-schedule path and AEAD-verification path aligned and makes implementation drift surface early as HPKE open failure.
 - The recipient member handle remains operationally important, but cryptographic HPKE seal/open binding is keyed by `kid`.
 
@@ -824,20 +824,20 @@ As with file-enc, signature verification always precedes decryption.
 
 ### 7.3 CEK Derivation
 
-- CEK derivation uses HKDF-SHA256 with context that includes `p = kapsaro:context:hkdf-info:kv-enc:cek@1`, `sid`, the KEY line prefix, and the entry nonce.
-- The artifact PRK is extracted once per kv-enc document from the MK and the JCS salt `kapsaro:context:hkdf-salt:kv-enc@1` plus `sid`.
+- CEK derivation uses HKDF-SHA256 with context that includes `p = kapsaro:hkdf-info:kv:cek@1`, `sid`, the KEY line prefix, and the entry nonce.
+- The artifact PRK is extracted once per kv-enc document from the MK and the JCS salt `kapsaro:hkdf-salt:kv@1` plus `sid`.
 - Including `sid`, the KEY line prefix, and the nonce in the derivation context ensures that copying an entry to a different file or another KEY does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
-- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = kapsaro:context:aad:kv-enc:entry-payload@1`.
+- Entry AAD includes the KEY line prefix, the file identifier `sid`, and the protocol identifier `p = kapsaro:aad:kv:entry-payload@1`.
 - Including the KEY line prefix prevents entry swapping within the same kv-enc document.
 - Including `sid` aligns the payload context with the CEK-derivation context.
 - The nonce is already consumed by CEK derivation, and `recipients` is intentionally excluded so that rewrap can replace wraps without forcing payload re-encryption.
 
 ### 7.5 HPKE Seal/Open (kv)
 
-- kv-enc wraps also include `kid`, `sid`, and `p = kapsaro:context:hpke-info:kv-enc:wrap@1`.
+- kv-enc wraps also include `kid`, `sid`, and `p = kapsaro:hpke-info:kv:wrap@1`.
 - As in file-enc, HPKE `info` and `AAD` use the same canonicalized context bytes.
 - This makes key-generation binding and file-context binding explicit while turning implementation drift into HPKE open failure.
 
@@ -908,7 +908,7 @@ These inputs are not aliases for the same parameter inside one primitive. HPKE `
 In file-enc / kv-enc HPKE seal/open, the same bytes are used for HPKE info and AAD. Example for file-enc:
 
 ```
-info_bytes = jcs({"kid": ..., "p": "kapsaro:context:hpke-info:file-enc:wrap@1", "sid": ...})
+info_bytes = jcs({"kid": ..., "p": "kapsaro:hpke-info:file:wrap@1", "sid": ...})
 aad_bytes  = info_bytes
 ```
 
@@ -1021,8 +1021,8 @@ The protection path is a three-stage pipeline.
 
 | Stage | Input | Output | Security role |
 | --- | --- | --- | --- |
-| SSHSIG signing | Sign message (`kapsaro:context:sshsig-message:private-key:protection@1` and `ikm_salt`), namespace `kapsaro-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
-| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `kapsaro:context:hkdf-info:private-key:sshsig@1:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
+| SSHSIG signing | Sign message (`kapsaro:sshsig:private-key:protection@1` and `ikm_salt`), namespace `kapsaro-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
+| HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `kapsaro:hkdf-info:private-key:sshsig@1:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
 | XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Encrypts the private key material and makes tampering in the `protected` header fail at decryption time |
 
 The following diagram visualizes this derivation path.
@@ -1086,7 +1086,7 @@ Many CI platforms provide "secret variables" that are stored securely and expose
 
 ### 9.3.2 Key Derivation Pipeline
 
-In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `kapsaro:context:hkdf-info:private-key:password@1:{kid}`, which is intentionally distinct from the SSH-based path (`kapsaro:context:hkdf-info:private-key:sshsig@1:{kid}`) for domain separation.
+In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `kapsaro:hkdf-info:private-key:password@1:{kid}`, which is intentionally distinct from the SSH-based path (`kapsaro:hkdf-info:private-key:sshsig@1:{kid}`) for domain separation.
 
 `ikm_salt` is reserved for Argon2id and `hkdf_salt` for HKDF so that the two derivation steps remain clearly separated.
 

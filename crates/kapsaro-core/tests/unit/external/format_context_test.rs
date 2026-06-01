@@ -2,12 +2,85 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::test_utils::ALICE_MEMBER_HANDLE;
+use kapsaro_core::cli_api::test_support::domain::public_key::{IdentityKeys, JwkOkpPublicKey};
 use kapsaro_core::cli_api::test_support::domain::wire::{
-    algorithm, context as wire_context, format,
+    algorithm, context as wire_context, format, jwk,
 };
 use kapsaro_core::cli_api::test_support::operations::envelope::binding;
 use kapsaro_core::cli_api::test_support::operations::key::protection::binding as private_key_binding;
+use kapsaro_core::cli_api::test_support::wire::public_key::{
+    build_attestation_body_bytes, AttestationBodyInput,
+};
 use uuid::Uuid;
+
+const X25519_PUBLIC_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const ED25519_PUBLIC_KEY: &str = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+
+#[test]
+fn test_context_wire_strings_use_short_readable_values() {
+    assert_eq!(
+        wire_context::AAD_KV_ENTRY_PAYLOAD_V1,
+        "kapsaro:aad:kv:entry-payload@1"
+    );
+    assert_eq!(
+        wire_context::HPKE_INFO_KV_WRAP_V1,
+        "kapsaro:hpke-info:kv:wrap@1"
+    );
+    assert_eq!(
+        wire_context::HPKE_INFO_FILE_WRAP_V1,
+        "kapsaro:hpke-info:file:wrap@1"
+    );
+    assert_eq!(
+        wire_context::HKDF_INFO_PRIVATE_KEY_SSHSIG_V1,
+        "kapsaro:hkdf-info:private-key:sshsig@1"
+    );
+    assert_eq!(
+        wire_context::HKDF_INFO_PRIVATE_KEY_PASSWORD_V1,
+        "kapsaro:hkdf-info:private-key:password@1"
+    );
+    assert_eq!(wire_context::HKDF_SALT_FILE_V1, "kapsaro:hkdf-salt:file@1");
+    assert_eq!(wire_context::HKDF_SALT_KV_V1, "kapsaro:hkdf-salt:kv@1");
+    assert_eq!(
+        wire_context::HKDF_INFO_FILE_CONTENT_KEY_V1,
+        "kapsaro:hkdf-info:file:content-key@1"
+    );
+    assert_eq!(
+        wire_context::HKDF_INFO_FILE_MAC_KEY_V1,
+        "kapsaro:hkdf-info:file:mac-key@1"
+    );
+    assert_eq!(
+        wire_context::HKDF_INFO_KV_CEK_V1,
+        "kapsaro:hkdf-info:kv:cek@1"
+    );
+    assert_eq!(
+        wire_context::HKDF_INFO_KV_MAC_KEY_V1,
+        "kapsaro:hkdf-info:kv:mac-key@1"
+    );
+    assert_eq!(
+        wire_context::MAC_DOMAIN_KEY_POSSESSION_V1,
+        "kapsaro:mac:key-possession@1"
+    );
+    assert_eq!(
+        wire_context::SIG_DOMAIN_ARTIFACT_SIGNATURE_V1,
+        "kapsaro:sig:artifact-signature@1"
+    );
+    assert_eq!(
+        wire_context::SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V1,
+        "kapsaro:sshsig:private-key:protection@1"
+    );
+    assert_eq!(
+        wire_context::SSHSIG_MESSAGE_PUBLIC_KEY_ATTESTATION_V1,
+        "kapsaro:sshsig:public-key:attestation@1"
+    );
+    assert_eq!(
+        wire_context::SSHSIG_MESSAGE_DETERMINISM_CHECK_V1,
+        b"kapsaro:sshsig:determinism-check@1"
+    );
+    assert_eq!(
+        wire_context::HASH_DOMAIN_RECIPIENT_SET_V1,
+        "kapsaro:hash:recipient-set@1"
+    );
+}
 
 /// Test HPKE info for kv-file (WRAP line) - v9 format.
 #[test]
@@ -27,6 +100,36 @@ fn test_hpke_info_kv_file() {
     assert_eq!(parsed["p"], wire_context::HPKE_INFO_KV_WRAP_V1);
     assert_eq!(parsed["sid"], sid.to_string());
     assert_eq!(parsed["kid"], kid);
+}
+
+#[test]
+fn test_public_key_attestation_body_uses_context_golden_bytes() {
+    let keys = IdentityKeys {
+        kem: jwk_public_key(jwk::CURVE_X25519, X25519_PUBLIC_KEY),
+        sig: jwk_public_key(jwk::CURVE_ED25519, ED25519_PUBLIC_KEY),
+    };
+    let input = AttestationBodyInput {
+        subject_handle: ALICE_MEMBER_HANDLE,
+        keys: &keys,
+        binding_claims: None,
+        created_at: None,
+        expires_at: "2027-01-15T00:00:00Z",
+    };
+
+    let body = build_attestation_body_bytes(&input).unwrap();
+
+    assert_eq!(
+        std::str::from_utf8(&body).unwrap(),
+        concat!(
+            r#"{"expires_at":"2027-01-15T00:00:00Z","#,
+            r#""keys":{"kem":{"crv":"X25519","kty":"OKP","#,
+            r#""x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},"#,
+            r#""sig":{"crv":"Ed25519","kty":"OKP","#,
+            r#""x":"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}},"#,
+            r#""p":"kapsaro:sshsig:public-key:attestation@1","#,
+            r#""subject_handle":"alice@example.com"}"#
+        )
+    );
 }
 
 /// Test HPKE info for file-enc - v7 format.
@@ -153,4 +256,12 @@ fn test_aad_private_key() {
     assert_eq!(parsed["kid"], "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(parsed["alg"]["fpr"], "SHA256:ABCDEFGH123456789");
     assert_eq!(parsed["expires_at"], "2027-01-15T00:00:00Z");
+}
+
+fn jwk_public_key(curve: &str, x: &str) -> JwkOkpPublicKey {
+    JwkOkpPublicKey {
+        kty: "OKP".to_string(),
+        crv: curve.to_string(),
+        x: x.to_string(),
+    }
 }

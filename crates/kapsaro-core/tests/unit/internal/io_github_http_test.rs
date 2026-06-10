@@ -2,16 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    build_github_api_url_from_base, build_github_keys_url, build_github_request,
-    build_github_user_by_id_url, build_github_user_by_login_url, build_http_client,
-    fetch_github_keys, fetch_github_user_by_login, parse_github_keys, parse_github_user_response,
-    GitHubKeyRecord,
+    build_github_api_url_from_base, build_github_keys_url, build_github_user_by_id_url,
+    build_github_user_by_login_url, build_http_client, fetch_github_keys,
+    fetch_github_user_by_login, parse_github_keys, parse_github_user_response, GitHubKeyRecord,
 };
 use crate::model::public_key::GithubAccount;
-use crate::test_utils::EnvGuard;
 use crate::Error;
 use reqwest::ResponseBuilderExt;
-use serial_test::serial;
 
 fn response(status: u16, body: &'static str) -> reqwest::Response {
     http::Response::builder()
@@ -180,37 +177,6 @@ async fn test_parse_github_keys_response_invalid_json_error() {
         "unexpected: {}",
         error.format_user_message()
     );
-}
-
-#[test]
-#[serial]
-fn test_build_github_request_sends_github_token() {
-    let _guard = EnvGuard::new(&["GITHUB_TOKEN"]);
-    std::env::set_var("GITHUB_TOKEN", "test-token");
-    let client = build_http_client().unwrap();
-
-    let request = build_github_request(&client, "http://example.test")
-        .build()
-        .unwrap();
-
-    assert_eq!(
-        request.headers().get("Authorization").unwrap(),
-        "Bearer test-token"
-    );
-}
-
-#[test]
-#[serial]
-fn test_build_github_request_omits_auth_header_without_github_token() {
-    let _guard = EnvGuard::new(&["GITHUB_TOKEN"]);
-    std::env::remove_var("GITHUB_TOKEN");
-    let client = build_http_client().unwrap();
-
-    let request = build_github_request(&client, "http://example.test")
-        .build()
-        .unwrap();
-
-    assert!(request.headers().get("Authorization").is_none());
 }
 
 #[tokio::test]

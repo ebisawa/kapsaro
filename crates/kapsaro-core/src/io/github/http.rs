@@ -45,10 +45,6 @@ pub(crate) fn build_http_client() -> Result<reqwest::Client> {
         .map_err(|e| Error::build_config_error(format!("Failed to create HTTP client: {}", e)))
 }
 
-fn build_github_request(client: &reqwest::Client, url: &str) -> reqwest::RequestBuilder {
-    apply_github_auth(client.get(url))
-}
-
 fn build_github_api_url(path_segments: &[&str]) -> Result<reqwest::Url> {
     let url = reqwest::Url::parse(GITHUB_API_BASE_URL).map_err(|e| {
         Error::build_config_error(format!("Failed to parse GitHub API base URL: {}", e))
@@ -66,13 +62,6 @@ fn build_github_api_url_from_base(
     Ok(url)
 }
 
-fn apply_github_auth(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-        return request.header("Authorization", format!("Bearer {}", token));
-    }
-    request
-}
-
 /// Generic user lookup used by both `fetch_github_user_by_id` and
 /// `fetch_github_user_by_login`.
 ///
@@ -87,15 +76,12 @@ async fn fetch_github_user_api<T, F>(
 where
     F: FnOnce(GitHubUser) -> T,
 {
-    let response = build_github_request(client, url.as_str())
-        .send()
-        .await
-        .map_err(|e| {
-            Error::build_verification_error(
-                "V-GITHUB-API".to_string(),
-                format!("Failed to fetch GitHub user: {}", e),
-            )
-        })?;
+    let response = client.get(url.as_str()).send().await.map_err(|e| {
+        Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            format!("Failed to fetch GitHub user: {}", e),
+        )
+    })?;
 
     parse_github_user_response(response, context_label, transform).await
 }
@@ -197,15 +183,12 @@ async fn fetch_github_keys_with_url(
     client: &reqwest::Client,
     url: reqwest::Url,
 ) -> Result<Vec<GitHubKeyRecord>> {
-    let response = build_github_request(client, url.as_str())
-        .send()
-        .await
-        .map_err(|e| {
-            Error::build_verification_error(
-                "V-GITHUB-API".to_string(),
-                format!("Failed to fetch GitHub keys: {}", e),
-            )
-        })?;
+    let response = client.get(url.as_str()).send().await.map_err(|e| {
+        Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            format!("Failed to fetch GitHub keys: {}", e),
+        )
+    })?;
     parse_github_keys(response).await
 }
 

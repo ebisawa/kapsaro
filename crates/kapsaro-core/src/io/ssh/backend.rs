@@ -14,3 +14,7 @@ pub mod ssh_keygen;
 
 pub use factory::build_backend;
 pub use signature_backend::SignatureBackend;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_ssh_backend_test.rs"]
+mod io_ssh_backend_test;

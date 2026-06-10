@@ -70,3 +70,7 @@ fn validate_filename_matches_owner(path: &Path, document: &TrustStoreDocument) -
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_trust_store_test.rs"]
+mod io_trust_store_test;

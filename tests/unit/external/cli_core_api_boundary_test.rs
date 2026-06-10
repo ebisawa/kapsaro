@@ -443,8 +443,8 @@ fn online_test_support_modules_are_feature_gated() {
     let content = cli_api_test_support_source();
 
     assert!(
-        module_is_feature_gated(&content, "pub mod account {"),
-        "github account test-support module must be gated as a whole"
+        module_is_absent_or_feature_gated(&content, "pub mod account {"),
+        "github account test-support module must be gated as a whole if present"
     );
     assert!(
         module_is_feature_gated(&content, "pub mod github {"),
@@ -509,6 +509,11 @@ fn module_is_feature_gated(content: &str, module_header: &str) -> bool {
         .any(|window| {
             window[0].trim() == "#[cfg(feature = \"online\")]" && window[1].trim() == module_header
         })
+}
+
+fn module_is_absent_or_feature_gated(content: &str, module_header: &str) -> bool {
+    !content.lines().any(|line| line.trim() == module_header)
+        || module_is_feature_gated(content, module_header)
 }
 
 fn assert_absent(content: &str, needle: &str, message: &str) {

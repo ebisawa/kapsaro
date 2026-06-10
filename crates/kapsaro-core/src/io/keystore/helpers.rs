@@ -62,3 +62,7 @@ pub fn resolve_kid(
 
     select_most_recent_kid(keystore_root, member_handle)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/keystore_helpers_test.rs"]
+mod keystore_helpers_test;

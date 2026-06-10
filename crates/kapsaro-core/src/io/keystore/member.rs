@@ -194,3 +194,7 @@ fn select_preferred_kid(
     });
     candidates.into_iter().next()
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_keystore_member_test.rs"]
+mod io_keystore_member_test;

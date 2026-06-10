@@ -3,7 +3,7 @@
 
 //! Unit tests for io/ssh/agent/validation modules
 
-use kapsaro_core::cli_api::test_support::storage::ssh::agent::validation::validate_key_present;
+use crate::io::ssh::agent::validation::validate_key_present;
 use std::path::Path;
 
 #[test]

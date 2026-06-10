@@ -3,15 +3,15 @@
 
 //! Unit tests for Signature Backend abstraction (Phase 12.1 - TDD Red phase)
 
+use crate::io::ssh::agent::client::DefaultAgentSigner;
+use crate::io::ssh::backend::ssh_agent::SshAgentBackend;
+use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
+use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::external::keygen::DefaultSshKeygen;
+use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::test_utils::stub_agent_signer;
-use kapsaro_core::cli_api::test_support::storage::ssh::agent::client::DefaultAgentSigner;
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_agent::SshAgentBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 
 #[test]
 fn test_backend_trait_determinism_check() {

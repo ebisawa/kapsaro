@@ -68,3 +68,7 @@ pub fn decode_ssh_string(data: &[u8]) -> Result<(&[u8], &[u8])> {
 
     Ok((&data[4..4 + len], &data[4 + len..]))
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/io_ssh_protocol_wire_test.rs"]
+mod io_ssh_protocol_wire_test;

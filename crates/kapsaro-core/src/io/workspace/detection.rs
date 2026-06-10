@@ -14,3 +14,7 @@ pub use search::{detect_workspace_root, WorkspaceRoot};
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/workspace_detection_internal_test.rs"]
 mod internal_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/workspace_detection_test.rs"]
+mod workspace_detection_test;

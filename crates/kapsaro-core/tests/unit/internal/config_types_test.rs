@@ -3,9 +3,9 @@
 
 //! Unit tests for config value types.
 
+use crate::config::types::ConfigKey;
+use crate::io::config::paths::get_global_config_path;
 use crate::test_utils::EnvGuard;
-use kapsaro_core::cli_api::test_support::settings::types::ConfigKey;
-use kapsaro_core::cli_api::test_support::storage::config::paths::get_global_config_path;
 use std::path::PathBuf;
 
 #[test]

@@ -51,3 +51,7 @@ impl KeystoreResolver {
         Ok(keystore_root)
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_keystore_resolver_test.rs"]
+mod io_keystore_resolver_test;

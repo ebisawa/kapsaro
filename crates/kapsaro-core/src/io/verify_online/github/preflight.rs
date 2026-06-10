@@ -76,3 +76,7 @@ pub async fn verify_ssh_key_on_github_with_api(
         ),
     ))
 }
+
+#[cfg(all(test, feature = "online"))]
+#[path = "../../../../tests/unit/internal/io_verify_online_github_preflight_test.rs"]
+mod io_verify_online_github_preflight_test;

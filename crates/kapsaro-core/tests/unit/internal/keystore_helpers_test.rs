@@ -3,15 +3,15 @@
 
 //! Unit tests for keystore helpers
 
-use crate::test_utils::save_public_key;
-use crate::test_utils::EnvGuard;
-use kapsaro_core::cli_api::test_support::domain::public_key::{
+use crate::io::config::paths::get_base_dir;
+use crate::io::keystore::active::set_active_kid;
+use crate::io::keystore::helpers::resolve_kid;
+use crate::io::keystore::paths::get_keystore_root_from_base;
+use crate::model::public_key::{
     Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
-use kapsaro_core::cli_api::test_support::storage::config::paths::get_base_dir;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::helpers::resolve_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::paths::get_keystore_root_from_base;
+use crate::test_utils::save_public_key;
+use crate::test_utils::EnvGuard;
 use tempfile::TempDir;
 
 const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -21,21 +21,18 @@ const B64URL_64: &str =
 fn dummy_public_key(member_handle: &str, kid: &str, created_at: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1
-                .to_string(),
+            format: crate::model::wire::format::PUBLIC_KEY_V1.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
             keys: IdentityKeys {
                 kem: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
-                        .to_string(),
+                    crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
                     x: B64URL_32.to_string(),
                 },
                 sig: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
-                        .to_string(),
+                    crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
                     x: B64URL_32.to_string(),
                 },
             },

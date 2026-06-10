@@ -3,15 +3,13 @@
 
 //! Unit tests for trust store file I/O
 
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
+use crate::io::trust::store::{load_trust_store, save_trust_store};
+use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
-use kapsaro_core::cli_api::test_support::helpers::limits::MAX_JSON_DEPTH;
-use kapsaro_core::cli_api::test_support::storage::trust::store::{
-    load_trust_store, save_trust_store,
-};
+use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::support::limits::MAX_JSON_DEPTH;
 use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

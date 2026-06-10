@@ -3,12 +3,12 @@
 
 //! Unit tests for keystore public keys
 
-use crate::test_utils::save_public_key;
-use kapsaro_core::cli_api::test_support::domain::public_key::{
+use crate::io::keystore::active::set_active_kid;
+use crate::io::keystore::public_keys::load_public_keys_for_member_handles;
+use crate::model::public_key::{
     Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
-use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::public_keys::load_public_keys_for_member_handles;
+use crate::test_utils::save_public_key;
 use tempfile::TempDir;
 
 const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -18,28 +18,27 @@ const B64URL_64: &str =
 fn build_test_public_key(member_handle: &str, kid: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1.to_string(),
+            format: crate::model::wire::format::PUBLIC_KEY_V1.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-                            keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
-                        x: B64URL_32.to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
-                        x: B64URL_32.to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
+                    x: B64URL_32.to_string(),
                 },
-                attestation: Attestation {
-                    method:
-                        kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                            .to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
-                    sig: B64URL_64.to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
+                    x: B64URL_32.to_string(),
                 },
+            },
+            attestation: Attestation {
+                method: crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                    .to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
+                sig: B64URL_64.to_string(),
+            },
             binding_claims: None,
             expires_at: "2030-01-01T00:00:00Z".to_string(),
             created_at: Some("2025-01-01T00:00:00Z".to_string()),

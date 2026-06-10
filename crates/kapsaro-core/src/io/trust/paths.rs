@@ -14,3 +14,7 @@ pub fn get_trust_store_dir(base_dir: &Path) -> PathBuf {
 pub fn get_trust_store_file_path(base_dir: &Path, owner_handle: &str) -> PathBuf {
     get_trust_store_dir(base_dir).join(format!("{}.json", owner_handle))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_trust_paths_test.rs"]
+mod io_trust_paths_test;

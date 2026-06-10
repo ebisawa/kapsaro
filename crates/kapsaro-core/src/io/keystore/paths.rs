@@ -98,3 +98,7 @@ pub fn get_public_key_file_path_from_root(
 pub fn get_active_file_path_from_root(keystore_root: &Path, member_handle: &str) -> PathBuf {
     get_member_keystore_path_from_root(keystore_root, member_handle).join("active")
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/keystore_paths_test.rs"]
+mod keystore_paths_test;

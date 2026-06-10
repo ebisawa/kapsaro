@@ -3,13 +3,11 @@
 
 //! Unit tests for pre-flight SSH key verification against GitHub.
 
-use kapsaro_core::cli_api::test_support::domain::public_key::GithubAccount;
-use kapsaro_core::cli_api::test_support::storage::github::http::GitHubKeyRecord;
-use kapsaro_core::cli_api::test_support::storage::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
-use kapsaro_core::cli_api::test_support::storage::verify_online::github::{
-    GitHubApiFuture, GitHubVerificationApi,
-};
-use kapsaro_core::cli_api::test_support::storage::verify_online::VerificationStatus;
+use crate::io::github::http::GitHubKeyRecord;
+use crate::io::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
+use crate::io::verify_online::github::{GitHubApiFuture, GitHubVerificationApi};
+use crate::io::verify_online::VerificationStatus;
+use crate::model::public_key::GithubAccount;
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

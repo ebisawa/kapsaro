@@ -5,7 +5,7 @@
 //!
 //! Tests for keystore resolver.
 
-use kapsaro_core::cli_api::test_support::storage::keystore::resolver::KeystoreResolver;
+use crate::io::keystore::resolver::KeystoreResolver;
 use tempfile::TempDir;
 
 #[test]

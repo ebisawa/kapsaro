@@ -176,3 +176,7 @@ impl StrictKeyCheckingResolution {
         matches!(self.mode, StrictKeyChecking::No)
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/config_types_test.rs"]
+mod config_types_test;

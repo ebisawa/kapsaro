@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::common::{RemovedRecipient, WrapItem};
 use super::signature::ArtifactSignature;
-use super::verification::SignatureVerificationProof;
+use super::verified::VerifiedDocument;
 
 /// FileEncDocument v7 top-level structure
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -148,39 +148,7 @@ impl FileEncDocument {
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone)]
-pub struct VerifiedFileEncDocument {
-    /// The verified document
-    document: FileEncDocument,
-    /// Proof of signature verification
-    proof: SignatureVerificationProof,
-}
-impl VerifiedFileEncDocument {
-    /// Create a new VerifiedFileEncDocument wrapper
-    pub fn new(document: FileEncDocument, proof: SignatureVerificationProof) -> Self {
-        Self { document, proof }
-    }
-
-    /// Get a reference to the verified document
-    pub fn document(&self) -> &FileEncDocument {
-        &self.document
-    }
-
-    /// Get a reference to the verification proof
-    pub fn proof(&self) -> &SignatureVerificationProof {
-        &self.proof
-    }
-
-    /// Get a mutable reference to the verification proof
-    pub(crate) fn proof_mut(&mut self) -> &mut SignatureVerificationProof {
-        &mut self.proof
-    }
-
-    /// Extract the inner document and proof (consumes self)
-    pub fn into_inner(self) -> (FileEncDocument, SignatureVerificationProof) {
-        (self.document, self.proof)
-    }
-}
+pub type VerifiedFileEncDocument = VerifiedDocument<FileEncDocument>;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/model_file_enc_test.rs"]

@@ -5,32 +5,6 @@
 //! Provides accessor-based access after signature verification succeeds.
 
 use crate::model::kv_enc::document::KvEncDocument;
-use crate::model::verification::SignatureVerificationProof;
+use crate::model::verified::VerifiedDocument;
 
-#[derive(Debug, Clone)]
-pub struct VerifiedKvEncDocument {
-    document: KvEncDocument,
-    proof: SignatureVerificationProof,
-}
-
-impl VerifiedKvEncDocument {
-    pub fn new(document: KvEncDocument, proof: SignatureVerificationProof) -> Self {
-        Self { document, proof }
-    }
-
-    pub fn document(&self) -> &KvEncDocument {
-        &self.document
-    }
-
-    pub fn proof(&self) -> &SignatureVerificationProof {
-        &self.proof
-    }
-
-    pub(crate) fn proof_mut(&mut self) -> &mut SignatureVerificationProof {
-        &mut self.proof
-    }
-
-    pub fn into_inner(self) -> (KvEncDocument, SignatureVerificationProof) {
-        (self.document, self.proof)
-    }
-}
+pub type VerifiedKvEncDocument = VerifiedDocument<KvEncDocument>;

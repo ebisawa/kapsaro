@@ -22,19 +22,19 @@ Each section shows which design decisions support which security claims, and whe
 
 ## 1. Security Claims and Boundaries
 
-This chapter explains the design problem Kapsaro addresses and the boundary of its security claims. It starts with the design starting point, then separates what Kapsaro guarantees, what depends on operational assumptions, and what it deliberately does not guarantee.
+This chapter sets out the design problem Kapsaro addresses and the boundary of its security claims. It begins with the design starting point, then separates what Kapsaro guarantees, what depends on operational assumptions, and what it deliberately does not guarantee.
 
 Later chapters justify these claims through the threat model, trust boundary, cryptographic primitives, signature verification, concrete file-enc / kv-enc structures, context binding, trust policy, and attack scenarios.
 
 ### 1.1 Design Starting Point
 
-Kapsaro is an offline-first CLI for helping teams manage secret values such as `.env` files, certificates, and API keys through Git review and history. The motivating problem is that plaintext chat handoffs and manual distribution leave values behind, make it hard to know who could read what at a given time, and make member changes or CI access changes easy to miss.
+Kapsaro is an offline-first CLI that helps teams manage secret values such as `.env` files, certificates, and API keys through Git review and history. The motivating problem is that plaintext chat handoffs and manual distribution leave values behind, make it hard to know who could read what at a given time, and make member changes or CI access changes easy to miss.
 
-At the same time, the Git repository is not a cryptographic trust anchor. Git is useful for replication, history, diff review, and visibility into membership changes, but a developer with write access, compromised CI, or an unauthorized push path can rewrite files in the repository. A design that trusts repository contents at face value would place cryptographic trust in a region that attackers may be able to tamper with.
+At the same time, the Git repository is not a cryptographic trust anchor. Git is useful for replication, history, diff review, and visibility into membership changes, but a developer with write access, compromised CI, or an unauthorized push path can rewrite files in the repository. A design that trusts repository contents at face value would place cryptographic trust in data that attackers may be able to tamper with.
 
 Kapsaro's answer is to use Git as the distribution medium while keeping cryptographic trust out of repository state itself. Secrets are encrypted for each recipient's key, and encrypted artifacts carry enough structure to be verified through signatures and context binding. Each user's private keys, local keystore, local trust store, and SSH signing capability live in the local trusted area, while workspace member data and encrypted artifacts are treated as inputs that must be verified before use.
 
-This separation makes Kapsaro treat "whether the artifact was tampered with," "which key signed it," "who may decrypt in the current workspace," and "whether the user has reviewed that key owner" as different questions. A cryptographically valid signature does not by itself prove that the artifact should be accepted in the current operational state. This premise drives the threat model and trust boundary in §2 and the trust policy in §10.
+Because of this separation, Kapsaro treats "whether the artifact was tampered with," "which key signed it," "who may decrypt in the current workspace," and "whether the user has reviewed that key owner" as distinct questions. A cryptographically valid signature does not by itself prove that the artifact should be accepted in the current operational state. This premise drives the threat model and trust boundary in §2 and the trust policy in §10.
 
 ### 1.2 Guaranteed by Design
 
@@ -107,11 +107,11 @@ The following claims hold when the implementation preserves the invariants in §
 
 Kapsaro's threat model follows from the §1 starting point: Git is useful as a distribution medium, but repository contents are not trusted as-is. The protected assets are secret-value confidentiality, encrypted-artifact integrity, member and key decisions, and the user's local approval history.
 
-This chapter first states which inputs attackers are assumed to be able to manipulate, then explains the operational assumptions required around those inputs. It then separates the local trusted area from repository data that must be verified, and finally explains the layered separation between cryptographic verification, current authorization, user approval, and identity-supporting evidence.
+The chapter first states which inputs attackers are assumed to be able to manipulate, then covers the operational assumptions required around those inputs. It then separates the local trusted area from repository data that must be verified, and finally describes the layered separation between cryptographic verification, current authorization, user approval, and identity-supporting evidence.
 
 ### 2.1 Attacker Model
 
-The main attacks Kapsaro accounts for target repository data, public-key acceptance, components inside encrypted artifacts, first approval, or local approval history. The table below organizes attackers by which boundary they can influence. Attackers who break repository governance or local trusted-area protection are treated as cases where the operational assumptions in §2.2 no longer hold.
+The main attacks Kapsaro accounts for target repository data, public-key acceptance, components inside encrypted artifacts, first approval, or local approval history. The table below groups attackers by the boundary they can influence. Attackers who break repository governance or local trusted-area protection are treated as cases where the operational assumptions in §2.2 no longer hold.
 
 | Attacker | Capability | Assumed Scenario |
 |----------|-----------|----------------|
@@ -124,11 +124,11 @@ The main attacks Kapsaro accounts for target repository data, public-key accepta
 
 ### 2.2 Operational Assumptions
 
-Some decisions cannot be completed by the cryptographic construction alone and depend on user or organizational operation. The important point is not to confuse these operational assumptions with cryptographic trust anchors. Kapsaro verifies tamperable inputs and combines those verification results with operational approval.
+Some decisions cannot be completed by the cryptographic construction alone and depend on user or organizational operation. These operational assumptions must not be confused with cryptographic trust anchors. Kapsaro verifies tamperable inputs and combines those verification results with operational approval.
 
 Repository write control assumes changes to `members/active/` are checked through PR review. The active member list is the authorization source for the current member set / current recipient set, but it is not a cryptographic trust anchor.
 
-Repository-level rollback: a repository-level rollback where an attacker or insider with write access restores a historically valid encrypted file to the current HEAD cannot be detected or prevented by Kapsaro's context bindings alone. Those bindings guarantee artifact integrity and context consistency, not freshness or monotonicity against Git history. Read-path trust review reviews the key owners for the signer and active-resolvable artifact recipients; unresolved recipient `kid`s are reported as warnings. Write paths are stricter: an input artifact with a recipient `kid` that no longer resolves to current `members/active` must be rewrapped before writing. The operational assumption is that protected branches, required review, change management, and pre-deployment checks prevent old secret artifacts from being promoted back to current HEAD.
+Repository-level rollback: when an attacker or insider with write access restores a historically valid encrypted file to the current HEAD, Kapsaro's context bindings alone cannot detect or prevent it. Those bindings guarantee artifact integrity and context consistency, not freshness or monotonicity against Git history. Read-path trust review covers the key owners for the signer and active-resolvable artifact recipients; unresolved recipient `kid`s are reported as warnings. Write paths are stricter: an input artifact with a recipient `kid` that no longer resolves to current `members/active` must be rewrapped before writing. The operational assumption is that protected branches, required review, change management, and pre-deployment checks prevent old secret artifacts from being promoted back to current HEAD.
 
 Local trusted-area protection assumes the user's workstation, local keystore, local trust store (`<KAPSARO_HOME>/trust/`), SSH key, and SSH signing inputs are protected under the user's control. Signatures on the local trust store are used for integrity checks, corruption detection, and format validation, but they do not fully protect against consistent replacement or rollback inside that area.
 
@@ -181,7 +181,7 @@ Untrusted elements:
 - The workspace's active member list (`members/active/`) and incoming candidates (`members/incoming/`) — untrusted repository data. Each public-key document is verified by self-signature and attestation, while use of these directories as the authority for current membership depends on repo governance
 - Workspace `secrets/` directory — verified by signatures
 
-Within this trust boundary, the SSH private key serves two roles: it binds a Kapsaro public key to an SSH key through attestation, and it derives—on each decrypt—the symmetric key that protects the PrivateKey file (`private.json`) in the local keystore from an SSH signature (details in §9.2).
+Within this trust boundary, the SSH private key serves two roles: it binds a Kapsaro public key to an SSH key through attestation, and on each decrypt it produces the SSH signature from which the symmetric key protecting the PrivateKey file (`private.json`) in the local keystore is derived (details in §9.2).
 
 Decrypting a Kapsaro key requires both reach to the corresponding `private.json` in the local keystore and the ability to produce an SSH signature over the message derived from that file's contents. Device compromise and simultaneous capture of `private.json` and SSH signing capability are discussed under the trust assumptions in §9.4.
 
@@ -209,7 +209,7 @@ Stronger confidence in key identity depends on these layers working together. Co
 
 ## 3. Common Cryptographic Foundation
 
-This chapter explains why the standard cryptographic primitives were selected, and summarizes the security properties and limits those primitives inherit from their specifications. Algorithm selection criteria: (a) alignment with IETF-style standards so the construction is uniquely specified, (b) structural reduction of misuse surface, and (c) affinity with the SSH ecosystem (ssh-ed25519, SSHSIG).
+This chapter gives the rationale for each standard cryptographic primitive and summarizes the security properties and limits those primitives inherit from their specifications. The algorithms were selected for (a) alignment with IETF-style standards so the construction is uniquely specified, (b) structural reduction of misuse surface, and (c) affinity with the SSH ecosystem (ssh-ed25519, SSHSIG).
 
 ### 3.1 Algorithm Summary
 
@@ -258,7 +258,7 @@ AEAD for confidentiality and tamper detection of file-enc payloads, kv-enc entri
 Rationale:
 - 24-byte nonce makes random nonce collision risk practically negligible (birthday bound at 2^96)
 - Consistent performance even in environments without AES-NI
-- Does not provide misuse resistance, but practical security is ensured by the large nonce space
+- Does not provide misuse resistance, but the large nonce space provides practical security
 
 Comparison with alternatives:
 
@@ -276,7 +276,7 @@ Known limitations (primitive specification level):
 Tamper detection for encrypted artifacts and kv-enc documents, and self-contained signature verification with embedded signer public keys (§5).
 
 Rationale:
-- Deterministic signatures: Always generates the same signature for the same input. An essential property for use as IKM in PrivateKey protection.
+- Deterministic signatures: the same input always yields the same signature, which is essential for use as IKM in PrivateKey protection.
 - Fast signing and verification
 - Affinity with SSH ecosystem (ssh-ed25519)
 
@@ -310,7 +310,7 @@ Uses:
 Deterministic mapping of JSON objects to bytes so inputs to signatures, AAD, and HPKE `info` do not vary across implementations (§8 overall).
 
 Rationale:
-- Eliminates ambiguity in key ordering and number representation, ensuring consistency of signatures, AAD, and HPKE info
+- Eliminates ambiguity in key ordering and number representation, so signatures, AAD, and HPKE info stay consistent
 - Even when string fields such as the file identifier `sid` contain arbitrary characters, the canonical byte sequence is unambiguous
 
 Example deployment points:
@@ -349,14 +349,14 @@ The choice of 192-bit nonce space serves as a safety net in case future design c
 | ChaCha20-Poly1305 | Key 256 bits | 256 bits | HPKE internal AEAD |
 | HKDF-SHA256 | Output 256 bits | 256 bits | Based on hash function preimage resistance |
 
-The security of the overall system is constrained by the weakest link in the chain of cryptographic primitives. In Kapsaro, X25519 (HPKE) and Ed25519 both provide 128-bit security, so the overall classical security level is 128 bits (equivalent to AES-128). The 256-bit symmetric keys do not elevate the system-wide security level.
+Overall system security is bounded by the weakest primitive in the chain. In Kapsaro, X25519 (HPKE) and Ed25519 both provide 128-bit security, so the overall classical security level is 128 bits (equivalent to AES-128). The 256-bit symmetric keys do not elevate the system-wide security level.
 
 ---
 
 
 ## 4. Key Hierarchy and Key Lifecycle
 
-This chapter organizes key material by type, role, and lifecycle within the trust boundary described in §2.3. How each key is consumed in each protocol is deferred to §6 (file-enc), §7 (kv-enc), and §9 (PrivateKey protection). §8 covers the binding-point summary for the identifiers that represent files, key generations, KV entries, and protocols.
+This chapter covers key material by type, role, and lifecycle within the trust boundary described in §2.3. How each key is consumed in each protocol is deferred to §6 (file-enc), §7 (kv-enc), and §9 (PrivateKey protection). §8 covers the binding-point summary for the identifiers that represent files, key generations, KV entries, and protocols.
 
 ### 4.1 Key Types and Relationships
 
@@ -426,7 +426,7 @@ Promoting incoming to active is a recipient add; per §7.8 both file-enc and kv-
 
 ### 4.4 Key Lifecycle
 
-A Kapsaro key pair transitions through a lifecycle from creation to expiration, and may be replaced through key rotation.
+A Kapsaro key pair moves through a lifecycle from creation to expiration, and may be replaced through key rotation.
 
 ```
 creation → active → expired
@@ -441,11 +441,11 @@ creation → active → expired
 
 Active indicates whether new cryptographic operations are allowed for that key generation. Whether an artifact may be accepted in the workspace is separate: embedded `signer_pub` verification and the trust policy in §10 are orthogonal to this state label.
 
-After expired, ciphertext created earlier under that key does not automatically lose cryptographic integrity or context binding. Expiry is an operational boundary for rejecting new wraps and new signatures; using an expired key for decryption or operational artifact signature verification still requires explicit recovery through `--allow-expired-key`, `KAPSARO_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`.
+Once a key expires, ciphertext created earlier under it does not automatically lose cryptographic integrity or context binding. Expiry is an operational boundary for rejecting new wraps and new signatures; using an expired key for decryption or operational artifact signature verification still requires explicit recovery through `--allow-expired-key`, `KAPSARO_ALLOW_EXPIRED_KEY=yes`, or `allow_expired_key="yes"`.
 
 Rotate makes a new `kid` the operational current key. Deleting the old `kid`'s `private.json` from the local keystore prevents HPKE open and decryption for that generation (keystore layout: §9.1.2).
 
-Kapsaro does not provide a cryptographic revocation list in the CRL sense. To stop trusting a key operationally requires workspace updates, re-encryption of artifacts where needed, and manual review of `known_keys` (§13.4).
+Kapsaro does not provide a cryptographic revocation list in the CRL sense. Withdrawing operational trust from a key requires workspace updates, re-encryption of artifacts where needed, and manual review of `known_keys` (§13.4).
 
 #### 4.4.1 Immutability of Key Statement ID (kid)
 
@@ -461,7 +461,7 @@ Key rotation is driven mainly by the `rewrap` command. Typical triggers include 
 
 Recipient addition keeps the existing content key and adds wraps in both formats. Recipient removal regenerates the MK and re-encrypts the full payload for file-enc, and regenerates the MK and re-encrypts every entry for kv-enc (§7.7, §7.8). `--rotate-key` also regenerates the content key (MK) and re-encrypts the entire payload.
 
-`--rotate-key` limits future encryption after leakage; per §13.2 it does not "restore" confidentiality of ciphertext already distributed.
+After a leak, `--rotate-key` limits exposure for future encryption; per §13.2 it does not "restore" confidentiality of ciphertext already distributed.
 
 ---
 
@@ -523,7 +523,7 @@ Thus the signature binds the entire interpretable document body and the key-poss
 
 For file-enc and kv-enc, the Ed25519 verification key is always taken from the embedded `signer_pub`. The implementation validates `signer_pub` as a document before verifying the artifact signature with that key. Signer lookup must not fall back to the workspace or local keystore.
 
-Cryptographic verification of an artifact is organized into three layers (Layer A → Layer B → Layer C).
+Cryptographic verification of an artifact proceeds in three layers (Layer A → Layer B → Layer C).
 
 - Layer A. Validity of the `signer_pub` document — Establish that `signer_pub` is a valid `PublicKey` document and has not been tampered with
   - Structure and schema validation — Required fields and format constraints
@@ -532,17 +532,17 @@ Cryptographic verification of an artifact is organized into three layers (Layer 
 - Layer B. Binding the key generation to the artifact — The artifact's `signature.kid` matches `signer_pub.protected.kid` (consistent with the derivation rule in §4.4.1)
 - Layer C. Tamper detection for the artifact body and key-possession proof — Verify `sig` over the signed payload defined in §5.1, using the signing public key from `signer_pub`
 
-HPKE open proceeds only after Layer C succeeds, consistent with the §1.5 invariant do not decrypt before signature verification. After HPKE open, Kapsaro derives the artifact MAC key from the resulting MK, recomputes `signature.mac`, and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
+HPKE open proceeds only after Layer C succeeds, consistent with the §1.5 invariant against decrypting before signature verification. After HPKE open, Kapsaro derives the artifact MAC key from the resulting MK, recomputes `signature.mac`, and verifies that the artifact body, signer `kid`, and content key correspond to each other before plaintext decryption. This key-possession proof is cryptographic evidence of content-key possession for that artifact body and signer key statement; it is not proof of the signer's human identity or authority to update the artifact.
 
 Acceptance gate based on key state (`expires_at`): `expires_at` belongs to the key-generation lifecycle in §4.4. Details are consolidated in §4.4 and §10.
 
-Local trust store exception: trust store documents have no embedded `signer_pub` in `signature`. Verification uses the owner's PublicKey from the local keystore, as in §10.4. This is the only exception to the general `signer_pub`-required rule; it pairs with the fact that the trust store is an approval-cache document, not an authority for current trust state.
+Local trust store exception: trust store documents have no embedded `signer_pub` in `signature`. Verification uses the owner's PublicKey from the local keystore, as in §10.4. This is the only exception to the general `signer_pub`-required rule; it reflects the trust store's role as an approval-cache document, not an authority for current trust state.
 
 ### 5.5 PublicKey Self-Signature
 
 `PublicKey` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
 
-What this establishes is key consistency in §1.6: evidence that the party who created this public-key document held the corresponding Kapsaro signing private key. An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
+This establishes key consistency as defined in §1.6: evidence that the party who created this public-key document held the corresponding Kapsaro signing private key. An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
 
 ### 5.6 SSH Attestation
 
@@ -550,7 +550,7 @@ SSH attestation shows that the Kapsaro key material (KEM / signing) inside `sign
 
 The PublicKey attestation body signed by SSH is the JCS-normalized JSON object containing `p = kapsaro:sshsig:public-key:attestation@1`, `subject_handle`, `keys`, optional `binding_claims`, optional `created_at`, and `expires_at`. It excludes `kid`, `attestation`, and `signature`. SSHSIG signed_data follows the OpenSSH `SSHSIG` format with namespace `kapsaro-attestation`, empty reserved field, hash algorithm `sha256`, and message hash `SHA256(JCS(attestation_body))`.
 
-What is established is correspondence between the Kapsaro public key and the SSH public key. Who owns the SSH key (identity) is not determined by attestation alone. SSH signatures for PrivateKey protection use a different namespace (`kapsaro-key-protection`), and the IKM derivation context is separated in §9.2.1.
+Attestation establishes correspondence between the Kapsaro public key and the SSH public key. Who owns the SSH key (identity) is not determined by attestation alone. SSH signatures for PrivateKey protection use a different namespace (`kapsaro-key-protection`), and the IKM derivation context is separated in §9.2.1.
 
 ### 5.7 Online Verification (GitHub)
 
@@ -746,7 +746,7 @@ The full document layout is as follows.
 
 ### 7.2 Design Rationale for Two-Layer Key Structure
 
-kv-enc uses one MK per file, while the artifact PRK is extracted once from `MK` and `sid`, and each entry CEK is expanded from that PRK with `sid`, `k`, and the entry nonce.
+kv-enc uses one MK per file; the artifact PRK is extracted once from `MK` and `sid`, and each entry CEK is expanded from that PRK with `sid`, `k`, and the entry nonce.
 
 This two-layer structure exists for four reasons.
 
@@ -826,7 +826,7 @@ As with file-enc, signature verification always precedes decryption.
 
 - CEK derivation uses HKDF-SHA256 with context that includes `p = kapsaro:hkdf-info:kv:cek@1`, `sid`, the KEY line prefix, and the entry nonce.
 - The artifact PRK is extracted once per kv-enc document from the MK and the JCS salt `kapsaro:hkdf-salt:kv@1` plus `sid`.
-- Including `sid`, the KEY line prefix, and the nonce in the derivation context ensures that copying an entry to a different file or another KEY does not reproduce the same CEK.
+- Including `sid`, the KEY line prefix, and the nonce in the derivation context means that copying an entry to a different file or another KEY does not reproduce the same CEK.
 
 ### 7.4 Entry AAD
 
@@ -878,7 +878,7 @@ In kv-enc, the MK is always regenerated and all entries are re-encrypted. This i
 
 ## 8. Context Binding and Defence-in-Depth
 
-Kapsaro cryptographically binds each encrypted artifact to its context (which file, which key generation, which entry, which protocol) so that components cannot be swapped, reused, or mixed between different contexts. This is achieved by embedding the file identifier (`sid`), key statement ID (`kid`), KV entry key (`k`), and protocol identifier (`p`) into both the key derivation inputs and the authenticated data, providing multiple independent layers of protection.
+Kapsaro cryptographically binds each encrypted artifact to its context (which file, which key generation, which entry, which protocol) so that components cannot be swapped, reused, or mixed between different contexts. The binding works by embedding the file identifier (`sid`), key statement ID (`kid`), KV entry key (`k`), and protocol identifier (`p`) into both the key derivation inputs and the authenticated data, giving multiple independent layers of protection.
 
 ### 8.1 System of Binding Elements
 
@@ -984,7 +984,7 @@ PrivateKey protection is designed as a two-layer structure.
 
 Two modes re-derive that Layer-2 symmetric key. The PrivateKey material's format and storage location are shared between both modes: they use the same local keystore layout (§9.1.2) and the same ciphertext field. However, the SSH-based and password-based modes use different derivation procedures and different HKDF info strings, so a key derived for one mode cannot be reused as if it belonged to the other.
 
-- SSH-based protection (§9.2): derives the symmetric key from a signature produced by the user's existing SSH Ed25519 key. Intended for normal interactive use and eliminates the need to manage a Kapsaro-specific password.
+- SSH-based protection (§9.2): derives the symmetric key from a signature produced by the user's existing SSH Ed25519 key. Intended for normal interactive use; it removes the need to manage a Kapsaro-specific password.
 - Password-based protection (§9.3): derives the symmetric key from a user-supplied password via Argon2id + HKDF. Intended for CI/CD environments where SSH keys and `ssh-agent` are unavailable.
 
 Trust assumptions common to both are covered in §9.4.
@@ -1011,9 +1011,9 @@ Here `alg.fpr` is only an identifier for the SSH key used to protect that key ge
 
 ### 9.2 SSH-Based Protection
 
-SSH-based protection re-derives the symmetric key that encrypts the contents of the PrivateKey file (`private.json`) from an SSH signature each time the PrivateKey file has to be read. This is how the scheme keeps the PrivateKey file encrypted without any Kapsaro-specific password.
+SSH-based protection re-derives the symmetric key that encrypts the contents of the PrivateKey file (`private.json`) from an SSH signature each time the PrivateKey file needs to be read. This keeps the PrivateKey file encrypted without any Kapsaro-specific password.
 
-The symmetric key used to encrypt the file contents (`enc_key`) is a separate, HKDF-derived key built from the SSH signature's output, distinct from the SSH private key itself. `enc_key` is treated as a per-use ephemeral value and is re-derived by repeating the same procedure whenever the PrivateKey file is opened. Re-deriving `enc_key` requires both the SSH key's signing capability and the target `private.json`'s `protected` header.
+The symmetric key that encrypts the file contents (`enc_key`) is an HKDF-derived key built from the SSH signature output, distinct from the SSH private key itself. `enc_key` is treated as a per-use ephemeral value and is re-derived by repeating the same procedure whenever the PrivateKey file is opened. Re-deriving `enc_key` requires both the SSH key's signing capability and the target `private.json`'s `protected` header.
 
 ### 9.2.1 Key Derivation Pipeline
 
@@ -1021,7 +1021,7 @@ The protection path is a three-stage pipeline.
 
 | Stage | Input | Output | Security role |
 | --- | --- | --- | --- |
-| SSHSIG signing | Sign message (`kapsaro:sshsig:private-key:protection@1` and `ikm_salt`), namespace `kapsaro-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Ensures that only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
+| SSHSIG signing | Sign message (`kapsaro:sshsig:private-key:protection@1` and `ikm_salt`), namespace `kapsaro-key-protection`, hash algorithm `sha256` | Raw Ed25519 signature bytes | Only an actor with SSH signing capability can obtain the signature bytes used as IKM input |
 | HKDF-SHA256 | Raw signature bytes, salt = `hkdf_salt`, info = `kapsaro:hkdf-info:private-key:sshsig@1:{kid}` | `enc_key` | Converts the signature bytes into an `enc_key` scoped to that key generation, so it does not mix with other `kid`s |
 | XChaCha20-Poly1305 | `enc_key`, AAD = `jcs(protected)` | `encrypted.ct` | Encrypts the private key material and makes tampering in the `protected` header fail at decryption time |
 
@@ -1051,13 +1051,13 @@ AAD is `jcs(protected)`. This makes the entire `protected` header part of tamper
 
 Ed25519 (RFC 8032 PureEdDSA) is expected to be deterministic. During encryption, Kapsaro signs the same signed_data twice and confirms that the extracted raw signature bytes match. If they do not, processing aborts.
 
-The reason is that using the signature value as IKM makes non-determinism fatal: encryption and decryption would derive different `enc_key` values and decryption would fail. This check also serves to exclude non-deterministic signers such as FIDO2 Ed25519-SK tokens from this mode early.
+The reason is that using the signature value as IKM makes non-determinism fatal: encryption and decryption would derive different `enc_key` values and decryption would fail. This check also excludes non-deterministic signers, such as FIDO2 Ed25519-SK tokens, from this mode early.
 
 ### 9.2.3 Confidentiality of the Signature Value Used as IKM
 
 The raw Ed25519 signature value used here as IKM is not treated like an ordinary signature value that can be freely exposed for verification. In this path, the signature value itself is directly tied to PrivateKey decryption capability, so it is treated as secret material rather than as a public signature artifact.
 
-The implementation-side memory-hygiene and logging-hygiene implications are discussed later in §12.3, "Memory Handling of Secrets."
+The memory-hygiene and logging-hygiene implications for the implementation are discussed in §12.3, "Memory Handling of Secrets."
 
 ### 9.2.4 Conditions for Successful Decryption
 
@@ -1074,7 +1074,7 @@ Given these, actual decryption proceeds in three steps.
 2. Reconstruct IKM and `enc_key` from the target private.json protected header (`ikm_salt`, `hkdf_salt`, `kid`) plus SSH signing capability
 3. Decrypt using `jcs(protected)` as AAD so that header tampering is detected
 
-Accordingly, the symmetric key that decrypts the PrivateKey file is reconstructed to the same value whenever a corresponding SSH signature is obtained. Any actor that can reach the contents of `private.json` and produce an SSH signature over the message derived from those contents can reconstruct that symmetric key and decrypt the PrivateKey file. Trust assumptions are discussed in §9.4.
+The symmetric key that decrypts the PrivateKey file therefore reconstructs to the same value whenever a corresponding SSH signature is obtained. Any actor that can reach the contents of `private.json` and produce an SSH signature over the message derived from those contents can reconstruct that symmetric key and decrypt the PrivateKey file. Trust assumptions are discussed in §9.4.
 
 ### 9.3 Password-Based Protection
 
@@ -1082,11 +1082,11 @@ As an alternative to SSH-based protection, Kapsaro supports password-based priva
 
 ### 9.3.1 Use Case
 
-Many CI platforms provide "secret variables" that are stored securely and exposed as environment variables at runtime. This protection scheme enables exporting a Kapsaro private key in a portable, password-protected format that can be registered as a CI secret variable and used without any SSH infrastructure.
+Many CI platforms provide "secret variables" that are stored securely and exposed as environment variables at runtime. This scheme lets a Kapsaro private key be exported in a portable, password-protected format that can be registered as a CI secret variable and used without any SSH infrastructure.
 
 ### 9.3.2 Key Derivation Pipeline
 
-In this scheme, Password plus `ikm_salt` is fed into Argon2id to derive a 32-byte IKM, and that IKM plus `hkdf_salt` is then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `kapsaro:hkdf-info:private-key:password@1:{kid}`, which is intentionally distinct from the SSH-based path (`kapsaro:hkdf-info:private-key:sshsig@1:{kid}`) for domain separation.
+The password and `ikm_salt` are fed into Argon2id to derive a 32-byte IKM; that IKM and `hkdf_salt` are then fed into HKDF-SHA256 to derive the encryption key. The HKDF info string is `kapsaro:hkdf-info:private-key:password@1:{kid}`, which is intentionally distinct from the SSH-based path (`kapsaro:hkdf-info:private-key:sshsig@1:{kid}`) for domain separation.
 
 `ikm_salt` is reserved for Argon2id and `hkdf_salt` for HKDF so that the two derivation steps remain clearly separated.
 
@@ -1128,7 +1128,7 @@ Under normal operation all three elements reside together on the user's device, 
 
 Access to SSH signing capability alone — connecting to an ssh-agent, or supplying signatures via agent forwarding — is not by itself a threat to PrivateKey protection. Decryption only succeeds when the attacker can also reach `private.json`; both are required.
 
-Maintaining the device itself (OS / filesystem access controls, device hygiene, protection of the key-storage area) and the SSH key's operational hygiene (passphrase, agent confirmation mode) are responsibilities outside Kapsaro itself. Given those responsibilities are upheld, the effective strength of this scheme rests on preventing simultaneous possession of the three elements above.
+Maintaining the device itself (OS / filesystem access controls, device hygiene, protection of the key-storage area) and the SSH key's operational hygiene (passphrase, agent confirmation mode) are responsibilities outside Kapsaro itself. Provided those responsibilities are met, the effective strength of this scheme rests on preventing simultaneous possession of the three elements above.
 
 ---
 
@@ -1147,7 +1147,7 @@ The local trust store is a per-user approval cache. `known_keys` records key own
 
 ### 10.2 Read-Path Trust Decision
 
-The read path decides whether an encrypted artifact from a repository that an attacker may modify may proceed to plaintext decryption. Kapsaro does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-HPKE-open key-possession proof verification have completed.
+The read path decides whether an encrypted artifact, coming from a repository an attacker may modify, may proceed to plaintext decryption. Kapsaro does not decrypt plaintext until structural validation, `signer_pub` validation, signature verification including `signature.mac`, the trust decision, format-specific reference consistency checks, and post-HPKE-open key-possession proof verification have completed.
 
 Successful signature verification is not enough to accept an artifact. On read paths, Kapsaro checks whether the signer is present in current `members/active`, or whether the user has accepted the signer through the limited exception in §10.5. It also checks `known_keys` to determine whether the user has reviewed the signer and any recipient that resolves to current `members/active`. If the signer key or the private key used to recover the MK is expired, `decrypt`, `get`, `run`, and `list` fail by default and continue with a warning only when explicit expired-key recovery is enabled.
 
@@ -1199,7 +1199,7 @@ An artifact that was legitimately signed in the past and remains consistent with
 
 ## 11. Major Attack Scenarios
 
-For concrete attack analysis, the tables in this chapter directly use the context-binding identifiers (`sid`, `kid`, `k`, `p`) and internal names such as `signer_pub`, `members/active`, and `known_keys`, which earlier chapters described in abstract terms. See §8 for the formal definitions and binding-point summary, and §10 for the trust-policy roles.
+To analyze concrete attacks, the tables in this chapter directly use the context-binding identifiers (`sid`, `kid`, `k`, `p`) and internal names such as `signer_pub`, `members/active`, and `known_keys`, which earlier chapters described in abstract terms. See §8 for the formal definitions and binding-point summary, and §10 for the trust-policy roles.
 
 ### 11.1 Repository Tampering
 
@@ -1234,7 +1234,7 @@ For concrete attack analysis, the tables in this chapter directly use the contex
 | When it weakens | Misapproval during manual review, failure of repo governance, GitHub account compromise, or leakage of the SSH attestor private key |
 | Expected failure point | Human rejection or promotion refusal due to verification failure |
 
-Important: Self-signature prevents tampering with an existing PublicKey, but it cannot prevent an attacker from creating a new PublicKey with their own key while following the legitimate procedure. The primary defense against new-key insertion is TOFU-based manual review and repo governance. During initial bootstrap or first contact with a signer, out-of-band verification through a channel outside the repository is desirable.
+Important: Self-signature prevents tampering with an existing PublicKey, but it cannot prevent an attacker from creating a new PublicKey with their own key while following the legitimate procedure. The primary defense against new-key insertion is TOFU-based manual review and repo governance. During initial bootstrap or first contact with a signer, verification through an out-of-band channel outside the repository is desirable.
 
 #### 11.2.3 Local Trust Store Tampering
 
@@ -1362,7 +1362,7 @@ Kapsaro does not guarantee complete erasure from process memory. Memory zeroizat
 
 ### 13.2 Key Compromise and Forward Secrecy
 
-HPKE Base mode provides ephemeral-key isolation per wrap via ephemeral keys. However, if a recipient's long-term private key is compromised, all existing wraps for that recipient can be opened. Kapsaro does not claim strong system-wide forward secrecy.
+HPKE Base mode isolates each wrap with a fresh ephemeral key. However, if a recipient's long-term private key is compromised, all existing wraps for that recipient can be opened. Kapsaro does not claim strong system-wide forward secrecy.
 
 If the SSH private key used for PrivateKey protection, or equivalent SSH signing authority, is compromised together with access to the corresponding `private.json` record in the local keystore, the Kapsaro private key protected by that SSH key must be treated as effectively compromised. Because the same SSH key can protect multiple Kapsaro keys, running `rewrap --rotate-key` only for affected artifacts is not sufficient by itself.
 
@@ -1374,7 +1374,7 @@ Even if a recipient is removed, content that was previously decryptable cannot b
 
 A repository-level rollback that restores an older encrypted file from Git history to the current HEAD is a special case of this property. The old artifact can still carry signatures, recipient bindings, and context bindings that were valid at the historical point when it was produced, so context binding alone can only observe it as an "old but valid" artifact.
 
-Read-path trust review does not turn the artifact member set into a freshness signal. It reviews the key owners for the signer and active-resolvable artifact recipients, while unresolved recipient `kid`s are warned about to preserve readability of historical artifacts. Write paths provide a stricter normalization point: an input artifact with recipients outside current `members/active` must be rewrapped before ordinary writes can persist new state.
+Read-path trust review does not turn the artifact member set into a freshness signal. It reviews the key owners for the signer and active-resolvable artifact recipients, while unresolved recipient `kid`s produce warnings, preserving readability of historical artifacts. Write paths provide a stricter normalization point: an input artifact with recipients outside current `members/active` must be rewrapped before ordinary writes can persist new state.
 
 When removing a member, review `disclosed` entries and rotate the actual secret values (database passwords, API keys, certificates, etc.) that the removed member had access to. `rewrap --rotate-key` and membership updates alone do not eliminate the risk of old-value reactivation, so external revocation / secret rotation and repo governance that prevents Git-history rollback from being promoted to current HEAD must be used together.
 
@@ -1488,7 +1488,7 @@ graph TB
     style CEK fill:#90EE90
 ```
 
-This diagram provides a quick overview of which secret protects which object and where signatures or wraps are applied. For concrete binding points and verification order, prefer the main text in §8 and §12.
+This diagram gives a quick overview of which secret protects which object and where signatures or wraps are applied. For concrete binding points and verification order, see §8 and §12 in the main text.
 
 ### Appendix B: Security Operations Checklist
 

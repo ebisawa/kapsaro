@@ -1,13 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Verified private key types for functional domain modeling
+//! Verified wrapper types for functional domain modeling
 //!
-//! This module provides type-level guarantees that encrypted documents have been
-//! successfully decrypted and validated. The `VerifiedPrivateKey` wrapper ensures that
-//! decryption and validation must occur before using the plaintext in operations.
+//! This module provides type-level guarantees that documents have passed the
+//! required verification or decryption step before trusted operations use them.
 
 use super::private_key::PrivateKeyPlaintext;
+use super::verification::SignatureVerificationProof;
 
 /// Proof of successful decryption and validation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +43,48 @@ impl DecryptionProof {
     /// Get the SSH fingerprint used for decryption.
     pub fn ssh_fpr(&self) -> Option<&str> {
         self.ssh_fpr.as_deref()
+    }
+}
+
+/// A document that has been verified to have a valid signature.
+///
+/// This type ensures that signature verification must occur before the document
+/// can be used in operations that require trust. The verification process validates:
+/// - The signature is cryptographically valid
+/// - The signer's public key is trusted or otherwise accepted by the verification path
+/// - For embedded signer_pub, the PublicKey document itself is verified
+#[derive(Debug, Clone)]
+pub struct VerifiedDocument<T> {
+    /// The verified document.
+    document: T,
+    /// Proof of signature verification.
+    proof: SignatureVerificationProof,
+}
+
+impl<T> VerifiedDocument<T> {
+    /// Create a new verified document wrapper.
+    pub fn new(document: T, proof: SignatureVerificationProof) -> Self {
+        Self { document, proof }
+    }
+
+    /// Get a reference to the verified document.
+    pub fn document(&self) -> &T {
+        &self.document
+    }
+
+    /// Get a reference to the verification proof.
+    pub fn proof(&self) -> &SignatureVerificationProof {
+        &self.proof
+    }
+
+    /// Get a mutable reference to the verification proof.
+    pub(crate) fn proof_mut(&mut self) -> &mut SignatureVerificationProof {
+        &mut self.proof
+    }
+
+    /// Extract the inner document and proof (consumes self).
+    pub fn into_inner(self) -> (T, SignatureVerificationProof) {
+        (self.document, self.proof)
     }
 }
 

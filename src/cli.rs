@@ -30,6 +30,10 @@ mod unset;
 
 mod config;
 
+#[cfg(test)]
+#[path = "../tests/unit/internal/stderr_color_guard.rs"]
+pub(crate) mod stderr_color_guard;
+
 use config::ConfigArgs;
 use decrypt::DecryptArgs;
 use doctor::DoctorArgs;

@@ -5,8 +5,9 @@ use crate::cli::common::trust::{
     format_member_key_review_lines, format_non_member_signer_review_lines,
     format_recipient_set_review_lines, format_signer_key_review_lines, recipient_set_review_prompt,
 };
+use crate::cli::stderr_color_guard::StderrColorGuard;
 use crate::test_utils::{kid as test_kid, member_handle};
-use console::{colors_enabled_stderr, set_colors_enabled_stderr, strip_ansi_codes};
+use console::strip_ansi_codes;
 use kapsaro_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
 use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
@@ -17,24 +18,6 @@ use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::Arti
 use kapsaro_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
 use serial_test::serial;
 use uuid::Uuid;
-
-struct StderrColorGuard {
-    original: bool,
-}
-
-impl StderrColorGuard {
-    fn new(enabled: bool) -> Self {
-        let original = colors_enabled_stderr();
-        set_colors_enabled_stderr(enabled);
-        Self { original }
-    }
-}
-
-impl Drop for StderrColorGuard {
-    fn drop(&mut self) {
-        set_colors_enabled_stderr(self.original);
-    }
-}
 
 #[test]
 fn test_format_signer_key_review_lines_uses_user_facing_copy_and_github_account() {

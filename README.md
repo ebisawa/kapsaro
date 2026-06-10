@@ -140,6 +140,8 @@ If you want setup and operational guidance:
 
 - [User Guide (English)](guides/user_guide_en.md)
 - [User Guide (Japanese)](guides/user_guide_ja.md)
+- [Windows / WSL2 Supplemental Guide (English)](guides/wsl_user_guide_en.md)
+- [Windows / WSL2 Supplemental Guide (Japanese)](guides/wsl_user_guide_ja.md)
 
 If you want the security model and design details:
 

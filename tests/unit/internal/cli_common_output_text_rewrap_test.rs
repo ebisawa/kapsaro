@@ -1,11 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use serial_test::serial;
+
 use super::format_rewrap_batch_outcome_lines;
 use crate::cli::common::output::rewrap::{RewrapBatchView, RewrapFailureView};
+use crate::cli::stderr_color_guard::StderrColorGuard;
 
 #[test]
+#[serial]
 fn test_format_rewrap_batch_outcome_lines_keeps_long_paths_and_errors_inline() {
+    let _guard = StderrColorGuard::new(false);
     let processed_path = format!(
         "secrets/{}/rotated-secret.file.enc",
         "very-long-directory-name/".repeat(5)

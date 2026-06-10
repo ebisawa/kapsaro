@@ -140,6 +140,8 @@ kapsaro doctor
 
 - [User Guide (English)](guides/user_guide_en.md)
 - [User Guide (Japanese)](guides/user_guide_ja.md)
+- [Windows / WSL2 補足ガイド (English)](guides/wsl_user_guide_en.md)
+- [Windows / WSL2 補足ガイド (Japanese)](guides/wsl_user_guide_ja.md)
 
 暗号設計やセキュリティモデルを詳しく確認したい場合:
 

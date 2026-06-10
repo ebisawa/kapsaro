@@ -9,6 +9,7 @@ use crate::app::trust::enforcement::{
     build_signer_identity, enforce_artifact_recipient_set_trust, enforce_signer_trust,
     evaluate_read_artifact_recipient_keys,
 };
+use crate::app::trust::outcome::ReadRecipientKeyTrust;
 use crate::app::trust::policy::{CommandCapability, ReadTrustPolicy, TrustPolicy};
 use crate::app::trust::snapshot::{load_read_trust_context, TrustContext};
 use crate::app::trust::{ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome};
@@ -39,40 +40,75 @@ pub fn evaluate_read_artifact_trust<P>(
 where
     P: ReadTrustPolicy,
 {
+    let loaded = resolve_read_trust_context_for_policy::<P>(options, execution)?;
+    let trust_ctx = &loaded.trust_ctx;
+    let signer_outcome =
+        evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, current_recipients)?;
+    let recipient_trust = evaluate_read_artifact_recipient_keys(trust_ctx, current_recipient_set)?;
+    debug_read_artifact_trust::<P>(options, proof, current_recipient_set, &recipient_trust);
+    Ok(build_read_artifact_trust_plan(
+        signer_outcome,
+        recipient_trust.outcome,
+        loaded.warnings,
+        recipient_trust.warnings,
+    ))
+}
+
+fn resolve_read_trust_context_for_policy<P>(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+) -> Result<crate::app::trust::snapshot::ReadTrustContextLoadResult>
+where
+    P: ReadTrustPolicy,
+{
     let workspace = execution.workspace_root.as_ref().ok_or_else(|| {
         crate::Error::build_invalid_operation_error(format!(
             "Workspace is required for {} trust evaluation",
             P::CAPABILITY.label()
         ))
     })?;
-    let loaded = load_read_trust_context(
+    load_read_trust_context(
         options,
         &workspace.root_path,
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
         Some(execution.key_ctx.local_key_identity()),
         options.debug,
-    )?;
-    let trust_ctx = &loaded.trust_ctx;
-    let signer_outcome =
-        evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, current_recipients)?;
-    let recipient_trust = evaluate_read_artifact_recipient_keys(trust_ctx, current_recipient_set)?;
-    if options.debug {
-        debug!(
-            "[TRUST] read evaluation: capability={}, signer_kid={}, recipient_count={}, stale_recipient_warnings={}",
-            P::CAPABILITY.label(),
-            format_kid_half_display_lossy(&proof.kid),
-            current_recipient_set.recipient_kids().len(),
-            recipient_trust.warnings.len()
-        );
+    )
+}
+
+fn debug_read_artifact_trust<P>(
+    options: &CommonCommandOptions,
+    proof: &SignatureVerificationProof,
+    current_recipient_set: &ArtifactRecipientSet,
+    recipient_trust: &ReadRecipientKeyTrust,
+) where
+    P: ReadTrustPolicy,
+{
+    if !options.debug {
+        return;
     }
-    let mut warnings = loaded.warnings;
-    warnings.extend(recipient_trust.warnings);
-    Ok(ReadArtifactTrustPlan {
+    debug!(
+        "[TRUST] read evaluation: capability={}, signer_kid={}, recipient_count={}, stale_recipient_warnings={}",
+        P::CAPABILITY.label(),
+        format_kid_half_display_lossy(&proof.kid),
+        current_recipient_set.recipient_kids().len(),
+        recipient_trust.warnings.len()
+    );
+}
+
+fn build_read_artifact_trust_plan(
+    signer_outcome: SignerTrustOutcome,
+    recipient_outcome: RecipientTrustOutcome,
+    mut warnings: Vec<String>,
+    recipient_warnings: Vec<String>,
+) -> ReadArtifactTrustPlan {
+    warnings.extend(recipient_warnings);
+    ReadArtifactTrustPlan {
         signer_outcome,
-        recipient_outcome: recipient_trust.outcome,
+        recipient_outcome,
         warnings,
-    })
+    }
 }
 
 pub fn evaluate_signer_trust_with_proof(

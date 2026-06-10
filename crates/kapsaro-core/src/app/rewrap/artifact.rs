@@ -64,6 +64,19 @@ impl<'a> RewrapArtifactExecutionContext<'a> {
     }
 }
 
+struct RewrapArtifactConfirmations<
+    'a,
+    ConfirmKnown,
+    ConfirmNonMember,
+    ConfirmRecipients,
+    ConfirmRecipientSet,
+> {
+    known: &'a mut ConfirmKnown,
+    non_member: &'a mut ConfirmNonMember,
+    recipients: &'a mut ConfirmRecipients,
+    recipient_set: &'a mut ConfirmRecipientSet,
+}
+
 pub fn execute_rewrap_artifacts<
     ConfirmKnown,
     ConfirmNonMember,
@@ -83,20 +96,43 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
+    let mut confirmations = RewrapArtifactConfirmations {
+        known: confirm_known,
+        non_member: confirm_non_member,
+        recipients: confirm_recipients,
+        recipient_set: confirm_recipient_set,
+    };
+    execute_rewrap_artifact_paths(ctx, &mut confirmations)
+}
+
+fn execute_rewrap_artifact_paths<
+    ConfirmKnown,
+    ConfirmNonMember,
+    ConfirmRecipients,
+    ConfirmRecipientSet,
+>(
+    ctx: &RewrapArtifactExecutionContext<'_>,
+    confirmations: &mut RewrapArtifactConfirmations<
+        '_,
+        ConfirmKnown,
+        ConfirmNonMember,
+        ConfirmRecipients,
+        ConfirmRecipientSet,
+    >,
+) -> Result<RewrapBatchOutcome>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
     let mut processed_files = Vec::new();
     let mut failed_files = Vec::new();
     let mut warnings = Vec::new();
 
     for file_path in &ctx.plan.artifact_paths {
-        match execute_rewrap_file(
-            file_path,
-            ctx,
-            &mut warnings,
-            confirm_known,
-            confirm_non_member,
-            confirm_recipients,
-            confirm_recipient_set,
-        ) {
+        match execute_rewrap_file(file_path, ctx, &mut warnings, confirmations) {
             Ok(()) => processed_files.push(RewrapFileSuccess {
                 output_path: file_path.clone(),
             }),
@@ -108,12 +144,24 @@ where
         }
     }
 
-    Ok(RewrapBatchOutcome {
+    Ok(build_rewrap_batch_outcome(
+        processed_files,
+        failed_files,
+        warnings,
+    ))
+}
+
+fn build_rewrap_batch_outcome(
+    processed_files: Vec<RewrapFileSuccess>,
+    failed_files: Vec<RewrapFileFailure>,
+    warnings: Vec<String>,
+) -> RewrapBatchOutcome {
+    RewrapBatchOutcome {
         processed_files,
         failed_files,
         promoted_member_handles: Vec::new(),
         warnings,
-    })
+    }
 }
 
 fn collect_current_recipient_handles(
@@ -132,10 +180,13 @@ fn execute_rewrap_file<ConfirmKnown, ConfirmNonMember, ConfirmRecipients, Confir
     file_path: &Path,
     ctx: &RewrapArtifactExecutionContext<'_>,
     warnings: &mut Vec<String>,
-    confirm_known: &mut ConfirmKnown,
-    confirm_non_member: &mut ConfirmNonMember,
-    confirm_recipients: &mut ConfirmRecipients,
-    confirm_recipient_set: &mut ConfirmRecipientSet,
+    confirmations: &mut RewrapArtifactConfirmations<
+        '_,
+        ConfirmKnown,
+        ConfirmNonMember,
+        ConfirmRecipients,
+        ConfirmRecipientSet,
+    >,
 ) -> Result<()>
 where
     ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
@@ -150,29 +201,92 @@ where
             format_path_relative_to_cwd(file_path)
         );
     }
+    let (captured, content) = load_rewrap_artifact_content(file_path)?;
+    execute_loaded_rewrap_file(file_path, &captured, &content, ctx, warnings, confirmations)
+}
+
+fn load_rewrap_artifact_content(file_path: &Path) -> Result<(ReviewedTextFile, EncContent)> {
     let captured = load_reviewed_artifact(file_path)?;
     let content = detect_reviewed_artifact(&captured)?;
-    if let Some(warning) = build_rewrap_decryption_key_warning(&content, ctx)? {
-        push_unique_warning(warnings, warning);
-    }
+    Ok((captured, content))
+}
+
+fn execute_loaded_rewrap_file<
+    ConfirmKnown,
+    ConfirmNonMember,
+    ConfirmRecipients,
+    ConfirmRecipientSet,
+>(
+    file_path: &Path,
+    captured: &ReviewedTextFile,
+    content: &EncContent,
+    ctx: &RewrapArtifactExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+    confirmations: &mut RewrapArtifactConfirmations<
+        '_,
+        ConfirmKnown,
+        ConfirmNonMember,
+        ConfirmRecipients,
+        ConfirmRecipientSet,
+    >,
+) -> Result<()>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
+    collect_rewrap_file_warning(content, ctx, warnings)?;
     review_captured_artifact_signer(
-        &captured,
-        &content,
+        captured,
+        content,
         ctx,
         warnings,
-        confirm_known,
-        confirm_non_member,
-        confirm_recipients,
+        confirmations.known,
+        confirmations.non_member,
+        confirmations.recipients,
     )?;
+    execute_rewrap_artifact_replacement(
+        file_path,
+        captured,
+        content,
+        ctx,
+        warnings,
+        confirmations.recipient_set,
+    )
+}
+
+fn collect_rewrap_file_warning(
+    content: &EncContent,
+    ctx: &RewrapArtifactExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    if let Some(warning) = build_rewrap_decryption_key_warning(content, ctx)? {
+        push_unique_warning(warnings, warning);
+    }
+    Ok(())
+}
+
+fn execute_rewrap_artifact_replacement<ConfirmRecipientSet>(
+    file_path: &Path,
+    captured: &ReviewedTextFile,
+    content: &EncContent,
+    ctx: &RewrapArtifactExecutionContext<'_>,
+    warnings: &mut Vec<String>,
+    confirm_recipient_set: &mut ConfirmRecipientSet,
+) -> Result<()>
+where
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
     let rewritten = rewrite_and_review_output_artifact(
         file_path,
-        &content,
+        content,
         ctx,
         warnings,
         confirm_recipient_set,
     )?;
-    captured.save_replacement(&rewritten)?;
-    Ok(())
+    captured.save_replacement(&rewritten)
 }
 
 fn rewrite_and_review_output_artifact<ConfirmRecipientSet>(

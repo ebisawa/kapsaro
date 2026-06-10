@@ -40,6 +40,11 @@ pub struct PromotionReviewSession {
     prompt_candidates: Vec<IncomingPromotionCandidate>,
 }
 
+struct PromotionReviewCandidates {
+    auto_accepted: Vec<IncomingPromotionCandidate>,
+    prompt: Vec<IncomingPromotionCandidate>,
+}
+
 impl PromotionReviewSession {
     pub fn view(&self) -> &PromotionReviewView {
         &self.view
@@ -69,49 +74,75 @@ pub fn build_promotion_review_plan(
     self_trust: &SelfTrustSet,
     is_interactive: bool,
 ) -> Result<IncomingPromotionReviewPlan> {
-    let mut auto_accepted_candidates = Vec::new();
-    let mut prompt_candidates = Vec::new();
+    let candidates = collect_promotion_review_candidates(report, known_keys, self_trust)?;
+    enforce_interactive_promotion_review(&candidates.prompt, is_interactive)?;
+    Ok(IncomingPromotionReviewPlan {
+        failed_candidates: report.failed.clone(),
+        auto_accepted_candidates: candidates.auto_accepted,
+        prompt_candidates: candidates.prompt,
+    })
+}
+
+fn collect_promotion_review_candidates(
+    report: &IncomingVerificationReport,
+    known_keys: &[KnownKey],
+    self_trust: &SelfTrustSet,
+) -> Result<PromotionReviewCandidates> {
+    let mut auto_accepted = Vec::new();
+    let mut prompt = Vec::new();
     for candidate in report
         .binding_configured
         .iter()
         .chain(report.not_configured.iter())
     {
-        let known_key_state = judge_known_key(
+        collect_promotion_review_candidate(
+            candidate,
             known_keys,
-            &candidate.review.kid,
-            &candidate.review.member_handle,
+            self_trust,
+            &mut auto_accepted,
+            &mut prompt,
         )?;
-        if is_self_promotion_candidate(candidate, self_trust)? {
-            auto_accepted_candidates.push(candidate.clone());
-            continue;
-        }
-        match known_key_state {
-            KnownKeyJudgment::Existing => auto_accepted_candidates.push(candidate.clone()),
-            KnownKeyJudgment::New => prompt_candidates.push(candidate.clone()),
-        }
     }
-
-    if prompt_candidates.is_empty() {
-        return Ok(IncomingPromotionReviewPlan {
-            failed_candidates: report.failed.clone(),
-            auto_accepted_candidates,
-            prompt_candidates,
-        });
-    }
-
-    if !is_interactive {
-        return Err(Error::build_verification_error(
-            "V-TOFU".to_string(),
-            "TOFU confirmation required for incoming members but stdin is not a terminal."
-                .to_string(),
-        ));
-    }
-
-    Ok(IncomingPromotionReviewPlan {
-        failed_candidates: report.failed.clone(),
-        auto_accepted_candidates,
-        prompt_candidates,
+    Ok(PromotionReviewCandidates {
+        auto_accepted,
+        prompt,
     })
+}
+
+fn collect_promotion_review_candidate(
+    candidate: &IncomingPromotionCandidate,
+    known_keys: &[KnownKey],
+    self_trust: &SelfTrustSet,
+    auto_accepted: &mut Vec<IncomingPromotionCandidate>,
+    prompt: &mut Vec<IncomingPromotionCandidate>,
+) -> Result<()> {
+    let known_key_state = judge_known_key(
+        known_keys,
+        &candidate.review.kid,
+        &candidate.review.member_handle,
+    )?;
+    if is_self_promotion_candidate(candidate, self_trust)? {
+        auto_accepted.push(candidate.clone());
+        return Ok(());
+    }
+    match known_key_state {
+        KnownKeyJudgment::Existing => auto_accepted.push(candidate.clone()),
+        KnownKeyJudgment::New => prompt.push(candidate.clone()),
+    }
+    Ok(())
+}
+
+fn enforce_interactive_promotion_review(
+    prompt_candidates: &[IncomingPromotionCandidate],
+    is_interactive: bool,
+) -> Result<()> {
+    if prompt_candidates.is_empty() || is_interactive {
+        return Ok(());
+    }
+    Err(Error::build_verification_error(
+        "V-TOFU".to_string(),
+        "TOFU confirmation required for incoming members but stdin is not a terminal.".to_string(),
+    ))
 }
 
 fn is_self_promotion_candidate(

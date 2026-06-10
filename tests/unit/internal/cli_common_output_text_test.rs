@@ -1,28 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use console::{colors_enabled_stderr, set_colors_enabled_stderr};
 use serial_test::serial;
 
 use crate::cli::common::output::text::format_warning_line;
-
-struct StderrColorGuard {
-    enabled: bool,
-}
-
-impl StderrColorGuard {
-    fn new(enabled: bool) -> Self {
-        let previous = colors_enabled_stderr();
-        set_colors_enabled_stderr(enabled);
-        Self { enabled: previous }
-    }
-}
-
-impl Drop for StderrColorGuard {
-    fn drop(&mut self) {
-        set_colors_enabled_stderr(self.enabled);
-    }
-}
+use crate::cli::stderr_color_guard::StderrColorGuard;
 
 #[test]
 #[serial]

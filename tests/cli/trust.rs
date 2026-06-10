@@ -17,6 +17,7 @@ use kapsaro_core::cli_api::test_support::domain::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
 use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
+use kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339;
 use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
 use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
 use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
@@ -89,11 +90,16 @@ fn save_signed_trust_store_with_recipient_sets(
 }
 
 fn save_signed_trust_store_with_default_recipient_sets(home: &TempDir) {
+    // Keep approval timestamps relative to the current time so purge tests
+    // with "--older-than 1d" stay valid regardless of the execution date.
+    let now = time::OffsetDateTime::now_utc();
+    let old_approved_at = format_timestamp_rfc3339(now - time::Duration::days(30)).unwrap();
+    let new_approved_at = format_timestamp_rfc3339(now).unwrap();
     save_signed_trust_store_with_recipient_sets(
         home,
         vec![
-            build_recipient_set(SID_OLD, &[KID_BOB], "2026-01-01T00:00:00Z"),
-            build_recipient_set(SID_NEW, &[KID_BOB, KID_CHARLIE], "2026-06-01T00:00:00Z"),
+            build_recipient_set(SID_OLD, &[KID_BOB], &old_approved_at),
+            build_recipient_set(SID_NEW, &[KID_BOB, KID_CHARLIE], &new_approved_at),
         ],
     );
 }

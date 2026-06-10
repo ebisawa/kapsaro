@@ -19,6 +19,11 @@ struct RewrapReviewLabels<'a> {
     approval_subject: &'a str,
 }
 
+struct RewrapReviewState {
+    approvals: Vec<ApprovedKnownKey>,
+    seen_known: BTreeSet<KnownKeyIdentity>,
+}
+
 pub fn review_rewrap_input_trust_requirements_with_confirmation<
     ConfirmKnown,
     ConfirmNonMember,
@@ -69,52 +74,165 @@ where
     ConfirmRecipients:
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
 {
-    let mut approvals = Vec::new();
-    let mut seen_known = BTreeSet::new();
-    let labels = RewrapReviewLabels {
-        context: context_label,
+    let state = execute_rewrap_input_review(
+        requirements,
+        context_label,
         approval_subject,
-    };
+        &mut verify_online,
+        &mut confirm_known,
+        &mut confirm_non_member,
+        &mut confirm_recipients,
+    )?;
+    Ok(dedupe_approved_known_keys(state.approvals))
+}
 
+fn execute_rewrap_input_review<VerifyOnline, ConfirmKnown, ConfirmNonMember, ConfirmRecipients>(
+    requirements: &[RewrapInputTrustRequirement],
+    context_label: &str,
+    approval_subject: &str,
+    verify_online: &mut VerifyOnline,
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+    confirm_recipients: &mut ConfirmRecipients,
+) -> Result<RewrapReviewState>
+where
+    VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
+{
+    let mut state = RewrapReviewState {
+        approvals: Vec::new(),
+        seen_known: BTreeSet::new(),
+    };
+    review_rewrap_input_requirements(
+        requirements,
+        RewrapReviewLabels {
+            context: context_label,
+            approval_subject,
+        },
+        verify_online,
+        confirm_known,
+        confirm_non_member,
+        confirm_recipients,
+        &mut state,
+    )?;
+    Ok(state)
+}
+
+fn review_rewrap_input_requirements<
+    VerifyOnline,
+    ConfirmKnown,
+    ConfirmNonMember,
+    ConfirmRecipients,
+>(
+    requirements: &[RewrapInputTrustRequirement],
+    labels: RewrapReviewLabels<'_>,
+    verify_online: &mut VerifyOnline,
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+    confirm_recipients: &mut ConfirmRecipients,
+    state: &mut RewrapReviewState,
+) -> Result<()>
+where
+    VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
+{
     for requirement in requirements {
-        match &requirement.signer_outcome {
-            SignerTrustOutcome::Accepted => {}
-            SignerTrustOutcome::NeedsKnownKeyApproval(candidate) => {
-                review_rewrap_known_key(
-                    requirement,
-                    candidate,
-                    labels,
-                    &mut verify_online,
-                    &mut confirm_known,
-                    &mut seen_known,
-                    &mut approvals,
-                )?;
-            }
-            SignerTrustOutcome::NeedsNonMemberAcceptance {
-                candidate,
-                current_recipients,
-            } => {
-                review_rewrap_non_member(
-                    requirement,
-                    candidate,
-                    current_recipients,
-                    labels,
-                    &mut verify_online,
-                    &mut confirm_non_member,
-                )?;
-            }
-        }
-        review_rewrap_recipient_keys(
+        review_rewrap_input_requirement(
             requirement,
             labels,
-            &mut verify_online,
-            &mut confirm_recipients,
-            &mut seen_known,
-            &mut approvals,
+            verify_online,
+            confirm_known,
+            confirm_non_member,
+            confirm_recipients,
+            state,
         )?;
     }
+    Ok(())
+}
 
-    Ok(dedupe_approved_known_keys(approvals))
+fn review_rewrap_input_requirement<
+    VerifyOnline,
+    ConfirmKnown,
+    ConfirmNonMember,
+    ConfirmRecipients,
+>(
+    requirement: &RewrapInputTrustRequirement,
+    labels: RewrapReviewLabels<'_>,
+    verify_online: &mut VerifyOnline,
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+    confirm_recipients: &mut ConfirmRecipients,
+    state: &mut RewrapReviewState,
+) -> Result<()>
+where
+    VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
+{
+    review_rewrap_signer_requirement(
+        requirement,
+        labels,
+        verify_online,
+        confirm_known,
+        confirm_non_member,
+        &mut state.seen_known,
+        &mut state.approvals,
+    )?;
+    review_rewrap_recipient_keys(
+        requirement,
+        labels,
+        verify_online,
+        confirm_recipients,
+        &mut state.seen_known,
+        &mut state.approvals,
+    )
+}
+
+fn review_rewrap_signer_requirement<VerifyOnline, ConfirmKnown, ConfirmNonMember>(
+    requirement: &RewrapInputTrustRequirement,
+    labels: RewrapReviewLabels<'_>,
+    verify_online: &mut VerifyOnline,
+    confirm_known: &mut ConfirmKnown,
+    confirm_non_member: &mut ConfirmNonMember,
+    seen_known: &mut BTreeSet<KnownKeyIdentity>,
+    approvals: &mut Vec<ApprovedKnownKey>,
+) -> Result<()>
+where
+    VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+{
+    match &requirement.signer_outcome {
+        SignerTrustOutcome::Accepted => Ok(()),
+        SignerTrustOutcome::NeedsKnownKeyApproval(candidate) => review_rewrap_known_key(
+            requirement,
+            candidate,
+            labels,
+            verify_online,
+            confirm_known,
+            seen_known,
+            approvals,
+        ),
+        SignerTrustOutcome::NeedsNonMemberAcceptance {
+            candidate,
+            current_recipients,
+        } => review_rewrap_non_member(
+            requirement,
+            candidate,
+            current_recipients,
+            labels,
+            verify_online,
+            confirm_non_member,
+        ),
+    }
 }
 
 fn review_rewrap_known_key<VerifyOnline, ConfirmKnown>(
@@ -192,7 +310,30 @@ where
     else {
         return Ok(());
     };
-    let reviewed = candidates
+    let reviewed = collect_rewrap_recipient_key_reviews(candidates, verify_online, seen_known)?;
+    if reviewed.is_empty() {
+        return Ok(());
+    }
+    let approved = confirm_recipients(&reviewed, labels.context)?;
+    if approved.len() != reviewed.len() {
+        return Err(build_rewrap_rejection_error(
+            &requirement.file_path,
+            "recipient trust",
+        ));
+    }
+    collect_rewrap_recipient_approvals(approved, seen_known, approvals);
+    Ok(())
+}
+
+fn collect_rewrap_recipient_key_reviews<VerifyOnline>(
+    candidates: &[TrustApprovalCandidate],
+    verify_online: &mut VerifyOnline,
+    seen_known: &BTreeSet<KnownKeyIdentity>,
+) -> Result<Vec<TrustApprovalCandidate>>
+where
+    VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
+{
+    candidates
         .iter()
         .filter(|candidate| {
             !seen_known.contains(&KnownKeyIdentity::new(
@@ -207,23 +348,19 @@ where
                 verify_online,
             )
         })
-        .collect::<Result<Vec<_>>>()?;
-    if reviewed.is_empty() {
-        return Ok(());
-    }
-    let approved = confirm_recipients(&reviewed, labels.context)?;
-    if approved.len() != reviewed.len() {
-        return Err(build_rewrap_rejection_error(
-            &requirement.file_path,
-            "recipient trust",
-        ));
-    }
+        .collect()
+}
+
+fn collect_rewrap_recipient_approvals(
+    approved: Vec<TrustApprovalCandidate>,
+    seen_known: &mut BTreeSet<KnownKeyIdentity>,
+    approvals: &mut Vec<ApprovedKnownKey>,
+) {
     for candidate in approved {
         let approval = ApprovedKnownKey::from(&candidate);
         seen_known.insert(KnownKeyIdentity::from(&approval));
         approvals.push(approval);
     }
-    Ok(())
 }
 
 fn dedupe_approved_known_keys(approvals: Vec<ApprovedKnownKey>) -> Vec<ApprovedKnownKey> {

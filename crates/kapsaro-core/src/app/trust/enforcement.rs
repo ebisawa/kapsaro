@@ -33,7 +33,22 @@ pub fn enforce_signer_trust(
 ) -> Result<SignerTrustOutcome> {
     enforce_scope_strict_mode(trust_ctx, capability)?;
     let candidate = build_trust_approval_candidate(public_key);
+    enforce_signer_judgment(
+        trust_ctx,
+        judgment,
+        capability,
+        current_recipients,
+        candidate,
+    )
+}
 
+fn enforce_signer_judgment(
+    trust_ctx: &TrustContext,
+    judgment: &TrustJudgment,
+    capability: CommandCapability,
+    current_recipients: &[String],
+    candidate: TrustApprovalCandidate,
+) -> Result<SignerTrustOutcome> {
     match judgment {
         TrustJudgment::Trusted => Ok(SignerTrustOutcome::Accepted),
         TrustJudgment::NeedsApproval { member_handle, kid } => {
@@ -51,23 +66,19 @@ pub fn enforce_signer_trust(
             member_handle,
             kid,
             active_member_handle,
-        } => Err(Error::build_verification_error(
-            "E_TRUST_ACTIVE_MEMBER_MISMATCH".to_string(),
-            format!(
-                "Signer '{}' (kid: {}) does not match current active member '{}'",
-                member_handle, kid, active_member_handle
-            ),
+        } => Err(build_active_member_mismatch_error(
+            member_handle,
+            kid,
+            active_member_handle,
         )),
         TrustJudgment::KnownKeyIntegrityAnomaly {
             member_handle,
             kid,
             known_member_handle,
-        } => Err(Error::build_verification_error(
-            "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
-            format!(
-                "kid '{}' exists with subject_handle '{}' but candidate has subject_handle '{}'",
-                kid, known_member_handle, member_handle
-            ),
+        } => Err(build_known_key_integrity_anomaly_error(
+            member_handle,
+            kid,
+            known_member_handle,
         )),
     }
 }
@@ -84,10 +95,7 @@ pub fn enforce_recipients_trust_with_additional(
     recipients: &[PublicKey],
     additional_known_keys: &[KnownKeyIdentity],
 ) -> Result<RecipientTrustOutcome> {
-    let recipient_trust_identities = recipients
-        .iter()
-        .map(TrustIdentity::from_public_key)
-        .collect::<Result<Vec<_>>>()?;
+    let recipient_trust_identities = resolve_recipient_trust_identities(recipients)?;
     let known_key_cache =
         AdditionalKnownKeyCache::new(&trust_ctx.known_keys, additional_known_keys);
     known_key_cache.validate_recipient_integrity(&recipient_trust_identities)?;
@@ -103,33 +111,10 @@ pub fn enforce_recipients_trust_with_additional(
     }
 
     if !trust_ctx.is_interactive {
-        let kids: Vec<String> = needs_approval
-            .iter()
-            .map(|identity| format!("'{}' ({})", identity.kid(), identity.member_handle()))
-            .collect();
-        return Err(Error::build_verification_error(
-            "E_TRUST_RECIPIENT_UNKNOWN".to_string(),
-            format!(
-                "Unknown recipient kid requires approval.\n\
-                 Recipients: {}\n\
-                 Action: Run kapsaro member verify --approve first.",
-                kids.join(", ")
-            ),
-        ));
+        return Err(build_unknown_recipient_error(&needs_approval));
     }
 
-    let pending: Vec<TrustApprovalCandidate> = needs_approval
-        .iter()
-        .filter_map(|identity| {
-            recipients
-                .iter()
-                .find(|pk| {
-                    pk.protected.subject_handle == identity.member_handle()
-                        && pk.protected.kid == identity.kid()
-                })
-                .map(build_trust_approval_candidate)
-        })
-        .collect();
+    let pending = collect_recipient_approval_candidates(recipients, &needs_approval);
     Ok(RecipientTrustOutcome::NeedsManualApproval(pending))
 }
 
@@ -144,39 +129,11 @@ pub fn enforce_artifact_recipient_set_trust(
         return Ok(ArtifactRecipientTrustOutcome::SkippedStrictKeyCheckingNo);
     }
 
-    match judge_recipient_set(&trust_ctx.recipient_sets, current) {
-        RecipientSetJudgment::Accepted => Ok(ArtifactRecipientTrustOutcome::Accepted),
-        RecipientSetJudgment::Missing => {
-            if is_self_only_recipient_set(
-                current,
-                &trust_ctx.active_members_by_kid,
-                &trust_ctx.self_trust,
-            )? {
-                return Ok(ArtifactRecipientTrustOutcome::Accepted);
-            }
-            enforce_artifact_recipient_review(
-                trust_ctx,
-                current.clone(),
-                None,
-                "E_RECIPIENT_TRUST_MISSING",
-            )
-        }
-        RecipientSetJudgment::Changed { approved } => {
-            if is_self_only_recipient_set(
-                current,
-                &trust_ctx.active_members_by_kid,
-                &trust_ctx.self_trust,
-            )? {
-                return Ok(ArtifactRecipientTrustOutcome::Accepted);
-            }
-            enforce_artifact_recipient_review(
-                trust_ctx,
-                current.clone(),
-                Some(approved),
-                "E_RECIPIENT_SET_CHANGED",
-            )
-        }
-    }
+    enforce_artifact_recipient_set_judgment(
+        trust_ctx,
+        current,
+        judge_recipient_set(&trust_ctx.recipient_sets, current),
+    )
 }
 
 pub fn evaluate_read_artifact_recipient_keys(
@@ -193,6 +150,92 @@ pub fn evaluate_read_artifact_recipient_keys(
     };
 
     Ok(ReadRecipientKeyTrust { outcome, warnings })
+}
+
+fn resolve_recipient_trust_identities(recipients: &[PublicKey]) -> Result<Vec<TrustIdentity>> {
+    recipients
+        .iter()
+        .map(TrustIdentity::from_public_key)
+        .collect()
+}
+
+fn build_unknown_recipient_error(needs_approval: &[KnownKeyIdentity]) -> Error {
+    let kids: Vec<String> = needs_approval
+        .iter()
+        .map(|identity| format!("'{}' ({})", identity.kid(), identity.member_handle()))
+        .collect();
+    Error::build_verification_error(
+        "E_TRUST_RECIPIENT_UNKNOWN".to_string(),
+        format!(
+            "Unknown recipient kid requires approval.\n\
+             Recipients: {}\n\
+             Action: Run kapsaro member verify --approve first.",
+            kids.join(", ")
+        ),
+    )
+}
+
+fn collect_recipient_approval_candidates(
+    recipients: &[PublicKey],
+    needs_approval: &[KnownKeyIdentity],
+) -> Vec<TrustApprovalCandidate> {
+    needs_approval
+        .iter()
+        .filter_map(|identity| {
+            recipients
+                .iter()
+                .find(|pk| {
+                    pk.protected.subject_handle == identity.member_handle()
+                        && pk.protected.kid == identity.kid()
+                })
+                .map(build_trust_approval_candidate)
+        })
+        .collect()
+}
+
+fn enforce_artifact_recipient_set_judgment(
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+    judgment: RecipientSetJudgment,
+) -> Result<ArtifactRecipientTrustOutcome> {
+    match judgment {
+        RecipientSetJudgment::Accepted => Ok(ArtifactRecipientTrustOutcome::Accepted),
+        RecipientSetJudgment::Missing => enforce_artifact_recipient_set_review(
+            trust_ctx,
+            current,
+            None,
+            "E_RECIPIENT_TRUST_MISSING",
+        ),
+        RecipientSetJudgment::Changed { approved } => enforce_artifact_recipient_set_review(
+            trust_ctx,
+            current,
+            Some(approved),
+            "E_RECIPIENT_SET_CHANGED",
+        ),
+    }
+}
+
+fn enforce_artifact_recipient_set_review(
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+    approved: Option<RecipientSetRecord>,
+    rule: &str,
+) -> Result<ArtifactRecipientTrustOutcome> {
+    if evaluate_self_only_recipient_set(trust_ctx, current)? {
+        return Ok(ArtifactRecipientTrustOutcome::Accepted);
+    }
+    enforce_artifact_recipient_review(trust_ctx, current.clone(), approved, rule)
+}
+
+fn evaluate_self_only_recipient_set(
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+) -> Result<bool> {
+    is_self_only_recipient_set(
+        current,
+        &trust_ctx.active_members_by_kid,
+        &trust_ctx.self_trust,
+    )
 }
 
 pub fn enforce_write_input_artifact_recipients(
@@ -362,6 +405,34 @@ fn enforce_non_member(
             format_non_member_error_message(trust_ctx, capability, member_handle, kid),
         ))
     }
+}
+
+fn build_active_member_mismatch_error(
+    member_handle: &MemberHandle,
+    kid: &Kid,
+    active_member_handle: &MemberHandle,
+) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_ACTIVE_MEMBER_MISMATCH".to_string(),
+        format!(
+            "Signer '{}' (kid: {}) does not match current active member '{}'",
+            member_handle, kid, active_member_handle
+        ),
+    )
+}
+
+fn build_known_key_integrity_anomaly_error(
+    member_handle: &MemberHandle,
+    kid: &Kid,
+    known_member_handle: &MemberHandle,
+) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
+        format!(
+            "kid '{}' exists with subject_handle '{}' but candidate has subject_handle '{}'",
+            kid, known_member_handle, member_handle
+        ),
+    )
 }
 
 fn format_non_member_error_message(

@@ -158,32 +158,51 @@ fn evaluate_candidate_with_snapshot(
         .with_verification_result(vr)
         .build();
 
-    if is_public_key_expired(&pk.protected.expires_at) {
-        return Err(Error::build_verification_error(
-            "E_KEY_EXPIRED".to_string(),
-            format!(
-                "PublicKey has expired.\n\
-                 Expires at: {}\n\
-                 Action: Rotate the member key before approval.",
-                pk.protected.expires_at
-            ),
-        ));
-    }
+    enforce_candidate_public_key_active(&pk.protected.expires_at)?;
 
-    // Manual review is only allowed when GitHub binding is absent.
-    if vr.status == VerificationStatus::Failed
-        || (candidate.github_binding_configured && vr.status != VerificationStatus::Verified)
-    {
+    if !evaluate_candidate_online_verification(vr, &candidate) {
         return Ok(build_member_approval_result(
             vr, &candidate, false, false, false,
         ));
     }
 
+    evaluate_candidate_known_key_state(vr, &candidate, known_keys)
+}
+
+fn enforce_candidate_public_key_active(expires_at: &str) -> Result<()> {
+    if !is_public_key_expired(expires_at) {
+        return Ok(());
+    }
+    Err(Error::build_verification_error(
+        "E_KEY_EXPIRED".to_string(),
+        format!(
+            "PublicKey has expired.\n\
+             Expires at: {}\n\
+             Action: Rotate the member key before approval.",
+            expires_at
+        ),
+    ))
+}
+
+fn evaluate_candidate_online_verification(
+    vr: &crate::io::verify_online::VerificationResult,
+    candidate: &TrustApprovalCandidate,
+) -> bool {
+    // Manual review is only allowed when GitHub binding is absent.
+    vr.status != VerificationStatus::Failed
+        && (!candidate.github_binding_configured || vr.status == VerificationStatus::Verified)
+}
+
+fn evaluate_candidate_known_key_state(
+    vr: &crate::io::verify_online::VerificationResult,
+    candidate: &TrustApprovalCandidate,
+    known_keys: &[crate::model::trust_store::KnownKey],
+) -> Result<MemberApprovalResult> {
     let known_key_state = match judge_known_key(known_keys, &candidate.kid, &vr.member_handle) {
         Ok(state) => state,
         Err(e) => {
             return Ok(build_member_approval_result_with_message(
-                &candidate,
+                candidate,
                 true,
                 false,
                 false,
@@ -194,7 +213,7 @@ fn evaluate_candidate_with_snapshot(
 
     Ok(build_member_approval_result(
         vr,
-        &candidate,
+        candidate,
         vr.status == VerificationStatus::Verified,
         matches!(known_key_state, KnownKeyJudgment::New),
         matches!(known_key_state, KnownKeyJudgment::Existing),

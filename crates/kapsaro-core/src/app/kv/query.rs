@@ -27,6 +27,9 @@ use tracing::debug;
 
 use super::session::KvCommandSession;
 use super::types::{KvDisclosedEntry, KvReadMode, KvReadResult};
+use crate::app::context::execution::SelectedDecryptionKeyExpiry;
+use crate::app::trust::evaluation::ReadArtifactTrustPlan;
+use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 
 pub struct KvReadCommand {
     pub execution: crate::app::context::execution::ExecutionContext,
@@ -47,46 +50,21 @@ pub fn resolve_kv_read_command<P>(
 where
     P: ReadTrustPolicy,
 {
-    let mut command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
+    let command = KvCommandSession::resolve_read(options, member_handle, file_name, ssh_ctx)?;
     let file = command.load_required_file()?;
     let kv_content = file.kv_content();
     let operation_options = options.operation_options();
-    let disclosed = list_kv_keys_with_disclosed(&kv_content)?
-        .into_iter()
-        .map(Into::into)
-        .collect();
-    let verified_doc = verify_kv_content_for_operation(
-        &kv_content,
-        operation_options.debug(),
-        operation_options.allow_expired_key(),
-    )?;
-    let wrap_set = WrapSet::parse(&verified_doc.document().wrap().wrap, "Document")?;
-    let selected_key_expiry = evaluate_selected_decryption_key_expiry(
-        &command.execution,
-        &wrap_set,
-        operation_options.allow_expired_key(),
-        operation_options.debug(),
-    )?;
-    push_signature_verification_warnings(
-        &mut command.warnings,
+    let disclosed = collect_kv_disclosed_entries(&kv_content)?;
+    let verified_doc = verify_kv_read_content(&kv_content, operation_options)?;
+    let selected_key_expiry =
+        evaluate_kv_read_key_expiry(&command.execution, &verified_doc, operation_options)?;
+    let trust_plan = evaluate_kv_read_trust::<P>(options, &command.execution, &verified_doc)?;
+    let warnings = collect_kv_read_warnings(
+        command.warnings,
         verified_doc.proof(),
-        Some(&selected_key_expiry.key_identity),
+        selected_key_expiry,
+        trust_plan.warnings,
     )?;
-    if let Some(warning) = selected_key_expiry.warning {
-        push_unique_warning(&mut command.warnings, warning);
-    }
-    let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
-    let trust_plan = evaluate_read_artifact_trust::<P>(
-        options,
-        &command.execution,
-        verified_doc.proof(),
-        &recipient_evidence.recipient_set,
-        &recipient_evidence.recipient_handles,
-    )?;
-    let mut warnings = command.warnings;
-    for warning in trust_plan.warnings {
-        push_unique_warning(&mut warnings, warning);
-    }
 
     Ok(KvReadCommand {
         execution: command.execution,
@@ -97,6 +75,74 @@ where
         warnings,
         target_path: file.target.file_path,
     })
+}
+
+fn collect_kv_disclosed_entries(
+    kv_content: &crate::format::content::KvEncContent,
+) -> Result<Vec<KvDisclosedEntry>> {
+    Ok(list_kv_keys_with_disclosed(kv_content)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+
+fn verify_kv_read_content(
+    kv_content: &crate::format::content::KvEncContent,
+    options: crate::api::operation::OperationOptions,
+) -> Result<VerifiedKvEncDocument> {
+    verify_kv_content_for_operation(kv_content, options.debug(), options.allow_expired_key())
+}
+
+fn evaluate_kv_read_key_expiry(
+    execution: &crate::app::context::execution::ExecutionContext,
+    verified_doc: &VerifiedKvEncDocument,
+    options: crate::api::operation::OperationOptions,
+) -> Result<SelectedDecryptionKeyExpiry> {
+    let wrap_set = WrapSet::parse(&verified_doc.document().wrap().wrap, "Document")?;
+    evaluate_selected_decryption_key_expiry(
+        execution,
+        &wrap_set,
+        options.allow_expired_key(),
+        options.debug(),
+    )
+}
+
+fn evaluate_kv_read_trust<P>(
+    options: &CommonCommandOptions,
+    execution: &crate::app::context::execution::ExecutionContext,
+    verified_doc: &VerifiedKvEncDocument,
+) -> Result<ReadArtifactTrustPlan>
+where
+    P: ReadTrustPolicy,
+{
+    let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
+    evaluate_read_artifact_trust::<P>(
+        options,
+        execution,
+        verified_doc.proof(),
+        &recipient_evidence.recipient_set,
+        &recipient_evidence.recipient_handles,
+    )
+}
+
+fn collect_kv_read_warnings(
+    mut warnings: Vec<String>,
+    proof: &crate::model::verification::SignatureVerificationProof,
+    selected_key_expiry: SelectedDecryptionKeyExpiry,
+    trust_warnings: Vec<String>,
+) -> Result<Vec<String>> {
+    push_signature_verification_warnings(
+        &mut warnings,
+        proof,
+        Some(&selected_key_expiry.key_identity),
+    )?;
+    if let Some(warning) = selected_key_expiry.warning {
+        push_unique_warning(&mut warnings, warning);
+    }
+    for warning in trust_warnings {
+        push_unique_warning(&mut warnings, warning);
+    }
+    Ok(warnings)
 }
 
 pub fn execute_kv_list_command(

@@ -276,3 +276,7 @@ pub fn parse_sshsig_armored(
     let blob = decode_base64_armored(armored)?;
     parse_sshsig_blob(&blob, expected_namespace, expected_ssh_pubkey)
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/sshsig_format_test.rs"]
+mod sshsig_format_test;

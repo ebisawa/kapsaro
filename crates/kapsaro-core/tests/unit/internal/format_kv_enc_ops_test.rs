@@ -3,40 +3,34 @@
 
 //! Unit tests for kv-enc v1 encryption/decryption operations.
 
-use crate::keygen_helpers::{
+use crate::feature::context::crypto::SigningContext;
+use crate::feature::kv::decrypt::decrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::mutate::{
+    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
+    KvWriteContext,
+};
+use crate::feature::kv::types::KvInputEntry;
+use crate::format::content::KvEncContent;
+use crate::format::kv::document::parse_kv_document;
+use crate::format::kv::dotenv::{build_dotenv_string, parse_dotenv};
+use crate::format::kv::enc::canonical::parse_kv_wrap;
+use crate::format::schema::document::{parse_kv_head_token, parse_kv_wrap_token};
+use crate::format::token::TokenCodec;
+use crate::io::workspace::members::{list_active_member_handles, load_member_files};
+use crate::model::kv_enc::verified::VerifiedKvEncDocument;
+use crate::model::public_key::PublicKey;
+use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::test_utils::keygen_helpers::{
     build_test_private_key, build_verified_private_key, build_verified_recipient_keys,
 };
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use ed25519_dalek::SigningKey;
-use kapsaro_core::cli_api::test_support::domain::kv_enc::verified::VerifiedKvEncDocument;
-use kapsaro_core::cli_api::test_support::domain::public_key::PublicKey;
-use kapsaro_core::cli_api::test_support::domain::verification::{
-    SignatureVerificationProof, VerifyingKeySource,
-};
-use kapsaro_core::cli_api::test_support::operations::context::crypto::SigningContext;
-use kapsaro_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
-use kapsaro_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
-use kapsaro_core::cli_api::test_support::operations::kv::mutate::{
-    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
-    KvWriteContext,
-};
-use kapsaro_core::cli_api::test_support::operations::kv::types::KvInputEntry;
-use kapsaro_core::cli_api::test_support::storage::workspace::members::{
-    list_active_member_handles, load_member_files,
-};
-use kapsaro_core::cli_api::test_support::wire::content::KvEncContent;
-use kapsaro_core::cli_api::test_support::wire::kv::document::parse_kv_document;
-use kapsaro_core::cli_api::test_support::wire::kv::dotenv::{build_dotenv_string, parse_dotenv};
-use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
-use kapsaro_core::cli_api::test_support::wire::schema::document::{
-    parse_kv_head_token, parse_kv_wrap_token,
-};
-use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
 
 fn create_secret_home() -> tempfile::TempDir {
     let temp = tempfile::TempDir::new().unwrap();
-    kapsaro_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(temp.path()).unwrap();
+    crate::support::fs::ensure_dir_restricted(temp.path()).unwrap();
     temp
 }
 
@@ -50,7 +44,7 @@ fn decrypt_kv_document_for_test(
     encrypted: &str,
     member_handle: &str,
     kid: &str,
-    private: &kapsaro_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
+    private: &crate::model::private_key::PrivateKeyPlaintext,
     signer_kid: &str,
 ) -> std::collections::HashMap<String, String> {
     let doc = parse_kv_document(encrypted).unwrap();
@@ -408,8 +402,7 @@ fn test_wrap_line_with_many_recipients() {
         .find(|l| l.starts_with(":WRAP "))
         .expect("WRAP line should exist");
     let wrap_token = wrap_line.strip_prefix(":WRAP ").unwrap();
-    let wrap_data: kapsaro_core::cli_api::test_support::domain::kv_enc::header::KvWrap =
-        parse_kv_wrap_token(wrap_token).unwrap();
+    let wrap_data: crate::model::kv_enc::header::KvWrap = parse_kv_wrap_token(wrap_token).unwrap();
     let user_kid = wrap_data
         .wrap
         .iter()
@@ -432,9 +425,9 @@ fn test_wrap_line_with_many_recipients() {
 // ============================================================
 
 fn signing_key_from_private(
-    private_key: &kapsaro_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
+    private_key: &crate::model::private_key::PrivateKeyPlaintext,
 ) -> ed25519_dalek::SigningKey {
-    use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad_array;
+    use crate::format::codec::base64_public::decode_base64url_nopad_array;
     let sig_d = decode_base64url_nopad_array(&private_key.keys.sig.d, "sig.d").unwrap();
     ed25519_dalek::SigningKey::from_bytes(&sig_d)
 }
@@ -443,20 +436,20 @@ fn setup_crypto_ctx_for_test(
     member_handle: &str,
     kid: &str,
     keystore_root: &std::path::Path,
-    private_key: &kapsaro_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
-    public_key: &kapsaro_core::cli_api::test_support::domain::public_key::PublicKey,
+    private_key: &crate::model::private_key::PrivateKeyPlaintext,
+    public_key: &crate::model::public_key::PublicKey,
     ssh_priv: &std::path::Path,
     ssh_pub_content: &str,
-) -> kapsaro_core::cli_api::test_support::operations::context::crypto::CryptoContext {
-    kapsaro_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(keystore_root).unwrap();
+) -> crate::feature::context::crypto::CryptoContext {
+    crate::support::fs::ensure_dir_restricted(keystore_root).unwrap();
     let workspace_path = Some(keystore_root.parent().unwrap().join("workspace"));
     let encrypted_private =
         build_test_private_key(private_key, member_handle, kid, ssh_priv, ssh_pub_content).unwrap();
     let member_dir = keystore_root.join(member_handle);
-    kapsaro_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(&member_dir).unwrap();
+    crate::support::fs::ensure_dir_restricted(&member_dir).unwrap();
     let key_dir = keystore_root.join(member_handle).join(kid);
-    kapsaro_core::cli_api::test_support::helpers::fs::ensure_dir_restricted(&key_dir).unwrap();
-    kapsaro_core::cli_api::test_support::helpers::fs::atomic::save_json_restricted(
+    crate::support::fs::ensure_dir_restricted(&key_dir).unwrap();
+    crate::support::fs::atomic::save_json_restricted(
         &key_dir.join("private.json"),
         &encrypted_private,
     )
@@ -464,7 +457,7 @@ fn setup_crypto_ctx_for_test(
     crate::test_utils::save_public_key(keystore_root, member_handle, kid, public_key).unwrap();
     let backend = crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(ssh_priv).unwrap();
 
-    kapsaro_core::cli_api::test_support::operations::context::crypto::load_crypto_context_from_keystore(
+    crate::feature::context::crypto::load_crypto_context_from_keystore(
         keystore_root.to_path_buf(),
         member_handle,
         Some(kid),
@@ -480,8 +473,8 @@ fn encrypt_initial_kv_doc(
     member_handle: &str,
     kid: &str,
     keystore_root: &std::path::Path,
-    private_key: &kapsaro_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
-    public_key: &kapsaro_core::cli_api::test_support::domain::public_key::PublicKey,
+    private_key: &crate::model::private_key::PrivateKeyPlaintext,
+    public_key: &crate::model::public_key::PublicKey,
     entries: &[(&str, &str)],
 ) -> String {
     let signing_key = signing_key_from_private(private_key);
@@ -507,16 +500,16 @@ fn encrypt_initial_kv_doc(
         kv_map.insert(k.to_string(), v.to_string());
     }
 
-    kapsaro_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document(
+    encrypt_kv_document(
         &kv_map,
         &verified_members,
-        &kapsaro_core::cli_api::test_support::operations::context::crypto::SigningContext {
+        &SigningContext {
             signing_key: &signing_key,
             signer_kid: kid,
             signer_pub: public_key.clone(),
             debug: false,
         },
-        kapsaro_core::cli_api::test_support::wire::token::TokenCodec::JsonJcs,
+        TokenCodec::JsonJcs,
     )
     .unwrap()
 }
@@ -530,7 +523,7 @@ fn kv_entry_token(content: &str, key: &str) -> Option<String> {
 }
 
 fn kv_head_field(content: &str, field: &str) -> String {
-    use kapsaro_core::cli_api::test_support::domain::kv_enc::header::KvHeader;
+    use crate::model::kv_enc::header::KvHeader;
     let token = content
         .lines()
         .find(|l| l.starts_with(":HEAD "))
@@ -578,10 +571,7 @@ fn build_recipient_snapshot(
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        kapsaro_core::cli_api::test_support::operations::verify::public_key::verify_recipient_public_keys(
-            &public_keys,
-            false,
-        )?;
+        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -737,10 +727,10 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
 fn setup_unset_test_ctx(
     entries: &[(&str, &str)],
 ) -> (
-    String, // initial content
-    kapsaro_core::cli_api::test_support::operations::context::crypto::CryptoContext, // key context
-    tempfile::TempDir, // must be kept alive
-    tempfile::TempDir, // SSH temp dir - must be kept alive
+    String,                                         // initial content
+    crate::feature::context::crypto::CryptoContext, // key context
+    tempfile::TempDir,                              // must be kept alive
+    tempfile::TempDir,                              // SSH temp dir - must be kept alive
 ) {
     let member_handle = "alice@example.com";
     let ssh_temp = tempfile::TempDir::new().unwrap();

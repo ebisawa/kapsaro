@@ -440,3 +440,11 @@ fn format_instance_path(path: &str) -> String {
 fn unescape_json_pointer_segment(segment: &str) -> String {
     segment.replace("~1", "/").replace("~0", "~")
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/format_schema_trust_store_test.rs"]
+mod format_schema_trust_store_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/schema_validator_test.rs"]
+mod schema_validator_test;

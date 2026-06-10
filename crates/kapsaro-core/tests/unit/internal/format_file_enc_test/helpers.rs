@@ -1,31 +1,24 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keygen_helpers::{build_verified_private_key, build_verified_recipient_key};
+use crate::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
+use crate::feature::decrypt::file::decrypt_file_document;
+use crate::format::codec::base64_public::encode_base64url_nopad;
+use crate::model::file_enc::VerifiedFileEncDocument;
+use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
+use crate::model::public_key::{
+    Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected, VerifiedRecipientKey,
+};
+use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::test_utils::keygen_helpers::{build_verified_private_key, build_verified_recipient_key};
 use ed25519_dalek::SigningKey;
-use kapsaro_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
-use kapsaro_core::cli_api::test_support::domain::verification::{
-    SignatureVerificationProof, VerifyingKeySource,
-};
-use kapsaro_core::cli_api::test_support::domain::{
-    private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext},
-    public_key::{
-        Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
-        VerifiedRecipientKey,
-    },
-};
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
-use kapsaro_core::cli_api::test_support::primitives::kem::{
-    derive_public_key_from_secret, X25519PublicKey, X25519SecretKey,
-};
 
 pub(super) fn b64url(data: &[u8]) -> String {
     encode_base64url_nopad(data)
 }
 
 pub(super) fn decrypt_file_document_for_test(
-    file_enc_doc: &kapsaro_core::cli_api::test_support::domain::file_enc::FileEncDocument,
+    file_enc_doc: &crate::model::file_enc::FileEncDocument,
     member_handle: &str,
     kid: &str,
     private_key: &PrivateKeyPlaintext,
@@ -75,28 +68,27 @@ pub(super) fn recipients_and_members(
 pub(super) fn build_test_public_key(member_handle: &str, kid: &str, kem_pub: &str) -> PublicKey {
     PublicKey {
         protected: PublicKeyProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1.to_string(),
+            format: crate::model::wire::format::PUBLIC_KEY_V1.to_string(),
             subject_handle: member_handle.to_string(),
             kid: kid.to_string(),
-                            keys: IdentityKeys {
-                    kem: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
-                        x: kem_pub.to_string(),
-                    },
-                    sig: JwkOkpPublicKey {
-                        kty: "OKP".to_string(),
-                        crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
-                        x: "dummy_sig_pub".to_string(),
-                    },
+            keys: IdentityKeys {
+                kem: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
+                    x: kem_pub.to_string(),
                 },
-                attestation: Attestation {
-                    method:
-                        kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                            .to_string(),
-                    pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
-                    sig: "dummy".to_string(),
+                sig: JwkOkpPublicKey {
+                    kty: "OKP".to_string(),
+                    crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
+                    x: "dummy_sig_pub".to_string(),
                 },
+            },
+            attestation: Attestation {
+                method: crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                    .to_string(),
+                pub_: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE".to_string(),
+                sig: "dummy".to_string(),
+            },
             binding_claims: None,
             expires_at: "2030-01-01T00:00:00Z".to_string(),
             created_at: Some("2025-01-01T00:00:00Z".to_string()),
@@ -116,15 +108,13 @@ pub(super) fn build_test_private_key(
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
-                    .to_string(),
+                crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
                 x: pk_b64,
                 d: sk_b64,
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
-                    .to_string(),
+                crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
                 x: "dummy_sig_pub".to_string(),
                 d: "dummy_sig_priv".to_string(),
             },

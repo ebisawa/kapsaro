@@ -227,3 +227,7 @@ pub struct ArtifactSignature {
     /// Signature bytes (base64url, no padding)
     pub sig: String,
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_signature_test.rs"]
+mod model_signature_test;

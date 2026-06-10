@@ -44,3 +44,7 @@ pub fn build_attestation_body_bytes(input: &AttestationBodyInput<'_>) -> Result<
         expires_at: input.expires_at,
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/format_context_test.rs"]
+mod format_context_test;

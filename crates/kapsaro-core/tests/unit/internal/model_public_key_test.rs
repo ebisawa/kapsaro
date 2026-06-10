@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
-use kapsaro_core::cli_api::test_support::domain::public_key::{
+use crate::model::public_key::{
     Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
     PublicKeyParts, PublicKeyProtected,
 };
+use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 
 #[test]
 fn test_public_key_deserialization() {
@@ -41,18 +41,18 @@ fn test_public_key_deserialization() {
 
     assert_eq!(
         pk.protected.format,
-        kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1
+        crate::model::wire::format::PUBLIC_KEY_V1
     );
     assert_eq!(pk.protected.subject_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(pk.protected.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(pk.protected.keys.kem.kty, "OKP");
     assert_eq!(
         pk.protected.keys.kem.crv,
-        kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
+        crate::model::wire::jwk::CURVE_X25519
     );
     assert_eq!(
         pk.protected.attestation.method,
-        kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+        crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
     );
 }
 
@@ -60,26 +60,25 @@ fn test_public_key_deserialization() {
 fn test_public_key_serialization() {
     let pk = PublicKey {
         protected: PublicKeyProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1.to_string(),
+            format: crate::model::wire::format::PUBLIC_KEY_V1.to_string(),
             subject_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string(),
             keys: IdentityKeys {
                 kem: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519.to_string(),
+                    crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
                     x: "dGVzdGtleQ".to_string(),
                 },
                 sig: JwkOkpPublicKey {
                     kty: "OKP".to_string(),
-                    crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519.to_string(),
+                    crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
                     x: "dGVzdGtleQ".to_string(),
                 },
             },
             binding_claims: None,
             attestation: Attestation {
-                method:
-                    kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                        .to_string(),
+                method: crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
+                    .to_string(),
                 pub_: "ssh-ed25519 AAAAC3...".to_string(),
                 sig: "c2lnbmF0dXJl".to_string(),
             },
@@ -93,7 +92,7 @@ fn test_public_key_serialization() {
 
     assert_eq!(
         json_value["protected"]["format"],
-        kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1
+        crate::model::wire::format::PUBLIC_KEY_V1
     );
     assert_eq!(json_value["protected"]["subject_handle"], BOB_MEMBER_HANDLE);
     assert_eq!(
@@ -114,14 +113,12 @@ fn test_public_key_new_preserves_binding_claims() {
         keys: IdentityKeys {
             kem: JwkOkpPublicKey {
                 kty: "OKP".to_string(),
-                crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
-                    .to_string(),
+                crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
                 x: "a2VtcHVi".to_string(),
             },
             sig: JwkOkpPublicKey {
                 kty: "OKP".to_string(),
-                crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
-                    .to_string(),
+                crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
                 x: "c2lncHVi".to_string(),
             },
         },
@@ -129,8 +126,7 @@ fn test_public_key_new_preserves_binding_claims() {
             github_account: Some(github_account.clone()),
         }),
         attestation: Attestation {
-            method: kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN
-                .to_string(),
+            method: crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN.to_string(),
             pub_: "ssh-ed25519 AAAAC3...".to_string(),
             sig: "YXR0ZXN0c2ln".to_string(),
         },

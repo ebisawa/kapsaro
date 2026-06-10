@@ -5,8 +5,8 @@
 //!
 //! Tests for line-oriented kv-enc format parsing.
 
-use kapsaro_core::cli_api::test_support::domain::kv_enc::line::{KvEncLine, KvEncVersion};
-use kapsaro_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
+use crate::format::kv::enc::parser::KvEncParser;
+use crate::model::kv_enc::line::{KvEncLine, KvEncVersion};
 
 // Header parsing tests
 

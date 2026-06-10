@@ -347,3 +347,7 @@ fn validate_kv_wrap_limits(wrap: KvWrap) -> Result<KvWrap> {
     validate_wrap_items(&wrap.wrap, "WRAP token")?;
     Ok(wrap)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/format_schema_document_test.rs"]
+mod format_schema_document_test;

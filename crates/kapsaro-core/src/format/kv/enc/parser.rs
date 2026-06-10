@@ -158,3 +158,7 @@ impl<'a> KvEncParser<'a> {
 #[cfg(test)]
 #[path = "../../../../tests/unit/internal/format_kv_enc_parser_internal_test.rs"]
 mod internal_tests;
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/format_kv_enc_test.rs"]
+mod format_kv_enc_test;

@@ -3,12 +3,10 @@
 
 //! Unit tests for JSON Schema validator
 
-use crate::keygen_helpers::build_dummy_public_key;
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::wire::schema::validator::{
-    load_embedded_validator, SchemaTarget, Validator,
-};
+use crate::format::codec::base64_public::encode_base64url_nopad;
+use crate::format::schema::validator::{load_embedded_validator, SchemaTarget, Validator};
+use crate::model::wire::algorithm;
+use crate::test_utils::keygen_helpers::build_dummy_public_key;
 
 const B64URL_24: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const B64URL_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -218,18 +216,18 @@ fn set_json_path(value: &mut serde_json::Value, path: &[&str], replacement: &str
 fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
     serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1,
+            "format": crate::model::wire::format::PUBLIC_KEY_V1,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "keys": {
                 "kem": {
                     "kty": "OKP",
-                    "crv": kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519,
+                    "crv": crate::model::wire::jwk::CURVE_X25519,
                     "x": B64URL_32
                 },
                 "sig": {
                     "kty": "OKP",
-                    "crv": kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519,
+                    "crv": crate::model::wire::jwk::CURVE_ED25519,
                     "x": B64URL_32
                 }
             },
@@ -258,15 +256,15 @@ fn test_validate_private_key_basic() {
     // PrivateKey external format includes protected and encrypted sections.
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V1,
+            "format": crate::model::wire::format::PRIVATE_KEY_V1,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": kapsaro_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
+                "kdf": crate::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
                 "fpr": "SHA256:abcdef1234567890",
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -292,14 +290,14 @@ fn test_validate_private_key_argon2id_without_params() {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let valid_private_key = serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V1,
+            "format": crate::model::wire::format::PRIVATE_KEY_V1,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": kapsaro_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
+                "kdf": crate::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -353,15 +351,15 @@ fn build_valid_private_key() -> serde_json::Value {
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::PRIVATE_KEY_V1,
+            "format": crate::model::wire::format::PRIVATE_KEY_V1,
             "subject_handle": "alice@example.com",
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "alg": {
-                "kdf": kapsaro_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
+                "kdf": crate::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
                 "fpr": "SHA256:abcdef1234567890",
                 "ikm_salt": ikm_salt,
                 "hkdf_salt": hkdf_salt,
-                "aead": kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
             },
             "created_at": "2026-01-14T00:00:00Z",
             "expires_at": "2027-01-14T00:00:00Z"
@@ -543,13 +541,13 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1,
+            "format": crate::model::wire::format::FILE_ENC_V1,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": kapsaro_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V1,
+                    "format": crate::model::wire::format::FILE_PAYLOAD_V1,
                     "sid": sid,
-                    "alg": { "aead": kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305 }
+                    "alg": { "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305 }
                 },
                 "encrypted": { "nonce": B64URL_24, "ct": B64URL_48 }
             },
@@ -564,7 +562,7 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519,
+            "alg": crate::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -583,14 +581,14 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
     let valid_file_enc_doc = serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1,
+            "format": crate::model::wire::format::FILE_ENC_V1,
             "sid": sid,
             "payload": {
                 "protected": {
-                    "format": kapsaro_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V1,
+                    "format": crate::model::wire::format::FILE_PAYLOAD_V1,
                     "sid": sid,
                     "alg": {
-                        "aead": kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                        "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
                     }
                 },
                 "encrypted": {
@@ -609,7 +607,7 @@ fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
             "updated_at": "2026-01-14T00:00:00Z"
         },
         "signature": {
-            "alg": kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519,
+            "alg": crate::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
             "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",

@@ -3,11 +3,9 @@
 
 //! Unit tests for Trust Store format canonicalization
 
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
-    KnownKey, KnownKeyApprovalVia, TrustStoreProtected,
-};
-use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
-use kapsaro_core::cli_api::test_support::wire::trust_store::build_trust_store_signature_bytes;
+use crate::format::trust_store::build_trust_store_signature_bytes;
+use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
+use crate::model::wire::format::LOCAL_TRUST_V1;
 use std::collections::BTreeMap;
 
 fn build_test_protected() -> TrustStoreProtected {

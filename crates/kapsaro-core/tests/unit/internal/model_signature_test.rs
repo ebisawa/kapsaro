@@ -3,16 +3,13 @@
 
 //! Unit tests for ArtifactSignature model
 
-use crate::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
-use kapsaro_core::cli_api::test_support::domain::signature::{
-    ArtifactSignature, KeyPossessionProof, KeyPossessionProofAlgorithm,
-};
+use crate::model::signature::{ArtifactSignature, KeyPossessionProof, KeyPossessionProofAlgorithm};
+use crate::test_utils::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
 
 #[test]
 fn test_signature_serialization() {
     let sig = ArtifactSignature {
-        alg: kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
-            .to_string(),
+        alg: crate::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
         kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
         signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         mac: build_dummy_key_possession_proof(),
@@ -22,7 +19,7 @@ fn test_signature_serialization() {
     let json = serde_json::to_string(&sig).unwrap();
     assert!(json.contains(&format!(
         "\"alg\":\"{}\"",
-        kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
+        crate::model::wire::algorithm::SIGNATURE_ED25519
     )));
     assert!(!json.contains("\"signer\""));
     assert!(json.contains("\"kid\":\"7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD\""));
@@ -59,10 +56,7 @@ fn test_signature_deserialization() {
     }"#;
 
     let sig: ArtifactSignature = serde_json::from_str(json).unwrap();
-    assert_eq!(
-        sig.alg,
-        kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
-    );
+    assert_eq!(sig.alg, crate::model::wire::algorithm::SIGNATURE_ED25519);
     assert_eq!(sig.kid, "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA");
     assert_eq!(sig.sig, "YWJjZGVmZ2hp");
     assert_eq!(sig.mac.algorithm(), KeyPossessionProofAlgorithm::HmacSha256);

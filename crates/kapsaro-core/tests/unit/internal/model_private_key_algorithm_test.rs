@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKeyAlgorithm;
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305;
-use kapsaro_core::cli_api::test_support::domain::wire::private_key::{
+use crate::model::private_key::PrivateKeyAlgorithm;
+use crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305;
+use crate::model::wire::private_key::{
     PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256, PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
 };
 

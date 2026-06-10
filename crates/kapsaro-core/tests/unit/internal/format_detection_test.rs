@@ -9,8 +9,8 @@
 //! - kv-enc detection (:KAPSARO_KV 1 header)
 //! - file-enc detection (JSON with "format": "kapsaro:format:file-enc@1")
 
-use kapsaro_core::cli_api::test_support::helpers::limits::MAX_JSON_DEPTH;
-use kapsaro_core::cli_api::test_support::wire::detection::{detect_format, InputFormat};
+use crate::format::detection::{detect_format, InputFormat};
+use crate::support::limits::MAX_JSON_DEPTH;
 
 fn deeply_nested_json(depth: usize) -> String {
     let mut json = String::new();

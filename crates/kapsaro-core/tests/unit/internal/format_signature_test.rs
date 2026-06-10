@@ -3,27 +3,25 @@
 
 //! Unit tests for file-enc canonicalization
 
-use ed25519_dalek::SigningKey;
-use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
-use kapsaro_core::cli_api::test_support::domain::file_enc::{
+use crate::crypto::types::keys::{MacKey, MasterKey};
+use crate::feature::envelope::key_schedule::FileKeySchedule;
+use crate::feature::envelope::signature::{sign_file_document, verify_file_signature};
+use crate::format::file::build_file_signature_bytes;
+use crate::model::common::WrapItem;
+use crate::model::file_enc::{
     FileEncAlgorithm, FileEncDocumentProtected, FilePayload, FilePayloadCiphertext,
     FilePayloadHeader,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
-use kapsaro_core::cli_api::test_support::operations::envelope::key_schedule::FileKeySchedule;
-use kapsaro_core::cli_api::test_support::operations::envelope::signature::{
-    sign_file_document, verify_file_signature,
-};
-use kapsaro_core::cli_api::test_support::primitives::types::keys::{MacKey, MasterKey};
-use kapsaro_core::cli_api::test_support::wire::file::build_file_signature_bytes;
+use crate::model::wire::algorithm;
+use ed25519_dalek::SigningKey;
 use uuid::Uuid;
 
-use crate::keygen_helpers::build_dummy_public_key;
+use crate::test_utils::keygen_helpers::build_dummy_public_key;
 
 fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FileEncDocumentProtected {
-        format: kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1.to_string(),
+        format: crate::model::wire::format::FILE_ENC_V1.to_string(),
         sid,
         wrap: vec![WrapItem {
             recipient_handle: "alice@example.com".to_string(),
@@ -35,11 +33,10 @@ fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
         removed_recipients: None,
         payload: FilePayload {
             protected: FilePayloadHeader {
-                format: kapsaro_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V1.to_string(),
+                format: crate::model::wire::format::FILE_PAYLOAD_V1.to_string(),
                 sid,
                 alg: FileEncAlgorithm {
-                    aead: kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
-                        .to_string(),
+                    aead: crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
                 },
             },
             encrypted: FilePayloadCiphertext {
@@ -89,10 +86,7 @@ fn test_sign_file_document_returns_valid_structure() {
     )
     .unwrap();
 
-    assert_eq!(
-        sig.alg,
-        kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
-    );
+    assert_eq!(sig.alg, crate::model::wire::algorithm::SIGNATURE_ED25519);
     assert_eq!(sig.kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     assert_eq!(sig.signer_pub.protected.subject_handle, "signer@test");
     assert_eq!(sig.mac.algorithm().as_wire_prefix(), "hmac-sha256");

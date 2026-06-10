@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
-use kapsaro_core::cli_api::test_support::operations::envelope::wrap_set::{WrapAlgorithm, WrapSet};
+use crate::feature::envelope::wrap_set::{WrapAlgorithm, WrapSet};
+use crate::model::common::WrapItem;
+use crate::model::wire::algorithm;
 
 const ALICE: &str = "alice@example.com";
 const BOB: &str = "bob@example.com";

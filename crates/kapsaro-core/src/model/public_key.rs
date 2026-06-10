@@ -142,3 +142,7 @@ impl PublicKey {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_public_key_test.rs"]
+mod model_public_key_test;

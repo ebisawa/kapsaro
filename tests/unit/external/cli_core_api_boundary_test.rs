@@ -534,6 +534,326 @@ fn collect_rust_files(path: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+#[test]
+fn test_cli_api_app_allow_list_snapshot() {
+    let source = cli_api_app_source();
+    let actual = extract_allow_list_snapshot(&source);
+    let expected: &[&str] = &[
+        "config::ConfigScope",
+        "config::ConfigSetResult",
+        "config::ConfigUnsetResult",
+        "config::list_config_command",
+        "config::resolve_config_value_command",
+        "config::set_config_command",
+        "config::unset_config_command",
+        "context::env_key::is_env_key_mode",
+        "context::execution::ExecutionContext",
+        "context::execution::resolve_write_execution",
+        "context::identity::build_missing_member_handle_error",
+        "context::identity::resolve_github_user_input",
+        "context::identity::resolve_member_handle_input",
+        "context::member::resolve_required_member",
+        "context::options::CommonCommandOptions",
+        "context::options::resolve_allow_expired_key_option",
+        "context::options::resolve_allow_non_member_option",
+        "context::ssh::SshKeyCandidateView",
+        "context::ssh::SshSigningContextResolution",
+        "context::ssh::build_ssh_signing_context",
+        "context::ssh::resolve_ssh_context_by_active_key",
+        "context::ssh::resolve_ssh_key_candidates",
+        "doctor::DoctorRequest",
+        "doctor::execute_doctor_command",
+        "doctor::types::DoctorCategory",
+        "doctor::types::DoctorCheck",
+        "doctor::types::DoctorReport",
+        "doctor::types::DoctorStatus",
+        "doctor::types::DoctorSubject",
+        "file::decrypt::DecryptFileCommand",
+        "file::decrypt::execute_decrypt_file_command",
+        "file::decrypt::resolve_decrypt_file_command",
+        "file::decrypt::validate_decrypt_file_input",
+        "file::encrypt::EncryptFileCommand",
+        "file::encrypt::execute_encrypt_file_command_with_recipient_set_confirmation",
+        "file::encrypt::resolve_encrypt_file_command",
+        "file::inspect::InspectCommand",
+        "file::inspect::InspectOutput",
+        "file::inspect::InspectSection",
+        "file::inspect::execute_inspect_file_command",
+        "key::generate::generate_key_command",
+        "key::manage::activate_key_command",
+        "key::manage::export_key_command",
+        "key::manage::export_private_key_command",
+        "key::manage::list_keys_command",
+        "key::manage::remove_key_command",
+        "key::manage::validate_kid",
+        "key::types::KeyActivateResult",
+        "key::types::KeyExportPrivateResult",
+        "key::types::KeyExportResult",
+        "key::types::KeyGenerationResult",
+        "key::types::KeyInfo",
+        "key::types::KeyListResult",
+        "key::types::KeyRemoveResult",
+        "kv::mutation::MutationWriteTrustPlan",
+        "kv::mutation::import_kv_command_with_recipient_set_confirmation",
+        "kv::mutation::resolve_mutation_write_plan",
+        "kv::mutation::set_kv_command_with_recipient_set_confirmation",
+        "kv::mutation::unset_kv_command_with_recipient_set_confirmation",
+        "kv::query::KvReadCommand",
+        "kv::query::execute_kv_list_command",
+        "kv::query::execute_kv_read_command",
+        "kv::query::resolve_kv_read_command",
+        "kv::types::KvDisclosedEntry",
+        "kv::types::KvImportResult",
+        "kv::types::KvReadMode",
+        "kv::types::KvReadResult",
+        "kv::types::KvWriteOutcome",
+        "member::approval::MemberApprovalEvaluation",
+        "member::approval::MemberApprovalResult",
+        "member::approval::evaluate_members_for_approval",
+        "member::approval::save_member_approvals",
+        "member::mutation::add_member",
+        "member::mutation::evaluate_member_removal",
+        "member::mutation::remove_member",
+        "member::query::list_members",
+        "member::query::load_member_show_result",
+        "member::types::MemberDocumentStatus",
+        "member::types::MemberDocumentView",
+        "member::types::MemberGithubClaim",
+        "member::types::MemberListEntry",
+        "member::types::MemberListResult",
+        "member::types::MemberRemovalReport",
+        "member::types::MemberRemoveResult",
+        "member::types::MemberShowResult",
+        "member::types::MemberVerificationResult",
+        "member::types::MembershipStatus",
+        "member::verification::verify_members",
+        "registration::InitWorkspaceState",
+        "registration::command::RegistrationDecision",
+        "registration::command::evaluate_registration_decision",
+        "registration::command::execute_registration_decision",
+        "registration::command::resolve_registration_command",
+        "registration::ensure_init_workspace_structure",
+        "registration::evaluate_init_workspace_status",
+        "registration::key_plan::resolve_registration_key_plan",
+        "registration::types::MemberKeySetupResult",
+        "registration::types::RegistrationCommand",
+        "registration::types::RegistrationKeyPlan",
+        "registration::types::RegistrationMode",
+        "registration::types::RegistrationOutcome",
+        "registration::types::RegistrationResult",
+        "registration::types::RegistrationTarget",
+        "rewrap::RewrapBatchCommandInput",
+        "rewrap::execute_rewrap_batch_command",
+        "rewrap::promotion::PromotionReviewFailure",
+        "rewrap::promotion::PromotionReviewPrompt",
+        "rewrap::promotion::PromotionReviewView",
+        "rewrap::types::RewrapBatchOutcome",
+        "run::execute_run_command",
+        "trust::ArtifactRecipientTrustOutcome",
+        "trust::CommandCapability",
+        "trust::GetPolicy",
+        "trust::ImportPolicy",
+        "trust::ListPolicy",
+        "trust::RecipientTrustOutcome",
+        "trust::RunPolicy",
+        "trust::SetPolicy",
+        "trust::SignerTrustOutcome",
+        "trust::TrustApprovalCandidate",
+        "trust::UnsetPolicy",
+        "trust::WriteTrustPolicy",
+        "trust::enforcement::ArtifactRecipientHandleHint",
+        "trust::enforcement::ArtifactRecipientSetReview",
+        "trust::enforcement::ArtifactRecipientSetSnapshot",
+        "trust::list::RecipientSetListItem",
+        "trust::list::RecipientSetListResult",
+        "trust::list::TrustListItem",
+        "trust::list::TrustListResult",
+        "trust::list::list_known_keys",
+        "trust::list::list_recipient_sets",
+        "trust::management::PurgeKnownKeysResult",
+        "trust::management::PurgeRecipientSetsResult",
+        "trust::management::RemoveKnownKeyResult",
+        "trust::management::RemoveRecipientSetResult",
+        "trust::management::execute_purge",
+        "trust::management::execute_recipient_set_purge",
+        "trust::management::list_purge_candidates",
+        "trust::management::list_recipient_set_purge_candidates",
+        "trust::management::remove_known_key_command",
+        "trust::management::remove_recipient_set_command",
+        "trust::recovery::TrustStoreResetPlan",
+        "trust::recovery::build_trust_store_reset_plan",
+        "trust::recovery::execute_trust_store_reset",
+        "trust::recovery::requires_trust_store_reset",
+        "trust::review::ReadSignerTrustReviewPlan",
+        "trust::review::SignerTrustLabels",
+        "trust::review::TrustExecutionContext",
+        "trust::review::WriteRecipientTrustReviewPlan",
+        "trust::review::execute_read_with_signer_trust",
+        "trust::review::execute_write_with_recipient_trust",
+    ];
+    assert_allow_list_matches(&actual, expected, "cli_api/app.rs");
+}
+
+#[test]
+fn test_cli_api_presentation_allow_list_snapshot() {
+    let source = cli_api_presentation_source();
+    let actual = extract_allow_list_snapshot(&source);
+    let expected: &[&str] = &[
+        "config::SshSigningMethod",
+        "fs::load_bytes",
+        "fs::load_text_with_limit",
+        "fs::save_bytes",
+        "fs::save_text",
+        "kid::format_kid_display",
+        "kid::format_kid_display_lossy",
+        "limits::MAX_JSON_DOCUMENT_READ_SIZE",
+        "limits::MAX_KV_ENC_FILE_SIZE",
+        "path::format_path_relative_to_cwd",
+        "ssh::SshDeterminismStatus",
+        "tty::is_interactive",
+        "validation::validate_github_login",
+        "validation::validate_member_handle",
+    ];
+    assert_allow_list_matches(&actual, expected, "cli_api/presentation.rs");
+}
+
+// Extracts the sorted allow-list snapshot from a cli_api source file.
+// Returns entries in "mod::path::Name" format, sorted lexicographically.
+fn extract_allow_list_snapshot(source: &str) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut mod_stack: Vec<String> = Vec::new();
+    let mut brace_depth_stack: Vec<i32> = Vec::new();
+    let mut current_depth: i32 = 0;
+    let mut use_buf = String::new();
+    let mut in_use_stmt = false;
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        // Start buffering before update_mod_stack so use-statement braces
+        // do not corrupt the module depth counter.
+        if !in_use_stmt && trimmed.starts_with("pub use ") {
+            in_use_stmt = true;
+        }
+        if !in_use_stmt {
+            update_mod_stack(
+                trimmed,
+                &mut mod_stack,
+                &mut brace_depth_stack,
+                &mut current_depth,
+            );
+        }
+        if in_use_stmt {
+            if !use_buf.is_empty() {
+                use_buf.push(' ');
+            }
+            use_buf.push_str(trimmed);
+            if trimmed.ends_with(';') {
+                in_use_stmt = false;
+                flush_use_stmt(&use_buf, &mod_stack, &mut entries);
+                use_buf.clear();
+            }
+        } else {
+            collect_pub_fn_name(trimmed, &mod_stack, &mut entries);
+        }
+    }
+    entries.sort();
+    entries.dedup();
+    entries
+}
+
+// Updates the module path stack as module braces open and close.
+fn update_mod_stack(
+    trimmed: &str,
+    mod_stack: &mut Vec<String>,
+    brace_depth_stack: &mut Vec<i32>,
+    current_depth: &mut i32,
+) {
+    if let Some(rest) = trimmed.strip_prefix("pub mod ") {
+        if let Some(name) = rest.split('{').next().map(|s| s.trim().to_string()) {
+            mod_stack.push(name);
+            brace_depth_stack.push(*current_depth);
+        }
+    }
+    for ch in trimmed.chars() {
+        match ch {
+            '{' => *current_depth += 1,
+            '}' => {
+                *current_depth -= 1;
+                if brace_depth_stack.last() == Some(current_depth) {
+                    brace_depth_stack.pop();
+                    mod_stack.pop();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// Parses a complete `pub use path::{A, B};` or `pub use path::X;` statement
+// and appends qualified entries to the list.
+fn flush_use_stmt(stmt: &str, mod_stack: &[String], entries: &mut Vec<String>) {
+    let prefix = mod_stack.join("::");
+    let inner = stmt
+        .trim_start_matches("pub use ")
+        .trim_end_matches(';')
+        .trim();
+    let names = extract_use_names(inner);
+    for name in names {
+        entries.push(format!("{prefix}::{name}"));
+    }
+}
+
+// Extracts the exported name(s) from a use path fragment.
+// Handles `path::X`, `path::{A, B as C}`, stripping `as` aliases to the alias.
+fn extract_use_names(inner: &str) -> Vec<String> {
+    let last = if let Some(pos) = inner.rfind("::") {
+        inner[pos + 2..].trim()
+    } else {
+        inner.trim()
+    };
+    if last.starts_with('{') {
+        let body = last.trim_matches(|c| c == '{' || c == '}');
+        body.split(',')
+            .filter_map(|part| {
+                let tok = part.trim();
+                if tok.is_empty() {
+                    return None;
+                }
+                Some(tok.split_whitespace().last().unwrap_or(tok).to_string())
+            })
+            .collect()
+    } else {
+        let name = last.split_whitespace().last().unwrap_or(last);
+        vec![name.to_string()]
+    }
+}
+
+// Collects a `pub fn name(` wrapper function defined directly in a mod block.
+fn collect_pub_fn_name(trimmed: &str, mod_stack: &[String], entries: &mut Vec<String>) {
+    if let Some(rest) = trimmed.strip_prefix("pub fn ") {
+        if let Some(name) = rest.split('<').next().and_then(|s| s.split('(').next()) {
+            let prefix = mod_stack.join("::");
+            entries.push(format!("{prefix}::{}", name.trim()));
+        }
+    }
+}
+
+// Asserts that actual snapshot equals expected, printing a diff on mismatch.
+fn assert_allow_list_matches(actual: &[String], expected: &[&str], label: &str) {
+    let missing: Vec<_> = expected
+        .iter()
+        .filter(|e| !actual.iter().any(|a| a == *e))
+        .collect();
+    let unexpected: Vec<_> = actual
+        .iter()
+        .filter(|a| !expected.contains(&a.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty() && unexpected.is_empty(),
+        "{label} allow-list snapshot mismatch.\nMissing (removed from source): {missing:?}\nUnexpected (added to source): {unexpected:?}"
+    );
+}
+
 fn assert_core_alias_does_not_reach_hidden_surface(content: &str, path: &Path) {
     let aliases = core_aliases(content);
     let display_path = path.display();

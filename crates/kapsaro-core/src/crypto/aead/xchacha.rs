@@ -121,3 +121,7 @@ pub(crate) fn encrypt_with_fresh_nonce(
 ) -> Result<(Ciphertext, XChaChaNonce)> {
     encrypt(key, nonce, aad, plaintext)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/crypto_xchacha20_poly1305_test.rs"]
+mod crypto_xchacha20_poly1305_test;

@@ -3,12 +3,10 @@
 
 //! XChaCha20-Poly1305 AEAD tests
 
-use kapsaro_core::cli_api::test_support::primitives::aead::xchacha::{
-    decrypt, encrypt_with_nonce, NONCE_SIZE,
-};
-use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
-use kapsaro_core::cli_api::test_support::primitives::types::keys::XChaChaKey;
-use kapsaro_core::cli_api::test_support::primitives::types::primitives::XChaChaNonce;
+use crate::crypto::aead::xchacha::{decrypt, encrypt_with_nonce, NONCE_SIZE};
+use crate::crypto::types::data::{Aad, Plaintext};
+use crate::crypto::types::keys::XChaChaKey;
+use crate::crypto::types::primitives::XChaChaNonce;
 
 #[test]
 fn test_xchacha20_encrypt_decrypt_roundtrip() {
@@ -39,7 +37,7 @@ fn test_xchacha20_nonce_24_bytes() {
 
 #[test]
 fn test_xchacha20_wrong_nonce_error() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
+    use crate::crypto::types::data::{Aad, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let wrong_nonce = XChaChaNonce::new([0xFFu8; NONCE_SIZE]);
@@ -55,9 +53,7 @@ fn test_xchacha20_wrong_nonce_error() {
 
 #[test]
 fn test_xchacha20_tampered_ciphertext_error() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{
-        Aad, Ciphertext, Plaintext,
-    };
+    use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let aad = Aad::from(b"test-aad" as &[u8]);
@@ -82,7 +78,7 @@ fn test_xchacha20_tampered_ciphertext_error() {
 
 #[test]
 fn test_xchacha20_aad_mismatch_error() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
+    use crate::crypto::types::data::{Aad, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let aad = Aad::from(b"correct-aad" as &[u8]);
@@ -115,7 +111,7 @@ fn test_xchacha20_wrong_key_error_message_sanitized() {
 
 #[test]
 fn test_xchacha20_empty_plaintext() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Plaintext};
+    use crate::crypto::types::data::{Aad, Plaintext};
 
     let key = XChaChaKey::new([0x42u8; 32]);
     let aad = Aad::from(b"test-aad" as &[u8]);

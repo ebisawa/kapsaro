@@ -120,3 +120,7 @@ pub async fn verify_github_account_with_api(
     )
     .await
 }
+
+#[cfg(all(test, feature = "online"))]
+#[path = "../../../tests/unit/internal/verify_github_test.rs"]
+mod verify_github_test;

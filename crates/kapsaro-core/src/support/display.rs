@@ -32,3 +32,7 @@ pub fn sanitize_display_field_with_limit(value: &str, max_len: usize) -> String 
     }
     out
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_display_sanitize_test.rs"]
+mod support_display_sanitize_test;

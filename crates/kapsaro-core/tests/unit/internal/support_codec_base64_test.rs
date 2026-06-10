@@ -3,15 +3,15 @@
 
 //! Unit tests for support/codec base64 modules.
 
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::{
+use crate::format::codec::base64_public::{
     decode_base64_standard, decode_base64url_nopad, encode_base64_standard,
     encode_base64_standard_nopad, encode_base64url_nopad,
 };
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_secret::{
+use crate::format::codec::base64_secret::{
     decode_base64url_nopad_secret_32, decode_base64url_nopad_secret_64,
     encode_base64url_nopad_secret_32, encode_base64url_nopad_secret_64,
 };
-use kapsaro_core::cli_api::test_support::helpers::secret::SecretArray;
+use crate::support::secret::SecretArray;
 
 #[test]
 fn test_encode_base64url_nopad_roundtrip() {

@@ -11,7 +11,7 @@ use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
-use crate::test_utils::stub_agent_signer;
+use crate::test_utils::{stub_agent_signer, EnvGuard};
 
 #[test]
 fn test_backend_trait_determinism_check() {
@@ -210,19 +210,11 @@ fn test_ssh_keygen_backend_command_not_found() {
 
 #[test]
 fn test_ssh_agent_backend_no_auth_sock() {
-    // Save original SSH_AUTH_SOCK
-    let original = std::env::var("SSH_AUTH_SOCK").ok();
-
-    // Remove SSH_AUTH_SOCK
+    let _guard = EnvGuard::new(&["SSH_AUTH_SOCK"]);
     std::env::remove_var("SSH_AUTH_SOCK");
 
     let backend = SshAgentBackend::new(Box::new(DefaultAgentSigner));
     let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
-
-    // Restore SSH_AUTH_SOCK
-    if let Some(val) = original {
-        std::env::set_var("SSH_AUTH_SOCK", val);
-    }
 
     assert!(result.is_err(), "Should fail without SSH_AUTH_SOCK");
 }

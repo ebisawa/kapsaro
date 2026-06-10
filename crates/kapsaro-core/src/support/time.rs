@@ -22,3 +22,7 @@ pub fn format_timestamp_rfc3339(dt: OffsetDateTime) -> Result<String> {
 pub fn generate_current_timestamp() -> Result<String> {
     format_timestamp_rfc3339(OffsetDateTime::now_utc())
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_time_test.rs"]
+mod support_time_test;

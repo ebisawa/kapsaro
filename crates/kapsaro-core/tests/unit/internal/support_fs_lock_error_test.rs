@@ -6,7 +6,7 @@
 //! Complements support_fs_lock_test.rs (happy paths) by exercising
 //! failure branches of with_file_lock.
 
-use kapsaro_core::cli_api::test_support::helpers::fs::lock::with_file_lock;
+use crate::support::fs::lock::with_file_lock;
 use kapsaro_core::{Error, ErrorKind};
 use std::fs;
 use std::path::Path;

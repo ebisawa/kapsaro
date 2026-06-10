@@ -113,3 +113,7 @@ fn expand_hkdf(hkdf: &Hkdf<Sha256>, info: &Info, output: &mut [u8]) -> Result<()
 #[cfg(test)]
 #[path = "../../tests/unit/internal/crypto_kdf_internal_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/crypto_kdf_test.rs"]
+mod crypto_kdf_test;

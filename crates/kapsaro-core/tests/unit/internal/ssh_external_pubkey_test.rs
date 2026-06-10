@@ -5,13 +5,13 @@
 //!
 //! Tests for SSH public key retrieval utilities.
 
-use kapsaro_core::cli_api::test_support::storage::ssh::external::pubkey::{
+use crate::io::ssh::external::pubkey::{
     collect_ed25519_keys_in_output, load_ed25519_keys_from_agent, load_ssh_public_key_file,
     load_ssh_public_key_with_descriptor_trait, SshKeyCandidate,
 };
-use kapsaro_core::cli_api::test_support::storage::ssh::external::traits::{SshAdd, SshKeygen};
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
+use crate::io::ssh::external::traits::{SshAdd, SshKeygen};
+use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use kapsaro_core::Result;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -44,7 +44,7 @@ impl MockSshAdd {
     fn err(message: &str) -> Self {
         Self {
             output: Err(kapsaro_core::Error::from(
-                kapsaro_core::cli_api::test_support::storage::ssh::SshError::build_operation_failed_error(message),
+                crate::io::ssh::SshError::build_operation_failed_error(message),
             )),
         }
     }
@@ -55,9 +55,7 @@ impl SshAdd for MockSshAdd {
         match &self.output {
             Ok(s) => Ok(s.clone()),
             Err(e) => Err(kapsaro_core::Error::from(
-                kapsaro_core::cli_api::test_support::storage::ssh::SshError::build_operation_failed_error(
-                    e.to_string(),
-                ),
+                crate::io::ssh::SshError::build_operation_failed_error(e.to_string()),
             )),
         }
     }
@@ -80,9 +78,7 @@ impl SshKeygen for MockSshKeygen {
         match &self.derived_public_key {
             Ok(value) => Ok(value.clone()),
             Err(error) => Err(kapsaro_core::Error::from(
-                kapsaro_core::cli_api::test_support::storage::ssh::SshError::build_operation_failed_error(
-                    error.to_string(),
-                ),
+                crate::io::ssh::SshError::build_operation_failed_error(error.to_string()),
             )),
         }
     }

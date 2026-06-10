@@ -1,14 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64_standard;
-use kapsaro_core::cli_api::test_support::storage::ssh::external::add::DefaultSshAdd;
-use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-use kapsaro_core::cli_api::test_support::storage::ssh::external::traits::SshAdd;
-use kapsaro_core::cli_api::test_support::storage::ssh::external::traits::SshKeygen;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::parse::decode_ssh_public_key_blob;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
+use crate::format::codec::base64_public::encode_base64_standard;
+use crate::io::ssh::external::add::DefaultSshAdd;
+use crate::io::ssh::external::keygen::DefaultSshKeygen;
+use crate::io::ssh::external::traits::SshAdd;
+use crate::io::ssh::external::traits::SshKeygen;
+use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
+use crate::io::ssh::protocol::wire::encode_ssh_string;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;

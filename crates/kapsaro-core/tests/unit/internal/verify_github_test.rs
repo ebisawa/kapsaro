@@ -3,16 +3,14 @@
 
 //! Unit tests for GitHub binding_claims.github_account verification.
 
-use kapsaro_core::cli_api::test_support::domain::public_key::{
-    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
-    PublicKeyProtected,
-};
-use kapsaro_core::cli_api::test_support::storage::github::http::GitHubKeyRecord;
-use kapsaro_core::cli_api::test_support::storage::verify_online::github::{
+use crate::io::github::http::GitHubKeyRecord;
+use crate::io::verify_online::github::{
     verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
 };
-use kapsaro_core::cli_api::test_support::storage::verify_online::{
-    VerificationStatus, VerifiedGithubIdentity,
+use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
+use crate::model::public_key::{
+    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
+    PublicKeyProtected,
 };
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -441,9 +439,7 @@ fn test_github_account_structure_github_has_id_and_login() {
 
 #[test]
 fn test_verification_result_verified_github_some() {
-    use kapsaro_core::cli_api::test_support::storage::verify_online::{
-        VerificationResult, VerificationStatus,
-    };
+    use crate::io::verify_online::{VerificationResult, VerificationStatus};
     let verified_github =
         VerifiedGithubIdentity::new(99, "bob".to_string(), "SHA256:fp".to_string(), 100);
 

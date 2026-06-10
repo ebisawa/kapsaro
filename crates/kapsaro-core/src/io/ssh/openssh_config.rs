@@ -156,3 +156,11 @@ pub fn parse_quoted_value(value: &str) -> String {
         trimmed.to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/ssh_openssh_config_integration_test.rs"]
+mod ssh_openssh_config_integration_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/ssh_openssh_config_test.rs"]
+mod ssh_openssh_config_test;

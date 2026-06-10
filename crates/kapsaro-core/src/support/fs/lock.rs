@@ -74,3 +74,11 @@ fn enforce_lock_path_not_symlink(path: &Path) -> Result<()> {
         format!("refusing to create lock file through symlink: {}", path)
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/support_fs_lock_error_test.rs"]
+mod support_fs_lock_error_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/support_fs_lock_test.rs"]
+mod support_fs_lock_test;

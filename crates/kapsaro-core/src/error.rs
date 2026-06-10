@@ -348,3 +348,11 @@ impl From<hkdf::InvalidLength> for Error {
         Error::build_crypto_error("HKDF key derivation failed")
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/internal/error_display_test.rs"]
+mod error_display_test;
+
+#[cfg(test)]
+#[path = "../tests/unit/internal/error_test.rs"]
+mod error_test;

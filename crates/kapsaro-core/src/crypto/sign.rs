@@ -41,3 +41,7 @@ pub fn verify_detached_bytes(
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/crypto_sign_ed25519_test.rs"]
+mod crypto_sign_ed25519_test;

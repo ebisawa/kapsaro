@@ -3,8 +3,8 @@
 
 //! Unit tests for SSH agent socket resolution
 
+use crate::io::ssh::agent::socket::resolve_agent_socket_path;
 use crate::test_utils::EnvGuard;
-use kapsaro_core::cli_api::test_support::storage::ssh::agent::socket::resolve_agent_socket_path;
 use std::env;
 use std::fs;
 use std::path::PathBuf;

@@ -1,10 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::primitives::types::keys::{Cek, MasterKey, XChaChaKey};
-use kapsaro_core::cli_api::test_support::primitives::types::primitives::{
-    HkdfSalt, PrivateKeyIkmSalt, XChaChaNonce,
-};
+use crate::crypto::types::keys::{Cek, MasterKey, XChaChaKey};
+use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt, XChaChaNonce};
 use kapsaro_core::Error;
 
 fn error_message<T>(result: Result<T, Error>) -> String {

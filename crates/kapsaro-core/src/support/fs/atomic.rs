@@ -139,3 +139,11 @@ pub fn save_bytes(path: &Path, data: &[u8]) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/support_fs_atomic_error_test.rs"]
+mod support_fs_atomic_error_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/support_fs_atomic_test.rs"]
+mod support_fs_atomic_test;

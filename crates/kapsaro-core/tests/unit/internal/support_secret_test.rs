@@ -3,9 +3,7 @@
 
 use std::ffi::OsString;
 
-use kapsaro_core::cli_api::test_support::helpers::secret::{
-    SecretArray, SecretBytes, SecretString,
-};
+use crate::support::secret::{SecretArray, SecretBytes, SecretString};
 use zeroize::Zeroizing;
 
 #[test]

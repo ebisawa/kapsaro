@@ -5,7 +5,7 @@
 //!
 //! Tests for decode_ssh_public_key_blob function
 
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::parse::decode_ssh_public_key_blob;
+use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 
 const TEST_PUBKEY: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
@@ -31,12 +31,12 @@ fn test_parse_ssh_pubkey_empty() {
 
 #[test]
 fn test_parse_ssh_pubkey_invalid_format() {
-    assert!(decode_ssh_public_key_blob(
-        kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
-    )
-    .unwrap_err()
-    .to_string()
-    .contains("Invalid"));
+    assert!(
+        decode_ssh_public_key_blob(crate::io::ssh::protocol::constants::KEY_TYPE_ED25519)
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid")
+    );
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn test_parse_ssh_pubkey_unsupported_type() {
 fn test_parse_ssh_pubkey_invalid_base64() {
     assert!(decode_ssh_public_key_blob(&format!(
         "{} !!!invalid!!!",
-        kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
+        crate::io::ssh::protocol::constants::KEY_TYPE_ED25519
     ))
     .unwrap_err()
     .to_string()

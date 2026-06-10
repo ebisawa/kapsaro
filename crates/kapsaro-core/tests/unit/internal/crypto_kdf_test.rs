@@ -3,11 +3,9 @@
 
 //! Tests for HKDF type-safe salt interface
 
-use kapsaro_core::cli_api::test_support::primitives::kdf::{
-    derive_hkdf_sha256_array, derive_hkdf_sha256_bytes,
-};
-use kapsaro_core::cli_api::test_support::primitives::types::data::{Ikm, Info};
-use kapsaro_core::cli_api::test_support::primitives::types::primitives::HkdfSalt;
+use crate::crypto::kdf::{derive_hkdf_sha256_array, derive_hkdf_sha256_bytes};
+use crate::crypto::types::data::{Ikm, Info};
+use crate::crypto::types::primitives::HkdfSalt;
 
 #[test]
 fn test_derive_hkdf_sha256_array_accepts_hkdf_salt() {

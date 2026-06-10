@@ -135,3 +135,7 @@ pub fn format_kid_half_display_lossy(kid: &str) -> String {
 fn is_crockford_base32_byte(byte: u8) -> bool {
     matches!(byte, b'0'..=b'9' | b'A'..=b'H' | b'J'..=b'K' | b'M'..=b'N' | b'P'..=b'T' | b'V'..=b'Z')
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_kid_test.rs"]
+mod support_kid_test;

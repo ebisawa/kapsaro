@@ -4,24 +4,20 @@
 use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
+use crate::config::types::SshSigningMethod;
+use crate::crypto::sign::sign_detached_bytes;
+use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
+use crate::feature::verify::public_key::verify_public_key_with_attestation;
+use crate::format::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
+use crate::format::jcs;
+use crate::model::wire::algorithm;
 use crate::test_utils::generate_temp_ssh_keypair_in_dir;
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::{
-    decode_base64url_nopad_array, encode_base64url_nopad,
-};
-use kapsaro_core::cli_api::test_support::operations::key::generate::{
-    generate_key, KeyGenerationOptions,
-};
-use kapsaro_core::cli_api::test_support::operations::verify::public_key::verify_public_key_with_attestation;
-use kapsaro_core::cli_api::test_support::primitives::sign::sign_detached_bytes;
-use kapsaro_core::cli_api::test_support::settings::types::SshSigningMethod;
-use kapsaro_core::cli_api::test_support::wire::jcs;
 use serial_test::serial;
 use tempfile::TempDir;
 
 fn generate_real_ssh_attested_public_key(
     temp_dir: &TempDir,
-) -> kapsaro_core::cli_api::test_support::domain::public_key::PublicKey {
+) -> crate::model::public_key::PublicKey {
     let (ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair_in_dir(temp_dir);
     let home_dir = temp_dir.path().join("home");
     std::fs::create_dir_all(&home_dir).unwrap();

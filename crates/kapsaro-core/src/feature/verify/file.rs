@@ -76,3 +76,7 @@ fn verify_loaded_file_signature(
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_verify_file_operation_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_verify_limits_test.rs"]
+mod feature_verify_limits_test;

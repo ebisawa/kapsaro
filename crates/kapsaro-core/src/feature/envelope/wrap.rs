@@ -150,3 +150,7 @@ pub fn build_wraps_for_recipients(
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_encrypt_wrap_test.rs"]
+mod feature_encrypt_wrap_test;

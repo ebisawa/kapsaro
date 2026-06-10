@@ -162,3 +162,7 @@ fn build_env_key_load_result(
         ),
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_context_env_key_test.rs"]
+mod feature_context_env_key_test;

@@ -19,3 +19,7 @@ pub use record::{
     validate_recipient_set_record, ArtifactRecipientSet, RecipientHandleMismatch,
     RecipientSetJudgment,
 };
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_trust_recipient_sets_test.rs"]
+mod feature_trust_recipient_sets_test;

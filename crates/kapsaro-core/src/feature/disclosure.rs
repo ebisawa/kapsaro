@@ -82,3 +82,7 @@ fn build_unique_removed_recipients(
     }
     deduped
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_disclosure_test.rs"]
+mod feature_disclosure_test;

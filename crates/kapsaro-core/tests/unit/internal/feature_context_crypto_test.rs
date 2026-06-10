@@ -6,24 +6,22 @@
 //! Tests for common decryption helpers and member key context.
 
 use crate::app::context::crypto::load_crypto_context;
+use crate::feature::context::crypto::SigningContext;
+use crate::feature::decrypt::file::decrypt_file_document;
+use crate::feature::encrypt::file::encrypt_file_document;
+use crate::feature::kv::decrypt::decrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::verify::file::verify_file_document;
+use crate::feature::verify::kv::signature::verify_kv_document;
+use crate::format::kv::document::parse_kv_document;
+use crate::format::kv::dotenv::parse_dotenv;
+use crate::format::token::TokenCodec;
+use crate::io::keystore::storage::{list_kids, load_public_key, save_key_pair_atomic};
+use crate::model::public_key::PublicKey;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     load_fixture_ssh_pubkey, setup_member_key_context, setup_test_keystore_from_fixtures,
 };
-use kapsaro_core::cli_api::test_support::domain::public_key::PublicKey;
-use kapsaro_core::cli_api::test_support::operations::context::crypto::SigningContext;
-use kapsaro_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
-use kapsaro_core::cli_api::test_support::operations::encrypt::file::encrypt_file_document;
-use kapsaro_core::cli_api::test_support::operations::kv::decrypt::decrypt_kv_document;
-use kapsaro_core::cli_api::test_support::operations::kv::encrypt::encrypt_kv_document;
-use kapsaro_core::cli_api::test_support::operations::verify::file::verify_file_document;
-use kapsaro_core::cli_api::test_support::operations::verify::kv::signature::verify_kv_document;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::{
-    list_kids, load_public_key, save_key_pair_atomic,
-};
-use kapsaro_core::cli_api::test_support::wire::kv::document::parse_kv_document;
-use kapsaro_core::cli_api::test_support::wire::kv::dotenv::parse_dotenv;
-use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
 use std::fs;
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
@@ -119,7 +117,7 @@ fn test_parse_verify_decrypt_file() {
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
 
     // Verify and decrypt
-    let doc: kapsaro_core::cli_api::test_support::domain::file_enc::FileEncDocument =
+    let doc: crate::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
     let verified_doc = verify_file_document(&doc, false).unwrap();
     let decrypted = decrypt_file_document(
@@ -225,9 +223,8 @@ fn test_crypto_context_load_fails_when_public_key_mismatches_private_key() {
         .unwrap()
         .trim()
         .to_string();
-    let backend: Box<
-        dyn kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend,
-    > = Box::new(crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_priv).unwrap());
+    let backend: Box<dyn crate::io::ssh::backend::SignatureBackend> =
+        Box::new(crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_priv).unwrap());
 
     let result = load_crypto_context(
         ALICE_MEMBER_HANDLE,

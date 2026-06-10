@@ -163,3 +163,7 @@ pub fn decrypt_file_document_with_context(
         key_info,
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_decrypt_test.rs"]
+mod feature_decrypt_test;

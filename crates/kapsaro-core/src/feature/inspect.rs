@@ -43,3 +43,7 @@ pub fn build_inspect_view(content: &EncContent) -> Result<InspectOutput> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_inspect_test.rs"]
+mod feature_inspect_test;

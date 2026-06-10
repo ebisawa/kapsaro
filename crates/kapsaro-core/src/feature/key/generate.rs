@@ -165,3 +165,7 @@ fn encrypt_private_key_document(
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_key_generate_internal_test.rs"]
 mod internal_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_key_generate_test.rs"]
+mod feature_key_generate_test;

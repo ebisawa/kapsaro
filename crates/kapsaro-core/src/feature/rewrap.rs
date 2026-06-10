@@ -352,3 +352,19 @@ pub fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Resu
 #[cfg(test)]
 #[path = "../../tests/unit/internal/feature_rewrap_common_test.rs"]
 mod common_tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_rewrap_file_op_test.rs"]
+mod feature_rewrap_file_op_test;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_rewrap_file_test.rs"]
+mod feature_rewrap_file_test;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_rewrap_kv_test.rs"]
+mod feature_rewrap_kv_test;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_rewrap_test.rs"]
+mod feature_rewrap_test;

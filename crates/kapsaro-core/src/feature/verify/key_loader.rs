@@ -75,3 +75,7 @@ fn build_loaded_verifying_key(
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_verify_key_loader_internal_test.rs"]
 mod internal_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_verify_key_loader_test.rs"]
+mod feature_verify_key_loader_test;

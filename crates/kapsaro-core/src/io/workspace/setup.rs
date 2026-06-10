@@ -111,3 +111,7 @@ pub fn save_member_document(member_file: &Path, public_key: &PublicKey) -> Resul
 fn ensure_workspace_dir(path: &Path) -> Result<()> {
     ensure_real_directory_tree(path, DirectoryPurpose::Workspace, DirectoryMode::Normal)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_init_test.rs"]
+mod feature_init_test;

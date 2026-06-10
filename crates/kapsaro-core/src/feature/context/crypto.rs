@@ -246,3 +246,7 @@ fn derive_signing_public_key_x(signing_key: &SigningKey) -> [u8; 32] {
     let verifying_key: ed25519_dalek::VerifyingKey = signing_key.into();
     verifying_key.to_bytes()
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_context_crypto_validation_test.rs"]
+mod feature_context_crypto_validation_test;

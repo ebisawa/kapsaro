@@ -21,3 +21,7 @@ pub use signer::{judge_signer_trust, TrustJudgment};
 
 pub(crate) use recipient::judge_recipients_trust_with_additional;
 pub(crate) use signer::judge_signer_trust_with_additional;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_trust_judgment_test.rs"]
+mod feature_trust_judgment_test;

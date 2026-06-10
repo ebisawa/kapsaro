@@ -94,3 +94,7 @@ pub fn decrypt_private_key_with_password(
         Err(error) => Err(build_private_key_decrypt_error(error)),
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/feature_key_protection_password_encryption_test.rs"]
+mod feature_key_protection_password_encryption_test;

@@ -193,3 +193,7 @@ fn contains_key(lines: &[KvEncLine], key: &str) -> bool {
         .iter()
         .any(|line| matches!(line, KvEncLine::KV { key: existing, .. } if existing == key))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_kv_disclosed_test.rs"]
+mod feature_kv_disclosed_test;

@@ -640,3 +640,7 @@ fn build_failed_online_verification_result(
         verified_github: None,
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_inspect_verification_test.rs"]
+mod feature_inspect_verification_test;

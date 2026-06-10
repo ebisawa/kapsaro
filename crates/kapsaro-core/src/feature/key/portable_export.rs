@@ -118,3 +118,7 @@ pub fn build_password_strength_warning(password: &str) -> Option<String> {
         RECOMMENDED_PASSWORD_LENGTH
     ))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_key_portable_export_test.rs"]
+mod feature_key_portable_export_test;

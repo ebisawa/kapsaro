@@ -20,3 +20,7 @@ pub use store::{
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/workspace_members_internal_test.rs"]
 mod internal_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_member_test.rs"]
+mod feature_member_test;

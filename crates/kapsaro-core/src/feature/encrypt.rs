@@ -58,3 +58,7 @@ pub fn encrypt_file_content(
         )
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/feature_encrypt_test.rs"]
+mod feature_encrypt_test;

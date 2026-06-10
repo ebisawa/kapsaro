@@ -28,7 +28,7 @@ pub fn get_base_dir() -> Result<PathBuf> {
 
     env::var("HOME")
         .map(|p| PathBuf::from(p).join(".config").join("kapsaro"))
-        .map_err(|_| Error::build_config_error("HOME environment variable not set".to_string()))
+        .map_err(|_| Error::build_home_environment_not_set_error())
 }
 
 /// Resolve the global configuration file path

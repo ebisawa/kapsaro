@@ -9,6 +9,7 @@ mod resolution;
 
 use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
+use crate::app::key::build_no_active_key_error;
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::io::keystore::active::load_active_kid;
 use crate::io::keystore::storage::load_private_key;
@@ -209,9 +210,8 @@ fn load_active_kid_for_ssh_context(
     member_handle: &str,
     keystore_root: &std::path::Path,
 ) -> Result<String> {
-    load_active_kid(member_handle, keystore_root)?.ok_or_else(|| {
-        Error::build_not_found_error(format!("No active key for member: {}", member_handle))
-    })
+    load_active_kid(member_handle, keystore_root)?
+        .ok_or_else(|| build_no_active_key_error(member_handle))
 }
 
 fn resolve_ssh_fingerprint_from_private_key(private_key: &PrivateKey) -> Result<&str> {

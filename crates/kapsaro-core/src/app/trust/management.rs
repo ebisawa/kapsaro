@@ -6,8 +6,8 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::{
-    execute_trust_store_mutation_with_execution, load_optional_trust_store_for_member,
-    TrustStoreMutation, TrustStoreMutationMode,
+    build_trust_store_not_found_error, execute_trust_store_mutation_with_execution,
+    load_optional_trust_store_for_member, TrustStoreMutation, TrustStoreMutationMode,
 };
 use crate::app::trust::types::{RemovedKnownKey, TrustMutationResult};
 use crate::feature::trust::known_keys::{purge_known_keys, remove_known_key};
@@ -157,9 +157,7 @@ where
     SelectRecords: FnOnce(&TrustStoreProtected) -> &[Record],
 {
     let (_, loaded) = load_optional_trust_store_for_member(options, member_handle)?;
-    let loaded = loaded.ok_or_else(|| {
-        Error::build_not_found_error(format!("Trust store not found for '{}'", member_handle))
-    })?;
+    let loaded = loaded.ok_or_else(|| build_trust_store_not_found_error(member_handle))?;
 
     let items = select_records(&loaded.protected)
         .iter()

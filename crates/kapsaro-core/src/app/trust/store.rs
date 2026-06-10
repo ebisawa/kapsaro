@@ -35,6 +35,10 @@ pub struct TrustStoreMutation<T> {
     pub changed: bool,
 }
 
+pub(super) fn build_trust_store_not_found_error(owner_handle: &str) -> Error {
+    Error::build_not_found_error(format!("Trust store not found for '{}'", owner_handle))
+}
+
 pub fn load_existing_trust_store(
     path: &Path,
     base_dir: &Path,
@@ -48,9 +52,7 @@ pub fn load_existing_trust_store(
     );
     let loaded = load_trust_store(path, base_dir)
         .map_err(|e| build_invalid_trust_store_error(path, e))?
-        .ok_or_else(|| {
-            Error::build_not_found_error(format!("Trust store not found for '{}'", owner_handle))
-        })?;
+        .ok_or_else(|| build_trust_store_not_found_error(owner_handle))?;
     verify_loaded_trust_store(path, keystore_root, loaded)
 }
 

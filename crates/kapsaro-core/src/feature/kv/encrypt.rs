@@ -153,3 +153,11 @@ where
         .build();
     super::sign::sign_unsigned_kv_document(unsigned, &master_key, signing)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_encrypt_kv_entry_test.rs"]
+mod feature_encrypt_kv_entry_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_kv_test.rs"]
+mod feature_kv_test;

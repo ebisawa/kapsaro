@@ -105,3 +105,7 @@ fn fixed_argon2_params() -> Result<argon2::Params> {
         crate::Error::build_crypto_error(format!("Invalid fixed Argon2id parameters: {}", e))
     })
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/feature_key_protection_password_key_derivation_test.rs"]
+mod feature_key_protection_password_key_derivation_test;

@@ -200,3 +200,11 @@ pub fn unwrap_master_key_for_kv_with_context(
         key_info: selected_key.info().clone(),
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_decrypt_unwrap_test.rs"]
+mod feature_decrypt_unwrap_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_decrypt_unwrap_validation_test.rs"]
+mod feature_decrypt_unwrap_validation_test;

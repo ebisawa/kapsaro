@@ -6,9 +6,9 @@
 use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, resolve_ssh_key_candidates_with_params, SshSigningParams,
 };
+use crate::config::types::SshSigningMethod;
+use crate::model::ssh::SshDeterminismStatus;
 use crate::test_utils::setup_test_keystore;
-use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-use kapsaro_core::cli_api::test_support::settings::types::SshSigningMethod;
 
 #[test]
 fn test_resolve_and_build_ssh_signing_context_default() {

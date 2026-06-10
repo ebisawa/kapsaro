@@ -32,3 +32,7 @@ pub fn build_member_addition_from_content(
         public_key,
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_member_add_test.rs"]
+mod feature_member_add_test;

@@ -162,3 +162,7 @@ pub fn validate_kid_integrity(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_trust_known_keys_test.rs"]
+mod feature_trust_known_keys_test;

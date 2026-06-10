@@ -71,3 +71,7 @@ pub fn load_global_config(base_dir: Option<&Path>) -> Result<BTreeMap<String, St
     let config_path = config::paths::get_global_config_path_from_base(&base_dir);
     config::store::load_config_file(&config_path, &base_dir)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_config_test.rs"]
+mod feature_config_test;

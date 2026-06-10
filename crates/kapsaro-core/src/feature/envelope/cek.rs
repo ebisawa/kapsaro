@@ -24,3 +24,7 @@ pub fn derive_cek(
     }
     KvKeySchedule::extract(mk, sid)?.derive_cek(key, nonce_b64)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_encrypt_kv_cek_test.rs"]
+mod feature_encrypt_kv_cek_test;

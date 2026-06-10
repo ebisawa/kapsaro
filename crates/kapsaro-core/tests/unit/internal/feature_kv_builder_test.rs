@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::KvDocumentBuilder;
+use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::kv::document::{KvDocumentEntry, WrapSource};
 use crate::format::schema::document::parse_kv_entry_token;
 use crate::format::token::TokenCodec;
@@ -9,7 +10,6 @@ use crate::model::common::WrapItem;
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use crate::model::kv_enc::line::{KvEncLine, KvEncVersion};
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 use std::collections::HashMap;
 use uuid::Uuid;
 

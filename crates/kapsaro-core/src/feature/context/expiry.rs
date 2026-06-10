@@ -476,3 +476,7 @@ mod tests {
         assert!(warning.is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_context_expiry_test.rs"]
+mod feature_context_expiry_test;

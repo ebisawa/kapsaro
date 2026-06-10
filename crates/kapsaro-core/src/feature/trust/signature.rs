@@ -38,3 +38,7 @@ pub fn sign_trust_store(
         signature,
     })
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_trust_signature_test.rs"]
+mod feature_trust_signature_test;

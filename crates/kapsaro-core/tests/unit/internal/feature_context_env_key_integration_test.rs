@@ -7,11 +7,11 @@
 //! using properly generated key pairs with SSH attestation.
 
 use crate::app::context::crypto::load_crypto_context_from_env;
-use kapsaro_core::cli_api::test_support::helpers::secret::SecretString;
-use kapsaro_core::cli_api::test_support::operations::context::env_key::load_private_key_from_env;
-use kapsaro_core::cli_api::test_support::operations::key::portable_export::{
+use crate::feature::context::env_key::load_private_key_from_env;
+use crate::feature::key::portable_export::{
     export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
 };
+use crate::support::secret::SecretString;
 use tempfile::TempDir;
 
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test, EnvGuard};
@@ -27,8 +27,8 @@ fn generate_and_export(
     password: &str,
 ) -> (
     String,
-    kapsaro_core::cli_api::test_support::domain::private_key::PrivateKeyPlaintext,
-    kapsaro_core::cli_api::test_support::domain::public_key::PublicKey,
+    crate::model::private_key::PrivateKeyPlaintext,
+    crate::model::public_key::PublicKey,
 ) {
     let temp_dir = TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);

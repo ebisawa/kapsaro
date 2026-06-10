@@ -3,10 +3,11 @@
 
 use super::*;
 use crate::test_utils::{
-    build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace,
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use console::strip_ansi_codes;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
 
 #[cfg(unix)]
 use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;

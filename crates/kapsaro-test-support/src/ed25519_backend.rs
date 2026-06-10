@@ -1,11 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Ed25519 direct signing backend for tests
-//!
-//! Replaces SshKeygenBackend in tests to avoid spawning ssh-keygen subprocesses.
-//! Signs SSHSIG signed_data directly with ed25519_dalek, producing identical
-//! Ed25519RawSignature output.
+// Ed25519 direct signing backend for tests.
+// Replaces SshKeygenBackend to avoid spawning ssh-keygen subprocesses in tests.
 
 use ed25519_dalek::{Signer, SigningKey};
 use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;

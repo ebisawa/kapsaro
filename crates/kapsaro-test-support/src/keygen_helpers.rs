@@ -1,10 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Key generation helpers for v3 testing with real SSH attestation and encryption.
-//!
-//! All test keys are generated with proper SSH attestation (via ssh-keygen) and
-//! encrypted with real SSH key protection. No test-only bypasses in production code.
+// Key generation helpers for testing with real SSH attestation and encryption.
+// All test keys are generated with proper SSH attestation and real SSH key protection.
 
 use kapsaro_core::cli_api::test_support::domain::{
     private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyPlaintext},
@@ -275,7 +273,7 @@ pub fn build_verified_recipient_key(public_key: PublicKey) -> VerifiedRecipientK
 }
 
 /// Build a VerifiedPublicKeyAttested wrapper for PublicKey (for testing only).
-pub fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
+fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
     let proof = AttestationProof {
         method: public_key.protected.attestation.method.clone(),
         ssh_pub: public_key.protected.attestation.pub_.clone(),

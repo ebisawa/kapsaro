@@ -5,8 +5,7 @@ use super::*;
 use crate::cli::common::{encrypt_file_with_member_set_review, kapsaro_bin, run_command_with_pty};
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
-    setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
-    update_active_private_key_expires_at,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use kapsaro_core::cli_api::test_support::domain::public_key::{BindingClaims, GithubAccount};
 use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
@@ -21,6 +20,8 @@ use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::bu
 use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 use kapsaro_core::cli_api::test_support::storage::workspace::members::load_member_file_from_path;
 use kapsaro_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
 #[cfg(unix)]
 use std::process::Command as StdCommand;
 
@@ -34,7 +35,7 @@ fn test_ssh_binding(temp_dir: &tempfile::TempDir) -> SshBindingContext {
         fingerprint: build_sha256_fingerprint(&public_key).unwrap(),
         public_key,
         backend: Box::new(
-            crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_private_key)
+            kapsaro_test_support::ed25519_backend::Ed25519DirectBackend::new(&ssh_private_key)
                 .unwrap(),
         ) as Box<dyn SignatureBackend>,
         determinism: SshDeterminismStatus::Verified,

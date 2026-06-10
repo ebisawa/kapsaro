@@ -9,7 +9,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
 use crate::cli::common::{cmd, copy_dir_all, ALICE_MEMBER_HANDLE};
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use assert_cmd::cargo;
 #[cfg(unix)]
 use console::strip_ansi_codes;
@@ -22,6 +21,8 @@ use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::comp
 use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
 use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
 use kapsaro_core::cli_api::test_support::storage::trust::store::save_trust_store;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use predicates::prelude::*;
 use serde_json::Value;
 use tempfile::TempDir;

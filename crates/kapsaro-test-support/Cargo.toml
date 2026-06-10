@@ -1,0 +1,15 @@
+[package]
+name = "kapsaro-test-support"
+version = "0.99.1-beta"
+edition = "2021"
+authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
+description = "Shared test helpers for kapsaro workspace tests"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+kapsaro-core = { path = "../kapsaro-core", default-features = false, features = ["cli-test-support"] }
+ed25519-dalek = "2"
+tempfile = "3"
+serde_json = "1"
+time = "0.3"

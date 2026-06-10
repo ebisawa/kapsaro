@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::test_utils::{setup_member_key_context, setup_trust_store_for_workspace};
+use crate::test_utils::setup_trust_store_for_workspace;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
 
 #[test]
 fn test_rewrap_rotate_key() {

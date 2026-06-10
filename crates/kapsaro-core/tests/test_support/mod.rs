@@ -3,16 +3,18 @@
 
 //! Common test utilities for environment variable management
 
-// Test-only key generation helpers
-#[path = "constants.rs"]
+// Shared helper sources from kapsaro-test-support, included via #[path] so they
+// compile within kapsaro-core's test binaries and keep type identity with crate:: paths.
+#[path = "../../../kapsaro-test-support/src/constants.rs"]
 #[allow(dead_code)]
 mod constants;
-#[path = "crypto_context.rs"]
+#[path = "../../../kapsaro-test-support/src/crypto_context.rs"]
 pub mod crypto_context;
-#[path = "ed25519_backend.rs"]
+#[path = "../../../kapsaro-test-support/src/ed25519_backend.rs"]
 pub mod ed25519_backend;
-#[path = "fixture.rs"]
+#[path = "../../../kapsaro-test-support/src/fixture.rs"]
 mod fixture;
+#[path = "../../../kapsaro-test-support/src/keygen_helpers.rs"]
 #[allow(dead_code)]
 pub mod keygen_helpers;
 #[path = "ssh_stubs.rs"]

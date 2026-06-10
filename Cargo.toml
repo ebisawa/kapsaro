@@ -8,7 +8,7 @@ license = "Apache-2.0"
 autotests = false
 
 [workspace]
-members = ["crates/kapsaro-core"]
+members = ["crates/kapsaro-core", "crates/kapsaro-test-support"]
 
 [dependencies]
 kapsaro-core = { version = "0.99.1-beta", path = "crates/kapsaro-core", default-features = false, features = ["cli-internal"] }
@@ -38,6 +38,7 @@ online = ["kapsaro-core/online"]
 
 [dev-dependencies]
 kapsaro-core = { version = "0.99.1-beta", path = "crates/kapsaro-core", default-features = false, features = ["cli-internal", "cli-test-support"] }
+kapsaro-test-support = { path = "crates/kapsaro-test-support" }
 
 # CLI testing
 assert_cmd = "2"

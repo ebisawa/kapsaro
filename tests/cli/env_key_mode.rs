@@ -10,7 +10,6 @@ use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
     TEST_MEMBER_HANDLE,
 };
-use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use kapsaro_core::cli_api::test_support::helpers::secret::SecretString;
 use kapsaro_core::cli_api::test_support::operations::key::portable_export::{
     export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
@@ -18,6 +17,7 @@ use kapsaro_core::cli_api::test_support::operations::key::portable_export::{
 use kapsaro_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
 use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use kapsaro_core::cli_api::test_support::storage::keystore::storage::load_private_key;
+use kapsaro_test_support::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;

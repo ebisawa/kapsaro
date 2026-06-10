@@ -1407,6 +1407,7 @@ dependencies = [
  "dialoguer",
  "ed25519-dalek",
  "kapsaro-core",
+ "kapsaro-test-support",
  "libc",
  "predicates",
  "serde",
@@ -1455,6 +1456,17 @@ dependencies = [
  "tracing",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "kapsaro-test-support"
+version = "0.99.1-beta"
+dependencies = [
+ "ed25519-dalek",
+ "kapsaro-core",
+ "serde_json",
+ "tempfile",
+ "time",
 ]
 
 [[package]]

@@ -11,8 +11,8 @@ use crate::cli::common::{
     setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, CommonOptions,
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
-use crate::test_utils::setup_test_workspace;
 use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
+use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};

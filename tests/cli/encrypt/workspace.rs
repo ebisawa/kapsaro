@@ -7,10 +7,12 @@ use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
 use crate::test_utils::{
-    build_expiring_soon_timestamp, keygen_test, save_active_public_key_to_workspace,
-    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
-    update_active_private_key_expires_at,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_workspace;
+use kapsaro_test_support::keygen_helpers::keygen_test;
 use std::fs;
 
 #[cfg(unix)]

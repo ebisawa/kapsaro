@@ -175,3 +175,7 @@ pub struct RecipientHandleHint {
     /// Recipient handle shown to the user.
     pub recipient_handle: String,
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_trust_store_test.rs"]
+mod model_trust_store_test;

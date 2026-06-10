@@ -181,3 +181,11 @@ impl VerifiedFileEncDocument {
         (self.document, self.proof)
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_file_enc_test.rs"]
+mod model_file_enc_test;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_verified_test.rs"]
+mod model_verified_test;

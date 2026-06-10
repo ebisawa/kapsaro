@@ -41,3 +41,7 @@ pub fn normalize<T: Serialize>(value: &T) -> Result<Vec<u8>> {
         ))
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/jcs_test.rs"]
+mod jcs_test;

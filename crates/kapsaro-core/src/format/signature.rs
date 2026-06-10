@@ -17,3 +17,7 @@ pub(crate) use body::{
 };
 pub(crate) use codec::{decode_ed25519_signature, encode_ed25519_signature};
 pub(crate) use input::{build_artifact_signature_input, build_key_possession_mac_message};
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/format_signature_test.rs"]
+mod format_signature_test;

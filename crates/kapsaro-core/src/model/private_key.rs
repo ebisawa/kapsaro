@@ -172,3 +172,11 @@ impl PrivateKey {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_private_key_algorithm_test.rs"]
+mod model_private_key_algorithm_test;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_private_key_test.rs"]
+mod model_private_key_test;

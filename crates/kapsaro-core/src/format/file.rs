@@ -10,3 +10,7 @@ use crate::Result;
 pub fn build_file_signature_bytes(protected: &FileEncDocumentProtected) -> Result<Vec<u8>> {
     jcs::normalize(protected)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/format_file_enc_test.rs"]
+mod format_file_enc_test;

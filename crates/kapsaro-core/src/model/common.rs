@@ -71,3 +71,7 @@ pub fn normalize_recipients(recipients: &[String]) -> Vec<String> {
     sorted.dedup();
     sorted
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/model_common_wrap_test.rs"]
+mod model_common_wrap_test;

@@ -5,8 +5,8 @@
 //!
 //! Tests for strict structure validation (line order, counts, KEY format, duplicates)
 
-use kapsaro_core::cli_api::test_support::wire::kv::document::validate_kv_file_structure;
-use kapsaro_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
+use crate::format::kv::document::validate_kv_file_structure;
+use crate::format::kv::enc::parser::KvEncParser;
 
 #[test]
 fn test_validate_valid_structure() {

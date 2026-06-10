@@ -27,3 +27,11 @@ pub fn parse_kv_document_with_source(content: &str, source_name: &str) -> Result
 pub fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {
     structure::validate_kv_file_structure(lines)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/format_kv_enc_ops_test.rs"]
+mod format_kv_enc_ops_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/format_kv_enc_structure_test.rs"]
+mod format_kv_enc_structure_test;

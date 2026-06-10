@@ -1,16 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::feature::envelope::binding;
+use crate::feature::key::protection::binding as private_key_binding;
+use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
+use crate::model::public_key::{IdentityKeys, JwkOkpPublicKey};
+use crate::model::wire::{algorithm, context as wire_context, format, jwk};
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use kapsaro_core::cli_api::test_support::domain::public_key::{IdentityKeys, JwkOkpPublicKey};
-use kapsaro_core::cli_api::test_support::domain::wire::{
-    algorithm, context as wire_context, format, jwk,
-};
-use kapsaro_core::cli_api::test_support::operations::envelope::binding;
-use kapsaro_core::cli_api::test_support::operations::key::protection::binding as private_key_binding;
-use kapsaro_core::cli_api::test_support::wire::public_key::{
-    build_attestation_body_bytes, AttestationBodyInput,
-};
 use uuid::Uuid;
 
 const X25519_PUBLIC_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -194,9 +190,7 @@ fn test_aad_payload_kv() {
 /// Test payload AAD for file-enc - v7 format (envelope: JCS of payload.protected).
 #[test]
 fn test_aad_file_payload() {
-    use kapsaro_core::cli_api::test_support::domain::file_enc::{
-        FileEncAlgorithm, FilePayloadHeader,
-    };
+    use crate::model::file_enc::{FileEncAlgorithm, FilePayloadHeader};
 
     let sid = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
     let payload_protected = FilePayloadHeader {
@@ -224,9 +218,7 @@ fn test_aad_file_payload() {
 /// Test AAD for PrivateKey encryption - v3 format (envelope: JCS of protected)
 #[test]
 fn test_aad_private_key() {
-    use kapsaro_core::cli_api::test_support::domain::private_key::{
-        PrivateKeyAlgorithm, PrivateKeyProtected,
-    };
+    use crate::model::private_key::{PrivateKeyAlgorithm, PrivateKeyProtected};
 
     let protected = PrivateKeyProtected {
         format: format::PRIVATE_KEY_V1.to_string(),

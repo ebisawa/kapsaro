@@ -3,24 +3,23 @@
 
 //! Unit tests for FileEncDocument model
 
-use crate::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
-use kapsaro_core::cli_api::test_support::domain::file_enc::{
+use crate::model::file_enc::{
     FileEncAlgorithm, FileEncDocument, FileEncDocumentProtected, FilePayload,
     FilePayloadCiphertext, FilePayloadHeader,
 };
-use kapsaro_core::cli_api::test_support::domain::signature::ArtifactSignature;
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
+use crate::model::signature::ArtifactSignature;
+use crate::model::wire::algorithm;
+use crate::test_utils::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
 use uuid::Uuid;
 
 fn build_test_payload_envelope() -> FilePayload {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     FilePayload {
         protected: FilePayloadHeader {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V1.to_string(),
+            format: crate::model::wire::format::FILE_PAYLOAD_V1.to_string(),
             sid,
             alg: FileEncAlgorithm {
-                aead: kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
-                    .to_string(),
+                aead: crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305.to_string(),
             },
         },
         encrypted: FilePayloadCiphertext {
@@ -35,26 +34,22 @@ fn test_file_enc_document_basic() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1
-                .to_string(),
+            format: crate::model::wire::format::FILE_ENC_V1.to_string(),
             sid,
-            wrap: vec![
-                kapsaro_core::cli_api::test_support::domain::common::WrapItem {
-                    recipient_handle: "alice@example.com".to_string(),
-                    kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
-                    alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
-                    enc: "enc_base64url".to_string(),
-                    ct: "ct_base64url".to_string(),
-                },
-            ],
+            wrap: vec![crate::model::common::WrapItem {
+                recipient_handle: "alice@example.com".to_string(),
+                kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+                alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
+                enc: "enc_base64url".to_string(),
+                ct: "ct_base64url".to_string(),
+            }],
             removed_recipients: None,
             payload: build_test_payload_envelope(),
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
-                .to_string(),
+            alg: crate::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             mac: build_dummy_key_possession_proof(),
@@ -72,18 +67,17 @@ fn test_recipients_derived_from_wrap() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1
-                .to_string(),
+            format: crate::model::wire::format::FILE_ENC_V1.to_string(),
             sid,
             wrap: vec![
-                kapsaro_core::cli_api::test_support::domain::common::WrapItem {
+                crate::model::common::WrapItem {
                     recipient_handle: "alice@example.com".to_string(),
                     kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
                     alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
                     enc: "enc1".to_string(),
                     ct: "ct1".to_string(),
                 },
-                kapsaro_core::cli_api::test_support::domain::common::WrapItem {
+                crate::model::common::WrapItem {
                     recipient_handle: "bob@example.com".to_string(),
                     kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GH".to_string(),
                     alg: algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305.to_string(),
@@ -97,8 +91,7 @@ fn test_recipients_derived_from_wrap() {
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
-                .to_string(),
+            alg: crate::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             mac: build_dummy_key_possession_proof(),
@@ -118,8 +111,7 @@ fn test_payload_serialization() {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
     let doc = FileEncDocument {
         protected: FileEncDocumentProtected {
-            format: kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1
-                .to_string(),
+            format: crate::model::wire::format::FILE_ENC_V1.to_string(),
             sid,
             wrap: vec![],
             removed_recipients: None,
@@ -128,8 +120,7 @@ fn test_payload_serialization() {
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         },
         signature: ArtifactSignature {
-            alg: kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519
-                .to_string(),
+            alg: crate::model::wire::algorithm::SIGNATURE_ED25519.to_string(),
             kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
             signer_pub: build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
             mac: build_dummy_key_possession_proof(),
@@ -164,15 +155,15 @@ fn test_payload_serialization() {
 fn test_file_enc_document_signature_requires_signer_pub() {
     let json = serde_json::json!({
         "protected": {
-            "format": kapsaro_core::cli_api::test_support::domain::wire::format::FILE_ENC_V1,
+            "format": crate::model::wire::format::FILE_ENC_V1,
             "sid": "01234567-89ab-cdef-0123-456789abcdef",
             "wrap": [],
             "payload": {
                 "protected": {
-                    "format": kapsaro_core::cli_api::test_support::domain::wire::format::FILE_PAYLOAD_V1,
+                    "format": crate::model::wire::format::FILE_PAYLOAD_V1,
                     "sid": "01234567-89ab-cdef-0123-456789abcdef",
                     "alg": {
-                        "aead": kapsaro_core::cli_api::test_support::domain::wire::algorithm::AEAD_XCHACHA20_POLY1305
+                        "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
                     }
                 },
                 "encrypted": {
@@ -184,7 +175,7 @@ fn test_file_enc_document_signature_requires_signer_pub() {
             "updated_at": "2025-01-01T00:00:00Z"
         },
         "signature": {
-            "alg": kapsaro_core::cli_api::test_support::domain::wire::algorithm::SIGNATURE_ED25519,
+            "alg": crate::model::wire::algorithm::SIGNATURE_ED25519,
             "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             "sig": "signature_base64url"
         }

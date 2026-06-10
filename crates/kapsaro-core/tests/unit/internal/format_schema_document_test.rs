@@ -1,21 +1,19 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
-use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
-use kapsaro_core::cli_api::test_support::domain::kv_enc::entry::KvEntryValue;
-use kapsaro_core::cli_api::test_support::domain::kv_enc::header::{
-    KvFileAlgorithm, KvHeader, KvWrap,
-};
-use kapsaro_core::cli_api::test_support::domain::signature::ArtifactSignature;
-use kapsaro_core::cli_api::test_support::domain::wire::{algorithm, format};
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::helpers::limits::MAX_WRAP_ITEMS;
-use kapsaro_core::cli_api::test_support::wire::schema::document::{
+use crate::format::codec::base64_public::encode_base64url_nopad;
+use crate::format::schema::document::{
     parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token, parse_kv_signature_token,
     parse_kv_wrap_token, parse_public_key_str, parse_trust_store_str,
 };
-use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
+use crate::format::token::TokenCodec;
+use crate::model::common::WrapItem;
+use crate::model::kv_enc::entry::KvEntryValue;
+use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
+use crate::model::signature::ArtifactSignature;
+use crate::model::wire::{algorithm, format};
+use crate::support::limits::MAX_WRAP_ITEMS;
+use crate::test_utils::keygen_helpers::{build_dummy_key_possession_proof, build_dummy_public_key};
 use uuid::Uuid;
 
 #[test]

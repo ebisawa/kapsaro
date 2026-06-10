@@ -5,15 +5,13 @@ use super::helpers::{
     b64url, build_test_private_key, build_test_public_key, decrypt_file_document_for_test,
     generate_ed25519_keypair, generate_x25519_keypair, recipients_and_members,
 };
-use crate::keygen_helpers::build_verified_private_key;
+use crate::feature::context::crypto::SigningContext;
+use crate::feature::decrypt::file::decrypt_file_document;
+use crate::feature::encrypt::file as file_enc;
+use crate::model::file_enc::VerifiedFileEncDocument;
+use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::test_utils::keygen_helpers::build_verified_private_key;
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
-use kapsaro_core::cli_api::test_support::domain::file_enc::VerifiedFileEncDocument;
-use kapsaro_core::cli_api::test_support::domain::verification::{
-    SignatureVerificationProof, VerifyingKeySource,
-};
-use kapsaro_core::cli_api::test_support::operations::context::crypto::SigningContext;
-use kapsaro_core::cli_api::test_support::operations::decrypt::file::decrypt_file_document;
-use kapsaro_core::cli_api::test_support::operations::encrypt::file as file_enc;
 
 #[test]
 fn test_decrypt_file_roundtrip() {

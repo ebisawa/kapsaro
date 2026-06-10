@@ -3,16 +3,16 @@
 
 //! Unit tests for Trust Store JSON Schema validation
 
-use crate::test_utils::ALICE_MEMBER_HANDLE;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
+use crate::feature::trust::recipient_sets::compute_recipient_set_hash;
+use crate::feature::trust::signature::sign_trust_store;
+use crate::feature::trust::verification::verify_trust_store;
+use crate::format::schema::validator::load_embedded_trust_validator;
+use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
-use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
-use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
-use kapsaro_core::cli_api::test_support::operations::trust::verification::verify_trust_store;
-use kapsaro_core::cli_api::test_support::wire::schema::validator::load_embedded_trust_validator;
+use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
+use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use std::collections::BTreeMap;
 
 const BOB_KID: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";

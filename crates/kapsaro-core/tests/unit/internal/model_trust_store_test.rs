@@ -3,11 +3,11 @@
 
 //! Unit tests for TrustStoreDocument model
 
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
+use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
+use crate::model::wire::format::LOCAL_TRUST_V1;
 use std::collections::BTreeMap;
 
 fn build_test_known_key(kid: &str, member_handle: &str) -> KnownKey {

@@ -3,13 +3,11 @@
 
 //! Unit tests for kv-enc canonical format
 
-use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
-use kapsaro_core::cli_api::test_support::domain::kv_enc::header::KvWrap;
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
-use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::{
-    build_canonical_bytes, extract_recipients_from_wrap,
-};
-use kapsaro_core::cli_api::test_support::wire::kv::enc::parser::KvEncParser;
+use crate::format::kv::enc::canonical::{build_canonical_bytes, extract_recipients_from_wrap};
+use crate::format::kv::enc::parser::KvEncParser;
+use crate::model::common::WrapItem;
+use crate::model::kv_enc::header::KvWrap;
+use crate::model::wire::algorithm;
 
 #[test]
 fn test_build_canonical_bytes() {

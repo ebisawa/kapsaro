@@ -120,3 +120,7 @@ pub fn extract_recipients_from_wrap(wrap: &KvWrap) -> Vec<String> {
         .map(|w| w.recipient_handle.clone())
         .collect()
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/format_kv_canonical_test.rs"]
+mod format_kv_canonical_test;

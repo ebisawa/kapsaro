@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
-use kapsaro_core::cli_api::test_support::domain::kv_enc::header::{KvFileAlgorithm, KvHeader};
-use kapsaro_core::cli_api::test_support::domain::wire::algorithm;
-use kapsaro_core::cli_api::test_support::helpers::limits::MAX_JSON_DEPTH;
-use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
+use crate::format::token::TokenCodec;
+use crate::model::common::WrapItem;
+use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader};
+use crate::model::wire::algorithm;
+use crate::support::limits::MAX_JSON_DEPTH;
 use uuid::Uuid;
 
 fn deeply_nested_json(depth: usize) -> String {

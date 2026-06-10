@@ -123,3 +123,7 @@ fn is_key_value_line(line: &str) -> bool {
         !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/format_detection_test.rs"]
+mod format_detection_test;

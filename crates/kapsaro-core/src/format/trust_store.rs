@@ -11,3 +11,7 @@ use crate::Result;
 pub fn build_trust_store_signature_bytes(protected: &TrustStoreProtected) -> Result<Vec<u8>> {
     jcs::normalize(protected)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/format_trust_store_test.rs"]
+mod format_trust_store_test;

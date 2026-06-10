@@ -10,7 +10,7 @@ use std::path::Path;
 use kapsaro_core::api::file::FileEncArtifact;
 use kapsaro_core::api::kv::KvEncArtifact;
 use kapsaro_core::api::operation::OperationOptions;
-use kapsaro_core::cli_api::test_support::helpers::limits::{
+use kapsaro_core::cli_api::presentation::limits::{
     MAX_JSON_DOCUMENT_READ_SIZE, MAX_KV_ENC_FILE_SIZE,
 };
 use kapsaro_core::{Error, Result};

@@ -11,7 +11,7 @@ use crate::test_utils::{
     save_active_public_key_to_workspace, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
 use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;

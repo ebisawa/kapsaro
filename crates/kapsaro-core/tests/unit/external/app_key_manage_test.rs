@@ -17,8 +17,8 @@ use kapsaro_core::cli_api::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, list_keys_command,
     remove_key_command,
 };
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use kapsaro_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
 use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;

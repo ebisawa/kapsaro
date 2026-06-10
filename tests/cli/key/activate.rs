@@ -4,7 +4,7 @@
 //! Integration tests for `key activate` command
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
-use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
 use std::fs;
 use tempfile::TempDir;

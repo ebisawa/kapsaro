@@ -3,9 +3,9 @@
 
 //! Unit tests for kid helpers.
 
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::helpers::kid::{
-    format_kid_display, format_kid_half_display, normalize_kid, normalize_kid_query,
-    resolve_unique_kid,
+    format_kid_half_display, normalize_kid, normalize_kid_query, resolve_unique_kid,
 };
 use kapsaro_core::cli_api::test_support::wire::kid::derive_public_key_kid;
 use serde_json::json;

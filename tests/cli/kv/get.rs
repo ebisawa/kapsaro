@@ -6,9 +6,8 @@
 use crate::cli::common::{
     cmd, setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
-use kapsaro_core::cli_api::test_support::helpers::kid::{
-    format_kid_display, format_kid_half_display,
-};
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_half_display;
 use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
 use predicates::prelude::*;
 use tempfile::TempDir;

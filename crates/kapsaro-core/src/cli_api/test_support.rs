@@ -54,9 +54,7 @@ pub mod operations {
             };
         }
         pub mod env_key {
-            pub use crate::feature::context::env_key::{
-                is_env_key_mode, load_private_key_from_env,
-            };
+            pub use crate::feature::context::env_key::load_private_key_from_env;
         }
         pub mod expiry {
             pub use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
@@ -81,10 +79,8 @@ pub mod operations {
     pub mod envelope {
         pub mod binding {
             pub use crate::feature::envelope::binding::{
-                build_file_content_key_info, build_file_key_schedule_salt, build_file_mac_key_info,
                 build_file_payload_aad, build_file_wrap_info, build_kv_cek_info,
-                build_kv_entry_aad, build_kv_key_schedule_salt, build_kv_mac_key_info,
-                build_kv_wrap_info,
+                build_kv_entry_aad, build_kv_wrap_info,
             };
         }
         pub mod cek {
@@ -114,7 +110,7 @@ pub mod operations {
         }
     }
     pub mod inspect {
-        pub use crate::feature::inspect::{build_inspect_view, InspectOutput, InspectSection};
+        pub use crate::feature::inspect::{build_inspect_view, InspectOutput};
         pub mod verification {
             pub use crate::app::file::inspect::{
                 build_online_verification_section, OnlineVerificationDisplay,
@@ -700,14 +696,12 @@ pub mod helpers {
     }
     pub mod kid {
         pub use crate::support::kid::{
-            format_kid_display, format_kid_display_lossy, format_kid_half_display, normalize_kid,
-            normalize_kid_query, resolve_unique_kid,
+            format_kid_half_display, normalize_kid, normalize_kid_query, resolve_unique_kid,
         };
     }
     pub mod limits {
         pub use crate::support::limits::{
-            MAX_ACTIVE_KID_FILE_SIZE, MAX_CONFIG_FILE_SIZE, MAX_JSON_DEPTH,
-            MAX_JSON_DOCUMENT_READ_SIZE, MAX_KV_ENC_FILE_SIZE, MAX_WRAP_ITEMS,
+            MAX_ACTIVE_KID_FILE_SIZE, MAX_CONFIG_FILE_SIZE, MAX_JSON_DEPTH, MAX_WRAP_ITEMS,
         };
     }
     pub mod secret {
@@ -720,8 +714,6 @@ pub mod helpers {
         pub use crate::support::tty::set_interactive_override;
     }
     pub mod validation {
-        pub use crate::support::validation::{
-            validate_github_login, validate_kv_file_basename, validate_member_handle,
-        };
+        pub use crate::support::validation::validate_kv_file_basename;
     }
 }

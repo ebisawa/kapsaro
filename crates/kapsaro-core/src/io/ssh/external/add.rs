@@ -47,3 +47,7 @@ impl SshAdd for DefaultSshAdd {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/ssh_external_env_test.rs"]
+mod ssh_external_env_test;

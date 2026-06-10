@@ -67,3 +67,7 @@ macro_rules! impl_fixed_size_type {
 pub mod data;
 pub mod keys;
 pub mod primitives;
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/crypto_types_test.rs"]
+mod crypto_types_test;

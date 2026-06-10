@@ -3,10 +3,12 @@
 
 //! Unit tests for support/fs module.
 
-use kapsaro_core::cli_api::test_support::helpers::fs::{
-    check_permission, check_permission_chain, ensure_dir, ensure_dir_restricted,
-    ensure_text_file_matches_snapshot, ensure_text_file_matches_snapshot_with_limit, list_dir,
-    load_bytes_with_limit, load_text, load_text_with_limit,
+use crate::support::fs::permission::check_permission;
+use crate::support::fs::read::load_bytes_with_limit;
+use crate::support::fs::snapshot::ensure_text_file_matches_snapshot;
+use crate::support::fs::{
+    check_permission_chain, ensure_dir, ensure_dir_restricted,
+    ensure_text_file_matches_snapshot_with_limit, list_dir, load_text, load_text_with_limit,
 };
 use std::fs;
 use tempfile::TempDir;

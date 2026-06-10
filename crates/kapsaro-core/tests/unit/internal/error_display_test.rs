@@ -6,10 +6,10 @@
 //! Complements error_test.rs (format_user_message coverage) with table-driven
 //! Display output checks and From conversion checks.
 
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::decode_base64_standard;
-use kapsaro_core::cli_api::test_support::primitives::CryptoError;
-use kapsaro_core::cli_api::test_support::storage::ssh::SshError;
-use kapsaro_core::cli_api::test_support::wire::FormatError;
+use crate::crypto::CryptoError;
+use crate::format::codec::base64_public::decode_base64_standard;
+use crate::format::FormatError;
+use crate::io::ssh::SshError;
 use kapsaro_core::{Error, ErrorKind};
 use std::error::Error as StdError;
 

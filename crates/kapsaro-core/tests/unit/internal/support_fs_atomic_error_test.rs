@@ -6,9 +6,7 @@
 //! Complements support_fs_atomic_test.rs (happy paths) by exercising
 //! failure branches of save_bytes / save_json / save_text.
 
-use kapsaro_core::cli_api::test_support::helpers::fs::atomic::{
-    save_bytes, save_json, save_text, save_text_restricted,
-};
+use crate::support::fs::atomic::{save_bytes, save_json, save_text, save_text_restricted};
 use kapsaro_core::ErrorKind;
 use serde::{Serialize, Serializer};
 use std::fs;

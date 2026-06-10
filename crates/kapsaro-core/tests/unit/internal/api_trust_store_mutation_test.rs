@@ -9,11 +9,11 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+use crate::io::ssh::backend::SignatureBackend;
+use crate::support::fs::lock::with_file_lock;
 use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
 use kapsaro_core::api::trust::TrustApproval;
-use kapsaro_core::cli_api::test_support::helpers::fs::lock::with_file_lock;
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
 use kapsaro_core::ErrorKind;
 use tempfile::TempDir;
 

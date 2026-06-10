@@ -5,7 +5,7 @@
 //!
 //! Tests for parsing logic (parse_identity_agent, parse_quoted_value, extract_config_line_before_comment)
 
-use kapsaro_core::cli_api::test_support::storage::ssh::openssh_config::{
+use crate::io::ssh::openssh_config::{
     extract_config_line_before_comment, parse_identity_agent, parse_quoted_value,
 };
 

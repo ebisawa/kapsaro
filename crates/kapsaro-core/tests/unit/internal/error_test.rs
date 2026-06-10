@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::primitives::CryptoError;
+use crate::crypto::CryptoError;
 use kapsaro_core::{Error, ErrorKind};
 
 #[test]

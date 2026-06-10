@@ -1,10 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::support::display::{sanitize_display_field, sanitize_display_field_with_limit};
 use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
-use kapsaro_core::cli_api::test_support::helpers::display::{
-    sanitize_display_field, sanitize_display_field_with_limit,
-};
 
 #[test]
 fn test_sanitize_display_field_escapes_newlines_and_controls() {

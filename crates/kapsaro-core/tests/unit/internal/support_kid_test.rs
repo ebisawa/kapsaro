@@ -3,11 +3,11 @@
 
 //! Unit tests for kid helpers.
 
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
-use kapsaro_core::cli_api::test_support::helpers::kid::{
+use crate::format::kid::derive_public_key_kid;
+use crate::support::kid::{
     format_kid_half_display, normalize_kid, normalize_kid_query, resolve_unique_kid,
 };
-use kapsaro_core::cli_api::test_support::wire::kid::derive_public_key_kid;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use serde_json::json;
 
 const CANONICAL_KID: &str = "RDVWSZ1QTMF4A4RX58T9A5W0YSXKCR8B";

@@ -463,3 +463,7 @@ fn recipient_review_request(
         recipient_kids: current.recipient_kids().to_vec(),
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/api_trust_store_mutation_test.rs"]
+mod api_trust_store_mutation_test;

@@ -169,3 +169,7 @@ fn extract_comment(line: &str) -> String {
         .map(|c| c.trim().to_string())
         .unwrap_or_default()
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/ssh_external_pubkey_test.rs"]
+mod ssh_external_pubkey_test;

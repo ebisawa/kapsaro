@@ -43,6 +43,10 @@ pub fn validate_sshsig_inputs(ssh_pubkey: &str, signature: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/ssh_verify_test.rs"]
+mod ssh_verify_test;
+
 /// Verify an SSHSIG armored signature using the `SshKeygen` trait.
 pub fn verify_sshsig(
     ssh_keygen: &dyn SshKeygen,

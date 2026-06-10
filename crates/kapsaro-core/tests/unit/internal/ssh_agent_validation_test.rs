@@ -3,10 +3,10 @@
 
 //! Unit tests for SSH agent validation - key matching logic
 
-use kapsaro_core::cli_api::test_support::storage::ssh::agent::validation::{
+use crate::io::ssh::agent::validation::{
     find_key_in_agent, validate_agent_has_keys, AgentIdentity,
 };
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::parse::decode_ssh_public_key_blob;
+use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 
 const ED25519_KEY_NO_COMMENT: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkB6jid+Y/7wt0S+9jTJGX1UytxIHOO3GXVPZPY1OYT";

@@ -3,11 +3,9 @@
 
 //! Unit tests for crypto module
 
-use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store_bytes;
-use kapsaro_core::cli_api::test_support::operations::trust::verification::verify_trust_store_bytes;
-use kapsaro_core::cli_api::test_support::primitives::kem::{
-    derive_public_key_from_secret, X25519PublicKey, X25519SecretKey,
-};
+use crate::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
+use crate::feature::trust::signature::sign_trust_store_bytes;
+use crate::feature::trust::verification::verify_trust_store_bytes;
 use serde::{Deserialize, Serialize};
 
 // Test helper to generate X25519 keypair from seed
@@ -37,7 +35,7 @@ fn generate_ed25519_keypair(
 
 #[test]
 fn test_generate_keypair_public_key_matches_secret_key() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::generate_keypair;
+    use crate::crypto::kem::generate_keypair;
 
     let (secret_key, public_key) = generate_keypair().unwrap();
     let derived_public_key = derive_public_key_from_secret(&secret_key).unwrap();
@@ -49,8 +47,8 @@ fn test_generate_keypair_public_key_matches_secret_key() {
 
 #[test]
 fn test_hpke_enc_length() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::seal_base;
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Info, Plaintext};
+    use crate::crypto::kem::seal_base;
+    use crate::crypto::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [1u8; 32];
     let (_, pk) = generate_x25519_keypair(member_seed);
@@ -65,10 +63,8 @@ fn test_hpke_enc_length() {
 
 #[test]
 fn test_hpke_different_aad_error() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{
-        Aad, Ciphertext, Enc, Info, Plaintext,
-    };
+    use crate::crypto::kem::{open_base, seal_base};
+    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -86,10 +82,8 @@ fn test_hpke_different_aad_error() {
 
 #[test]
 fn test_hpke_wrong_recipient_key_error() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{
-        Aad, Ciphertext, Enc, Info, Plaintext,
-    };
+    use crate::crypto::kem::{open_base, seal_base};
+    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 
     let (_, alice_pk) = generate_x25519_keypair([1u8; 32]);
     let (bob_sk, _) = generate_x25519_keypair([2u8; 32]);
@@ -106,8 +100,8 @@ fn test_hpke_wrong_recipient_key_error() {
 
 #[test]
 fn test_hpke_ciphertext_length() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::seal_base;
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{Aad, Info, Plaintext};
+    use crate::crypto::kem::seal_base;
+    use crate::crypto::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (_, pk) = generate_x25519_keypair(member_seed);
@@ -122,10 +116,8 @@ fn test_hpke_ciphertext_length() {
 
 #[test]
 fn test_hpke_empty_plaintext() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{
-        Aad, Ciphertext, Enc, Info, Plaintext,
-    };
+    use crate::crypto::kem::{open_base, seal_base};
+    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -143,7 +135,7 @@ fn test_hpke_empty_plaintext() {
 
 #[test]
 fn test_plaintext_debug_redacts_contents() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::Plaintext;
+    use crate::crypto::types::data::Plaintext;
 
     let plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
     let debug = format!("{:?}", plaintext);
@@ -168,7 +160,7 @@ fn test_plaintext_debug_redacts_contents() {
 
 #[test]
 fn test_plaintext_to_zeroizing_vec_clones_contents() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::Plaintext;
+    use crate::crypto::types::data::Plaintext;
 
     let plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
     let bytes = plaintext.to_zeroizing_vec();
@@ -178,7 +170,7 @@ fn test_plaintext_to_zeroizing_vec_clones_contents() {
 
 #[test]
 fn test_plaintext_take_zeroizing_vec_moves_contents() {
-    use kapsaro_core::cli_api::test_support::primitives::types::data::Plaintext;
+    use crate::crypto::types::data::Plaintext;
 
     let mut plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
     let bytes = plaintext.take_zeroizing_vec();
@@ -189,10 +181,8 @@ fn test_plaintext_take_zeroizing_vec_moves_contents() {
 
 #[test]
 fn test_hpke_open_error_message_sanitized() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::{open_base, seal_base};
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{
-        Aad, Ciphertext, Enc, Info, Plaintext,
-    };
+    use crate::crypto::kem::{open_base, seal_base};
+    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -215,10 +205,8 @@ fn test_hpke_open_error_message_sanitized() {
 
 #[test]
 fn test_hpke_invalid_enc_error_message_sanitized() {
-    use kapsaro_core::cli_api::test_support::primitives::kem::{open_base, X25519PublicKey};
-    use kapsaro_core::cli_api::test_support::primitives::types::data::{
-        Aad, Ciphertext, Enc, Info,
-    };
+    use crate::crypto::kem::{open_base, X25519PublicKey};
+    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info};
 
     let (sk, _) = generate_x25519_keypair([7u8; 32]);
     let _unused_pk = X25519PublicKey::from_bytes([9u8; 32]);
@@ -254,7 +242,7 @@ fn test_ed25519_wrong_key_error() {
         version: 1,
     };
 
-    let canonical_bytes = kapsaro_core::cli_api::test_support::wire::jcs::normalize(&doc).unwrap();
+    let canonical_bytes = crate::format::jcs::normalize(&doc).unwrap();
     let signature = sign_trust_store_bytes(
         &canonical_bytes,
         &alice_sk,

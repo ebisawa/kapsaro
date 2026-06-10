@@ -34,3 +34,7 @@ pub(crate) mod types;
 #[cfg(test)]
 #[path = "../tests/unit/internal/crypto_hmac_internal_test.rs"]
 mod crypto_hmac_internal_test;
+
+#[cfg(test)]
+#[path = "../tests/unit/internal/crypto_test.rs"]
+mod crypto_test;

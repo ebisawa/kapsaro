@@ -3,13 +3,13 @@
 
 //! Tests for Ed25519DirectBackend
 
-use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
-use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
 use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
 use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
 use kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use kapsaro_test_support::ed25519_backend::Ed25519DirectBackend;
+use kapsaro_test_support::fixture::generate_temp_ssh_keypair_in_dir;
 use tempfile::TempDir;
 
 #[test]

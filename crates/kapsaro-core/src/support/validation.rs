@@ -45,6 +45,10 @@ pub fn validate_member_handle(id: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_validation_test.rs"]
+mod support_validation_test;
+
 /// Validate a GitHub login.
 ///
 /// GitHub logins are ASCII identifiers for REST `/users/{login}` lookups.

@@ -347,3 +347,7 @@ fn invalid_character_error(field_name: &str, detail: &str) -> Error {
 fn invalid_length_error(field_name: &str, detail: &str) -> Error {
     Error::build_parse_error(format!("{}: {}", field_name, detail))
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_codec_base64_test.rs"]
+mod support_codec_base64_test;

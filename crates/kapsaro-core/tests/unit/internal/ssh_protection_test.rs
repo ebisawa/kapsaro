@@ -1,31 +1,29 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::domain::private_key::{
+use crate::crypto::aead::xchacha;
+use crate::crypto::kdf::derive_hkdf_sha256_array;
+use crate::crypto::types::data::{Ikm, Info, Plaintext};
+use crate::crypto::types::keys::XChaChaKey;
+use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
+use crate::feature::key::protection::binding::build_private_key_aad;
+use crate::feature::key::protection::encryption::{
+    decrypt_private_key, encrypt_private_key, PrivateKeyEncryptionParams,
+};
+use crate::feature::key::protection::key_derivation::build_sign_message;
+use crate::format::codec::base64_public::encode_base64url_nopad;
+use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
+use crate::model::private_key::{
     IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData,
     PrivateKeyPlaintext, PrivateKeyProtected,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::{
+use crate::model::wire::{
     algorithm,
     context::{HKDF_INFO_PRIVATE_KEY_SSHSIG_V1, SSHSIG_MESSAGE_PREFIX_PRIVATE_KEY_PROTECTION_V1},
     format,
 };
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::operations::key::protection::binding::build_private_key_aad;
-use kapsaro_core::cli_api::test_support::operations::key::protection::encryption::{
-    decrypt_private_key, encrypt_private_key, PrivateKeyEncryptionParams,
-};
-use kapsaro_core::cli_api::test_support::operations::key::protection::key_derivation::build_sign_message;
-use kapsaro_core::cli_api::test_support::primitives::aead::xchacha;
-use kapsaro_core::cli_api::test_support::primitives::kdf::derive_hkdf_sha256_array;
-use kapsaro_core::cli_api::test_support::primitives::types::data::{Ikm, Info, Plaintext};
-use kapsaro_core::cli_api::test_support::primitives::types::keys::XChaChaKey;
-use kapsaro_core::cli_api::test_support::primitives::types::primitives::{
-    HkdfSalt, PrivateKeyIkmSalt,
-};
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 use std::cell::Cell;
 use std::collections::BTreeSet;
 
@@ -39,15 +37,13 @@ fn build_test_plaintext() -> PrivateKeyPlaintext {
         keys: IdentityKeysPrivate {
             kem: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_X25519
-                    .to_string(),
+                crv: crate::model::wire::jwk::CURVE_X25519.to_string(),
                 x: b64(&[2u8; 32]),
                 d: b64(&[1u8; 32]),
             },
             sig: JwkOkpPrivateKey {
                 kty: "OKP".to_string(),
-                crv: kapsaro_core::cli_api::test_support::domain::wire::jwk::CURVE_ED25519
-                    .to_string(),
+                crv: crate::model::wire::jwk::CURVE_ED25519.to_string(),
                 x: b64(&[4u8; 32]),
                 d: b64(&[3u8; 32]),
             },

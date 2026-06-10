@@ -5,23 +5,17 @@
 //!
 //! Tests for verify_sshsig validation logic
 
+use crate::format::codec::base64_public::{encode_base64_standard, encode_base64url_nopad};
+use crate::format::public_key::AttestationBodyInput;
+use crate::io::ssh::external::traits::SshKeygen;
+use crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
+use crate::io::ssh::protocol::constants::ATTESTATION_NAMESPACE;
+use crate::io::ssh::protocol::types::Ed25519RawSignature;
+use crate::io::ssh::protocol::wire::encode_ssh_string;
+use crate::io::ssh::verify::verify_sshsig;
+use crate::io::ssh::verify::{build_attestation_signed_data, verify_attestation};
+use crate::model::public_key::{BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey};
 use ed25519_dalek::{Signer, SigningKey};
-use kapsaro_core::cli_api::test_support::domain::public_key::{
-    BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey,
-};
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::{
-    encode_base64_standard, encode_base64url_nopad,
-};
-use kapsaro_core::cli_api::test_support::storage::ssh::external::traits::SshKeygen;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::ATTESTATION_NAMESPACE;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::wire::encode_ssh_string;
-use kapsaro_core::cli_api::test_support::storage::ssh::verify::verify_sshsig;
-use kapsaro_core::cli_api::test_support::storage::ssh::verify::{
-    build_attestation_signed_data, verify_attestation,
-};
-use kapsaro_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -115,9 +109,7 @@ fn test_verify_sshsig_validation() {
     assert!(verify_sshsig(&keygen, "ssh-rsa AAAA...", b"msg", VALID_SIG)
         .unwrap_err()
         .to_string()
-        .contains(
-            kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_TYPE_ED25519
-        ));
+        .contains(crate::io::ssh::protocol::constants::KEY_TYPE_ED25519));
 
     assert!(verify_sshsig(&keygen, ED25519_KEY, b"msg", "")
         .unwrap_err()

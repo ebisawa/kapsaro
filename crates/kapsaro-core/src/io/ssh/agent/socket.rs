@@ -43,3 +43,7 @@ pub fn resolve_agent_socket_path() -> Result<PathBuf> {
 pub fn is_agent_socket_available() -> bool {
     resolve_agent_socket_path().is_ok()
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/ssh_agent_socket_test.rs"]
+mod ssh_agent_socket_test;

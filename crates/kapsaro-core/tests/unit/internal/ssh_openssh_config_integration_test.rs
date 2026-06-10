@@ -5,8 +5,8 @@
 //!
 //! These tests require file system operations and environment variable manipulation
 
+use crate::io::ssh::openssh_config::find_identity_agent;
 use crate::test_utils::EnvGuard;
-use kapsaro_core::cli_api::test_support::storage::ssh::openssh_config::find_identity_agent;
 use std::env;
 use std::fs;
 use tempfile::TempDir;

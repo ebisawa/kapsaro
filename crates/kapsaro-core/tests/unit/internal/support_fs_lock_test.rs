@@ -5,7 +5,7 @@
 //!
 //! Tests for file locking utilities.
 
-use kapsaro_core::cli_api::test_support::helpers::fs::lock::with_file_lock;
+use crate::support::fs::lock::with_file_lock;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;

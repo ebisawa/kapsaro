@@ -183,3 +183,7 @@ impl TryFrom<Zeroizing<Vec<u8>>> for SecretString {
         SecretBytes::from_zeroizing(value).try_into()
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_secret_test.rs"]
+mod support_secret_test;

@@ -35,3 +35,7 @@ pub fn list_dir(path: &Path) -> Result<ReadDir> {
         )
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/support_fs_test.rs"]
+mod support_fs_test;

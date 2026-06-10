@@ -3,9 +3,7 @@
 
 //! Unit tests for SSH wire format primitives (Phase 11.1 - TDD Red phase)
 
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::wire::{
-    decode_ssh_string, encode_ssh_string,
-};
+use crate::io::ssh::protocol::wire::{decode_ssh_string, encode_ssh_string};
 
 #[test]
 fn test_ssh_string_encode_empty() {

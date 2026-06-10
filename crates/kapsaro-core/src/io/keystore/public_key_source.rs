@@ -85,3 +85,7 @@ impl PublicKeySource for WorkspacePublicKeySource {
             .collect()
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_keystore_public_key_source_test.rs"]
+mod io_keystore_public_key_source_test;

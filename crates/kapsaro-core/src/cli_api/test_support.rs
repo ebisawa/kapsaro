@@ -6,7 +6,7 @@
 
 pub mod settings {
     pub mod types {
-        pub use crate::config::types::{ConfigKey, SshSigningMethod};
+        pub use crate::config::types::SshSigningMethod;
     }
 }
 pub mod primitives {
@@ -215,22 +215,10 @@ pub mod wire {
 pub mod storage {
     pub mod config {
         pub mod paths {
-            pub use crate::io::config::paths::{get_base_dir, get_global_config_path};
-        }
-        pub mod store {
-            pub use crate::io::config::store::{
-                load_config_file, set_config_value, unset_config_value,
-            };
+            pub use crate::io::config::paths::get_base_dir;
         }
     }
     pub mod github {
-        #[cfg(feature = "online")]
-        pub mod account {
-            pub use crate::io::github::account::{
-                resolve_github_account_by_login_with_api, GitHubAccountLookupApi,
-                GitHubAccountLookupFuture,
-            };
-        }
         #[cfg(feature = "online")]
         pub mod http {
             pub use crate::io::github::http::GitHubKeyRecord;
@@ -238,53 +226,23 @@ pub mod storage {
     }
     pub mod keystore {
         pub mod active {
-            pub use crate::io::keystore::active::{
-                clear_active_kid, load_active_kid, set_active_kid,
-            };
-        }
-        pub mod helpers {
-            pub use crate::io::keystore::helpers::resolve_kid;
+            pub use crate::io::keystore::active::{load_active_kid, set_active_kid};
         }
         pub mod member {
-            pub use crate::io::keystore::member::{
-                find_active_key_document, load_public_keys_for_member,
-                load_single_member_handle_from_keystore,
-            };
+            pub use crate::io::keystore::member::find_active_key_document;
         }
         pub mod paths {
-            pub use crate::io::keystore::paths::{
-                get_active_file_path_from_root, get_key_path_from_root,
-                get_keystore_root_from_base, get_member_keystore_path_from_root,
-                get_private_key_file_path_from_root, get_public_key_file_path_from_root,
-            };
-        }
-        pub mod public_key_source {
-            pub use crate::io::keystore::public_key_source::{
-                PublicKeySource, WorkspacePublicKeySource,
-            };
-        }
-        pub mod public_keys {
-            pub use crate::io::keystore::public_keys::load_public_keys_for_member_handles;
-        }
-        pub mod resolver {
-            pub use crate::io::keystore::resolver::KeystoreResolver;
+            pub use crate::io::keystore::paths::get_keystore_root_from_base;
         }
         pub mod storage {
             pub use crate::io::keystore::storage::{
-                list_kids, list_member_handles, load_private_key, load_public_key,
-                save_key_pair_atomic,
+                list_kids, load_private_key, save_key_pair_atomic,
             };
         }
-    }
-    pub mod process {
-        pub use crate::io::process::execute_command_with_env;
     }
     pub mod ssh {
         pub use crate::io::ssh::SshError;
         pub mod agent {
-            pub mod client {
-                pub use crate::io::ssh::agent::client::DefaultAgentSigner;
-            }
             pub mod socket {
                 pub use crate::io::ssh::agent::socket::resolve_agent_socket_path;
             }
@@ -293,15 +251,12 @@ pub mod storage {
             }
             pub mod validation {
                 pub use crate::io::ssh::agent::validation::{
-                    find_key_in_agent, validate_agent_has_keys, validate_key_present, AgentIdentity,
+                    find_key_in_agent, validate_agent_has_keys, AgentIdentity,
                 };
             }
         }
         pub mod backend {
             pub use crate::io::ssh::backend::SignatureBackend;
-            pub mod ssh_agent {
-                pub use crate::io::ssh::backend::ssh_agent::SshAgentBackend;
-            }
             pub mod ssh_keygen {
                 pub use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
             }
@@ -372,10 +327,10 @@ pub mod storage {
     }
     pub mod trust {
         pub mod paths {
-            pub use crate::io::trust::paths::{get_trust_store_dir, get_trust_store_file_path};
+            pub use crate::io::trust::paths::get_trust_store_file_path;
         }
         pub mod store {
-            pub use crate::io::trust::store::{load_trust_store, save_trust_store};
+            pub use crate::io::trust::store::save_trust_store;
         }
     }
     pub mod verify_online {
@@ -387,9 +342,6 @@ pub mod storage {
             pub use crate::io::verify_online::github::{
                 verify_github_account_with_api, GitHubApiFuture, GitHubVerificationApi,
             };
-            pub mod preflight {
-                pub use crate::io::verify_online::github::preflight::verify_ssh_key_on_github_with_api;
-            }
         }
     }
     pub mod workspace {
@@ -400,14 +352,7 @@ pub mod storage {
         }
         pub mod members {
             pub use crate::io::workspace::members::{
-                list_active_member_handles, load_active_member_files, load_member_file,
-                load_member_file_from_path, load_member_files, load_verified_member_file_from_path,
-            };
-        }
-        pub mod setup {
-            pub use crate::io::workspace::setup::{
-                check_workspace_has_active_members, ensure_workspace_structure,
-                save_member_document, validate_workspace_exists,
+                load_active_member_files, load_member_file_from_path, load_member_files,
             };
         }
     }
@@ -532,11 +477,6 @@ pub mod helpers {
     pub mod kid {
         pub use crate::support::kid::{
             format_kid_half_display, normalize_kid, normalize_kid_query, resolve_unique_kid,
-        };
-    }
-    pub mod limits {
-        pub use crate::support::limits::{
-            MAX_ACTIVE_KID_FILE_SIZE, MAX_CONFIG_FILE_SIZE, MAX_JSON_DEPTH, MAX_WRAP_ITEMS,
         };
     }
     pub mod secret {

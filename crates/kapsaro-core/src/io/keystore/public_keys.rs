@@ -34,3 +34,7 @@ pub fn load_public_keys_for_member_handles(
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/keystore_public_keys_test.rs"]
+mod keystore_public_keys_test;

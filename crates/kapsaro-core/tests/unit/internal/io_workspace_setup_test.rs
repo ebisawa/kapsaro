@@ -1,14 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::setup_test_keystore_from_fixtures;
-use crate::test_utils::ALICE_MEMBER_HANDLE;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::load_public_key;
-use kapsaro_core::cli_api::test_support::storage::workspace::setup::{
+use crate::io::keystore::active::load_active_kid;
+use crate::io::keystore::storage::load_public_key;
+use crate::io::workspace::setup::{
     check_workspace_has_active_members, ensure_workspace_structure, save_member_document,
     validate_workspace_exists,
 };
+use crate::test_utils::setup_test_keystore_from_fixtures;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
 use std::fs;
 use tempfile::TempDir;
 

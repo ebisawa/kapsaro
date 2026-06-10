@@ -58,3 +58,7 @@ fn remove_parent_kapsaro_env_vars(command: &mut Command) {
 fn is_kapsaro_env_key(key: &OsStr) -> bool {
     key.to_str().is_some_and(|key| key.starts_with("KAPSARO_"))
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/io_process_env_test.rs"]
+mod io_process_env_test;

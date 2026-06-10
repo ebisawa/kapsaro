@@ -5,10 +5,8 @@
 //!
 //! Tests for load_config_file, set_config_value, and unset_config_value functions.
 
-use kapsaro_core::cli_api::test_support::helpers::limits::MAX_CONFIG_FILE_SIZE;
-use kapsaro_core::cli_api::test_support::storage::config::store::{
-    load_config_file, set_config_value, unset_config_value,
-};
+use crate::io::config::store::{load_config_file, set_config_value, unset_config_value};
+use crate::support::limits::MAX_CONFIG_FILE_SIZE;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

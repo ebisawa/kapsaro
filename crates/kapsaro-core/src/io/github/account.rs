@@ -71,3 +71,7 @@ pub async fn resolve_github_account_by_login_with_api(
 
     Ok(account)
 }
+
+#[cfg(all(test, feature = "online"))]
+#[path = "../../../tests/unit/internal/io_github_account_test.rs"]
+mod io_github_account_test;

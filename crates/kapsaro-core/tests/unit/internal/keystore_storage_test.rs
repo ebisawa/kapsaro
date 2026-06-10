@@ -3,7 +3,7 @@
 
 //! Unit tests for keystore storage
 
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_member_handles;
+use crate::io::keystore::storage::list_member_handles;
 use std::fs;
 use tempfile::TempDir;
 

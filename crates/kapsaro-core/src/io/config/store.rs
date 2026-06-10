@@ -139,3 +139,7 @@ fn save_toml_table(path: &Path, table: &toml::Table) -> Result<()> {
     })?;
     DocumentStore::<CollectPermissionWarnings>::save_text_restricted(path, &content)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_config_store_test.rs"]
+mod io_config_store_test;

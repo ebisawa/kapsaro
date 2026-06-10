@@ -3,10 +3,10 @@
 
 //! Unit tests for GitHub account lookup by login.
 
-use kapsaro_core::cli_api::test_support::domain::public_key::GithubAccount;
-use kapsaro_core::cli_api::test_support::storage::github::account::{
+use crate::io::github::account::{
     resolve_github_account_by_login_with_api, GitHubAccountLookupApi, GitHubAccountLookupFuture,
 };
+use crate::model::public_key::GithubAccount;
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

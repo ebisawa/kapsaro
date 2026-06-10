@@ -223,3 +223,15 @@ pub fn find_member_by_kid(keystore_root: &Path, kid: &str) -> Result<String> {
         format_kid_display_lossy(kid)
     )))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_keystore_storage_permission_test.rs"]
+mod io_keystore_storage_permission_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/keystore_storage_test.rs"]
+mod keystore_storage_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/keystore_test.rs"]
+mod keystore_test;

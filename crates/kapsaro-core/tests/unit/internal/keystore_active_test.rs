@@ -3,10 +3,8 @@
 
 //! Unit tests for keystore active key management
 
-use kapsaro_core::cli_api::test_support::helpers::limits::MAX_ACTIVE_KID_FILE_SIZE;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::{
-    clear_active_kid, load_active_kid, set_active_kid,
-};
+use crate::io::keystore::active::{clear_active_kid, load_active_kid, set_active_kid};
+use crate::support::limits::MAX_ACTIVE_KID_FILE_SIZE;
 use tempfile::TempDir;
 
 #[test]

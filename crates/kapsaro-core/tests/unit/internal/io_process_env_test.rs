@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::helpers::secret::SecretString;
-use kapsaro_core::cli_api::test_support::storage::process::execute_command_with_env;
+use crate::io::process::execute_command_with_env;
+use crate::support::secret::SecretString;
 use std::collections::BTreeMap;
 
 use crate::test_utils::EnvGuard;

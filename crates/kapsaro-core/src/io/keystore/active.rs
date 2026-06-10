@@ -70,3 +70,7 @@ fn parse_active_kid(content: &str) -> Result<Option<String>, Error> {
     }
     Ok(Some(normalize_kid(kid)?))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/keystore_active_test.rs"]
+mod keystore_active_test;

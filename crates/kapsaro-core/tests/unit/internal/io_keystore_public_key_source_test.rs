@@ -3,9 +3,7 @@
 
 //! Unit tests for PublicKeySource trait implementations
 
-use kapsaro_core::cli_api::test_support::storage::keystore::public_key_source::{
-    PublicKeySource, WorkspacePublicKeySource,
-};
+use crate::io::keystore::public_key_source::{PublicKeySource, WorkspacePublicKeySource};
 use std::fs;
 use tempfile::TempDir;
 

@@ -3,9 +3,7 @@
 
 //! Unit tests for trust store path resolution
 
-use kapsaro_core::cli_api::test_support::storage::trust::paths::{
-    get_trust_store_dir, get_trust_store_file_path,
-};
+use crate::io::trust::paths::{get_trust_store_dir, get_trust_store_file_path};
 use std::path::Path;
 
 #[test]

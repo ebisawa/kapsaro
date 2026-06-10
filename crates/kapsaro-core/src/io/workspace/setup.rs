@@ -115,3 +115,7 @@ fn ensure_workspace_dir(path: &Path) -> Result<()> {
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_init_test.rs"]
 mod feature_init_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/io_workspace_setup_test.rs"]
+mod io_workspace_setup_test;

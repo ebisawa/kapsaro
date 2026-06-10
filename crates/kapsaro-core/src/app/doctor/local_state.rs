@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 
 use crate::app::context::member::resolve_required_member;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::store::load_existing_trust_store;
+use crate::app::trust::store::{load_existing_trust_store, TrustStoreState};
 use crate::feature::context::env_key::is_env_key_mode;
 use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
 use crate::io::keystore::active::load_active_kid;
@@ -23,7 +23,7 @@ use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
 use tracing::debug;
 
-use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
+use super::types::{DoctorCategory, DoctorCheck, DoctorStatus, DoctorSubject};
 
 use crate::support::fs::policy::is_real_dir;
 
@@ -37,61 +37,86 @@ pub fn check_local_state(
 ) -> Result<LocalStateDiagnostics> {
     let base_dir = options.resolve_base_dir()?;
     let keystore_root = options.resolve_keystore_root()?;
-    if options.debug {
-        debug!(
-            "[DOCTOR] local state: start home={}, keystore_root={}",
-            format_path_relative_to_cwd(&base_dir),
-            format_path_relative_to_cwd(&keystore_root)
-        );
-    }
-    let mut checks = vec![DoctorCheck::ok(
-        "config.paths",
-        DoctorCategory::LocalKeystore,
-        DoctorSubject::Path(format_path_relative_to_cwd(&keystore_root)),
-        "Local state paths resolved",
-    )];
+    log_local_state_start(&base_dir, &keystore_root, options.debug);
 
-    if !is_real_dir(&keystore_root) {
-        checks.push(
-            DoctorCheck::warn(
-                "keystore.root",
-                DoctorCategory::LocalKeystore,
-                DoctorSubject::Path(format_path_relative_to_cwd(&keystore_root)),
-                "Keystore root does not exist",
-            )
-            .with_next_action("create or import a local key"),
-        );
+    let mut checks = vec![build_paths_resolved_check(&keystore_root)];
+    let root_check = check_keystore_root(&keystore_root);
+    let root_present = root_check.status == DoctorStatus::Ok;
+    checks.push(root_check);
+    if !root_present {
         return Ok(LocalStateDiagnostics { checks });
     }
-    checks.push(DoctorCheck::ok(
-        "keystore.root",
-        DoctorCategory::LocalKeystore,
-        DoctorSubject::Path(format_path_relative_to_cwd(&keystore_root)),
-        "Keystore root is present",
-    ));
 
     let owner = resolve_owner(options, member_handle);
     let Some(owner) = owner else {
-        if options.debug {
-            debug!("[DOCTOR] local state: member owner unresolved");
-        }
-        checks.push(
-            DoctorCheck::warn(
-                "keystore.member",
-                DoctorCategory::LocalKeystore,
-                DoctorSubject::Path(format_path_relative_to_cwd(&base_dir)),
-                "Member handle could not be resolved",
-            )
-            .with_next_action("specify --member-handle"),
-        );
+        log_unresolved_owner(options.debug);
+        checks.push(check_unresolved_keystore_owner(&base_dir));
         return Ok(LocalStateDiagnostics { checks });
     };
-    if options.debug {
-        debug!("[DOCTOR] local state: member owner={owner}");
-    }
+    log_resolved_owner(&owner, options.debug);
 
     checks.extend(check_member_keystore(&keystore_root, &owner, options.debug));
     Ok(LocalStateDiagnostics { checks })
+}
+
+fn log_local_state_start(base_dir: &Path, keystore_root: &Path, debug_enabled: bool) {
+    if debug_enabled {
+        debug!(
+            "[DOCTOR] local state: start home={}, keystore_root={}",
+            format_path_relative_to_cwd(base_dir),
+            format_path_relative_to_cwd(keystore_root)
+        );
+    }
+}
+
+fn build_paths_resolved_check(keystore_root: &Path) -> DoctorCheck {
+    DoctorCheck::ok(
+        "config.paths",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Path(format_path_relative_to_cwd(keystore_root)),
+        "Local state paths resolved",
+    )
+}
+
+fn check_keystore_root(keystore_root: &Path) -> DoctorCheck {
+    let subject = DoctorSubject::Path(format_path_relative_to_cwd(keystore_root));
+    if is_real_dir(keystore_root) {
+        return DoctorCheck::ok(
+            "keystore.root",
+            DoctorCategory::LocalKeystore,
+            subject,
+            "Keystore root is present",
+        );
+    }
+    DoctorCheck::warn_with_next_action(
+        "keystore.root",
+        DoctorCategory::LocalKeystore,
+        subject,
+        "Keystore root does not exist",
+        "create or import a local key",
+    )
+}
+
+fn check_unresolved_keystore_owner(base_dir: &Path) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "keystore.member",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Path(format_path_relative_to_cwd(base_dir)),
+        "Member handle could not be resolved",
+        "specify --member-handle",
+    )
+}
+
+fn log_unresolved_owner(debug_enabled: bool) {
+    if debug_enabled {
+        debug!("[DOCTOR] local state: member owner unresolved");
+    }
+}
+
+fn log_resolved_owner(owner: &str, debug_enabled: bool) {
+    if debug_enabled {
+        debug!("[DOCTOR] local state: member owner={owner}");
+    }
 }
 
 pub fn check_trust_store(
@@ -102,76 +127,118 @@ pub fn check_trust_store(
     let base_dir = options.resolve_base_dir()?;
     let keystore_root = options.resolve_keystore_root()?;
     let Some(owner) = resolve_owner(options, member_handle) else {
-        return Ok(vec![DoctorCheck::warn(
-            "trust_store.present",
-            DoctorCategory::LocalTrustStore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&base_dir.join("trust"))),
-            "Local trust store owner could not be resolved",
-        )
-        .with_next_action("specify --member-handle")]);
+        return Ok(vec![check_unresolved_trust_store_owner(&base_dir)]);
     };
 
     let path = get_trust_store_file_path(&base_dir, &owner);
-    if options.debug {
-        debug!(
-            "[DOCTOR] trust store: inspect path={}, owner={}",
-            format_path_relative_to_cwd(&path),
-            owner
-        );
-    }
+    log_trust_store_path(&path, &owner, options.debug);
     if !path.exists() {
-        return Ok(vec![DoctorCheck::warn(
-            "trust_store.present",
-            DoctorCategory::LocalTrustStore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-            "Local trust store is missing",
-        )
-        .with_next_action("run kapsaro member verify --approve")]);
+        return Ok(vec![check_missing_trust_store(&path)]);
     }
 
-    let state = match load_existing_trust_store(&path, &base_dir, &keystore_root, &owner) {
-        Ok(state) => state,
-        Err(error) => {
-            return Ok(vec![DoctorCheck::fail(
-                "trust_store.signature",
-                DoctorCategory::LocalTrustStore,
-                DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-                "Local trust store is invalid",
-            )
-            .with_reason(error.format_user_message())
-            .with_next_action("follow the trust store recovery procedure")]);
-        }
+    let state = match load_trust_store_state(&path, &base_dir, &keystore_root, &owner) {
+        TrustStoreCheck::Loaded(state) => state,
+        TrustStoreCheck::Finding(check) => return Ok(vec![check]),
     };
-    if options.debug {
-        debug!(
-            "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
-            state.protected.known_keys.len(),
-            state.protected.recipient_sets.len()
-        );
-    }
+    log_trust_store_state(&state, options.debug);
 
-    let mut checks = vec![DoctorCheck::ok(
-        "trust_store.present",
-        DoctorCategory::LocalTrustStore,
-        DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-        "Local trust store is present and verified",
-    )];
-    checks.extend(state.warnings.into_iter().map(|warning| {
-        DoctorCheck::warn(
-            "trust_store.permissions",
-            DoctorCategory::LocalTrustStore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-            "Local trust store permission warning",
-        )
-        .with_reason(warning)
-        .with_next_action("fix local trust directory permissions")
-    }));
+    let mut checks = vec![check_verified_trust_store(&path)];
+    checks.extend(check_trust_store_permissions(&path, state.warnings));
     checks.extend(check_active_member_approvals(
         workspace.root_path.as_path(),
         &owner,
         &state.protected.known_keys,
     )?);
     Ok(checks)
+}
+
+fn check_unresolved_trust_store_owner(base_dir: &Path) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "trust_store.present",
+        DoctorCategory::LocalTrustStore,
+        DoctorSubject::Path(format_path_relative_to_cwd(&base_dir.join("trust"))),
+        "Local trust store owner could not be resolved",
+        "specify --member-handle",
+    )
+}
+
+fn log_trust_store_path(path: &Path, owner: &str, debug_enabled: bool) {
+    if debug_enabled {
+        debug!(
+            "[DOCTOR] trust store: inspect path={}, owner={}",
+            format_path_relative_to_cwd(path),
+            owner
+        );
+    }
+}
+
+fn check_missing_trust_store(path: &Path) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "trust_store.present",
+        DoctorCategory::LocalTrustStore,
+        DoctorSubject::Path(format_path_relative_to_cwd(path)),
+        "Local trust store is missing",
+        "run kapsaro member verify --approve",
+    )
+}
+
+enum TrustStoreCheck {
+    Loaded(TrustStoreState),
+    Finding(DoctorCheck),
+}
+
+fn load_trust_store_state(
+    path: &Path,
+    base_dir: &Path,
+    keystore_root: &Path,
+    owner: &str,
+) -> TrustStoreCheck {
+    match load_existing_trust_store(path, base_dir, keystore_root, owner) {
+        Ok(state) => TrustStoreCheck::Loaded(state),
+        Err(error) => TrustStoreCheck::Finding(DoctorCheck::fail_with_reason_and_next_action(
+            "trust_store.signature",
+            DoctorCategory::LocalTrustStore,
+            DoctorSubject::Path(format_path_relative_to_cwd(path)),
+            "Local trust store is invalid",
+            error.format_user_message(),
+            "follow the trust store recovery procedure",
+        )),
+    }
+}
+
+fn log_trust_store_state(state: &TrustStoreState, debug_enabled: bool) {
+    if debug_enabled {
+        debug!(
+            "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
+            state.protected.known_keys.len(),
+            state.protected.recipient_sets.len()
+        );
+    }
+}
+
+fn check_verified_trust_store(path: &Path) -> DoctorCheck {
+    DoctorCheck::ok(
+        "trust_store.present",
+        DoctorCategory::LocalTrustStore,
+        DoctorSubject::Path(format_path_relative_to_cwd(path)),
+        "Local trust store is present and verified",
+    )
+}
+
+fn check_trust_store_permissions(path: &Path, warnings: Vec<String>) -> Vec<DoctorCheck> {
+    warnings
+        .into_iter()
+        .map(|warning| {
+            DoctorCheck::warn_with_reason_and_next_action(
+                "trust_store.permissions",
+                DoctorCategory::LocalTrustStore,
+                DoctorSubject::Path(format_path_relative_to_cwd(path)),
+                "Local trust store permission warning",
+                warning,
+                "fix local trust directory permissions",
+            )
+        })
+        .collect()
 }
 
 fn resolve_owner(options: &CommonCommandOptions, member_handle: Option<&str>) -> Option<String> {
@@ -192,65 +259,21 @@ fn check_member_keystore(
     let member_dir = keystore_root.join(member_handle);
     let mut checks = Vec::new();
     if !is_real_dir(&member_dir) {
-        checks.push(
-            DoctorCheck::warn(
-                "keystore.member",
-                DoctorCategory::LocalKeystore,
-                DoctorSubject::Member(member_handle.to_string()),
-                "No key directory exists for member handle",
-            )
-            .with_next_action("create or import a local key"),
-        );
+        checks.push(check_missing_member_keystore(member_handle));
         return checks;
     }
-    checks.push(DoctorCheck::ok(
-        "keystore.member",
-        DoctorCategory::LocalKeystore,
-        DoctorSubject::Member(member_handle.to_string()),
-        "Member key directory exists",
-    ));
+    checks.push(check_existing_member_keystore(member_handle));
 
-    let active_kid = match load_active_kid(member_handle, keystore_root) {
-        Ok(Some(kid)) => kid,
-        Ok(None) => {
-            checks.push(
-                DoctorCheck::warn(
-                    "keystore.active_key",
-                    DoctorCategory::LocalKeystore,
-                    DoctorSubject::Member(member_handle.to_string()),
-                    "No active key is configured",
-                )
-                .with_next_action("run kapsaro key activate or kapsaro key new"),
-            );
-            return checks;
-        }
-        Err(error) => {
-            checks.push(
-                DoctorCheck::fail(
-                    "keystore.active_key",
-                    DoctorCategory::LocalKeystore,
-                    DoctorSubject::Member(member_handle.to_string()),
-                    "Active key could not be read",
-                )
-                .with_reason(error.format_user_message()),
-            );
+    let active_kid = match check_active_kid(keystore_root, member_handle) {
+        ActiveKidCheck::Configured(kid) => kid,
+        ActiveKidCheck::Finding(check) => {
+            checks.push(check);
             return checks;
         }
     };
-    if debug_enabled {
-        debug!(
-            "[DOCTOR] local state: inspect active key member_handle={}, kid={}",
-            member_handle,
-            format_kid_half_display_lossy(&active_kid)
-        );
-    }
+    log_active_kid(member_handle, &active_kid, debug_enabled);
 
-    checks.push(DoctorCheck::ok(
-        "keystore.active_key",
-        DoctorCategory::LocalKeystore,
-        DoctorSubject::General(active_kid.clone()),
-        "Active key is configured",
-    ));
+    checks.push(check_configured_active_kid(&active_kid));
     checks.push(check_private_key(keystore_root, member_handle, &active_kid));
     checks.push(check_public_key_expiry(
         keystore_root,
@@ -258,6 +281,80 @@ fn check_member_keystore(
         &active_kid,
     ));
     checks
+}
+
+enum ActiveKidCheck {
+    Configured(String),
+    Finding(DoctorCheck),
+}
+
+fn check_missing_member_keystore(member_handle: &str) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "keystore.member",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Member(member_handle.to_string()),
+        "No key directory exists for member handle",
+        "create or import a local key",
+    )
+}
+
+fn check_existing_member_keystore(member_handle: &str) -> DoctorCheck {
+    DoctorCheck::ok(
+        "keystore.member",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Member(member_handle.to_string()),
+        "Member key directory exists",
+    )
+}
+
+fn check_active_kid(keystore_root: &Path, member_handle: &str) -> ActiveKidCheck {
+    match load_active_kid(member_handle, keystore_root) {
+        Ok(Some(kid)) => ActiveKidCheck::Configured(kid),
+        Ok(None) => ActiveKidCheck::Finding(check_missing_active_kid(member_handle)),
+        Err(error) => ActiveKidCheck::Finding(check_unreadable_active_kid(
+            member_handle,
+            error.format_user_message(),
+        )),
+    }
+}
+
+fn check_missing_active_kid(member_handle: &str) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "keystore.active_key",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Member(member_handle.to_string()),
+        "No active key is configured",
+        "run kapsaro key activate or kapsaro key new",
+    )
+}
+
+fn check_unreadable_active_kid(member_handle: &str, reason: impl Into<String>) -> DoctorCheck {
+    DoctorCheck::fail_with_reason(
+        "keystore.active_key",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Member(member_handle.to_string()),
+        "Active key could not be read",
+        reason,
+    )
+}
+
+fn log_active_kid(member_handle: &str, active_kid: &str, debug_enabled: bool) {
+    if debug_enabled {
+        debug!(
+            "[DOCTOR] local state: inspect active key member_handle={}, kid={}",
+            member_handle,
+            format_kid_half_display_lossy(active_kid)
+        );
+    }
+}
+
+fn check_configured_active_kid(active_kid: &str) -> DoctorCheck {
+    DoctorCheck::ok(
+        "keystore.active_key",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::General(active_kid.to_string()),
+        "Active key is configured",
+    )
 }
 
 fn check_private_key(keystore_root: &Path, member_handle: &str, kid: &str) -> DoctorCheck {
@@ -269,58 +366,81 @@ fn check_private_key(keystore_root: &Path, member_handle: &str, kid: &str) -> Do
             DoctorSubject::Path(format_path_relative_to_cwd(&path)),
             "Active private key can be loaded",
         ),
-        Err(error) => DoctorCheck::fail(
+        Err(error) => DoctorCheck::fail_with_reason_and_next_action(
             "keystore.private_key",
             DoctorCategory::LocalKeystore,
             DoctorSubject::Path(format_path_relative_to_cwd(&path)),
             "Active private key cannot be loaded",
-        )
-        .with_reason(error.format_user_message())
-        .with_next_action("check key backup or restore"),
+            error.format_user_message(),
+            "check key backup or restore",
+        ),
     }
 }
 
 fn check_public_key_expiry(keystore_root: &Path, member_handle: &str, kid: &str) -> DoctorCheck {
     let path = get_public_key_file_path_from_root(keystore_root, member_handle, kid);
-    match load_public_key(keystore_root, member_handle, kid).and_then(|public_key| {
+    let result = load_public_key(keystore_root, member_handle, kid).and_then(|public_key| {
         check_key_expiry(&public_key.protected.expires_at, OffsetDateTime::now_utc())
-    }) {
-        Ok(KeyExpiryStatus::Valid) => DoctorCheck::ok(
-            "keystore.expiry",
-            DoctorCategory::LocalKeystore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-            "Active local key has sufficient validity",
-        ),
+    });
+    build_public_key_expiry_check(&path, result)
+}
+
+fn build_public_key_expiry_check(path: &Path, result: Result<KeyExpiryStatus>) -> DoctorCheck {
+    match result {
+        Ok(KeyExpiryStatus::Valid) => build_valid_public_key_expiry_check(path),
         Ok(KeyExpiryStatus::ExpiringSoon {
             expires_at,
             days_remaining,
-        }) => DoctorCheck::warn(
+        }) => build_expiring_public_key_check(path, expires_at, days_remaining),
+        Ok(KeyExpiryStatus::Expired { expires_at }) => {
+            build_expired_public_key_check(path, expires_at)
+        }
+        Err(error) => DoctorCheck::fail_with_reason(
             "keystore.expiry",
             DoctorCategory::LocalKeystore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-            "Active local key expiry is near",
-        )
-        .with_reason(format!(
+            DoctorSubject::Path(format_path_relative_to_cwd(path)),
+            "Active local key expiry could not be checked",
+            error.format_user_message(),
+        ),
+    }
+}
+
+fn build_valid_public_key_expiry_check(path: &Path) -> DoctorCheck {
+    DoctorCheck::ok(
+        "keystore.expiry",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Path(format_path_relative_to_cwd(path)),
+        "Active local key has sufficient validity",
+    )
+}
+
+fn build_expiring_public_key_check(
+    path: &Path,
+    expires_at: String,
+    days_remaining: i64,
+) -> DoctorCheck {
+    DoctorCheck::warn_with_reason_and_next_action(
+        "keystore.expiry",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Path(format_path_relative_to_cwd(path)),
+        "Active local key expiry is near",
+        format!(
             "expires_at: {}; days remaining: {}",
             expires_at, days_remaining
-        ))
-        .with_next_action("plan key rotation"),
-        Ok(KeyExpiryStatus::Expired { expires_at }) => DoctorCheck::fail(
-            "keystore.expiry",
-            DoctorCategory::LocalKeystore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-            "Active local key is expired",
-        )
-        .with_reason(format!("expires_at: {}", expires_at))
-        .with_next_action("rotate the key before write-path commands"),
-        Err(error) => DoctorCheck::fail(
-            "keystore.expiry",
-            DoctorCategory::LocalKeystore,
-            DoctorSubject::Path(format_path_relative_to_cwd(&path)),
-            "Active local key expiry could not be checked",
-        )
-        .with_reason(error.format_user_message()),
-    }
+        ),
+        "plan key rotation",
+    )
+}
+
+fn build_expired_public_key_check(path: &Path, expires_at: String) -> DoctorCheck {
+    DoctorCheck::fail_with_reason_and_next_action(
+        "keystore.expiry",
+        DoctorCategory::LocalKeystore,
+        DoctorSubject::Path(format_path_relative_to_cwd(path)),
+        "Active local key is expired",
+        format!("expires_at: {}", expires_at),
+        "rotate the key before write-path commands",
+    )
 }
 
 fn check_active_member_approvals(
@@ -333,28 +453,31 @@ fn check_active_member_approvals(
         if member.protected.subject_handle == owner {
             continue;
         }
-        let known = known_keys.iter().any(|known| {
-            known.kid == member.protected.kid
-                && known.subject_handle == member.protected.subject_handle
-        });
-        if known {
-            checks.push(DoctorCheck::ok(
-                "trust_store.active_approval",
-                DoctorCategory::LocalTrustStore,
-                DoctorSubject::Member(member.protected.subject_handle),
-                "Active member key is approved",
-            ));
-        } else {
-            checks.push(
-                DoctorCheck::warn(
-                    "trust_store.active_approval",
-                    DoctorCategory::LocalTrustStore,
-                    DoctorSubject::Member(member.protected.subject_handle),
-                    "Active member key is not in local approval cache",
-                )
-                .with_next_action("run kapsaro member verify --approve"),
-            );
-        }
+        checks.push(check_active_member_approval(&member, known_keys));
     }
     Ok(checks)
+}
+
+fn check_active_member_approval(
+    member: &crate::model::public_key::PublicKey,
+    known_keys: &[crate::model::trust_store::KnownKey],
+) -> DoctorCheck {
+    let known = known_keys.iter().any(|known| {
+        known.kid == member.protected.kid && known.subject_handle == member.protected.subject_handle
+    });
+    if known {
+        return DoctorCheck::ok(
+            "trust_store.active_approval",
+            DoctorCategory::LocalTrustStore,
+            DoctorSubject::Member(member.protected.subject_handle.clone()),
+            "Active member key is approved",
+        );
+    }
+    DoctorCheck::warn_with_next_action(
+        "trust_store.active_approval",
+        DoctorCategory::LocalTrustStore,
+        DoctorSubject::Member(member.protected.subject_handle.clone()),
+        "Active member key is not in local approval cache",
+        "run kapsaro member verify --approve",
+    )
 }

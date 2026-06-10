@@ -145,6 +145,50 @@ impl DoctorCheck {
         self.next_action = Some(next_action.into());
         self
     }
+
+    pub(crate) fn warn_with_next_action(
+        id: &'static str,
+        category: DoctorCategory,
+        subject: DoctorSubject,
+        message: impl Into<String>,
+        next_action: impl Into<String>,
+    ) -> Self {
+        Self::warn(id, category, subject, message).with_next_action(next_action)
+    }
+
+    pub(crate) fn fail_with_reason(
+        id: &'static str,
+        category: DoctorCategory,
+        subject: DoctorSubject,
+        message: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::fail(id, category, subject, message).with_reason(reason)
+    }
+
+    pub(crate) fn fail_with_reason_and_next_action(
+        id: &'static str,
+        category: DoctorCategory,
+        subject: DoctorSubject,
+        message: impl Into<String>,
+        reason: impl Into<String>,
+        next_action: impl Into<String>,
+    ) -> Self {
+        Self::fail_with_reason(id, category, subject, message, reason).with_next_action(next_action)
+    }
+
+    pub(crate) fn warn_with_reason_and_next_action(
+        id: &'static str,
+        category: DoctorCategory,
+        subject: DoctorSubject,
+        message: impl Into<String>,
+        reason: impl Into<String>,
+        next_action: impl Into<String>,
+    ) -> Self {
+        Self::warn(id, category, subject, message)
+            .with_reason(reason)
+            .with_next_action(next_action)
+    }
 }
 
 #[derive(Debug, Clone)]

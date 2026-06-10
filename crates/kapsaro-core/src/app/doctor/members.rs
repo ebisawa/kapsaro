@@ -8,10 +8,10 @@ use time::OffsetDateTime;
 
 use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
 use crate::feature::member::verification::{
-    derive_member_handle_from_path, verify_member_public_key_file,
+    derive_member_handle_from_path, verify_member_public_key_file, VerifiedMemberFile,
 };
 use crate::io::verify_online::github::verify_github_account;
-use crate::io::verify_online::VerificationStatus;
+use crate::io::verify_online::{VerificationResult, VerificationStatus};
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::io::workspace::members::{
     list_active_member_paths, list_incoming_member_paths, load_member_file_from_path,
@@ -34,26 +34,11 @@ fn check_active_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Doct
     let paths = list_active_member_paths(workspace_root)?;
     let mut checks = Vec::new();
     if paths.is_empty() {
-        checks.push(
-            DoctorCheck::fail(
-                "members.active.present",
-                DoctorCategory::MembersActive,
-                DoctorSubject::Path(format_path_relative_to_cwd(
-                    &workspace_root.join("members/active"),
-                )),
-                "No active members found",
-            )
-            .with_next_action("run kapsaro init or restore members/active"),
-        );
+        checks.push(check_missing_active_members(workspace_root));
         return Ok(checks);
     }
 
-    checks.push(DoctorCheck::ok(
-        "members.active.present",
-        DoctorCategory::MembersActive,
-        DoctorSubject::General("members/active".to_string()),
-        format!("{} active member file(s) found", paths.len()),
-    ));
+    checks.push(check_present_active_members(paths.len()));
     extend_member_path_checks(
         &mut checks,
         &paths,
@@ -64,30 +49,36 @@ fn check_active_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Doct
     Ok(checks)
 }
 
+fn check_missing_active_members(workspace_root: &Path) -> DoctorCheck {
+    DoctorCheck::fail(
+        "members.active.present",
+        DoctorCategory::MembersActive,
+        DoctorSubject::Path(format_path_relative_to_cwd(
+            &workspace_root.join("members/active"),
+        )),
+        "No active members found",
+    )
+    .with_next_action("run kapsaro init or restore members/active")
+}
+
+fn check_present_active_members(count: usize) -> DoctorCheck {
+    DoctorCheck::ok(
+        "members.active.present",
+        DoctorCategory::MembersActive,
+        DoctorSubject::General("members/active".to_string()),
+        format!("{} active member file(s) found", count),
+    )
+}
+
 fn check_incoming_members(workspace_root: &Path, verbose: bool) -> Result<Vec<DoctorCheck>> {
     let paths = list_incoming_member_paths(workspace_root)?;
     let mut checks = Vec::new();
     if paths.is_empty() {
-        checks.push(DoctorCheck::ok(
-            "members.incoming.empty",
-            DoctorCategory::MembersIncoming,
-            DoctorSubject::Path(format_path_relative_to_cwd(
-                &workspace_root.join("members/incoming"),
-            )),
-            "No incoming members",
-        ));
+        checks.push(check_empty_incoming_members(workspace_root));
         return Ok(checks);
     }
 
-    checks.push(
-        DoctorCheck::warn(
-            "members.incoming.pending",
-            DoctorCategory::MembersIncoming,
-            DoctorSubject::General("members/incoming".to_string()),
-            format!("{} incoming member file(s) pending", paths.len()),
-        )
-        .with_next_action("review the PR and run kapsaro rewrap"),
-    );
+    checks.push(check_pending_incoming_members(paths.len()));
     extend_member_path_checks(
         &mut checks,
         &paths,
@@ -96,6 +87,27 @@ fn check_incoming_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Do
         verbose,
     );
     Ok(checks)
+}
+
+fn check_empty_incoming_members(workspace_root: &Path) -> DoctorCheck {
+    DoctorCheck::ok(
+        "members.incoming.empty",
+        DoctorCategory::MembersIncoming,
+        DoctorSubject::Path(format_path_relative_to_cwd(
+            &workspace_root.join("members/incoming"),
+        )),
+        "No incoming members",
+    )
+}
+
+fn check_pending_incoming_members(count: usize) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "members.incoming.pending",
+        DoctorCategory::MembersIncoming,
+        DoctorSubject::General("members/incoming".to_string()),
+        format!("{} incoming member file(s) pending", count),
+        "review the PR and run kapsaro rewrap",
+    )
 }
 
 fn extend_member_path_checks(
@@ -117,52 +129,90 @@ fn verify_member_path(
     verbose: bool,
 ) -> Vec<DoctorCheck> {
     let member_handle = derive_member_handle_from_path(path);
-    let public_key = match load_member_file_from_path(path) {
-        Ok(public_key) => public_key,
-        Err(error) => {
-            return vec![DoctorCheck::fail(
-                id,
-                category,
-                DoctorSubject::Member(member_handle),
-                format!(
-                    "{} failed validation: {}",
-                    format_path_relative_to_cwd(path),
-                    error.format_user_message()
-                ),
-            )];
-        }
+    let public_key = match load_member_file_for_doctor(id, category, path, &member_handle) {
+        MemberFileCheck::Loaded(public_key) => public_key,
+        MemberFileCheck::Finding(check) => return vec![check],
     };
+
     match verify_member_public_key_file(
         &public_key,
         Some(&member_handle),
         &format_path_relative_to_cwd(path),
         verbose,
     ) {
-        Ok(verified) => {
-            let mut checks = vec![DoctorCheck::ok(
-                id,
-                category,
-                DoctorSubject::Member(verified.member_handle.clone()),
-                format!("{} is valid", format_path_relative_to_cwd(path)),
-            )];
-            checks.push(check_member_expiry(category, &verified.member_handle, path));
-            checks.push(check_github_verification(
-                category,
-                &verified.member_handle,
-                &verified.public_key,
-                verbose,
-            ));
-            checks
-        }
-        Err(error) => vec![DoctorCheck::fail(
+        Ok(verified) => build_verified_member_path_checks(id, category, path, verified, verbose),
+        Err(error) => vec![check_failed_member_verification(
             id,
             category,
-            DoctorSubject::Path(format_path_relative_to_cwd(path)),
-            "Member file verification failed",
-        )
-        .with_reason(error.format_user_message())
-        .with_next_action("fix the member file and review the PR")],
+            path,
+            error.format_user_message(),
+        )],
     }
+}
+
+enum MemberFileCheck {
+    Loaded(Box<crate::model::public_key::PublicKey>),
+    Finding(DoctorCheck),
+}
+
+fn load_member_file_for_doctor(
+    id: &'static str,
+    category: DoctorCategory,
+    path: &Path,
+    member_handle: &str,
+) -> MemberFileCheck {
+    match load_member_file_from_path(path) {
+        Ok(public_key) => MemberFileCheck::Loaded(Box::new(public_key)),
+        Err(error) => MemberFileCheck::Finding(DoctorCheck::fail(
+            id,
+            category,
+            DoctorSubject::Member(member_handle.to_string()),
+            format!(
+                "{} failed validation: {}",
+                format_path_relative_to_cwd(path),
+                error.format_user_message()
+            ),
+        )),
+    }
+}
+
+fn build_verified_member_path_checks(
+    id: &'static str,
+    category: DoctorCategory,
+    path: &Path,
+    verified: VerifiedMemberFile,
+    verbose: bool,
+) -> Vec<DoctorCheck> {
+    let mut checks = vec![DoctorCheck::ok(
+        id,
+        category,
+        DoctorSubject::Member(verified.member_handle.clone()),
+        format!("{} is valid", format_path_relative_to_cwd(path)),
+    )];
+    checks.push(check_member_expiry(category, &verified.member_handle, path));
+    checks.push(check_github_verification(
+        category,
+        &verified.member_handle,
+        &verified.public_key,
+        verbose,
+    ));
+    checks
+}
+
+fn check_failed_member_verification(
+    id: &'static str,
+    category: DoctorCategory,
+    path: &Path,
+    reason: impl Into<String>,
+) -> DoctorCheck {
+    DoctorCheck::fail_with_reason_and_next_action(
+        id,
+        category,
+        DoctorSubject::Path(format_path_relative_to_cwd(path)),
+        "Member file verification failed",
+        reason,
+        "fix the member file and review the PR",
+    )
 }
 
 fn check_github_verification(
@@ -171,44 +221,12 @@ fn check_github_verification(
     public_key: &crate::model::public_key::PublicKey,
     verbose: bool,
 ) -> DoctorCheck {
-    let has_binding = public_key
-        .protected
-        .binding_claims
-        .as_ref()
-        .and_then(|claims| claims.github_account.as_ref())
-        .is_some();
-    if !has_binding {
-        return DoctorCheck::warn(
-            "github.verify",
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            "GitHub binding is not configured",
-        )
-        .with_next_action("run kapsaro member verify if manual review is needed");
+    if !has_github_binding(public_key) {
+        return check_missing_github_binding(category, member_handle);
     }
 
     match block_on_result(verify_github_account(public_key, verbose)) {
-        Ok(result) if result.status == VerificationStatus::Verified => DoctorCheck::ok(
-            "github.verify",
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            "GitHub account and SSH key match",
-        ),
-        Ok(result) if result.status == VerificationStatus::Failed => DoctorCheck::fail(
-            "github.verify",
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            "GitHub verification failed",
-        )
-        .with_reason(result.message)
-        .with_next_action("check the key owner and GitHub SSH keys"),
-        Ok(result) => DoctorCheck::warn(
-            "github.verify",
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            "GitHub verification is not configured",
-        )
-        .with_reason(result.message),
+        Ok(result) => check_github_result(category, member_handle, result),
         Err(error) => DoctorCheck::skip(
             "github.verify",
             category,
@@ -220,46 +238,128 @@ fn check_github_verification(
     }
 }
 
-fn check_member_expiry(category: DoctorCategory, member_handle: &str, path: &Path) -> DoctorCheck {
-    match load_member_file_from_path(path).and_then(|public_key| {
-        check_key_expiry(&public_key.protected.expires_at, OffsetDateTime::now_utc())
-    }) {
-        Ok(KeyExpiryStatus::Valid) => DoctorCheck::ok(
-            "key.expiry",
+fn has_github_binding(public_key: &crate::model::public_key::PublicKey) -> bool {
+    public_key
+        .protected
+        .binding_claims
+        .as_ref()
+        .and_then(|claims| claims.github_account.as_ref())
+        .is_some()
+}
+
+fn check_missing_github_binding(category: DoctorCategory, member_handle: &str) -> DoctorCheck {
+    DoctorCheck::warn_with_next_action(
+        "github.verify",
+        category,
+        DoctorSubject::Member(member_handle.to_string()),
+        "GitHub binding is not configured",
+        "run kapsaro member verify if manual review is needed",
+    )
+}
+
+fn check_github_result(
+    category: DoctorCategory,
+    member_handle: &str,
+    result: VerificationResult,
+) -> DoctorCheck {
+    match result.status {
+        VerificationStatus::Verified => DoctorCheck::ok(
+            "github.verify",
             category,
             DoctorSubject::Member(member_handle.to_string()),
-            "Key has sufficient validity",
+            "GitHub account and SSH key match",
         ),
+        VerificationStatus::Failed => DoctorCheck::fail_with_reason_and_next_action(
+            "github.verify",
+            category,
+            DoctorSubject::Member(member_handle.to_string()),
+            "GitHub verification failed",
+            result.message,
+            "check the key owner and GitHub SSH keys",
+        ),
+        VerificationStatus::NotConfigured => DoctorCheck::warn(
+            "github.verify",
+            category,
+            DoctorSubject::Member(member_handle.to_string()),
+            "GitHub verification is not configured",
+        )
+        .with_reason(result.message),
+    }
+}
+
+fn check_member_expiry(category: DoctorCategory, member_handle: &str, path: &Path) -> DoctorCheck {
+    let result = load_member_file_from_path(path).and_then(|public_key| {
+        check_key_expiry(&public_key.protected.expires_at, OffsetDateTime::now_utc())
+    });
+    build_member_expiry_check(category, member_handle, path, result)
+}
+
+fn build_member_expiry_check(
+    category: DoctorCategory,
+    member_handle: &str,
+    path: &Path,
+    result: Result<KeyExpiryStatus>,
+) -> DoctorCheck {
+    match result {
+        Ok(KeyExpiryStatus::Valid) => build_valid_member_expiry_check(category, member_handle),
         Ok(KeyExpiryStatus::ExpiringSoon {
             expires_at,
             days_remaining,
-        }) => DoctorCheck::warn(
-            "key.expiry",
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            "Key expiry is near",
-        )
-        .with_reason(format!(
-            "expires_at: {}; days remaining: {}",
-            expires_at, days_remaining
-        ))
-        .with_next_action("plan key new, join, and rewrap"),
-        Ok(KeyExpiryStatus::Expired { expires_at }) => DoctorCheck::fail(
-            "key.expiry",
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            "Key is expired",
-        )
-        .with_reason(format!("expires_at: {}", expires_at))
-        .with_next_action("rotate the key and run kapsaro rewrap"),
-        Err(error) => DoctorCheck::fail(
+        }) => build_expiring_member_check(category, member_handle, expires_at, days_remaining),
+        Ok(KeyExpiryStatus::Expired { expires_at }) => {
+            build_expired_member_check(category, member_handle, expires_at)
+        }
+        Err(error) => DoctorCheck::fail_with_reason(
             "key.expiry",
             category,
             DoctorSubject::Path(format_path_relative_to_cwd(path)),
             "Key expiry could not be checked",
-        )
-        .with_reason(error.format_user_message()),
+            error.format_user_message(),
+        ),
     }
+}
+
+fn build_valid_member_expiry_check(category: DoctorCategory, member_handle: &str) -> DoctorCheck {
+    DoctorCheck::ok(
+        "key.expiry",
+        category,
+        DoctorSubject::Member(member_handle.to_string()),
+        "Key has sufficient validity",
+    )
+}
+
+fn build_expiring_member_check(
+    category: DoctorCategory,
+    member_handle: &str,
+    expires_at: String,
+    days_remaining: i64,
+) -> DoctorCheck {
+    DoctorCheck::warn_with_reason_and_next_action(
+        "key.expiry",
+        category,
+        DoctorSubject::Member(member_handle.to_string()),
+        "Key expiry is near",
+        format!(
+            "expires_at: {}; days remaining: {}",
+            expires_at, days_remaining
+        ),
+        "plan key new, join, and rewrap",
+    )
+}
+
+fn build_expired_member_check(
+    category: DoctorCategory,
+    member_handle: &str,
+    expires_at: String,
+) -> DoctorCheck {
+    DoctorCheck::fail_with_reason_and_next_action(
+        "key.expiry",
+        category,
+        DoctorSubject::Member(member_handle.to_string()),
+        "Key is expired",
+        format!("expires_at: {}", expires_at),
+        "rotate the key and run kapsaro rewrap",
+    )
 }
 
 fn check_kid_uniqueness(workspace_root: &Path) -> Result<DoctorCheck> {
@@ -273,18 +373,7 @@ fn check_kid_uniqueness(workspace_root: &Path) -> Result<DoctorCheck> {
         };
         let kid = public_key.protected.kid.clone();
         if let Some(previous) = seen.insert(kid.clone(), path.clone()) {
-            return Ok(DoctorCheck::fail(
-                "members.kid_unique",
-                DoctorCategory::MembersActive,
-                DoctorSubject::General(kid),
-                "Duplicate kid found in workspace members",
-            )
-            .with_reason(format!(
-                "{} conflicts with {}",
-                format_path_relative_to_cwd(&previous),
-                format_path_relative_to_cwd(&path)
-            ))
-            .with_next_action("remove or reissue the conflicting member file"));
+            return Ok(check_duplicate_kid(kid, &previous, &path));
         }
     }
     Ok(DoctorCheck::ok(
@@ -293,4 +382,19 @@ fn check_kid_uniqueness(workspace_root: &Path) -> Result<DoctorCheck> {
         DoctorSubject::General("members".to_string()),
         "Active and incoming member kids are unique",
     ))
+}
+
+fn check_duplicate_kid(kid: String, previous: &Path, path: &Path) -> DoctorCheck {
+    DoctorCheck::fail_with_reason_and_next_action(
+        "members.kid_unique",
+        DoctorCategory::MembersActive,
+        DoctorSubject::General(kid),
+        "Duplicate kid found in workspace members",
+        format!(
+            "{} conflicts with {}",
+            format_path_relative_to_cwd(previous),
+            format_path_relative_to_cwd(path)
+        ),
+        "remove or reissue the conflicting member file",
+    )
 }

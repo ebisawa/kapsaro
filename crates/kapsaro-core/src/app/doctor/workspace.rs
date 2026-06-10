@@ -36,64 +36,93 @@ pub fn check_workspace(options: &CommonCommandOptions) -> Result<DoctorWorkspace
     let base_dir = options.resolve_base_dir()?;
     let keystore_root = KeystoreResolver::resolve(options.home.as_ref())?;
     let config_path = get_global_config_path_from_base(&base_dir);
-    let mut checks = vec![DoctorCheck::ok(
-        "config.paths",
-        DoctorCategory::Workspace,
-        DoctorSubject::Path(format_path_relative_to_cwd(&base_dir)),
-        format!(
-            "Home: {}; keystore: {}; config: {}",
-            format_path_relative_to_cwd(&base_dir),
-            format_path_relative_to_cwd(&keystore_root),
-            format_path_relative_to_cwd(&config_path)
-        ),
+    let mut checks = vec![build_workspace_paths_check(
+        &base_dir,
+        &keystore_root,
+        &config_path,
     )];
 
     let resolved = resolve_doctor_workspace(options, &base_dir)?;
     let Some((workspace_root, source)) = resolved else {
-        checks.push(
-            DoctorCheck::fail(
-                "workspace.resolve",
-                DoctorCategory::Workspace,
-                DoctorSubject::General("workspace".to_string()),
-                "Workspace could not be resolved",
-            )
-            .with_next_action("specify --workspace or run from a workspace root"),
-        );
-        return Ok(DoctorWorkspaceState {
-            workspace_root: None,
-            structure_ok: false,
-            checks,
-        });
+        checks.push(check_unresolved_workspace());
+        return Ok(build_workspace_state(None, false, checks));
     };
 
-    checks.push(DoctorCheck::ok(
-        "workspace.resolve",
-        DoctorCategory::Workspace,
-        DoctorSubject::Path(format_path_relative_to_cwd(&workspace_root.root_path)),
-        format!("Workspace resolved from {}", source),
-    ));
+    checks.push(check_resolved_workspace(&workspace_root, source));
     let structure_ok = workspace_structure_ok(&workspace_root.root_path);
     checks.push(check_workspace_structure(
         &workspace_root.root_path,
         structure_ok,
     ));
-    if is_gitless_layout(&workspace_root.root_path) {
-        checks.push(
-            DoctorCheck::warn(
-                "workspace.gitless",
-                DoctorCategory::Workspace,
-                DoctorSubject::Path(format_path_relative_to_cwd(&workspace_root.root_path)),
-                "Workspace is not inside a git checkout",
-            )
-            .with_next_action("confirm this production layout is intentional"),
-        );
-    }
+    checks.extend(check_gitless_workspace(&workspace_root.root_path));
 
-    Ok(DoctorWorkspaceState {
-        workspace_root: Some(workspace_root),
+    Ok(build_workspace_state(
+        Some(workspace_root),
         structure_ok,
         checks,
-    })
+    ))
+}
+
+fn build_workspace_paths_check(
+    base_dir: &Path,
+    keystore_root: &Path,
+    config_path: &Path,
+) -> DoctorCheck {
+    DoctorCheck::ok(
+        "config.paths",
+        DoctorCategory::Workspace,
+        DoctorSubject::Path(format_path_relative_to_cwd(base_dir)),
+        format!(
+            "Home: {}; keystore: {}; config: {}",
+            format_path_relative_to_cwd(base_dir),
+            format_path_relative_to_cwd(keystore_root),
+            format_path_relative_to_cwd(config_path)
+        ),
+    )
+}
+
+fn check_unresolved_workspace() -> DoctorCheck {
+    DoctorCheck::fail(
+        "workspace.resolve",
+        DoctorCategory::Workspace,
+        DoctorSubject::General("workspace".to_string()),
+        "Workspace could not be resolved",
+    )
+    .with_next_action("specify --workspace or run from a workspace root")
+}
+
+fn check_resolved_workspace(workspace_root: &WorkspaceRoot, source: &str) -> DoctorCheck {
+    DoctorCheck::ok(
+        "workspace.resolve",
+        DoctorCategory::Workspace,
+        DoctorSubject::Path(format_path_relative_to_cwd(&workspace_root.root_path)),
+        format!("Workspace resolved from {}", source),
+    )
+}
+
+fn check_gitless_workspace(workspace_root: &Path) -> Vec<DoctorCheck> {
+    if !is_gitless_layout(workspace_root) {
+        return Vec::new();
+    }
+    vec![DoctorCheck::warn_with_next_action(
+        "workspace.gitless",
+        DoctorCategory::Workspace,
+        DoctorSubject::Path(format_path_relative_to_cwd(workspace_root)),
+        "Workspace is not inside a git checkout",
+        "confirm this production layout is intentional",
+    )]
+}
+
+fn build_workspace_state(
+    workspace_root: Option<WorkspaceRoot>,
+    structure_ok: bool,
+    checks: Vec<DoctorCheck>,
+) -> DoctorWorkspaceState {
+    DoctorWorkspaceState {
+        workspace_root,
+        structure_ok,
+        checks,
+    }
 }
 
 fn resolve_doctor_workspace(
@@ -148,14 +177,14 @@ fn check_workspace_structure(workspace_root: &Path, structure_ok: bool) -> Docto
             "Workspace has members/active, members/incoming, and secrets",
         );
     }
-    DoctorCheck::fail(
+    DoctorCheck::fail_with_reason_and_next_action(
         "workspace.structure",
         DoctorCategory::Workspace,
         DoctorSubject::Path(format_path_relative_to_cwd(workspace_root)),
         "Workspace is missing required directories",
+        format!("missing: {}", missing.join(", ")),
+        "run kapsaro init or repair the workspace",
     )
-    .with_reason(format!("missing: {}", missing.join(", ")))
-    .with_next_action("run kapsaro init or repair the workspace")
 }
 
 fn required_workspace_dirs(workspace_root: &Path) -> [PathBuf; 3] {

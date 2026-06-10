@@ -1,22 +1,19 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+// Builders for CommonCommandOptions used in tests.
+// Provides both minimal and signing-specific option configurations.
+
 use std::path::Path;
 
 use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::test_support::settings::types::SshSigningMethod;
 
-pub(crate) fn build_test_command_options(
-    home: &Path,
-    workspace: Option<&Path>,
-) -> CommonCommandOptions {
+pub fn build_test_command_options(home: &Path, workspace: Option<&Path>) -> CommonCommandOptions {
     build_test_command_options_with(home, workspace, None, false, None)
 }
 
-pub(crate) fn build_test_signing_command_options(
-    home: &Path,
-    workspace: &Path,
-) -> CommonCommandOptions {
+pub fn build_test_signing_command_options(home: &Path, workspace: &Path) -> CommonCommandOptions {
     CommonCommandOptions {
         home: Some(home.to_path_buf()),
         identity: Some(home.join(".ssh").join("test_ed25519")),
@@ -29,7 +26,7 @@ pub(crate) fn build_test_signing_command_options(
     }
 }
 
-fn build_test_command_options_with(
+pub fn build_test_command_options_with(
     home: &Path,
     workspace: Option<&Path>,
     identity: Option<&Path>,

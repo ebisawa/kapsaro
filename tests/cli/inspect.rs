@@ -12,10 +12,12 @@ use crate::cli::common::{
     TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{
-    build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
-    setup_test_workspace, setup_trust_store_for_workspace, update_active_private_key_expires_at,
+    build_expiring_soon_timestamp, save_active_public_key_to_workspace,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
 use console::strip_ansi_codes;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;

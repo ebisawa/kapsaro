@@ -1,9 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared CryptoContext builder for tests
-//!
-//! Uses Ed25519DirectBackend to avoid spawning ssh-keygen subprocesses.
+// Shared CryptoContext builder for tests.
+// Uses Ed25519DirectBackend to avoid spawning ssh-keygen subprocesses.
 
 use super::ed25519_backend::Ed25519DirectBackend;
 use kapsaro_core::cli_api::test_support::operations::context::crypto::{

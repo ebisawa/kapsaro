@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+// Runtime test fixture builders for keystores, workspaces, and SSH key pairs.
+// All fixtures are generated at runtime; no static fixture data files are used.
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -88,6 +91,11 @@ fn build_shared_fixture() -> SharedFixture {
 // ============================================================================
 // Fixture loaders
 // ============================================================================
+
+/// Load the fixture SSH public key content
+pub fn load_fixture_ssh_pubkey() -> String {
+    SHARED_FIXTURE.ssh_public_key_content.clone()
+}
 
 /// Write SSH keypair from shared fixture into per-test TempDir
 fn save_ssh_keys(temp_dir: &TempDir) -> (PathBuf, String) {

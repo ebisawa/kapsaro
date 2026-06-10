@@ -7,12 +7,12 @@ use crate::cli::common::{
     cmd, set_stdin_with_member_set_review, set_value_with_member_set_review, setup_workspace,
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
-use crate::test_utils::{
-    setup_member_key_context, setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
-};
+use crate::test_utils::setup_trust_store_for_workspace;
 use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
 use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
 use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;

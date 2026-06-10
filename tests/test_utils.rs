@@ -3,32 +3,22 @@
 
 //! Common test utilities for environment variable management
 
-// Test-only key generation helpers
-#[path = "../tests/test_utils/constants.rs"]
+#[path = "test_utils/internal_cli.rs"]
 #[allow(dead_code)]
-mod constants;
-#[path = "../tests/test_utils/crypto_context.rs"]
-pub mod crypto_context;
-#[path = "../tests/test_utils/ed25519_backend.rs"]
-pub mod ed25519_backend;
-#[path = "../tests/test_utils/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-pub mod keygen_helpers;
-#[allow(unused_imports)]
-pub use constants::{
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
-};
-pub use crypto_context::setup_member_key_context;
-#[allow(unused_imports)]
-pub use fixture::{
-    generate_temp_ssh_keypair_in_dir, setup_test_keystore, setup_test_keystore_from_fixtures,
-    setup_test_workspace, setup_test_workspace_from_fixtures,
-};
+pub mod internal_cli;
+use kapsaro_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
 use kapsaro_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use kapsaro_core::Error;
-#[allow(unused_imports)]
-pub use keygen_helpers::keygen_test;
+
+#[allow(dead_code)]
+pub fn member_handle(value: impl Into<String>) -> MemberHandle {
+    MemberHandle::try_from(value.into()).expect("test member_handle must be valid")
+}
+
+#[allow(dead_code)]
+pub fn kid(value: impl Into<String>) -> Kid {
+    Kid::try_from(value.into()).expect("test kid must be valid")
+}
 
 /// Set up a trust store that approves all active members in a workspace.
 ///

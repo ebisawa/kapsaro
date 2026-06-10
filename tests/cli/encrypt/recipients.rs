@@ -9,9 +9,9 @@ use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
     CAROL_MEMBER_HANDLE,
 };
-use crate::test_utils::{
-    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
-};
+use crate::test_utils::setup_trust_store_for_workspace;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_workspace;
 use std::fs;
 
 #[test]
@@ -55,7 +55,8 @@ fn test_encrypt_recipients_are_all_active_members() {
 
 #[test]
 fn test_encrypt_workspace_required() {
-    use crate::test_utils::{setup_test_keystore, with_temp_cwd};
+    use crate::test_utils::with_temp_cwd;
+    use kapsaro_test_support::fixture::setup_test_keystore;
     let temp_dir = setup_test_keystore(ALICE_MEMBER_HANDLE);
     let test_dir = temp_dir.path();
     with_temp_cwd(test_dir, || {

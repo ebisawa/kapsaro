@@ -6,14 +6,14 @@
 //! This module provides shared helper functions and constants used across
 //! CLI integration tests to reduce code duplication and improve maintainability.
 
-use crate::test_utils::generate_temp_ssh_keypair_in_dir;
-pub use crate::test_utils::{
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
-};
 use assert_cmd::{cargo, Command};
 use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 use kapsaro_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
 use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
+pub use kapsaro_test_support::constants::{
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+};
+use kapsaro_test_support::fixture::generate_temp_ssh_keypair_in_dir;
 #[cfg(unix)]
 use std::fs::File;
 #[cfg(unix)]

@@ -3,7 +3,7 @@
 
 #[path = "context_execution.rs"]
 mod context_execution;
-#[path = "context_options.rs"]
+#[path = "../../../kapsaro-test-support/src/context_options.rs"]
 mod context_options;
 #[path = "context_paths.rs"]
 mod context_paths;

@@ -2,24 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    display_kid_or_raw, format_key_export_summary_lines, format_key_list_lines,
-    is_online_verification_verified,
+    format_key_export_summary_lines, format_key_list_lines, is_online_verification_verified,
 };
 use crate::cli::common::output::key::view::{KeyInfoView, KeyListView, KeyMemberView};
+use crate::cli::common::output::text::layout::{format_kid_display_text, KidDisplayFallback};
 use kapsaro_core::api::online::OnlineVerificationStatus;
 use std::path::PathBuf;
 
 #[test]
 fn test_display_kid_or_raw_formats_valid_kid() {
     assert_eq!(
-        display_kid_or_raw("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
+        format_kid_display_text("KAD1AAAA1111BBBB2222CCCC3333DDDD", KidDisplayFallback::Raw),
         "KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"
     );
 }
 
 #[test]
 fn test_display_kid_or_raw_keeps_invalid_kid() {
-    assert_eq!(display_kid_or_raw("not-a-kid"), "not-a-kid");
+    assert_eq!(
+        format_kid_display_text("not-a-kid", KidDisplayFallback::Raw),
+        "not-a-kid"
+    );
 }
 
 #[test]

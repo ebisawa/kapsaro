@@ -6,18 +6,25 @@
 use std::path::Path;
 
 use crate::cli::common::output::text::layout;
+use crate::cli::common::output::text::layout::LineTarget;
 use kapsaro_core::cli_api::app::registration::types::RegistrationMode;
 use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
 
 pub(crate) fn print_created_workspace_summary(workspace_path: &Path) {
-    print_stderr_lines(format_created_workspace_summary_lines(workspace_path));
+    layout::print_lines(
+        format_created_workspace_summary_lines(workspace_path),
+        LineTarget::Stderr,
+    );
     eprintln!("  Created members/active/");
     eprintln!("  Created members/incoming/");
     eprintln!("  Created secrets/");
 }
 
 pub(crate) fn print_init_noop_summary(workspace_path: &Path) {
-    print_stderr_lines(format_init_noop_summary_lines(workspace_path));
+    layout::print_lines(
+        format_init_noop_summary_lines(workspace_path),
+        LineTarget::Stderr,
+    );
 }
 
 pub(crate) fn print_registration_next_steps(mode: RegistrationMode, is_new_workspace: bool) {
@@ -56,12 +63,6 @@ fn format_init_noop_summary_lines(workspace_path: &Path) -> Vec<String> {
         "Use `kapsaro join` to submit a key to an existing workspace.",
     ));
     lines
-}
-
-fn print_stderr_lines(lines: Vec<String>) {
-    for line in lines {
-        eprintln!("{line}");
-    }
 }
 
 #[cfg(test)]

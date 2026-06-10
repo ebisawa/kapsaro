@@ -4,11 +4,11 @@
 //! Text renderers for trust commands.
 
 use crate::cli::common::output::text::layout;
+use crate::cli::common::output::text::layout::{KidDisplayFallback, LineTarget};
 use crate::cli::common::output::trust::view::{RecipientSetListItemView, TrustListItemView};
-use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 pub(crate) fn print_known_key_list(items: &[TrustListItemView<'_>]) {
-    print_lines(format_known_key_list_lines(items));
+    layout::print_lines(format_known_key_list_lines(items), LineTarget::Stderr);
 }
 
 fn format_known_key_list_lines(items: &[TrustListItemView<'_>]) -> Vec<String> {
@@ -17,7 +17,7 @@ fn format_known_key_list_lines(items: &[TrustListItemView<'_>]) -> Vec<String> {
         let value = format!(
             "{} {} (approved: {}, via: {})",
             item.member_handle,
-            format_kid_display_lossy(item.kid),
+            layout::format_kid_display_text(item.kid, KidDisplayFallback::Sanitized),
             item.approved_at,
             item.approved_via
         );
@@ -33,7 +33,7 @@ pub(crate) fn print_empty_known_key_list() {
 }
 
 pub(crate) fn print_recipient_set_list(items: &[RecipientSetListItemView<'_>]) {
-    print_lines(format_recipient_set_list_lines(items));
+    layout::print_lines(format_recipient_set_list_lines(items), LineTarget::Stderr);
 }
 
 fn format_recipient_set_list_lines(items: &[RecipientSetListItemView<'_>]) -> Vec<String> {
@@ -54,7 +54,7 @@ fn format_recipient_set_list_lines(items: &[RecipientSetListItemView<'_>]) -> Ve
         for kid in item.recipient_kids {
             lines.extend(layout::format_value_lines(
                 "      - ",
-                &format_kid_display_lossy(kid),
+                &layout::format_kid_display_text(kid, KidDisplayFallback::Sanitized),
             ));
         }
     }
@@ -68,14 +68,14 @@ pub(crate) fn print_empty_recipient_set_list() {
 }
 
 pub(crate) fn print_trust_remove_summary(kid: &str, member_handle: &str) {
-    let kid_display = format_kid_display_lossy(kid);
+    let kid_display = layout::format_kid_display_text(kid, KidDisplayFallback::Sanitized);
     let value = format!("Removed kid '{kid_display}' (member: {member_handle}) from trust store");
-    print_lines(layout::format_value_lines("", &value));
+    layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
 }
 
 pub(crate) fn print_recipient_set_remove_summary(sid: &str) {
     let value = format!("Removed recipient set '{sid}' from trust store");
-    print_lines(layout::format_value_lines("", &value));
+    layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
 }
 
 pub(crate) fn print_no_entries_to_purge() {
@@ -83,7 +83,10 @@ pub(crate) fn print_no_entries_to_purge() {
 }
 
 pub(crate) fn print_trust_purge_candidates(items: &[TrustListItemView<'_>]) {
-    print_lines(format_trust_purge_candidate_lines(items));
+    layout::print_lines(
+        format_trust_purge_candidate_lines(items),
+        LineTarget::Stderr,
+    );
 }
 
 fn format_trust_purge_candidate_lines(items: &[TrustListItemView<'_>]) -> Vec<String> {
@@ -92,7 +95,7 @@ fn format_trust_purge_candidate_lines(items: &[TrustListItemView<'_>]) -> Vec<St
         let value = format!(
             "{} {} (approved: {})",
             item.member_handle,
-            format_kid_display_lossy(item.kid),
+            layout::format_kid_display_text(item.kid, KidDisplayFallback::Sanitized),
             item.approved_at
         );
         lines.extend(layout::format_value_lines("  ", &value));
@@ -103,7 +106,10 @@ fn format_trust_purge_candidate_lines(items: &[TrustListItemView<'_>]) -> Vec<St
 }
 
 pub(crate) fn print_recipient_set_purge_candidates(items: &[RecipientSetListItemView<'_>]) {
-    print_lines(format_recipient_set_purge_candidate_lines(items));
+    layout::print_lines(
+        format_recipient_set_purge_candidate_lines(items),
+        LineTarget::Stderr,
+    );
 }
 
 fn format_recipient_set_purge_candidate_lines(
@@ -131,12 +137,6 @@ pub(crate) fn print_trust_purge_summary(count: usize) {
 
 pub(crate) fn print_recipient_set_purge_summary(count: usize) {
     eprintln!("Purged {} recipient set(s)", count);
-}
-
-fn print_lines(lines: Vec<String>) {
-    for line in lines {
-        eprintln!("{line}");
-    }
 }
 
 #[cfg(test)]

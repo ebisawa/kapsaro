@@ -6,12 +6,14 @@
 use console::Style;
 
 use crate::cli::common::output::text::layout;
+use crate::cli::common::output::text::layout::LineTarget;
 use kapsaro_core::cli_api::app::file::inspect::{InspectCommand, InspectOutput, InspectSection};
 
 pub(crate) fn print_inspect_banner(input_display: &str) {
-    for line in format_inspect_banner_lines(input_display) {
-        eprintln!("{line}");
-    }
+    layout::print_lines(
+        format_inspect_banner_lines(input_display),
+        LineTarget::Stderr,
+    );
     eprintln!();
 }
 

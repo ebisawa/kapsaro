@@ -4,12 +4,11 @@
 //! Text renderers for KV commands.
 
 use crate::cli::common::output::kv::view::{KvEntryView, KvKeyView};
+use crate::cli::common::output::text::layout::LineTarget;
 use crate::cli::common::output::text::{layout, print_optional_status};
 
 pub(crate) fn print_kv_key_list(keys: &[KvKeyView<'_>]) {
-    for line in format_kv_key_list_lines(keys) {
-        println!("{line}");
-    }
+    layout::print_lines(format_kv_key_list_lines(keys), LineTarget::Stdout);
 }
 
 pub(crate) fn print_all_kv_values(entries: &[KvEntryView<'_>], with_key: bool) {

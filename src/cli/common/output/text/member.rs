@@ -10,18 +10,16 @@ use crate::cli::common::output::member::view::{
     MemberShowView, MemberVerificationResultsView,
 };
 use crate::cli::common::output::text::layout;
+use crate::cli::common::output::text::layout::{KidDisplayFallback, LabelAlignment, LineTarget};
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, print_trust_review_line,
 };
-use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
 
 const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
 const MEMBER_SHOW_BULLET: &str = "\u{25CF}";
 
 pub(crate) fn print_member_sections(view: &MemberListView<'_>) {
-    for line in format_member_list_lines(view) {
-        println!("{line}");
-    }
+    layout::print_lines(format_member_list_lines(view), LineTarget::Stdout);
 }
 
 fn format_member_list_lines(view: &MemberListView<'_>) -> Vec<String> {
@@ -57,7 +55,7 @@ fn push_member_list_section(
         lines.extend(layout::format_pair_row(
             "  ",
             member.member_handle,
-            &format_kid_display_lossy(member.kid),
+            &layout::format_kid_display_text(member.kid, KidDisplayFallback::Sanitized),
             member_handle_width,
         ));
     }
@@ -76,9 +74,10 @@ pub(crate) fn print_empty_member_approval_results() {
 }
 
 pub(crate) fn print_member_verification_results(view: &MemberVerificationResultsView<'_>) {
-    for line in format_member_verification_results_lines(view) {
-        eprintln!("{line}");
-    }
+    layout::print_lines(
+        format_member_verification_results_lines(view),
+        LineTarget::Stderr,
+    );
 }
 
 fn format_member_verification_results_lines(
@@ -112,9 +111,7 @@ fn format_member_verification_results_lines(
 }
 
 pub(crate) fn print_member_show(member: &MemberShowView<'_>) {
-    for line in format_member_show_lines(member) {
-        println!("{line}");
-    }
+    layout::print_lines(format_member_show_lines(member), LineTarget::Stdout);
 }
 
 pub(crate) fn print_member_add_summary(member_handle: &str) {
@@ -174,23 +171,23 @@ fn format_member_approval_item_lines(result: &MemberApprovalItemView<'_>) -> Vec
 fn format_member_show_lines(member: &MemberShowView<'_>) -> Vec<String> {
     let mut lines = format_member_show_header_lines(member.member_handle);
 
-    push_member_show_section(
+    layout::push_section(
         &mut lines,
         "Status".to_string(),
         format_member_show_status_lines(member),
     );
-    push_member_show_section(
+    layout::push_section(
         &mut lines,
         format_key_section_title(member.kid),
         format_member_show_key_lines(member),
     );
-    push_member_show_section(
+    layout::push_section(
         &mut lines,
         "SSH Attestation".to_string(),
-        format_member_show_row_lines("Fingerprint", member.ssh_fingerprint),
+        format_member_show_field_lines("Fingerprint", member.ssh_fingerprint),
     );
     if let Some(github) = &member.github_claim {
-        push_member_show_section(
+        layout::push_section(
             &mut lines,
             "GitHub Binding".to_string(),
             format_member_show_binding_lines(github),
@@ -212,16 +209,19 @@ fn format_member_show_header_lines(member_handle: &str) -> Vec<String> {
 }
 
 fn format_key_section_title(kid: &str) -> String {
-    let title = format!("Key  {}", format_kid_display_lossy(kid));
+    let title = format!(
+        "Key  {}",
+        layout::format_kid_display_text(kid, KidDisplayFallback::Sanitized)
+    );
     Style::new().bold().apply_to(title).to_string()
 }
 
 fn format_member_show_status_lines(member: &MemberShowView<'_>) -> Vec<String> {
-    let mut lines = format_member_show_row_lines(
+    let mut lines = format_member_show_field_lines(
         "Membership",
         &style_membership_value(member.membership_status).to_string(),
     );
-    lines.extend(format_member_show_row_lines(
+    lines.extend(format_member_show_field_lines(
         "Verification",
         &style_verification_value(member.verification_status).to_string(),
     ));
@@ -229,13 +229,13 @@ fn format_member_show_status_lines(member: &MemberShowView<'_>) -> Vec<String> {
 }
 
 fn format_member_show_key_lines(member: &MemberShowView<'_>) -> Vec<String> {
-    let mut lines = format_member_show_row_lines("Algorithm", &member.algorithm);
-    lines.extend(format_member_show_row_lines(
+    let mut lines = format_member_show_field_lines("Algorithm", &member.algorithm);
+    lines.extend(format_member_show_field_lines(
         "Expires At",
         member.expires_at,
     ));
     if let Some(created) = member.created_at {
-        lines.extend(format_member_show_row_lines("Created At", created));
+        lines.extend(format_member_show_field_lines("Created At", created));
     }
     lines
 }
@@ -261,15 +261,13 @@ fn style_verification_value(value: &str) -> console::StyledObject<String> {
     style.apply_to(value.to_string())
 }
 
-fn push_member_show_section(lines: &mut Vec<String>, title: String, body: Vec<String>) {
-    lines.push(String::new());
-    lines.push(title);
-    lines.extend(body);
-}
-
-fn format_member_show_row_lines(label: &str, value: &str) -> Vec<String> {
-    let prefix = format!("  {:<width$}: ", label, width = MEMBER_SHOW_LABEL_WIDTH);
-    layout::format_value_lines(&prefix, value)
+fn format_member_show_field_lines(label: &str, value: &str) -> Vec<String> {
+    layout::format_labeled_value_lines(
+        label,
+        value,
+        MEMBER_SHOW_LABEL_WIDTH,
+        LabelAlignment::ColonAfterWidth,
+    )
 }
 
 #[cfg(test)]

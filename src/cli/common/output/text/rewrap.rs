@@ -5,12 +5,14 @@
 
 use crate::cli::common::output::rewrap::RewrapBatchView;
 use crate::cli::common::output::text::layout;
+use crate::cli::common::output::text::layout::LineTarget;
 use crate::cli::error::format_stderr_error_message;
 
 pub(crate) fn print_rewrap_batch_outcome(outcome: &RewrapBatchView) {
-    for line in format_rewrap_batch_outcome_lines(outcome) {
-        eprintln!("{line}");
-    }
+    layout::print_lines(
+        format_rewrap_batch_outcome_lines(outcome),
+        LineTarget::Stderr,
+    );
 }
 
 fn format_rewrap_batch_outcome_lines(outcome: &RewrapBatchView) -> Vec<String> {

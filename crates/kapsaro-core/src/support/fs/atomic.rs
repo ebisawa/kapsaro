@@ -78,9 +78,7 @@ fn ensure_parent_dir_restricted(path: &Path) -> Result<()> {
 /// Save JSON data atomically (write-then-rename)
 pub fn save_json<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     ensure_parent_dir(path)?;
-    let json = serde_json::to_string_pretty(data).map_err(|e| {
-        Error::build_parse_error_with_source(format!("JSON serialization failed: {}", e), e)
-    })?;
+    let json = serde_json::to_string_pretty(data).map_err(Error::build_json_serialization_error)?;
     save_bytes(path, json.as_bytes())
 }
 
@@ -93,9 +91,7 @@ pub fn save_text(path: &Path, content: &str) -> Result<()> {
 /// Save JSON data atomically with restricted permissions (dir 0700, file 0600)
 pub fn save_json_restricted<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     ensure_parent_dir_restricted(path)?;
-    let json = serde_json::to_string_pretty(data).map_err(|e| {
-        Error::build_parse_error_with_source(format!("JSON serialization failed: {}", e), e)
-    })?;
+    let json = serde_json::to_string_pretty(data).map_err(Error::build_json_serialization_error)?;
     save_bytes(path, json.as_bytes())?;
     set_file_permission_0600(path)
 }

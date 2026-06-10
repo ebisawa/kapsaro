@@ -37,9 +37,7 @@ pub fn remove_recipient_set(
 ) -> Result<RecipientSetRecord> {
     let sid = Uuid::parse_str(sid)
         .map(|sid| sid.to_string())
-        .map_err(|e| {
-            Error::build_invalid_argument_error(format!("Invalid sid '{}': {}", sid, e))
-        })?;
+        .map_err(|e| Error::build_invalid_sid_error(sid, e))?;
     let pos = records
         .iter()
         .position(|record| record.sid == sid)

@@ -135,11 +135,24 @@ impl Error {
         Self::parse_error_with_boxed_source(message.into(), Some(Box::new(source)))
     }
 
+    pub(crate) fn build_json_serialization_error(
+        source: impl StdError + Send + Sync + 'static,
+    ) -> Self {
+        Self::build_parse_error_with_source(
+            format!("JSON serialization failed: {}", source),
+            source,
+        )
+    }
+
     /// Build a configuration error.
     pub fn build_config_error(message: impl Into<String>) -> Self {
         Self::from_repr(ErrorRepr::Config {
             message: message.into(),
         })
+    }
+
+    pub(crate) fn build_home_environment_not_set_error() -> Self {
+        Self::build_config_error("HOME environment variable not set")
     }
 
     /// Build a not found error.
@@ -154,6 +167,10 @@ impl Error {
         Self::from_repr(ErrorRepr::InvalidArgument {
             message: message.into(),
         })
+    }
+
+    pub(crate) fn build_invalid_sid_error(sid: &str, source: impl fmt::Display) -> Self {
+        Self::build_invalid_argument_error(format!("Invalid sid '{}': {}", sid, source))
     }
 
     /// Build an invalid operation error.

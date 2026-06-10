@@ -410,9 +410,8 @@ impl TrustApproval {
             )),
             TrustReviewKind::RecipientSet | TrustReviewKind::ChangedRecipientSet => {
                 let sid = require_review_field(request.sid(), "sid")?;
-                let sid = uuid::Uuid::parse_str(sid).map_err(|error| {
-                    Error::build_invalid_argument_error(format!("Invalid sid '{}': {}", sid, error))
-                })?;
+                let sid = uuid::Uuid::parse_str(sid)
+                    .map_err(|error| Error::build_invalid_sid_error(sid, error))?;
                 Ok(Self::recipient_set(sid, request.recipient_kids.clone()))
             }
         }

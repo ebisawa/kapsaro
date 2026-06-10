@@ -36,4 +36,13 @@ impl FormatError {
             source: Some(Box::new(source)),
         }
     }
+
+    pub(crate) fn build_json_serialization_error(
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::build_parse_error_with_source(
+            format!("JSON serialization failed: {}", source),
+            source,
+        )
+    }
 }

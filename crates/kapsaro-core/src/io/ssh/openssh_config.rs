@@ -37,8 +37,7 @@ use std::path::PathBuf;
 ///     IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 /// ```
 pub fn find_identity_agent() -> Result<Option<PathBuf>> {
-    let home = std::env::var("HOME")
-        .map_err(|_| Error::build_config_error("HOME environment variable not set".to_string()))?;
+    let home = std::env::var("HOME").map_err(|_| Error::build_home_environment_not_set_error())?;
 
     let config_path = PathBuf::from(home).join(".ssh").join("config");
     if !config_path.exists() {

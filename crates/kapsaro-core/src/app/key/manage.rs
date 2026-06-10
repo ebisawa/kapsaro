@@ -9,6 +9,7 @@ use std::path::Path;
 use crate::app::context::member::{resolve_key_owner, resolve_required_member};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
+use crate::app::key::build_no_active_key_error;
 use crate::app::key::export::save_exported_public_key;
 use crate::app::key::types::{
     KeyActivateResult, KeyExportPrivateResult, KeyExportResult, KeyInfo, KeyListResult,
@@ -241,9 +242,8 @@ fn resolve_active_kid(
 ) -> Result<String> {
     match kid {
         Some(kid) => resolve_member_kid_query(keystore_root, member_handle, &kid),
-        None => load_active_kid(member_handle, keystore_root)?.ok_or_else(|| {
-            Error::build_not_found_error(format!("No active key for member: {}", member_handle))
-        }),
+        None => load_active_kid(member_handle, keystore_root)?
+            .ok_or_else(|| build_no_active_key_error(member_handle)),
     }
 }
 

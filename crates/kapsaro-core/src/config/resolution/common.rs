@@ -48,7 +48,7 @@ pub(crate) fn expand_tilde(path: &str) -> Result<PathBuf> {
 pub(super) fn get_home_dir() -> Result<PathBuf> {
     env::var("HOME")
         .map(PathBuf::from)
-        .map_err(|_| Error::build_config_error("HOME environment variable not set".to_string()))
+        .map_err(|_| Error::build_home_environment_not_set_error())
 }
 
 /// Get default SSH key path (~/.ssh/id_ed25519)

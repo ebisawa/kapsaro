@@ -241,7 +241,7 @@ fn test_load_trust_store_warns_on_insecure_parent_directory_permissions() {
 
 #[test]
 fn test_load_trust_store_rejects_oversized_document_before_parse() {
-    use kapsaro_core::cli_api::test_support::helpers::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+    use kapsaro_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 
     let dir = TempDir::new().unwrap();
     let base_dir = dir.path().join("kapsaro");

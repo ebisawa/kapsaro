@@ -6,11 +6,11 @@
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use console::strip_ansi_codes;
+use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKey;
 use kapsaro_core::cli_api::test_support::domain::public_key::PublicKey;
 use kapsaro_core::cli_api::test_support::domain::wire::format;
 use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::decode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_display;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;

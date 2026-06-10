@@ -1,15 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use kapsaro_core::cli_api::app::context::env_key::is_env_key_mode;
 use kapsaro_core::cli_api::test_support::domain::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use kapsaro_core::cli_api::test_support::domain::wire::format;
 use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 use kapsaro_core::cli_api::test_support::helpers::secret::SecretString;
-use kapsaro_core::cli_api::test_support::operations::context::env_key::{
-    is_env_key_mode, load_private_key_from_env,
-};
+use kapsaro_core::cli_api::test_support::operations::context::env_key::load_private_key_from_env;
 use kapsaro_core::cli_api::test_support::operations::key::material::{
     build_private_key_plaintext, generate_keypairs,
 };

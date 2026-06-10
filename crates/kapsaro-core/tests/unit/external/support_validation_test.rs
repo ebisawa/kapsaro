@@ -5,9 +5,10 @@
 //!
 //! Tests for validation utilities (edge cases).
 
-use kapsaro_core::cli_api::test_support::helpers::validation::{
-    validate_github_login, validate_kv_file_basename, validate_member_handle,
+use kapsaro_core::cli_api::presentation::validation::{
+    validate_github_login, validate_member_handle,
 };
+use kapsaro_core::cli_api::test_support::helpers::validation::validate_kv_file_basename;
 
 #[test]
 fn test_validate_member_handle_valid() {

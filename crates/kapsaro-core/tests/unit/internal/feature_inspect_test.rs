@@ -13,6 +13,7 @@ use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::feature::verify::file::verify_file_document_report;
 use crate::feature::verify::kv::signature::verify_kv_document_report;
 use crate::format::content::EncContent;
+use crate::format::kv::document::parse_kv_document;
 use crate::format::schema::document::parse_kv_signature_token;
 use crate::format::token::TokenCodec;
 use crate::io::keystore::storage::{list_kids, load_public_key};
@@ -105,6 +106,45 @@ fn build_file_enc_content(member_handle: &str) -> (tempfile::TempDir, String) {
     let temp_dir = setup_test_keystore(member_handle);
     let content = encrypt_file_fixture(&temp_dir, member_handle, b"super secret content");
     (temp_dir, content)
+}
+
+#[test]
+fn test_inspect_file_enc_preserves_structured_artifact_details() {
+    let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_HANDLE);
+    let doc: crate::model::file_enc::FileEncDocument = serde_json::from_str(&content).unwrap();
+    let wrap_item = doc.protected.wrap.first().unwrap();
+    let report = verify_file_document_report(&doc, false);
+
+    assert_eq!(doc.protected.format, "kapsaro:format:file-enc@1");
+    assert_eq!(doc.protected.recipients(), vec![ALICE_MEMBER_HANDLE]);
+    assert_eq!(wrap_item.recipient_handle, ALICE_MEMBER_HANDLE);
+    assert!(!wrap_item.enc.is_empty());
+    assert!(!wrap_item.ct.is_empty());
+    assert!(!doc.protected.payload.encrypted.ct.is_empty());
+    assert_eq!(
+        doc.signature.signer_pub.protected.subject_handle,
+        ALICE_MEMBER_HANDLE
+    );
+    assert!(report.verified);
+    assert_eq!(report.message, "OK");
+}
+
+#[test]
+fn test_inspect_kv_enc_preserves_structured_artifact_details() {
+    let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
+    let doc = parse_kv_document(&content).unwrap();
+    let entry = doc.entry("DATABASE_URL").unwrap();
+    let report = verify_kv_document_report(&content, false);
+
+    assert_eq!(doc.head().alg.aead, "xchacha20-poly1305");
+    assert_eq!(doc.wrap().wrap[0].recipient_handle, ALICE_MEMBER_HANDLE);
+    assert_eq!(entry.key(), "DATABASE_URL");
+    assert!(!entry.value().nonce.is_empty());
+    assert!(!entry.value().ct.is_empty());
+    assert!(!entry.value().disclosed);
+    assert_eq!(doc.entries().len(), 1);
+    assert!(report.verified);
+    assert_eq!(report.message, "OK");
 }
 
 // ============================================================================

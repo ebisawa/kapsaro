@@ -138,15 +138,6 @@ pub mod wire {
     pub mod public_key {
         pub use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
     }
-    pub mod kv {
-        pub mod enc {
-            pub mod canonical {
-                pub use crate::format::kv::enc::canonical::{
-                    build_canonical_bytes, extract_recipients_from_wrap, parse_kv_wrap,
-                };
-            }
-        }
-    }
     pub mod schema {
         pub mod document {
             pub use crate::format::schema::document::{

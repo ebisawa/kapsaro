@@ -3,11 +3,13 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::kv::mutation::{
-    resolve_mutation_write_plan, set_kv_command_with_recipient_set_confirmation,
+    import_kv_command_with_recipient_set_confirmation, resolve_mutation_write_plan,
+    set_kv_command_with_recipient_set_confirmation,
     unset_kv_command_with_recipient_set_confirmation, MutationWriteTrustPlan,
 };
-use crate::app::kv::types::KvInputEntry;
-use crate::app::trust::{SetPolicy, UnsetPolicy};
+use crate::app::kv::query::{execute_kv_read_command, resolve_kv_read_command};
+use crate::app::kv::types::{KvInputEntry, KvReadMode};
+use crate::app::trust::{GetPolicy, ImportPolicy, SetPolicy, UnsetPolicy};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
 use crate::io::keystore::active::set_active_kid;
 use crate::io::keystore::storage::list_kids;
@@ -52,6 +54,21 @@ fn evaluate_unset_plan(
     .unwrap()
 }
 
+fn evaluate_import_plan(
+    options: &CommonCommandOptions,
+    name: Option<&str>,
+) -> MutationWriteTrustPlan<ImportPolicy> {
+    let ssh_ctx = Some(resolve_test_ssh_context(options, ALICE_MEMBER_HANDLE));
+    resolve_mutation_write_plan::<ImportPolicy>(
+        options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        name,
+        true,
+        ssh_ctx,
+    )
+    .unwrap()
+}
+
 fn activate_fixture_key(home: &std::path::Path) {
     let keystore_root = home.join("keys");
     let kid = list_kids(&keystore_root, ALICE_MEMBER_HANDLE)
@@ -64,6 +81,26 @@ fn activate_fixture_key(home: &std::path::Path) {
 
 fn allow_member_set_review<P>(plan: &mut MutationWriteTrustPlan<P>) {
     plan.trust_context.is_interactive = true;
+}
+
+fn read_kv_values(
+    options: &CommonCommandOptions,
+    mode: KvReadMode<'_>,
+) -> std::collections::BTreeMap<String, String> {
+    let ssh_ctx = Some(resolve_test_ssh_context(options, ALICE_MEMBER_HANDLE));
+    let command = resolve_kv_read_command::<GetPolicy>(
+        options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        ssh_ctx,
+    )
+    .unwrap();
+    execute_kv_read_command(&command, mode, false)
+        .unwrap()
+        .values
+        .into_iter()
+        .map(|(key, value)| (key, value.into_plain_string_for_output()))
+        .collect()
 }
 
 fn set_kv_with_approved_member_set<P>(
@@ -86,6 +123,125 @@ where
     P: crate::app::trust::WriteTrustPolicy,
 {
     unset_kv_command_with_recipient_set_confirmation(plan, key, success_message, |_, _| Ok(true))
+}
+
+#[test]
+fn test_execute_set_creates_default_kv_file_with_entry() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+
+    with_temp_cwd(temp_dir.path(), || {
+        let mut plan = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut plan);
+
+        set_kv_with_approved_member_set(
+            &plan,
+            vec![KvInputEntry::new("DATABASE_URL", "postgres://localhost/db")],
+            None,
+        )
+        .unwrap();
+
+        let kv_path = workspace_dir.join("secrets").join("default.kvenc");
+        let content = fs::read_to_string(&kv_path).unwrap();
+        assert!(content.contains("DATABASE_URL"));
+    });
+}
+
+#[test]
+fn test_execute_set_updates_existing_key_value() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+
+    with_temp_cwd(temp_dir.path(), || {
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(
+            &initial,
+            vec![KvInputEntry::new("API_KEY", "initial_value")],
+            None,
+        )
+        .unwrap();
+
+        let mut update = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut update);
+        set_kv_with_approved_member_set(
+            &update,
+            vec![KvInputEntry::new("API_KEY", "updated_value")],
+            None,
+        )
+        .unwrap();
+
+        let values = read_kv_values(&options, KvReadMode::Single("API_KEY"));
+        assert_eq!(
+            values.get("API_KEY").map(String::as_str),
+            Some("updated_value")
+        );
+    });
+}
+
+#[test]
+fn test_execute_set_preserves_existing_keys_when_adding_entry() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+
+    with_temp_cwd(temp_dir.path(), || {
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
+            .unwrap();
+
+        let mut update = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut update);
+        set_kv_with_approved_member_set(&update, vec![KvInputEntry::new("KEY2", "value2")], None)
+            .unwrap();
+
+        let values = read_kv_values(&options, KvReadMode::All);
+        assert_eq!(values.get("KEY1").map(String::as_str), Some("value1"));
+        assert_eq!(values.get("KEY2").map(String::as_str), Some("value2"));
+    });
+}
+
+#[test]
+fn test_import_kv_overwrites_existing_key() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+
+    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+
+    with_temp_cwd(temp_dir.path(), || {
+        let mut initial = evaluate_set_plan(&options, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(
+            &initial,
+            vec![KvInputEntry::new("API_KEY", "old_value")],
+            None,
+        )
+        .unwrap();
+
+        let mut import = evaluate_import_plan(&options, None);
+        allow_member_set_review(&mut import);
+        let (_, imported) = import_kv_command_with_recipient_set_confirmation(
+            &import,
+            "API_KEY=new_value\n",
+            None,
+            |_, _| Ok(true),
+        )
+        .unwrap();
+
+        let values = read_kv_values(&options, KvReadMode::Single("API_KEY"));
+        assert_eq!(imported, 1);
+        assert_eq!(values.get("API_KEY").map(String::as_str), Some("new_value"));
+    });
 }
 
 #[test]

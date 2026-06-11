@@ -115,6 +115,10 @@ fn test_export_preserves_metadata() {
     let private_key: PrivateKey =
         serde_json::from_slice(&json_bytes).expect("should be valid JSON");
 
+    assert_eq!(
+        private_key.protected.format,
+        crate::model::wire::format::PRIVATE_KEY_V1
+    );
     assert_eq!(private_key.protected.subject_handle, member_handle);
     assert_eq!(private_key.protected.kid, kid);
     assert_eq!(private_key.protected.created_at, created_at);

@@ -12,3 +12,7 @@ pub(super) fn save_exported_public_key(out: &Path, public_key: &PublicKey) -> Re
     })?;
     atomic::save_text(out, &json)
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_key_export_test.rs"]
+mod app_key_export_test;

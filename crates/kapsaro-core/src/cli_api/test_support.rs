@@ -346,8 +346,8 @@ pub mod helpers {
     pub mod codec {
         pub mod base64_public {
             pub use crate::format::codec::base64_public::{
-                decode_base64_standard, decode_base64url_nopad, decode_base64url_nopad_array,
-                encode_base64_standard, encode_base64_standard_nopad, encode_base64url_nopad,
+                decode_base64_standard, decode_base64url_nopad_array, encode_base64_standard,
+                encode_base64_standard_nopad, encode_base64url_nopad,
             };
         }
         pub mod base64_secret {

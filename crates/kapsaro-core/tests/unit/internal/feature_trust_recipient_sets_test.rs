@@ -2,15 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::feature::trust::recipient_sets::{
-    compute_recipient_set_hash, judge_recipient_set, ArtifactRecipientSet, RecipientSetJudgment,
+    compute_recipient_set_hash, judge_recipient_set, purge_recipient_sets, remove_recipient_set,
+    ArtifactRecipientSet, RecipientSetJudgment,
 };
 use crate::model::common::WrapItem;
 use crate::model::trust_store::{RecipientSetApprovalVia, RecipientSetRecord};
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 const KID_ALICE: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 const KID_BOB: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";
 const RECIPIENT_SET_HASH_GOLDEN: &str = "nvfYrpcB97NnFjmvsw15HHsRL70a7RE7p3mg4NvK3Vk";
+const SID_OLD: &str = "00000000-0000-4000-8000-000000000201";
+const SID_NEW: &str = "00000000-0000-4000-8000-000000000202";
 
 #[test]
 fn test_from_wrap_items_captures_sorted_recipient_handle_hints() {
@@ -74,6 +79,55 @@ fn test_into_record_persists_recipient_handle_hints() {
     let hints = record.recipient_handle_hints.unwrap();
     assert_eq!(hints[0].kid, KID_ALICE);
     assert_eq!(hints[0].recipient_handle, "alice@example.com");
+}
+
+#[test]
+fn test_remove_recipient_set_removes_requested_sid_only() {
+    let mut records = build_default_recipient_sets();
+
+    let removed = remove_recipient_set(&mut records, SID_OLD).unwrap();
+
+    assert_eq!(removed.sid, SID_OLD);
+    assert_eq!(record_sids(&records), vec![SID_NEW]);
+}
+
+#[test]
+fn test_purge_recipient_sets_removes_only_old_records() {
+    let mut records = build_default_recipient_sets();
+
+    let removed =
+        purge_recipient_sets(&mut records, parse_timestamp("2026-04-01T00:00:00Z")).unwrap();
+
+    assert_eq!(record_sids(&removed), vec![SID_OLD]);
+    assert_eq!(record_sids(&records), vec![SID_NEW]);
+}
+
+fn build_default_recipient_sets() -> Vec<RecipientSetRecord> {
+    vec![
+        {
+            let mut record =
+                recipient_set_record(Uuid::parse_str(SID_OLD).unwrap(), &[KID_ALICE], None);
+            record.approved_at = "2026-01-01T00:00:00Z".to_string();
+            record
+        },
+        {
+            let mut record =
+                recipient_set_record(Uuid::parse_str(SID_NEW).unwrap(), &[KID_BOB], None);
+            record.approved_at = "2026-06-01T00:00:00Z".to_string();
+            record
+        },
+    ]
+}
+
+fn record_sids(records: &[RecipientSetRecord]) -> Vec<&str> {
+    records
+        .iter()
+        .map(|record| record.sid.as_str())
+        .collect::<Vec<_>>()
+}
+
+fn parse_timestamp(ts: &str) -> OffsetDateTime {
+    OffsetDateTime::parse(ts, &Rfc3339).unwrap()
 }
 
 fn recipient_set_record(

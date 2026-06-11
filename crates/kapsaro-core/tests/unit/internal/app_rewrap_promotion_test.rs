@@ -48,6 +48,21 @@ fn binding_configured_result(member_handle: &str) -> IncomingPromotionCandidate 
     )
 }
 
+fn binding_configured_result_with_github(member_handle: &str) -> IncomingPromotionCandidate {
+    build_candidate(
+        member_handle,
+        IncomingVerificationCategory::BindingConfigured,
+        "pending online verification",
+        true,
+        Some(VerifiedGithubIdentity::new(
+            999999,
+            "offline-test-user".to_string(),
+            "SHA256:abc".to_string(),
+            1,
+        )),
+    )
+}
+
 fn build_candidate(
     member_handle: &str,
     category: IncomingVerificationCategory,
@@ -200,6 +215,32 @@ fn test_build_promotion_review_plan_auto_accepts_known_kid() {
         "alice"
     );
     assert!(result.prompt_candidates.is_empty());
+}
+
+#[test]
+fn test_build_promotion_review_session_skips_online_verify_for_known_github_binding() {
+    let report = build_report(
+        vec![binding_configured_result_with_github("bob")],
+        vec![],
+        vec![],
+    );
+    let review_plan = build_promotion_review_plan(
+        &report,
+        &[known_key("bob")],
+        &SelfTrustSet::default(),
+        false,
+    )
+    .unwrap();
+
+    let session = build_promotion_review_session_with_verifier(&review_plan, |_candidate| {
+        panic!("online verifier should not run for auto-accepted known incoming keys");
+    })
+    .unwrap();
+    let accepted = session.into_accepted_candidates(&[]);
+
+    assert_eq!(accepted.len(), 1);
+    assert_eq!(accepted[0].review.member_handle, "bob");
+    assert!(accepted[0].review.github_binding_configured);
 }
 
 #[test]

@@ -11,7 +11,6 @@ use crate::cli::common::{
     setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, CommonOptions,
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
-use kapsaro_core::cli_api::test_support::wire::kv::enc::canonical::parse_kv_wrap;
 use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
 use std::fs;
@@ -119,27 +118,4 @@ fn save_kv_file(
     workspace_dir
         .join("secrets")
         .join(format!("{}.kvenc", name))
-}
-
-/// Parse the recipient_handles from a kv-enc .kv file's WRAP line.
-fn load_kv_recipient_handles(kv_path: &Path) -> Vec<String> {
-    let content = fs::read_to_string(kv_path).unwrap();
-    let (_, _, wrap_data) = parse_kv_wrap(&content).unwrap();
-    wrap_data
-        .wrap
-        .iter()
-        .map(|w| w.recipient_handle.clone())
-        .collect()
-}
-
-/// Get the removed_recipients recipient_handles from a kv-enc file.
-fn load_kv_removed_recipient_handles(kv_path: &Path) -> Vec<String> {
-    let content = fs::read_to_string(kv_path).unwrap();
-    let (_, _, wrap_data) = parse_kv_wrap(&content).unwrap();
-    wrap_data
-        .removed_recipients
-        .unwrap_or_default()
-        .iter()
-        .map(|r| r.recipient_handle.clone())
-        .collect()
 }

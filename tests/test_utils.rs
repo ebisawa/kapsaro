@@ -142,14 +142,6 @@ pub fn save_active_public_key_to_workspace(
     save_active_public_key_to_workspace_dir(home, workspace, member_handle, "active")
 }
 
-pub fn save_active_public_key_to_workspace_incoming(
-    home: &Path,
-    workspace: &Path,
-    member_handle: &str,
-) -> Result<(), Error> {
-    save_active_public_key_to_workspace_dir(home, workspace, member_handle, "incoming")
-}
-
 fn save_active_public_key_to_workspace_dir(
     home: &Path,
     workspace: &Path,

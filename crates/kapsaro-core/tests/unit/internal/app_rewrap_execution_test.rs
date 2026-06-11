@@ -21,9 +21,13 @@ use crate::app::trust::{derive_self_sig_x, CommandTrustSnapshot, RewrapInputPoli
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
+use crate::feature::kv::encrypt::encrypt_kv_document;
 use crate::feature::trust::verification::verify_trust_store;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::format::content::FileEncContent;
+use crate::format::kv::dotenv::parse_dotenv;
+use crate::format::schema::document::parse_kv_wrap_token;
+use crate::format::token::TokenCodec;
 use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
@@ -33,7 +37,8 @@ use crate::io::workspace::members::{
 };
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
-    setup_member_key_context, setup_test_workspace, update_active_private_key_expires_at, EnvGuard,
+    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
+    update_active_private_key_expires_at, EnvGuard,
 };
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
@@ -80,6 +85,53 @@ fn encrypt_file_for_members(
     )
     .unwrap();
     serde_json::to_string_pretty(&document).unwrap()
+}
+
+fn encrypt_kv_for_members(
+    home: &std::path::Path,
+    signer_handle: &str,
+    signer_kid: &str,
+    key_ctx: &crate::feature::context::crypto::CryptoContext,
+    recipient_handles: &[&str],
+) -> String {
+    let keystore_root = home.join("keys");
+    let signer_pub = load_public_key(&keystore_root, signer_handle, signer_kid).unwrap();
+    let recipient_members = recipient_handles
+        .iter()
+        .map(|member_handle| {
+            let kid = list_kids(&keystore_root, member_handle).unwrap().remove(0);
+            load_public_key(&keystore_root, member_handle, &kid).unwrap()
+        })
+        .collect::<Vec<_>>();
+    let verified_members =
+        crate::test_utils::keygen_helpers::build_verified_recipient_keys(&recipient_members);
+    let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
+    encrypt_kv_document(
+        &kv_map,
+        &verified_members,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid,
+            signer_pub,
+            debug: false,
+        },
+        TokenCodec::JsonJcs,
+    )
+    .unwrap()
+}
+
+fn kv_wrap_recipient_handles(content: &str) -> Vec<String> {
+    let wrap_token = content
+        .lines()
+        .find(|line| line.starts_with(":WRAP "))
+        .unwrap()
+        .strip_prefix(":WRAP ")
+        .unwrap();
+    let wrap = parse_kv_wrap_token(wrap_token).unwrap();
+    wrap.wrap
+        .iter()
+        .map(|item| item.recipient_handle.clone())
+        .collect()
 }
 
 fn find_incoming_candidate(
@@ -165,6 +217,73 @@ fn build_review_session(
         approvals: approvals.to_vec(),
         review_warnings: Vec::new(),
     }
+}
+
+#[test]
+fn test_execute_reviewed_rewrap_artifacts_adds_active_member_to_kv_wrap() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &execution.key_ctx,
+    );
+    let secret_path = workspace_dir.join("secrets").join("add-member.kvenc");
+    let encrypted = encrypt_kv_for_members(
+        temp_dir.path(),
+        ALICE_MEMBER_HANDLE,
+        execution.key_ctx.kid(),
+        &execution.key_ctx,
+        &[ALICE_MEMBER_HANDLE],
+    );
+    fs::write(&secret_path, &encrypted).unwrap();
+    assert_eq!(
+        kv_wrap_recipient_handles(&encrypted),
+        vec![ALICE_MEMBER_HANDLE.to_string()]
+    );
+
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.pre_promotion_trust.is_interactive = true;
+    let request = RewrapBatchRequest {
+        options,
+        rotate_key: false,
+        clear_disclosure_history: false,
+        accepted_promotions: Vec::new(),
+    };
+    let post_members = load_active_member_files(&workspace_dir).unwrap();
+    let (fixed_members, post_promotion_trust) =
+        build_verified_post_promotion_state(&plan, post_members);
+
+    let outcome = execute_reviewed_rewrap_artifacts(
+        &request,
+        &plan,
+        execution,
+        &fixed_members,
+        &post_promotion_trust,
+        &mut |_candidate, _context_label| Ok(true),
+        &mut |_candidate, _context_label, _recipients| Ok(true),
+        &mut |candidates, _context_label| Ok(candidates.to_vec()),
+        &mut |_outcome, _context_label| Ok(true),
+    )
+    .unwrap();
+
+    assert!(
+        outcome.failed_files.is_empty(),
+        "unexpected rewrap failures: {:?}",
+        outcome
+            .failed_files
+            .iter()
+            .map(|failure| failure.error_message.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(outcome.processed_files.len(), 1);
+    let rewrapped = fs::read_to_string(&secret_path).unwrap();
+    let recipient_handles = kv_wrap_recipient_handles(&rewrapped);
+    assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE.to_string()));
+    assert!(recipient_handles.contains(&BOB_MEMBER_HANDLE.to_string()));
 }
 
 #[test]

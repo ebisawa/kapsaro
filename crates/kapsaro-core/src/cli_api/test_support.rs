@@ -106,9 +106,6 @@ pub mod operations {
             }
         }
     }
-    pub mod rewrap {
-        pub use crate::feature::rewrap::{rewrap_content, RewrapRequest};
-    }
     pub mod trust {
         pub mod recipient_sets {
             pub use crate::feature::trust::recipient_sets::{
@@ -282,9 +279,9 @@ pub mod domain {
     }
     pub mod public_key {
         pub use crate::model::public_key::{
-            Attestation, AttestationProof, AttestedKeyStatement, BindingClaims, GithubAccount,
-            IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyParts, PublicKeyProtected,
-            VerifiedBindingClaims, VerifiedPublicKeyAttested, VerifiedRecipientKey,
+            Attestation, AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey,
+            PublicKey, PublicKeyParts, PublicKeyProtected, VerifiedBindingClaims,
+            VerifiedPublicKeyAttested, VerifiedRecipientKey,
         };
     }
     pub mod signature {

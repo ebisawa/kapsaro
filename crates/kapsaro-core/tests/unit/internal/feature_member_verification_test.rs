@@ -3,7 +3,9 @@
 
 use super::*;
 use crate::io::verify_online::VerifiedGithubIdentity;
+use crate::test_utils::{setup_test_workspace_from_fixtures, ALICE_MEMBER_HANDLE};
 use crate::Error;
+use serde_json::Value;
 
 #[test]
 fn test_feature_member_add_does_not_perform_file_or_workspace_io() {
@@ -51,6 +53,43 @@ fn test_feature_member_verification_does_not_perform_file_or_online_io() {
 
 fn dummy_github() -> VerifiedGithubIdentity {
     VerifiedGithubIdentity::new(1, "alice-gh".to_string(), "SHA256:abc".to_string(), 42)
+}
+
+fn tampered_active_member_public_key(
+    tamper: impl FnOnce(&mut Value),
+) -> crate::model::public_key::PublicKey {
+    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let member_file = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", ALICE_MEMBER_HANDLE));
+    let mut value: Value =
+        serde_json::from_str(&std::fs::read_to_string(member_file).unwrap()).unwrap();
+    tamper(&mut value);
+    serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn test_verify_member_public_key_file_rejects_tampered_attestation_signature() {
+    let public_key = tampered_active_member_public_key(|value| {
+        value["protected"]["attestation"]["sig"] = Value::String("broken".to_string());
+    });
+
+    let error = verify_member_public_key_file(
+        &public_key,
+        Some(ALICE_MEMBER_HANDLE),
+        "members/active/alice@example.com.json",
+        false,
+    )
+    .unwrap_err();
+
+    assert!(
+        error
+            .format_user_message()
+            .contains("does not match derived kid"),
+        "unexpected error: {}",
+        error.format_user_message()
+    );
 }
 
 #[test]

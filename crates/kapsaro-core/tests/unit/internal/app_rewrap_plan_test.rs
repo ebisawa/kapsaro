@@ -2,18 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::path::Path;
 
 use crate::app::rewrap::plan::build_rewrap_batch_plan;
 use crate::app::rewrap::promotion::build_promotion_review_plan;
 use crate::app::rewrap::trust::build_rewrap_trust;
+use crate::app::rewrap::types::IncomingVerificationCategory;
 use crate::app::trust::approval::save_known_key_approvals;
 use crate::app::trust::RecipientTrustOutcome;
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
+use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
+use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
+use crate::io::keystore::active::set_active_kid;
+use crate::io::keystore::storage::save_key_pair_atomic;
+use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
+use crate::io::ssh::backend::SignatureBackend;
+use crate::io::ssh::external::keygen::DefaultSshKeygen;
+use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::load_trust_store;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::io::workspace::members::load_member_file_from_path;
+use crate::model::public_key::GithubAccount;
+use crate::model::ssh::SshDeterminismStatus;
+use crate::support::time::format_timestamp_rfc3339;
 // (intentionally unused in this file)
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace,
@@ -23,11 +37,66 @@ use crate::test_utils::{
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
 const BOB_MEMBER_HANDLE: &str = "bob@example.com";
+const BOB_GITHUB_ID: u64 = 42;
+const BOB_GITHUB_LOGIN: &str = "bob-gh";
 
 fn strict_key_checking_guard() -> EnvGuard {
     let guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
     std::env::remove_var("KAPSARO_STRICT_KEY_CHECKING");
     guard
+}
+
+fn build_verified_ssh_binding(home: &Path) -> SshBindingContext {
+    let ssh_key_path = home.join(".ssh").join("test_ed25519");
+    let ssh_public_key = fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
+        .unwrap()
+        .trim()
+        .to_string();
+    let fingerprint = build_sha256_fingerprint(&ssh_public_key).unwrap();
+    let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
+        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        SshKeyDescriptor::from_path(ssh_key_path),
+    ));
+
+    SshBindingContext {
+        public_key: ssh_public_key,
+        fingerprint,
+        backend,
+        determinism: SshDeterminismStatus::Verified,
+    }
+}
+
+fn save_github_bound_public_key_to_workspace_incoming(
+    home: &Path,
+    workspace_dir: &Path,
+    member_handle: &str,
+) {
+    let now = time::OffsetDateTime::now_utc();
+    let created_at = format_timestamp_rfc3339(now).unwrap();
+    let expires_at = format_timestamp_rfc3339(now + time::Duration::days(365)).unwrap();
+    let result = generate_key(KeyGenerationOptions {
+        member_handle: member_handle.to_string(),
+        created_at,
+        expires_at,
+        debug: false,
+        github_account: Some(GithubAccount {
+            id: BOB_GITHUB_ID,
+            login: BOB_GITHUB_LOGIN.to_string(),
+        }),
+        ssh_binding: build_verified_ssh_binding(home),
+    })
+    .unwrap();
+    let keystore_root = home.join("keys");
+    save_key_pair_atomic(
+        &keystore_root,
+        member_handle,
+        &result.kid,
+        &result.private_key,
+        &result.public_key,
+    )
+    .unwrap();
+    set_active_kid(member_handle, &result.kid, &keystore_root).unwrap();
+    save_active_public_key_to_workspace_incoming(home, workspace_dir, member_handle).unwrap();
 }
 
 #[test]
@@ -57,6 +126,43 @@ fn test_build_rewrap_batch_plan_rejects_duplicate_kids_across_active_and_incomin
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Duplicate kid"));
+}
+
+#[test]
+fn test_build_rewrap_batch_plan_classifies_github_bound_incoming_as_binding_configured() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    fs::write(
+        workspace_dir.join("secrets").join("default.kvenc"),
+        "VERSION kapsaro.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
+    )
+    .unwrap();
+    save_github_bound_public_key_to_workspace_incoming(
+        temp_dir.path(),
+        &workspace_dir,
+        BOB_MEMBER_HANDLE,
+    );
+
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    let report = plan.incoming_report.unwrap();
+
+    assert!(report.failed.is_empty());
+    assert!(report.not_configured.is_empty());
+    assert_eq!(report.binding_configured.len(), 1);
+
+    let candidate = &report.binding_configured[0];
+    assert_eq!(candidate.review.member_handle, BOB_MEMBER_HANDLE);
+    assert_eq!(
+        candidate.review.category,
+        IncomingVerificationCategory::BindingConfigured
+    );
+    assert!(candidate.review.github_binding_configured);
+    assert_eq!(
+        candidate.review.message,
+        "GitHub binding configured; online verification will run if trust update is required"
+    );
 }
 
 #[test]

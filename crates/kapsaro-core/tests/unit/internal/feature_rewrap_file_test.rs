@@ -67,6 +67,30 @@ fn rewrap_file_content(
     rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 
+fn parse_file_document(content: &str) -> crate::model::file_enc::FileEncDocument {
+    serde_json::from_str(content).unwrap()
+}
+
+fn file_wrap_recipient_handles(document: &crate::model::file_enc::FileEncDocument) -> Vec<&str> {
+    document
+        .protected
+        .wrap
+        .iter()
+        .map(|item| item.recipient_handle.as_str())
+        .collect()
+}
+
+fn file_removed_recipient_handles(document: &crate::model::file_enc::FileEncDocument) -> Vec<&str> {
+    document
+        .protected
+        .removed_recipients
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|item| item.recipient_handle.as_str())
+        .collect()
+}
+
 /// Encrypt file content for alice (single recipient), returning the JSON string.
 fn encrypt_file_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) -> String {
     let keystore_root = temp_dir.path().join("keys");
@@ -200,7 +224,7 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
     );
 
     let rewrapped = result.unwrap();
-    let doc: crate::model::file_enc::FileEncDocument = serde_json::from_str(&rewrapped).unwrap();
+    let doc = parse_file_document(&rewrapped);
     let alice_wrap = doc
         .protected
         .wrap
@@ -209,6 +233,24 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
         .unwrap();
     assert_eq!(alice_wrap.kid, new_kid);
     assert_eq!(doc.signature.kid, new_key_ctx.kid().to_string());
+}
+
+#[test]
+fn test_rewrap_file_remove_recipient_updates_wrap_and_history() {
+    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
+    let json = encrypt_file_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
+    let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, &alice_kid)]);
+    let request = single_rewrap_request(&key_ctx, target_members, false, false, false);
+
+    let rewrapped = rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
+    let document = parse_file_document(&rewrapped);
+    let recipient_handles = file_wrap_recipient_handles(&document);
+    assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE));
+    assert!(!recipient_handles.contains(&BOB_MEMBER_HANDLE));
+
+    let removed_recipient_handles = file_removed_recipient_handles(&document);
+    assert!(removed_recipient_handles.contains(&BOB_MEMBER_HANDLE));
 }
 
 #[test]
@@ -229,8 +271,7 @@ fn test_rewrap_file_clear_disclosure_history() {
         rewrap_file_content(&FileEncContent::new_unchecked(json), &remove_request).unwrap();
 
     // Verify disclosure history exists after removal
-    let after_remove_doc: crate::model::file_enc::FileEncDocument =
-        serde_json::from_str(&after_remove).unwrap();
+    let after_remove_doc = parse_file_document(&after_remove);
     assert!(
         after_remove_doc.protected.removed_recipients.is_some(),
         "removed_recipients should exist after removing bob"
@@ -248,8 +289,7 @@ fn test_rewrap_file_clear_disclosure_history() {
 
     // After clearing, removed_recipients should be None
     let cleared = result.unwrap();
-    let cleared_doc: crate::model::file_enc::FileEncDocument =
-        serde_json::from_str(&cleared).unwrap();
+    let cleared_doc = parse_file_document(&cleared);
     assert!(
         cleared_doc.protected.removed_recipients.is_none(),
         "removed_recipients must be cleared after clear_disclosure_history"

@@ -71,6 +71,32 @@ fn rewrap_kv_content(
     rewrap_content(&EncContent::KvEnc(content.clone()), request)
 }
 
+fn parse_wrap_from_content(content: &str) -> KvWrap {
+    let wrap_token = content
+        .lines()
+        .find(|line| line.starts_with(":WRAP "))
+        .unwrap()
+        .strip_prefix(":WRAP ")
+        .unwrap();
+    parse_kv_wrap_token(wrap_token).unwrap()
+}
+
+fn recipient_handles_from_wrap(wrap: &KvWrap) -> Vec<&str> {
+    wrap.wrap
+        .iter()
+        .map(|item| item.recipient_handle.as_str())
+        .collect()
+}
+
+fn removed_recipient_handles_from_wrap(wrap: &KvWrap) -> Vec<&str> {
+    wrap.removed_recipients
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|item| item.recipient_handle.as_str())
+        .collect()
+}
+
 /// Encrypt a simple KV document for alice (single recipient).
 fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) -> String {
     let keystore_root = temp_dir.path().join("keys");
@@ -208,6 +234,8 @@ fn test_rewrap_kv_document_rotate_key() {
         original_wrap, rotated_wrap,
         "WRAP token must change after key rotation"
     );
+    let wrap = parse_wrap_from_content(&rewrapped);
+    assert!(recipient_handles_from_wrap(&wrap).contains(&ALICE_MEMBER_HANDLE));
 }
 
 #[test]
@@ -242,13 +270,7 @@ fn test_rewrap_kv_succeeds_when_only_old_self_wrap_exists() {
     );
 
     let rewrapped = result.unwrap();
-    let wrap_token = rewrapped
-        .lines()
-        .find(|l| l.starts_with(":WRAP "))
-        .unwrap()
-        .strip_prefix(":WRAP ")
-        .unwrap();
-    let wrap_data: KvWrap = parse_kv_wrap_token(wrap_token).unwrap();
+    let wrap_data = parse_wrap_from_content(&rewrapped);
     let alice_wrap = wrap_data
         .wrap
         .iter()
@@ -281,18 +303,8 @@ fn test_rewrap_kv_add_recipient() {
 
     // Parse the rewrapped WRAP token to verify bob was added as a recipient
     let rewrapped = result.unwrap();
-    let wrap_token = rewrapped
-        .lines()
-        .find(|l| l.starts_with(":WRAP "))
-        .unwrap()
-        .strip_prefix(":WRAP ")
-        .unwrap();
-    let wrap_data: crate::model::kv_enc::header::KvWrap = parse_kv_wrap_token(wrap_token).unwrap();
-    let recipient_handles: Vec<&str> = wrap_data
-        .wrap
-        .iter()
-        .map(|w| w.recipient_handle.as_str())
-        .collect();
+    let wrap_data = parse_wrap_from_content(&rewrapped);
+    let recipient_handles = recipient_handles_from_wrap(&wrap_data);
     assert!(
         recipient_handles.contains(&BOB_MEMBER_HANDLE),
         "rewrapped WRAP must include bob as a recipient, got: {:?}",
@@ -303,6 +315,26 @@ fn test_rewrap_kv_add_recipient() {
         "rewrapped WRAP must still include alice as a recipient, got: {:?}",
         recipient_handles
     );
+}
+
+#[test]
+fn test_rewrap_kv_remove_recipient_updates_wrap_and_history() {
+    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
+    let encrypted = encrypt_kv_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
+
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let encrypted = KvEncContent::new_unchecked(encrypted);
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
+
+    let wrap = parse_wrap_from_content(&rewrapped);
+    let recipient_handles = recipient_handles_from_wrap(&wrap);
+    assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE));
+    assert!(!recipient_handles.contains(&BOB_MEMBER_HANDLE));
+
+    let removed_recipient_handles = removed_recipient_handles_from_wrap(&wrap);
+    assert!(removed_recipient_handles.contains(&BOB_MEMBER_HANDLE));
 }
 
 #[test]
@@ -597,13 +629,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
         );
     }
     // Verify removed_recipients present by parsing the WRAP token
-    let wrap_token_after_remove = after_remove
-        .lines()
-        .find(|l| l.starts_with(":WRAP "))
-        .unwrap()
-        .strip_prefix(":WRAP ")
-        .unwrap();
-    let wrap_after_remove: KvWrap = parse_kv_wrap_token(wrap_token_after_remove).unwrap();
+    let wrap_after_remove = parse_wrap_from_content(&after_remove);
     assert!(
         wrap_after_remove.removed_recipients.is_some(),
         "removed_recipients must be present after removal"
@@ -629,13 +655,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
     }
 
     // Verify removed_recipients is gone by parsing the WRAP token
-    let wrap_token_after_clear = after_clear
-        .lines()
-        .find(|l| l.starts_with(":WRAP "))
-        .unwrap()
-        .strip_prefix(":WRAP ")
-        .unwrap();
-    let wrap_after_clear: KvWrap = parse_kv_wrap_token(wrap_token_after_clear).unwrap();
+    let wrap_after_clear = parse_wrap_from_content(&after_clear);
     assert!(
         wrap_after_clear.removed_recipients.is_none(),
         "removed_recipients must be None after clear_disclosure_history"

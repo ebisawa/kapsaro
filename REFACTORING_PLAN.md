@@ -356,6 +356,299 @@ Phase 5・6 は全体の整理フェーズのため最後に行う。
 
 各フェーズ完了時にこの表を更新し、効果を定量的に確認する。
 
+### 7.5 Phase 6: 層別カバレッジと E2E テスト分類台帳（2026-06-11 計測）
+
+#### 層別カバレッジ計測
+
+`scripts/coverage-layers.sh` により、ユニット層（bin 内部・lib 内部・独立ユニット・
+public_api）のみのカバレッジと、CLI E2E（cli_integration）を上乗せしたカバレッジを
+分離計測した。
+
+| 指標 | 値 |
+| --- | --- |
+| ユニット層の実行行（hit > 0） | 20,697 行 |
+| ユニット層 + E2E の実行行 | 24,438 行 |
+| E2E のみ到達の行（全体） | 3,741 行 |
+| E2E のみ到達の行（core production） | 1,343 行 |
+
+E2E のみ到達の core 行はユニットテストが検証していないドメイン到達点であり、
+E2E テストを縮小する前に、この行をカバーするユニットテストを移譲先へ追加する。
+主な分布: app/file 256、app/member 171、app/key 134、app/registration 125、
+app/rewrap 143、app/kv 83、app/trust 75（app 層で約 1,100 行）、
+feature 層は inspect 37、context 36、kv 30、key 22、envelope 22 など計約 160 行。
+
+#### E2E テスト分類台帳
+
+対象 8 領域の E2E テスト 153 件を全件分類した。分類の意味は次のとおり。
+
+- 残す: CLI 表現（引数解釈・終了コード・出力文言・プロンプト・配管）の検証として維持する
+- 縮小: CLI 表現の assert を残し、ドメイン細部の assert を内部ユニットテストへ移す
+- 移譲: テスト全体を内部ユニットテストへ移し、E2E からは削除する
+
+この台帳は Phase 6 の各 PR の削減上限を固定する。台帳にないテストの削除・変更は行わない。
+
+
+#### tests/cli/rewrap/membership.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_rewrap_adds_new_member | 移譲 | app_rewrap_execution_test.rs | rewrap 前後の KV wrap recipient handle だけを検証しており、CLI 表現の assert がない。 |
+| test_rewrap_non_interactive_skips_prompt_for_known_incoming_kid | 移譲 | app_rewrap_promotion_test.rs | 非対話 prompt の有無ではなく BOB が recipient に入る状態だけを検証している。 |
+| test_rewrap_non_interactive_skips_online_verify_for_known_incoming_github_binding | 移譲 | app_rewrap_promotion_test.rs | オンライン検証スキップの表示ではなく known incoming GitHub binding の recipient 追加だけを検証している。 |
+| test_rewrap_non_interactive_auto_accepts_self_rotation | 移譲 | app_rewrap_promotion_test.rs | self rotation 後の recipient handle が Alice のままという内部状態だけを検証している。 |
+| test_rewrap_accept_prompt_accepts_carriage_return_in_pty | 縮小 | app_rewrap_execution_test.rs | PTY prompt と carriage return 表示は CLI 固有だが、BOB 追加 assert は wrap 内部状態である。 |
+| test_rewrap_rejects_self_incoming_when_local_identity_mismatches | 縮小 | app_rewrap_promotion_test.rs | 失敗終了と stderr 文言は残すが、self incoming の identity mismatch 判定は promotion 細部である。 |
+| test_rewrap_removes_member_kv_enc | 移譲 | feature_rewrap_kv_test.rs | KV wrap と removed_recipients の recipient handle を直接検証しており、CLI 経由である必要が薄い。 |
+| test_rewrap_removes_member_file_enc | 移譲 | feature_rewrap_file_test.rs | file-enc JSON の protected.wrap と removed_recipients を直接検証する内部構造テストである。 |
+| test_rewrap_requires_recipient_trust_approval | 縮小 | app_rewrap_plan_test.rs | 失敗終了と Unknown recipient kid 表示は CLI 表現だが、trust approval gate は rewrap plan の細部である。 |
+| test_rewrap_rejects_duplicate_kid_workspace_before_processing | 縮小 | app_rewrap_plan_test.rs | Duplicate kid の stderr は残すが、active/incoming の duplicate kid 検出は plan 細部である。 |
+
+#### tests/cli/rewrap/operations.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_rewrap_rotate_key | 縮小 | feature_rewrap_kv_test.rs | --rotate-key の CLI 経路は残すが、ファイル内容変化と wrap recipient handle は KV rewrap 内部状態である。 |
+| test_rewrap_clear_disclosure_history | 縮小 | feature_rewrap_kv_test.rs | --clear-disclosure-history の CLI 経路は残すが、removed_recipients が空になる assert は内部状態である。 |
+
+#### tests/cli/rewrap/preconditions.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_rewrap_requires_workspace | 残す | なし | workspace 未解決時の失敗終了だけを検証しており、CLI 起動と終了コードを除くと検証内容が残らない。 |
+| test_rewrap_with_no_files_fails_gracefully | 残す | なし | secrets に対象ファイルがない場合の失敗終了と No encrypted files の stderr 文言を検証している。 |
+| test_rewrap_nonexistent_workspace_fails | 残す | なし | 存在しない --workspace 指定時の failure を検証する CLI 引数経路のテストである。 |
+| test_rewrap_quiet_keeps_failed_file_details_on_stderr | 残す | なし | --quiet 時の色付き stderr とエラー文言を検証する CLI 表示テストである。 |
+| test_rewrap_surfaces_insecure_trust_store_warning_on_stderr | 残す | なし | 成功終了しつつ Insecure permissions が stderr に出る警告表示を検証している。 |
+| test_rewrap_surfaces_recipient_key_expiry_warning_on_stderr | 残す | なし | 成功終了と recipient key expiry warning の stderr 文言を検証している。 |
+
+#### tests/cli/rewrap/roundtrip.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_rewrap_file_enc_roundtrip | 残す | なし | rewrap 後に decrypt --out で復号できる file-enc の happy-path CLI roundtrip である。 |
+| test_rewrap_kv_enc_roundtrip | 残す | なし | rewrap 後に get の stdout で値を取得できる KV の happy-path CLI roundtrip である。 |
+| test_rewrap_json_output_uses_operation_outcome_shape | 残す | なし | --json stdout の success と summary 形状を検証する CLI JSON 契約である。 |
+
+#### tests/cli/member.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_member_list_shows_initialized_member | 残す | なし | member list の stdout に member handle と display kid が出ることを検証している。 |
+| test_member_list_json_output | 残す | なし | member list --json の members.active 配列と protected.kid を検証する CLI JSON 構造テストである。 |
+| test_member_list_empty_workspace | 残す | なし | 空 workspace で成功終了し No members found を stdout に出す表示契約を検証している。 |
+| test_member_list_json_empty_workspace_outputs_empty_arrays | 残す | なし | 空 workspace の --json stdout が active/incoming 空配列になる CLI JSON 契約を検証している。 |
+| test_member_list_json_skips_invalid_member_file | 縮小 | app_member_verification_test.rs | JSON と stderr warning は CLI 表現だが、改ざん member file の除外判定は member verification 細部である。 |
+| test_member_show_displays_public_key | 残す | なし | member show の見出し、ラベル、非表示文言を stdout で検証する表示レイアウト依存テストである。 |
+| test_member_show_reports_verification_warning | 残す | なし | expired 表示と has expired の stderr warning を検証する CLI 表示テストである。 |
+| test_member_show_json_wraps_public_key_document | 残す | なし | member show --json の member.protected.subject_handle と kid を検証する CLI JSON 構造テストである。 |
+| test_member_show_unknown_member_fails | 残す | なし | unknown member 指定時の failure を検証する CLI エラー経路である。 |
+| test_member_show_invalid_member_fails | 移譲 | feature_member_verification_test.rs | CLI assert は failure のみで、attestation sig 改ざん member の検証失敗が本質である。 |
+| test_member_verify_approve_requires_manual_confirmation_non_interactive | 残す | なし | 非対話 approve の failure と interactive confirmation の stderr 文言を検証している。 |
+| test_member_verify_approve_debug_logs_candidate_verification | 残す | なし | --debug stdout の candidate verification trace と非対話確認エラーを検証している。 |
+| test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner | 残す | なし | --member-handle 有無による stderr 文言差を検証する CLI options 経路である。 |
+| test_member_verify_approve_hides_already_known_results | 残す | なし | already known の member handle や Approved を stderr に出さない表示契約を検証している。 |
+| test_member_verify_approve_json_skips_already_known_results | 残す | なし | --json stdout の results 空配列と stderr 非表示を検証する CLI JSON 契約である。 |
+| test_member_remove_removes_from_workspace | 縮小 | app_member_mutation_test.rs | list/remove/list の CLI smoke は残すが、削除後に active list から消える状態変化は mutation 細部である。 |
+| test_member_remove_without_force_in_non_interactive_mode_fails | 残す | なし | 非対話時の --force 要求 stderr と削除されていない list 表示を検証している。 |
+| test_member_remove_nonexistent_fails | 残す | なし | nonexistent member の remove が failure になる CLI エラー経路である。 |
+| test_member_remove_warns_on_tampered_artifact_but_continues | 縮小 | app_member_mutation_test.rs | 成功終了と stderr warning は残すが、改ざん artifact scan 継続は mutation 細部である。 |
+| test_member_remove_debug_logs_artifact_scan | 残す | なし | --debug stdout の artifact scan trace と平文非表示を検証している。 |
+| test_member_add_places_in_incoming | 残す | なし | member add の成功終了と Added member の stderr 表示を検証している。 |
+| test_member_add_invalid_file_fails | 残す | なし | invalid JSON 入力時の failure を検証する CLI エラー経路である。 |
+| test_member_add_duplicate_without_force_fails | 残す | なし | 重複 add without --force の failure を検証する CLI エラー経路である。 |
+| test_member_verify_reports_offline_invalid_member | 残す | なし | failure と not found in active/ の stderr 文言を検証している。 |
+| test_member_verify_ignores_invalid_incoming_member_when_verifying_all | 縮小 | app_member_verification_test.rs | --json results の外形は残すが、invalid incoming を無視する判定は verification 細部である。 |
+
+#### tests/cli/trust.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_trust_list_succeeds_without_ssh_agent | 残す | なし | ssh-agent なしで成功し stderr に handle と display kid を出す CLI 表示を検証している。 |
+| test_trust_list_json_keeps_canonical_kid | 残す | なし | trust keys list --json の known_keys 配列と canonical kid を検証する CLI JSON 契約である。 |
+| test_trust_recipients_list_text_shows_sid_hash_and_kids | 残す | なし | recipients list の stderr に SID、hash、display kid が出ることを検証している。 |
+| test_trust_recipients_list_json_keeps_canonical_fields | 残す | なし | recipients list --json の recipient_sets、canonical kid、hash field を検証している。 |
+| test_trust_recipients_remove_deletes_requested_sid | 縮小 | feature_trust_recipient_sets_test.rs | Removed recipient set 表示は残すが、指定 SID だけ消える状態変化は recipient set 細部である。 |
+| test_trust_remove_prints_insecure_permission_warning | 残す | なし | permission warning、removal confirmation、display kid の stderr 表示を検証している。 |
+| test_trust_remove_colors_warning_when_forced | 残す | なし | CLICOLOR_FORCE 時の ANSI warning と strip 後文言を検証している。 |
+| test_trust_remove_requires_member_handle_when_keystore_is_ambiguous | 残す | なし | ambiguous keystore 時の failure、複数行 stderr、赤色適用範囲を検証している。 |
+| test_trust_remove_accepts_member_handle_when_keystore_is_ambiguous | 残す | なし | --member-handle 指定で成功し Removed kid を stderr に出す CLI 経路を検証している。 |
+| test_trust_remove_accepts_display_kid | 残す | なし | display kid を CLI 引数として受け、stderr に display kid を出すことを検証している。 |
+| test_trust_remove_accepts_unique_prefix_kid | 残す | なし | unique prefix kid を CLI 引数として受け、stderr に display kid を出すことを検証している。 |
+| test_trust_list_prints_warning_after_known_key_output | 残す | なし | known key 表示が permission warning より前に出る stderr 順序を検証している。 |
+| test_trust_purge_with_force | 縮小 | feature_trust_known_keys_test.rs | purge 件数と empty list 表示は残すが、古い known key の削除状態は trust 細部である。 |
+| test_trust_purge_accepts_member_handle_when_keystore_is_ambiguous | 残す | なし | ambiguous keystore で --member-handle 指定時の成功と purge 件数表示を検証している。 |
+| test_trust_purge_without_force_in_non_interactive_mode_error | 残す | なし | 非対話 purge without --force の failure と stderr 文言を検証している。 |
+| test_trust_recipients_purge_with_force_removes_only_old_records | 縮小 | feature_trust_recipient_sets_test.rs | purge 件数と list 表示は残すが、old record だけ削除される判定は recipient set 細部である。 |
+| test_trust_recipients_purge_without_force_in_non_interactive_mode_error | 縮小 | feature_trust_recipient_sets_test.rs | failure と stderr 文言は残すが、失敗後に全 recipient set が残る状態確認は内部細部である。 |
+
+#### tests/cli/key/export.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_key_export_explicit_kid | 縮小 | app_key_export_test.rs（新設） | explicit kid と --out の CLI 経路は残すが、exported PublicKey の kid/subject_handle/format は app 細部である。 |
+| test_key_export_active | 縮小 | app_key_export_test.rs（新設） | active key export の CLI smoke は残すが、exported PublicKey format の内部確認は app 細部である。 |
+| test_key_export_accepts_display_kid | 縮小 | app_key_export_test.rs（新設） | display kid 引数の CLI 経路は残すが、exported PublicKey の kid 一致は app 細部である。 |
+| test_key_export_private_rejects_short_password_by_default | 残す | なし | stdin password、failure、stderr 文言、Warning 非表示、出力ファイル未作成を検証している。 |
+| test_key_export_private_colors_short_password_error_when_forced | 残す | なし | CLICOLOR_FORCE 時の ANSI error、strip 後文言、出力ファイル未作成を検証している。 |
+| test_key_export_private_warns_for_allowed_weak_password_to_file | 残す | なし | 弱い password を許可した場合の success、stderr warning、出力ファイル作成を検証している。 |
+| test_key_export_private_colors_short_password_warning_when_forced | 残す | なし | CLICOLOR_FORCE 時の ANSI warning と strip 後文言を検証している。 |
+| test_key_export_private_warns_for_accepted_short_password_only_on_stderr | 残す | なし | --stdout の base64url 出力と warning が stderr のみに出る配管契約を検証している。 |
+| test_key_export_private_does_not_warn_for_recommended_password | 残す | なし | 推奨長 password で success し stderr に warning 文言がないことを検証している。 |
+| test_key_export_private_writes_password_protected_key_file | 縮小 | feature_key_portable_export_test.rs | --out success は残すが、base64url decode 後の PrivateKey subject_handle/format は portable export 細部である。 |
+| test_key_export_private_writes_base64url_to_stdout_with_stdout_flag | 縮小 | feature_key_portable_export_test.rs | --stdout 出力は残すが、decode 後の PrivateKey subject_handle/format は portable export 細部である。 |
+| test_key_export_private_requires_member_handle_before_password_input | 残す | なし | member handle 未設定が password mismatch より先に出る stderr 順序を検証している。 |
+| test_key_export_private_requires_explicit_output_destination | 残す | なし | stdout 空、failure、requires either --out or --stdout の stderr を検証している。 |
+| test_key_export_private_rejects_stdout_and_out_together | 残す | なし | --stdout と --out 同時指定時の failure と cannot be used with の stderr を検証している。 |
+
+#### tests/cli/decrypt.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_decrypt_help_aligns_multiline_usage | 残す | なし | --help stdout の Usage 改行位置を検証する clap 表示契約である。 |
+| test_decrypt_missing_input | 残す | なし | 必須 input 欠落時の failure と clap stderr 文言を検証している。 |
+| test_decrypt_rejects_kv_enc_format | 残す | なし | kv-enc 入力時の failure と Expected file-enc format の stderr を検証している。 |
+| test_decrypt_rejects_unknown_format | 残す | なし | unknown format 入力時の failure と Expected file-enc format の stderr を検証している。 |
+| test_decrypt_file_enc_roundtrip_with_out | 縮小 | feature_decrypt_test.rs | debug stdout と Decrypted to 表示は残すが、復号ファイル内容一致は decrypt 細部である。 |
+| test_decrypt_rejects_tampered_file_enc_signature | 縮小 | feature_verify_file_operation_test.rs | Signature verification failed の stderr は残すが、改ざん artifact の復号拒否は verify/decrypt 細部である。 |
+| test_decrypt_surfaces_private_key_expiry_warning_on_stderr | 残す | なし | decrypt 成功時に local key expiry warning を stderr に出す CLI 表示を検証している。 |
+| test_decrypt_nonexistent_file_fails | 残す | なし | nonexistent path 指定時の failure を検証する CLI エラー経路である。 |
+| test_decrypt_file_with_stdout_writes_bytes_to_stdout | 残す | なし | --stdout 時の stdout bytes と Decrypted to 非表示を検証する配管テストである。 |
+| test_decrypt_stdin_with_out_writes_decrypted_file | 残す | なし | --stdin --out、stdin 入力、出力先 path 表示、出力ファイル bytes を検証している。 |
+| test_decrypt_stdin_with_stdout_writes_bytes_to_stdout | 残す | なし | --stdin --stdout、stdin 入力、stdout bytes、stderr 非表示を検証している。 |
+| test_decrypt_file_requires_out_or_stdout | 残す | なし | 出力先未指定時の failure と requires either --out or --stdout の stderr を検証している。 |
+| test_decrypt_rejects_stdout_and_out_together | 残す | なし | --stdout と --out 同時指定時の failure と stderr 文言を検証している。 |
+| test_decrypt_rejects_input_and_stdin_together | 残す | なし | input path と --stdin 同時指定時の failure と stderr 文言を検証している。 |
+
+#### tests/cli/inspect.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_inspect_file_enc_shows_metadata | 残す | なし | file-enc metadata の見出し、各セクション、Attestation 表示を stdout で検証している。 |
+| test_inspect_file_enc_json_output_is_structured | 縮小 | feature_inspect_test.rs | --json stdout 構造は残すが、wrap item enc/ct、payload ct、signer_pub、verification status は inspect 細部である。 |
+| test_inspect_kv_enc_shows_metadata | 残す | なし | KV metadata の見出し、各セクション、Attestation 表示を stdout で検証している。 |
+| test_inspect_kv_enc_json_output_is_structured | 縮小 | feature_inspect_test.rs | --json stdout 構造は残すが、entry nonce/ct/disclosed、summary、verification status は inspect 細部である。 |
+| test_inspect_invalid_format_fails | 残す | なし | plain text 入力時の failure を検証する CLI エラー経路である。 |
+| test_inspect_nonexistent_file_fails | 残す | なし | nonexistent path 指定時の failure を検証する CLI エラー経路である。 |
+| test_inspect_shows_signature_verification | 残す | なし | Signature Verification セクションと Status 表示を stdout で検証している。 |
+| test_inspect_kv_shows_entry_count | 残す | なし | Total Entries: 1 の stdout 表示を検証している。 |
+| test_inspect_succeeds_without_workspace_or_private_key | 残す | なし | workspace/private key なしで success し signature verification 表示を出す CLI 挙動を検証している。 |
+| test_inspect_ignores_trust_store_and_strict_key_checking | 残す | なし | invalid trust store と env 指定下でも success して stdout 表示する CLI 挙動を検証している。 |
+| test_inspect_colors_public_key_expiry_warning_when_forced | 残す | なし | CLICOLOR_FORCE 時の ANSI warning と strip 後文言を検証している。 |
+| test_inspect_colors_disclosed_rotation_warning_when_forced | 残す | なし | disclosed rotation warning の ANSI 表示と strip 後文言を検証している。 |
+
+#### tests/cli/kv/default_file.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_error_when_workspace_not_found | 残す | なし | workspace 未検出時の failure と stderr 文言候補を検証する CLI エラー経路である。 |
+
+#### tests/cli/kv/get.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_get_existing_key | 残す | なし | get の成功終了と stdout の値表示を検証する happy-path CLI smoke である。 |
+| test_get_rejects_tampered_kv_signature | 縮小 | feature_verify_kv_operation_test.rs | Signature verification failed の stderr は残すが、KV signature 改ざん拒否は verify 細部である。 |
+| test_get_nonexistent_key | 残す | なし | nonexistent key の failure と not found の stderr を検証している。 |
+| test_get_with_json_output | 残す | なし | get --json の values.TEST_KEY 構造を stdout JSON として検証している。 |
+| test_get_error_when_file_not_exists | 残す | なし | KV ファイル未存在時の failure と not found の stderr を検証している。 |
+| test_get_all | 残す | なし | get --all の成功終了と複数値の stdout 表示を検証している。 |
+| test_get_all_debug_logs_public_key_verification_contexts | 残す | なし | --debug stdout の trace 文言と非表示 trace を検証している。 |
+| test_get_all_debug_uses_half_kid_for_high_frequency_traces | 残す | なし | debug stdout の KID 表示形式と full KID 非表示を検証している。 |
+| test_get_all_verbose_does_not_log_public_key_verification_contexts | 残す | なし | --verbose では debug trace が stdout に出ないことを検証している。 |
+| test_get_all_with_key | 残す | なし | --with-key の KEY="value" stdout 表示形式を検証している。 |
+| test_get_with_key_format | 残す | なし | 単一 key の --with-key stdout 表示形式を検証している。 |
+| test_get_all_with_key_arg_fails | 残す | なし | --all と key 引数の不正な組み合わせが failure になる CLI 引数テストである。 |
+| test_get_without_key_and_all_fails | 残す | なし | key も --all もない CLI 呼び出しが failure になる引数テストである。 |
+| test_get_all_json | 残す | なし | get --all --json の values 構造と複数値を stdout JSON として検証している。 |
+
+#### tests/cli/kv/import.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_import_dotenv_file | 残す | なし | Imported 3 entries の出力と後続 get stdout を確認する import happy-path CLI smoke である。 |
+| test_import_overwrites_existing_keys | 移譲 | app_kv_mutation_test.rs | import 自体は success のみで、主検証は既存 key の上書き結果であり KV mutation の細部である。 |
+| test_import_invalid_dotenv_fails | 残す | なし | invalid dotenv の failure と missing '=' separator の stderr を検証している。 |
+| test_import_nonexistent_file_fails | 残す | なし | nonexistent input path 指定時の failure を検証する CLI エラー経路である。 |
+| test_import_empty_file_fails | 残す | なし | 有効 entry なしの failure と No valid entries found の stderr を検証している。 |
+| test_import_with_json_output | 残す | なし | import --json の success と summary を stdout JSON として検証している。 |
+| test_import_rejects_symlink_input_file | 縮小 | support_fs_test.rs | symlink の stderr 表示は残すが、symlink 入力拒否はファイル安全性の細部である。 |
+
+#### tests/cli/kv/list.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_list_all_keys | 残す | なし | list の成功終了と key 一覧の stdout 表示を検証している。 |
+| test_list_with_json_output | 残す | なし | list --json の keys 配列と順序を stdout JSON として検証している。 |
+| test_list_error_when_file_not_exists | 残す | なし | KV ファイル未存在時の failure と not found の stderr を検証している。 |
+| test_list_rejects_tampered_kv_signature | 縮小 | feature_verify_kv_operation_test.rs | Signature verification failed の stderr は残すが、KV signature 改ざん拒否は verify 細部である。 |
+| test_list_debug_verifies_key_possession_without_printing_values | 残す | なし | --debug stdout の key possession trace と secret 値非表示を検証している。 |
+
+#### tests/cli/kv/name_option.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_set_with_name_option_creates_named_file | 残す | なし | -n による出力先パス解決と default file 非作成を検証している。 |
+| test_set_get_with_name_option_roundtrip | 残す | なし | set -n と get -n の成功、stdout 値表示を検証する CLI roundtrip である。 |
+| test_list_with_name_option | 残す | なし | list -n の成功と stdout key 表示を検証している。 |
+| test_unset_with_name_option | 残す | なし | unset -n --force の成功と後続 get -n failure を検証している。 |
+| test_run_with_name_option | 残す | なし | run -n -- の stdout に環境変数値が出ることを検証している。 |
+| test_get_with_nonexistent_name_fails | 残す | なし | nonexistent -n 指定時の failure を検証する CLI エラー経路である。 |
+| test_named_file_and_default_file_are_independent | 残す | なし | default と -n other の list stdout を比較し、ファイル選択表示を検証している。 |
+
+#### tests/cli/kv/set.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_set_creates_new_file | 縮小 | app_kv_mutation_test.rs | default file 作成は残すが、ファイル内容に key が含まれる assert は保存内容の細部である。 |
+| test_set_updates_existing_key | 移譲 | app_kv_mutation_test.rs | set 自体は success のみで、主検証は既存 key 更新結果であり KV mutation の細部である。 |
+| test_set_debug_does_not_log_secret_value | 残す | なし | --debug stdout の trace と secret 値非表示を検証している。 |
+| test_set_multiple_keys | 移譲 | app_kv_mutation_test.rs | set は success のみで、主検証は複数 key が残る mutation 結果である。 |
+| test_set_without_workspace_fails | 残す | なし | workspace なしの failure と stderr 文言候補を検証している。 |
+| test_set_stdin_creates_new_file | 残す | なし | --stdin 入力、出力先 path 作成、後続 get の stdout 値表示を検証している。 |
+| test_set_stdin_and_value_arg_conflicts | 残す | なし | --stdin と VALUE 引数の CLI 競合が failure になることを検証している。 |
+| test_set_without_stdin_and_without_value_fails | 残す | なし | VALUE なし、--stdin なしの CLI 呼び出しが failure になることを検証している。 |
+| test_set_existing_file_updates_wrap_to_current_active_members | 移譲 | feature_rewrap_kv_test.rs | parse_kv_wrap で wrap recipient 配列を直接読み、暗号文書内部構造を検証している。 |
+
+#### tests/cli/kv/unset.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_unset_existing_key_with_force | 残す | なし | unset --force 成功と後続 list の stdout 表示/非表示を検証している。 |
+| test_unset_nonexistent_key | 残す | なし | nonexistent key の failure と not found の stderr を検証している。 |
+| test_unset_non_interactive_without_force_fails | 残す | なし | 非対話 unset without --force の stderr 実文言を検証している。 |
+| test_unset_requires_member_handle_before_confirmation | 残す | なし | member handle エラーが force 要求より先に出る stderr 順序を検証している。 |
+
+#### tests/cli/verify.rs
+
+| テスト関数名 | 分類 | 移譲先（内部ユニットファイル） | 判定理由（1 行） |
+|---|---|---|---|
+| test_verify_file_enc_valid_signature | 残す | なし | inspect の success と Signature Verification / OK の stdout 表示を検証している。 |
+| test_verify_kv_enc_valid_signature | 残す | なし | KV inspect の success と Signature Verification / OK の stdout 表示を検証している。 |
+| test_verify_file_enc_tampered_fails | 縮小 | feature_verify_file_operation_test.rs | inspect が success のまま FAILED を出す表示は残すが、signature field 改ざん検出は verify 細部である。 |
+
+#### 集計
+
+| ファイル | 残す | 縮小 | 移譲 | 合計 |
+|---|---:|---:|---:|---:|
+| tests/cli/rewrap/membership.rs | 0 | 4 | 6 | 10 |
+| tests/cli/rewrap/operations.rs | 0 | 2 | 0 | 2 |
+| tests/cli/rewrap/preconditions.rs | 6 | 0 | 0 | 6 |
+| tests/cli/rewrap/roundtrip.rs | 3 | 0 | 0 | 3 |
+| tests/cli/member.rs | 20 | 4 | 1 | 25 |
+| tests/cli/trust.rs | 13 | 4 | 0 | 17 |
+| tests/cli/key/export.rs | 9 | 5 | 0 | 14 |
+| tests/cli/decrypt.rs | 12 | 2 | 0 | 14 |
+| tests/cli/inspect.rs | 10 | 2 | 0 | 12 |
+| tests/cli/kv/default_file.rs | 1 | 0 | 0 | 1 |
+| tests/cli/kv/get.rs | 13 | 1 | 0 | 14 |
+| tests/cli/kv/import.rs | 5 | 1 | 1 | 7 |
+| tests/cli/kv/list.rs | 4 | 1 | 0 | 5 |
+| tests/cli/kv/name_option.rs | 7 | 0 | 0 | 7 |
+| tests/cli/kv/set.rs | 5 | 1 | 3 | 9 |
+| tests/cli/kv/unset.rs | 4 | 0 | 0 | 4 |
+| tests/cli/verify.rs | 2 | 1 | 0 | 3 |
+| 合計 | 114 | 28 | 11 | 153 |
+
 ## 8. フェーズ実績
 
 ### Phase 0(PR #116、2026-06-10 完了)

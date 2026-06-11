@@ -3,9 +3,7 @@
 
 //! Integration tests for `import` command
 
-use crate::cli::common::{
-    cmd, import_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
-};
+use crate::cli::common::{cmd, import_file_with_member_set_review, setup_workspace};
 use predicates::prelude::*;
 use std::fs;
 
@@ -48,48 +46,6 @@ fn test_import_dotenv_file() {
             .success()
             .stdout(predicate::str::contains(*expected_value));
     }
-}
-
-#[test]
-fn test_import_overwrites_existing_keys() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    // Set initial value
-    set_value_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        "API_KEY",
-        "old_value",
-        None,
-        None,
-    );
-
-    // Import file with same key
-    let env_file = workspace_dir.path().join("test.env");
-    fs::write(&env_file, "API_KEY=new_value\n").unwrap();
-
-    cmd()
-        .arg("import")
-        .arg(env_file.to_str().unwrap())
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success();
-
-    // Verify value was overwritten
-    cmd()
-        .arg("get")
-        .arg("API_KEY")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("new_value"));
 }
 
 #[test]

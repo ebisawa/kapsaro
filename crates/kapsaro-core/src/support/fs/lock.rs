@@ -3,19 +3,45 @@
 
 //! File locking utilities.
 
+use super::relative::{DirectoryFd, OpenDir};
 use crate::support::fs::policy::{
     enforce_path_not_symlink, ensure_real_directory_tree, DirectoryMode, DirectoryPurpose,
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use fd_lock::RwLock;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
+
+#[derive(Debug)]
+pub(crate) struct LockedDir<'a> {
+    file: &'a File,
+    path: &'a Path,
+}
+
+impl DirectoryFd for LockedDir<'_> {
+    fn file(&self) -> &File {
+        self.file
+    }
+
+    fn path(&self) -> &Path {
+        self.path
+    }
+}
+
+impl LockedDir<'_> {
+    #[cfg(unix)]
+    pub(crate) fn open_child_dir(&self, name: &str) -> Result<OpenDir> {
+        super::relative::open_child_dir(self, name)
+    }
+}
 
 /// Execute a function with an exclusive file lock.
 ///
-/// Creates a lock file (`.{filename}.lock`) in the same directory as the target file
-/// and holds an exclusive lock while executing the provided function.
+/// Creates a sidecar lock file (`.{filename}.lock`) in the same directory as the target
+/// file and holds an exclusive lock while executing the provided function. The sidecar
+/// is deliberately kept on disk after release so that all processes contending for the
+/// same logical target always open fds to the same underlying inode (rendezvous anchor).
 pub fn with_file_lock<T, F>(path: &Path, f: F) -> Result<T>
 where
     F: FnOnce() -> Result<T>,
@@ -53,11 +79,80 @@ where
     };
 
     let mut lock = RwLock::new(lock_file);
-    let _guard = lock
-        .write()
-        .map_err(|e| Error::build_io_error(format!("Failed to acquire lock: {}", e)))?;
 
-    f()
+    let result = {
+        let _guard = lock
+            .write()
+            .map_err(|e| Error::build_io_error(format!("Failed to acquire lock: {}", e)))?;
+        f()
+    };
+
+    // NOTE: We deliberately do *not* remove the sidecar lock file here.
+    // The persistent name acts as the rendezvous point so that all processes
+    // contending for the same logical target (e.g. a .kvenc file) open fds
+    // to the *same* underlying inode. Deleting the name after release allows
+    // a late-arriving process to create a fresh lock file (new inode) and
+    // acquire independently, breaking mutual exclusion for the protected
+    // operation (see detailed race analysis in conversation history).
+    // The lock file may remain on disk after use; use .gitignore for
+    // `.*.lock` patterns in workspace secrets/ etc. as needed.
+    result
+}
+
+/// Execute a function with an exclusive directory lock.
+///
+/// Locks the given directory itself (no sidecar file is created).
+/// The directory must already exist; this function does not create it.
+/// The lock is released when the returned guard is dropped after `f` returns.
+///
+/// On Unix, the directory fd is opened with `O_DIRECTORY | O_NOFOLLOW` so that
+/// a symlink at the final path component is rejected before locking.
+pub fn with_dir_lock<T, F>(dir: &Path, f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    with_locked_dir(dir, |_| f())
+}
+
+/// Execute a function with an exclusive directory lock and the locked fd.
+pub(crate) fn with_locked_dir<T, F>(dir: &Path, f: F) -> Result<T>
+where
+    F: FnOnce(&LockedDir<'_>) -> Result<T>,
+{
+    enforce_path_not_symlink(dir, |path| {
+        format!("refusing to lock directory through symlink: {}", path)
+    })?;
+
+    let dir_file = open_dir_for_locking(dir)?;
+    let mut lock = RwLock::new(dir_file);
+
+    let guard = lock
+        .write()
+        .map_err(|e| Error::build_io_error(format!("Failed to acquire directory lock: {}", e)))?;
+
+    let locked = LockedDir {
+        file: &guard,
+        path: dir,
+    };
+    f(&locked)
+}
+
+#[cfg(unix)]
+fn open_dir_for_locking(dir: &Path) -> Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(dir)
+        .map_err(|e| {
+            Error::build_io_error_with_source(
+                format!(
+                    "Failed to open directory for locking: {}",
+                    format_path_relative_to_cwd(dir)
+                ),
+                e,
+            )
+        })
 }
 
 fn lock_parent_dir(path: &Path) -> Option<&Path> {

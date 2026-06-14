@@ -1,12 +1,17 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use super::paths::{ensure_members_dir, member_file_path, MemberStatus};
-use super::store::{check_workspace_member_kid_uniqueness, MemberKidCandidate};
-use crate::support::fs::{atomic, ensure_text_file_matches_snapshot_with_limit, lock};
+//! Promotion of incoming workspace members to active status.
+//! Holds a directory lock on members/ to prevent concurrent promotion races.
+
+use super::paths::{ensure_members_dir, MemberStatus};
+use super::store::{check_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate};
+use crate::support::fs::lock;
+use crate::support::fs::relative::{
+    ensure_text_file_matches_snapshot_with_limit_at, remove_file_at, save_text_at, OpenDir,
+};
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::{Error, Result};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,70 +30,56 @@ pub fn promote_snapshotted_incoming_members(
         return Ok(Vec::new());
     }
 
-    ensure_snapshotted_promotion_kids_are_unique(workspace_path, snapshots)?;
+    // Ensure the members/ directory exists before attempting to lock it.
     ensure_members_dir(workspace_path, MemberStatus::Active)?;
 
-    for snapshot in snapshots {
-        promote_snapshotted_member(workspace_path, snapshot)?;
-    }
+    let members_root = workspace_path.join("members");
+    lock::with_locked_dir(&members_root, |members_dir| {
+        let incoming_dir = members_dir.open_child_dir("incoming")?;
+        let active_dir = members_dir.open_child_dir("active")?;
+        ensure_snapshotted_promotion_kids_are_unique(&active_dir, &incoming_dir, snapshots)?;
 
-    Ok(snapshots
-        .iter()
-        .map(|snapshot| snapshot.member_handle.clone())
-        .collect())
-}
+        for snapshot in snapshots {
+            promote_snapshotted_member(&incoming_dir, &active_dir, snapshot)?;
+        }
 
-fn promote_snapshotted_member(
-    workspace_path: &Path,
-    snapshot: &IncomingMemberPromotionSnapshot,
-) -> Result<()> {
-    let destination = member_file_path(
-        workspace_path,
-        MemberStatus::Active,
-        &snapshot.member_handle,
-    );
-    with_promotion_file_locks(&snapshot.source_path, &destination, || {
-        let subject_display = format!("Incoming member '{}'", snapshot.member_handle);
-        ensure_text_file_matches_snapshot_with_limit(
-            &snapshot.source_path,
-            Some(&snapshot.source_content),
-            &subject_display,
-            MAX_JSON_DOCUMENT_READ_SIZE,
-        )?;
-        atomic::save_text(&destination, &snapshot.source_content)?;
-        fs::remove_file(&snapshot.source_path).map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to clean incoming member '{}': {}",
-                    snapshot.member_handle, e
-                ),
-                e,
-            )
-        })
+        Ok(snapshots
+            .iter()
+            .map(|snapshot| snapshot.member_handle.clone())
+            .collect())
     })
 }
 
-fn with_promotion_file_locks<T, F>(source_path: &Path, destination_path: &Path, f: F) -> Result<T>
-where
-    F: FnOnce() -> Result<T>,
-{
-    let source_key = source_path.as_os_str().to_string_lossy();
-    let destination_key = destination_path.as_os_str().to_string_lossy();
-    let mut action = Some(f);
+fn promote_snapshotted_member(
+    incoming_dir: &OpenDir,
+    active_dir: &OpenDir,
+    snapshot: &IncomingMemberPromotionSnapshot,
+) -> Result<()> {
+    let member_file_name = member_file_name(&snapshot.member_handle);
+    let subject_display = format!("Incoming member '{}'", snapshot.member_handle);
+    ensure_text_file_matches_snapshot_with_limit_at(
+        incoming_dir,
+        &member_file_name,
+        Some(&snapshot.source_content),
+        &subject_display,
+        MAX_JSON_DOCUMENT_READ_SIZE,
+    )?;
+    save_text_at(active_dir, &member_file_name, &snapshot.source_content)?;
+    remove_file_at(incoming_dir, &member_file_name).map_err(|e| {
+        Error::build_io_error(format!(
+            "Failed to clean incoming member '{}': {}",
+            snapshot.member_handle, e
+        ))
+    })
+}
 
-    if source_key <= destination_key {
-        lock::with_file_lock(source_path, || {
-            lock::with_file_lock(destination_path, || action.take().unwrap()())
-        })
-    } else {
-        lock::with_file_lock(destination_path, || {
-            lock::with_file_lock(source_path, || action.take().unwrap()())
-        })
-    }
+fn member_file_name(member_handle: &str) -> String {
+    format!("{}.json", member_handle)
 }
 
 fn ensure_snapshotted_promotion_kids_are_unique(
-    workspace_path: &Path,
+    active_dir: &OpenDir,
+    incoming_dir: &OpenDir,
     snapshots: &[IncomingMemberPromotionSnapshot],
 ) -> Result<()> {
     let candidates = snapshots
@@ -103,10 +94,14 @@ fn ensure_snapshotted_promotion_kids_are_unique(
         .iter()
         .map(|snapshot| (MemberStatus::Incoming, snapshot.member_handle.clone()))
         .collect::<Vec<_>>();
-    check_workspace_member_kid_uniqueness(
-        workspace_path,
+    check_workspace_member_kid_uniqueness_in_open_dirs(
+        active_dir,
+        incoming_dir,
         &candidates,
         &ignored_existing,
-        &[MemberStatus::Active, MemberStatus::Incoming],
     )
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/io_workspace_members_promotion_test.rs"]
+mod io_workspace_members_promotion_test;

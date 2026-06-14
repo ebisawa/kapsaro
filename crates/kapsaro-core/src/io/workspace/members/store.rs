@@ -14,7 +14,10 @@ pub use load::{
 };
 pub use remove::remove_member;
 pub use save::save_member_content;
-pub(crate) use uniqueness::{check_workspace_member_kid_uniqueness, MemberKidCandidate};
+pub(crate) use uniqueness::{
+    check_workspace_member_kid_uniqueness, check_workspace_member_kid_uniqueness_in_open_dirs,
+    MemberKidCandidate,
+};
 pub use uniqueness::{
     ensure_member_document_kid_is_unique, ensure_workspace_member_kid_uniqueness,
 };

@@ -10,7 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::io::ssh::backend::SignatureBackend;
-use crate::support::fs::lock::with_file_lock;
+use crate::io::trust::paths::get_trust_store_dir;
+use crate::support::fs::{ensure_dir_restricted, lock::with_dir_lock};
 use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
 use kapsaro_core::api::trust::TrustApproval;
@@ -273,17 +274,18 @@ fn apply_approvals_rejects_expired_signing_key() {
 }
 
 #[test]
-fn apply_approvals_waits_for_trust_store_file_lock() {
+fn apply_approvals_waits_for_trust_store_dir_lock() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
     let key_store = LocalKeyStore::new(temp.path().join("keys"));
     let trust_store = build_trust_store(temp.path(), ALICE);
-    let path = trust_store.path();
+    let trust_dir = get_trust_store_dir(temp.path());
+    ensure_dir_restricted(&trust_dir).expect("ensure trust dir exists");
     let home_path = temp.path().to_path_buf();
     let bob_kid = fixture_kid(&key_store, BOB);
     let (ready_tx, ready_rx) = mpsc::channel();
     let (done_tx, done_rx) = mpsc::channel();
 
-    let worker = with_file_lock(&path, || {
+    let worker = with_dir_lock(&trust_dir, || {
         let worker = thread::spawn(move || {
             let trust_store = build_trust_store(&home_path, ALICE);
             let key_ctx = load_key_context_from_home_path(&home_path, ALICE);
@@ -299,11 +301,11 @@ fn apply_approvals_waits_for_trust_store_file_lock() {
             .expect("worker must reach apply_approvals");
         assert!(
             done_rx.recv_timeout(Duration::from_millis(300)).is_err(),
-            "apply_approvals must wait for the trust store file lock"
+            "apply_approvals must wait for the trust store directory lock"
         );
         Ok::<_, kapsaro_core::Error>(worker)
     })
-    .expect("hold trust store lock");
+    .expect("hold trust store directory lock");
 
     let result = done_rx
         .recv_timeout(Duration::from_secs(5))

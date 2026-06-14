@@ -8,7 +8,10 @@ pub mod lock;
 pub(crate) mod permission;
 pub(crate) mod policy;
 pub(crate) mod read;
+pub(crate) mod relative;
 pub(crate) mod snapshot;
+#[cfg(test)]
+pub(crate) mod test_umask;
 
 pub use permission::{
     check_permission_chain, ensure_dir, ensure_dir_restricted, set_file_permission_0600,

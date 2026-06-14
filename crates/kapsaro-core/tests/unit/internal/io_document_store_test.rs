@@ -4,6 +4,11 @@
 use crate::io::document_store::{
     CollectPermissionWarnings, DocumentStore, FailOnPermissionWarning,
 };
+use crate::support::fs::lock::with_locked_dir;
+#[cfg(unix)]
+use crate::support::fs::test_umask::{
+    run_current_test_in_isolated_umask_process, with_restrictive_umask,
+};
 use crate::Result;
 use std::cell::Cell;
 use std::fs;
@@ -58,6 +63,33 @@ fn collect_permission_warnings_loads_document() {
     assert_eq!(loaded.document, "loaded");
     assert_eq!(loaded.permission_warnings.len(), 1);
     assert!(loaded.permission_warnings[0].contains("Insecure permissions"));
+}
+
+#[cfg(unix)]
+#[test]
+fn save_json_restricted_at_preserves_0600_with_restrictive_umask() {
+    const CHILD_ENV: &str = "KAPSARO_DOCUMENT_STORE_UMASK_CHILD";
+    const TEST_NAME: &str =
+        "io::document_store::tests::save_json_restricted_at_preserves_0600_with_restrictive_umask";
+    if run_current_test_in_isolated_umask_process(CHILD_ENV, TEST_NAME) {
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("secret.json");
+    let document = serde_json::json!({ "secret": "value" });
+
+    with_restrictive_umask(|| {
+        with_locked_dir(temp_dir.path(), |dir| {
+            DocumentStore::<CollectPermissionWarnings>::save_json_restricted_at(
+                dir, &path, &document,
+            )
+        })
+        .unwrap();
+    });
+
+    let mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
 }
 
 #[test]

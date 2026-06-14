@@ -18,11 +18,6 @@ pub fn ensure_dir_restricted(path: &Path) -> Result<()> {
     ensure_real_directory_tree(path, DirectoryPurpose::General, DirectoryMode::Restricted)
 }
 
-#[cfg(not(unix))]
-pub fn ensure_dir_restricted(path: &Path) -> Result<()> {
-    ensure_real_directory_tree(path, DirectoryPurpose::General, DirectoryMode::Restricted)
-}
-
 #[cfg(unix)]
 pub fn set_file_permission_0600(path: &Path) -> Result<()> {
     use std::fs::Permissions;
@@ -38,11 +33,6 @@ pub fn set_file_permission_0600(path: &Path) -> Result<()> {
             e,
         )
     })
-}
-
-#[cfg(not(unix))]
-pub fn set_file_permission_0600(_path: &Path) -> Result<()> {
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -74,11 +64,6 @@ pub fn check_permission(path: &Path) -> Option<String> {
     ))
 }
 
-#[cfg(not(unix))]
-pub fn check_permission(_path: &Path) -> Option<String> {
-    None
-}
-
 #[cfg(unix)]
 pub fn check_permission_chain(path: &Path, logical_root: &Path) -> Vec<String> {
     if !path.starts_with(logical_root) {
@@ -105,9 +90,4 @@ pub fn check_permission_chain(path: &Path, logical_root: &Path) -> Vec<String> {
     }
 
     warnings
-}
-
-#[cfg(not(unix))]
-pub fn check_permission_chain(_path: &Path, _logical_root: &Path) -> Vec<String> {
-    Vec::new()
 }

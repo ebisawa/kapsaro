@@ -5,6 +5,9 @@
 
 //! Core library APIs for Kapsaro encrypted artifacts and local state.
 
+#[cfg(not(unix))]
+compile_error!("kapsaro-core currently supports Unix targets only.");
+
 pub mod api;
 mod error;
 

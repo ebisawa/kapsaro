@@ -6,6 +6,7 @@
 use crate::format::schema::document::parse_trust_store_str;
 use crate::io::document_store::{CollectPermissionWarnings, DocumentStore};
 use crate::model::trust_store::TrustStoreDocument;
+use crate::support::fs::relative::DirectoryFd;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -39,6 +40,34 @@ pub fn load_trust_store(path: &Path, base_dir: &Path) -> Result<Option<TrustStor
     }))
 }
 
+pub(crate) fn load_trust_store_at<D>(
+    dir: &D,
+    path: &Path,
+    base_dir: &Path,
+) -> Result<Option<TrustStoreLoadResult>>
+where
+    D: DirectoryFd,
+{
+    let Some(loaded) = DocumentStore::<CollectPermissionWarnings>::load_optional_at(
+        dir,
+        path,
+        base_dir,
+        MAX_JSON_DOCUMENT_READ_SIZE,
+        "Trust store",
+        |content| parse_trust_store(content, path),
+    )?
+    else {
+        return Ok(None);
+    };
+    let document = loaded.document;
+    validate_filename_matches_owner(path, &document)?;
+
+    Ok(Some(TrustStoreLoadResult {
+        document,
+        permission_warnings: loaded.permission_warnings,
+    }))
+}
+
 /// Save a trust store atomically with restricted permissions.
 ///
 /// - Parent directory is created with mode 0700
@@ -46,6 +75,17 @@ pub fn load_trust_store(path: &Path, base_dir: &Path) -> Result<Option<TrustStor
 /// - File permission is set to 0600 on Unix
 pub fn save_trust_store(path: &Path, document: &TrustStoreDocument) -> Result<()> {
     DocumentStore::<CollectPermissionWarnings>::save_json_restricted(path, document)
+}
+
+pub(crate) fn save_trust_store_at<D>(
+    dir: &D,
+    path: &Path,
+    document: &TrustStoreDocument,
+) -> Result<()>
+where
+    D: DirectoryFd,
+{
+    DocumentStore::<CollectPermissionWarnings>::save_json_restricted_at(dir, path, document)
 }
 
 fn parse_trust_store(content: &str, path: &Path) -> Result<TrustStoreDocument> {

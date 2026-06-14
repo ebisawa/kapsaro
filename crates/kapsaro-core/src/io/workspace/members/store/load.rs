@@ -4,6 +4,7 @@
 use super::super::paths::{find_member_path, members_dir, MemberStatus};
 use crate::format::schema::document::parse_public_key_str;
 use crate::model::public_key::PublicKey;
+use crate::support::fs::relative::{self, DirectoryFd};
 use crate::support::fs::{list_dir, load_text_with_limit};
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
@@ -41,6 +42,17 @@ pub(crate) fn load_json_files_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
         .collect::<Result<Vec<_>>>()?;
     paths.sort();
     Ok(paths)
+}
+
+pub(crate) fn load_json_file_names_in_dir_at<D>(dir: &D) -> Result<Vec<String>>
+where
+    D: DirectoryFd,
+{
+    let names = relative::list_child_names_at(dir)?
+        .into_iter()
+        .filter(|name| Path::new(name).extension().and_then(|s| s.to_str()) == Some("json"))
+        .collect();
+    Ok(names)
 }
 
 fn load_sorted_members_from_dir(dir: &Path) -> Result<Vec<PublicKey>> {
@@ -125,6 +137,21 @@ pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {
     parse_public_key_str(&content, &source_name)
 }
 
+pub(crate) fn load_member_file_at<D>(dir: &D, name: &str) -> Result<PublicKey>
+where
+    D: DirectoryFd,
+{
+    let source_path = dir.path().join(name);
+    let source_name = format_path_relative_to_cwd(&source_path);
+    let content = relative::load_text_with_limit_at(
+        dir,
+        name,
+        MAX_JSON_DOCUMENT_READ_SIZE,
+        "PublicKey file",
+    )?;
+    parse_public_key_str(&content, &source_name)
+}
+
 /// Load a member file and require that its stem matches `protected.subject_handle`.
 ///
 /// The spec places each PublicKey at `members/active/<member_handle>.json`. Any
@@ -141,6 +168,29 @@ pub fn load_verified_member_file_from_path(path: &Path) -> Result<PublicKey> {
             format_path_relative_to_cwd(path)
         ))
     })?;
+    if stem != public_key.protected.subject_handle {
+        return Err(Error::build_invalid_argument_error(format!(
+            "Member handle mismatch: file '{}' contains '{}'",
+            stem, public_key.protected.subject_handle
+        )));
+    }
+    Ok(public_key)
+}
+
+pub(crate) fn load_verified_member_file_at<D>(dir: &D, name: &str) -> Result<PublicKey>
+where
+    D: DirectoryFd,
+{
+    let public_key = load_member_file_at(dir, name)?;
+    let stem = Path::new(name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| {
+            Error::build_invalid_argument_error(format!(
+                "Member file has no readable stem: {}",
+                format_path_relative_to_cwd(&dir.path().join(name))
+            ))
+        })?;
     if stem != public_key.protected.subject_handle {
         return Err(Error::build_invalid_argument_error(format!(
             "Member handle mismatch: file '{}' contains '{}'",

@@ -134,11 +134,6 @@ fn create_directory_restricted(path: &Path, purpose: DirectoryPurpose) -> Result
     set_directory_permission_0700(path)
 }
 
-#[cfg(not(unix))]
-fn create_directory_restricted(path: &Path, purpose: DirectoryPurpose) -> Result<()> {
-    create_directory_normal(path, purpose)
-}
-
 #[cfg(unix)]
 pub(crate) fn set_directory_permission_0700(path: &Path) -> Result<()> {
     use std::fs::Permissions;
@@ -154,11 +149,6 @@ pub(crate) fn set_directory_permission_0700(path: &Path) -> Result<()> {
             e,
         )
     })
-}
-
-#[cfg(not(unix))]
-pub(crate) fn set_directory_permission_0700(_path: &Path) -> Result<()> {
-    Ok(())
 }
 
 fn inspect_directory_error(path: &Path, purpose: DirectoryPurpose, e: std::io::Error) -> Error {

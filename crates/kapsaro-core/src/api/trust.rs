@@ -16,14 +16,15 @@ use crate::feature::trust::recipient_sets::{
 };
 use crate::feature::trust::signature::sign_trust_store;
 use crate::feature::trust::verification::verify_trust_store;
-use crate::io::trust::paths::get_trust_store_file_path;
-use crate::io::trust::store::{load_trust_store, save_trust_store};
+use crate::io::trust::paths::{get_trust_store_dir, get_trust_store_file_path};
+use crate::io::trust::store::{load_trust_store, load_trust_store_at, save_trust_store_at};
 use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, TrustStoreDocument, TrustStoreProtected,
 };
 use crate::model::trust_store_verified::VerifiedTrustStore;
 use crate::model::{file_enc::VerifiedFileEncDocument, kv_enc::verified::VerifiedKvEncDocument};
-use crate::support::fs::lock;
+use crate::support::fs::relative::DirectoryFd;
+use crate::support::fs::{ensure_dir_restricted, lock};
 use crate::support::time::generate_current_timestamp;
 use crate::{Error, Result};
 
@@ -159,14 +160,17 @@ impl LocalTrustStore {
                 "Key context is not backed by a local keystore".to_string(),
             )
         })?;
+        let trust_dir = get_trust_store_dir(&self.base_dir);
+        ensure_dir_restricted(&trust_dir)?;
         let path = self.path();
-        lock::with_file_lock(&path, || {
-            let mut protected = self.load_protected_for_mutation(&path, keystore_root)?;
+        lock::with_locked_dir(&trust_dir, |locked_trust_dir| {
+            let mut protected =
+                self.load_protected_for_mutation_at(locked_trust_dir, &path, keystore_root)?;
             self.apply_approval_updates(&mut protected, approvals)?;
             protected.updated_at = generate_current_timestamp()?;
             let document =
                 sign_trust_store(&protected, signing.signing_key(), signing.signer_kid())?;
-            save_trust_store(&path, &document)
+            save_trust_store_at(locked_trust_dir, &path, &document)
         })
     }
 
@@ -221,12 +225,16 @@ impl LocalTrustStore {
         Ok(())
     }
 
-    fn load_protected_for_mutation(
+    fn load_protected_for_mutation_at<D>(
         &self,
+        dir: &D,
         path: &Path,
         keystore_root: &Path,
-    ) -> Result<TrustStoreProtected> {
-        let Some(loaded) = self.load_raw_with_warnings_at(path)? else {
+    ) -> Result<TrustStoreProtected>
+    where
+        D: DirectoryFd,
+    {
+        let Some(loaded) = self.load_raw_with_warnings_at_dir(dir, path)? else {
             return empty_protected(&self.owner_handle);
         };
         let verified = verify_trust_store(&loaded.document, keystore_root)?;
@@ -240,6 +248,22 @@ impl LocalTrustStore {
 
     fn load_raw_with_warnings_at(&self, path: &Path) -> Result<Option<RawTrustStoreLoadResult>> {
         load_trust_store(path, &self.base_dir).map(|loaded| {
+            loaded.map(|result| RawTrustStoreLoadResult {
+                document: result.document,
+                permission_warnings: result.permission_warnings,
+            })
+        })
+    }
+
+    fn load_raw_with_warnings_at_dir<D>(
+        &self,
+        dir: &D,
+        path: &Path,
+    ) -> Result<Option<RawTrustStoreLoadResult>>
+    where
+        D: DirectoryFd,
+    {
+        load_trust_store_at(dir, path, &self.base_dir).map(|loaded| {
             loaded.map(|result| RawTrustStoreLoadResult {
                 document: result.document,
                 permission_warnings: result.permission_warnings,

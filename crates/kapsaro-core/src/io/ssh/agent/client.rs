@@ -122,18 +122,6 @@ fn connect_socket(path: &Path) -> Result<Box<dyn ReadWrite>> {
         .map_err(|e| build_connect_error(path, e))
 }
 
-#[cfg(target_family = "windows")]
-fn connect_socket(path: &Path) -> Result<Box<dyn ReadWrite>> {
-    use std::fs::OpenOptions;
-
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path)
-        .map(|file| Box::new(file) as Box<dyn ReadWrite>)
-        .map_err(|e| build_connect_error(path, e))
-}
-
 fn build_write_error(error: std::io::Error) -> crate::Error {
     crate::Error::from(SshError::build_operation_failed_error_with_source(
         format!("ssh-agent write failed: {}", error),

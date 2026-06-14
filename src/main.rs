@@ -3,6 +3,9 @@
 
 //! kapsaro CLI entry point.
 
+#[cfg(not(unix))]
+compile_error!("kapsaro CLI currently supports Unix targets only.");
+
 mod cli;
 
 #[cfg(test)]

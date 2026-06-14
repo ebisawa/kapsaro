@@ -4,13 +4,14 @@
 //! Promotion of incoming workspace members to active status.
 //! Holds a directory lock on members/ to prevent concurrent promotion races.
 
-use super::paths::{ensure_members_dir, member_file_path, MemberStatus};
-use super::store::{check_workspace_member_kid_uniqueness, MemberKidCandidate};
-use crate::support::fs::policy::{ensure_real_directory_tree, DirectoryMode, DirectoryPurpose};
-use crate::support::fs::{atomic, ensure_text_file_matches_snapshot_with_limit, lock};
+use super::paths::{ensure_members_dir, MemberStatus};
+use super::store::{check_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate};
+use crate::support::fs::lock;
+use crate::support::fs::relative::{
+    ensure_text_file_matches_snapshot_with_limit_at, remove_file_at, save_text_at, OpenDir,
+};
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::{Error, Result};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,15 +34,13 @@ pub fn promote_snapshotted_incoming_members(
     ensure_members_dir(workspace_path, MemberStatus::Active)?;
 
     let members_root = workspace_path.join("members");
-    lock::with_dir_lock(&members_root, || {
-        // Re-validate the incoming directory under the lock before any read or
-        // remove. A symlink swapped in for `incoming/` after the review snapshot
-        // must not let the source read/remove escape the workspace.
-        enforce_real_incoming_dir(&members_root)?;
-        ensure_snapshotted_promotion_kids_are_unique(workspace_path, snapshots)?;
+    lock::with_locked_dir(&members_root, |members_dir| {
+        let incoming_dir = members_dir.open_child_dir("incoming")?;
+        let active_dir = members_dir.open_child_dir("active")?;
+        ensure_snapshotted_promotion_kids_are_unique(&active_dir, &incoming_dir, snapshots)?;
 
         for snapshot in snapshots {
-            promote_snapshotted_member(workspace_path, snapshot)?;
+            promote_snapshotted_member(&incoming_dir, &active_dir, snapshot)?;
         }
 
         Ok(snapshots
@@ -52,44 +51,35 @@ pub fn promote_snapshotted_incoming_members(
 }
 
 fn promote_snapshotted_member(
-    workspace_path: &Path,
+    incoming_dir: &OpenDir,
+    active_dir: &OpenDir,
     snapshot: &IncomingMemberPromotionSnapshot,
 ) -> Result<()> {
-    let destination = member_file_path(
-        workspace_path,
-        MemberStatus::Active,
-        &snapshot.member_handle,
-    );
+    let member_file_name = member_file_name(&snapshot.member_handle);
     let subject_display = format!("Incoming member '{}'", snapshot.member_handle);
-    ensure_text_file_matches_snapshot_with_limit(
-        &snapshot.source_path,
+    ensure_text_file_matches_snapshot_with_limit_at(
+        incoming_dir,
+        &member_file_name,
         Some(&snapshot.source_content),
         &subject_display,
         MAX_JSON_DOCUMENT_READ_SIZE,
     )?;
-    atomic::save_text(&destination, &snapshot.source_content)?;
-    fs::remove_file(&snapshot.source_path).map_err(|e| {
-        Error::build_io_error_with_source(
-            format!(
-                "Failed to clean incoming member '{}': {}",
-                snapshot.member_handle, e
-            ),
-            e,
-        )
+    save_text_at(active_dir, &member_file_name, &snapshot.source_content)?;
+    remove_file_at(incoming_dir, &member_file_name).map_err(|e| {
+        Error::build_io_error(format!(
+            "Failed to clean incoming member '{}': {}",
+            snapshot.member_handle, e
+        ))
     })
 }
 
-fn enforce_real_incoming_dir(members_root: &Path) -> Result<()> {
-    let incoming_dir = members_root.join("incoming");
-    ensure_real_directory_tree(
-        &incoming_dir,
-        DirectoryPurpose::Workspace,
-        DirectoryMode::Normal,
-    )
+fn member_file_name(member_handle: &str) -> String {
+    format!("{}.json", member_handle)
 }
 
 fn ensure_snapshotted_promotion_kids_are_unique(
-    workspace_path: &Path,
+    active_dir: &OpenDir,
+    incoming_dir: &OpenDir,
     snapshots: &[IncomingMemberPromotionSnapshot],
 ) -> Result<()> {
     let candidates = snapshots
@@ -104,11 +94,11 @@ fn ensure_snapshotted_promotion_kids_are_unique(
         .iter()
         .map(|snapshot| (MemberStatus::Incoming, snapshot.member_handle.clone()))
         .collect::<Vec<_>>();
-    check_workspace_member_kid_uniqueness(
-        workspace_path,
+    check_workspace_member_kid_uniqueness_in_open_dirs(
+        active_dir,
+        incoming_dir,
         &candidates,
         &ignored_existing,
-        &[MemberStatus::Active, MemberStatus::Incoming],
     )
 }
 

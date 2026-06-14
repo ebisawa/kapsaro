@@ -8,6 +8,7 @@ use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::support::fs;
 use crate::support::fs::atomic;
+use crate::support::fs::relative::{self, DirectoryFd};
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
@@ -101,8 +102,39 @@ impl ReviewedTextFile {
         )
     }
 
+    pub fn ensure_current_at<D>(&self, dir: &D) -> Result<()>
+    where
+        D: DirectoryFd,
+    {
+        let file_name = self.file_name()?;
+        let subject_display = format!("{} '{}'", self.subject_label, self.path.display());
+        relative::ensure_text_file_matches_snapshot_with_limit_at(
+            dir,
+            file_name,
+            self.content(),
+            &subject_display,
+            self.max_bytes,
+        )
+    }
+
     pub fn save_replacement(&self, content: &str) -> Result<()> {
         atomic::save_text(&self.path, content)
+    }
+
+    pub fn save_replacement_at<D>(&self, dir: &D, content: &str) -> Result<()>
+    where
+        D: DirectoryFd,
+    {
+        relative::save_text_at(dir, self.file_name()?, content)
+    }
+
+    fn file_name(&self) -> Result<&str> {
+        self.path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| {
+                Error::build_config_error(format!("Invalid file path '{}'", self.path.display()))
+            })
     }
 }
 

@@ -121,8 +121,9 @@ where
     F: FnOnce(Option<&KvEncContent>, &KvRecipientSnapshot, &KvWriteContext<'_>) -> Result<String>,
 {
     let secrets_dir = plan.review.target().workspace_root.secrets_dir();
-    lock::with_dir_lock(&secrets_dir, || {
-        plan.review.ensure_current(plan.verbose)?;
+    lock::with_locked_dir(&secrets_dir, |locked_secrets_dir| {
+        plan.review
+            .ensure_current_at(locked_secrets_dir, plan.verbose)?;
         plan.execution.key_ctx.enforce_signing_key_not_expired()?;
         let write_ctx = KvWriteContext::new(
             &plan.execution.member_handle,
@@ -137,7 +138,8 @@ where
         let content = plan.review.encrypted_content(encrypted.clone());
         let mut warnings = Vec::new();
         review_kv_output_recipient_set(plan, &content, &mut warnings, &mut confirm_recipient_set)?;
-        plan.review.save_replacement(&encrypted)?;
+        plan.review
+            .save_replacement_at(locked_secrets_dir, &encrypted)?;
         Ok(KvWriteOutcome {
             message: success_message.map(ToOwned::to_owned),
             warnings,

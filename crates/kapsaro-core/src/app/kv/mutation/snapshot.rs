@@ -8,6 +8,7 @@ use crate::app::context::review::{ensure_workspace_members_match_snapshot, Revie
 use crate::app::trust::WorkspaceMemberSnapshot;
 use crate::feature::kv::mutate::KvRecipientSnapshot;
 use crate::format::content::{EncContent, KvEncContent};
+use crate::support::fs::relative::DirectoryFd;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::Result;
 
@@ -71,6 +72,14 @@ impl MutationReviewSnapshot {
         self.ensure_file_matches()
     }
 
+    pub(super) fn ensure_current_at<D>(&self, dir: &D, verbose: bool) -> Result<()>
+    where
+        D: DirectoryFd,
+    {
+        self.ensure_members_match(verbose)?;
+        self.file_snapshot.ensure_current_at(dir)
+    }
+
     pub(super) fn existing_content(&self) -> Option<&KvEncContent> {
         self.file.as_content()
     }
@@ -85,6 +94,13 @@ impl MutationReviewSnapshot {
 
     pub(super) fn save_replacement(&self, encrypted: &str) -> Result<()> {
         self.file_snapshot.save_replacement(encrypted)
+    }
+
+    pub(super) fn save_replacement_at<D>(&self, dir: &D, encrypted: &str) -> Result<()>
+    where
+        D: DirectoryFd,
+    {
+        self.file_snapshot.save_replacement_at(dir, encrypted)
     }
 
     pub(super) fn encrypted_content(&self, encrypted: String) -> EncContent {

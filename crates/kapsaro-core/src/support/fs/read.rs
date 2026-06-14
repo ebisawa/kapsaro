@@ -128,20 +128,6 @@ fn open_no_follow(path: &Path) -> Result<File> {
         })
 }
 
-#[cfg(not(unix))]
-fn open_no_follow(path: &Path) -> Result<File> {
-    fs::File::open(path).map_err(|e| {
-        Error::build_io_error_with_source(
-            format!(
-                "Failed to read file {}: {}",
-                format_path_relative_to_cwd(path),
-                e
-            ),
-            e,
-        )
-    })
-}
-
 fn load_capped_bytes(
     file: &mut File,
     max_bytes: usize,

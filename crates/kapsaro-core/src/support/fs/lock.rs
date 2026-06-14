@@ -3,14 +3,38 @@
 
 //! File locking utilities.
 
+use super::relative::{DirectoryFd, OpenDir};
 use crate::support::fs::policy::{
     enforce_path_not_symlink, ensure_real_directory_tree, DirectoryMode, DirectoryPurpose,
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use fd_lock::RwLock;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
+
+#[derive(Debug)]
+pub(crate) struct LockedDir<'a> {
+    file: &'a File,
+    path: &'a Path,
+}
+
+impl DirectoryFd for LockedDir<'_> {
+    fn file(&self) -> &File {
+        self.file
+    }
+
+    fn path(&self) -> &Path {
+        self.path
+    }
+}
+
+impl LockedDir<'_> {
+    #[cfg(unix)]
+    pub(crate) fn open_child_dir(&self, name: &str) -> Result<OpenDir> {
+        super::relative::open_child_dir(self, name)
+    }
+}
 
 /// Execute a function with an exclusive file lock.
 ///
@@ -87,6 +111,14 @@ pub fn with_dir_lock<T, F>(dir: &Path, f: F) -> Result<T>
 where
     F: FnOnce() -> Result<T>,
 {
+    with_locked_dir(dir, |_| f())
+}
+
+/// Execute a function with an exclusive directory lock and the locked fd.
+pub(crate) fn with_locked_dir<T, F>(dir: &Path, f: F) -> Result<T>
+where
+    F: FnOnce(&LockedDir<'_>) -> Result<T>,
+{
     enforce_path_not_symlink(dir, |path| {
         format!("refusing to lock directory through symlink: {}", path)
     })?;
@@ -94,11 +126,15 @@ where
     let dir_file = open_dir_for_locking(dir)?;
     let mut lock = RwLock::new(dir_file);
 
-    let _guard = lock
+    let guard = lock
         .write()
         .map_err(|e| Error::build_io_error(format!("Failed to acquire directory lock: {}", e)))?;
 
-    f()
+    let locked = LockedDir {
+        file: &guard,
+        path: dir,
+    };
+    f(&locked)
 }
 
 #[cfg(unix)]
@@ -113,25 +149,6 @@ fn open_dir_for_locking(dir: &Path) -> Result<std::fs::File> {
                 format!(
                     "Failed to open directory for locking: {}",
                     format_path_relative_to_cwd(dir)
-                ),
-                e,
-            )
-        })
-}
-
-#[cfg(not(unix))]
-fn open_dir_for_locking(dir: &Path) -> Result<std::fs::File> {
-    // Non-Unix fallback: use a sentinel file inside the directory as the lock anchor.
-    let sentinel = dir.join(".dirlock");
-    OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(&sentinel)
-        .map_err(|e| {
-            Error::build_io_error_with_source(
-                format!(
-                    "Failed to open directory lock sentinel: {}",
-                    format_path_relative_to_cwd(&sentinel)
                 ),
                 e,
             )

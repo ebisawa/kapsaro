@@ -1440,6 +1440,7 @@ dependencies = [
  "libc",
  "rand",
  "reqwest",
+ "rustix",
  "serde",
  "serde_jcs",
  "serde_json",

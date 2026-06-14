@@ -5,7 +5,7 @@
 //!
 //! Tests for file locking utilities.
 
-use crate::support::fs::lock::with_file_lock;
+use crate::support::fs::lock::{with_dir_lock, with_file_lock};
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -132,6 +132,87 @@ fn test_with_file_lock_rejects_symlinked_lock_parent() {
         !real_parent.join(".config.toml.lock").exists(),
         "lock file must not be created outside the intended directory"
     );
+}
+
+#[test]
+fn test_with_dir_lock_basic_operation_and_return_value() {
+    let temp_dir = TempDir::new().unwrap();
+    let result = with_dir_lock(temp_dir.path(), || Ok::<i32, kapsaro_core::Error>(42));
+    assert_eq!(result.unwrap(), 42);
+}
+
+#[test]
+fn test_with_dir_lock_propagates_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let result: kapsaro_core::Result<()> = with_dir_lock(temp_dir.path(), || {
+        Err(kapsaro_core::Error::build_config_error(
+            "dir lock error".to_string(),
+        ))
+    });
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_with_dir_lock_rejects_nonexistent_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let missing = temp_dir.path().join("does_not_exist");
+    let result = with_dir_lock(&missing, || Ok::<(), kapsaro_core::Error>(()));
+    assert!(result.is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_with_dir_lock_rejects_symlinked_directory() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real_dir = temp_dir.path().join("real");
+    let link_dir = temp_dir.path().join("link");
+    fs::create_dir(&real_dir).unwrap();
+    symlink(&real_dir, &link_dir).unwrap();
+
+    let result = with_dir_lock(&link_dir, || Ok::<(), kapsaro_core::Error>(()));
+    let error = result.unwrap_err();
+    assert!(
+        error.to_string().contains("symlink"),
+        "expected symlink rejection, got: {error}"
+    );
+}
+
+#[test]
+fn test_with_dir_lock_mutual_exclusion() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    let temp_dir = TempDir::new().unwrap();
+    let dir_path = temp_dir.path().to_path_buf();
+    let barrier = Arc::new(Barrier::new(2));
+    let counter = Arc::new(std::sync::Mutex::new(0u32));
+
+    let dir_clone = dir_path.clone();
+    let barrier_clone = Arc::clone(&barrier);
+    let counter_clone = Arc::clone(&counter);
+
+    let handle = thread::spawn(move || {
+        barrier_clone.wait();
+        with_dir_lock(&dir_clone, || {
+            let mut c = counter_clone.lock().unwrap();
+            *c += 1;
+            Ok::<(), kapsaro_core::Error>(())
+        })
+        .unwrap();
+    });
+
+    barrier.wait();
+    with_dir_lock(&dir_path, || {
+        let mut c = counter.lock().unwrap();
+        *c += 1;
+        Ok::<(), kapsaro_core::Error>(())
+    })
+    .unwrap();
+
+    handle.join().unwrap();
+    assert_eq!(*counter.lock().unwrap(), 2);
 }
 
 #[test]

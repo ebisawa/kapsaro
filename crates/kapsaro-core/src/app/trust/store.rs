@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Trust store load, mutation, and persistence orchestration.
+//! Provides locked access to the trust/ directory for safe concurrent mutation.
+
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::CommandPathResolution;
@@ -15,7 +18,7 @@ use crate::io::trust::store::{
 };
 use crate::model::trust_store::TrustStoreProtected;
 use crate::model::wire::format::LOCAL_TRUST_V1;
-use crate::support::fs::lock;
+use crate::support::fs::{ensure_dir_restricted, lock};
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 use tracing::debug;
@@ -138,7 +141,11 @@ pub fn execute_trust_store_mutation<T, F>(
 where
     F: FnOnce(&mut TrustStoreProtected) -> Result<TrustStoreMutation<T>>,
 {
-    lock::with_file_lock(path, || {
+    let trust_dir = path
+        .parent()
+        .ok_or_else(|| Error::build_config_error("Invalid trust store path".to_string()))?;
+    ensure_dir_restricted(trust_dir)?;
+    lock::with_dir_lock(trust_dir, || {
         let loaded = load_trust_store_for_mutation(path, keystore_root, owner_handle, mode)?;
         let mut protected = loaded.protected;
         let mutation = mutate(&mut protected)?;

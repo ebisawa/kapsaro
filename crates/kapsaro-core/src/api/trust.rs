@@ -16,14 +16,14 @@ use crate::feature::trust::recipient_sets::{
 };
 use crate::feature::trust::signature::sign_trust_store;
 use crate::feature::trust::verification::verify_trust_store;
-use crate::io::trust::paths::get_trust_store_file_path;
+use crate::io::trust::paths::{get_trust_store_dir, get_trust_store_file_path};
 use crate::io::trust::store::{load_trust_store, save_trust_store};
 use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, TrustStoreDocument, TrustStoreProtected,
 };
 use crate::model::trust_store_verified::VerifiedTrustStore;
 use crate::model::{file_enc::VerifiedFileEncDocument, kv_enc::verified::VerifiedKvEncDocument};
-use crate::support::fs::lock;
+use crate::support::fs::{ensure_dir_restricted, lock};
 use crate::support::time::generate_current_timestamp;
 use crate::{Error, Result};
 
@@ -159,8 +159,10 @@ impl LocalTrustStore {
                 "Key context is not backed by a local keystore".to_string(),
             )
         })?;
+        let trust_dir = get_trust_store_dir(&self.base_dir);
+        ensure_dir_restricted(&trust_dir)?;
         let path = self.path();
-        lock::with_file_lock(&path, || {
+        lock::with_dir_lock(&trust_dir, || {
             let mut protected = self.load_protected_for_mutation(&path, keystore_root)?;
             self.apply_approval_updates(&mut protected, approvals)?;
             protected.updated_at = generate_current_timestamp()?;

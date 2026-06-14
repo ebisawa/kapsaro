@@ -120,8 +120,8 @@ where
     P: WriteTrustPolicy,
     F: FnOnce(Option<&KvEncContent>, &KvRecipientSnapshot, &KvWriteContext<'_>) -> Result<String>,
 {
-    let file_path = plan.review.target().file_path.clone();
-    lock::with_file_lock(&file_path, || {
+    let secrets_dir = plan.review.target().workspace_root.secrets_dir();
+    lock::with_dir_lock(&secrets_dir, || {
         plan.review.ensure_current(plan.verbose)?;
         plan.execution.key_ctx.enforce_signing_key_not_expired()?;
         let write_ctx = KvWriteContext::new(

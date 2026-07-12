@@ -20,6 +20,7 @@ use kapsaro_core::cli_api::app::context::member::resolve_required_member;
 use kapsaro_core::cli_api::app::context::options::{
     resolve_allow_expired_key_option, resolve_allow_non_member_option, CommonCommandOptions,
 };
+use kapsaro_core::cli_api::app::context::paths::require_workspace;
 use kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution;
 use kapsaro_core::cli_api::app::file::decrypt::DecryptFileCommand;
 use kapsaro_core::cli_api::app::file::encrypt::EncryptFileCommand;
@@ -41,6 +42,7 @@ use tracing::debug;
 pub(crate) struct ReadCommandLabels<'a> {
     pub context: &'a str,
     pub subject: &'a str,
+    pub workspace_purpose: &'a str,
     pub allow_non_member: bool,
 }
 
@@ -140,6 +142,13 @@ pub(crate) fn resolve_trust_store_owner_member(
             .to_string()),
         Err(error) => Err(error),
     }
+}
+
+pub(crate) fn ensure_workspace_required(
+    options: &CommonCommandOptions,
+    purpose: &str,
+) -> Result<()> {
+    require_workspace(options, purpose).map(|_| ())
 }
 
 pub(crate) fn run_read_command_with_trust<Plan, T, Execute>(
@@ -261,6 +270,7 @@ where
     ResolvePlan: FnMut(Option<SshSigningContextResolution>) -> Result<Plan>,
     Execute: FnMut(&Plan) -> Result<T>,
 {
+    ensure_workspace_required(options, labels.workspace_purpose)?;
     run_with_trust_store_reset_recovery(
         options,
         || resolve_trust_store_owner_member(options, member_handle.clone()),
@@ -284,6 +294,7 @@ where
     P: WriteTrustPolicy,
     Execute: FnMut(&CommonCommandOptions, &MutationWriteTrustPlan<P>) -> Result<T>,
 {
+    ensure_workspace_required(options, "kv mutation")?;
     run_with_trust_store_reset_recovery(
         options,
         || resolve_trust_store_owner_member(options, member_handle.clone()),

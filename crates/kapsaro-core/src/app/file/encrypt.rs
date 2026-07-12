@@ -5,6 +5,7 @@ use crate::app::context::execution::{
     build_write_execution_warnings, resolve_write_execution, ExecutionContext,
 };
 use crate::app::context::options::CommonCommandOptions;
+use crate::app::context::paths::build_workspace_not_found_error;
 use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::review::{
     review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
@@ -20,7 +21,7 @@ use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::{EncContent, FileEncContent};
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::model::public_key::VerifiedRecipientKey;
-use crate::{Error, Result};
+use crate::Result;
 
 pub struct EncryptFileCommand {
     pub execution: ExecutionContext,
@@ -126,7 +127,7 @@ fn require_encrypt_workspace(execution: &ExecutionContext) -> Result<WorkspaceRo
     execution
         .workspace_root
         .clone()
-        .ok_or_else(|| Error::build_config_error("Workspace is required for encrypt".to_string()))
+        .ok_or_else(|| build_workspace_not_found_error("encrypt"))
 }
 
 #[cfg(test)]

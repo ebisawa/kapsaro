@@ -81,6 +81,7 @@ pub(crate) fn run(args: DecryptArgs) -> Result<()> {
         ReadCommandLabels {
             context: "decrypt signer",
             subject: "signer",
+            workspace_purpose: "decrypt",
             allow_non_member: options.allow_non_member,
         },
         |ssh_ctx| {

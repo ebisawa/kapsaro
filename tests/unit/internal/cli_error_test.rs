@@ -32,15 +32,14 @@ fn test_format_error_line_adds_ansi_color_when_stderr_colors_enabled() {
 
 #[test]
 #[serial]
-fn test_format_error_line_colors_only_first_line_for_multiline_errors() {
+fn test_format_error_line_keeps_detail_block_plain_when_colored() {
     let _guard = StderrColorGuard::new(true);
     let error = Error::build_invalid_operation_error(
         "member handle not configured.\n\
-         member handle is required but could not be determined.\n\n\
+         Reason: member handle is required but could not be determined.\n\
          Options:\n\
-         1. Specify --member-handle <handle>\n\
-         2. Set environment variable: export KAPSARO_MEMBER_HANDLE=<handle>\n\
-         3. Set in config: kapsaro config set member_handle <handle>",
+         1. Specify a member handle with --member-handle <handle>\n\
+         2. Configure a default member handle explicitly",
     );
 
     let rendered = format_error_line(&error);
@@ -54,7 +53,55 @@ fn test_format_error_line_colors_only_first_line_for_multiline_errors() {
     );
     assert!(
         !body.contains("\u{1b}[31m"),
-        "body should not start a red ANSI span: {rendered}"
+        "detail block should not start a red ANSI span: {rendered}"
+    );
+}
+
+#[test]
+#[serial]
+fn test_format_error_line_colors_error_continuation_lines() {
+    let _guard = StderrColorGuard::new(true);
+    let error = Error::build_invalid_operation_error(
+        "Recipient kid is not active.\nKid: KAD1-AAAA\nAction: Run kapsaro rewrap.",
+    );
+
+    let rendered = format_error_line(&error);
+
+    assert_eq!(
+        rendered,
+        concat!(
+            "\u{1b}[31mError: Recipient kid is not active.\u{1b}[0m\n",
+            "\u{1b}[31m       Kid: KAD1-AAAA\u{1b}[0m\n",
+            "\u{1b}[31m       Action: Run kapsaro rewrap.\u{1b}[0m"
+        )
+    );
+}
+
+#[test]
+#[serial]
+fn test_format_error_line_keeps_reason_options_as_detail_block() {
+    let _guard = StderrColorGuard::new(false);
+    let error = Error::build_config_error(
+        "workspace not found.\n\
+         Reason: kv access requires a Kapsaro workspace, but no workspace could be resolved.\n\
+         Options:\n\
+         1. Run kapsaro init to create a new workspace in the current Git repository\n\
+         2. Run inside a Git repository that contains .kapsaro/\n\
+         3. Configure an existing workspace explicitly with --workspace <path>",
+    );
+
+    let rendered = format_error_line(&error);
+
+    assert_eq!(
+        rendered,
+        concat!(
+            "Error: workspace not found.\n",
+            "Reason: kv access requires a Kapsaro workspace, but no workspace could be resolved.\n",
+            "Options:\n",
+            "1. Run kapsaro init to create a new workspace in the current Git repository\n",
+            "2. Run inside a Git repository that contains .kapsaro/\n",
+            "3. Configure an existing workspace explicitly with --workspace <path>"
+        )
     );
 }
 

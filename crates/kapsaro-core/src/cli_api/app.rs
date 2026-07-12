@@ -37,6 +37,10 @@ pub mod context {
         };
     }
 
+    pub mod paths {
+        pub use crate::app::context::paths::require_workspace;
+    }
+
     pub mod ssh {
         pub use crate::app::context::ssh::{
             build_ssh_signing_context, resolve_ssh_context_by_active_key,

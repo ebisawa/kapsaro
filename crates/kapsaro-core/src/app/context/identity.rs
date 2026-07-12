@@ -33,7 +33,7 @@ pub fn resolve_github_user_input(
 
 pub fn build_missing_member_handle_error(include_prompt_hint: bool) -> Error {
     let prompt_hint = if include_prompt_hint {
-        "\n4. Run in an interactive terminal for prompt"
+        "\n3. Run in an interactive terminal for prompt"
     } else {
         ""
     };
@@ -42,9 +42,8 @@ pub fn build_missing_member_handle_error(include_prompt_hint: bool) -> Error {
         "member handle not configured.\n\
          Reason: member handle is required but could not be determined.\n\
          Options:\n\
-         1. Specify --member-handle <handle>\n\
-         2. Set KAPSARO_MEMBER_HANDLE=<handle>\n\
-         3. Run kapsaro config set member_handle <handle>{prompt_hint}"
+         1. Specify a member handle with --member-handle <handle>\n\
+         2. Configure a default member handle explicitly{prompt_hint}"
     ))
 }
 

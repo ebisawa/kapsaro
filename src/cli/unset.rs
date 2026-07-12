@@ -8,8 +8,8 @@ use clap::Args;
 use std::io::BufRead;
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, resolve_required_member_handle,
-    run_kv_write_command_with_recovery, WriteCommandLabels,
+    ensure_workspace_required, resolve_options_with_allow_expired_key,
+    resolve_required_member_handle, run_kv_write_command_with_recovery, WriteCommandLabels,
 };
 use crate::cli::common::output::text::{print_optional_status, print_warnings};
 use crate::cli::common::prompt::confirm_destructive_action;
@@ -50,6 +50,7 @@ pub(crate) fn run(args: UnsetArgs) -> Result<()> {
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
+    ensure_workspace_required(&options, "kv mutation")?;
     let member_handle =
         resolve_required_member_handle(&options, args.member.member_handle.clone(), false)?;
     confirm_unset_operation(args.force.force, &args.key)?;

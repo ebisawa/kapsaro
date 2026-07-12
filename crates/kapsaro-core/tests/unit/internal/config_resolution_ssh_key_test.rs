@@ -103,7 +103,8 @@ fn test_resolve_ssh_key_no_source_error() {
     let result = super::resolve_ssh_key_descriptor(None, None);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("not configured") || err_msg.contains("not found"));
+    assert!(err_msg.contains("SSH key not configured."));
+    assert!(err_msg.contains("--ssh-identity <path>"));
 }
 
 #[test]

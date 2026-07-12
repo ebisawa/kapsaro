@@ -34,6 +34,15 @@ fn test_require_member_handle_input_errors_when_missing() {
         "unexpected error: {}",
         error.format_user_message()
     );
+    assert!(error
+        .format_user_message()
+        .contains("Specify a member handle with --member-handle <handle>"));
+    assert!(error
+        .format_user_message()
+        .contains("Configure a default member handle explicitly"));
+    assert!(!error
+        .format_user_message()
+        .contains("KAPSARO_MEMBER_HANDLE"));
 }
 
 #[test]

@@ -348,7 +348,9 @@ fn test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner
         .env("KAPSARO_SSH_IDENTITY", fixture_ssh_key_path(&temp_dir))
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Specify --member-handle"));
+        .stderr(predicate::str::contains(
+            "Specify a member handle with --member-handle",
+        ));
 
     cmd()
         .arg("member")
@@ -365,7 +367,7 @@ fn test_member_verify_approve_accepts_member_handle_option_for_trust_store_owner
         .assert()
         .failure()
         .stderr(predicate::str::contains("interactive confirmation"))
-        .stderr(predicate::str::contains("Specify --member-handle").not());
+        .stderr(predicate::str::contains("Specify a member handle with --member-handle").not());
 }
 
 #[test]

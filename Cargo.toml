@@ -1,6 +1,6 @@
 [package]
 name = "kapsaro"
-version = "0.99.1-beta"
+version.workspace = true
 edition = "2021"
 authors = ["Satoshi Ebisawa <ebisawa@gmail.com>"]
 description = "Offline-first CLI for sharing encrypted .env files and other secrets through Git"
@@ -10,8 +10,14 @@ autotests = false
 [workspace]
 members = ["crates/kapsaro-core", "crates/kapsaro-test-support"]
 
+[workspace.package]
+version = "0.99.2-beta"
+
+[workspace.dependencies]
+kapsaro-core = { version = "0.99.2-beta", path = "crates/kapsaro-core", default-features = false }
+
 [dependencies]
-kapsaro-core = { version = "0.99.1-beta", path = "crates/kapsaro-core", default-features = false, features = ["cli-internal"] }
+kapsaro-core = { workspace = true, features = ["cli-internal"] }
 
 # CLI framework
 clap = { version = "4", features = ["derive"] }
@@ -37,7 +43,7 @@ default = ["online"]
 online = ["kapsaro-core/online"]
 
 [dev-dependencies]
-kapsaro-core = { version = "0.99.1-beta", path = "crates/kapsaro-core", default-features = false, features = ["cli-internal", "cli-test-support"] }
+kapsaro-core = { workspace = true, features = ["cli-internal", "cli-test-support"] }
 kapsaro-test-support = { path = "crates/kapsaro-test-support" }
 
 # CLI testing

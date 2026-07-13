@@ -11,8 +11,8 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_options, resolve_trust_store_owner_member, run_write_command_with_trust,
-    WriteCommandLabels,
+    ensure_workspace_required, resolve_options, resolve_trust_store_owner_member,
+    run_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
 use crate::cli::common::output::text::print_warnings;
@@ -65,6 +65,7 @@ pub(crate) fn run(args: EncryptArgs) -> Result<()> {
         args.stdin,
     )?;
     let options = resolve_options(&args.common);
+    ensure_workspace_required(&options, "encrypt")?;
     let (encrypted, approval_warnings) = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),

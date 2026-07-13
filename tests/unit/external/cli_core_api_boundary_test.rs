@@ -561,6 +561,7 @@ fn test_cli_api_app_allow_list_snapshot() {
         "context::options::CommonCommandOptions",
         "context::options::resolve_allow_expired_key_option",
         "context::options::resolve_allow_non_member_option",
+        "context::paths::require_workspace",
         "context::ssh::SshKeyCandidateView",
         "context::ssh::SshSigningContextResolution",
         "context::ssh::build_ssh_signing_context",

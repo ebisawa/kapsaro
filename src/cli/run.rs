@@ -55,6 +55,7 @@ pub(crate) fn run(args: RunArgs) -> Result<i32> {
         ReadCommandLabels {
             context: "run signer",
             subject: "run",
+            workspace_purpose: "kv access",
             allow_non_member: false,
         },
         |ssh_ctx| {

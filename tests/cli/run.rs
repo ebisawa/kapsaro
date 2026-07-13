@@ -34,23 +34,29 @@ fn setup_workspace_with_default_file() -> (TempDir, TempDir, TempDir, PathBuf) {
 fn test_run_error_when_workspace_not_found() {
     let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let current_dir = TempDir::new().unwrap();
 
     // Try to run without workspace (should fail)
     cmd()
         // Ensure workspace auto-detection cannot accidentally succeed
-        .current_dir(home_dir.path())
+        .current_dir(current_dir.path())
         .arg("run")
         .arg("--")
         .arg("echo")
         .arg("test")
         .env("KAPSARO_HOME", home_dir.path())
         .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .env_remove("KAPSARO_MEMBER_HANDLE")
+        .env_remove("KAPSARO_WORKSPACE")
+        .env_remove("KAPSARO_PRIVATE_KEY")
         .assert()
         .failure()
         .stderr(
-            predicate::str::contains("workspace")
-                .or(predicate::str::contains("not found"))
-                .or(predicate::str::contains("member handle not configured")),
+            predicate::str::contains("Error: workspace not found.\nReason:")
+                .and(predicate::str::contains("kapsaro init"))
+                .and(predicate::str::contains("\nOptions:\n1."))
+                .and(predicate::str::contains("--workspace <path>"))
+                .and(predicate::str::contains("member handle not configured").not()),
         );
 
     drop(ssh_temp);

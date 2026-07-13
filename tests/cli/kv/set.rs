@@ -65,20 +65,26 @@ fn test_set_debug_does_not_log_secret_value() {
 #[test]
 fn test_set_without_workspace_fails() {
     let home_dir = TempDir::new().unwrap();
+    let current_dir = TempDir::new().unwrap();
 
-    // workspace を設定せずに set を実行 → エラーになることを確認
+    // Run set without any workspace configuration.
     cmd()
         .arg("set")
         .arg("DATABASE_URL")
         .arg("postgres://localhost/db")
         .env("KAPSARO_HOME", home_dir.path())
-        .current_dir("/tmp")
+        .env_remove("KAPSARO_MEMBER_HANDLE")
+        .env_remove("KAPSARO_WORKSPACE")
+        .env_remove("KAPSARO_PRIVATE_KEY")
+        .current_dir(current_dir.path())
         .assert()
         .failure()
         .stderr(
-            predicate::str::contains("SSH key")
-                .or(predicate::str::contains("workspace"))
-                .or(predicate::str::contains("member handle not configured")),
+            predicate::str::contains("Error: workspace not found.\nReason:")
+                .and(predicate::str::contains("kapsaro init"))
+                .and(predicate::str::contains("\nOptions:\n1."))
+                .and(predicate::str::contains("--workspace <path>"))
+                .and(predicate::str::contains("member handle not configured").not()),
         );
 }
 

@@ -31,8 +31,18 @@ fn load_optional_workspace_with_base(
 
 /// Resolve a workspace and fail if none is configured or auto-detectable.
 pub fn require_workspace(options: &CommonCommandOptions, purpose: &str) -> Result<WorkspaceRoot> {
-    load_optional_workspace(options)?
-        .ok_or_else(|| Error::build_config_error(format!("Workspace is required for {}", purpose)))
+    load_optional_workspace(options)?.ok_or_else(|| build_workspace_not_found_error(purpose))
+}
+
+pub(crate) fn build_workspace_not_found_error(purpose: &str) -> Error {
+    Error::build_config_error(format!(
+        "workspace not found.\n\
+         Reason: {purpose} requires a Kapsaro workspace, but no workspace could be resolved.\n\
+         Options:\n\
+         1. Run kapsaro init to create a new workspace in the current Git repository\n\
+         2. Run inside a Git repository that contains .kapsaro/\n\
+         3. Configure an existing workspace explicitly with --workspace <path>"
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -59,10 +69,7 @@ impl CommandPathResolution {
     pub fn require_workspace(options: &CommonCommandOptions, purpose: &str) -> Result<Self> {
         let paths = Self::load(options)?;
         if paths.workspace_root.is_none() {
-            return Err(Error::build_config_error(format!(
-                "Workspace is required for {}",
-                purpose
-            )));
+            return Err(build_workspace_not_found_error(purpose));
         }
         Ok(paths)
     }

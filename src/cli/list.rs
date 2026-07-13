@@ -48,6 +48,7 @@ pub(crate) fn run(args: ListArgs) -> Result<()> {
         ReadCommandLabels {
             context: "list signer",
             subject: "signer",
+            workspace_purpose: "kv access",
             allow_non_member: options.allow_non_member,
         },
         |ssh_ctx| {

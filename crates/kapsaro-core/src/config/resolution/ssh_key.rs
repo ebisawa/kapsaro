@@ -80,7 +80,11 @@ pub(crate) fn build_ssh_key_not_found_error(candidate: &SshKeyResolution) -> Err
             SshKeySource::GlobalConfig => "global config",
             SshKeySource::Default => {
                 return Error::build_not_found_error(
-                    "SSH key not configured and default path (~/.ssh/id_ed25519) not found"
+                    "SSH key not configured.\n\
+                     Reason: no SSH key was configured, and the default path (~/.ssh/id_ed25519) was not found.\n\
+                     Options:\n\
+                     1. Create a default SSH key\n\
+                     2. Configure an existing SSH key explicitly with --ssh-identity <path>"
                         .to_string(),
                 );
             }

@@ -20,7 +20,7 @@ What you can expect:
 - reduce plaintext `.env` and certificate handoffs through chat
 - review secret additions, updates, and membership changes as Git diffs
 - encrypt separately for each recipient with standards-based schemes such as HPKE
-- sync future encrypted-file recipients after a member is removed
+- sync encrypted-file recipients to the current member roster after a member is removed
 - keep past disclosure visible enough to decide which values need rotation
 
 Not a good fit if you need to:
@@ -120,7 +120,7 @@ kapsaro rewrap
 # -> approves the request and syncs access across encrypted files
 ```
 
-A new member is added in a pending state first, then an existing member runs `rewrap` to approve and apply the change. Because membership changes appear as repository diffs, your team can review who joined and when through the normal PR flow.
+A new member is added in a pending state first, then an existing member runs `rewrap` to approve the request and apply it to the encrypted files. Because membership changes appear as repository diffs, your team can review who joined and when through the normal PR flow.
 
 ### 5. Offboarding and Key Updates Are Mechanical
 
@@ -139,7 +139,7 @@ After a member is removed, `rewrap` synchronizes recipient lists across encrypte
 
 Kapsaro records the history of members who were removed from access. For encrypted `.env` files, it also tracks entry-level disclosure state, which makes it easier to see which values still need to be rotated.
 
-The important point is that removing a member does not recover secrets that were already disclosed in the past. Kapsaro does not hide that fact. Instead, it makes the residual risk visible so teams can make clean decisions about updating values and rotating keys.
+Removing a member does not recover secrets that were already disclosed in the past. Kapsaro does not hide that premise; it makes the residual risk visible so teams can make clean decisions about updating values and rotating keys.
 
 ### 7. CI/CD Works Without SSH Keys or an Agent
 
@@ -150,7 +150,7 @@ Kapsaro supports CI/CD environments through portable private key export:
 kapsaro key export --private --member-handle ci@example.com --out ci-key.txt
 ```
 
-Register `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` as CI secret variables. The CI job can then use `kapsaro run` and `kapsaro get` without any SSH key, SSH agent, or local keystore. The CI member is still just another entry in the active member list, so its access can be revoked by the same `member remove` + `rewrap` flow.
+Register `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` as CI secret variables. The CI job can then use `kapsaro run` and `kapsaro get` without any SSH key, SSH agent, or local keystore. The CI member is still just another entry in the active member list, so its access can be revoked with the same `member remove` and `rewrap` flow as any regular member.
 
 ### 8. Check That Member Keys Belong to the Right Person
 
@@ -172,8 +172,7 @@ Kapsaro can confirm that an encrypted file was created by a particular key, but 
 
 - An Ed25519 SSH key
 - A Git repository
-- A GitHub account
-  Optional. Useful if you want to verify the link between a public key and an account.
+- A GitHub account (optional; used to verify the link between a public key and an account)
 - Git practices such as PR review and protected branches for member changes
 - For CI/CD use, an environment where CI secret variables are managed safely
 

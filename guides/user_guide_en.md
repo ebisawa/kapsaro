@@ -126,7 +126,7 @@ The operation that updates recipient information after a member change or key ro
 
 ### `member handle`
 
-A self-asserted handle that a user keeps using across Kapsaro workspaces. It often looks like an email address, but it does not have to be a real email address or a verified external identifier.
+A self-asserted handle that a user keeps using across kapsaro workspaces. It often looks like an email address, but it does not have to be a real email address or a verified external identifier.
 
 ### `kid`
 

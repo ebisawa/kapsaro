@@ -920,10 +920,8 @@ Why `sid` and `k` are included in both CEK derivation info and entry AAD:
 
 For kv-enc:
 
-- Include `sid` in CEK derivation info so `sid` affects the CEK at the HKDF stage
-- Include `k` in CEK derivation info so the entry identity affects the CEK at the HKDF stage
-- Also include `sid` in entry AAD so `sid` is verified again at the AEAD stage
-- Also include `k` in entry AAD so entry identity is verified again at the AEAD stage
+- Include `sid` and `k` in CEK derivation info so the file and entry identities affect the CEK at the HKDF stage
+- Also include `sid` and `k` in entry AAD so both identities are verified again at the AEAD stage
 
 In cryptographic terms, one of these may appear sufficient in isolation, but also including it in AAD provides:
 
@@ -1234,7 +1232,7 @@ To analyze concrete attacks, the tables in this chapter directly use the context
 | When it weakens | Misapproval during manual review, failure of repo governance, GitHub account compromise, or leakage of the SSH attestor private key |
 | Expected failure point | Human rejection or promotion refusal due to verification failure |
 
-Important: Self-signature prevents tampering with an existing PublicKey, but it cannot prevent an attacker from creating a new PublicKey with their own key while following the legitimate procedure. The primary defense against new-key insertion is TOFU-based manual review and repo governance. During initial bootstrap or first contact with a signer, verification through an out-of-band channel outside the repository is desirable.
+Self-signature prevents tampering with an existing PublicKey, but it cannot prevent an attacker from creating a new PublicKey with their own key while following the legitimate procedure. The primary defense against new-key insertion is TOFU-based manual review and repo governance. During initial bootstrap or first contact with a signer, verification through an out-of-band channel outside the repository is desirable.
 
 #### 11.2.3 Local Trust Store Tampering
 
@@ -1403,7 +1401,7 @@ Compression before encryption is not performed. This is an intentional design de
 ---
 
 
-## 14. References and RFC List
+## 14. References
 
 | Specification | Purpose |
 |--------------|---------|

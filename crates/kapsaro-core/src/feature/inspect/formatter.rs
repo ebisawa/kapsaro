@@ -5,13 +5,29 @@
 
 use crate::model::common::{RemovedRecipient, WrapItem};
 use crate::model::file_enc::FilePayload;
+use crate::support::display::{push_display_escaped, sanitize_display_field_with_limit};
 use crate::support::kid::format_kid_display;
+
+const PAYLOAD_CT_DISPLAY_LEN: usize = 64;
+const WRAP_TOKEN_DISPLAY_LEN: usize = 32;
+const ATTEST_KEY_DISPLAY_LEN: usize = 60;
+pub(crate) const SIGNATURE_DISPLAY_LEN: usize = 40;
+pub(crate) const ENTRY_CT_DISPLAY_LEN: usize = 40;
 
 /// Format lines built through the append helpers.
 pub(crate) fn format_section_lines(build: impl FnOnce(&mut String)) -> Vec<String> {
     let mut out = String::new();
     build(&mut out);
     out.lines().map(ToOwned::to_owned).collect()
+}
+
+/// Shorten a document field for display.
+///
+/// Inspection runs before signature verification, so every field here is
+/// attacker-controlled. Slicing by byte offset would split a multi-byte
+/// character, and an embedded newline would forge extra output lines.
+pub(crate) fn display_field(value: &str, max_len: usize) -> String {
+    sanitize_display_field_with_limit(value, max_len)
 }
 
 /// Append file payload information.
@@ -28,9 +44,9 @@ pub(crate) fn append_file_payload_info(payload: &FilePayload, out: &mut String) 
     append_line(
         out,
         format!(
-            "    CT:        {} bytes ({}...)",
+            "    CT:        {} bytes ({})",
             payload.encrypted.ct.len(),
-            &payload.encrypted.ct[..payload.encrypted.ct.len().min(64)]
+            display_field(&payload.encrypted.ct, PAYLOAD_CT_DISPLAY_LEN)
         ),
     );
 }
@@ -46,11 +62,17 @@ pub(crate) fn append_wrap_item(index: usize, wrap: &WrapItem, out: &mut String) 
     append_line(out, format!("        Alg:   {}", wrap.alg));
     append_line(
         out,
-        format!("        Enc:   {}...", &wrap.enc[..wrap.enc.len().min(32)]),
+        format!(
+            "        Enc:   {}",
+            display_field(&wrap.enc, WRAP_TOKEN_DISPLAY_LEN)
+        ),
     );
     append_line(
         out,
-        format!("        CT:    {}...", &wrap.ct[..wrap.ct.len().min(32)]),
+        format!(
+            "        CT:    {}",
+            display_field(&wrap.ct, WRAP_TOKEN_DISPLAY_LEN)
+        ),
     );
 }
 
@@ -92,14 +114,13 @@ pub(crate) fn append_signer_info(
         if attestation.pub_.is_empty() {
             append_line(out, "  Attest Key:  (empty)");
         } else {
-            let shown_len = attestation.pub_.len().min(60);
-            let shown = &attestation.pub_[..shown_len];
-            let suffix = if attestation.pub_.len() > shown_len {
-                "..."
-            } else {
-                ""
-            };
-            append_line(out, format!("  Attest Key:  {}{}", shown, suffix));
+            append_line(
+                out,
+                format!(
+                    "  Attest Key:  {}",
+                    display_field(&attestation.pub_, ATTEST_KEY_DISPLAY_LEN)
+                ),
+            );
         }
     } else {
         append_line(out, "  Signer:      (not embedded, search by kid)");
@@ -107,7 +128,14 @@ pub(crate) fn append_signer_info(
 }
 
 /// Append a line to output string.
+///
+/// Escaping happens here so that no interpolated document field can inject
+/// extra lines into a section, whether or not the field is truncated.
 pub(crate) fn append_line(out: &mut String, line: impl AsRef<str>) {
-    out.push_str(line.as_ref());
+    push_display_escaped(out, line.as_ref());
     out.push('\n');
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_inspect_formatter_test.rs"]
+mod feature_inspect_formatter_test;

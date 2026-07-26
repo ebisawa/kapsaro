@@ -10,8 +10,8 @@ use crate::support::kid::format_kid_display;
 use crate::Result;
 
 use super::formatter::{
-    append_line, append_removed_recipients, append_signer_info, append_wrap_item,
-    format_section_lines,
+    append_line, append_removed_recipients, append_signer_info, append_wrap_item, display_field,
+    format_section_lines, ENTRY_CT_DISPLAY_LEN, SIGNATURE_DISPLAY_LEN,
 };
 use super::{build_section, InspectOutput, InspectSection};
 
@@ -69,9 +69,9 @@ fn build_kv_enc_entries_section(data: &KvEncInspectionData) -> InspectSection {
                 append_line(
                     out,
                     format!(
-                        "      CT:      {} bytes ({}...)",
+                        "      CT:      {} bytes ({})",
                         entry.ct.len(),
-                        &entry.ct[..entry.ct.len().min(40)]
+                        display_field(&entry.ct, ENTRY_CT_DISPLAY_LEN)
                     ),
                 );
                 if entry.disclosed {
@@ -105,8 +105,8 @@ fn build_kv_enc_signature_section(data: &KvEncInspectionData) -> Option<InspectS
                 append_line(
                     out,
                     format!(
-                        "  Sig:         {}...",
-                        &signature.sig[..signature.sig.len().min(40)]
+                        "  Sig:         {}",
+                        display_field(&signature.sig, SIGNATURE_DISPLAY_LEN)
                     ),
                 );
             }),

@@ -27,6 +27,9 @@ pub const MAX_CONFIG_FILE_SIZE: usize = 1024 * 1024;
 /// Maximum active kid file size in bytes.
 pub const MAX_ACTIVE_KID_FILE_SIZE: usize = 256;
 
+/// Maximum GitHub API response body size in bytes.
+pub const MAX_GITHUB_RESPONSE_SIZE: usize = 1024 * 1024;
+
 /// Maximum number of KEY lines in a kv-enc document
 pub const MAX_KV_KEY_LINES: usize = 10_000;
 

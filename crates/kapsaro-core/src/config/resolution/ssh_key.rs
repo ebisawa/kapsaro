@@ -140,20 +140,22 @@ fn resolve_configured_ssh_key_candidate(
     .transpose()
 }
 
+/// Tilde expansion applies to both sources: a shell expands `~` before it
+/// reaches an environment variable only when the value is unquoted, and CI
+/// configuration commonly sets it literally.
 fn build_candidate_from_source(
     (path, source): (String, StringSourceResolution),
 ) -> Result<SshKeyResolution> {
-    match source {
-        StringSourceResolution::Env => Ok(build_ssh_key_resolution(
-            PathBuf::from(path),
-            SshKeySource::Env,
-        )),
-        StringSourceResolution::GlobalConfig => Ok(build_ssh_key_resolution(
-            expand_tilde(&path)?,
-            SshKeySource::GlobalConfig,
-        )),
-        _ => unreachable!("unexpected SSH key source"),
-    }
+    let key_source = match source {
+        StringSourceResolution::Env => SshKeySource::Env,
+        StringSourceResolution::GlobalConfig => SshKeySource::GlobalConfig,
+        _ => {
+            return Err(Error::build_config_error(
+                "SSH key candidate resolved from an unsupported source".to_string(),
+            ))
+        }
+    };
+    Ok(build_ssh_key_resolution(expand_tilde(&path)?, key_source))
 }
 
 fn build_ssh_key_resolution(path: PathBuf, source: SshKeySource) -> SshKeyResolution {

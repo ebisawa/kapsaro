@@ -60,7 +60,7 @@ fn validate_sshsig_header(blob: &[u8]) -> Result<&[u8]> {
     // Check minimum length
     if blob.len() < 6 {
         return Err(SshError::build_operation_failed_error(
-            "SSHSIG blob too short (minimum 10 bytes required)",
+            "SSHSIG blob too short (minimum 6 bytes required for the magic)",
         )
         .into());
     }

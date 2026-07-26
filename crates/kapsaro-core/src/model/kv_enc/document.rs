@@ -39,17 +39,20 @@ pub struct KvEncDocument {
     pub lines: Vec<KvEncLine>,
     pub head: KvHeader,
     pub wrap: KvWrap,
+    pub wrap_token: String,
     pub entries: Vec<KvEncEntry>,
     pub signature_token: String,
     pub signature: KvFileSignature,
 }
 
 impl KvEncDocument {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         original_content: String,
         lines: Vec<KvEncLine>,
         head: KvHeader,
         wrap: KvWrap,
+        wrap_token: String,
         entries: Vec<KvEncEntry>,
         signature_token: String,
         signature: KvFileSignature,
@@ -59,10 +62,16 @@ impl KvEncDocument {
             lines,
             head,
             wrap,
+            wrap_token,
             entries,
             signature_token,
             signature,
         }
+    }
+
+    /// Return the `:WRAP` token the document was parsed from.
+    pub fn wrap_token(&self) -> &str {
+        &self.wrap_token
     }
 
     pub fn content(&self) -> &str {

@@ -76,34 +76,34 @@ fn test_kv_document_entry_encoded_accessors() {
 
 #[test]
 fn test_wrap_source_decoded_data() {
-    let w = WrapSource::Decoded(sample_wrap());
+    let w = WrapSource::decoded(sample_wrap());
     assert_eq!(w.data().wrap.len(), 1);
+    assert_eq!(w.token(), None);
 }
 
 #[test]
-fn test_wrap_source_raw_data() {
-    let w = WrapSource::Raw {
-        data: sample_wrap(),
-        token: "raw_tok".to_string(),
-    };
+fn test_wrap_source_raw_keeps_the_original_token() {
+    let w = WrapSource::raw(sample_wrap(), "raw_tok".to_string());
     assert_eq!(w.data().wrap.len(), 1);
+    assert_eq!(w.token(), Some("raw_tok"));
 }
 
+/// Mutating the data invalidates the token it was parsed from, so the token
+/// must be dropped rather than re-serialized alongside stale data.
 #[test]
-fn test_wrap_source_data_mut_promotes_raw_to_decoded() {
-    let mut w = WrapSource::Raw {
-        data: sample_wrap(),
-        token: "raw_tok".to_string(),
-    };
+fn test_wrap_source_data_mut_drops_the_original_token() {
+    let mut w = WrapSource::raw(sample_wrap(), "raw_tok".to_string());
+
     let _d = w.data_mut();
-    assert!(matches!(w, WrapSource::Decoded(_)));
+
+    assert_eq!(w.token(), None);
 }
 
 #[test]
 fn test_builder_new_creates_decoded_wrap() {
     let b = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false);
     let doc = b.build();
-    assert!(matches!(doc.wrap, WrapSource::Decoded(_)));
+    assert_eq!(doc.wrap.token(), None);
     assert!(doc.entries.is_empty());
 }
 
@@ -134,7 +134,7 @@ fn test_builder_from_lines_with_some_wrap() {
     )
     .unwrap();
     let doc = b.build();
-    assert!(matches!(doc.wrap, WrapSource::Decoded(_)));
+    assert_eq!(doc.wrap.token(), None);
     assert_eq!(doc.entries.len(), 1);
     assert_eq!(doc.entries[0].key(), "A");
 }
@@ -162,7 +162,7 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
     let b = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs, false)
         .unwrap();
     let doc = b.build();
-    assert!(matches!(doc.wrap, WrapSource::Raw { .. }));
+    assert!(doc.wrap.token().is_some());
     assert_eq!(doc.entries.len(), 1);
 }
 
@@ -258,9 +258,9 @@ fn test_unsigned_doc_wrap_mut_promotes() {
             .unwrap()
             .build();
 
-    assert!(matches!(doc.wrap, WrapSource::Raw { .. }));
+    assert!(doc.wrap.token().is_some());
     let _w = doc.wrap_mut();
-    assert!(matches!(doc.wrap, WrapSource::Decoded(_)));
+    assert_eq!(doc.wrap.token(), None);
 }
 
 #[test]

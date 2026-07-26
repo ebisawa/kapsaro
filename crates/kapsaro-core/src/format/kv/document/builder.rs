@@ -27,7 +27,7 @@ impl KvDocumentBuilder {
     pub fn new(head: KvHeader, wrap: KvWrap, token_codec: TokenCodec, debug: bool) -> Self {
         Self {
             head,
-            wrap: WrapSource::Decoded(wrap),
+            wrap: WrapSource::decoded(wrap),
             entries: Vec::new(),
             token_codec,
             debug,
@@ -110,14 +110,11 @@ impl KvDocumentBuilder {
 
     fn resolve_wrap_source(wrap: Option<&KvWrap>, token: &str) -> Result<WrapSource> {
         match wrap {
-            Some(wrap) => Ok(WrapSource::Decoded(wrap.clone())),
-            None => {
-                let data = parse_kv_wrap_token(token)?;
-                Ok(WrapSource::Raw {
-                    data,
-                    token: token.to_string(),
-                })
-            }
+            Some(wrap) => Ok(WrapSource::decoded(wrap.clone())),
+            None => Ok(WrapSource::raw(
+                parse_kv_wrap_token(token)?,
+                token.to_string(),
+            )),
         }
     }
 

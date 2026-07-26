@@ -128,6 +128,29 @@ fn test_resolve_ssh_key_tilde_expansion() {
     assert_eq!(result, key_path);
 }
 
+/// A CI configuration that sets the variable literally never goes through a
+/// shell, so the tilde arrives unexpanded.
+#[test]
+#[serial]
+fn test_resolve_ssh_key_expands_tilde_from_environment() {
+    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_SSH_IDENTITY", "HOME"]);
+    let temp_home = tempfile::tempdir().unwrap();
+    env::set_var("KAPSARO_HOME", temp_home.path());
+    let fake_home = tempfile::tempdir().unwrap();
+    let ssh_dir = fake_home.path().join(".ssh");
+    fs::create_dir_all(&ssh_dir).unwrap();
+    let key_path = ssh_dir.join("env_key");
+    fs::write(&key_path, "dummy key").unwrap();
+    env::set_var("HOME", fake_home.path());
+    env::set_var("KAPSARO_SSH_IDENTITY", "~/.ssh/env_key");
+
+    let result = super::resolve_ssh_key_candidate(None, None).unwrap();
+
+    assert_eq!(result.source, super::SshKeySource::Env);
+    assert_eq!(result.path, key_path);
+    assert!(result.exists);
+}
+
 #[test]
 #[serial]
 fn test_resolve_ssh_key_candidate_default_missing() {

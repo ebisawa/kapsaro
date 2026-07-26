@@ -38,29 +38,40 @@ impl KvDocumentEntry {
     }
 }
 
+/// Wrap data alongside the token it was parsed from, when one exists.
+///
+/// The token is kept so an untouched wrap re-serializes byte for byte. Handing
+/// out a mutable reference to the data invalidates it, which is why the two
+/// live in one type rather than in separate variants.
 #[derive(Debug, Clone)]
-pub(crate) enum WrapSource {
-    Decoded(KvWrap),
-    Raw { data: KvWrap, token: String },
+pub(crate) struct WrapSource {
+    data: KvWrap,
+    token: Option<String>,
 }
 
 impl WrapSource {
-    pub fn data(&self) -> &KvWrap {
-        match self {
-            Self::Decoded(data) => data,
-            Self::Raw { data, .. } => data,
+    pub fn decoded(data: KvWrap) -> Self {
+        Self { data, token: None }
+    }
+
+    pub fn raw(data: KvWrap, token: String) -> Self {
+        Self {
+            data,
+            token: Some(token),
         }
     }
 
+    pub fn data(&self) -> &KvWrap {
+        &self.data
+    }
+
+    pub fn token(&self) -> Option<&str> {
+        self.token.as_deref()
+    }
+
     pub fn data_mut(&mut self) -> &mut KvWrap {
-        if let Self::Raw { data, .. } = self {
-            let owned = data.clone();
-            *self = Self::Decoded(owned);
-        }
-        match self {
-            Self::Decoded(data) => data,
-            Self::Raw { .. } => unreachable!(),
-        }
+        self.token = None;
+        &mut self.data
     }
 }
 
@@ -129,7 +140,7 @@ impl KvDocumentDraft {
     }
 
     pub fn set_wrap(&mut self, wrap: KvWrap) {
-        self.wrap = WrapSource::Decoded(wrap);
+        self.wrap = WrapSource::decoded(wrap);
     }
 
     pub(crate) fn token_codec(&self) -> TokenCodec {
@@ -180,15 +191,15 @@ impl KvDocumentDraft {
     }
 
     fn resolve_wrap_token(&self) -> Result<String> {
-        match &self.wrap {
-            WrapSource::Decoded(data) => TokenCodec::encode_debug(
+        match self.wrap.token() {
+            Some(token) => Ok(token.to_owned()),
+            None => TokenCodec::encode_debug(
                 self.token_codec,
-                data,
+                self.wrap.data(),
                 self.debug,
                 Some("WRAP"),
                 Some("serialize_unsigned"),
             ),
-            WrapSource::Raw { token, .. } => Ok(token.clone()),
         }
     }
 }

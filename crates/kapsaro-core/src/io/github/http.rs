@@ -7,6 +7,7 @@
 //! key-generation account lookup.
 
 use crate::model::public_key::GithubAccount;
+use crate::support::limits::MAX_GITHUB_RESPONSE_SIZE;
 use crate::support::validation;
 use crate::{Error, Result};
 use serde::Deserialize;
@@ -35,14 +36,71 @@ struct GitHubUser {
 }
 
 /// Build an HTTP client for GitHub API requests.
+///
+/// Redirects are refused: the API does not redirect on the paths used here, so
+/// following one would only serve to move the request to another host.
 pub(crate) fn build_http_client() -> Result<reqwest::Client> {
     let builder = reqwest::Client::builder()
         .user_agent(format!("kapsaro/{}", env!("CARGO_PKG_VERSION")))
-        .timeout(std::time::Duration::from_secs(10));
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .default_headers(github_api_headers());
 
     builder
         .build()
         .map_err(|e| Error::build_config_error(format!("Failed to create HTTP client: {}", e)))
+}
+
+/// Pin the response shape to a documented API version.
+fn github_api_headers() -> reqwest::header::HeaderMap {
+    use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT};
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static("application/vnd.github+json"),
+    );
+    headers.insert(
+        HeaderName::from_static("x-github-api-version"),
+        HeaderValue::from_static("2022-11-28"),
+    );
+    headers
+}
+
+/// Turn a rate limit response into a message that names the cause.
+///
+/// Unauthenticated callers share a low hourly quota, and a bare status code
+/// gives no hint that waiting is the remedy.
+fn rate_limit_error(response: &reqwest::Response) -> Option<Error> {
+    let status = response.status();
+    if status != reqwest::StatusCode::TOO_MANY_REQUESTS
+        && !(status == reqwest::StatusCode::FORBIDDEN && exhausted_rate_limit(response))
+    {
+        return None;
+    }
+
+    let retry_after = response
+        .headers()
+        .get("retry-after")
+        .and_then(|value| value.to_str().ok())
+        .map(|value| format!(" Retry after {} seconds.", value))
+        .unwrap_or_default();
+    Some(Error::build_verification_error(
+        "V-GITHUB-API".to_string(),
+        format!(
+            "GitHub API rate limit reached (status: {}).{} Unauthenticated \
+             requests share a low hourly quota.",
+            status, retry_after
+        ),
+    ))
+}
+
+fn exhausted_rate_limit(response: &reqwest::Response) -> bool {
+    response
+        .headers()
+        .get("x-ratelimit-remaining")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.trim() == "0")
 }
 
 fn build_github_api_url(path_segments: &[&str]) -> Result<reqwest::Url> {
@@ -94,6 +152,9 @@ async fn parse_github_user_response<T, F>(
 where
     F: FnOnce(GitHubUser) -> T,
 {
+    if let Some(error) = rate_limit_error(&response) {
+        return Err(error);
+    }
     let status = response.status();
     if !status.is_success() {
         return Err(Error::build_verification_error(
@@ -105,14 +166,47 @@ where
         ));
     }
 
-    let user: GitHubUser = response.json().await.map_err(|e| {
+    let user: GitHubUser = read_capped_json(response, "GitHub user response").await?;
+    Ok(transform(user))
+}
+
+/// Read a bounded response body and deserialize it.
+///
+/// `Response::json` reads to the end with no ceiling, so the peer decides how
+/// much is allocated.
+async fn read_capped_json<T>(response: reqwest::Response, subject: &str) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let body = read_capped_body(response, subject).await?;
+    serde_json::from_slice(&body).map_err(|e| {
         Error::build_verification_error(
             "V-GITHUB-API".to_string(),
-            format!("Failed to parse GitHub user response: {}", e),
+            format!("Failed to parse {}: {}", subject, e),
         )
-    })?;
+    })
+}
 
-    Ok(transform(user))
+async fn read_capped_body(mut response: reqwest::Response, subject: &str) -> Result<Vec<u8>> {
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| {
+        Error::build_verification_error(
+            "V-GITHUB-API".to_string(),
+            format!("Failed to read {}: {}", subject, e),
+        )
+    })? {
+        if body.len() + chunk.len() > MAX_GITHUB_RESPONSE_SIZE {
+            return Err(Error::build_verification_error(
+                "V-GITHUB-API".to_string(),
+                format!(
+                    "{} exceeds the maximum size of {} bytes",
+                    subject, MAX_GITHUB_RESPONSE_SIZE
+                ),
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 /// Resolve a GitHub account id to `(id, current_login)` via REST API.
@@ -193,6 +287,9 @@ async fn fetch_github_keys_with_url(
 }
 
 async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyRecord>> {
+    if let Some(error) = rate_limit_error(&response) {
+        return Err(error);
+    }
     if !response.status().is_success() {
         return Err(Error::build_verification_error(
             "V-GITHUB-API".to_string(),
@@ -200,12 +297,7 @@ async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyR
         ));
     }
 
-    let keys: Vec<GitHubKey> = response.json().await.map_err(|e| {
-        Error::build_verification_error(
-            "V-GITHUB-API".to_string(),
-            format!("Failed to parse GitHub API response: {}", e),
-        )
-    })?;
+    let keys: Vec<GitHubKey> = read_capped_json(response, "GitHub keys response").await?;
 
     Ok(keys
         .into_iter()

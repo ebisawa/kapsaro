@@ -607,9 +607,16 @@ fn test_jcs_rfc8785_example_sorting() {
 
     let result = normalize_to_string(&input).unwrap();
 
-    // Empty string comes first, then "100", then "apple", then "peach"
-    // (empty < digits < lowercase letters in code point order)
-    assert!(result.starts_with(r#"{"":"An empty key""#));
+    // The whole output is the signed byte string, so pinning only its prefix
+    // would leave the rest free to change without failing.
+    assert_eq!(
+        result,
+        concat!(
+            r#"{"":"An empty key","100":"A numeric key","#,
+            r#""apple":{"size":10,"type":"fruit"},"#,
+            r#""peach":"This is a string value."}"#,
+        ),
+    );
 }
 
 #[test]
@@ -620,6 +627,16 @@ fn test_jcs_numbers_format() {
         (json!(1), "1"),
         (json!(-1), "-1"),
         (json!(0.5), "0.5"),
+        // Integer-valued floats drop the fraction.
+        (json!(1.0), "1"),
+        (json!(-0.0), "0"),
+        // Values that a naive formatter renders in exponent notation.
+        (json!(1e21), "1e+21"),
+        (json!(1e-7), "1e-7"),
+        (json!(0.000001), "0.000001"),
+        // The largest integers that survive a round trip through f64.
+        (json!(9007199254740991i64), "9007199254740991"),
+        (json!(-9007199254740991i64), "-9007199254740991"),
     ];
 
     for (input, expected) in test_cases {

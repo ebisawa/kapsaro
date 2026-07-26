@@ -9,4 +9,6 @@ pub mod context_options;
 pub mod crypto_context;
 pub mod ed25519_backend;
 pub mod fixture;
+pub mod guards;
 pub mod keygen_helpers;
+pub mod workspace_state;

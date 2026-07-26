@@ -74,7 +74,16 @@ jobs:
           fi
 
           checks_json="$(gh api "repos/${REPO}/commits/${target_sha}/check-runs?per_page=100")"
-          for check_name in Format Clippy Test; do
+          # Names must match the CI job names exactly. The test job is a matrix,
+          # so each platform appears as its own check.
+          required_checks=(
+            "Format"
+            "Clippy"
+            "Audit"
+            "Test (ubuntu-latest)"
+            "Test (macos-latest)"
+          )
+          for check_name in "${required_checks[@]}"; do
             conclusion="$(
               jq -r --arg name "${check_name}" '
                 [

@@ -38,6 +38,7 @@ fn test_install_script_installs_archive_after_provenance_verification() {
     assert!(invocation.contains(ARCHIVE));
     assert!(invocation.contains(BUNDLE));
     assert!(invocation.contains("--repo ebisawa/kapsaro"));
+    assert!(invocation.contains("--signer-workflow ebisawa/kapsaro/.github/workflows/release.yml"));
 }
 
 #[test]
@@ -207,6 +208,7 @@ archive="$3"
 shift 3
 bundle=''
 repo=''
+signer_workflow=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --bundle)
@@ -215,6 +217,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --repo)
       repo="$2"
+      shift 2
+      ;;
+    --signer-workflow)
+      signer_workflow="$2"
       shift 2
       ;;
     *)
@@ -230,6 +236,10 @@ if [ ! -f "$archive" ] || [ ! -f "$bundle" ]; then
 fi
 if [ "$repo" != "ebisawa/kapsaro" ]; then
   printf 'unexpected repo: %s\n' "$repo" >&2
+  exit 45
+fi
+if [ "$signer_workflow" != "ebisawa/kapsaro/.github/workflows/release.yml" ]; then
+  printf 'unexpected signer workflow: %s\n' "$signer_workflow" >&2
   exit 45
 fi
 if [ "__VERIFY_EXIT__" = "0" ]; then

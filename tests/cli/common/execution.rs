@@ -4,6 +4,10 @@
 // Binary/command execution helpers and PTY (pseudo-terminal) infrastructure.
 // Provides the test binary entry points and low-level interactive I/O primitives.
 
+// Allocating a pseudo-terminal requires libc calls that have no safe wrapper.
+// Needed to exercise the interactive prompts the CLI shows on a real terminal.
+#![allow(unsafe_code)]
+
 use assert_cmd::{cargo, Command};
 #[cfg(unix)]
 use std::fs::File;

@@ -7,5 +7,7 @@
 pub mod cli_core_api_boundary_test;
 #[path = "unit/external/install_script_test.rs"]
 pub mod install_script_test;
+#[path = "unit/external/release_profile_test.rs"]
+pub mod release_profile_test;
 #[path = "unit/external/test_harness_registration_test.rs"]
 pub mod test_harness_registration_test;

@@ -72,4 +72,5 @@ path = "tests/unit.rs"
 lto = "fat"
 codegen-units = 1
 strip = true
-panic = "abort"
+# Keep the default "unwind" strategy. Secret material is zeroized by Drop
+# implementations, and "abort" would skip them on every panic path.

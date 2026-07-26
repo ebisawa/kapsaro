@@ -39,8 +39,21 @@ pub const MAX_BASE64_CIPHERTEXT_LENGTH: usize = 16 * 1024 * 1024;
 /// Maximum JSON nesting depth
 pub const MAX_JSON_DEPTH: usize = 32;
 
+/// JSON elements one wrap item contributes: the object, its five member
+/// separators, and the comma that joins it to the next item.
+const JSON_ELEMENTS_PER_WRAP_ITEM: usize = 11;
+
+/// Element budget for the document structure outside the wrap array.
+const JSON_ELEMENTS_DOCUMENT_OVERHEAD: usize = 2_000;
+
 /// Maximum number of JSON elements (objects + arrays + values)
-pub const MAX_JSON_ELEMENTS: usize = 10_000;
+///
+/// Derived from [`MAX_WRAP_ITEMS`] so a document carrying the documented
+/// maximum number of recipients stays reachable. A fixed value smaller than
+/// this budget rejects such documents in the pre-parse scan, before the wrap
+/// count limit is ever consulted.
+pub const MAX_JSON_ELEMENTS: usize =
+    MAX_WRAP_ITEMS * JSON_ELEMENTS_PER_WRAP_ITEM + JSON_ELEMENTS_DOCUMENT_OVERHEAD;
 
 /// Validate WRAP item count against the global DoS limit.
 pub fn validate_wrap_count(count: usize, context: &str) -> Result<()> {

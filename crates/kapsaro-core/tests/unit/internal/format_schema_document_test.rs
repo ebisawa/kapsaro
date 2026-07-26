@@ -457,18 +457,22 @@ fn test_parse_kv_signature_token_requires_signer_pub_error() {
     assert!(!message.contains("schema"));
 }
 
-#[test]
-fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
+/// Build a file-enc document carrying `wrap_count` distinct recipients.
+fn build_file_enc_with_wrap_count(wrap_count: usize) -> serde_json::Value {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let wrap_item = serde_json::json!({
-        "rh": "alice@example.com",
-        "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-        "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-        "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    });
-    let wrap: Vec<_> = (0..=MAX_WRAP_ITEMS).map(|_| wrap_item.clone()).collect();
-    let file_enc = serde_json::json!({
+    let wrap: Vec<_> = (0..wrap_count)
+        .map(|index| {
+            serde_json::json!({
+                "rh": format!("member{index}@example.com"),
+                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
+                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            })
+        })
+        .collect();
+
+    serde_json::json!({
         "protected": {
             "format": format::FILE_ENC_V1,
             "sid": sid,
@@ -494,12 +498,32 @@ fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
             "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
         }
-    });
+    })
+}
+
+#[test]
+fn test_parse_file_enc_str_rejects_wrap_count_over_limit() {
+    let file_enc = build_file_enc_with_wrap_count(MAX_WRAP_ITEMS + 1);
 
     let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
-    assert!(result.is_err());
+
     let err = result.unwrap_err().to_string();
-    assert!(err.contains("wrap count") || err.contains("1000"));
+    assert!(
+        err.contains(&format!("more than {MAX_WRAP_ITEMS} items")),
+        "expected the wrap item limit to be reported, got: {err}",
+    );
+}
+
+/// The documented recipient limit has to stay reachable. The pre-parse element
+/// scan runs first, so a budget smaller than a full wrap array would reject
+/// these documents before the wrap count is ever inspected.
+#[test]
+fn test_parse_file_enc_str_accepts_wrap_count_at_limit() {
+    let file_enc = build_file_enc_with_wrap_count(MAX_WRAP_ITEMS);
+
+    let document = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
+
+    assert_eq!(document.protected.wrap.len(), MAX_WRAP_ITEMS);
 }
 
 #[test]

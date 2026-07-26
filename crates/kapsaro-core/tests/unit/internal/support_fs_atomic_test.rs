@@ -186,3 +186,19 @@ fn test_save_text_rejects_symlinked_target() {
         "write must not have followed the symlink"
     );
 }
+
+/// The write goes through a temporary file that is renamed into place. A
+/// leftover temporary means the sequence was interrupted or reordered.
+#[test]
+fn test_save_bytes_leaves_only_the_target_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("payload.bin");
+
+    save_bytes(&file_path, b"content").unwrap();
+
+    let entries: Vec<_> = fs::read_dir(temp_dir.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(entries, vec![std::ffi::OsString::from("payload.bin")]);
+}

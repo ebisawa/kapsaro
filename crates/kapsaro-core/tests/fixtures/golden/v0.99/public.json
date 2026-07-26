@@ -1,0 +1,27 @@
+{
+  "protected": {
+    "format": "kapsaro:format:public-key@1",
+    "subject_handle": "alice@example.com",
+    "kid": "H8JDDCXN7PWFDVB3XCNEGK5XTPPE2D8C",
+    "keys": {
+      "kem": {
+        "kty": "OKP",
+        "crv": "X25519",
+        "x": "_X-IfhNfzaqljQ8VJYXi2R2Uhs0gxbCMmVekeW4zoT4"
+      },
+      "sig": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "425iqetWIKN3wdQkMdkneJG99wQgKzCFyG0ag7l-A1Y"
+      }
+    },
+    "attestation": {
+      "method": "ssh-sign",
+      "pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINm6vXw+IfGIIvL14lyfcD8x1lmS1qOoHByz4rrMmvdc kapsaro-golden-fixture-do-not-use",
+      "sig": "3bWUiJ2z3Uz9ApUoPosdX63weVhJSExT1KK5wMw24uE7_d5I97aw2JmpV4ChLBhQDBKlBeKovukpUpgLyAFLBw"
+    },
+    "expires_at": "2126-01-01T00:00:00Z",
+    "created_at": "2026-07-26T03:14:19Z"
+  },
+  "signature": "M1LvfAFIyqaH58hb_4tcMb2ambAiD1Yp-XfyiQ0dEWf7267YY8yh0l_KPtHiY8sZ5t6c-0l92aczHiO5xszHBQ"
+}

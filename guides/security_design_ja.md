@@ -570,6 +570,17 @@ file-enc と kv-enc の署名は、同一の `signature_v4` 構造（実装上�
 
 ローカル信頼ストア（`kapsaro:format:local-trust@1`）の `signature` は、`alg` / `kid` / `sig` の表現を共有するが、埋め込み `signer_pub` は持たない。検証方法の例外は §5.4 末尾および §10.4 で扱う。
 
+PublicKey 文書（`kapsaro:format:public-key@1`）は第三の表現を用いる。その `signature` はオブジェクトではなく、86 文字の Ed25519 署名を保持する base64url 文字列そのものである。自己署名には識別すべき別の署名者が存在せず、鍵所持証明を束縛すべき artifact body も存在しないためである。署名対象は文書の `protected` オブジェクトを JCS 直列化したバイト列である。
+
+```
+{
+  "protected": { "format": "kapsaro:format:public-key@1", ... },
+  "signature": "<base64url, 86 文字>"
+}
+```
+
+すべての署名付き文書が `signature_v4` のオブジェクト形状を持つと仮定した実装は、PublicKey 文書を読めない。
+
 `signature_v4` の主要フィールドは次のとおりである。
 
 

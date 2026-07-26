@@ -7,13 +7,14 @@
 
 use super::protocol::parse::decode_ssh_public_key_blob;
 use super::protocol::{sshsig, wire};
+use crate::crypto::sign::verify_detached_signature;
 use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
 use crate::Result;
-use ed25519_dalek::{Verifier, VerifyingKey};
+use ed25519_dalek::VerifyingKey;
 
 /// Validate SSHSIG inputs before verification.
 ///
@@ -176,7 +177,7 @@ pub fn verify_attestation(
     let verifying_key = extract_ed25519_pubkey_from_ssh(ssh_pubkey)?;
 
     // Step 4: Verify signature
-    verifying_key.verify(&signed_data, &sig).map_err(|e| {
+    verify_detached_signature(&signed_data, &verifying_key, &sig).map_err(|e| {
         crate::Error::from(SshError::build_operation_failed_error_with_source(
             format!("Attestation signature verification failed: {}", e),
             e,

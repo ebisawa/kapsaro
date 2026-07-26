@@ -3,6 +3,7 @@
 
 //! Public key verification.
 
+use crate::crypto::sign::verify_detached_signature;
 use crate::feature::context::expiry::{
     check_key_expiry, enforce_recipient_key_not_expired, KeyExpiryStatus,
 };
@@ -20,7 +21,7 @@ use crate::model::verification::SelfSignatureProof;
 use crate::support::display::sanitize_display_field;
 use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
 use crate::{Error, Result};
-use ed25519_dalek::{Verifier, VerifyingKey};
+use ed25519_dalek::VerifyingKey;
 use time::OffsetDateTime;
 use tracing::debug;
 
@@ -68,7 +69,7 @@ fn verify_public_key_self_signature_context(
     let sig = ed25519_dalek::Signature::from_slice(&sig_bytes)
         .map_err(|e| Error::build_crypto_error_with_source("Invalid signature format", e))?;
 
-    verifying_key.verify(&protected_jcs, &sig).map_err(|e| {
+    verify_detached_signature(&protected_jcs, &verifying_key, &sig).map_err(|e| {
         Error::build_crypto_error_with_source("PublicKey self-signature verification failed", e)
     })?;
 

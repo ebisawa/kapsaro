@@ -8,7 +8,7 @@ use crate::feature::trust::signature::sign_trust_store_bytes;
 use crate::feature::trust::verification::verify_trust_store_bytes;
 use crate::model::trust_store::TrustStoreSignature;
 use crate::model::wire::algorithm::SIGNATURE_ED25519;
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{SigningKey, VerifyingKey};
 
 #[test]
 fn test_sign_trust_store_bytes_returns_valid_structure() {
@@ -152,4 +152,37 @@ fn test_verify_detached_bytes_accepts_raw_ed25519_signature_bytes() {
     let signature = sign_detached_bytes(message, &sk).unwrap();
 
     verify_detached_bytes(message, &vk, &signature).unwrap();
+}
+
+/// Compressed encoding of the Ed25519 identity point, which has order 1.
+const SMALL_ORDER_POINT: [u8; 32] = {
+    let mut bytes = [0u8; 32];
+    bytes[0] = 1;
+    bytes
+};
+
+/// A small-order verifying key makes `[k]A` the identity for every message, so
+/// the verification equation collapses to `[S]B = R` and stops depending on the
+/// message at all. Strict verification rejects the key instead.
+#[test]
+fn test_verify_detached_bytes_rejects_small_order_verifying_key() {
+    let vk = VerifyingKey::from_bytes(&SMALL_ORDER_POINT).unwrap();
+    let mut signature = [0u8; 64];
+    signature[..32].copy_from_slice(&SMALL_ORDER_POINT);
+
+    for message in [b"first artifact".as_slice(), b"second artifact".as_slice()] {
+        assert!(verify_detached_bytes(message, &vk, &signature).is_err());
+    }
+}
+
+/// A small-order `R` point lets a signature carry over between messages even
+/// when the verifying key itself is well formed.
+#[test]
+fn test_verify_detached_bytes_rejects_small_order_signature_point() {
+    let sk = SigningKey::from_bytes(&[7u8; 32]);
+    let vk = sk.verifying_key();
+    let mut signature = [0u8; 64];
+    signature[..32].copy_from_slice(&SMALL_ORDER_POINT);
+
+    assert!(verify_detached_bytes(b"raw signature input", &vk, &signature).is_err());
 }

@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSHSIG format handling (Phase 11.2 - TDD Green phase)
+//! SSHSIG format handling.
 //!
 //! Implements SSHSIG wire format parsing and signed data construction
 //! per OpenSSH PROTOCOL.sshsig specification.

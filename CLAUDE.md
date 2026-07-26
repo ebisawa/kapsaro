@@ -47,8 +47,8 @@ cargo test --workspace         # Run all tests (workspace 全体。--workspace �
 cargo test                     # ルート crate (kapsaro bin) のテストのみ
 cargo test -p kapsaro --bin kapsaro  # ルート crate の CLI 内部テスト（src/ 内 #[cfg(test)]）
 cargo test -p kapsaro-core   # kapsaro-core crate のテストのみ
-cargo test --test unit         # ルート crate の独立ユニットテスト（CLI API 境界など 3 件）
-cargo test --test unit -p kapsaro-core  # kapsaro-core の独立ユニットテスト（外部・内部合わせて 60+ 件）
+cargo test --test unit         # ルート crate の独立ユニットテスト（CLI API 境界・リポジトリ規約チェック）
+cargo test --test unit -p kapsaro-core  # kapsaro-core の独立ユニットテスト（外部ツリー）
 cargo test --test cli_integration  # CLI E2E テスト
 cargo test --test public_api -p kapsaro-core  # 公開 API 境界テスト
 cargo test <module_path>::     # 特定モジュールのテスト
@@ -138,12 +138,12 @@ KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トー
 テストファイルは以下の 2 つの `tests/` ツリーに分かれる。
 
 **ルート crate (`tests/`)**
-- `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する CLI レベルのテスト（3 件）
+- `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する CLI レベルのテストとリポジトリ規約チェック
 - `tests/unit.rs` — 上記を登録するエントリポイント。`tests/test_utils/` にある `test_support/mod.rs` を `test_utils` モジュールとして import
 - `tests/cli_integration.rs` — CLI の E2E テスト
 
 **kapsaro-core crate (`crates/kapsaro-core/tests/`)**
-- `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する独立ユニットテスト（60+ 件）。`cli_api::test_support` 経由でアクセス
+- `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する独立ユニットテスト。`cli_api::test_support` と公開 API 経由でアクセス
 - `tests/unit/internal/` — `crates/kapsaro-core/src/` 内の production ファイルから `#[cfg(test)] #[path = "../../tests/unit/internal/..."]` で登録する crate-private ユニットテスト
 - `tests/unit.rs` — 上記外部テストを登録するエントリポイント。`tests/test_support/mod.rs` を import
 - `tests/public_api.rs` — `kapsaro_core::api` の公開 API 境界テスト

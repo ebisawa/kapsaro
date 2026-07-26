@@ -97,48 +97,10 @@ impl<T> VerifiedDocument<T> {
 /// - Cryptographic consistency (e.g., private/public key pairs match)
 /// - SSH fingerprint matches the decryption key
 ///
-/// # Example
-///
-/// ```ignore
-/// use kapsaro_core::model::verified::VerifiedPrivateKey;
-/// use kapsaro_core::model::private_key::PrivateKeyPlaintext;
-/// use kapsaro_core::io::ssh::backend::SignatureBackend;
-///
-/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// // Load member key context (returns CryptoContext with VerifiedPrivateKey)
-/// # let member_handle = "alice@example.com";
-/// # let backend: &dyn SignatureBackend = todo!();
-/// # let ssh_pubkey = "";
-/// # let keystore_root = std::path::PathBuf::from("/tmp");
-/// # let debug = false;
-/// # let load_crypto_context = |_member_handle: &str,
-/// #                            _backend: &dyn SignatureBackend,
-/// #                            _ssh_pubkey: &str,
-/// #                            _explicit_kid: Option<&str>,
-/// #                            _keystore_root: Option<&std::path::PathBuf>,
-/// #                            _workspace_path: Option<std::path::PathBuf>,
-/// #                            _debug: bool|
-/// #  -> Result<{ kapsaro_core::feature::context::crypto::CryptoContext }, Box<dyn std::error::Error>> { todo!() };
-/// let key_ctx = load_crypto_context(
-///     member_handle,
-///     backend,
-///     ssh_pubkey,
-///     None,
-///     Some(&keystore_root),
-///     None,
-///     debug,
-/// )?;
-///
-/// // Access decrypted document and proof information
-/// let plaintext = key_ctx.private_key.document();
-/// let proof = key_ctx.private_key.proof();
-/// assert_eq!(proof.member_handle(), "alice@example.com");
-///
-/// // The VerifiedPrivateKey wrapper ensures type-level guarantees that decryption
-/// // and validation have occurred before the plaintext can be used in trusted operations.
-/// # Ok(())
-/// # }
-/// ```
+/// Loading a key context is the only way to obtain one. The accompanying
+/// [`DecryptionProof`] records which member handle, key statement, and SSH
+/// fingerprint the decryption ran under, so callers can report the identity
+/// they actually decrypted with rather than the one they asked for.
 #[derive(Debug)]
 pub struct VerifiedPrivateKey {
     /// The decrypted document

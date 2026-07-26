@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for Signature Backend abstraction (Phase 12.1 - TDD Red phase)
+//! Unit tests for the signature backend abstraction.
+//! Covers backend selection and error reporting for missing commands.
 
 use crate::io::ssh::agent::client::DefaultAgentSigner;
 use crate::io::ssh::backend::ssh_agent::SshAgentBackend;

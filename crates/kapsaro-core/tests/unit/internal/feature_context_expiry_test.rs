@@ -53,7 +53,8 @@ fn test_check_key_expiry_expired() {
 
 #[test]
 fn test_check_key_expiry_boundary_exactly_now() {
-    // PRD: "現在時刻が expires_at を過ぎている" -> at exact boundary = expired
+    // The expiry boundary is inclusive: a key is expired once the current time
+    // reaches expires_at, not only after it passes.
     let now = OffsetDateTime::now_utc();
     let expires_at = rfc3339(now);
     let status = check_key_expiry(&expires_at, now).unwrap();

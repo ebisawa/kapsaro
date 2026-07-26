@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for SSH wire format primitives (Phase 11.1 - TDD Red phase)
+//! Unit tests for SSH wire format primitives.
+//! Covers SSH_STRING encoding and length-bounded decoding.
 
 use crate::io::ssh::protocol::wire::{decode_ssh_string, encode_ssh_string};
 

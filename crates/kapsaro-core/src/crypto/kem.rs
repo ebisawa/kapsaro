@@ -146,3 +146,7 @@ pub fn open_base(
 
     Ok(Zeroizing::new(Plaintext::from(plaintext)))
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/crypto_kem_rfc9180_kat_test.rs"]
+mod crypto_kem_rfc9180_kat_test;

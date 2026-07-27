@@ -18,18 +18,22 @@ fn test_file_size_limit_exceeded() {
     );
 }
 
+/// Build a syntactically valid document padded to exactly `size` bytes.
+fn kv_document_of_size(size: usize) -> String {
+    let prefix = ":KAPSARO_KV 1\n:HEAD head\n:WRAP wrap\nPADDING ";
+    let suffix = "\n:SIG sig\n";
+    let padding = size - prefix.len() - suffix.len();
+    format!("{}{}{}", prefix, "A".repeat(padding), suffix)
+}
+
 #[test]
 fn test_file_size_at_limit_is_accepted() {
-    let content = "A".repeat(MAX_KV_ENC_FILE_SIZE);
-    let parser = KvEncParser::new(&content);
-    let result = parser.parse_all();
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        !err.contains("exceeds maximum size limit"),
-        "should not fail on size limit: {}",
-        err
-    );
+    let content = kv_document_of_size(MAX_KV_ENC_FILE_SIZE);
+
+    let lines = KvEncParser::new(&content).parse_all().unwrap();
+
+    assert_eq!(content.len(), MAX_KV_ENC_FILE_SIZE);
+    assert!(!lines.is_empty());
 }
 
 #[test]

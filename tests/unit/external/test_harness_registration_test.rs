@@ -40,6 +40,59 @@ fn test_unit_internal_files_are_registered_once() {
     assert_registered_once(&core_internal_files, &core_registrations);
 }
 
+/// Tests live in the test tree and are attached with `#[path]`, so a
+/// `#[cfg(test)]` module with an inline body in a production source is a
+/// violation the registration checks above cannot see.
+#[test]
+fn test_production_sources_declare_no_inline_test_modules() {
+    let root = repo_root();
+    let mut offenders = BTreeSet::new();
+    for source_root in [root.join("src"), root.join("crates/kapsaro-core/src")] {
+        collect_inline_test_modules(&source_root, &root, &mut offenders);
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "move these inline test modules into the test tree: {offenders:?}",
+    );
+}
+
+fn collect_inline_test_modules(dir: &Path, root: &Path, offenders: &mut BTreeSet<String>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+        if path.is_dir() {
+            collect_inline_test_modules(&path, root, offenders);
+        } else if path.extension().is_some_and(|ext| ext == "rs")
+            && declares_inline_test_module(&path)
+        {
+            offenders.insert(
+                path.strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+}
+
+/// A registered test module ends the declaration with `;`, while an inline one
+/// opens a body with `{`.
+fn declares_inline_test_module(path: &Path) -> bool {
+    let Ok(contents) = fs::read_to_string(path) else {
+        return false;
+    };
+    let mut after_cfg_test = false;
+    for line in contents.lines().map(str::trim) {
+        if after_cfg_test && line.starts_with("mod ") && line.ends_with('{') {
+            return true;
+        }
+        after_cfg_test = line == "#[cfg(test)]" || (after_cfg_test && line.starts_with("#["));
+    }
+    false
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }

@@ -7,6 +7,9 @@ description = "Shared test helpers for kapsaro workspace tests"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 kapsaro-core = { workspace = true, features = ["cli-test-support"] }
 ed25519-dalek = "2"

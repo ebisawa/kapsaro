@@ -76,7 +76,12 @@ elif command -v gh >/dev/null 2>&1; then
   echo "Downloading attestation bundle..."
   curl -fsSL "${BUNDLE_URL}" -o "${TMP_DIR}/${BUNDLE}"
   echo "Verifying build provenance..."
-  if ! gh attestation verify "${TMP_DIR}/${ARCHIVE}" --bundle "${TMP_DIR}/${BUNDLE}" --repo "${REPO}"; then
+  # Pinning the signer workflow rejects an attestation produced by any other
+  # workflow in the repository, not just one from another repository.
+  if ! gh attestation verify "${TMP_DIR}/${ARCHIVE}" \
+    --bundle "${TMP_DIR}/${BUNDLE}" \
+    --repo "${REPO}" \
+    --signer-workflow "${REPO}/.github/workflows/release.yml"; then
     echo "Provenance verification failed for ${ARCHIVE}." >&2
     exit 1
   fi

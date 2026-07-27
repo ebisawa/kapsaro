@@ -284,6 +284,9 @@ fn test_load_bytes_with_limit_rejects_fifo() {
     let temp_dir = TempDir::new().unwrap();
     let fifo_path = temp_dir.path().join("pipe");
     let c_path = CString::new(fifo_path.to_str().unwrap()).unwrap();
+    // mkfifo has no safe wrapper. The path is a valid CString inside a
+    // temporary directory this test owns.
+    #[allow(unsafe_code)]
     let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
     assert_eq!(rc, 0, "mkfifo failed");
 

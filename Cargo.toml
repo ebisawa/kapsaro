@@ -16,6 +16,21 @@ version = "0.99.2-beta"
 [workspace.dependencies]
 kapsaro-core = { version = "0.99.2-beta", path = "crates/kapsaro-core", default-features = false }
 
+# CI already runs clippy with -D warnings. Declaring the policy here applies the
+# same strictness to local builds and editors.
+#
+# Production code contains no unsafe. Denying it here turns that from a property
+# that happens to hold into one the build enforces; the few test helpers that
+# need libc opt out explicitly.
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+[lints]
+workspace = true
+
 [dependencies]
 kapsaro-core = { workspace = true, features = ["cli-internal"] }
 

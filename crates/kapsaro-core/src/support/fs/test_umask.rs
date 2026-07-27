@@ -4,6 +4,10 @@
 //! Test helpers for process umask-sensitive filesystem assertions.
 //! Runs umask mutations in isolated test child processes.
 
+// libc::umask has no safe wrapper. Confined to a child process spawned for a
+// single test, so the process-global mutation cannot affect other tests.
+#![allow(unsafe_code)]
+
 #[cfg(unix)]
 pub(crate) fn run_current_test_in_isolated_umask_process(env_name: &str, test_name: &str) -> bool {
     if std::env::var_os(env_name).is_some() {

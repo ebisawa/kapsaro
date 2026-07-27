@@ -1,0 +1,42 @@
+# Supply chain policy for cargo-deny.
+# Run with: cargo deny --workspace check
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+# Every entry below is present in the current dependency graph. Keep this list
+# closed so a new dependency with unreviewed terms fails the build.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+
+[bans]
+# The RustCrypto ecosystem is mid-transition, so several hashing crates resolve
+# to two versions through different transitive paths. Surface that without
+# failing the build, since resolving it depends on upstream releases.
+multiple-versions = "warn"
+wildcards = "deny"
+# Workspace members are referenced by path and carry no version requirement.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

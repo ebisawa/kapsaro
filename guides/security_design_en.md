@@ -1328,7 +1328,27 @@ Auditors should treat structural validation -> `signer_pub` validation -> artifa
 
 ### 12.2 Input Validation and DoS Resistance
 
-The implementation is expected to apply conservative limits to input size, wrap count, entry count, JSON depth, and token length, and to parse fail-closed. The audit-relevant points are:
+Parsing is fail-closed and bounded. The wire limits below are part of the format contract, so an independent implementation has to accept documents up to these values and reject anything beyond them.
+
+| Wire limit | Value |
+| --- | --- |
+| Wrap items per document | 1,000 |
+| KEY lines per kv-enc document | 10,000 |
+| kv-enc document size | 16 MiB |
+| base64url token length | 1 MiB |
+| base64url ciphertext length | 16 MiB |
+
+The remaining limits are implementation guards. They bound resource use before parsing and may be raised without changing the format.
+
+| Implementation guard | Value |
+| --- | --- |
+| JSON nesting depth | 32 |
+| JSON element count | Derived from the wrap item limit |
+| JSON document read size | 24 MiB |
+
+The JSON element budget is derived rather than fixed so that a document at the wrap item limit stays parseable. A fixed budget below that threshold would reject conforming documents during the pre-parse scan, before the wrap count is ever inspected, making the published limit unreachable.
+
+The audit-relevant points are:
 
 - abnormally large inputs and deep nesting must not cause uncontrolled memory or CPU growth
 - base64url parsing must reject invalid characters, padding (`=`), and whitespace or newlines

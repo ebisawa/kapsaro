@@ -26,6 +26,7 @@ pub(super) fn parse_kv_document(content: &str, source_name: &str) -> Result<KvEn
         lines,
         head,
         wrap,
+        wrap_token,
         validated_tokens.entries,
         validated_tokens.signature_token,
         validated_tokens.signature,

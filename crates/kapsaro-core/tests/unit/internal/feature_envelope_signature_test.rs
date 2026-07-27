@@ -165,6 +165,7 @@ fn build_test_kv_document(
             wrap: Vec::new(),
             removed_recipients: None,
         },
+        String::new(),
         Vec::new(),
         String::new(),
         signature,

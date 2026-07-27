@@ -16,6 +16,12 @@ const SSH_AGENTC_SIGN_REQUEST: u8 = 13;
 
 pub(super) const MAX_AGENT_PACKET_SIZE: usize = 1024 * 1024;
 
+/// Upper bound on identities accepted from an agent response.
+///
+/// The declared count is read before any identity is parsed, so it has to be
+/// bounded independently of the packet size.
+const MAX_AGENT_IDENTITIES: usize = 256;
+
 pub(super) fn build_request_identities() -> Vec<u8> {
     vec![SSH_AGENTC_REQUEST_IDENTITIES]
 }
@@ -70,6 +76,13 @@ fn split_packet(packet: &[u8]) -> Result<(u8, &[u8])> {
 
 fn parse_identities(mut payload: &[u8]) -> Result<Vec<AgentIdentity>> {
     let count = decode_u32(&mut payload, "identity count")?;
+    if count > MAX_AGENT_IDENTITIES {
+        return Err(SshError::build_operation_failed_error(format!(
+            "ssh-agent reported {} identities (maximum {})",
+            count, MAX_AGENT_IDENTITIES
+        ))
+        .into());
+    }
     let mut identities = Vec::with_capacity(count);
 
     for _ in 0..count {
@@ -158,6 +171,22 @@ mod tests {
     #[test]
     fn test_build_request_identities_packet_body() {
         assert_eq!(build_request_identities(), vec![11]);
+    }
+
+    /// The declared count is read before any identity is parsed, so an
+    /// oversized value would otherwise reserve memory for identities the
+    /// packet cannot contain.
+    #[test]
+    fn test_parse_identities_response_rejects_an_oversized_identity_count() {
+        let mut packet = vec![12];
+        packet.extend_from_slice(&u32::MAX.to_be_bytes());
+
+        let error = parse_identities_response(&packet).unwrap_err();
+
+        assert!(
+            error.to_string().contains("maximum"),
+            "unexpected error: {error}",
+        );
     }
 
     #[test]

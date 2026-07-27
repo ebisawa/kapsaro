@@ -32,23 +32,15 @@ pub(crate) fn encode_kv_entries_to_tokens(
         .collect()
 }
 
-/// Detect the token codec for a validated KV document.
+/// Detect the token codec a document is encoded with.
 ///
-/// Relies on the invariant that `KvEncDocument` is only constructed via
-/// `parse_kv_document`, which requires a `:WRAP` line to be present.
+/// Takes the `:WRAP` token rather than the line list so the caller cannot
+/// supply input that has no codec to detect.
 pub(crate) fn detect_token_codec(
-    lines: &[KvEncLine],
+    wrap_token: &str,
     override_codec: Option<TokenCodec>,
 ) -> TokenCodec {
-    override_codec.unwrap_or_else(|| {
-        lines
-            .iter()
-            .find_map(|line| match line {
-                KvEncLine::Wrap { token } => Some(TokenCodec::detect(token)),
-                _ => None,
-            })
-            .expect("WRAP line must exist in validated KvEncDocument")
-    })
+    override_codec.unwrap_or_else(|| TokenCodec::detect(wrap_token))
 }
 
 pub(crate) fn build_entry_tokens<'a>(

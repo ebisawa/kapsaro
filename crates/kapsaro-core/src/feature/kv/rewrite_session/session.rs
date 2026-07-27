@@ -80,7 +80,7 @@ impl<'a> VerifiedKvRewriteSession<'a> {
 
     pub(crate) fn token_codec(&self) -> TokenCodec {
         let doc = self.document();
-        detect_token_codec(doc.lines(), self.token_codec)
+        detect_token_codec(doc.wrap_token(), self.token_codec)
     }
 
     pub(crate) fn current_recipients(&self) -> Vec<String> {

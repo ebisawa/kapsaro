@@ -19,6 +19,66 @@ fn response(status: u16, body: &'static str) -> reqwest::Response {
         .into()
 }
 
+fn rate_limited_response(status: u16) -> reqwest::Response {
+    http::Response::builder()
+        .status(status)
+        .header("x-ratelimit-remaining", "0")
+        .header("retry-after", "60")
+        .url(reqwest::Url::parse("http://example.test/response").unwrap())
+        .body("")
+        .unwrap()
+        .into()
+}
+
+fn oversized_body() -> reqwest::Response {
+    let body = "a".repeat(crate::support::limits::MAX_GITHUB_RESPONSE_SIZE + 1);
+    http::Response::builder()
+        .status(200)
+        .url(reqwest::Url::parse("http://example.test/response").unwrap())
+        .body(body)
+        .unwrap()
+        .into()
+}
+
+/// A bare status code gives no hint that the quota is the cause, and the
+/// unauthenticated quota is small enough to hit during normal use.
+#[tokio::test]
+async fn test_parse_github_keys_reports_an_exhausted_rate_limit() {
+    let error = parse_github_keys(rate_limited_response(403))
+        .await
+        .unwrap_err();
+
+    let message = error.format_user_message();
+    assert!(message.contains("rate limit"), "unexpected: {message}");
+    assert!(message.contains("60"), "unexpected: {message}");
+}
+
+#[tokio::test]
+async fn test_parse_github_keys_reports_too_many_requests() {
+    let error = parse_github_keys(rate_limited_response(429))
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.format_user_message().contains("rate limit"),
+        "unexpected: {}",
+        error.format_user_message()
+    );
+}
+
+/// The response body is peer-controlled, so its size decides how much is
+/// allocated unless the read is bounded.
+#[tokio::test]
+async fn test_parse_github_keys_rejects_an_oversized_body() {
+    let error = parse_github_keys(oversized_body()).await.unwrap_err();
+
+    assert!(
+        error.format_user_message().contains("maximum size"),
+        "unexpected: {}",
+        error.format_user_message()
+    );
+}
+
 #[test]
 fn test_build_github_api_url_from_base_extends_path_segments() {
     let base = reqwest::Url::parse("http://example.test").unwrap();
@@ -173,7 +233,7 @@ async fn test_parse_github_keys_response_invalid_json_error() {
     assert!(
         error
             .format_user_message()
-            .contains("Failed to parse GitHub API response"),
+            .contains("Failed to parse GitHub keys response"),
         "unexpected: {}",
         error.format_user_message()
     );

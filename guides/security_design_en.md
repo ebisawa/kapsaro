@@ -45,7 +45,7 @@ The following claims hold when the implementation preserves the invariants in §
 | Confidentiality | HPKE seal/open + XChaCha20-Poly1305 | Recipient private keys are not compromised | Legitimate recipients can still exfiltrate plaintext | §3, §6, §7 |
 | Tamper detection | Ed25519 signatures | Verification is never bypassed | A malicious legitimate signer is not prevented | §5 |
 | Self-contained verification of signed artifacts | Embedded signer public key + public-key verification | Every signed artifact embeds the signer's public key | Current membership still depends on separate trust policy checks | §5 |
-| Key consistency | Public-key document self-signature | The original private key is not compromised | Does not prevent creation of a brand new malicious key | §5.5 |
+| Key consistency | Public-key document self-signature, verified strictly | The original private key is not compromised | Does not prevent creation of a brand new malicious key | §5.5 |
 | Current-trust decision | Active member list + local approval cache | Repo governance and user approvals work as intended | Weak against bootstrap TOFU, repo compromise, and misapproval | §10 |
 | Stronger key identity evidence | SSH attestation + manual approval + online verify | Manual approval is executed correctly | Weak against first-contact MITM and GitHub/SSH compromise | §2.4, §5.6, §5.7 |
 | Context binding | Bind each artifact to its context (file, key generation, entry, protocol) | The implementation preserves the intended binding points | Security weakens if a future change removes a binding | §8, §11 |
@@ -543,6 +543,8 @@ Local trust store exception: trust store documents have no embedded `signer_pub`
 `PublicKey` carries a self-signature over the `protected` object. The signed object is the document's `protected` (per the format definition); field tampering fails self-signature verification.
 
 This establishes key consistency as defined in §1.6: evidence that the party who created this public-key document held the corresponding Kapsaro signing private key. An attacker can mint a new key pair with a valid self-signature, so the main defenses against new key insertion are §2.4 layers 2–4 and operational policy in §10. By contrast, tampering an existing PublicKey without the original private key cannot update the self-signature consistently, which makes self-signature a pillar of layer 1.
+
+Every Ed25519 verification in Kapsaro is strict: a small-order verifying key and a small-order signature `R` point are both rejected. This matters for key consistency specifically. A small-order verifying key has no private key holder at all, and one signature under such a key verifies against arbitrary messages. Without the strict check, anyone could publish a self-signed PublicKey while holding no private key, and the evidence this section rests on would be vacuous.
 
 ### 5.6 SSH Attestation
 

@@ -5,6 +5,8 @@
 
 #[path = "unit/external/cli_core_api_boundary_test.rs"]
 pub mod cli_core_api_boundary_test;
+#[path = "unit/external/ed25519_strict_verification_test.rs"]
+pub mod ed25519_strict_verification_test;
 #[path = "unit/external/install_script_test.rs"]
 pub mod install_script_test;
 #[path = "unit/external/release_profile_test.rs"]

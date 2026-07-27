@@ -8,7 +8,7 @@
 
 use crate::crypto::{build_crypto_error, build_crypto_operation_error};
 use crate::Result;
-use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, SignatureError, Signer, SigningKey, VerifyingKey};
 
 pub type Ed25519SignatureBytes = [u8; 64];
 
@@ -18,6 +18,21 @@ pub fn sign_detached_bytes(
     signing_key: &SigningKey,
 ) -> Result<Ed25519SignatureBytes> {
     Ok(signing_key.sign(message_bytes).to_bytes())
+}
+
+/// Verify a parsed Ed25519 signature over raw bytes.
+///
+/// This is the only verification entry point in the crate. It uses
+/// `verify_strict`, which rejects a small-order verifying key and a
+/// small-order signature `R` point. Without those checks a single signature
+/// verifies under arbitrary messages, so accepting a signature would no longer
+/// imply that some private key holder produced it.
+pub fn verify_detached_signature(
+    message_bytes: &[u8],
+    verifying_key: &VerifyingKey,
+    signature: &Signature,
+) -> std::result::Result<(), SignatureError> {
+    verifying_key.verify_strict(message_bytes, signature)
 }
 
 /// Verify a raw Ed25519 signature over raw bytes.
@@ -32,11 +47,10 @@ pub fn verify_detached_bytes(
             format!("Expected 64 bytes (Ed25519), got {}", signature_bytes.len()),
         ));
     }
-    let sig = ed25519_dalek::Signature::from_slice(signature_bytes)
+    let sig = Signature::from_slice(signature_bytes)
         .map_err(|_| build_crypto_operation_error("Invalid signature format"))?;
 
-    verifying_key
-        .verify(message_bytes, &sig)
+    verify_detached_signature(message_bytes, verifying_key, &sig)
         .map_err(|_| build_crypto_operation_error("Signature verification failed"))?;
 
     Ok(())

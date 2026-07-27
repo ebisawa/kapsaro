@@ -3,7 +3,12 @@
 
 //! Unit tests for install.sh.
 //! Exercises installer download, provenance verification, and install paths.
+//!
+//! Serialized: each test writes fake commands and then execs them. A fork
+//! elsewhere in this binary would inherit the still-open write descriptor and
+//! make the exec fail with ETXTBSY, so no other test may run alongside them.
 
+use serial_test::serial;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,6 +19,7 @@ const ARCHIVE: &str = "kapsaro-v1.2.3-x86_64-unknown-linux-gnu.tar.gz";
 const BUNDLE: &str = "kapsaro-v1.2.3.sigstore.jsonl";
 
 #[test]
+#[serial]
 fn test_install_script_installs_archive_after_provenance_verification() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
@@ -42,6 +48,7 @@ fn test_install_script_installs_archive_after_provenance_verification() {
 }
 
 #[test]
+#[serial]
 fn test_install_script_rejects_archive_when_provenance_verification_fails() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
@@ -58,6 +65,7 @@ fn test_install_script_rejects_archive_when_provenance_verification_fails() {
 }
 
 #[test]
+#[serial]
 fn test_install_script_rejects_environment_without_gh_command() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");
@@ -72,6 +80,7 @@ fn test_install_script_rejects_environment_without_gh_command() {
 }
 
 #[test]
+#[serial]
 fn test_install_script_installs_archive_without_provenance_when_insecure() {
     let fixture = InstallFixture::new();
     fixture.save_archive(b"release archive bytes");

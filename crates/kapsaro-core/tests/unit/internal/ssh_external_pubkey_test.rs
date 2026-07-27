@@ -92,16 +92,6 @@ impl SshKeygen for MockSshKeygen {
     ) -> Result<Ed25519RawSignature> {
         unreachable!("sign is not used in this test");
     }
-
-    fn verify(
-        &self,
-        _ssh_pubkey: &str,
-        _namespace: &str,
-        _message: &[u8],
-        _signature: &str,
-    ) -> Result<()> {
-        unreachable!("verify is not used in this test");
-    }
 }
 
 // --- Tests for existing functions (kept) ---

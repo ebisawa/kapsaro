@@ -19,6 +19,9 @@ pub mod guards;
 #[path = "../../../kapsaro-test-support/src/keygen_helpers.rs"]
 #[allow(dead_code)]
 pub mod keygen_helpers;
+#[path = "process_output.rs"]
+#[allow(dead_code)]
+pub mod process_output;
 #[path = "ssh_stubs.rs"]
 #[allow(dead_code)]
 mod ssh_stubs;

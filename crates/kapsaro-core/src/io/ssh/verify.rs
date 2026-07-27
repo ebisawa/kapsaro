@@ -1,63 +1,23 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSHSIG verification via ssh-keygen subprocess
+//! Attestation verification using raw Ed25519 signatures.
 //!
-//! Also provides attestation verification using raw Ed25519 signatures.
+//! Builds the SSHSIG signed data and checks it in process, without ssh-keygen.
 
 use super::protocol::parse::decode_ssh_public_key_blob;
 use super::protocol::{sshsig, wire};
 use crate::crypto::sign::verify_detached_signature;
 use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::format::public_key::{build_attestation_body_bytes, AttestationBodyInput};
-use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::constants as ssh;
 use crate::io::ssh::SshError;
 use crate::Result;
 use ed25519_dalek::VerifyingKey;
 
-/// Validate SSHSIG inputs before verification.
-///
-/// Returns an error if validation fails, otherwise returns Ok(()).
-pub fn validate_sshsig_inputs(ssh_pubkey: &str, signature: &str) -> Result<()> {
-    if ssh_pubkey.is_empty() {
-        return Err(SshError::build_operation_failed_error("SSH public key is empty").into());
-    }
-
-    let key_type = ssh_pubkey.split_whitespace().next().unwrap_or("");
-    if key_type != ssh::KEY_TYPE_ED25519 {
-        return Err(SshError::build_operation_failed_error(format!(
-            "Only ssh-ed25519 supported, got: {}",
-            key_type
-        ))
-        .into());
-    }
-
-    if signature.is_empty() {
-        return Err(SshError::build_operation_failed_error("Signature is empty").into());
-    }
-
-    if !signature.contains(ssh::SSHSIG_ARMOR_BEGIN) {
-        return Err(SshError::build_operation_failed_error("Not in SSHSIG armored format").into());
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/ssh_verify_test.rs"]
 mod ssh_verify_test;
-
-/// Verify an SSHSIG armored signature using the `SshKeygen` trait.
-pub fn verify_sshsig(
-    ssh_keygen: &dyn SshKeygen,
-    ssh_pubkey: &str,
-    message: &[u8],
-    signature: &str,
-) -> Result<()> {
-    validate_sshsig_inputs(ssh_pubkey, signature)?;
-    ssh_keygen.verify(ssh_pubkey, ssh::ATTESTATION_NAMESPACE, message, signature)
-}
 
 /// Build signed data for PublicKey attestation verification.
 pub fn build_attestation_signed_data(input: &AttestationBodyInput<'_>) -> Result<Vec<u8>> {

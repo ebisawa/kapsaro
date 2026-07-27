@@ -1,140 +1,22 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for SSH signature verification
+//! Unit tests for PublicKey attestation verification.
 //!
-//! Tests for verify_sshsig validation logic
+//! Covers the signed data construction and rejection of tampered fields.
 
 use crate::format::codec::base64_public::{encode_base64_standard, encode_base64url_nopad};
 use crate::format::public_key::AttestationBodyInput;
-use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
 use crate::io::ssh::protocol::constants::ATTESTATION_NAMESPACE;
-use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
-use crate::io::ssh::verify::verify_sshsig;
 use crate::io::ssh::verify::{build_attestation_signed_data, verify_attestation};
 use crate::model::public_key::{BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey};
 use ed25519_dalek::{Signer, SigningKey};
-use std::path::Path;
-use std::sync::Mutex;
 
-const VALID_SIG: &str = "-----BEGIN SSH SIGNATURE-----\n-----END SSH SIGNATURE-----";
-const ED25519_KEY: &str = "ssh-ed25519 AAAA... comment";
 const ATTESTATION_SUBJECT_HANDLE: &str = "alice@example.com";
 const ATTESTATION_CREATED_AT: &str = "2026-01-01T00:00:00Z";
 const ATTESTATION_EXPIRES_AT: &str = "2027-01-01T00:00:00Z";
-
-/// Stub SshKeygen that always succeeds (validation tests never reach trait methods)
-struct StubSshKeygen;
-
-impl SshKeygen for StubSshKeygen {
-    fn derive_public_key(&self, _key_path: &Path) -> kapsaro_core::Result<String> {
-        unimplemented!()
-    }
-    fn sign(
-        &self,
-        _key_path: &Path,
-        _namespace: &str,
-        _ssh_pubkey: &str,
-        _data: &[u8],
-    ) -> kapsaro_core::Result<Ed25519RawSignature> {
-        unimplemented!()
-    }
-    fn verify(
-        &self,
-        _ssh_pubkey: &str,
-        _namespace: &str,
-        _message: &[u8],
-        _signature: &str,
-    ) -> kapsaro_core::Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Debug, Default)]
-struct RecordedVerifyCall {
-    ssh_pubkey: String,
-    namespace: String,
-    message: Vec<u8>,
-    signature: String,
-}
-
-#[derive(Default)]
-struct RecordingSshKeygen {
-    call: Mutex<Option<RecordedVerifyCall>>,
-}
-
-impl SshKeygen for RecordingSshKeygen {
-    fn derive_public_key(&self, _key_path: &Path) -> kapsaro_core::Result<String> {
-        unimplemented!()
-    }
-
-    fn sign(
-        &self,
-        _key_path: &Path,
-        _namespace: &str,
-        _ssh_pubkey: &str,
-        _data: &[u8],
-    ) -> kapsaro_core::Result<Ed25519RawSignature> {
-        unimplemented!()
-    }
-
-    fn verify(
-        &self,
-        ssh_pubkey: &str,
-        namespace: &str,
-        message: &[u8],
-        signature: &str,
-    ) -> kapsaro_core::Result<()> {
-        *self.call.lock().unwrap() = Some(RecordedVerifyCall {
-            ssh_pubkey: ssh_pubkey.to_string(),
-            namespace: namespace.to_string(),
-            message: message.to_vec(),
-            signature: signature.to_string(),
-        });
-        Ok(())
-    }
-}
-
-#[test]
-fn test_verify_sshsig_validation() {
-    let keygen = StubSshKeygen;
-
-    assert!(verify_sshsig(&keygen, "", b"msg", VALID_SIG)
-        .unwrap_err()
-        .to_string()
-        .contains("empty"));
-
-    assert!(verify_sshsig(&keygen, "ssh-rsa AAAA...", b"msg", VALID_SIG)
-        .unwrap_err()
-        .to_string()
-        .contains(crate::io::ssh::protocol::constants::KEY_TYPE_ED25519));
-
-    assert!(verify_sshsig(&keygen, ED25519_KEY, b"msg", "")
-        .unwrap_err()
-        .to_string()
-        .contains("empty"));
-
-    assert!(verify_sshsig(&keygen, ED25519_KEY, b"msg", "invalid")
-        .unwrap_err()
-        .to_string()
-        .contains("armored"));
-}
-
-#[test]
-fn test_verify_sshsig_delegates_valid_input_to_keygen() {
-    let keygen = RecordingSshKeygen::default();
-    let message = b"attestation payload";
-
-    verify_sshsig(&keygen, ED25519_KEY, message, VALID_SIG).unwrap();
-
-    let call = keygen.call.lock().unwrap().take().expect("verify call");
-    assert_eq!(call.ssh_pubkey, ED25519_KEY);
-    assert_eq!(call.namespace, ATTESTATION_NAMESPACE);
-    assert_eq!(call.message, message);
-    assert_eq!(call.signature, VALID_SIG);
-}
 
 fn test_identity_keys() -> IdentityKeys {
     IdentityKeys {

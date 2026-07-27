@@ -8,7 +8,7 @@ use crate::support::kid::format_kid_display;
 
 use super::formatter::{
     append_file_payload_info, append_line, append_removed_recipients, append_signer_info,
-    append_wrap_item, format_section_lines,
+    append_wrap_item, display_field, format_section_lines, SIGNATURE_DISPLAY_LEN,
 };
 use super::{build_section, InspectOutput, InspectSection};
 
@@ -65,7 +65,10 @@ fn build_file_enc_signature_section(doc: &FileEncDocument) -> InspectSection {
             append_signer_info(Some(&sig.signer_pub), out);
             append_line(
                 out,
-                format!("  Sig:         {}...", &sig.sig[..sig.sig.len().min(40)]),
+                format!(
+                    "  Sig:         {}",
+                    display_field(&sig.sig, SIGNATURE_DISPLAY_LEN)
+                ),
             );
         }),
     )

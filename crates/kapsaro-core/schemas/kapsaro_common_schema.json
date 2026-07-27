@@ -175,7 +175,12 @@
           "type": "string",
           "enum": ["ssh-sign"]
         },
-        "pub": { "type": "string" },
+        "pub": {
+          "type": "string",
+          "pattern": "^[^\\r\\n]+$",
+          "maxLength": 4096,
+          "description": "SSH public key in OpenSSH format; a single line with no CR or LF"
+        },
         "sig": {
           "$ref": "#/$defs/b64url_64",
           "description": "Attestation signature 64 bytes encoded as base64url (no padding, 86 characters)"

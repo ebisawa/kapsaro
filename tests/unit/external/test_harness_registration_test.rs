@@ -57,6 +57,66 @@ fn test_production_sources_declare_no_inline_test_modules() {
     );
 }
 
+/// Execing a file this process still has open for writing fails with ETXTBSY
+/// once a concurrent fork inherits the descriptor. A test that generates a
+/// script and then runs it therefore has to exclude every other test in its
+/// binary; prefer a system binary or a pure function over a generated script.
+#[test]
+fn test_generated_scripts_are_confined_to_serialized_tests() {
+    let root = repo_root();
+    let mut offenders = BTreeSet::new();
+    for test_root in [
+        root.join("tests"),
+        root.join("crates/kapsaro-core/tests"),
+        root.join("crates/kapsaro-test-support/tests"),
+    ] {
+        collect_unserialized_script_fixtures(&test_root, &root, &mut offenders);
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "these tests generate a script without serializing the binary: {offenders:?}",
+    );
+}
+
+fn collect_unserialized_script_fixtures(dir: &Path, root: &Path, offenders: &mut BTreeSet<String>) {
+    const SERIAL_ATTRIBUTE: &str = "#[serial]";
+    // This file spells out the patterns it looks for, so scanning itself would
+    // match on its own constants rather than on a generated script.
+    const SELF: &str = "test_harness_registration_test.rs";
+
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+        if path.is_dir() {
+            collect_unserialized_script_fixtures(&path, root, offenders);
+        } else if path.file_name().is_some_and(|name| name == SELF) {
+            continue;
+        } else if embeds_script_body(&path) && !file_mentions(&path, SERIAL_ATTRIBUTE) {
+            offenders.insert(
+                path.strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+}
+
+/// A shebang in a Rust source is a script the test writes out to run it. The
+/// executable mode alone is not the signal, since directories also use 0o755.
+fn embeds_script_body(path: &Path) -> bool {
+    ["#!/bin/sh", "#!/bin/bash", "#!/usr/bin/env"]
+        .iter()
+        .any(|shebang| file_mentions(path, shebang))
+}
+
+fn file_mentions(path: &Path, needle: &str) -> bool {
+    path.extension().is_some_and(|ext| ext == "rs")
+        && fs::read_to_string(path).is_ok_and(|contents| contents.contains(needle))
+}
+
 fn collect_inline_test_modules(dir: &Path, root: &Path, offenders: &mut BTreeSet<String>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;

@@ -11,7 +11,6 @@ pub mod add;
 pub mod keygen;
 pub mod pubkey;
 pub(crate) mod runner;
-pub mod temp_file;
 pub mod traits;
 
 pub(crate) fn build_ssh_child_env(agent_socket: Option<&Path>) -> BTreeMap<String, OsString> {

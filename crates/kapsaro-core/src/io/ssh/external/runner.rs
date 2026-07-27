@@ -123,12 +123,6 @@ pub(super) fn decode_stdout_utf8(
     })
 }
 
-pub(super) fn failure_details(output: &Output) -> String {
-    if !output.stderr.is_empty() {
-        decode_lossy(&output.stderr)
-    } else if !output.stdout.is_empty() {
-        decode_lossy(&output.stdout)
-    } else {
-        format!("exit code: {:?}", output.status.code())
-    }
-}
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/ssh_external_runner_test.rs"]
+mod ssh_external_runner_test;

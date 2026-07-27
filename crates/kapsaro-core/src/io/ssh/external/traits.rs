@@ -26,16 +26,6 @@ pub trait SshKeygen: Send + Sync {
         ssh_pubkey: &str,
         data: &[u8],
     ) -> Result<Ed25519RawSignature>;
-
-    /// `ssh-keygen -Y verify` — verify an SSHSIG armored signature.
-    /// Temp files (allowed_signers, signature) are managed internally.
-    fn verify(
-        &self,
-        ssh_pubkey: &str,
-        namespace: &str,
-        message: &[u8],
-        signature: &str,
-    ) -> Result<()>;
 }
 
 /// Abstraction over the `ssh-add` command.

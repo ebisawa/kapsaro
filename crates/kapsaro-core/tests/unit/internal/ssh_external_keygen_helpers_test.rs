@@ -6,13 +6,12 @@
 //! These tests synthesize `std::process::Output` values directly so the
 //! helpers can be exercised without invoking the real `ssh-keygen` binary.
 
-#![cfg(any(unix, windows))]
-
-use super::{check_sign_output, check_verify_output, parse_sign_stdout};
+use super::{build_derive_public_key_args, build_sign_args, check_sign_output, parse_sign_stdout};
 use crate::format::codec::base64_public::encode_base64_standard;
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
+use crate::test_utils::process_output::{build_process_output, failed_code};
 use crate::Error;
 
 const TEST_SSH_PUBKEY: &str =
@@ -23,38 +22,6 @@ const OTHER_SSH_PUBKEY: &str =
 fn append_publickey(blob: &mut Vec<u8>, ssh_pubkey: &str) {
     let publickey = decode_ssh_public_key_blob(ssh_pubkey).unwrap();
     blob.extend_from_slice(&encode_ssh_string(&publickey));
-}
-
-#[cfg(unix)]
-fn build_process_output(code: i32, stderr: &[u8], stdout: &[u8]) -> std::process::Output {
-    use std::os::unix::process::ExitStatusExt;
-    std::process::Output {
-        status: std::process::ExitStatus::from_raw(code),
-        stderr: stderr.to_vec(),
-        stdout: stdout.to_vec(),
-    }
-}
-
-#[cfg(windows)]
-fn build_process_output(code: u32, stderr: &[u8], stdout: &[u8]) -> std::process::Output {
-    use std::os::windows::process::ExitStatusExt;
-    std::process::Output {
-        status: std::process::ExitStatus::from_raw(code),
-        stderr: stderr.to_vec(),
-        stdout: stdout.to_vec(),
-    }
-}
-
-/// Helper that converts the platform-specific "exit code 1" raw value.
-#[cfg(unix)]
-fn failed_code() -> i32 {
-    // Unix raw wait status: exit code 1 is encoded as 1 << 8 = 256.
-    256
-}
-
-#[cfg(windows)]
-fn failed_code() -> u32 {
-    1
 }
 
 // --------------------------------------------------------------------
@@ -192,65 +159,42 @@ fn test_parse_sign_stdout_rejects_invalid_utf8() {
 }
 
 // --------------------------------------------------------------------
-// check_verify_output
+// argument builders
 // --------------------------------------------------------------------
 
 #[test]
-fn test_check_verify_output_accepts_zero_exit() {
-    let output = build_process_output(0, b"", b"");
-    assert!(check_verify_output(output).is_ok());
+fn test_build_derive_public_key_args_passes_the_key_path_to_the_f_flag() {
+    let args = build_derive_public_key_args(std::path::Path::new("/tmp/id_ed25519"));
+
+    assert_eq!(args, vec!["-y", "-f", "/tmp/id_ed25519"]);
 }
 
+/// Omitting `-O hashalg=sha256` makes ssh-keygen pick its own default, and the
+/// SSHSIG parser only accepts sha256.
 #[test]
-fn test_check_verify_output_failure_with_stderr_uses_stderr() {
-    let output = build_process_output(failed_code(), b"signature verification failed\n", b"");
-    let err = check_verify_output(output).expect_err("non-zero exit must fail");
+fn test_build_sign_args_requests_sha256_and_binds_the_namespace() {
+    let args = build_sign_args("/tmp/id_ed25519", KEY_PROTECTION_NAMESPACE);
 
-    assert_eq!(err.kind(), crate::ErrorKind::Ssh);
-    let message = err.format_user_message();
-    assert!(message.contains("ssh-keygen -Y verify failed"));
-    assert!(message.contains("signature verification failed"));
+    assert_eq!(
+        args,
+        [
+            "-Y",
+            "sign",
+            "-f",
+            "/tmp/id_ed25519",
+            "-n",
+            KEY_PROTECTION_NAMESPACE,
+            "-O",
+            "hashalg=sha256",
+        ]
+    );
 }
 
+/// No output path is passed, so ssh-keygen writes the signature to stdout and
+/// never leaves signature material on disk.
 #[test]
-fn test_check_verify_output_failure_stdout_only_falls_back_to_stdout() {
-    let output = build_process_output(failed_code(), b"", b"stdout diagnostic message");
-    let err = check_verify_output(output).expect_err("non-zero exit must fail");
+fn test_build_sign_args_names_no_output_file() {
+    let args = build_sign_args("/tmp/id_ed25519", KEY_PROTECTION_NAMESPACE);
 
-    assert_eq!(err.kind(), crate::ErrorKind::Ssh);
-    assert!(err
-        .format_user_message()
-        .contains("stdout diagnostic message"));
-}
-
-#[test]
-fn test_check_verify_output_failure_both_empty_uses_exit_code() {
-    let output = build_process_output(failed_code(), b"", b"");
-    let err = check_verify_output(output).expect_err("non-zero exit must fail");
-
-    assert_eq!(err.kind(), crate::ErrorKind::Ssh);
-    let message = err.format_user_message();
-    assert!(message.contains("ssh-keygen -Y verify failed"));
-    assert!(message.contains("exit code:"));
-}
-
-#[test]
-fn test_check_verify_output_failure_trims_trailing_whitespace() {
-    let output = build_process_output(failed_code(), b"   bad signature   \n\n", b"");
-    let err = check_verify_output(output).expect_err("non-zero exit must fail");
-
-    assert_eq!(err.kind(), crate::ErrorKind::Ssh);
-    // Trailing newlines / spaces removed by `.trim()`.
-    assert!(err.format_user_message().ends_with("bad signature"));
-}
-
-#[test]
-fn test_check_verify_output_failure_prefers_stderr_over_stdout() {
-    let output = build_process_output(failed_code(), b"from stderr", b"from stdout");
-    let err = check_verify_output(output).expect_err("non-zero exit must fail");
-
-    assert_eq!(err.kind(), crate::ErrorKind::Ssh);
-    let message = err.format_user_message();
-    assert!(message.contains("from stderr"));
-    assert!(!message.contains("from stdout"));
+    assert_eq!(args.len(), 8);
 }

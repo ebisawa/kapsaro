@@ -3,8 +3,8 @@
 
 //! Default implementation of the `SshKeygen` trait using the system ssh-keygen command.
 
+use super::runner;
 use super::traits::SshKeygen;
-use super::{runner, temp_file};
 use crate::io::ssh::external::runner::SshCommandRunner;
 use crate::io::ssh::protocol::sshsig::parse_sshsig_armored;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
@@ -30,13 +30,33 @@ impl DefaultSshKeygen {
     }
 }
 
+/// `ssh-keygen -y -f <key>` prints the public half of a private key file.
+fn build_derive_public_key_args(key_path: &Path) -> Vec<OsString> {
+    vec![
+        OsString::from("-y"),
+        OsString::from("-f"),
+        key_path.as_os_str().to_os_string(),
+    ]
+}
+
+/// `ssh-keygen -Y sign` takes the message on stdin and writes the armored
+/// signature to stdout, so the signature never reaches a file on disk.
+fn build_sign_args<'a>(key_path: &'a str, namespace: &'a str) -> [&'a str; 8] {
+    [
+        "-Y",
+        "sign",
+        "-f",
+        key_path,
+        "-n",
+        namespace,
+        "-O",
+        "hashalg=sha256",
+    ]
+}
+
 impl SshKeygen for DefaultSshKeygen {
     fn derive_public_key(&self, key_path: &Path) -> Result<String> {
-        let args = vec![
-            OsString::from("-y"),
-            OsString::from("-f"),
-            key_path.as_os_str().to_os_string(),
-        ];
+        let args = build_derive_public_key_args(key_path);
         let output =
             SshCommandRunner::optional_agent(self.ssh_keygen_path.clone()).output(args, |e| {
                 SshError::build_operation_failed_error_with_source(
@@ -81,48 +101,6 @@ impl SshKeygen for DefaultSshKeygen {
         check_sign_output(&output, is_public_key)?;
         parse_sign_stdout(output.stdout, namespace, ssh_pubkey)
     }
-
-    fn verify(
-        &self,
-        ssh_pubkey: &str,
-        namespace: &str,
-        message: &[u8],
-        signature: &str,
-    ) -> Result<()> {
-        let allowed = format!(
-            "{} namespaces=\"{}\" {}\n",
-            namespace, namespace, ssh_pubkey
-        );
-        let allowed_file = temp_file::save_temp_str(&allowed)?;
-        let sig_file = temp_file::save_temp_str(signature)?;
-
-        let args = vec![
-            OsString::from("-Y"),
-            OsString::from("verify"),
-            OsString::from("-f"),
-            allowed_file.path().as_os_str().to_os_string(),
-            OsString::from("-I"),
-            OsString::from(namespace),
-            OsString::from("-n"),
-            OsString::from(namespace),
-            OsString::from("-s"),
-            sig_file.path().as_os_str().to_os_string(),
-        ];
-        let output = SshCommandRunner::optional_agent(self.ssh_keygen_path.clone())
-            .output_with_stdin(
-                args,
-                message,
-                |e| {
-                    SshError::build_operation_failed_error_with_source(
-                        "Failed to spawn ssh-keygen",
-                        e,
-                    )
-                },
-                "Failed to wait for ssh-keygen",
-            )?;
-
-        check_verify_output(output)
-    }
 }
 
 fn execute_sign_command(
@@ -131,18 +109,8 @@ fn execute_sign_command(
     namespace: &str,
     data: &[u8],
 ) -> Result<std::process::Output> {
-    let args = [
-        "-Y",
-        "sign",
-        "-f",
-        key_path_str,
-        "-n",
-        namespace,
-        "-O",
-        "hashalg=sha256",
-    ];
     SshCommandRunner::optional_agent(ssh_keygen_path.to_string()).output_with_stdin(
-        args,
+        build_sign_args(key_path_str, namespace),
         data,
         |e| {
             SshError::build_operation_failed_error_with_source(
@@ -199,18 +167,6 @@ fn parse_sign_stdout(
     })?;
     let blob = parse_sshsig_armored(armored, expected_namespace, expected_ssh_pubkey)?;
     blob.extract_ed25519_raw()
-}
-
-fn check_verify_output(output: Output) -> Result<()> {
-    if output.status.success() {
-        return Ok(());
-    }
-    let details = runner::failure_details(&output);
-    Err(SshError::build_operation_failed_error(format!(
-        "ssh-keygen -Y verify failed: {}",
-        details.trim()
-    ))
-    .into())
 }
 
 #[cfg(test)]

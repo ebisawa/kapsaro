@@ -1,0 +1,20 @@
+{
+  "protected": {
+    "format": "kapsaro:format:private-key@1",
+    "subject_handle": "alice@example.com",
+    "kid": "H8JDDCXN7PWFDVB3XCNEGK5XTPPE2D8C",
+    "alg": {
+      "kdf": "sshsig-ed25519-hkdf-sha256",
+      "fpr": "SHA256:A9lFXqTImwZSWS/9T2Zza9G47tvfDMKzpSkbMnsHENQ",
+      "ikm_salt": "ERMEvLmXdJLZWYmWYherw0fDcjY02H_Uxpdr98pCD3I",
+      "hkdf_salt": "3Jv-i70mLA7ocHOZX1XSCRSB4KGONrsbqQli0scF8Ks",
+      "aead": "xchacha20-poly1305"
+    },
+    "created_at": "2026-07-26T03:14:19Z",
+    "expires_at": "2126-01-01T00:00:00Z"
+  },
+  "encrypted": {
+    "nonce": "gDSSlVYiSqSAmCO-UCn1BXIEyPQuCEn0",
+    "ct": "WEBMSO7HKyoY42WTt9nJjRBoCvxkuvphz-UJy_X3d__uzq1J2otLB_BBHId7fV6J_vp9xEVFixwI5ooNgbv2BEeQk0QJjjz_C7gPSwDdOxQ3x-DIqYqSB3IXFb5vLOQSvVj8KixY8s7lWekNiaXJ76czzzzuBCXNr0w9JvgsOVMzQ0lflmgW8l3b3fRLHqdqPewVPJwzRpvT47aQZXkLlgpVdE6cCFn-UMWxxdDrR9hzsIvkOYwqI_bVIGn_LgLYkTyhj5aeyoWRNSZth1xQzW39TQZ1RX82zLImoxwptILzWVSqmYqcE61Ag3uuG7tNAY6va7oh4v5bt4d48YH8HKg_rg2Bo_243kpDRJmr1FN0lFGaB6XwCL2V8PDyjntw8-jMNEEQCqnD"
+  }
+}

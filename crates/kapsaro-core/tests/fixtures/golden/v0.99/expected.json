@@ -1,0 +1,11 @@
+{
+  "kapsaro_version": "0.99.2-beta",
+  "member_handle": "alice@example.com",
+  "kid": "H8JDDCXN7PWFDVB3XCNEGK5XTPPE2D8C",
+  "ssh_key_fingerprint": "SHA256:A9lFXqTImwZSWS/9T2Zza9G47tvfDMKzpSkbMnsHENQ",
+  "file_enc_plaintext": "GOLDEN_FIXTURE_PLAINTEXT\n",
+  "kv_entries": {
+    "API_KEY": "sk-golden-fixture-value",
+    "DATABASE_URL": "postgres://user:pw@localhost/golden"
+  }
+}

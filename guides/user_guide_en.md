@@ -31,7 +31,7 @@ Team development requires sharing secrets — database passwords, API keys, cert
 - Leaving real values as comments in `.env.example`
 - Former members retaining passwords that were shared with them
 
-kapsaro is a CLI tool that solves these problems by **managing encrypted secrets in a Git repository**, allowing teams to share secrets safely and traceably.
+kapsaro is a CLI tool that solves these problems by managing encrypted secrets in a Git repository, allowing teams to share secrets safely and traceably.
 
 ### What it solves
 
@@ -81,29 +81,29 @@ The workspace is the `.kapsaro/` directory in your Git repository. This is where
 
 Each user has their own key pair.
 
-- A **public key** can be shared with the team
-- A **private key** must stay with that user
+- A public key can be shared with the team
+- A private key must stay with that user
 
-The basic idea of public-key encryption is simple: **encrypt with a public key, decrypt with the matching private key**. In kapsaro, secrets are encrypted for recipients' public keys, so only users with the matching private keys can decrypt them. In other words, it does not depend on securely distributing one team-wide shared secret key.
+The basic idea of public-key encryption is simple: encrypt with a public key, decrypt with the matching private key. In kapsaro, secrets are encrypted for recipients' public keys, so only users with the matching private keys can decrypt them. In other words, it does not depend on securely distributing one team-wide shared secret key.
 
-With shared-key encryption, everyone who needs access must somehow receive the same secret key securely, so **how to distribute that shared secret** becomes an operational problem in itself. With public-key encryption, you only distribute public keys, so you do not need to distribute the secret material that must remain private.
+With shared-key encryption, everyone who needs access must somehow receive the same secret key securely, so how to distribute that shared secret becomes an operational problem in itself. With public-key encryption, you only distribute public keys, so you do not need to distribute the secret material that must remain private.
 
-The important rule is that **a private key must never be shared with anyone else**. Giving someone your private key is effectively giving them the ability to read secrets as you. Do not commit it to Git, paste it into chat, or share it carelessly through backups or exports.
+The important rule is that a private key must never be shared with anyone else. Giving someone your private key is effectively giving them the ability to read secrets as you. Do not commit it to Git, paste it into chat, or share it carelessly through backups or exports.
 
-By contrast, **a public key is something you should actively share even though it is called a "key."** A public key alone normally cannot decrypt the secret. That is why it is safe to commit public-key files under `members/active/` or `members/incoming/`.
+By contrast, a public key is something you should actively share even though it is called a "key." A public key alone normally cannot decrypt the secret. That is why it is safe to commit public-key files under `members/active/` or `members/incoming/`.
 
-The difficult part is **knowing whose public key it really is**. A public key can be safe to share and still be falsely presented as "Alice's key" by an attacker. In practice, the hard problem is not distributing public keys, but deciding **which person a given public key should be trusted to represent**.
+The difficult part is knowing whose public key it really is. A public key can be safe to share and still be falsely presented as "Alice's key" by an attacker. In practice, the hard problem is not distributing public keys, but deciding which person a given public key should be trusted to represent.
 
 ### How a member becomes usable
 
 New members and rotated keys first go into `members/incoming/`. They become usable recipients only after an existing member reviews the PR and runs `kapsaro rewrap`.
 
-In practice, **PR review is part of member approval**. During review, you are not only checking that "a public key was added" but also deciding whether that key should be trusted as belonging to that person. Do not merge unfamiliar public keys casually.
+In practice, PR review is part of member approval. During review, you are not only checking that "a public key was added" but also deciding whether that key should be trusted as belonging to that person. Do not merge unfamiliar public keys casually.
 
 ### Two formats you will use most
 
-- **kv-enc**: For `.env`-style key-value secrets. This is the recommended default for day-to-day use.
-- **file-enc**: For encrypting an entire file such as a certificate or binary.
+- kv-enc: For `.env`-style key-value secrets. This is the recommended default for day-to-day use.
+- file-enc: For encrypting an entire file such as a certificate or binary.
 
 For operations, see [Chapter 8](#8-daily-usage-kv-store) and [Chapter 9](#9-file-encryption-and-decryption).
 
@@ -117,8 +117,8 @@ The workspace is the `.kapsaro/` directory. When you run kapsaro inside a Git re
 
 ### `active` / `incoming`
 
-- **incoming**: A public key that is not approved yet
-- **active**: An approved public key that can be a recipient of secrets
+- incoming: A public key that is not approved yet
+- active: An approved public key that can be a recipient of secrets
 
 ### `rewrap`
 
@@ -168,7 +168,7 @@ This is why `list` can show key names without decryption and `inspect` can show 
 
 The SSH Ed25519 key is not the key that directly decrypts workspace secrets. It is used to protect the local kapsaro private key and to show which SSH key is backing that kapsaro key.
 
-In workflows that use GitHub-backed online verify, the tool also checks whether `attestation.pub` is still present in that GitHub account's **current** SSH public-key list. Removing an SSH public key from GitHub therefore stops future online verification that depends on that key. This does not erase existing attestation, but it is a practical way to stop future approvals or trust updates that rely on that key.
+In workflows that use GitHub-backed online verify, the tool also checks whether `attestation.pub` is still present in that GitHub account's current SSH public-key list. Removing an SSH public key from GitHub therefore stops future online verification that depends on that key. This does not erase existing attestation, but it is a practical way to stop future approvals or trust updates that rely on that key.
 
 ### Practical rules when in doubt
 
@@ -219,7 +219,7 @@ ssh-add -l
 ssh-add ~/.ssh/id_ed25519
 ```
 
-**Note**: SSH keys must be in Ed25519 format (RSA and others are not supported).
+Note: SSH keys must be in Ed25519 format (RSA and others are not supported).
 
 ```bash
 # Generate an Ed25519 key if you don't have one
@@ -601,7 +601,7 @@ The command exits with status 1 only when a FAIL finding exists. WARN and SKIP f
 
 When a new member submits a PR via `kapsaro join`, follow this flow to approve them.
 
-**Why PR review matters**: Reviewing and merging a PR is the decision to "trust this person's public key." Merging a PR from an unknown person without review means adding them as a recipient of your secrets.
+Why PR review matters: Reviewing and merging a PR is the decision to "trust this person's public key." Merging a PR from an unknown person without review means adding them as a recipient of your secrets.
 
 ```bash
 # 1. After merging the new member's PR, pull the latest
@@ -626,7 +626,7 @@ After `rewrap` completes:
 - `members/incoming/bob@example.com.json` moves to `members/active/`
 - Bob is added as a recipient in all encrypted files
 
-**Recommended**: After rewrap, register the new member's key in your local trust store to avoid approval prompts on future operations:
+Recommended: After rewrap, register the new member's key in your local trust store to avoid approval prompts on future operations:
 
 ```bash
 kapsaro member verify --approve
@@ -714,9 +714,9 @@ kapsaro trust recipients purge --older-than 180d --force
 
 ### Removing Members
 
-Use this when you no longer want a member to read future versions of your secrets: for example when someone leaves the team, changes role, loses a device, or should otherwise lose access. Think of it as a two-step process. First, `member remove` takes the member out of the workspace member list. Then `rewrap` updates the encrypted files themselves. After that, the removed member can no longer decrypt the **updated** secrets.
+Use this when you no longer want a member to read future versions of your secrets: for example when someone leaves the team, changes role, loses a device, or should otherwise lose access. Think of it as a two-step process. First, `member remove` takes the member out of the workspace member list. Then `rewrap` updates the encrypted files themselves. After that, the removed member can no longer decrypt the updated secrets.
 
-**Important**: Removing a member and running rewrap **does not invalidate secret values that member previously obtained**. It is cryptographically impossible to "revoke past disclosures."
+Important: Removing a member and running rewrap does not invalidate secret values that member previously obtained. It is cryptographically impossible to "revoke past disclosures."
 
 ```bash
 # 1. Remove the member from the workspace member list
@@ -732,7 +732,7 @@ git commit -m "Remove alice from kapsaro"
 
 Before removal, `member remove` previews encrypted files that still include the member as a recipient and warns that `rewrap` is required. If broken artifacts or signature-invalid artifacts are found during the preview, they are shown as warnings and excluded from the list; the removal itself can still proceed. In non-interactive environments, removal requires `--force`.
 
-At this point, what has changed is **future access**. The secret values themselves have not changed yet, so you still need the follow-up work below.
+At this point, what has changed is future access. The secret values themselves have not changed yet, so you still need the follow-up work below.
 
 ### Required Steps After Removal
 
@@ -751,7 +751,7 @@ After you finish updating the values, you can clear the disclosure history if ne
 kapsaro rewrap --clear-disclosure-history
 ```
 
-In practice, member removal is not complete until you have handled the **secret values that person may already know**, not just the membership records. At the same time, review access in the real services outside kapsaro as well, such as GitHub, AWS, databases, and SaaS tools.
+In practice, member removal is not complete until you have handled the secret values that person may already know, not just the membership records. At the same time, review access in the real services outside kapsaro as well, such as GitHub, AWS, databases, and SaaS tools.
 
 ---
 
@@ -763,10 +763,10 @@ This chapter is about keeping your own keys usable and safe over time. You will 
 
 At minimum, follow these rules:
 
-- **Public keys may be shared, private keys must not**: only public keys belong in PRs. Private keys stay in your local `~/.config/kapsaro/keys/` and must not be committed to Git or sent through chat
-- **You are also responsible for the SSH key that protects the private key**: the kapsaro private key is protected by your SSH Ed25519 key, so careless copying or use on unsafe machines is a real risk
-- **Device security is part of key management**: screen lock, disk encryption, account protection, and backup hygiene all matter because they protect the keys indirectly
-- **Rotate immediately if compromise or loss is suspected**: if your private key, SSH key, or machine may be unsafe, run `key new` → `join` → `rewrap` and rotate secret values when needed
+- Public keys may be shared, private keys must not: only public keys belong in PRs. Private keys stay in your local `~/.config/kapsaro/keys/` and must not be committed to Git or sent through chat
+- You are also responsible for the SSH key that protects the private key: the kapsaro private key is protected by your SSH Ed25519 key, so careless copying or use on unsafe machines is a real risk
+- Device security is part of key management: screen lock, disk encryption, account protection, and backup hygiene all matter because they protect the keys indirectly
+- Rotate immediately if compromise or loss is suspected: if your private key, SSH key, or machine may be unsafe, run `key new` → `join` → `rewrap` and rotate secret values when needed
 
 ### Key States
 
@@ -825,7 +825,7 @@ Rotation is not only for scheduled expiry. You should also rotate when compromis
 
 Keys expire one year after generation by default. Warnings appear starting 30 days before expiration.
 
-**Summary**: (1) `key new` → (2) `join` → (3) PR and merge → (4) `rewrap` → (5) commit → (6) remove old key after transition period.
+Summary: (1) `key new` → (2) `join` → (3) PR and merge → (4) `rewrap` → (5) commit → (6) remove old key after transition period.
 
 ```bash
 # 1. Generate a new local key (it becomes active automatically)
@@ -858,11 +858,11 @@ kapsaro key remove <old_kid>
 
 The important point is that `key new` alone changes only your local machine. The workspace does not start using the new key until you share it with `join` and update recipients with `rewrap`.
 
-If your team relies on GitHub online verify, it is useful to **remove the old SSH public key from GitHub after the migration is complete**. Online verify checks whether the key is registered on GitHub now, so deleting the old SSH key makes old attestations backed by that SSH key less likely to pass future approval or trust-update flows. This does not invalidate the old attestation by itself, so review `members/active` and remove stale `known_keys` entries separately when needed.
+If your team relies on GitHub online verify, it is useful to remove the old SSH public key from GitHub after the migration is complete. Online verify checks whether the key is registered on GitHub now, so deleting the old SSH key makes old attestations backed by that SSH key less likely to pass future approval or trust-update flows. This does not invalidate the old attestation by itself, so review `members/active` and remove stale `known_keys` entries separately when needed.
 
 ### When Private-Key Compromise Is Suspected
 
-If you suspect compromise of your private key, SSH key, or machine, switch to a new key with the same basic flow as regular rotation: `key new` → `join` → `rewrap`. The important difference is that **you should not keep the old key around the way you might during a normal scheduled rotation**.
+If you suspect compromise of your private key, SSH key, or machine, switch to a new key with the same basic flow as regular rotation: `key new` → `join` → `rewrap`. The important difference is that you should not keep the old key around the way you might during a normal scheduled rotation.
 
 Create and share the new key first, then run `rewrap` after the PR is merged so recipients move to the new key. To limit further damage after suspected compromise, run `rewrap --rotate-key` if needed so the encrypted files are rebuilt with fresh content keys. Also rotate the actual secret values, such as API keys and passwords, if they may have been exposed through the compromised key.
 
@@ -874,7 +874,7 @@ kapsaro key remove <compromised_old_kid>
 
 This avoids leaving the leaked key on your machine as one of your retained old keys. During a normal scheduled rotation you may keep an old key for a while, but suspected compromise should be handled differently.
 
-If the suspected compromise involves the SSH attestor key, removing it locally is not enough. In GitHub-backed workflows, **remove that SSH public key from GitHub as well**. That causes future online verification for keys backed by that SSH key to fail, which makes it easier to keep that key out of future approval flows.
+If the suspected compromise involves the SSH attestor key, removing it locally is not enough. In GitHub-backed workflows, remove that SSH public key from GitHub as well. That causes future online verification for keys backed by that SSH key to fail, which makes it easier to keep that key out of future approval flows.
 
 ### Content Key Rotation
 
@@ -888,7 +888,7 @@ This regenerates the MK/DEK for all files, so old content keys no longer work ag
 
 ### Activating a Specific Key
 
-Use this when you have multiple local keys and want to switch which one will be used for future encryption and signing. This changes **only your local machine**; it does not update recipients in the workspace by itself.
+Use this when you have multiple local keys and want to switch which one will be used for future encryption and signing. This changes only your local machine; it does not update recipients in the workspace by itself.
 
 ```bash
 kapsaro key activate <kid>
@@ -907,11 +907,11 @@ As a guideline, retain old keys for 1–3 months after rewrap completion.
 
 ## 13. CI/CD Integration
 
-kapsaro supports CI/CD environments through portable private key export and environment variable-based key loading, **but only in trusted CI contexts**. This eliminates the need for SSH keys, `ssh-agent`, or a local keystore in CI runners.
+kapsaro supports CI/CD environments through portable private key export and environment variable-based key loading, but only in trusted CI contexts. This eliminates the need for SSH keys, `ssh-agent`, or a local keystore in CI runners.
 
 ### Overview
 
-Read this chapter only if your CI system needs to **read secrets**. The intended model is not to manage keys or run `rewrap` from CI. Instead, create a dedicated CI key on a developer machine, give that key to CI securely, and use CI only for read-only commands such as `get`, `run`, or `decrypt`.
+Read this chapter only if your CI system needs to read secrets. The intended model is not to manage keys or run `rewrap` from CI. Instead, create a dedicated CI key on a developer machine, give that key to CI securely, and use CI only for read-only commands such as `get`, `run`, or `decrypt`.
 
 In CI environments, kapsaro reads the private key and password from environment variables instead of the local keystore. Environment variable-based key loading guarantees read-only commands: `run`, `decrypt`, `get`, and `list` are supported.
 
@@ -1041,24 +1041,24 @@ kapsaro decrypt ca.pem.encrypted --out ca.pem
 
 At the moment, environment variable-based key loading supports only these read operations:
 
-- **Decryption** (`run`, `decrypt`, `get`)
-- **Listing** (`list`)
+- Decryption (`run`, `decrypt`, `get`)
+- Listing (`list`)
 
 All other commands remain unavailable when loading keys via environment variables:
 
-- **Secret mutation / re-signing** (`encrypt`, `set`, `unset`, `import`, `rewrap`)
-- **Key lifecycle** (`key new`, `key list`, `key activate`, `key remove`, `key export`, `key export --private`)
-- **Setup** (`init`, `join`)
-- **Other helper commands** (`inspect`, `member`, `config`, etc.)
+- Secret mutation / re-signing (`encrypt`, `set`, `unset`, `import`, `rewrap`)
+- Key lifecycle (`key new`, `key list`, `key activate`, `key remove`, `key export`, `key export --private`)
+- Setup (`init`, `join`)
+- Other helper commands (`inspect`, `member`, `config`, etc.)
 
 ### Security Considerations
 
-- **Password exposure**: `KAPSARO_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
-- **Trusted CI only**: Follow the allowed and forbidden CI contexts described earlier in this chapter. Attacker-controlled checkouts must not be used as signature-verification input.
-- **Scope of `KAPSARO_STRICT_KEY_CHECKING=no`**: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not update local approval history without explicit review or approval. Non-interactive write commands fail before saving output when the output member set still needs review.
-- **Dedicated CI member**: Use the dedicated CI member created in the setup steps; do not reuse a human member's key. This allows independent rotation and revocation.
-- **Key rotation**: Re-export and secret-store updates should be done on a developer machine with SSH signer and local keystore access, just like the initial setup. Do not perform this inside CI jobs.
-- **Least privilege**: Only add the CI member to the secrets it actually needs access to.
+- Password exposure: `KAPSARO_KEY_PASSWORD` persists in process memory and may be visible via `/proc/*/environ` on Linux. This is consistent with how CI platforms handle secrets.
+- Trusted CI only: Follow the allowed and forbidden CI contexts described earlier in this chapter. Attacker-controlled checkouts must not be used as signature-verification input.
+- Scope of `KAPSARO_STRICT_KEY_CHECKING=no`: As described earlier in this chapter, this is an exception for CI jobs that cannot keep a local trust store. It has no effect on write commands and does not update local approval history without explicit review or approval. Non-interactive write commands fail before saving output when the output member set still needs review.
+- Dedicated CI member: Use the dedicated CI member created in the setup steps; do not reuse a human member's key. This allows independent rotation and revocation.
+- Key rotation: Re-export and secret-store updates should be done on a developer machine with SSH signer and local keystore access, just like the initial setup. Do not perform this inside CI jobs.
+- Least privilege: Only add the CI member to the secrets it actually needs access to.
 
 ---
 
@@ -1153,7 +1153,7 @@ Even if the same member participates in multiple projects, their public key is r
 
 Not in the usual single-workspace setup. In kapsaro, encrypted files are shared with all members in that workspace's `members/active`.
 
-If you need different sharing groups, the practical approach is to **use multiple workspaces**. Because you can switch the target workspace with `-w` / `--workspace`, you can operate separate workspaces for groups such as "whole development team," "production operators only," or "members of one specific project." In that model, the workspace itself becomes the sharing group.
+If you need different sharing groups, the practical approach is to use multiple workspaces. Because you can switch the target workspace with `-w` / `--workspace`, you can operate separate workspaces for groups such as "whole development team," "production operators only," or "members of one specific project." In that model, the workspace itself becomes the sharing group.
 
 This is a more exceptional operating pattern, so it is easier to think in terms of one workspace for one shared team by default. Consider splitting workspaces only when you clearly need different sharing scopes.
 
@@ -1346,10 +1346,10 @@ The configuration file is located at `~/.config/kapsaro/config.toml`.
 
 kapsaro resolves configuration values from multiple sources in the following priority order:
 
-1. **CLI options** (highest priority)
-2. **Environment variables**
-3. **Config file** (`<KAPSARO_HOME>/config.toml`)
-4. **Default values** (lowest priority)
+1. CLI options (highest priority)
+2. Environment variables
+3. Config file (`<KAPSARO_HOME>/config.toml`)
+4. Default values (lowest priority)
 
 When a higher-priority source provides a value, lower-priority sources are ignored.
 
@@ -1401,7 +1401,7 @@ If the config file does not exist, kapsaro falls back to environment variables a
 | `KAPSARO_PRIVATE_KEY` | Base64url-encoded portable private key document (CI/CD) | (none) |
 | `KAPSARO_KEY_PASSWORD` | Password for `KAPSARO_PRIVATE_KEY` (CI/CD) | (none) |
 
-**Notes:**
+Notes:
 
 - `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` are used together for CI/CD environments where a local keystore is not available. When `KAPSARO_PRIVATE_KEY` is set, `KAPSARO_KEY_PASSWORD` is required. See [Chapter 13](#13-cicd-integration) for details.
 - `KAPSARO_STRICT_KEY_CHECKING=no` skips only read-path local key approval checks. This is permitted only for read operations (decrypt, get, run, list). Write-path operations always enforce strict checking, including output artifact member set review.

@@ -76,7 +76,7 @@ curl -fsSL https://raw.githubusercontent.com/ebisawa/kapsaro/main/install.sh | s
 ### ソースからビルド
 
 ```bash
-git clone <kapsaro-repo>
+git clone https://github.com/ebisawa/kapsaro.git
 cd kapsaro
 cargo install --path .
 ```

@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Configuration module (Phase 10.2 - TDD Green phase)
+//! Configuration module.
 //!
 //! Provides configuration loading and management for kapsaro.
 //! Config file location: `$KAPSARO_HOME/config.toml` or `~/.config/kapsaro/config.toml`

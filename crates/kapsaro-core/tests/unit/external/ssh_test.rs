@@ -1,18 +1,24 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for SSH module (fingerprint, agent, verify).
-//!
-//! Test structure follows TDD approach:
-//! - Phase 4.1: fingerprint (SHA256 fingerprint calculation)
-//! - Phase 4.2: agent (ssh-agent signature + determinism check)
-//! - Phase 4.3: verify (SSHSIG verification via ssh-keygen)
+//! Unit tests for SSH public key fingerprints.
+//! Agent framing and SSHSIG parsing are covered by the internal test tree.
 
 use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
 
-// ============================================================================
-// Phase 4.1: SSH Fingerprint Tests
-// ============================================================================
+/// The fingerprint is what users compare out of band when approving a key, so
+/// it has to agree with what ssh-keygen prints rather than merely be stable.
+#[test]
+fn test_build_sha256_fingerprint_matches_ssh_keygen() {
+    let pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
+
+    let fingerprint = build_sha256_fingerprint(pubkey).unwrap();
+
+    assert_eq!(
+        fingerprint,
+        "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU",
+    );
+}
 
 /// Test: build_sha256_fingerprint returns deterministic results.
 ///
@@ -99,15 +105,3 @@ fn test_comment_excluded_from_fingerprint() {
     assert_eq!(fpr1, fpr2);
     assert_eq!(fpr2, fpr3);
 }
-
-// ============================================================================
-// Phase 4.2: SSH Agent Tests (placeholder)
-// ============================================================================
-
-// Tests for ssh-agent signature will be added in Phase 4.2.
-
-// ============================================================================
-// Phase 4.3: SSHSIG Verify Tests (placeholder)
-// ============================================================================
-
-// Tests for SSHSIG verification will be added in Phase 4.3.

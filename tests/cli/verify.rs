@@ -118,8 +118,8 @@ fn test_verify_file_enc_tampered_fails() {
     let tampered_content = serde_json::to_string_pretty(&doc).unwrap();
     fs::write(&encrypted_file, tampered_content).unwrap();
 
-    // Inspect should succeed (exit code 0) even with tampered signature,
-    // showing metadata with verification Status: FAILED (graceful degradation per PRD)
+    // Inspect reports metadata for an artifact it cannot verify rather than
+    // refusing to run, so a failed signature still exits 0 with Status: FAILED.
     cmd()
         .arg("inspect")
         .arg(encrypted_file.to_str().unwrap())

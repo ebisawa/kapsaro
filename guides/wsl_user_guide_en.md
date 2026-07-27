@@ -1,8 +1,8 @@
 # Windows / WSL2 Supplemental Guide
 
-On Windows, you can install and use kapsaro in a **WSL2 (Windows Subsystem for Linux)** environment just like on a normal Linux system.
+On Windows, you can install and use kapsaro in a WSL2 (Windows Subsystem for Linux) environment just like on a normal Linux system.
 
-This document is intended as a **supplement** to `guides/user_guide_en.md` / `guides/user_guide_ja.md`, and summarizes Windows/WSL2-specific notes and recommended configuration examples.
+This document supplements `guides/user_guide_en.md` / `guides/user_guide_ja.md`, and summarizes Windows/WSL2-specific notes and recommended configuration examples.
 
 ## Using the 1Password SSH agent on WSL2
 
@@ -28,14 +28,17 @@ kapsaro config set ssh_signing_method ssh-keygen
 
 ### Key points
 
-1. **Use `ssh-keygen` to perform SSH signing**
-   Signing is performed via the `ssh-keygen` command, so set the signing method to `ssh-keygen`.
+#### Sign through `ssh-keygen`
 
-2. **Set `ssh_keygen_command` to `ssh-keygen.exe` (with `.exe`)**
-   From WSL2, calling `ssh-keygen.exe` runs the Windows binary, which can integrate with the 1Password SSH agent running on the Windows host.
+Signing is performed by the `ssh-keygen` command, so set the signing method to `ssh-keygen`.
 
-3. **Set `ssh_identity` to the public key file you want to use for signing**
-   Save the **public key** of the SSH key you want to use for signing (stored in 1Password) as a file inside WSL, and point `ssh_identity` to that file path.
+#### Keep the `.exe` suffix on `ssh_keygen_command`
+
+From WSL2, calling `ssh-keygen.exe` runs the Windows binary, which can integrate with the 1Password SSH agent running on the Windows host. Without the suffix the Linux binary runs instead and cannot reach the agent.
+
+#### Point `ssh_identity` at a public key file
+
+Save the public key of the SSH key you want to sign with, the one held in 1Password, as a file inside WSL, and set `ssh_identity` to that path. The private key stays in 1Password.
 
 ## Where to place the workspace
 

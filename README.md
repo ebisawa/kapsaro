@@ -76,7 +76,7 @@ The installer verifies each release archive's build provenance with GitHub Artif
 ### Build from source
 
 ```bash
-git clone <kapsaro-repo>
+git clone https://github.com/ebisawa/kapsaro.git
 cd kapsaro
 cargo install --path .
 ```

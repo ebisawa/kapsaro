@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for workspace detection (Phase 5.5 - TDD Red phase)
+//! Unit tests for workspace detection.
+//! Covers explicit paths, auto-detection, and environment overrides.
 
 use crate::io::workspace::detection::{detect_workspace_root, resolve_workspace};
 use crate::test_utils::EnvGuard;
@@ -143,7 +144,7 @@ fn test_workspace_root_fields() {
     assert_eq!(workspace.secrets_dir(), workspace_root.join("secrets"));
 }
 
-// Phase 1.3 tests: explicit path validation and auto-detection
+// Explicit path validation and auto-detection
 
 #[test]
 fn test_resolve_workspace_with_explicit_option() {

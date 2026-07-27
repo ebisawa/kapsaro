@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for SSHSIG format parsing (Phase 11.1 - TDD Red phase)
+//! Unit tests for SSHSIG format parsing.
+//! Covers header validation, namespace binding, and malformed blobs.
 
 use crate::format::codec::base64_public::encode_base64_standard;
 use crate::io::ssh::protocol::constants::{ATTESTATION_NAMESPACE, KEY_PROTECTION_NAMESPACE};

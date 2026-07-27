@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! SSH wire format primitives (Phase 11.2 - TDD Green phase)
+//! SSH wire format primitives.
 //!
 //! Implements SSH_STRING encoding/decoding per SSH protocol RFC 4251 §5.
 

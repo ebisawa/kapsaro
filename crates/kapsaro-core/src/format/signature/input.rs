@@ -3,7 +3,8 @@
 
 //! Domain-framed artifact signature inputs.
 //!
-//! Builds the PRD-defined MAC message and Ed25519 input bytes without changing framing.
+//! Frames the key-possession MAC message and the Ed25519 signature input.
+//! Every field is length-prefixed after a domain string so concatenations stay unambiguous.
 
 use serde::Serialize;
 

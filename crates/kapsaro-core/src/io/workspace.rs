@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Workspace module (Phase 5.5 - TDD Green phase)
+//! Workspace module.
 //!
 //! Provides workspace detection, configuration parsing, and mode resolution.
 

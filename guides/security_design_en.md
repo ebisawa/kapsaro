@@ -481,6 +481,17 @@ file-enc and kv-enc artifact signatures share the same `signature_v4` structure 
 
 The local trust store (`kapsaro:format:local-trust@1`) `signature` shares the `alg` / `kid` / `sig` representation but does not embed `signer_pub`. The verification exception is covered at the end of §5.4 and in §10.4.
 
+The PublicKey document (`kapsaro:format:public-key@1`) uses a third representation. Its `signature` is not an object at all but a bare base64url string holding the 86-character Ed25519 signature, because a self-signature has no separate signer to identify and no artifact body to bind a key-possession proof to. The signed input is the JCS serialization of the document's `protected` object.
+
+```
+{
+  "protected": { "format": "kapsaro:format:public-key@1", ... },
+  "signature": "<base64url, 86 characters>"
+}
+```
+
+An implementation that assumes the `signature_v4` object shape for every signed document will fail to read PublicKey documents.
+
 The main fields of `signature_v4` (artifact signature) are as follows.
 
 | Field | Type / encoding | Contents | Security role |

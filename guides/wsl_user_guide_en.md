@@ -37,6 +37,14 @@ kapsaro config set ssh_signing_method ssh-keygen
 3. **Set `ssh_identity` to the public key file you want to use for signing**
    Save the **public key** of the SSH key you want to use for signing (stored in 1Password) as a file inside WSL, and point `ssh_identity` to that file path.
 
+## Where to place the workspace
+
+Keep the workspace and `KAPSARO_HOME` on the WSL2 filesystem, under your Linux home directory rather than under `/mnt/c`.
+
+Paths under `/mnt/c` are Windows volumes surfaced through a translation layer. That layer reports permissions that do not correspond to real POSIX modes, so the owner-only checks kapsaro performs on the keystore and the local trust store cannot tell a protected file from a world-readable one. The security design treats those permissions as an operational responsibility, and on `/mnt/c` there is nothing for it to rely on.
+
+Run `kapsaro doctor` after moving a workspace; it reports the permission chain it can verify.
+
 ## References
 
 For detailed setup steps for integrating WSL2 with the 1Password SSH agent, refer to the official 1Password documentation.

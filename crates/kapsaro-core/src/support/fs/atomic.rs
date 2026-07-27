@@ -119,8 +119,12 @@ pub fn save_bytes(path: &Path, data: &[u8]) -> Result<()> {
     temp.write_all(data)
         .map_err(|e| Error::build_io_error_with_source(format!("Write failed: {}", e), e))?;
 
-    temp.flush()
-        .map_err(|e| Error::build_io_error_with_source(format!("Flush failed: {}", e), e))?;
+    // Flush only hands the bytes to the kernel. Without this sync the rename
+    // can reach disk while the contents have not, leaving an empty or
+    // truncated file after a crash.
+    temp.as_file()
+        .sync_all()
+        .map_err(|e| Error::build_io_error_with_source(format!("Sync failed: {}", e), e))?;
 
     temp.persist(path).map_err(|e| {
         Error::build_io_error_with_source(
@@ -133,7 +137,31 @@ pub fn save_bytes(path: &Path, data: &[u8]) -> Result<()> {
         )
     })?;
 
-    Ok(())
+    sync_parent_dir(parent)
+}
+
+/// Persist the directory entry created by the rename.
+fn sync_parent_dir(parent: &Path) -> Result<()> {
+    let dir = fs::File::open(parent).map_err(|e| {
+        Error::build_io_error_with_source(
+            format!(
+                "Failed to open {} for sync: {}",
+                format_path_relative_to_cwd(parent),
+                e
+            ),
+            e,
+        )
+    })?;
+    dir.sync_all().map_err(|e| {
+        Error::build_io_error_with_source(
+            format!(
+                "Directory sync failed for {}: {}",
+                format_path_relative_to_cwd(parent),
+                e
+            ),
+            e,
+        )
+    })
 }
 
 #[cfg(test)]

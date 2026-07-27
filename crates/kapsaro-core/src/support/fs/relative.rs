@@ -208,7 +208,7 @@ where
             return Err(error);
         }
     }
-    let write_result = write_and_flush(&mut temp_file, data);
+    let write_result = write_and_sync(&mut temp_file, data);
     drop(temp_file);
     if let Err(error) = write_result {
         let _ = unlink_child(dir, &temp_name);
@@ -218,7 +218,21 @@ where
         let _ = unlink_child(dir, &temp_name);
         io_error(format!("Persist to {} failed", child_path(dir, name)), e)
     })?;
-    Ok(())
+    sync_directory(dir)
+}
+
+/// Persist the directory entry created by the rename.
+#[cfg(unix)]
+fn sync_directory<D>(dir: &D) -> Result<()>
+where
+    D: DirectoryFd,
+{
+    rfs::fsync(dir.file()).map_err(|e| {
+        io_error(
+            format!("Directory sync failed: {}", dir.path().display()),
+            e,
+        )
+    })
 }
 
 #[cfg(unix)]
@@ -347,11 +361,16 @@ where
     })
 }
 
-fn write_and_flush(file: &mut File, data: &[u8]) -> Result<()> {
+/// Write and persist the contents to storage.
+///
+/// `flush` only hands the bytes to the kernel. Without the sync the rename can
+/// reach disk while the contents have not, leaving an empty or truncated file
+/// after a crash.
+fn write_and_sync(file: &mut File, data: &[u8]) -> Result<()> {
     file.write_all(data)
         .map_err(|e| Error::build_io_error_with_source(format!("Write failed: {}", e), e))?;
-    file.flush()
-        .map_err(|e| Error::build_io_error_with_source(format!("Flush failed: {}", e), e))
+    file.sync_all()
+        .map_err(|e| Error::build_io_error_with_source(format!("Sync failed: {}", e), e))
 }
 
 #[cfg(unix)]

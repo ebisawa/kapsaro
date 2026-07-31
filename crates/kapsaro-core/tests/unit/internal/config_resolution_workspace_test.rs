@@ -14,14 +14,10 @@ fn returns_none_when_no_workspace_in_config() {
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
     fs::write(&config_path, "member_handle = \"alice\"\n").unwrap();
+    std::env::set_var("KAPSARO_HOME", tmp.path());
 
-    temp_env::with_vars(
-        [("KAPSARO_HOME", Some(tmp.path().to_str().unwrap()))],
-        || {
-            let result = resolve_workspace_from_config().unwrap();
-            assert!(result.is_none());
-        },
-    );
+    let result = resolve_workspace_from_config().unwrap();
+    assert!(result.is_none());
 }
 
 #[test]
@@ -34,14 +30,10 @@ fn returns_path_when_workspace_in_config() {
         "workspace = \"/tmp/test-workspace/.kapsaro\"\n",
     )
     .unwrap();
+    std::env::set_var("KAPSARO_HOME", tmp.path());
 
-    temp_env::with_vars(
-        [("KAPSARO_HOME", Some(tmp.path().to_str().unwrap()))],
-        || {
-            let result = resolve_workspace_from_config().unwrap();
-            assert_eq!(result, Some(PathBuf::from("/tmp/test-workspace/.kapsaro")));
-        },
-    );
+    let result = resolve_workspace_from_config().unwrap();
+    assert_eq!(result, Some(PathBuf::from("/tmp/test-workspace/.kapsaro")));
 }
 
 #[test]
@@ -50,17 +42,13 @@ fn expands_tilde_in_workspace_path() {
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.toml");
     fs::write(&config_path, "workspace = \"~/projects/.kapsaro\"\n").unwrap();
+    std::env::set_var("KAPSARO_HOME", tmp.path());
 
-    temp_env::with_vars(
-        [("KAPSARO_HOME", Some(tmp.path().to_str().unwrap()))],
-        || {
-            let result = resolve_workspace_from_config().unwrap();
-            let home = std::env::var("HOME").unwrap();
-            assert_eq!(
-                result,
-                Some(PathBuf::from(format!("{}/projects/.kapsaro", home)))
-            );
-        },
+    let result = resolve_workspace_from_config().unwrap();
+    let home = std::env::var("HOME").unwrap();
+    assert_eq!(
+        result,
+        Some(PathBuf::from(format!("{}/projects/.kapsaro", home)))
     );
 }
 
@@ -79,23 +67,17 @@ fn cli_workspace_takes_priority_over_env_and_config() {
         format!("workspace = \"{}\"\n", config_workspace.display()),
     )
     .unwrap();
+    std::env::set_var("KAPSARO_HOME", config_dir.path());
+    std::env::set_var("KAPSARO_WORKSPACE", &env_workspace);
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(config_dir.path().to_str().unwrap())),
-            ("KAPSARO_WORKSPACE", Some(env_workspace.to_str().unwrap())),
-        ],
-        || {
-            let resolution = resolve_optional_workspace_from_sources(
-                Some(cli_workspace.clone()),
-                Some(config_dir.path()),
-            )
-            .unwrap()
-            .unwrap();
-            assert_eq!(resolution.root.root_path, cli_workspace);
-            assert_eq!(resolution.source, WorkspaceSource::CommandLine);
-        },
-    );
+    let resolution = resolve_optional_workspace_from_sources(
+        Some(cli_workspace.clone()),
+        Some(config_dir.path()),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(resolution.root.root_path, cli_workspace);
+    assert_eq!(resolution.source, WorkspaceSource::CommandLine);
 }
 
 #[test]
@@ -111,20 +93,14 @@ fn env_workspace_takes_priority_over_config() {
         format!("workspace = \"{}\"\n", config_workspace.display()),
     )
     .unwrap();
+    std::env::set_var("KAPSARO_HOME", config_dir.path());
+    std::env::set_var("KAPSARO_WORKSPACE", &env_workspace);
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(config_dir.path().to_str().unwrap())),
-            ("KAPSARO_WORKSPACE", Some(env_workspace.to_str().unwrap())),
-        ],
-        || {
-            let resolution = resolve_optional_workspace_from_sources(None, Some(config_dir.path()))
-                .unwrap()
-                .unwrap();
-            assert_eq!(resolution.root.root_path, env_workspace);
-            assert_eq!(resolution.source, WorkspaceSource::Environment);
-        },
-    );
+    let resolution = resolve_optional_workspace_from_sources(None, Some(config_dir.path()))
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolution.root.root_path, env_workspace);
+    assert_eq!(resolution.source, WorkspaceSource::Environment);
 }
 
 #[test]
@@ -144,20 +120,14 @@ fn config_workspace_takes_priority_over_auto_detect() {
 
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(auto_workspace_dir.path()).unwrap();
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(config_dir.path().to_str().unwrap())),
-            ("KAPSARO_WORKSPACE", None::<&str>),
-        ],
-        || {
-            let resolution = resolve_optional_workspace_from_sources(None, Some(config_dir.path()))
-                .unwrap()
-                .unwrap();
-            assert_eq!(resolution.root.root_path, config_workspace);
-            assert_ne!(resolution.root.root_path, auto_workspace);
-            assert_eq!(resolution.source, WorkspaceSource::GlobalConfig);
-        },
-    );
+    std::env::set_var("KAPSARO_HOME", config_dir.path());
+    std::env::remove_var("KAPSARO_WORKSPACE");
+    let resolution = resolve_optional_workspace_from_sources(None, Some(config_dir.path()))
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolution.root.root_path, config_workspace);
+    assert_ne!(resolution.root.root_path, auto_workspace);
+    assert_eq!(resolution.source, WorkspaceSource::GlobalConfig);
     std::env::set_current_dir(original_dir).unwrap();
 }
 
@@ -178,19 +148,13 @@ fn workspace_local_config_is_ignored_by_auto_detect() {
 
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(current_dir.path()).unwrap();
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(empty_home.path().to_str().unwrap())),
-            ("KAPSARO_WORKSPACE", None::<&str>),
-        ],
-        || {
-            let resolution = resolve_optional_workspace_from_sources(None, Some(empty_home.path()))
-                .unwrap()
-                .unwrap();
-            assert_eq!(resolution.root.root_path, current_workspace);
-            assert_eq!(resolution.source, WorkspaceSource::AutoDetect);
-        },
-    );
+    std::env::set_var("KAPSARO_HOME", empty_home.path());
+    std::env::remove_var("KAPSARO_WORKSPACE");
+    let resolution = resolve_optional_workspace_from_sources(None, Some(empty_home.path()))
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolution.root.root_path, current_workspace);
+    assert_eq!(resolution.source, WorkspaceSource::AutoDetect);
     std::env::set_current_dir(original_dir).unwrap();
 }
 
@@ -203,19 +167,13 @@ fn auto_detect_failure_adds_workspace_resolution_guidance() {
 
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(current_dir.path()).unwrap();
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(empty_home.path().to_str().unwrap())),
-            ("KAPSARO_WORKSPACE", None::<&str>),
-        ],
-        || {
-            let error = resolve_workspace_from_sources(None, Some(empty_home.path())).unwrap_err();
-            let message = error.to_string();
-            assert!(
-                message.contains("--workspace") && message.contains("KAPSARO_WORKSPACE"),
-                "auto-detect errors should add app/config-level guidance: {message}"
-            );
-        },
+    std::env::set_var("KAPSARO_HOME", empty_home.path());
+    std::env::remove_var("KAPSARO_WORKSPACE");
+    let error = resolve_workspace_from_sources(None, Some(empty_home.path())).unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains("--workspace") && message.contains("KAPSARO_WORKSPACE"),
+        "auto-detect errors should add app/config-level guidance: {message}"
     );
     std::env::set_current_dir(original_dir).unwrap();
 }

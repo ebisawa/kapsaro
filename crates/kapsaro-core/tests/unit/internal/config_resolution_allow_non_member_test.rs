@@ -12,13 +12,10 @@ fn defaults_to_disallow_non_member_acceptance() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_ALLOW_NON_MEMBER"]);
     let tmp = tempfile::tempdir().unwrap();
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(tmp.path().to_str().unwrap())),
-            ("KAPSARO_ALLOW_NON_MEMBER", None),
-        ],
-        || assert!(!resolve_allow_non_member(None, Some(tmp.path())).unwrap()),
-    );
+    std::env::set_var("KAPSARO_HOME", tmp.path());
+    std::env::remove_var("KAPSARO_ALLOW_NON_MEMBER");
+
+    assert!(!resolve_allow_non_member(None, Some(tmp.path())).unwrap());
 }
 
 #[test]
@@ -31,13 +28,10 @@ fn cli_allow_overrides_env_and_config() {
     )
     .unwrap();
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(tmp.path().to_str().unwrap())),
-            ("KAPSARO_ALLOW_NON_MEMBER", Some("no")),
-        ],
-        || assert!(resolve_allow_non_member(Some(true), Some(tmp.path())).unwrap()),
-    );
+    std::env::set_var("KAPSARO_HOME", tmp.path());
+    std::env::set_var("KAPSARO_ALLOW_NON_MEMBER", "no");
+
+    assert!(resolve_allow_non_member(Some(true), Some(tmp.path())).unwrap());
 }
 
 #[test]
@@ -50,13 +44,10 @@ fn env_overrides_config() {
     )
     .unwrap();
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(tmp.path().to_str().unwrap())),
-            ("KAPSARO_ALLOW_NON_MEMBER", Some("YES")),
-        ],
-        || assert!(resolve_allow_non_member(None, Some(tmp.path())).unwrap()),
-    );
+    std::env::set_var("KAPSARO_HOME", tmp.path());
+    std::env::set_var("KAPSARO_ALLOW_NON_MEMBER", "YES");
+
+    assert!(resolve_allow_non_member(None, Some(tmp.path())).unwrap());
 }
 
 #[test]
@@ -69,13 +60,10 @@ fn reads_config_value() {
     )
     .unwrap();
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(tmp.path().to_str().unwrap())),
-            ("KAPSARO_ALLOW_NON_MEMBER", None),
-        ],
-        || assert!(resolve_allow_non_member(None, Some(tmp.path())).unwrap()),
-    );
+    std::env::set_var("KAPSARO_HOME", tmp.path());
+    std::env::remove_var("KAPSARO_ALLOW_NON_MEMBER");
+
+    assert!(resolve_allow_non_member(None, Some(tmp.path())).unwrap());
 }
 
 #[test]
@@ -83,11 +71,8 @@ fn invalid_value_is_error() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_ALLOW_NON_MEMBER"]);
     let tmp = tempfile::tempdir().unwrap();
 
-    temp_env::with_vars(
-        [
-            ("KAPSARO_HOME", Some(tmp.path().to_str().unwrap())),
-            ("KAPSARO_ALLOW_NON_MEMBER", Some("maybe")),
-        ],
-        || assert!(resolve_allow_non_member(None, Some(tmp.path())).is_err()),
-    );
+    std::env::set_var("KAPSARO_HOME", tmp.path());
+    std::env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
+
+    assert!(resolve_allow_non_member(None, Some(tmp.path())).is_err());
 }

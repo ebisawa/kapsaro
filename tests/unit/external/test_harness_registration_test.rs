@@ -79,6 +79,29 @@ fn test_generated_scripts_are_confined_to_serialized_tests() {
     );
 }
 
+/// Core tests avoid `temp_env` so environment mutations use the shared
+/// `EnvGuard` lock instead of an independent synchronization mechanism.
+#[test]
+fn test_core_environment_tests_do_not_use_temp_env() {
+    let root = repo_root();
+    let test_root = root.join("crates/kapsaro-core/tests");
+    let offenders: BTreeSet<_> = collect_rs_files(&test_root)
+        .into_iter()
+        .filter(|path| file_mentions(path, "temp_env::"))
+        .map(|path| {
+            path.strip_prefix(&root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+
+    assert!(
+        offenders.is_empty(),
+        "core tests must not use temp_env alongside EnvGuard: {offenders:?}",
+    );
+}
+
 fn collect_unserialized_script_fixtures(dir: &Path, root: &Path, offenders: &mut BTreeSet<String>) {
     const SERIAL_ATTRIBUTE: &str = "#[serial]";
     // This file spells out the patterns it looks for, so scanning itself would

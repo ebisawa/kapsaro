@@ -1439,7 +1439,6 @@ dependencies = [
  "sha2 0.11.0",
  "shellexpand",
  "subtle",
- "temp-env",
  "tempfile",
  "thiserror",
  "time",

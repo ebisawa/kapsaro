@@ -29,7 +29,6 @@ pub struct DecryptFileCommand {
     pub trust_outcome: SignerTrustOutcome,
     pub recipient_trust_outcome: RecipientTrustOutcome,
     pub warnings: Vec<String>,
-    debug: bool,
 }
 
 pub fn resolve_decrypt_file_command(
@@ -60,7 +59,6 @@ pub fn resolve_decrypt_file_command(
         trust_outcome: trust_plan.signer_outcome,
         recipient_trust_outcome: trust_plan.recipient_outcome,
         warnings,
-        debug: operation_options.debug(),
     })
 }
 
@@ -68,7 +66,7 @@ fn verify_decrypt_file_content(
     content: &FileEncContent,
     options: OperationOptions,
 ) -> Result<VerifiedFileEncDocument> {
-    verify_file_content_for_operation(content, options.debug(), options.allow_expired_key())
+    verify_file_content_for_operation(content, options.allow_expired_key())
 }
 
 fn evaluate_decrypt_file_key_expiry(
@@ -77,12 +75,7 @@ fn evaluate_decrypt_file_key_expiry(
     options: OperationOptions,
 ) -> Result<SelectedDecryptionKeyExpiry> {
     let wrap_set = WrapSet::parse(&verified_doc.document().protected.wrap, "Document")?;
-    evaluate_selected_decryption_key_expiry(
-        execution,
-        &wrap_set,
-        options.allow_expired_key(),
-        options.debug(),
-    )
+    evaluate_selected_decryption_key_expiry(execution, &wrap_set, options.allow_expired_key())
 }
 
 fn evaluate_decrypt_file_trust(
@@ -129,7 +122,6 @@ pub fn execute_decrypt_file_command(command: &DecryptFileCommand) -> Result<Zero
         &command.verified_doc,
         &command.execution.member_handle,
         &command.execution.key_ctx,
-        command.debug,
     )
     .map(|result| result.value)
 }

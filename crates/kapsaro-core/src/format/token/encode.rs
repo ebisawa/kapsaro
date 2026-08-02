@@ -13,9 +13,6 @@ use crate::Result;
 pub fn to_token_with_codec_impl<T: serde::Serialize>(
     value: &T,
     codec: TokenCodec,
-    _debug: bool,
-    _label: Option<&str>,
-    _caller: Option<&str>,
 ) -> Result<String> {
     // v3 Rev1: token encoding is JSON/JCS only
     let _ = codec;

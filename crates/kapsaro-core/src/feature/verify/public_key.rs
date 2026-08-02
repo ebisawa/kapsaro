@@ -49,11 +49,10 @@ pub(crate) const TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT: &str = "trust store ke
 
 fn verify_public_key_self_signature_context(
     public_key: &PublicKey,
-    debug: bool,
     context: &str,
 ) -> Result<PublicKeySelfSignatureVerification> {
     validate_derived_kid(public_key)?;
-    log_public_key_verification(debug, public_key, context, "self-signature");
+    log_public_key_verification(public_key, context, "self-signature");
 
     let protected_jcs = jcs::normalize(&public_key.protected).map_err(|e| {
         Error::build_crypto_error_with_source("Failed to normalize PublicKey protected", e)
@@ -83,38 +82,32 @@ fn verify_public_key_self_signature_context(
 ///
 /// # Arguments
 /// * `public_key` - PublicKey document to verify
-/// * `debug` - Enable debug logging
 ///
 /// # Returns
 /// `VerifiedPublicKeyAttested` if verification succeeds, error otherwise
 pub fn verify_public_key_with_attestation(
     public_key: &PublicKey,
-    debug: bool,
 ) -> Result<VerifiedPublicKeyAttested> {
-    verify_public_key_with_attestation_context(public_key, debug, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
+    verify_public_key_with_attestation_context(public_key, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
 }
 
 pub fn verify_public_key_with_attestation_context(
     public_key: &PublicKey,
-    debug: bool,
     context: &str,
 ) -> Result<VerifiedPublicKeyAttested> {
-    Ok(
-        verify_signing_public_key_context(public_key, debug, context)?
-            .attested()
-            .clone(),
-    )
+    Ok(verify_signing_public_key_context(public_key, context)?
+        .attested()
+        .clone())
 }
 
 fn verify_signing_public_key_context(
     public_key: &PublicKey,
-    debug: bool,
     context: &str,
 ) -> Result<VerifiedSigningPublicKey> {
-    let verified = verify_public_key_self_signature_context(public_key, debug, context)?;
+    let verified = verify_public_key_self_signature_context(public_key, context)?;
 
     // Verify attestation
-    log_public_key_verification(debug, public_key, context, "attestation");
+    log_public_key_verification(public_key, context, "attestation");
     verify_attestation(
         &AttestationBodyInput {
             subject_handle: &public_key.protected.subject_handle,
@@ -146,17 +139,15 @@ fn verify_signing_public_key_context(
 
 pub fn verify_public_key_for_verification(
     public_key: &PublicKey,
-    debug: bool,
 ) -> Result<VerifiedPublicKeyForVerification> {
-    verify_public_key_for_verification_context(public_key, debug, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
+    verify_public_key_for_verification_context(public_key, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
 }
 
 pub fn verify_public_key_for_verification_context(
     public_key: &PublicKey,
-    debug: bool,
     context: &str,
 ) -> Result<VerifiedPublicKeyForVerification> {
-    let verified_public_key = verify_signing_public_key_context(public_key, debug, context)?;
+    let verified_public_key = verify_signing_public_key_context(public_key, context)?;
     let mut warnings = Vec::new();
     if let Some(warning) = build_public_key_expiry_warning(verified_public_key.attested())? {
         warnings.push(warning);
@@ -172,15 +163,11 @@ pub fn verify_public_key_for_verification_context(
 /// Enforces that none of the recipient keys are expired.
 /// Returns `VerifiedRecipientKey` which is the only type accepted by wrap functions,
 /// providing a compile-time guarantee that expiry has been checked.
-pub fn verify_recipient_public_keys(
-    keys: &[PublicKey],
-    debug: bool,
-) -> Result<Vec<VerifiedRecipientKey>> {
+pub fn verify_recipient_public_keys(keys: &[PublicKey]) -> Result<Vec<VerifiedRecipientKey>> {
     keys.iter()
         .map(|key| {
             let attested = verify_public_key_with_attestation_context(
                 key,
-                debug,
                 WORKSPACE_ACTIVE_MEMBER_RECIPIENT_CONTEXT,
             )?;
             enforce_recipient_key_not_expired(&attested)?;
@@ -189,20 +176,13 @@ pub fn verify_recipient_public_keys(
         .collect()
 }
 
-fn log_public_key_verification(
-    debug_enabled: bool,
-    public_key: &PublicKey,
-    context: &str,
-    verification_target: &str,
-) {
-    if debug_enabled {
-        debug!(
-            "[VERIFY] PublicKey: verify {} ({}, {})",
-            verification_target,
-            context,
-            format_kid_half_display_lossy(&public_key.protected.kid)
-        );
-    }
+fn log_public_key_verification(public_key: &PublicKey, context: &str, verification_target: &str) {
+    debug!(
+        "[VERIFY] PublicKey: verify {} ({}, {})",
+        verification_target,
+        context,
+        format_kid_half_display_lossy(&public_key.protected.kid)
+    );
 }
 
 fn validate_derived_kid(public_key: &PublicKey) -> Result<()> {

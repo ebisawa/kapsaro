@@ -173,7 +173,6 @@ pub fn keygen_test(
         created_at: &created_at,
         expires_at: &expires_at,
         sig_sk: &signing_key,
-        debug: false,
     })?;
 
     Ok((private_key, public_key))
@@ -212,7 +211,6 @@ pub fn build_test_private_key(
         ssh_fpr,
         created_at,
         expires_at,
-        debug: false,
     })
 }
 

@@ -39,12 +39,10 @@ pub fn derive_key_from_ssh(
     hkdf_salt: &HkdfSalt,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
-    debug: bool,
 ) -> Result<XChaChaKey> {
     let message = build_sign_message(ikm_salt_b64);
-    let raw_sig =
-        sign_for_private_key_encryption(kid, backend, ssh_pubkey, message.as_bytes(), debug)?;
-    derive_key_from_raw_signature(kid, &raw_sig, hkdf_salt, debug)
+    let raw_sig = sign_for_private_key_encryption(kid, backend, ssh_pubkey, message.as_bytes())?;
+    derive_key_from_raw_signature(kid, &raw_sig, hkdf_salt)
 }
 
 pub(super) fn derive_key_for_private_key_use(
@@ -53,11 +51,10 @@ pub(super) fn derive_key_for_private_key_use(
     hkdf_salt: &HkdfSalt,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
-    debug: bool,
 ) -> Result<PrivateKeyUseKey> {
     let message = build_sign_message(ikm_salt_b64);
-    let raw_sig = sign_for_private_key_use(kid, backend, ssh_pubkey, message.as_bytes(), debug)?;
-    let enc_key = derive_key_from_raw_signature(kid, &raw_sig, hkdf_salt, debug)?;
+    let raw_sig = sign_for_private_key_use(kid, backend, ssh_pubkey, message.as_bytes())?;
+    let enc_key = derive_key_from_raw_signature(kid, &raw_sig, hkdf_salt)?;
     Ok(PrivateKeyUseKey { enc_key, raw_sig })
 }
 
@@ -67,15 +64,12 @@ pub(super) fn enforce_private_key_use_signature_determinism(
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     expected_raw_sig: &Ed25519RawSignature,
-    debug: bool,
 ) -> Result<()> {
     let message = build_sign_message(ikm_salt_b64);
-    if debug {
-        debug!(
-            "[CRYPTO] SSH: sign_sshsig retry diagnosis (kid: {})",
-            format_kid_half_display_lossy(kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] SSH: sign_sshsig retry diagnosis (kid: {})",
+        format_kid_half_display_lossy(kid)
+    );
     let retry_sig = backend.sign_sshsig(
         ssh::KEY_PROTECTION_NAMESPACE,
         ssh_pubkey,
@@ -92,14 +86,11 @@ fn sign_for_private_key_encryption(
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     message: &[u8],
-    debug: bool,
 ) -> Result<Ed25519RawSignature> {
-    if debug {
-        debug!(
-            "[CRYPTO] SSH: sign_sshsig x2 determinism check (kid: {})",
-            format_kid_half_display_lossy(kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] SSH: sign_sshsig x2 determinism check (kid: {})",
+        format_kid_half_display_lossy(kid)
+    );
     backend
         .sign_sshsig_deterministic(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
         .map_err(build_determinism_error)
@@ -110,14 +101,11 @@ fn sign_for_private_key_use(
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     message: &[u8],
-    debug: bool,
 ) -> Result<Ed25519RawSignature> {
-    if debug {
-        debug!(
-            "[CRYPTO] SSH: sign_sshsig (kid: {})",
-            format_kid_half_display_lossy(kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] SSH: sign_sshsig (kid: {})",
+        format_kid_half_display_lossy(kid)
+    );
     backend.sign_sshsig(ssh::KEY_PROTECTION_NAMESPACE, ssh_pubkey, message)
 }
 
@@ -125,14 +113,11 @@ fn derive_key_from_raw_signature(
     kid: &str,
     raw_sig: &Ed25519RawSignature,
     hkdf_salt: &HkdfSalt,
-    debug: bool,
 ) -> Result<XChaChaKey> {
-    if debug {
-        debug!(
-            "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {})",
-            format_kid_half_display_lossy(kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] HKDF-SHA256: private key enc key derivation (kid: {})",
+        format_kid_half_display_lossy(kid)
+    );
     let ikm = Ikm::from(&raw_sig.as_bytes()[..]);
     let info = Info::from_string(&format!(
         "{}:{}",

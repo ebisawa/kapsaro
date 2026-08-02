@@ -195,7 +195,6 @@ fn test_command_trust_snapshot_loads_local_nonactive_self_key() {
         &workspace,
         ALICE_MEMBER_HANDLE,
         None,
-        false,
     )
     .unwrap();
     let identity = build_signer_identity(&local_nonactive).unwrap();
@@ -223,7 +222,6 @@ fn test_command_trust_snapshot_defers_unreferenced_local_self_key_loading() {
         &workspace,
         ALICE_MEMBER_HANDLE,
         None,
-        false,
     )
     .unwrap();
     let active = find_active_key_document(ALICE_MEMBER_HANDLE, &keystore_root)
@@ -263,7 +261,6 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key() {
         &workspace,
         ALICE_MEMBER_HANDLE,
         None,
-        false,
     )
     .unwrap();
     let proof = SignatureVerificationProof::new_with_signer_public_key(
@@ -305,14 +302,9 @@ fn test_evaluate_signer_trust_with_proof_accepts_historical_self_key_for_run() {
     )
     .unwrap();
     let options = build_test_command_options(dir.path(), Some(&workspace));
-    let snapshot = CommandTrustSnapshot::<RunPolicy>::load(
-        &options,
-        &workspace,
-        ALICE_MEMBER_HANDLE,
-        None,
-        false,
-    )
-    .unwrap();
+    let snapshot =
+        CommandTrustSnapshot::<RunPolicy>::load(&options, &workspace, ALICE_MEMBER_HANDLE, None)
+            .unwrap();
     let proof = SignatureVerificationProof::new_with_signer_public_key(
         local_nonactive.protected.subject_handle.clone(),
         local_nonactive.protected.kid.clone(),
@@ -341,8 +333,7 @@ fn test_load_read_trust_context_allows_expired_active_member_with_warning() {
     let options = build_test_command_options(dir.path(), Some(&workspace));
 
     let loaded =
-        load_read_trust_context(&options, &workspace, ALICE_MEMBER_HANDLE, None, None, false)
-            .unwrap();
+        load_read_trust_context(&options, &workspace, ALICE_MEMBER_HANDLE, None, None).unwrap();
 
     assert_eq!(loaded.trust_ctx.active_members_by_kid.len(), 1);
     assert!(loaded
@@ -364,7 +355,6 @@ fn test_write_trust_snapshot_rejects_expired_active_member() {
         &workspace,
         ALICE_MEMBER_HANDLE,
         None,
-        false,
     )
     .unwrap_err();
 

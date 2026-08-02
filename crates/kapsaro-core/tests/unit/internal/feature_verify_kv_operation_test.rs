@@ -31,7 +31,6 @@ fn build_kv_enc_content() -> String {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -60,7 +59,7 @@ fn operational_kv_verify_rejects_tampered_signature() {
     let content = replace_kv_signature_with_zero_tag(&build_kv_enc_content());
     let content = KvEncContent::new_unchecked(content);
 
-    let error = super::verify_kv_content_for_operation(&content, false, false).unwrap_err();
+    let error = super::verify_kv_content_for_operation(&content, false).unwrap_err();
 
     assert!(
         error.to_string().contains("Signature verification failed"),
@@ -88,14 +87,13 @@ fn operational_kv_verify_preserves_expired_signer_recovery_warning() {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
     .unwrap();
     let content = KvEncContent::new_unchecked(encrypted);
 
-    let verified = super::verify_kv_content_for_operation(&content, false, true).unwrap();
+    let verified = super::verify_kv_content_for_operation(&content, true).unwrap();
 
     assert!(verified.proof().warnings.iter().any(|warning| {
         warning.contains("Artifact signing key has expired.")

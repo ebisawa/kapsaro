@@ -39,7 +39,6 @@ fn single_rewrap_request<'a>(
     target_members: Vec<VerifiedRecipientKey>,
     rotate_key: bool,
     clear_disclosure_history: bool,
-    debug: bool,
 ) -> RewrapRequest<'a> {
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
@@ -47,7 +46,6 @@ fn single_rewrap_request<'a>(
         target_members,
         rotate_key,
         clear_disclosure_history,
-        debug,
     }
 }
 
@@ -107,7 +105,6 @@ fn encrypt_file_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -140,7 +137,6 @@ fn encrypt_file_for_alice_and_bob(
             signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub,
-            debug: false,
         },
     )
     .unwrap();
@@ -214,7 +210,7 @@ fn test_rewrap_file_succeeds_when_only_old_self_wrap_exists() {
     assert!(load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &new_kid).is_ok());
 
     let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, &new_kid)]);
-    let request = single_rewrap_request(&new_key_ctx, target_members, false, false, false);
+    let request = single_rewrap_request(&new_key_ctx, target_members, false, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
@@ -241,7 +237,7 @@ fn test_rewrap_file_remove_recipient_updates_wrap_and_history() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
     let json = encrypt_file_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
     let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, &alice_kid)]);
-    let request = single_rewrap_request(&key_ctx, target_members, false, false, false);
+    let request = single_rewrap_request(&key_ctx, target_members, false, false);
 
     let rewrapped = rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
     let document = parse_file_document(&rewrapped);
@@ -265,8 +261,7 @@ fn test_rewrap_file_clear_disclosure_history() {
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
 
     let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, &alice_kid)]);
-    let remove_request =
-        single_rewrap_request(&key_ctx, target_members.clone(), false, false, false);
+    let remove_request = single_rewrap_request(&key_ctx, target_members.clone(), false, false);
     let after_remove =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &remove_request).unwrap();
 
@@ -278,7 +273,7 @@ fn test_rewrap_file_clear_disclosure_history() {
     );
 
     // Now rewrap again with clear_disclosure_history
-    let clear_request = single_rewrap_request(&key_ctx, target_members, false, true, false);
+    let clear_request = single_rewrap_request(&key_ctx, target_members, false, true);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(after_remove), &clear_request);
 
     assert!(
@@ -308,7 +303,7 @@ fn test_rewrap_file_uses_fixed_target_member_snapshot() {
     let json = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
 
     let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, kid)]);
-    let request = single_rewrap_request(&key_ctx, target_members, false, false, false);
+    let request = single_rewrap_request(&key_ctx, target_members, false, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(

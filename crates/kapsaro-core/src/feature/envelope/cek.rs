@@ -12,16 +12,8 @@ use uuid::Uuid;
 /// Derive a CEK from MK, sid, key, and entry nonce for kv-enc.
 ///
 /// The entry nonce is the base64url value stored in the entry token.
-pub fn derive_cek(
-    mk: &MasterKey,
-    sid: &Uuid,
-    key: &str,
-    nonce_b64: &str,
-    debug: bool,
-) -> Result<Cek> {
-    if debug {
-        debug!("[CRYPTO] HKDF-SHA256: kv key schedule expand");
-    }
+pub fn derive_cek(mk: &MasterKey, sid: &Uuid, key: &str, nonce_b64: &str) -> Result<Cek> {
+    debug!("[CRYPTO] HKDF-SHA256: kv key schedule expand");
     KvKeySchedule::extract(mk, sid)?.derive_cek(key, nonce_b64)
 }
 

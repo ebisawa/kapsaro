@@ -16,7 +16,6 @@ use crate::Result;
 pub struct CommonCommandOptions {
     pub home: Option<PathBuf>,
     pub identity: Option<PathBuf>,
-    pub debug: bool,
     pub verbose: bool,
     pub workspace: Option<PathBuf>,
     pub ssh_signing_method: Option<SshSigningMethod>,
@@ -54,9 +53,7 @@ impl CommonCommandOptions {
 
     /// Build non-secret facade operation options for verification and crypto paths.
     pub fn operation_options(&self) -> OperationOptions {
-        OperationOptions::new()
-            .with_debug(self.debug)
-            .with_allow_expired_key(self.allow_expired_key)
+        OperationOptions::new().with_allow_expired_key(self.allow_expired_key)
     }
 }
 

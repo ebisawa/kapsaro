@@ -16,12 +16,11 @@ use super::types::{IncomingPromotionCandidate, RewrapBatchPlan, RewrapTrustPlan}
 pub fn build_rewrap_trust(
     plan: &RewrapBatchPlan,
     accepted_promotions: &[IncomingPromotionCandidate],
-    debug: bool,
 ) -> Result<RewrapTrustPlan> {
     let trust_ctx = &plan.pre_promotion_trust;
     let (post_promotion_members, accepted_promotion_candidates) =
         load_post_promotion_members(trust_ctx, accepted_promotions)?;
-    let verified_recipients = verify_recipient_public_keys(&post_promotion_members, debug)?;
+    let verified_recipients = verify_recipient_public_keys(&post_promotion_members)?;
     let recipient_expiry_warnings = collect_recipient_key_expiry_warnings(&verified_recipients)?;
     let post_promotion_members = verified_recipients
         .iter()

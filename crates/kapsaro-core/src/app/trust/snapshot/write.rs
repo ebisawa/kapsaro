@@ -34,9 +34,8 @@ where
         workspace_path: &Path,
         self_member_handle: &str,
         self_sig_x: Option<[u8; 32]>,
-        debug: bool,
     ) -> Result<Self> {
-        let workspace_members = WorkspaceMemberSnapshot::load(workspace_path, debug)?;
+        let workspace_members = WorkspaceMemberSnapshot::load(workspace_path)?;
         Self::from_workspace_members(options, workspace_members, self_member_handle, self_sig_x)
     }
 
@@ -85,14 +84,12 @@ where
         self_member_handle: &str,
         self_sig_x: Option<[u8; 32]>,
         local_key_identity: Option<&LocalKeyIdentity>,
-        debug: bool,
     ) -> Result<Self> {
         let trust_snapshot = CommandTrustSnapshot::<P>::load(
             options,
             workspace_path,
             self_member_handle,
             self_sig_x,
-            debug,
         )?;
         let recipient_trust = enforce_recipients_trust(
             trust_snapshot.trust_context(),

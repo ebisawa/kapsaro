@@ -80,16 +80,14 @@ pub fn load_crypto_context_from_keystore(
     ssh_backend: Box<dyn SignatureBackend>,
     ssh_pubkey: String,
     workspace_path: Option<PathBuf>,
-    debug_enabled: bool,
 ) -> Result<CryptoContext> {
-    let kid = resolve_keystore_kid(&keystore_root, member_handle, explicit_kid, debug_enabled)?;
+    let kid = resolve_keystore_kid(&keystore_root, member_handle, explicit_kid)?;
     let loaded = load_verified_private_key_from_keystore(
         &keystore_root,
         member_handle,
         &kid,
         ssh_backend.as_ref(),
         &ssh_pubkey,
-        debug_enabled,
     )?;
     let selected_kid_override = explicit_kid
         .map(|_| Kid::try_from(loaded.private_key.proof().kid().to_string()))
@@ -118,10 +116,9 @@ fn resolve_keystore_kid(
     keystore_root: &Path,
     member_handle: &str,
     explicit_kid: Option<&str>,
-    debug_enabled: bool,
 ) -> Result<String> {
     let kid = resolve_kid(keystore_root, member_handle, explicit_kid)?;
-    if debug_enabled {
+    if tracing::enabled!(tracing::Level::DEBUG) {
         let kid_display = format_kid_display(&kid).unwrap_or_else(|_| kid.clone());
         debug!("[CRYPTO] load_crypto_context: resolved kid={}", kid_display);
     }
@@ -134,19 +131,16 @@ pub(crate) fn load_verified_private_key_from_keystore(
     kid: &str,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
-    debug_enabled: bool,
 ) -> Result<PrivateKeyLoadResult> {
     let encrypted_private_key = load_private_key(keystore_root, member_handle, kid)?;
     let public_key = load_public_key(keystore_root, member_handle, kid)?;
     let verified_public_key = verify_public_key_with_attestation_context(
         &public_key,
-        debug_enabled,
         KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
     )?;
     verify_private_key_matches_public_key(&encrypted_private_key, verified_public_key.document())?;
 
-    let plaintext =
-        decrypt_private_key(&encrypted_private_key, backend, ssh_pubkey, debug_enabled)?;
+    let plaintext = decrypt_private_key(&encrypted_private_key, backend, ssh_pubkey)?;
     let private_key = build_verified_private_key_from_ssh(
         plaintext,
         &encrypted_private_key.protected.subject_handle,

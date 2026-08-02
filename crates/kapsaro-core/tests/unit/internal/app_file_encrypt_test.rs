@@ -37,7 +37,7 @@ fn test_encrypt_output_member_set_auto_accepts_self_only_non_interactive() {
         Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE)),
     )
     .unwrap();
-    let encrypted = execute_encrypt_file_command(&command, false).unwrap();
+    let encrypted = execute_encrypt_file_command(&command).unwrap();
     let document = FileEncContent::new_unchecked(encrypted).parse().unwrap();
     let recipient_set =
         ArtifactRecipientSet::from_wrap_items(document.protected.sid, &document.protected.wrap)

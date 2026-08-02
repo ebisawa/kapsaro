@@ -245,7 +245,6 @@ fn command_options(
     CommonCommandOptions {
         home,
         identity: None,
-        debug: false,
         verbose: false,
         workspace,
         ssh_signing_method: None,

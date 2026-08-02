@@ -1,12 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
-pub fn check_ci_readiness(options: &CommonCommandOptions) -> Vec<DoctorCheck> {
+pub fn check_ci_readiness() -> Vec<DoctorCheck> {
     let mut checks = Vec::new();
     if !is_env_key_mode() {
         checks.push(check_inactive_env_key_mode());
@@ -16,7 +15,7 @@ pub fn check_ci_readiness(options: &CommonCommandOptions) -> Vec<DoctorCheck> {
     checks.push(check_active_env_key_mode());
     checks.extend(check_strict_key_checking());
     checks.push(check_ci_command_scope());
-    checks.push(check_env_private_key_load(options.debug));
+    checks.push(check_env_private_key_load());
     checks.push(check_trusted_ci_context());
     checks
 }
@@ -63,8 +62,8 @@ fn check_ci_command_scope() -> DoctorCheck {
     )
 }
 
-fn check_env_private_key_load(debug_enabled: bool) -> DoctorCheck {
-    match load_private_key_from_env(debug_enabled) {
+fn check_env_private_key_load() -> DoctorCheck {
+    match load_private_key_from_env() {
         Ok(_) => DoctorCheck::ok(
             "ci.env_key.load",
             DoctorCategory::CiReadiness,

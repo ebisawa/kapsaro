@@ -53,7 +53,6 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
             signing_key: expired_key_ctx.signing_key(),
             signer_kid: &expired_kid,
             signer_pub: expired_public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -107,7 +106,6 @@ fn decrypt_command_coalesces_local_key_pair_expiry_warning() {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -173,7 +171,6 @@ fn decrypt_command_preserves_historical_signer_expiry_warning_with_same_expires_
             signing_key: historical_key_ctx.signing_key(),
             signer_kid: &historical_kid,
             signer_pub: historical_public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -237,7 +234,6 @@ fn decrypt_command_coalesces_selected_fallback_key_pair_expiry_warning() {
             signing_key: old_key_ctx.signing_key(),
             signer_kid: &old_kid,
             signer_pub: old_public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -293,7 +289,6 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
             signing_key: valid_key_ctx.signing_key(),
             signer_kid: &valid_kid,
             signer_pub: valid_public_key,
-            debug: false,
         },
     )
     .unwrap();

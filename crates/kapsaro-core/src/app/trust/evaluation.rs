@@ -45,7 +45,7 @@ where
     let signer_outcome =
         evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, current_recipients)?;
     let recipient_trust = evaluate_read_artifact_recipient_keys(trust_ctx, current_recipient_set)?;
-    debug_read_artifact_trust::<P>(options, proof, current_recipient_set, &recipient_trust);
+    debug_read_artifact_trust::<P>(proof, current_recipient_set, &recipient_trust);
     Ok(build_read_artifact_trust_plan(
         signer_outcome,
         recipient_trust.outcome,
@@ -73,21 +73,16 @@ where
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
         Some(execution.key_ctx.local_key_identity()),
-        options.debug,
     )
 }
 
 fn debug_read_artifact_trust<P>(
-    options: &CommonCommandOptions,
     proof: &SignatureVerificationProof,
     current_recipient_set: &ArtifactRecipientSet,
     recipient_trust: &ReadRecipientKeyTrust,
 ) where
     P: ReadTrustPolicy,
 {
-    if !options.debug {
-        return;
-    }
     debug!(
         "[TRUST] read evaluation: capability={}, signer_kid={}, recipient_count={}, stale_recipient_warnings={}",
         P::CAPABILITY.label(),

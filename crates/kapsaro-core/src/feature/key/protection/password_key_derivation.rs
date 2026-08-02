@@ -42,25 +42,20 @@ pub fn derive_key_from_password(
     ikm_salt: &PrivateKeyIkmSalt,
     hkdf_salt: &HkdfSalt,
     kid: &str,
-    debug_enabled: bool,
 ) -> Result<XChaChaKey> {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] Argon2id: password hash (kid: {}, m: {}, t: {}, p: {})",
-            format_kid_half_display_lossy(kid),
-            ARGON2_MEMORY_COST_KIB,
-            ARGON2_TIME_COST,
-            ARGON2_PARALLELISM
-        );
-    }
+    debug!(
+        "[CRYPTO] Argon2id: password hash (kid: {}, m: {}, t: {}, p: {})",
+        format_kid_half_display_lossy(kid),
+        ARGON2_MEMORY_COST_KIB,
+        ARGON2_TIME_COST,
+        ARGON2_PARALLELISM
+    );
     let ikm = argon2id_hash(password, ikm_salt)?;
 
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] HKDF-SHA256: password key derivation (kid: {})",
-            format_kid_half_display_lossy(kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] HKDF-SHA256: password key derivation (kid: {})",
+        format_kid_half_display_lossy(kid)
+    );
     let info = Info::from_string(&format!(
         "{}:{}",
         context::HKDF_INFO_PRIVATE_KEY_PASSWORD_V1,

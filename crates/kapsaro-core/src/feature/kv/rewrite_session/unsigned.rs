@@ -18,21 +18,18 @@ pub(crate) fn build_unsigned_from_verified(
     verified: &VerifiedKvEncDocument,
     head: KvHeader,
     override_codec: Option<TokenCodec>,
-    debug: bool,
 ) -> Result<KvDocumentDraft> {
     let doc = verified.document();
     let token_codec = detect_token_codec(doc.wrap_token(), override_codec);
-    KvDocumentBuilder::from_document(head, None, doc, token_codec, debug)
-        .map(|builder| builder.build())
+    KvDocumentBuilder::from_document(head, None, doc, token_codec).map(|builder| builder.build())
 }
 
 pub(crate) fn sign_unsigned_with_key_context(
     unsigned: KvDocumentDraft,
     master_key: &MasterKey,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<String> {
-    let signing = build_signing_context(key_ctx, debug)?;
+    let signing = build_signing_context(key_ctx)?;
     super::super::sign::sign_unsigned_kv_document(unsigned, master_key, &signing)
 }
 
@@ -40,7 +37,6 @@ pub(crate) fn unwrap_master_key_from_verified(
     verified: &VerifiedKvEncDocument,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<MasterKey> {
     let doc = verified.document();
     let master_key = unwrap_master_key_for_kv_with_context(
@@ -48,8 +44,7 @@ pub(crate) fn unwrap_master_key_from_verified(
         &doc.wrap.wrap,
         member_handle,
         key_ctx,
-        debug,
     )
     .map(|result| result.value)?;
-    verify_kv_key_possession(verified, master_key, debug).map(|proof| proof.into_master_key())
+    verify_kv_key_possession(verified, master_key).map(|proof| proof.into_master_key())
 }

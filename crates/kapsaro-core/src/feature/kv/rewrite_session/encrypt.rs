@@ -15,13 +15,12 @@ pub(crate) fn encrypt_kv_map_with_key_context<V, F>(
     token_codec: TokenCodec,
     disclosed: bool,
     mutate_wrap: F,
-    debug: bool,
 ) -> Result<String>
 where
     V: AsRef<str>,
     F: FnOnce(&mut crate::model::kv_enc::header::KvWrap) -> Result<()>,
 {
-    let signing = build_signing_context(key_ctx, debug)?;
+    let signing = build_signing_context(key_ctx)?;
     super::super::encrypt::encrypt_kv_map_with_wrap_mutation(
         kv_map,
         members,

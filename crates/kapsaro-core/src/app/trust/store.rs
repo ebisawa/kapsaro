@@ -165,7 +165,6 @@ pub fn execute_trust_store_mutation_with_execution<T, F>(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     mode: TrustStoreMutationMode,
-    debug: bool,
     mutate: F,
 ) -> Result<TrustMutationResult<T>>
 where
@@ -173,7 +172,7 @@ where
 {
     let path = resolve_trust_store_path(options, &execution.member_handle)?;
     let keystore_root = options.resolve_keystore_root()?;
-    let signing = build_signing_context(&execution.key_ctx, debug)?;
+    let signing = build_signing_context(&execution.key_ctx)?;
     execute_trust_store_mutation(
         &path,
         &keystore_root,

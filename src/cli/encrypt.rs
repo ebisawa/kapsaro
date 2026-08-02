@@ -89,7 +89,6 @@ pub(crate) fn run(args: EncryptArgs) -> Result<()> {
                     execute_encrypt_file_command_with_recipient_set_confirmation(
                         &options,
                         &command,
-                        options.debug,
                         confirm_recipient_set_approval,
                     )
                 },

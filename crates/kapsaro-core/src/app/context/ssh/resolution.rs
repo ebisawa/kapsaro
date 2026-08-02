@@ -29,9 +29,7 @@ pub(super) fn resolve_signing_method(
     let signing_method_config = resolve_ssh_signing_method_config(params.signing_method, base_dir)?;
     let signing_method = resolve_ssh_signing_method(signing_method_config);
 
-    if params.verbose {
-        debug!("[SSH] Signing method: {}", signing_method);
-    }
+    debug!("[SSH] Signing method: {}", signing_method);
 
     Ok(signing_method)
 }

@@ -151,7 +151,7 @@ fn test_review_candidate_for_confirmation_requires_online_verification_for_known
 fn test_verify_trust_candidate_online_missing_public_key_error() {
     let candidate = candidate(true);
 
-    let error = verify_trust_candidate_online(&candidate, false).unwrap_err();
+    let error = verify_trust_candidate_online(&candidate).unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
     assert_eq!(
@@ -171,7 +171,7 @@ fn test_verify_trust_candidate_online_missing_public_key_error() {
 fn test_verify_trust_candidate_online_skips_unconfigured_binding_without_public_key() {
     let candidate = candidate(false);
 
-    let reviewed = verify_trust_candidate_online(&candidate, false).unwrap();
+    let reviewed = verify_trust_candidate_online(&candidate).unwrap();
 
     assert_eq!(reviewed, candidate);
 }
@@ -180,7 +180,7 @@ fn test_verify_trust_candidate_online_skips_unconfigured_binding_without_public_
 fn test_verify_trust_candidate_online_skips_already_verified_candidate_without_public_key() {
     let candidate = verified_candidate(&candidate(true));
 
-    let reviewed = verify_trust_candidate_online(&candidate, false).unwrap();
+    let reviewed = verify_trust_candidate_online(&candidate).unwrap();
 
     assert_eq!(reviewed, candidate);
 }
@@ -194,7 +194,7 @@ fn test_verify_trust_candidate_online_requires_online_feature() {
             .with_public_key(Some(public_key_for_member("alice@example.com")))
             .build();
 
-    let error = verify_trust_candidate_online(&candidate, false).unwrap_err();
+    let error = verify_trust_candidate_online(&candidate).unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Config);
     assert!(error
@@ -211,7 +211,7 @@ fn test_verify_trust_candidate_online_rejects_member_handle_mismatch() {
             .with_public_key(Some(public_key_for_member("bob@example.com")))
             .build();
 
-    let error = verify_trust_candidate_online(&candidate, false).unwrap_err();
+    let error = verify_trust_candidate_online(&candidate).unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
     assert_eq!(
@@ -236,7 +236,7 @@ fn test_verify_trust_candidate_online_applies_failed_result_context() {
             .with_public_key(Some(public_key_for_member("alice@example.com")))
             .build();
 
-    let reviewed = verify_trust_candidate_online(&candidate, false).unwrap();
+    let reviewed = verify_trust_candidate_online(&candidate).unwrap();
 
     assert!(reviewed.online_verification_attempted);
     assert!(reviewed.online_verification_message.is_some());

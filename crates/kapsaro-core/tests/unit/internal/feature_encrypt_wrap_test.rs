@@ -31,7 +31,7 @@ fn test_build_wrap_item_for_kv() {
     let kid = public_key.protected.kid.clone();
     let attested_pubkey = build_verified_recipient_key(public_key);
 
-    let wrap_item = build_wrap_item_for_kv(&sid, &attested_pubkey, &master_key, false).unwrap();
+    let wrap_item = build_wrap_item_for_kv(&sid, &attested_pubkey, &master_key).unwrap();
 
     assert_eq!(wrap_item.recipient_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(wrap_item.kid, kid);
@@ -55,8 +55,7 @@ fn test_build_wraps_for_recipients_kv() {
     let master_key = build_test_master_key();
 
     let wrap_items =
-        build_wraps_for_recipients(&attested_members, &sid, &master_key, WrapFormat::Kv, false)
-            .unwrap();
+        build_wraps_for_recipients(&attested_members, &sid, &master_key, WrapFormat::Kv).unwrap();
 
     assert_eq!(wrap_items.len(), 2);
     assert_eq!(wrap_items[0].recipient_handle, ALICE_MEMBER_HANDLE);
@@ -74,8 +73,7 @@ fn test_build_wraps_for_recipients_rejects_count_over_limit() {
     let attested_members = vec![attested_member; MAX_WRAP_ITEMS + 1];
     let master_key = build_test_master_key();
 
-    let result =
-        build_wraps_for_recipients(&attested_members, &sid, &master_key, WrapFormat::Kv, false);
+    let result = build_wraps_for_recipients(&attested_members, &sid, &master_key, WrapFormat::Kv);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("wrap count"));

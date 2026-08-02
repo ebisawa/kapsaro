@@ -12,7 +12,6 @@ fn options(rotate_key: bool, clear_disclosure_history: bool) -> RewrapOptions {
         rotate_key,
         clear_disclosure_history,
         token_codec: Some(TokenCodec::JsonJcs),
-        debug: false,
     }
 }
 
@@ -86,8 +85,7 @@ fn test_rewrite_with_rewrap_operation_plan_applies_operations_in_common_order() 
     let stale = vec!["alice".to_string()];
     let plan = build_rewrap_operation_plan(&current, &target, &stale, &options(true, true));
 
-    let result =
-        rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan, false).unwrap();
+    let result = rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan).unwrap();
 
     assert_eq!(
         result,
@@ -102,8 +100,7 @@ fn test_rewrite_with_rewrap_operation_plan_skips_empty_operations() {
     let stale = Vec::new();
     let plan = build_rewrap_operation_plan(&current, &target, &stale, &options(false, false));
 
-    let result =
-        rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan, false).unwrap();
+    let result = rewrite_with_rewrap_operation_plan(RecordingExecutor::default(), plan).unwrap();
 
     assert_eq!(result, "finalize");
 }

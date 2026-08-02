@@ -37,7 +37,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub() {
         sig: "dummy".to_string(), // sig field not used during key loading
     };
 
-    let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
+    let loaded = load_verifying_key_from_signature(&signature).unwrap();
 
     assert_eq!(loaded.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(loaded.source, VerifyingKeySource::SignerPubEmbedded);
@@ -76,7 +76,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub_not_active_member_succ
         sig: "dummy".to_string(),
     };
 
-    let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
+    let loaded = load_verifying_key_from_signature(&signature).unwrap();
 
     assert_eq!(loaded.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(loaded.public_key.protected.kid, kid.as_str());
@@ -101,7 +101,7 @@ fn test_load_verifying_key_from_signature_with_signer_pub_no_workspace_succeeds(
         sig: "dummy".to_string(),
     };
 
-    let loaded = load_verifying_key_from_signature(&signature, false).unwrap();
+    let loaded = load_verifying_key_from_signature(&signature).unwrap();
 
     assert_eq!(loaded.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(loaded.public_key.protected.kid, kid.as_str());
@@ -129,7 +129,7 @@ fn test_load_verifying_key_from_signature_kid_mismatch() {
         sig: "dummy".to_string(),
     };
 
-    let result = load_verifying_key_from_signature(&signature, false);
+    let result = load_verifying_key_from_signature(&signature);
 
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();

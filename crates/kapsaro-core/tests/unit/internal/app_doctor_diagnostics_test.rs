@@ -31,7 +31,6 @@ fn doctor_request(home: &TempDir, workspace: &Path) -> DoctorRequest {
         workspace: Some(workspace.to_path_buf()),
         home: Some(home.path().to_path_buf()),
         member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        debug: false,
         verbose: false,
     }
 }
@@ -105,7 +104,6 @@ fn encrypted_kv_for_recipients(
         signing_key: key_ctx.signing_key(),
         signer_kid: &kid,
         signer_pub,
-        debug: false,
     };
     encrypt_kv_document(&values, &verified_members, &signing, TokenCodec::JsonJcs).unwrap()
 }
@@ -133,7 +131,6 @@ fn encrypted_kv_for_mislabeled_bob_recipient(home: &TempDir) -> String {
         signing_key: key_ctx.signing_key(),
         signer_kid: &signer_kid,
         signer_pub,
-        debug: false,
     };
     encrypt_kv_document(&values, &verified_members, &signing, TokenCodec::JsonJcs).unwrap()
 }
@@ -148,16 +145,7 @@ fn test_doctor_ci_invalid_env_key_reports_fail_and_strict_warning() {
     std::env::set_var("KAPSARO_PRIVATE_KEY", "not-base64url");
     std::env::set_var("KAPSARO_KEY_PASSWORD", "password");
     std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
-    let home = TempDir::new().unwrap();
-    let options = DoctorRequest {
-        workspace: None,
-        home: Some(home.path().to_path_buf()),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        debug: false,
-        verbose: false,
-    }
-    .common_options();
-    let checks = check_ci_readiness(&options);
+    let checks = check_ci_readiness();
 
     assert!(
         has_check(&checks, "ci.env_key.present", DoctorStatus::Ok),
@@ -176,16 +164,7 @@ fn test_doctor_ci_env_key_absent_reports_skip() {
     let _guard = EnvGuard::new(&["KAPSARO_PRIVATE_KEY", "KAPSARO_KEY_PASSWORD"]);
     std::env::remove_var("KAPSARO_PRIVATE_KEY");
     std::env::remove_var("KAPSARO_KEY_PASSWORD");
-    let home = TempDir::new().unwrap();
-    let options = DoctorRequest {
-        workspace: None,
-        home: Some(home.path().to_path_buf()),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        debug: false,
-        verbose: false,
-    }
-    .common_options();
-    let checks = check_ci_readiness(&options);
+    let checks = check_ci_readiness();
 
     assert!(has_check(&checks, "ci.env_key.present", DoctorStatus::Skip));
 }
@@ -377,7 +356,6 @@ fn test_doctor_without_member_handle_reports_owner_warnings_when_ambiguous() {
         workspace: Some(workspace),
         home: Some(home.path().to_path_buf()),
         member_handle: None,
-        debug: false,
         verbose: false,
     };
 

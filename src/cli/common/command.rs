@@ -161,14 +161,12 @@ where
     Plan: ReadCommandPlan,
     Execute: FnOnce() -> Result<T>,
 {
-    if options.debug {
-        debug!(
-            "[TRUST] read gate: signer={}, recipients={}, allow_non_member={}",
-            describe_signer_trust(plan.signer_trust()),
-            describe_recipient_trust(plan.recipient_trust()),
-            labels.allow_non_member
-        );
-    }
+    debug!(
+        "[TRUST] read gate: signer={}, recipients={}, allow_non_member={}",
+        describe_signer_trust(plan.signer_trust()),
+        describe_recipient_trust(plan.recipient_trust()),
+        labels.allow_non_member
+    );
     execute_read_with_signer_trust(
         TrustExecutionContext {
             options,
@@ -202,15 +200,13 @@ where
     Plan: WriteCommandPlan,
     Execute: FnOnce() -> Result<T>,
 {
-    if options.debug {
-        debug!(
-            "[TRUST] write gate: signer={}, recipients={}",
-            plan.signer_trust()
-                .map(describe_signer_trust)
-                .unwrap_or("not-applicable"),
-            describe_recipient_trust(plan.recipient_trust())
-        );
-    }
+    debug!(
+        "[TRUST] write gate: signer={}, recipients={}",
+        plan.signer_trust()
+            .map(describe_signer_trust)
+            .unwrap_or("not-applicable"),
+        describe_recipient_trust(plan.recipient_trust())
+    );
     execute_write_with_recipient_trust(
         TrustExecutionContext {
             options,

@@ -19,48 +19,40 @@ use tracing::debug;
 pub async fn verify_ssh_key_on_github(
     ssh_pub_key: &str,
     account: &GithubAccount,
-    verbose: bool,
 ) -> Result<VerificationStatus> {
     let api = GitHubVerificationApiClient::new()?;
-    verify_ssh_key_on_github_with_api(ssh_pub_key, account, verbose, &api).await
+    verify_ssh_key_on_github_with_api(ssh_pub_key, account, &api).await
 }
 
 /// Verify SSH key against GitHub with an injected API implementation.
 pub async fn verify_ssh_key_on_github_with_api(
     ssh_pub_key: &str,
     account: &GithubAccount,
-    verbose: bool,
     api: &impl GitHubVerificationApi,
 ) -> Result<VerificationStatus> {
     let our_fingerprint = fingerprint::build_sha256_fingerprint(ssh_pub_key)?;
 
-    if verbose {
-        debug!(
-            "[VERIFY] Pre-flight: checking SSH key {} against GitHub user {}",
-            our_fingerprint, account.login
-        );
-    }
+    debug!(
+        "[VERIFY] Pre-flight: checking SSH key {} against GitHub user {}",
+        our_fingerprint, account.login
+    );
 
     let github_keys = api.fetch_keys(&account.login).await?;
 
-    if verbose {
-        debug!(
-            "[VERIFY] Pre-flight: fetched {} key(s) from GitHub",
-            github_keys.len()
-        );
-    }
+    debug!(
+        "[VERIFY] Pre-flight: fetched {} key(s) from GitHub",
+        github_keys.len()
+    );
 
     for github_key in &github_keys {
         let Ok(github_fingerprint) = fingerprint::build_sha256_fingerprint(&github_key.key) else {
             continue;
         };
         if github_fingerprint == our_fingerprint {
-            if verbose {
-                debug!(
-                    "[VERIFY] Pre-flight: fingerprint match (GitHub key id={})",
-                    github_key.id
-                );
-            }
+            debug!(
+                "[VERIFY] Pre-flight: fingerprint match (GitHub key id={})",
+                github_key.id
+            );
             return Ok(VerificationStatus::Verified);
         }
     }

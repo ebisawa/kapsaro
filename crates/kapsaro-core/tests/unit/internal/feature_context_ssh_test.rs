@@ -19,7 +19,6 @@ fn test_resolve_and_build_ssh_signing_context_default() {
         ssh_key: Some(ssh_key_path),
         signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: true,
     };
     let candidates = resolve_ssh_key_candidates_with_params(&params).unwrap();
@@ -38,7 +37,6 @@ fn test_resolve_ssh_key_candidates_with_explicit_key() {
         ssh_key: Some(ssh_key_path),
         signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: true,
     };
 
@@ -61,7 +59,6 @@ fn test_build_ssh_signing_context_from_selected_key() {
         ssh_key: Some(ssh_key_path),
         signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: true,
     };
 
@@ -82,7 +79,6 @@ fn test_resolve_agent_with_explicit_key_loads_pubkey_from_file() {
         ssh_key: Some(ssh_key_path),
         signing_method: Some(SshSigningMethod::SshAgent),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: true,
     };
 
@@ -121,7 +117,6 @@ fn test_resolve_agent_with_explicit_nonexistent_key_fails() {
         ssh_key: Some(nonexistent_key),
         signing_method: Some(SshSigningMethod::SshAgent),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: true,
     };
 
@@ -149,7 +144,6 @@ fn test_build_ssh_signing_context_skips_determinism_check_when_disabled() {
         ssh_key: Some(ssh_key_path),
         signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: false,
     };
 
@@ -169,7 +163,6 @@ fn test_build_ssh_signing_context_checks_determinism_when_enabled() {
         ssh_key: Some(ssh_key_path),
         signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(temp_dir.path().to_path_buf()),
-        verbose: false,
         check_determinism: true,
     };
 

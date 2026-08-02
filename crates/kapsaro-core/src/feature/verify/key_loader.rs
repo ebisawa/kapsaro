@@ -27,14 +27,12 @@ pub struct SignatureVerificationKey {
 /// Expired keys are allowed for verification but generate a warning.
 pub fn load_verifying_key_from_signature(
     signature: &ArtifactSignature,
-    debug: bool,
 ) -> Result<SignatureVerificationKey> {
     build_loaded_verifying_key(
         &signature.signer_pub,
         &signature.kid,
         VerifyingKeySource::SignerPubEmbedded,
         "signer_pub embedded",
-        debug,
     )
 }
 
@@ -43,10 +41,9 @@ fn build_loaded_verifying_key(
     expected_kid: &str,
     source: VerifyingKeySource,
     source_label: &str,
-    debug: bool,
 ) -> Result<SignatureVerificationKey> {
     let verified =
-        verify_public_key_for_verification_context(public_key, debug, EMBEDDED_SIGNER_PUB_CONTEXT)
+        verify_public_key_for_verification_context(public_key, EMBEDDED_SIGNER_PUB_CONTEXT)
             .map_err(|e| {
                 Error::build_crypto_error_with_source(
                     format!("PublicKey document verification failed ({})", source_label),

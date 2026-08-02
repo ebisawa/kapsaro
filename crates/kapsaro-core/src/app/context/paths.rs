@@ -62,7 +62,7 @@ impl CommandPathResolution {
             keystore_root,
             workspace_root,
         };
-        log_path_resolution(options, &paths);
+        log_path_resolution(&paths);
         Ok(paths)
     }
 
@@ -80,8 +80,8 @@ impl CommandPathResolution {
     }
 }
 
-fn log_path_resolution(options: &CommonCommandOptions, paths: &CommandPathResolution) {
-    if !options.debug {
+fn log_path_resolution(paths: &CommandPathResolution) {
+    if !tracing::enabled!(tracing::Level::DEBUG) {
         return;
     }
     let workspace = paths

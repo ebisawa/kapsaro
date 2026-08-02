@@ -57,18 +57,14 @@ impl GitHubVerificationApi for GitHubVerificationApiClient {
 
 /// Verify a PublicKey's binding_claims.github_account against GitHub using REST only
 /// (id -> current login -> keys).
-pub async fn verify_github_account(
-    public_key: &PublicKey,
-    verbose: bool,
-) -> Result<VerificationResult> {
+pub async fn verify_github_account(public_key: &PublicKey) -> Result<VerificationResult> {
     let api = GitHubVerificationApiClient::new()?;
-    verify_github_account_with_api(public_key, verbose, &api).await
+    verify_github_account_with_api(public_key, &api).await
 }
 
 /// Verify a PublicKey's GitHub binding using an injected API implementation.
 pub async fn verify_github_account_with_api(
     public_key: &PublicKey,
-    verbose: bool,
     api: &impl GitHubVerificationApi,
 ) -> Result<VerificationResult> {
     let member_handle = &public_key.protected.subject_handle;
@@ -80,13 +76,11 @@ pub async fn verify_github_account_with_api(
     {
         Some(b) => b,
         None => {
-            if verbose {
-                debug!(
-                    "[VERIFY] Verify {}: no binding_claims.github_account configured (skipped)",
-                    member_handle
-                );
-            }
-            let fingerprint = compute_attestation_fingerprint(public_key, verbose);
+            debug!(
+                "[VERIFY] Verify {}: no binding_claims.github_account configured (skipped)",
+                member_handle
+            );
+            let fingerprint = compute_attestation_fingerprint(public_key);
             return Ok(VerificationResult::not_configured(
                 member_handle,
                 "No binding_claims.github_account configured",
@@ -96,7 +90,7 @@ pub async fn verify_github_account_with_api(
         }
     };
 
-    let our_fingerprint = match compute_attestation_fingerprint(public_key, verbose) {
+    let our_fingerprint = match compute_attestation_fingerprint(public_key) {
         Some(fp) => fp,
         None => {
             return Ok(VerificationResult::failed(
@@ -108,17 +102,9 @@ pub async fn verify_github_account_with_api(
         }
     };
 
-    let (id_used, login_for_keys) = resolve_github_identity(api, github.id, verbose).await?;
+    let (id_used, login_for_keys) = resolve_github_identity(api, github.id).await?;
 
-    verify_github_keys(
-        api,
-        public_key,
-        &our_fingerprint,
-        id_used,
-        &login_for_keys,
-        verbose,
-    )
-    .await
+    verify_github_keys(api, public_key, &our_fingerprint, id_used, &login_for_keys).await
 }
 
 #[cfg(all(test, feature = "online"))]

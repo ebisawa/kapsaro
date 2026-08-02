@@ -69,7 +69,7 @@ pub mod operations {
                 let content =
                     load_text_with_limit(file_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
                 let source_name = format_path_relative_to_cwd(file_path);
-                let addition = build_member_addition_from_content(&content, &source_name, false)?;
+                let addition = build_member_addition_from_content(&content, &source_name)?;
 
                 save_member_content(
                     workspace_path,
@@ -87,11 +87,8 @@ pub mod operations {
 
             use crate::io::verify_online::VerificationResult;
 
-            pub async fn verify_member_files(
-                member_files: &[PathBuf],
-                verbose: bool,
-            ) -> Vec<VerificationResult> {
-                crate::app::member::verification::verify_member_files(member_files, verbose).await
+            pub async fn verify_member_files(member_files: &[PathBuf]) -> Vec<VerificationResult> {
+                crate::app::member::verification::verify_member_files(member_files).await
             }
         }
     }

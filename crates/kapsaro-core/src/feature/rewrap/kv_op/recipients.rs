@@ -23,7 +23,6 @@ pub(in crate::feature::rewrap) fn add_kv_recipients(
     new_recipients: &[String],
     master_key: &MasterKey,
     target_members: &[VerifiedRecipientKey],
-    debug: bool,
 ) -> Result<()> {
     let current_recipients = extract_recipients_from_wrap(wrap_data);
     let wrap_items = build_new_wrap_items(
@@ -31,7 +30,7 @@ pub(in crate::feature::rewrap) fn add_kv_recipients(
         wrap_data.wrap.len(),
         new_recipients,
         target_members,
-        |attested| build_wrap_item_for_kv(sid, attested, master_key, debug),
+        |attested| build_wrap_item_for_kv(sid, attested, master_key),
     )?;
     wrap_data.wrap.extend(wrap_items);
 
@@ -44,12 +43,11 @@ pub(in crate::feature::rewrap) fn rewrite_kv_recipient_wraps(
     refreshed_recipients: &[String],
     master_key: &MasterKey,
     target_members: &[VerifiedRecipientKey],
-    debug: bool,
 ) -> Result<()> {
     replace_recipient_wrap_items(
         &mut wrap_data.wrap,
         refreshed_recipients,
         target_members,
-        |member| build_wrap_item_for_kv(sid, member, master_key, debug),
+        |member| build_wrap_item_for_kv(sid, member, master_key),
     )
 }

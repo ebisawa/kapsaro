@@ -59,7 +59,7 @@ pub(crate) fn run(args: ListArgs) -> Result<()> {
                 ssh_ctx,
             )
         },
-        |command| execute_kv_list_command(command, args.common.debug.debug),
+        execute_kv_list_command,
     )?;
     print_kv_key_list(&keys_with_disclosed, args.common.json.json)
 }

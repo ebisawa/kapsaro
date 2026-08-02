@@ -42,7 +42,7 @@ pub(crate) fn build_kv_encryption(
     };
 
     // Create WRAP items for all recipients
-    let wrap_items = build_wraps_for_recipients(members, sid, &master_key, WrapFormat::Kv, false)?;
+    let wrap_items = build_wraps_for_recipients(members, sid, &master_key, WrapFormat::Kv)?;
 
     let wrap_data = KvWrap {
         wrap: wrap_items,
@@ -57,7 +57,6 @@ pub(crate) fn encrypt_kv_entries<V>(
     kv_map: &HashMap<String, V>,
     master_key: &MasterKey,
     sid: &Uuid,
-    debug: bool,
     disclosed: bool,
 ) -> Result<Vec<(String, KvEntryValue)>>
 where
@@ -72,7 +71,6 @@ where
                 value.as_ref(),
                 &key_schedule,
                 sid,
-                debug,
                 "encrypt_kv_entries",
                 disclosed,
             )
@@ -92,7 +90,7 @@ where
 /// * `kv_map` - Key-value map to encrypt
 /// * `recipients` - List of recipient member_handles
 /// * `members` - Verified public keys with attested identity for recipients
-/// * `signing` - Signing context (signing_key, signer_kid, signer_pub, debug)
+/// * `signing` - Signing context (signing_key, signer_kid, signer_pub)
 /// * `token_codec` - Token codec to use (JSON/JCS or CBOR)
 ///
 /// # Returns
@@ -140,15 +138,10 @@ where
     let (master_key, head_data, mut wrap_data) = build_kv_encryption(members, &sid, &timestamp)?;
     mutate_wrap(&mut wrap_data)?;
 
-    let entries = encrypt_kv_entries(kv_map, &master_key, &sid, signing.debug, disclosed)?;
-    let encoded = encode_kv_entries_to_tokens(
-        &entries,
-        token_codec,
-        signing.debug,
-        "encrypt_kv_map_with_wrap_mutation",
-    )?;
+    let entries = encrypt_kv_entries(kv_map, &master_key, &sid, disclosed)?;
+    let encoded = encode_kv_entries_to_tokens(&entries, token_codec)?;
 
-    let unsigned = KvDocumentBuilder::new(head_data, wrap_data, token_codec, signing.debug)
+    let unsigned = KvDocumentBuilder::new(head_data, wrap_data, token_codec)
         .with_entries(encoded)
         .build();
     super::sign::sign_unsigned_kv_document(unsigned, &master_key, signing)

@@ -26,7 +26,7 @@ pub(crate) fn run_key(args: RemoveArgs) -> Result<(), Error> {
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
             let execution = resolve_write_execution_input(&options, member_handle.clone())?;
-            remove_known_key_command(&options, &execution, &args.kid, options.debug)
+            remove_known_key_command(&options, &execution, &args.kid)
         },
     )?;
     text::print_warnings(&result.warnings);
@@ -42,7 +42,7 @@ pub(crate) fn run_recipient(args: RecipientRemoveArgs) -> Result<(), Error> {
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
         || {
             let execution = resolve_write_execution_input(&options, member_handle.clone())?;
-            remove_recipient_set_command(&options, &execution, &args.sid, options.debug)
+            remove_recipient_set_command(&options, &execution, &args.sid)
         },
     )?;
     text::print_warnings(&result.warnings);

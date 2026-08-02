@@ -16,7 +16,6 @@ fn test_doctor_reports_missing_workspace_structure_as_fail() {
         workspace: Some(workspace.path().to_path_buf()),
         home: Some(home.path().to_path_buf()),
         member_handle: Some("alice@example.com".to_string()),
-        debug: false,
         verbose: false,
     })
     .unwrap();
@@ -40,7 +39,6 @@ fn test_doctor_reports_empty_incoming_as_ok() {
         workspace: Some(workspace.path().to_path_buf()),
         home: Some(home.path().to_path_buf()),
         member_handle: Some("alice@example.com".to_string()),
-        debug: false,
         verbose: false,
     })
     .unwrap();
@@ -63,7 +61,6 @@ fn test_doctor_reports_env_workspace_structure_failure() {
         workspace: None,
         home: Some(home.path().to_path_buf()),
         member_handle: Some("alice@example.com".to_string()),
-        debug: false,
         verbose: false,
     })
     .unwrap();
@@ -92,7 +89,6 @@ fn test_doctor_reports_config_workspace_structure_failure() {
         workspace: None,
         home: Some(home.path().to_path_buf()),
         member_handle: Some("alice@example.com".to_string()),
-        debug: false,
         verbose: false,
     })
     .unwrap();

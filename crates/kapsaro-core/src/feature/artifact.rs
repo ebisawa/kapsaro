@@ -16,15 +16,14 @@ use crate::Result;
 
 pub(crate) fn verify_artifact_signature(
     content: &EncContent,
-    debug: bool,
 ) -> Result<SignatureVerificationProof> {
     match content {
         EncContent::FileEnc(file_content) => {
-            let (_, proof) = verify_file_content(file_content, debug)?.into_inner();
+            let (_, proof) = verify_file_content(file_content)?.into_inner();
             Ok(proof)
         }
         EncContent::KvEnc(kv_content) => {
-            let (_, proof) = verify_kv_content(kv_content, debug)?.into_inner();
+            let (_, proof) = verify_kv_content(kv_content)?.into_inner();
             Ok(proof)
         }
     }
@@ -32,19 +31,17 @@ pub(crate) fn verify_artifact_signature(
 
 pub(crate) fn verify_artifact_signature_for_operation(
     content: &EncContent,
-    debug: bool,
     allow_expired_key: bool,
 ) -> Result<SignatureVerificationProof> {
     match content {
         EncContent::FileEnc(file_content) => {
             let (_, proof) =
-                verify_file_content_for_operation(file_content, debug, allow_expired_key)?
-                    .into_inner();
+                verify_file_content_for_operation(file_content, allow_expired_key)?.into_inner();
             Ok(proof)
         }
         EncContent::KvEnc(kv_content) => {
             let (_, proof) =
-                verify_kv_content_for_operation(kv_content, debug, allow_expired_key)?.into_inner();
+                verify_kv_content_for_operation(kv_content, allow_expired_key)?.into_inner();
             Ok(proof)
         }
     }

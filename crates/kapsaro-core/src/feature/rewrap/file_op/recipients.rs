@@ -78,7 +78,6 @@ pub(in crate::feature::rewrap) fn add_file_recipients(
     content_key: &MasterKey,
     new_recipients: &[String],
     target_members: &[VerifiedRecipientKey],
-    debug: bool,
 ) -> Result<()> {
     let current_recipients = protected.recipients();
     let wrap_items = build_new_wrap_items(
@@ -86,7 +85,7 @@ pub(in crate::feature::rewrap) fn add_file_recipients(
         protected.wrap.len(),
         new_recipients,
         target_members,
-        |attested| build_wrap_item_for_file(attested, &protected.sid, content_key, debug),
+        |attested| build_wrap_item_for_file(attested, &protected.sid, content_key),
     )?;
     protected.wrap.extend(wrap_items);
 
@@ -98,12 +97,11 @@ pub(in crate::feature::rewrap) fn rewrite_file_recipient_wraps(
     content_key: &MasterKey,
     recipients_to_refresh: &[String],
     target_members: &[VerifiedRecipientKey],
-    debug: bool,
 ) -> Result<()> {
     replace_recipient_wrap_items(
         &mut protected.wrap,
         recipients_to_refresh,
         target_members,
-        |member| build_wrap_item_for_file(member, &protected.sid, content_key, debug),
+        |member| build_wrap_item_for_file(member, &protected.sid, content_key),
     )
 }

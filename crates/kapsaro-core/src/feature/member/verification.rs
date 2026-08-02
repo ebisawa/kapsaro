@@ -32,19 +32,17 @@ pub fn verify_member_public_key_file(
     public_key: &PublicKey,
     expected_member_handle: Option<&str>,
     source_name: &str,
-    debug: bool,
 ) -> Result<VerifiedMemberFile> {
     build_verified_member_subject_for_workspace_file(
         public_key,
         expected_member_handle,
         source_name,
-        debug,
     )
     .map(Into::into)
 }
 
-pub fn verify_member_public_key(public_key: &PublicKey, debug: bool) -> Result<VerifiedMemberFile> {
-    build_verified_member_subject_for_input(public_key, debug).map(Into::into)
+pub fn verify_member_public_key(public_key: &PublicKey) -> Result<VerifiedMemberFile> {
+    build_verified_member_subject_for_input(public_key).map(Into::into)
 }
 
 impl From<VerifiedMemberSubject> for VerifiedMemberFile {
@@ -71,18 +69,14 @@ fn build_verified_member_subject_for_workspace_file(
     public_key: &PublicKey,
     expected_member_handle: Option<&str>,
     source_name: &str,
-    debug: bool,
 ) -> Result<VerifiedMemberSubject> {
     let fallback_member_handle = expected_member_handle
         .map(str::to_string)
         .unwrap_or_else(|| source_name.to_string());
 
     validate_member_file_member_handle(source_name, &fallback_member_handle, public_key)?;
-    let verified = verify_public_key_for_verification_context(
-        public_key,
-        debug,
-        WORKSPACE_MEMBER_FILE_CONTEXT,
-    )?;
+    let verified =
+        verify_public_key_for_verification_context(public_key, WORKSPACE_MEMBER_FILE_CONTEXT)?;
     Ok(VerifiedMemberSubject::new(
         verified
             .verified_public_key
@@ -141,13 +135,9 @@ pub fn build_verification_result_groups(
 
 fn build_verified_member_subject_from_public_key(
     public_key: &PublicKey,
-    verbose: bool,
 ) -> Result<VerifiedMemberSubject> {
-    let verified = verify_public_key_for_verification_context(
-        public_key,
-        verbose,
-        MEMBER_VERIFICATION_INPUT_CONTEXT,
-    )?;
+    let verified =
+        verify_public_key_for_verification_context(public_key, MEMBER_VERIFICATION_INPUT_CONTEXT)?;
     Ok(VerifiedMemberSubject::new(
         public_key.protected.subject_handle.clone(),
         public_key.clone(),
@@ -157,9 +147,8 @@ fn build_verified_member_subject_from_public_key(
 
 fn build_verified_member_subject_for_input(
     public_key: &PublicKey,
-    verbose: bool,
 ) -> Result<VerifiedMemberSubject> {
-    build_verified_member_subject_from_public_key(public_key, verbose)
+    build_verified_member_subject_from_public_key(public_key)
 }
 
 pub(crate) fn append_verification_warnings(

@@ -30,7 +30,6 @@ pub struct PublicKeyDocumentParams<'a> {
     pub created_at: &'a str,
     pub expires_at: &'a str,
     pub sig_sk: &'a SigningKey,
-    pub debug: bool,
 }
 
 #[derive(Serialize)]
@@ -80,7 +79,7 @@ pub fn build_public_key(params: &PublicKeyDocumentParams<'_>) -> Result<PublicKe
     .protected;
 
     let protected_jcs = jcs::normalize(&protected)?;
-    if params.debug {
+    if tracing::enabled!(tracing::Level::DEBUG) {
         let kid_display = format_kid_display(&derived_kid).unwrap_or_else(|_| derived_kid.clone());
         debug!(
             "[CRYPTO] Ed25519: sign_detached_bytes (kid: {})",

@@ -36,7 +36,6 @@ pub struct KeyContextOptions {
     ssh_backend: Box<dyn SshSignatureBackend>,
     ssh_pubkey: String,
     workspace_path: Option<PathBuf>,
-    operation_options: OperationOptions,
 }
 
 /// Verified recipient keys in caller-chosen order.
@@ -86,17 +85,12 @@ impl LocalKeyStore {
             into_internal_backend(options.ssh_backend),
             options.ssh_pubkey,
             options.workspace_path,
-            options.operation_options.debug(),
         )
         .map(KeyContext::from_inner)
     }
 
     /// Load and verify recipient public keys.
-    pub fn load_recipient_keys<I, S>(
-        &self,
-        recipients: I,
-        options: OperationOptions,
-    ) -> Result<RecipientKeys>
+    pub fn load_recipient_keys<I, S>(&self, recipients: I) -> Result<RecipientKeys>
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
@@ -109,7 +103,7 @@ impl LocalKeyStore {
                 load_public_key(&self.root, handle, &kid)
             })
             .collect::<Result<Vec<_>>>()?;
-        RecipientKeys::verify(recipients, &public_keys, options)
+        RecipientKeys::verify(recipients, &public_keys)
     }
 }
 
@@ -126,7 +120,6 @@ impl KeyContextOptions {
             ssh_backend,
             ssh_pubkey: ssh_pubkey.into(),
             workspace_path: None,
-            operation_options: OperationOptions::default(),
         }
     }
 
@@ -139,12 +132,6 @@ impl KeyContextOptions {
     /// Set an optional workspace path used by key protection checks.
     pub fn with_workspace_path(mut self, workspace_path: impl Into<PathBuf>) -> Self {
         self.workspace_path = Some(workspace_path.into());
-        self
-    }
-
-    /// Set shared operation options for underlying verification.
-    pub fn with_operation_options(mut self, options: OperationOptions) -> Self {
-        self.operation_options = options;
         self
     }
 }
@@ -168,11 +155,9 @@ impl KeyContext {
         options: OperationOptions,
     ) -> Result<()> {
         let wrap_set = WrapSet::parse(wrap_items, "Document")?;
-        let selected = self.inner().select_local_decryption_key(
-            &wrap_set,
-            self.member_handle(),
-            options.debug(),
-        )?;
+        let selected = self
+            .inner()
+            .select_local_decryption_key(&wrap_set, self.member_handle())?;
         let _ = enforce_expired_key_usage(
             &selected.info().expires_at,
             options.allow_expired_key(),
@@ -198,13 +183,9 @@ impl KeyContext {
 }
 
 impl RecipientKeys {
-    fn verify(
-        handles: Vec<String>,
-        public_keys: &[PublicKey],
-        options: OperationOptions,
-    ) -> Result<Self> {
+    fn verify(handles: Vec<String>, public_keys: &[PublicKey]) -> Result<Self> {
         validate_recipient_key_subjects(&handles, public_keys)?;
-        let keys = verify_recipient_public_keys(public_keys, options.debug())?;
+        let keys = verify_recipient_public_keys(public_keys)?;
         Ok(Self { handles, keys })
     }
 

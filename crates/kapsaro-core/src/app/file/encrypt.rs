@@ -47,7 +47,6 @@ pub fn resolve_encrypt_file_command(
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
         Some(execution.key_ctx.local_key_identity()),
-        options.debug,
     )?;
     let workspace_members = trust_plan.workspace_members();
     let mut warnings = build_write_execution_warnings(&execution)?;
@@ -64,8 +63,8 @@ pub fn resolve_encrypt_file_command(
     })
 }
 
-pub fn execute_encrypt_file_command(command: &EncryptFileCommand, debug: bool) -> Result<String> {
-    let signing = build_signing_context(&command.execution.key_ctx, debug)?;
+pub fn execute_encrypt_file_command(command: &EncryptFileCommand) -> Result<String> {
+    let signing = build_signing_context(&command.execution.key_ctx)?;
     encrypt_file_content(
         &command.input_bytes,
         &command.member_handles,
@@ -77,13 +76,12 @@ pub fn execute_encrypt_file_command(command: &EncryptFileCommand, debug: bool) -
 pub fn execute_encrypt_file_command_with_recipient_set_confirmation<ConfirmRecipientSet>(
     options: &CommonCommandOptions,
     command: &EncryptFileCommand,
-    debug: bool,
     confirm_recipient_set: ConfirmRecipientSet,
 ) -> Result<(String, Vec<String>)>
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    let encrypted = execute_encrypt_file_command(command, debug)?;
+    let encrypted = execute_encrypt_file_command(command)?;
     let content = EncContent::FileEnc(FileEncContent::new_unchecked(encrypted.clone()));
     let mut warnings = Vec::new();
     review_artifact_output_recipient_set(

@@ -90,7 +90,7 @@ fn verify_kv_read_content(
     kv_content: &crate::format::content::KvEncContent,
     options: crate::api::operation::OperationOptions,
 ) -> Result<VerifiedKvEncDocument> {
-    verify_kv_content_for_operation(kv_content, options.debug(), options.allow_expired_key())
+    verify_kv_content_for_operation(kv_content, options.allow_expired_key())
 }
 
 fn evaluate_kv_read_key_expiry(
@@ -99,12 +99,7 @@ fn evaluate_kv_read_key_expiry(
     options: crate::api::operation::OperationOptions,
 ) -> Result<SelectedDecryptionKeyExpiry> {
     let wrap_set = WrapSet::parse(&verified_doc.document().wrap().wrap, "Document")?;
-    evaluate_selected_decryption_key_expiry(
-        execution,
-        &wrap_set,
-        options.allow_expired_key(),
-        options.debug(),
-    )
+    evaluate_selected_decryption_key_expiry(execution, &wrap_set, options.allow_expired_key())
 }
 
 fn evaluate_kv_read_trust<P>(
@@ -145,26 +140,21 @@ fn collect_kv_read_warnings(
     Ok(warnings)
 }
 
-pub fn execute_kv_list_command(
-    command: &KvReadCommand,
-    debug_enabled: bool,
-) -> Result<Vec<KvDisclosedEntry>> {
+pub fn execute_kv_list_command(command: &KvReadCommand) -> Result<Vec<KvDisclosedEntry>> {
     let doc = command.verified_doc.document();
     let master_key = unwrap_master_key_for_kv_with_context(
         &doc.head().sid,
         &doc.wrap().wrap,
         &command.execution.member_handle,
         &command.execution.key_ctx,
-        debug_enabled,
     )?;
-    verify_kv_key_possession(&command.verified_doc, master_key.value, debug_enabled)?;
+    verify_kv_key_possession(&command.verified_doc, master_key.value)?;
     Ok(command.disclosed.clone())
 }
 
 pub fn execute_kv_read_command(
     command: &KvReadCommand,
     mode: KvReadMode<'_>,
-    debug: bool,
 ) -> Result<KvReadResult> {
     let values = match mode {
         KvReadMode::All => decode_decrypted_kv_values(
@@ -172,7 +162,6 @@ pub fn execute_kv_read_command(
                 &command.verified_doc,
                 &command.execution.member_handle,
                 &command.execution.key_ctx,
-                debug,
             )?
             .value,
         )?,
@@ -182,7 +171,6 @@ pub fn execute_kv_read_command(
                 &command.execution.member_handle,
                 &command.execution.key_ctx,
                 key,
-                debug,
             )
             .map(|result| result.value)
             .map_err(|e| build_kv_key_not_found_error(e, &command.target_path, key))?;
@@ -197,19 +185,13 @@ pub fn execute_kv_read_command(
     })
 }
 
-pub fn execute_kv_env_command(
-    command: &KvReadCommand,
-    debug_enabled: bool,
-) -> Result<SecretEnvironmentMap> {
-    if debug_enabled {
-        debug!("[KV] env command: decrypt values");
-    }
+pub fn execute_kv_env_command(command: &KvReadCommand) -> Result<SecretEnvironmentMap> {
+    debug!("[KV] env command: decrypt values");
     decode_decrypted_kv_values(
         decrypt_kv_document_with_context(
             &command.verified_doc,
             &command.execution.member_handle,
             &command.execution.key_ctx,
-            debug_enabled,
         )?
         .value,
     )

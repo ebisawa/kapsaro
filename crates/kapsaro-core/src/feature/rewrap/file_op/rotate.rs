@@ -22,12 +22,10 @@ pub(in crate::feature::rewrap) fn rotate_file_key(
     verified: &VerifiedFileEncDocument,
     old_content_key: &MasterKey,
     target_members: &[VerifiedRecipientKey],
-    debug: bool,
 ) -> Result<MasterKey> {
     let old_schedule = FileKeySchedule::extract(old_content_key, &protected.sid)?;
     let old_payload_key = old_schedule.derive_content_key()?;
-    let plaintext_bytes =
-        decrypt_file_payload(verified, &old_payload_key, debug, "rotate_file_key")?;
+    let plaintext_bytes = decrypt_file_payload(verified, &old_payload_key, "rotate_file_key")?;
     let plaintext_obj = Plaintext::from(plaintext_bytes.as_slice());
     let new_content_key_bytes = fill_secret_array::<32>()?;
     let new_content_key = MasterKey::from_zeroizing(new_content_key_bytes);
@@ -37,7 +35,6 @@ pub(in crate::feature::rewrap) fn rotate_file_key(
         &plaintext_obj,
         &new_xchacha_key,
         &protected.payload.protected,
-        debug,
         "rotate_file_key",
     )?;
 
@@ -49,7 +46,6 @@ pub(in crate::feature::rewrap) fn rotate_file_key(
         &protected.sid,
         &new_content_key,
         WrapFormat::File,
-        debug,
     )?;
     Ok(new_content_key)
 }

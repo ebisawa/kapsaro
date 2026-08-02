@@ -50,7 +50,7 @@ async fn test_resolve_github_account_by_login_with_fake_api() {
         calls: Arc::new(AtomicUsize::new(0)),
     };
 
-    let result = resolve_github_account_by_login_with_api("alice", false, &api).await;
+    let result = resolve_github_account_by_login_with_api("alice", &api).await;
 
     assert_eq!(
         result.unwrap(),
@@ -73,7 +73,7 @@ async fn test_resolve_github_account_by_login_rejects_invalid_login_before_api_c
         calls: Arc::clone(&calls),
     };
 
-    let result = resolve_github_account_by_login_with_api("../alice", false, &api).await;
+    let result = resolve_github_account_by_login_with_api("../alice", &api).await;
 
     assert!(result.is_err());
     assert_eq!(calls.load(Ordering::SeqCst), 0);
@@ -90,7 +90,7 @@ async fn test_resolve_github_account_by_login_propagates_api_error() {
         calls: Arc::clone(&calls),
     };
 
-    let result = resolve_github_account_by_login_with_api("alice", false, &api).await;
+    let result = resolve_github_account_by_login_with_api("alice", &api).await;
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);

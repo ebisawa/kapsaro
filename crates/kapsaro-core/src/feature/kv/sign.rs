@@ -19,13 +19,7 @@ pub(crate) fn sign_unsigned_kv_document(
     let token_codec = unsigned.token_codec();
     let mac_key = KvKeySchedule::extract(master_key, &unsigned.head().sid)?.derive_mac_key()?;
     let content = unsigned.serialize_unsigned()?;
-    sign_kv_document(
-        &content,
-        &mac_key,
-        signing,
-        token_codec,
-        "sign_unsigned_kv_document",
-    )
+    sign_kv_document(&content, &mac_key, signing, token_codec)
 }
 
 impl KvDocumentDraft {

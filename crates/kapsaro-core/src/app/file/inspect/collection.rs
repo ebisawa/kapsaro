@@ -8,7 +8,6 @@ use std::path::Path;
 
 use super::json::{build_online_verification_json_output, OnlineVerificationJsonOutput};
 use super::{InspectSection, OnlineVerificationDisplay};
-use crate::app::context::options::CommonCommandOptions;
 use crate::feature::inspect::build_section;
 use crate::feature::verify::file::verify_file_document_report;
 use crate::feature::verify::kv::signature::verify_kv_document_report;
@@ -44,21 +43,17 @@ pub(super) fn load_inspect_content(input_path: &Path) -> Result<EncContent> {
     )
 }
 
-pub(super) fn build_signature_report(
-    content: &EncContent,
-    debug: bool,
-) -> Result<SignatureVerificationReport> {
+pub(super) fn build_signature_report(content: &EncContent) -> Result<SignatureVerificationReport> {
     Ok(match content {
         EncContent::FileEnc(file_content) => {
             let doc = file_content.parse()?;
-            verify_file_document_report(&doc, debug)
+            verify_file_document_report(&doc)
         }
-        EncContent::KvEnc(kv_content) => verify_kv_document_report(kv_content.as_str(), debug),
+        EncContent::KvEnc(kv_content) => verify_kv_document_report(kv_content.as_str()),
     })
 }
 
 pub(super) fn build_online_output(
-    options: &CommonCommandOptions,
     report: &SignatureVerificationReport,
 ) -> Option<OnlineVerificationOutput> {
     let public_key = report.signer_public_key.as_ref()?;
@@ -74,7 +69,7 @@ pub(super) fn build_online_output(
             return Some(build_online_output_from_display(&display, None, None));
         }
     };
-    let result = verify_online_github_account(public_key, options.debug);
+    let result = verify_online_github_account(public_key);
     let github_display = build_github_account_display_values(&result, github);
     let display = OnlineVerificationDisplay::GithubResult(result);
 
@@ -87,9 +82,8 @@ pub(super) fn build_online_output(
 
 fn verify_online_github_account(
     public_key: &crate::model::public_key::PublicKey,
-    debug: bool,
 ) -> VerificationResult {
-    match block_on_result(verify_github_account(public_key, debug)) {
+    match block_on_result(verify_github_account(public_key)) {
         Ok(result) => result,
         Err(err) => build_failed_online_verification_result(
             &public_key.protected.subject_handle,

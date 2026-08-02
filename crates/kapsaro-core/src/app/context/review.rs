@@ -15,10 +15,9 @@ use std::path::{Path, PathBuf};
 pub fn ensure_workspace_members_match_snapshot(
     workspace_root: &Path,
     reviewed_members: &WorkspaceMemberSnapshot,
-    verbose: bool,
     mismatch_message: &str,
 ) -> Result<()> {
-    let current_members = WorkspaceMemberSnapshot::load(workspace_root, verbose)?;
+    let current_members = WorkspaceMemberSnapshot::load(workspace_root)?;
     if current_members.matches_active_members(reviewed_members) {
         return Ok(());
     }

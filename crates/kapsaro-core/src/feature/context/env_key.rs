@@ -22,9 +22,7 @@ use tracing::debug;
 const ENV_PRIVATE_KEY: &str = "KAPSARO_PRIVATE_KEY";
 const ENV_KEY_PASSWORD: &str = "KAPSARO_KEY_PASSWORD";
 
-struct EnvKeyCleanupGuard {
-    debug_enabled: bool,
-}
+struct EnvKeyCleanupGuard;
 
 impl Drop for EnvKeyCleanupGuard {
     fn drop(&mut self) {
@@ -32,9 +30,7 @@ impl Drop for EnvKeyCleanupGuard {
         // called from main thread only, no concurrent env access.
         std::env::remove_var(ENV_PRIVATE_KEY);
         std::env::remove_var(ENV_KEY_PASSWORD);
-        if self.debug_enabled {
-            debug!("[ENV_KEY] cleanup private key environment");
-        }
+        debug!("[ENV_KEY] cleanup private key environment");
     }
 }
 
@@ -57,39 +53,27 @@ pub struct EnvKeyLoadResult {
 /// decrypts it using KAPSARO_KEY_PASSWORD, and validates the key material.
 /// This path intentionally does not resolve the caller's own PublicKey
 /// from the workspace during key loading.
-pub fn load_private_key_from_env(debug: bool) -> Result<EnvKeyLoadResult> {
+pub fn load_private_key_from_env() -> Result<EnvKeyLoadResult> {
     // Safety: clear sensitive env vars on every exit path.
     // This is intentional security hygiene to minimize secret exposure.
     // Note: std::env::remove_var is not thread-safe; this function must
     // be called from the main thread only. The env vars cannot be
     // recovered after removal, so retries require re-setting them.
-    if debug {
-        debug!("[ENV_KEY] load private key: start");
-    }
-    let _cleanup = EnvKeyCleanupGuard {
-        debug_enabled: debug,
-    };
+    debug!("[ENV_KEY] load private key: start");
+    let _cleanup = EnvKeyCleanupGuard;
     let encoded = load_env_private_key()?;
-    if debug {
-        debug!("[ENV_KEY] load private key: private key env present");
-    }
+    debug!("[ENV_KEY] load private key: private key env present");
     let password = load_env_key_password()?;
-    if debug {
-        debug!("[ENV_KEY] load private key: password env present");
-    }
+    debug!("[ENV_KEY] load private key: password env present");
     let json_bytes = decode_private_key_env(encoded.as_str())?;
-    if debug {
-        debug!("[ENV_KEY] load private key: decoded private key payload");
-    }
+    debug!("[ENV_KEY] load private key: decoded private key payload");
     let private_key = parse_password_protected_private_key(json_bytes.as_bytes())?;
-    if debug {
-        debug!(
-            "[ENV_KEY] load private key: parsed password-protected key member_handle={}, kid={}",
-            private_key.protected.subject_handle,
-            format_kid_half_display_lossy(&private_key.protected.kid)
-        );
-    }
-    build_env_key_load_result(&private_key, &password, debug)
+    debug!(
+        "[ENV_KEY] load private key: parsed password-protected key member_handle={}, kid={}",
+        private_key.protected.subject_handle,
+        format_kid_half_display_lossy(&private_key.protected.kid)
+    );
+    build_env_key_load_result(&private_key, &password)
 }
 
 fn load_env_private_key() -> Result<SecretString> {
@@ -140,19 +124,16 @@ fn parse_password_protected_private_key(json_bytes: &[u8]) -> Result<PrivateKey>
 fn build_env_key_load_result(
     private_key: &PrivateKey,
     password: &SecretString,
-    debug: bool,
 ) -> Result<EnvKeyLoadResult> {
     let member_handle = private_key.protected.subject_handle.clone();
     let kid = private_key.protected.kid.clone();
-    let plaintext = decrypt_private_key_with_password(private_key, password, debug)?;
+    let plaintext = decrypt_private_key_with_password(private_key, password)?;
     let verified_key = build_verified_private_key_from_password(plaintext, &member_handle, &kid)?;
-    if debug {
-        debug!(
-            "[ENV_KEY] load private key: complete member_handle={}, kid={}",
-            member_handle,
-            format_kid_half_display_lossy(&kid)
-        );
-    }
+    debug!(
+        "[ENV_KEY] load private key: complete member_handle={}, kid={}",
+        member_handle,
+        format_kid_half_display_lossy(&kid)
+    );
 
     Ok(EnvKeyLoadResult {
         verified_key,

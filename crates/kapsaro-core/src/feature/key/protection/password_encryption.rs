@@ -23,7 +23,6 @@ pub fn encrypt_private_key_with_password(
     created_at: &str,
     expires_at: &str,
     password: &SecretString,
-    debug: bool,
 ) -> Result<PrivateKey> {
     let material = FreshPrivateKeyProtectionMaterial::generate()?;
     let metadata = PrivateKeyProtectionMetadata {
@@ -39,14 +38,12 @@ pub fn encrypt_private_key_with_password(
         &material.ikm_salt,
         &material.hkdf_salt,
         kid,
-        debug,
     )?;
 
     let encrypted = encrypt_private_key_plaintext(
         plaintext,
         &enc_key,
         &protected,
-        debug,
         "encrypt_private_key_with_password",
     )?;
 
@@ -60,7 +57,6 @@ pub fn encrypt_private_key_with_password(
 pub fn decrypt_private_key_with_password(
     private_key: &PrivateKey,
     password: &SecretString,
-    debug: bool,
 ) -> Result<PrivateKeyPlaintext> {
     match &private_key.protected.alg {
         PrivateKeyAlgorithm::Argon2id { aead, .. } => validate_aead_algorithm(aead)?,
@@ -80,14 +76,12 @@ pub fn decrypt_private_key_with_password(
         &ikm_salt,
         &hkdf_salt,
         &private_key.protected.kid,
-        debug,
     )?;
 
     match decrypt_private_key_plaintext(
         &enc_key,
         &ciphertext,
         &private_key.protected.kid,
-        debug,
         "decrypt_private_key_with_password",
     ) {
         Ok(plaintext) => Ok(plaintext),

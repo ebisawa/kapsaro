@@ -125,7 +125,6 @@ pub fn save_known_key_approvals(
         options,
         execution,
         TrustStoreMutationMode::CreateIfMissing,
-        options.debug,
         |protected| {
             let mut added = 0usize;
 
@@ -159,7 +158,6 @@ pub fn save_recipient_set_approval(
         options,
         execution,
         TrustStoreMutationMode::CreateIfMissing,
-        options.debug,
         |protected| {
             let changed = upsert_recipient_set(
                 &mut protected.recipient_sets,

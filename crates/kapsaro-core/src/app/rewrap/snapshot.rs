@@ -40,7 +40,7 @@ pub fn load_verified_post_promotion_members(
 ) -> Result<VerifiedPostPromotionRecipients> {
     let actual = load_active_member_files(workspace_root)?;
     ensure_post_promotion_members_match(expected, &actual)?;
-    let verified_members = verify_recipient_public_keys(&actual, false)?;
+    let verified_members = verify_recipient_public_keys(&actual)?;
     Ok(VerifiedPostPromotionRecipients::new(verified_members))
 }
 

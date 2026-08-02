@@ -19,7 +19,6 @@ use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtu
 fn single_rewrap_request<'a>(
     key_ctx: &'a crate::feature::context::crypto::CryptoContext,
     target_members: Vec<VerifiedRecipientKey>,
-    debug: bool,
 ) -> RewrapRequest<'a> {
     RewrapRequest {
         member_handle: ALICE_MEMBER_HANDLE,
@@ -27,7 +26,6 @@ fn single_rewrap_request<'a>(
         target_members,
         rotate_key: false,
         clear_disclosure_history: false,
-        debug,
     }
 }
 
@@ -73,7 +71,6 @@ fn test_rewrap_file_operation_rejects_invalid_signature() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -83,7 +80,7 @@ fn test_rewrap_file_operation_rejects_invalid_signature() {
     let json = serde_json::to_string_pretty(&file_enc_doc_tampered).unwrap();
 
     let target_members = build_rewrap_targets(&temp_dir, &[(ALICE_MEMBER_HANDLE, kid)]);
-    let request = single_rewrap_request(&key_ctx, target_members, false);
+    let request = single_rewrap_request(&key_ctx, target_members);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(

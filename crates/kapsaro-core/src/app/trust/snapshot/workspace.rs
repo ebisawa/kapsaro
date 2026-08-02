@@ -24,41 +24,33 @@ pub struct WorkspaceMemberSnapshot {
 }
 
 impl WorkspaceMemberSnapshot {
-    pub fn load(workspace_path: &Path, debug: bool) -> Result<Self> {
+    pub fn load(workspace_path: &Path) -> Result<Self> {
         let active_members = load_active_member_files(workspace_path)?;
         if active_members.is_empty() {
             return Err(crate::Error::build_not_found_error(
                 "No active members found in workspace".to_string(),
             ));
         }
-        Self::from_active_members(active_members, debug)
+        Self::from_active_members(active_members)
     }
 
-    pub fn from_active_members(active_members: Vec<PublicKey>, debug: bool) -> Result<Self> {
-        if debug {
-            debug!(
-                "[TRUST] active member files loaded: count={}",
-                active_members.len()
-            );
-        }
+    pub fn from_active_members(active_members: Vec<PublicKey>) -> Result<Self> {
+        debug!(
+            "[TRUST] active member files loaded: count={}",
+            active_members.len()
+        );
         let mut member_handles = active_members
             .iter()
             .map(|member| member.protected.subject_handle.clone())
             .collect::<Vec<_>>();
         member_handles.sort();
-        Self::build(active_members, member_handles, debug)
+        Self::build(active_members, member_handles)
     }
 
-    fn build(
-        active_members: Vec<PublicKey>,
-        member_handles: Vec<String>,
-        debug: bool,
-    ) -> Result<Self> {
+    fn build(active_members: Vec<PublicKey>, member_handles: Vec<String>) -> Result<Self> {
         let active_members_by_kid = build_active_members_by_kid(&active_members)?;
-        let verified_recipients = crate::feature::verify::public_key::verify_recipient_public_keys(
-            &active_members,
-            debug,
-        )?;
+        let verified_recipients =
+            crate::feature::verify::public_key::verify_recipient_public_keys(&active_members)?;
 
         Ok(Self {
             active_members,

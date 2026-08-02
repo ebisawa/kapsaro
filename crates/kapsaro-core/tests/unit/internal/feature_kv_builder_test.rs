@@ -101,7 +101,7 @@ fn test_wrap_source_data_mut_drops_the_original_token() {
 
 #[test]
 fn test_builder_new_creates_decoded_wrap() {
-    let b = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false);
+    let b = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs);
     let doc = b.build();
     assert_eq!(doc.wrap.token(), None);
     assert!(doc.entries.is_empty());
@@ -130,7 +130,6 @@ fn test_builder_from_lines_with_some_wrap() {
         Some(wrap.clone()),
         &lines,
         TokenCodec::JsonJcs,
-        false,
     )
     .unwrap();
     let doc = b.build();
@@ -159,8 +158,8 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
             token: encode_entry(&entry),
         },
     ];
-    let b = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs, false)
-        .unwrap();
+    let b =
+        KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs).unwrap();
     let doc = b.build();
     assert!(doc.wrap.token().is_some());
     assert_eq!(doc.entries.len(), 1);
@@ -168,7 +167,7 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
 
 #[test]
 fn test_builder_with_entries_appends() {
-    let b = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false);
+    let b = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs);
     let doc = b
         .with_entries(vec![("X".to_string(), "tx".to_string())])
         .build();
@@ -178,7 +177,7 @@ fn test_builder_with_entries_appends() {
 
 #[test]
 fn test_unsigned_doc_entry_keys() {
-    let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false)
+    let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs)
         .with_entries(vec![
             ("A".to_string(), "ta".to_string()),
             ("B".to_string(), "tb".to_string()),
@@ -189,7 +188,7 @@ fn test_unsigned_doc_entry_keys() {
 
 #[test]
 fn test_unsigned_doc_has_entry() {
-    let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false)
+    let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs)
         .with_entries(vec![("K".to_string(), "t".to_string())])
         .build();
     assert!(doc.has_entry("K"));
@@ -198,7 +197,7 @@ fn test_unsigned_doc_has_entry() {
 
 #[test]
 fn test_unsigned_doc_set_entries_replaces_and_appends() {
-    let mut doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false)
+    let mut doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs)
         .with_entries(vec![
             ("A".to_string(), "old_a".to_string()),
             ("B".to_string(), "old_b".to_string()),
@@ -220,7 +219,7 @@ fn test_unsigned_doc_set_entries_replaces_and_appends() {
 
 #[test]
 fn test_unsigned_doc_unset_entry() {
-    let mut doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false)
+    let mut doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs)
         .with_entries(vec![
             ("A".to_string(), "ta".to_string()),
             ("B".to_string(), "tb".to_string()),
@@ -232,8 +231,7 @@ fn test_unsigned_doc_unset_entry() {
 
 #[test]
 fn test_unsigned_doc_set_updated_at() {
-    let mut doc =
-        KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false).build();
+    let mut doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs).build();
     doc.set_updated_at("2026-05-25T00:00:00Z".to_string());
     assert_eq!(doc.head().updated_at, "2026-05-25T00:00:00Z");
 }
@@ -253,10 +251,9 @@ fn test_unsigned_doc_wrap_mut_promotes() {
             token: wrap_tok.clone(),
         },
     ];
-    let mut doc =
-        KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs, false)
-            .unwrap()
-            .build();
+    let mut doc = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs)
+        .unwrap()
+        .build();
 
     assert!(doc.wrap.token().is_some());
     let _w = doc.wrap_mut();
@@ -267,7 +264,7 @@ fn test_unsigned_doc_wrap_mut_promotes() {
 fn test_serialize_unsigned_format() {
     let val_a = sample_entry_value("A", false);
     let val_b = sample_entry_value("B", false);
-    let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs, false)
+    let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs)
         .with_entries(vec![
             ("A".to_string(), encode_entry(&val_a)),
             ("B".to_string(), encode_entry(&val_b)),
@@ -298,10 +295,9 @@ fn test_serialize_unsigned_raw_wrap_passthrough() {
             token: wrap_tok.clone(),
         },
     ];
-    let doc =
-        KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs, false)
-            .unwrap()
-            .build();
+    let doc = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs)
+        .unwrap()
+        .build();
 
     let s = doc.serialize_unsigned().unwrap();
     assert!(s.contains(&format!(":WRAP {}\n", wrap_tok)));
@@ -339,7 +335,6 @@ fn test_clear_disclosed_flags_clears_disclosed_true() {
         Some(sample_wrap()),
         &lines,
         TokenCodec::JsonJcs,
-        false,
     )
     .unwrap()
     .build();
@@ -379,7 +374,6 @@ fn test_clear_disclosed_flags_noop_when_all_false() {
         Some(sample_wrap()),
         &lines,
         TokenCodec::JsonJcs,
-        false,
     )
     .unwrap()
     .build();

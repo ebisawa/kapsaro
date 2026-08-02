@@ -26,7 +26,7 @@ where
         outcome,
         context_label,
         approval_subject,
-        |candidate| verify_trust_candidate_online(candidate, false),
+        verify_trust_candidate_online,
         confirm_known,
         confirm_non_member,
     )

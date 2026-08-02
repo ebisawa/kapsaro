@@ -56,10 +56,9 @@ pub fn load_read_trust_context(
     self_member_handle: &str,
     self_sig_x: Option<[u8; 32]>,
     local_key_identity: Option<&LocalKeyIdentity>,
-    debug: bool,
 ) -> Result<ReadTrustContextLoadResult> {
     let verified_active_members =
-        load_active_member_index_for_read_trust(workspace_path, local_key_identity, debug)?;
+        load_active_member_index_for_read_trust(workspace_path, local_key_identity)?;
     let trust_ctx = load_trust_context(
         options,
         verified_active_members.active_members_by_kid,
@@ -94,17 +93,15 @@ pub(super) fn load_trust_context(
     };
     let self_trust = load_self_trust(options, self_member_handle, derive_self_sig_x)?;
 
-    if options.debug {
-        debug!(
-            "[TRUST] context: strict_key_checking={}, interactive={}, allow_non_member={}, active_members={}, known_keys={}, recipient_sets={}",
-            format_strict_key_checking(strict_key_checking),
-            is_interactive,
-            options.allow_non_member,
-            active_members_by_kid.len(),
-            known_keys.len(),
-            recipient_sets.len()
-        );
-    }
+    debug!(
+        "[TRUST] context: strict_key_checking={}, interactive={}, allow_non_member={}, active_members={}, known_keys={}, recipient_sets={}",
+        format_strict_key_checking(strict_key_checking),
+        is_interactive,
+        options.allow_non_member,
+        active_members_by_kid.len(),
+        known_keys.len(),
+        recipient_sets.len()
+    );
 
     Ok(TrustContext {
         known_keys,
@@ -135,7 +132,6 @@ struct VerifiedActiveMemberIndex {
 fn load_active_member_index_for_read_trust(
     workspace_path: &Path,
     local_key_identity: Option<&LocalKeyIdentity>,
-    debug: bool,
 ) -> Result<VerifiedActiveMemberIndex> {
     let active_members = load_active_member_files(workspace_path)?;
     if active_members.is_empty() {
@@ -149,7 +145,6 @@ fn load_active_member_index_for_read_trust(
     for member in active_members {
         let verified = verify_public_key_for_verification_context(
             &member,
-            debug,
             WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
         )?;
         if !matches_local_key_identity(verified.verified_public_key.document(), local_key_identity)?

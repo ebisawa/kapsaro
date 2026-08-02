@@ -80,7 +80,7 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
         },
     };
 
-    let result = verify_file_document(&doc, false);
+    let result = verify_file_document(&doc);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("wrap count"));
 }
@@ -108,7 +108,7 @@ fn test_verify_kv_document_rejects_wrap_count_over_limit() {
         test_signature(),
     );
 
-    let result = verify_kv_document(&doc, false);
+    let result = verify_kv_document(&doc);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("wrap count"));
 }
@@ -150,7 +150,7 @@ fn test_verify_file_document_rejects_duplicate_wrap_rh() {
         },
     };
 
-    let result = verify_file_document(&doc, false);
+    let result = verify_file_document(&doc);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -184,7 +184,7 @@ fn test_verify_kv_document_rejects_duplicate_wrap_rh() {
         test_signature(),
     );
 
-    let result = verify_kv_document(&doc, false);
+    let result = verify_kv_document(&doc);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()

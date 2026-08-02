@@ -94,7 +94,6 @@ fn load_signer_public_key(doc: &TrustStoreDocument, keystore_root: &Path) -> Res
 fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedSigningPublicKey> {
     verify_public_key_for_verification_context(
         signer_public_key,
-        false,
         TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
     )
     .map_err(|e| {

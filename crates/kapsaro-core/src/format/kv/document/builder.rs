@@ -19,18 +19,16 @@ pub struct KvDocumentBuilder {
     wrap: WrapSource,
     entries: Vec<KvDocumentEntry>,
     token_codec: TokenCodec,
-    debug: bool,
 }
 
 impl KvDocumentBuilder {
     /// Create a new builder with decoded wrap data.
-    pub fn new(head: KvHeader, wrap: KvWrap, token_codec: TokenCodec, debug: bool) -> Self {
+    pub fn new(head: KvHeader, wrap: KvWrap, token_codec: TokenCodec) -> Self {
         Self {
             head,
             wrap: WrapSource::decoded(wrap),
             entries: Vec::new(),
             token_codec,
-            debug,
         }
     }
 
@@ -40,7 +38,6 @@ impl KvDocumentBuilder {
         wrap: Option<KvWrap>,
         doc: &KvEncDocument,
         token_codec: TokenCodec,
-        debug: bool,
     ) -> Result<Self> {
         let wrap_source = Self::wrap_source_from_lines(wrap.as_ref(), doc.lines())?;
         let entries = doc
@@ -58,7 +55,6 @@ impl KvDocumentBuilder {
             wrap: wrap_source,
             entries,
             token_codec,
-            debug,
         })
     }
 
@@ -71,7 +67,6 @@ impl KvDocumentBuilder {
         wrap: Option<KvWrap>,
         lines: &[KvEncLine],
         token_codec: TokenCodec,
-        debug: bool,
     ) -> Result<Self> {
         let mut entries = Vec::new();
 
@@ -92,7 +87,6 @@ impl KvDocumentBuilder {
             wrap,
             entries,
             token_codec,
-            debug,
         })
     }
 
@@ -138,7 +132,6 @@ impl KvDocumentBuilder {
             wrap: self.wrap,
             entries: self.entries,
             token_codec: self.token_codec,
-            debug: self.debug,
         }
     }
 }

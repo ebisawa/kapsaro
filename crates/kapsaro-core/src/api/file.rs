@@ -53,10 +53,8 @@ impl FileEncArtifact {
         plaintext: &[u8],
         recipients: &RecipientKeys,
         key_ctx: &KeyContext,
-        options: OperationOptions,
     ) -> Result<Self> {
-        let debug = options.debug();
-        let signing = build_signing_context(key_ctx.inner(), debug)?;
+        let signing = build_signing_context(key_ctx.inner())?;
         let content =
             encrypt_file_content(plaintext, recipients.handles(), recipients.keys(), &signing)?;
         Self::parse(content)
@@ -64,12 +62,8 @@ impl FileEncArtifact {
 
     /// Verify the artifact signature.
     pub fn verify(&self, options: OperationOptions) -> Result<VerifiedFileEncArtifact> {
-        verify_file_content_for_operation(
-            self.text.content(),
-            options.debug(),
-            options.allow_expired_key(),
-        )
-        .map(VerifiedFileEncArtifact::from_inner)
+        verify_file_content_for_operation(self.text.content(), options.allow_expired_key())
+            .map(VerifiedFileEncArtifact::from_inner)
     }
 
     /// Return the serialized artifact text.
@@ -104,12 +98,7 @@ impl VerifiedFileEncArtifact {
     ) -> Result<SecretBytes> {
         key_ctx
             .enforce_decryption_key_not_expired(&self.inner().document().protected.wrap, options)?;
-        decrypt_file_document_with_context(
-            self.inner(),
-            key_ctx.member_handle(),
-            key_ctx.inner(),
-            options.debug(),
-        )
-        .map(|result| SecretBytes::from_zeroizing(result.value))
+        decrypt_file_document_with_context(self.inner(), key_ctx.member_handle(), key_ctx.inner())
+            .map(|result| SecretBytes::from_zeroizing(result.value))
     }
 }

@@ -25,24 +25,20 @@ use super::view::build_member_verification_result;
 pub fn verify_members(
     options: &CommonCommandOptions,
     member_handles: &[String],
-    verbose: bool,
 ) -> Result<Vec<MemberVerificationResult>> {
     let workspace = require_workspace(options, "member verify")?;
     let member_files = select_verification_member_files(&workspace.root_path, member_handles)?;
-    let results = block_on(verify_member_files(&member_files, verbose))?;
+    let results = block_on(verify_member_files(&member_files))?;
     Ok(results
         .into_iter()
         .map(build_member_verification_result)
         .collect())
 }
 
-pub(crate) async fn verify_member_files(
-    member_files: &[PathBuf],
-    verbose: bool,
-) -> Vec<VerificationResult> {
+pub(crate) async fn verify_member_files(member_files: &[PathBuf]) -> Vec<VerificationResult> {
     let mut results = Vec::new();
     for member_file in member_files {
-        let subject = match build_verified_member_file_subject(member_file, verbose) {
+        let subject = match build_verified_member_file_subject(member_file) {
             Ok(subject) => subject,
             Err(error) => {
                 let member_handle = derive_member_handle_from_path(member_file);
@@ -59,7 +55,6 @@ pub(crate) async fn verify_member_files(
                 &subject.member_handle,
                 &subject.public_key,
                 &subject.warnings,
-                verbose,
             )
             .await,
         );
@@ -69,29 +64,26 @@ pub(crate) async fn verify_member_files(
 
 pub(crate) async fn verify_member_public_keys(
     public_keys: &[crate::model::public_key::PublicKey],
-    verbose: bool,
 ) -> Result<Vec<VerificationResult>> {
     let mut results = Vec::new();
     for public_key in public_keys {
-        let subject = match crate::feature::member::verification::verify_member_public_key(
-            public_key, verbose,
-        ) {
-            Ok(subject) => subject,
-            Err(error) => {
-                results.push(build_offline_verification_failure(
-                    &public_key.protected.subject_handle,
-                    error,
-                    has_github_claim(public_key),
-                ));
-                continue;
-            }
-        };
+        let subject =
+            match crate::feature::member::verification::verify_member_public_key(public_key) {
+                Ok(subject) => subject,
+                Err(error) => {
+                    results.push(build_offline_verification_failure(
+                        &public_key.protected.subject_handle,
+                        error,
+                        has_github_claim(public_key),
+                    ));
+                    continue;
+                }
+            };
         results.push(
             verify_public_key_online(
                 &subject.member_handle,
                 &subject.public_key,
                 &subject.warnings,
-                verbose,
             )
             .await,
         );
@@ -101,21 +93,19 @@ pub(crate) async fn verify_member_public_keys(
 
 fn build_verified_member_file_subject(
     member_file: &Path,
-    verbose: bool,
 ) -> Result<crate::feature::member::verification::VerifiedMemberFile> {
     let member_handle = derive_member_handle_from_path(member_file);
     let public_key = crate::io::workspace::members::load_member_file_from_path(member_file)?;
     let source_name = format_path_relative_to_cwd(member_file);
-    verify_member_public_key_file(&public_key, Some(&member_handle), &source_name, verbose)
+    verify_member_public_key_file(&public_key, Some(&member_handle), &source_name)
 }
 
 async fn verify_public_key_online(
     member_handle: &str,
     public_key: &crate::model::public_key::PublicKey,
     warnings: &[String],
-    verbose: bool,
 ) -> VerificationResult {
-    let result = match verify_github_account(public_key, verbose).await {
+    let result = match verify_github_account(public_key).await {
         Ok(result) => result,
         Err(error) => VerificationResult::failed(
             member_handle,

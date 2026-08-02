@@ -131,7 +131,7 @@ fn test_remove_known_key_command_rejects_expired_signing_key() {
     );
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
 
-    let result = remove_known_key_command(&options, &execution, KID_OLD, false);
+    let result = remove_known_key_command(&options, &execution, KID_OLD);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
@@ -157,7 +157,7 @@ fn test_remove_recipient_set_command_removes_only_requested_sid() {
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
 
-    let result = remove_recipient_set_command(&options, &execution, SID_FRACTIONAL, false).unwrap();
+    let result = remove_recipient_set_command(&options, &execution, SID_FRACTIONAL).unwrap();
 
     assert_eq!(result.value, SID_FRACTIONAL);
     let protected = verified_trust_store(&home);
@@ -182,7 +182,6 @@ fn test_remove_known_key_command_accepts_display_kid() {
         &options,
         &execution,
         "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0",
-        false,
     )
     .unwrap();
 
@@ -197,7 +196,7 @@ fn test_remove_known_key_command_accepts_unique_prefix() {
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
 
-    let result = remove_known_key_command(&options, &execution, "C4AR", false).unwrap();
+    let result = remove_known_key_command(&options, &execution, "C4AR").unwrap();
 
     assert_eq!(result.value.member_handle, "charlie@example.com");
     assert_eq!(result.value.kid, KID_FRACTIONAL);
@@ -219,7 +218,6 @@ fn test_execute_purge_rejects_expired_signing_key() {
         &options,
         &execution,
         parse_timestamp("2026-01-01T00:00:01Z"),
-        false,
     );
 
     assert!(result.is_err());
@@ -245,7 +243,6 @@ fn test_execute_recipient_set_purge_removes_only_old_records() {
         &options,
         &execution,
         parse_timestamp("2026-01-01T00:00:00.05Z"),
-        false,
     )
     .unwrap();
 
@@ -273,7 +270,7 @@ fn test_recipient_set_mutation_rejects_expired_signing_key_without_store_change(
     );
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
 
-    let result = remove_recipient_set_command(&options, &execution, SID_OLD, false);
+    let result = remove_recipient_set_command(&options, &execution, SID_OLD);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
@@ -318,7 +315,7 @@ fn test_remove_known_key_command_surfaces_insecure_permission_warning() {
     let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
-    let result = remove_known_key_command(&options, &execution, KID_OLD, false).unwrap();
+    let result = remove_known_key_command(&options, &execution, KID_OLD).unwrap();
 
     assert_eq!(result.value.member_handle, "bob@example.com");
     assert_eq!(result.value.kid, KID_OLD);

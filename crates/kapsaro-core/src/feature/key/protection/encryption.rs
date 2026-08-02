@@ -71,7 +71,6 @@ pub struct PrivateKeyEncryptionParams<'a> {
     pub ssh_fpr: String,
     pub created_at: String,
     pub expires_at: String,
-    pub debug: bool,
 }
 
 /// Encrypt PrivateKey with SSH key
@@ -92,14 +91,12 @@ pub fn encrypt_private_key(params: &PrivateKeyEncryptionParams<'_>) -> Result<Pr
         &material.hkdf_salt,
         params.backend,
         params.ssh_pubkey,
-        params.debug,
     )?;
 
     let encrypted = encrypt_private_key_plaintext(
         params.plaintext,
         &enc_key,
         &protected,
-        params.debug,
         "encrypt_private_key",
     )?;
 
@@ -114,7 +111,6 @@ pub fn decrypt_private_key(
     private_key: &PrivateKey,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
-    debug: bool,
 ) -> Result<PrivateKeyPlaintext> {
     validate_ssh_protection_algorithm(private_key)?;
     verify_ssh_fingerprint_matches(private_key, ssh_pubkey)?;
@@ -129,14 +125,12 @@ pub fn decrypt_private_key(
         &hkdf_salt,
         backend,
         ssh_pubkey,
-        debug,
     )?;
 
     match decrypt_private_key_plaintext(
         &derived.enc_key,
         &ciphertext,
         &private_key.protected.kid,
-        debug,
         "decrypt_private_key",
     ) {
         Ok(plaintext) => Ok(plaintext),
@@ -146,7 +140,6 @@ pub fn decrypt_private_key(
                 backend,
                 ssh_pubkey,
                 &derived.raw_sig,
-                debug,
             )?;
             Err(build_private_key_decrypt_error(error))
         }
@@ -158,7 +151,6 @@ fn enforce_private_key_use_determinism(
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
     raw_sig: &crate::io::ssh::protocol::types::Ed25519RawSignature,
-    debug: bool,
 ) -> Result<()> {
     key_derivation::enforce_private_key_use_signature_determinism(
         &private_key.protected.kid,
@@ -166,7 +158,6 @@ fn enforce_private_key_use_determinism(
         backend,
         ssh_pubkey,
         raw_sig,
-        debug,
     )
 }
 

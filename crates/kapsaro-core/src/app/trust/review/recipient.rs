@@ -21,7 +21,7 @@ where
     review_recipient_trust_with_confirmation_verifier(
         outcome,
         context_label,
-        |candidate| verify_trust_candidate_online(candidate, false),
+        verify_trust_candidate_online,
         confirm_recipients,
     )
 }

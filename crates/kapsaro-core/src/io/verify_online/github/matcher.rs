@@ -9,35 +9,26 @@ use crate::io::verify_online::{VerificationResult, VerifiedGithubIdentity};
 use crate::model::public_key::PublicKey;
 use tracing::debug;
 
-pub(super) fn compute_attestation_fingerprint(
-    public_key: &PublicKey,
-    verbose: bool,
-) -> Option<String> {
+pub(super) fn compute_attestation_fingerprint(public_key: &PublicKey) -> Option<String> {
     let member_handle = &public_key.protected.subject_handle;
-    if verbose {
-        debug!(
-            "[VERIFY] Verify {}: computing fingerprint from attestation.pub",
-            member_handle
-        );
-    }
+    debug!(
+        "[VERIFY] Verify {}: computing fingerprint from attestation.pub",
+        member_handle
+    );
 
     match fingerprint::build_sha256_fingerprint(&public_key.protected.attestation.pub_) {
         Ok(fingerprint) => {
-            if verbose {
-                debug!(
-                    "[VERIFY] Verify {}: attestation fingerprint {}",
-                    member_handle, fingerprint
-                );
-            }
+            debug!(
+                "[VERIFY] Verify {}: attestation fingerprint {}",
+                member_handle, fingerprint
+            );
             Some(fingerprint)
         }
         Err(_) => {
-            if verbose {
-                debug!(
-                    "[VERIFY] Verify {}: failed to compute fingerprint",
-                    member_handle
-                );
-            }
+            debug!(
+                "[VERIFY] Verify {}: failed to compute fingerprint",
+                member_handle
+            );
             None
         }
     }
@@ -49,7 +40,6 @@ pub(super) fn find_key_by_fingerprint(
     github_keys: &[GitHubKeyRecord],
     id_used: u64,
     login_for_keys: &str,
-    verbose: bool,
 ) -> Option<VerificationResult> {
     let member_handle = &public_key.protected.subject_handle;
 
@@ -61,12 +51,10 @@ pub(super) fn find_key_by_fingerprint(
             continue;
         }
 
-        if verbose {
-            debug!(
-                "[VERIFY] Verify {}: fingerprint match (GitHub key id={})",
-                member_handle, github_key.id
-            );
-        }
+        debug!(
+            "[VERIFY] Verify {}: fingerprint match (GitHub key id={})",
+            member_handle, github_key.id
+        );
         return Some(VerificationResult::verified(
             member_handle,
             format!(

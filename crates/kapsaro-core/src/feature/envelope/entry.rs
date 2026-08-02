@@ -27,7 +27,6 @@ pub(crate) fn encrypt_entry(
     value: &str,
     key_schedule: &KvKeySchedule,
     sid: &Uuid,
-    debug: bool,
     caller: &str,
     disclosed: bool,
 ) -> Result<KvEntryValue> {
@@ -38,12 +37,10 @@ pub(crate) fn encrypt_entry(
     let aad = build_kv_entry_aad(sid, key)?;
     let plaintext = Plaintext::from(value.as_bytes());
 
-    if debug {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (key: cek)",
-            caller
-        );
-    }
+    debug!(
+        "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (key: cek)",
+        caller
+    );
     let (ciphertext, _) =
         xchacha_encrypt_with_fresh_nonce(&cek_key, &plaintext, &aad, fresh_nonce)?;
 
@@ -64,7 +61,6 @@ pub(crate) fn decrypt_entry(
     aead: &str,
     key_schedule: &KvKeySchedule,
     sid: &Uuid,
-    debug: bool,
     caller: &str,
 ) -> Result<Zeroizing<Vec<u8>>> {
     validate_kv_entry_aead(aead)?;
@@ -75,12 +71,10 @@ pub(crate) fn decrypt_entry(
     let ciphertext = decode_base64url_nopad_ciphertext(&entry.ct, "ct")?;
     let aad = build_kv_entry_aad(sid, key)?;
 
-    if debug {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (key: cek)",
-            caller
-        );
-    }
+    debug!(
+        "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (key: cek)",
+        caller
+    );
     let mut plaintext = xchacha_decrypt(&cek_key, &nonce, &aad, &ciphertext)?;
     Ok(plaintext.take_zeroizing_vec())
 }

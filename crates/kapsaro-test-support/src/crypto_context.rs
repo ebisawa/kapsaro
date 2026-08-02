@@ -34,7 +34,6 @@ pub fn setup_member_key_context(
         Box::new(backend),
         ssh_pub,
         Some(temp_dir.path().join("workspace")),
-        false,
     )
     .unwrap()
 }

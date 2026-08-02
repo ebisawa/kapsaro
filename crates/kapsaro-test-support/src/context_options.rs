@@ -17,7 +17,6 @@ pub fn build_test_signing_command_options(home: &Path, workspace: &Path) -> Comm
     CommonCommandOptions {
         home: Some(home.to_path_buf()),
         identity: Some(home.join(".ssh").join("test_ed25519")),
-        debug: false,
         verbose: false,
         workspace: Some(workspace.to_path_buf()),
         ssh_signing_method: Some(SshSigningMethod::SshKeygen),
@@ -36,7 +35,6 @@ pub fn build_test_command_options_with(
     CommonCommandOptions {
         home: Some(home.to_path_buf()),
         identity: identity.map(Path::to_path_buf),
-        debug: false,
         verbose,
         workspace: workspace.map(Path::to_path_buf),
         ssh_signing_method,

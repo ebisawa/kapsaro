@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::app::artifact::{list_workspace_encrypted_artifacts, load_artifact_content};
-use crate::app::context::options::CommonCommandOptions;
 use crate::feature::artifact::{artifact_recipient_evidence, verify_artifact_signature};
 use crate::feature::trust::recipient_sets::{
     find_recipient_handle_mismatch, ArtifactRecipientEvidence, RecipientHandleMismatch,
@@ -22,7 +21,6 @@ use crate::Result;
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
 pub fn check_artifacts(
-    options: &CommonCommandOptions,
     _member_handle: Option<&str>,
     workspace: &WorkspaceRoot,
 ) -> Result<Vec<DoctorCheck>> {
@@ -47,7 +45,7 @@ pub fn check_artifacts(
         format!("{} encrypted artifact(s) found", artifact_paths.len()),
     )];
     for path in artifact_paths {
-        checks.extend(check_artifact(&path, &active_members_by_kid, options.debug));
+        checks.extend(check_artifact(&path, &active_members_by_kid));
     }
     Ok(checks)
 }
@@ -55,7 +53,6 @@ pub fn check_artifacts(
 fn check_artifact(
     path: &Path,
     active_members_by_kid: &BTreeMap<String, PublicKey>,
-    verbose: bool,
 ) -> Vec<DoctorCheck> {
     let subject = DoctorSubject::Artifact(format_path_relative_to_cwd(path));
     let content = match load_artifact_for_doctor(path, &subject) {
@@ -64,7 +61,7 @@ fn check_artifact(
     };
 
     let mut checks = vec![check_artifact_format(&subject)];
-    let proof = match check_artifact_signature(&content, &subject, verbose) {
+    let proof = match check_artifact_signature(&content, &subject) {
         ArtifactSignatureCheck::Verified(proof) => *proof,
         ArtifactSignatureCheck::Finding(check) => {
             checks.push(check);
@@ -115,9 +112,8 @@ enum ArtifactSignatureCheck {
 fn check_artifact_signature(
     content: &EncContent,
     subject: &DoctorSubject,
-    verbose: bool,
 ) -> ArtifactSignatureCheck {
-    match verify_artifact_signature(content, verbose) {
+    match verify_artifact_signature(content) {
         Ok(proof) => ArtifactSignatureCheck::Verified(Box::new(proof)),
         Err(error) => {
             ArtifactSignatureCheck::Finding(DoctorCheck::fail_with_reason_and_next_action(

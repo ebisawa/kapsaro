@@ -49,7 +49,6 @@ fn single_rewrap_request<'a>(
     workspace_root: Option<&std::path::Path>,
     rotate_key: bool,
     clear_disclosure_history: bool,
-    debug: bool,
 ) -> RewrapRequest<'a> {
     let target_members = workspace_root
         .map(|workspace_root| {
@@ -64,7 +63,6 @@ fn single_rewrap_request<'a>(
         target_members,
         rotate_key,
         clear_disclosure_history,
-        debug,
     }
 }
 
@@ -148,7 +146,6 @@ fn encrypt_file_for_alice(
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap()
@@ -173,7 +170,6 @@ fn resign_with_invalid_key_possession(
         key_ctx.signing_key(),
         kid,
         signer_pub,
-        false,
     )
     .unwrap();
     document
@@ -204,7 +200,6 @@ fn encrypt_file_for_alice_and_bob(
             signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub,
-            debug: false,
         },
     )
     .unwrap()
@@ -227,7 +222,7 @@ fn test_rotate_file_key_changes_content() {
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
     let rewrapped_json = rewrap_file_content(
         &FileEncContent::new_unchecked(original_json.clone()),
         &request,
@@ -258,7 +253,7 @@ fn test_rotate_file_key_preserves_decryptability() {
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
 
     // Rewrap with rotation
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
     let rewrapped_json = rewrap_file_content(
         &FileEncContent::new_unchecked(original_json.clone()),
         &request,
@@ -267,15 +262,9 @@ fn test_rotate_file_key_preserves_decryptability() {
 
     // Verify and decrypt the rewrapped document
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
-    let verified = verify_file_document(&rewrapped_doc, false).unwrap();
-    let decrypted = decrypt_file_document(
-        &verified,
-        ALICE_MEMBER_HANDLE,
-        kid,
-        key_ctx.private_key(),
-        false,
-    )
-    .unwrap();
+    let verified = verify_file_document(&rewrapped_doc).unwrap();
+    let decrypted =
+        decrypt_file_document(&verified, ALICE_MEMBER_HANDLE, kid, key_ctx.private_key()).unwrap();
 
     assert_eq!(
         decrypted.as_slice(),
@@ -297,7 +286,7 @@ fn test_rotate_file_key_updates_wrap() {
     let doc = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
     let rewrapped_json = rewrap_file_content(
         &FileEncContent::new_unchecked(original_json.clone()),
         &request,
@@ -328,23 +317,16 @@ fn test_rewrap_file_rejects_invalid_key_possession_without_rotation() {
 
     let document = encrypt_file_for_alice(&temp_dir, kid, &key_ctx);
     let document = resign_with_invalid_key_possession(&temp_dir, kid, &key_ctx, document);
-    let verified = verify_file_document(&document, false)
+    let verified = verify_file_document(&document)
         .expect("tampered proof fixture must keep a valid Ed25519 signature");
 
     assert!(
-        decrypt_file_document(
-            &verified,
-            ALICE_MEMBER_HANDLE,
-            kid,
-            key_ctx.private_key(),
-            false,
-        )
-        .is_err(),
+        decrypt_file_document(&verified, ALICE_MEMBER_HANDLE, kid, key_ctx.private_key(),).is_err(),
         "fixture must be rejected by normal decrypt"
     );
 
     let json = serde_json::to_string_pretty(&document).unwrap();
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(result.is_err());
@@ -368,7 +350,7 @@ fn test_rotate_file_key_rejects_invalid_key_possession() {
     let document = resign_with_invalid_key_possession(&temp_dir, kid, &key_ctx, document);
     let json = serde_json::to_string_pretty(&document).unwrap();
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(result.is_err());
@@ -395,7 +377,7 @@ fn test_add_file_recipient_via_rewrap() {
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
     setup_workspace_members(&temp_dir, BOB_MEMBER_HANDLE, &bob_kid);
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
@@ -433,7 +415,7 @@ fn test_add_file_recipient_already_exists_noop() {
     let json = serde_json::to_string_pretty(&doc).unwrap();
 
     // Rewrap when all recipients already present (alice is both in doc and workspace)
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false);
     let result = rewrap_file_content(&FileEncContent::new_unchecked(json), &request);
 
     assert!(
@@ -462,7 +444,7 @@ fn test_remove_file_recipient_via_rewrap() {
     // Setup workspace with only alice (bob removed from workspace)
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
@@ -498,18 +480,17 @@ fn test_replace_file_recipient_wraps_added_member_with_rotated_key() {
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
     setup_workspace_members(&temp_dir, CAROL_MEMBER_HANDLE, &carol_kid);
 
-    let request = single_rewrap_request(&alice_ctx, Some(temp_dir.path()), false, false, false);
+    let request = single_rewrap_request(&alice_ctx, Some(temp_dir.path()), false, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
-    let verified = verify_file_document(&rewrapped_doc, false).unwrap();
+    let verified = verify_file_document(&rewrapped_doc).unwrap();
 
     let decrypted = decrypt_file_document(
         &verified,
         CAROL_MEMBER_HANDLE,
         &carol_kid,
         carol_ctx.private_key(),
-        false,
     )
     .unwrap();
 
@@ -533,7 +514,7 @@ fn test_remove_file_recipient_adds_disclosure() {
     // Setup workspace with only alice (bob removed)
     setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
 
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), false, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(json), &request).unwrap();
 
@@ -577,7 +558,7 @@ fn test_rewrap_file_roundtrip_with_rotation() {
     let original_json = serde_json::to_string_pretty(&doc).unwrap();
 
     // Rewrap with rotation
-    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false, false);
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
     let rewrapped_json =
         rewrap_file_content(&FileEncContent::new_unchecked(original_json), &request).unwrap();
 
@@ -591,7 +572,7 @@ fn test_rewrap_file_roundtrip_with_rotation() {
 
     // Verify signature on rewrapped document
     let rewrapped_doc = parsed.unwrap();
-    let verified = verify_file_document(&rewrapped_doc, false);
+    let verified = verify_file_document(&rewrapped_doc);
     assert!(
         verified.is_ok(),
         "rewrapped document must pass signature verification: {:?}",

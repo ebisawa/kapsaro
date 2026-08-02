@@ -60,7 +60,6 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
             signing_key: expired_key_ctx.signing_key(),
             signer_kid: &expired_kid,
             signer_pub: expired_public_key,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -115,7 +114,6 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
             signing_key: valid_key_ctx.signing_key(),
             signer_kid: &valid_kid,
             signer_pub: valid_public_key,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -178,7 +176,6 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -191,10 +188,8 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap(),
-            debug: false,
         },
         TokenCodec::JsonJcs,
-        "kv_list_command_rejects_invalid_key_possession_without_decrypting_entries",
     )
     .unwrap();
     std::fs::write(
@@ -216,7 +211,7 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
         )
         .unwrap();
 
-        let error = super::execute_kv_list_command(&command, false).unwrap_err();
+        let error = super::execute_kv_list_command(&command).unwrap_err();
         assert!(error.to_string().contains("E_KEY_POSSESSION_MAC_INVALID"));
     });
 }

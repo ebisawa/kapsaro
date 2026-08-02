@@ -37,7 +37,7 @@ pub fn check_local_state(
 ) -> Result<LocalStateDiagnostics> {
     let base_dir = options.resolve_base_dir()?;
     let keystore_root = options.resolve_keystore_root()?;
-    log_local_state_start(&base_dir, &keystore_root, options.debug);
+    log_local_state_start(&base_dir, &keystore_root);
 
     let mut checks = vec![build_paths_resolved_check(&keystore_root)];
     let root_check = check_keystore_root(&keystore_root);
@@ -49,24 +49,22 @@ pub fn check_local_state(
 
     let owner = resolve_owner(options, member_handle);
     let Some(owner) = owner else {
-        log_unresolved_owner(options.debug);
+        log_unresolved_owner();
         checks.push(check_unresolved_keystore_owner(&base_dir));
         return Ok(LocalStateDiagnostics { checks });
     };
-    log_resolved_owner(&owner, options.debug);
+    log_resolved_owner(&owner);
 
-    checks.extend(check_member_keystore(&keystore_root, &owner, options.debug));
+    checks.extend(check_member_keystore(&keystore_root, &owner));
     Ok(LocalStateDiagnostics { checks })
 }
 
-fn log_local_state_start(base_dir: &Path, keystore_root: &Path, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[DOCTOR] local state: start home={}, keystore_root={}",
-            format_path_relative_to_cwd(base_dir),
-            format_path_relative_to_cwd(keystore_root)
-        );
-    }
+fn log_local_state_start(base_dir: &Path, keystore_root: &Path) {
+    debug!(
+        "[DOCTOR] local state: start home={}, keystore_root={}",
+        format_path_relative_to_cwd(base_dir),
+        format_path_relative_to_cwd(keystore_root)
+    );
 }
 
 fn build_paths_resolved_check(keystore_root: &Path) -> DoctorCheck {
@@ -107,16 +105,12 @@ fn check_unresolved_keystore_owner(base_dir: &Path) -> DoctorCheck {
     )
 }
 
-fn log_unresolved_owner(debug_enabled: bool) {
-    if debug_enabled {
-        debug!("[DOCTOR] local state: member owner unresolved");
-    }
+fn log_unresolved_owner() {
+    debug!("[DOCTOR] local state: member owner unresolved");
 }
 
-fn log_resolved_owner(owner: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!("[DOCTOR] local state: member owner={owner}");
-    }
+fn log_resolved_owner(owner: &str) {
+    debug!("[DOCTOR] local state: member owner={owner}");
 }
 
 pub fn check_trust_store(
@@ -131,7 +125,7 @@ pub fn check_trust_store(
     };
 
     let path = get_trust_store_file_path(&base_dir, &owner);
-    log_trust_store_path(&path, &owner, options.debug);
+    log_trust_store_path(&path, &owner);
     if !path.exists() {
         return Ok(vec![check_missing_trust_store(&path)]);
     }
@@ -140,7 +134,7 @@ pub fn check_trust_store(
         TrustStoreCheck::Loaded(state) => state,
         TrustStoreCheck::Finding(check) => return Ok(vec![check]),
     };
-    log_trust_store_state(&state, options.debug);
+    log_trust_store_state(&state);
 
     let mut checks = vec![check_verified_trust_store(&path)];
     checks.extend(check_trust_store_permissions(&path, state.warnings));
@@ -162,14 +156,12 @@ fn check_unresolved_trust_store_owner(base_dir: &Path) -> DoctorCheck {
     )
 }
 
-fn log_trust_store_path(path: &Path, owner: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[DOCTOR] trust store: inspect path={}, owner={}",
-            format_path_relative_to_cwd(path),
-            owner
-        );
-    }
+fn log_trust_store_path(path: &Path, owner: &str) {
+    debug!(
+        "[DOCTOR] trust store: inspect path={}, owner={}",
+        format_path_relative_to_cwd(path),
+        owner
+    );
 }
 
 fn check_missing_trust_store(path: &Path) -> DoctorCheck {
@@ -206,14 +198,12 @@ fn load_trust_store_state(
     }
 }
 
-fn log_trust_store_state(state: &TrustStoreState, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
-            state.protected.known_keys.len(),
-            state.protected.recipient_sets.len()
-        );
-    }
+fn log_trust_store_state(state: &TrustStoreState) {
+    debug!(
+        "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
+        state.protected.known_keys.len(),
+        state.protected.recipient_sets.len()
+    );
 }
 
 fn check_verified_trust_store(path: &Path) -> DoctorCheck {
@@ -251,11 +241,7 @@ fn resolve_owner(options: &CommonCommandOptions, member_handle: Option<&str>) ->
     resolve_required_member(options, None).ok()
 }
 
-fn check_member_keystore(
-    keystore_root: &Path,
-    member_handle: &str,
-    debug_enabled: bool,
-) -> Vec<DoctorCheck> {
+fn check_member_keystore(keystore_root: &Path, member_handle: &str) -> Vec<DoctorCheck> {
     let member_dir = keystore_root.join(member_handle);
     let mut checks = Vec::new();
     if !is_real_dir(&member_dir) {
@@ -271,7 +257,7 @@ fn check_member_keystore(
             return checks;
         }
     };
-    log_active_kid(member_handle, &active_kid, debug_enabled);
+    log_active_kid(member_handle, &active_kid);
 
     checks.push(check_configured_active_kid(&active_kid));
     checks.push(check_private_key(keystore_root, member_handle, &active_kid));
@@ -338,14 +324,12 @@ fn check_unreadable_active_kid(member_handle: &str, reason: impl Into<String>) -
     )
 }
 
-fn log_active_kid(member_handle: &str, active_kid: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[DOCTOR] local state: inspect active key member_handle={}, kid={}",
-            member_handle,
-            format_kid_half_display_lossy(active_kid)
-        );
-    }
+fn log_active_kid(member_handle: &str, active_kid: &str) {
+    debug!(
+        "[DOCTOR] local state: inspect active key member_handle={}, kid={}",
+        member_handle,
+        format_kid_half_display_lossy(active_kid)
+    );
 }
 
 fn check_configured_active_kid(active_kid: &str) -> DoctorCheck {

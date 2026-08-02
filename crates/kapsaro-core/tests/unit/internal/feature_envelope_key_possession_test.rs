@@ -89,10 +89,9 @@ fn key_possession_proof_binds_signer_kid() {
     let mac_key = MacKey::new([7u8; 32]);
     let body_bytes = ArtifactBodyBytes::from_bytes(br#"{"format":"kapsaro:format:file-enc@1"}"#);
 
-    let proof =
-        build_key_possession_proof("file", &body_bytes, &mac_key, SIGNER_KID, false).unwrap();
+    let proof = build_key_possession_proof("file", &body_bytes, &mac_key, SIGNER_KID).unwrap();
     let other_proof =
-        build_key_possession_proof("file", &body_bytes, &mac_key, OTHER_SIGNER_KID, false).unwrap();
+        build_key_possession_proof("file", &body_bytes, &mac_key, OTHER_SIGNER_KID).unwrap();
 
     assert_ne!(proof.as_str(), other_proof.as_str());
     assert_ne!(proof.tag(), other_proof.tag());
@@ -102,19 +101,12 @@ fn key_possession_proof_binds_signer_kid() {
 fn key_possession_verification_rejects_signer_kid_mismatch() {
     let mac_key = MacKey::new([9u8; 32]);
     let body_bytes = ArtifactBodyBytes::from_bytes(br#"{"format":"kapsaro:format:file-enc@1"}"#);
-    let proof =
-        build_key_possession_proof("file", &body_bytes, &mac_key, SIGNER_KID, false).unwrap();
+    let proof = build_key_possession_proof("file", &body_bytes, &mac_key, SIGNER_KID).unwrap();
 
-    verify_key_possession_proof("file", &proof, &mac_key, &body_bytes, SIGNER_KID, false).unwrap();
+    verify_key_possession_proof("file", &proof, &mac_key, &body_bytes, SIGNER_KID).unwrap();
 
-    let result = verify_key_possession_proof(
-        "file",
-        &proof,
-        &mac_key,
-        &body_bytes,
-        OTHER_SIGNER_KID,
-        false,
-    );
+    let result =
+        verify_key_possession_proof("file", &proof, &mac_key, &body_bytes, OTHER_SIGNER_KID);
 
     assert!(result.is_err());
     assert!(result

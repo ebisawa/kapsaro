@@ -25,7 +25,6 @@ fn decrypt_entry_rejects_unsupported_header_aead_before_decoding_entry() {
         "aes-256-gcm",
         &key_schedule,
         &sid,
-        false,
         "test",
     );
 
@@ -50,7 +49,6 @@ fn decrypt_entry_accepts_supported_header_aead_until_entry_decoding() {
         algorithm::AEAD_XCHACHA20_POLY1305,
         &key_schedule,
         &sid,
-        false,
         "test",
     );
 

@@ -12,7 +12,6 @@ pub(crate) fn build_test_command_options(
     CommonCommandOptions {
         home: Some(home.to_path_buf()),
         identity: None,
-        debug: false,
         verbose: false,
         workspace: workspace.map(Path::to_path_buf),
         ssh_signing_method: None,

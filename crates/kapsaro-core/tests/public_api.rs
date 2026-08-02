@@ -41,7 +41,7 @@ fn api_exposes_use_case_modules() {
     let _secret = kapsaro_core::api::secret::SecretString::new("secret".to_string());
     let _bytes = kapsaro_core::api::secret::SecretBytes::new(vec![1, 2, 3]);
     let _options = kapsaro_core::api::operation::OperationOptions::default();
-    let _online = kapsaro_core::api::online::GitHubOnlineVerifier::new(_options);
+    let _online = kapsaro_core::api::online::GitHubOnlineVerifier::new();
 
     assert_eq!(key_store.root(), temp.path().join("keys").as_path());
     assert_eq!(
@@ -58,8 +58,7 @@ fn key_context_options_group_runtime_inputs() {
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA".to_string(),
     )
     .with_kid("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
-    .with_workspace_path(std::path::PathBuf::from("/tmp/workspace"))
-    .with_operation_options(OperationOptions::new().with_debug(true));
+    .with_workspace_path(std::path::PathBuf::from("/tmp/workspace"));
 
     let _load_key_context = LocalKeyStore::load_key_context;
 }
@@ -149,12 +148,7 @@ fn error_exposes_stable_kind_for_embedding_apps() {
 #[test]
 fn kv_artifact_exposes_entry_named_operations() {
     assert!(std::any::type_name::<
-        fn(
-            Vec<KvInputEntry>,
-            &RecipientKeys,
-            &KeyContext,
-            OperationOptions,
-        ) -> Result<KvEncArtifact>,
+        fn(Vec<KvInputEntry>, &RecipientKeys, &KeyContext) -> Result<KvEncArtifact>,
     >()
     .contains("fn"));
 
@@ -202,7 +196,7 @@ fn trust_evaluator_returns_review_without_prompting() {
 fn online_facade_fails_closed_without_online_feature() {
     use kapsaro_core::api::online::GitHubOnlineVerifier;
 
-    let verifier = GitHubOnlineVerifier::new(OperationOptions::default());
+    let verifier = GitHubOnlineVerifier::new();
     let error = verifier
         .resolve_account_by_login("alice")
         .expect_err("online facade must fail without online feature");
@@ -217,12 +211,8 @@ fn test_file_artifact_io_methods_pinned() {
     let _load: fn(&std::path::Path) -> Result<FileEncArtifact> = |p| FileEncArtifact::load(p);
     let _save_fn: fn(&FileEncArtifact, &std::path::Path) -> Result<()> = |a, p| a.save(p);
     let _as_str_fn: fn(&FileEncArtifact) -> &str = FileEncArtifact::as_str;
-    let _encrypt_bytes: fn(
-        &[u8],
-        &RecipientKeys,
-        &KeyContext,
-        OperationOptions,
-    ) -> Result<FileEncArtifact> = FileEncArtifact::encrypt_bytes;
+    let _encrypt_bytes: fn(&[u8], &RecipientKeys, &KeyContext) -> Result<FileEncArtifact> =
+        FileEncArtifact::encrypt_bytes;
     // Pin recipient_set_subject on VerifiedFileEncArtifact.
     let _rss: fn(&VerifiedFileEncArtifact) -> Result<RecipientSetSubject> =
         VerifiedFileEncArtifact::recipient_set_subject;
@@ -256,7 +246,7 @@ fn test_local_key_store_methods_pinned() {
     // load_recipient_keys is generic; call the monomorphised version via a concrete iterator.
     let temp = tempfile::tempdir().expect("tempdir");
     let ks = LocalKeyStore::new(temp.path().join("keys"));
-    let _ = ks.load_recipient_keys(std::iter::empty::<String>(), OperationOptions::default());
+    let _ = ks.load_recipient_keys(std::iter::empty::<String>());
 }
 
 #[test]
@@ -307,15 +297,11 @@ fn test_online_verification_types_pinned() {
 
 #[test]
 fn test_operation_options_methods_pinned() {
-    let opts = OperationOptions::new()
-        .with_allow_expired_key(true)
-        .with_debug(false);
+    let opts = OperationOptions::new().with_allow_expired_key(true);
     assert!(opts.allow_expired_key());
-    assert!(!opts.debug());
     // Pin method shapes.
     let _with_allow_expired_key: fn(OperationOptions, bool) -> OperationOptions =
         OperationOptions::with_allow_expired_key;
-    let _debug_getter: fn(&OperationOptions) -> bool = OperationOptions::debug;
     let _allow_expired_key_getter: fn(&OperationOptions) -> bool =
         OperationOptions::allow_expired_key;
 }

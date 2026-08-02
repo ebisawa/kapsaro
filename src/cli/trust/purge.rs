@@ -56,12 +56,7 @@ fn run_purge_flow<Candidates, Outcome, List, Preview, Execute, Print>(
 where
     List: Fn(&CommonCommandOptions, &str, OffsetDateTime) -> Result<Candidates, Error>,
     Preview: Fn(&Candidates, &mut BTreeSet<String>) -> bool,
-    Execute: Fn(
-        &CommonCommandOptions,
-        &ExecutionContext,
-        OffsetDateTime,
-        bool,
-    ) -> Result<Outcome, Error>,
+    Execute: Fn(&CommonCommandOptions, &ExecutionContext, OffsetDateTime) -> Result<Outcome, Error>,
     Print: Fn(&Outcome, &mut BTreeSet<String>),
 {
     let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
@@ -86,7 +81,7 @@ where
     let result = run_with_trust_store_reset_recovery(
         &options,
         || resolve_trust_store_owner_member(&options, member_handle.clone()),
-        || execute(&options, &execution, older_than_timestamp, options.debug),
+        || execute(&options, &execution, older_than_timestamp),
     )?;
     print_outcome(&result, &mut shown_warnings);
     Ok(())

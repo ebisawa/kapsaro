@@ -22,7 +22,7 @@ fn encrypt_file_payload_content_returns_valid_ciphertext() {
         },
     };
 
-    let result = encrypt_file_payload_content(&plaintext, &key, &header, false, "test");
+    let result = encrypt_file_payload_content(&plaintext, &key, &header, "test");
     assert!(result.is_ok());
 
     let ciphertext = result.unwrap();

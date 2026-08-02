@@ -20,15 +20,12 @@ pub(crate) fn encrypt_file_payload_content(
     plaintext: &Plaintext,
     key: &XChaChaKey,
     payload_header: &FilePayloadHeader,
-    debug: bool,
     caller: &str,
 ) -> Result<FilePayloadCiphertext> {
-    if debug {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (key: dek)",
-            caller
-        );
-    }
+    debug!(
+        "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (key: dek)",
+        caller
+    );
     let aad = build_file_payload_aad(payload_header)?;
     let (ciphertext, nonce) = xchacha_encrypt_with_nonce(key, plaintext, &aad)?;
     Ok(FilePayloadCiphertext {

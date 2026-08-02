@@ -76,12 +76,11 @@ fn encrypt_file_for_test(
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
 
-    let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
+    let verified_doc = verify_file_document(&file_enc_doc).unwrap();
 
     (verified_doc, key_ctx, kid, temp_dir)
 }
@@ -119,14 +118,13 @@ fn encrypt_kv_for_test(
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
     .unwrap();
 
     let doc = parse_kv_document(&encrypted).unwrap();
-    let verified_doc = verify_kv_document(&doc, false).unwrap();
+    let verified_doc = verify_kv_document(&doc).unwrap();
 
     (verified_doc, key_ctx, kid, temp_dir)
 }
@@ -146,7 +144,6 @@ fn test_decrypt_file_selects_wrap_by_kid() {
         ALICE_MEMBER_HANDLE,
         &kid,
         key_ctx.private_key(),
-        false,
     );
 
     assert!(result.is_ok());
@@ -164,7 +161,6 @@ fn test_decrypt_file_reports_missing_wrap_kid() {
         ALICE_MEMBER_HANDLE,
         nonexistent_kid,
         key_ctx.private_key(),
-        false,
     );
 
     assert!(result.is_err());
@@ -189,7 +185,6 @@ fn test_decrypt_file_rejects_recipient_handle_mismatch() {
         different_member_handle,
         &kid,
         key_ctx.private_key(),
-        false,
     );
 
     assert!(
@@ -222,7 +217,6 @@ fn test_decrypt_kv_document_rh_mismatch_fails() {
         different_member_handle,
         &kid,
         key_ctx.private_key(),
-        false,
     );
 
     assert!(
@@ -272,21 +266,19 @@ fn test_decrypt_kv_entries_empty() {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
     .unwrap();
 
     let doc = parse_kv_document(&encrypted).unwrap();
-    let verified_doc = verify_kv_document(&doc, false).unwrap();
+    let verified_doc = verify_kv_document(&doc).unwrap();
 
     let decrypted = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         &kid,
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
 
@@ -307,7 +299,6 @@ fn test_decrypt_kv_entries_multiple() {
         ALICE_MEMBER_HANDLE,
         &kid,
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
 
@@ -365,7 +356,7 @@ fn test_unwrap_master_key_for_file() {
         SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
     ));
     let private_key =
-        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
+        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub).unwrap();
 
     let signing_key = generate_ed25519_keypair([2u8; 32]);
     let content = b"Hello, World!";
@@ -380,7 +371,6 @@ fn test_unwrap_master_key_for_file() {
             signing_key: &signing_key,
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
@@ -400,8 +390,7 @@ fn test_unwrap_master_key_for_file() {
 
     // Unwrap master key
     let unwrapped_key =
-        unwrap_master_key_for_file(&verified, ALICE_MEMBER_HANDLE, kid, &decrypted_key, false)
-            .unwrap();
+        unwrap_master_key_for_file(&verified, ALICE_MEMBER_HANDLE, kid, &decrypted_key).unwrap();
 
     // Verify unwrapped key is valid
     assert_eq!(unwrapped_key.as_bytes().len(), 32);
@@ -425,7 +414,7 @@ fn test_unwrap_master_key_from_wrap_item() {
         SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
     ));
     let private_key_plaintext =
-        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
+        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub).unwrap();
 
     let sid = Uuid::new_v4();
     let master_key = build_test_master_key();
@@ -433,7 +422,7 @@ fn test_unwrap_master_key_from_wrap_item() {
     // Extract kid from public key for kids list
     // Create wrap item (wrap in Attested for API)
     let attested_pubkey = build_verified_recipient_key(public_key.clone());
-    let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
+    let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key).unwrap();
 
     // Unwrap master key using the same private key that matches the public key used to create wrap
     // Note: build_wrap_item_for_file uses hpke_info::file, so we need to use unwrap_master_key_base
@@ -455,7 +444,6 @@ fn test_unwrap_master_key_from_wrap_item() {
         &sid,
         &kem_secret_key,
         build_file_wrap_info,
-        false,
         "test_unwrap_master_key_from_wrap_item",
     )
     .unwrap();
@@ -483,14 +471,14 @@ fn test_hpke_aad_binding_defence_in_depth() {
         SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
     ));
     let private_key_plaintext =
-        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub, false).unwrap();
+        decrypt_private_key(&encrypted_private_key, backend.as_ref(), &ssh_pub).unwrap();
 
     let sid = Uuid::new_v4();
     let master_key = build_test_master_key();
 
     // Create wrap item (uses aad=info) - wrap in Attested for API
     let attested_pubkey = build_verified_recipient_key(public_key.clone());
-    let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key, false).unwrap();
+    let wrap_item = build_wrap_item_for_file(&attested_pubkey, &sid, &master_key).unwrap();
 
     // Try to unwrap with empty AAD. This demonstrates that aad=info binding is enforced.
     let decrypted_key = build_verified_private_key(

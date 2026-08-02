@@ -31,16 +31,13 @@ pub fn sign_file_document(
     signing_key: &SigningKey,
     signer_kid: &str,
     signer_pub: PublicKey,
-    debug: bool,
 ) -> Result<ArtifactSignature> {
-    if debug {
-        debug!(
-            "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
-            format_kid_half_display_lossy(signer_kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
+        format_kid_half_display_lossy(signer_kid)
+    );
     let body_bytes = build_file_artifact_body_bytes(protected)?;
-    let mac = build_file_key_possession_proof(&body_bytes, mac_key, signer_kid, debug)?;
+    let mac = build_file_key_possession_proof(&body_bytes, mac_key, signer_kid)?;
     let sig_input = build_artifact_signature_input(
         algorithm::SIGNATURE_ED25519,
         signer_kid,
@@ -54,14 +51,11 @@ pub fn verify_file_signature(
     protected: &FileEncDocumentProtected,
     verifying_key: &VerifyingKey,
     signature: &ArtifactSignature,
-    debug: bool,
 ) -> Result<()> {
-    if debug {
-        debug!(
-            "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
-            format_kid_half_display_lossy(&signature.kid)
-        );
-    }
+    debug!(
+        "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
+        format_kid_half_display_lossy(&signature.kid)
+    );
     let body_bytes = build_file_artifact_body_bytes(protected)?;
     let sig_input = build_artifact_signature_input(
         signature.alg.as_str(),
@@ -83,9 +77,8 @@ pub(crate) fn sign_kv_document(
     mac_key: &MacKey,
     signing: &SigningContext<'_>,
     token_codec: TokenCodec,
-    caller: &str,
 ) -> Result<String> {
-    append_kv_signature(unsigned, mac_key, signing, token_codec, caller)
+    append_kv_signature(unsigned, mac_key, signing, token_codec)
 }
 
 fn append_kv_signature(
@@ -93,17 +86,13 @@ fn append_kv_signature(
     mac_key: &MacKey,
     signing: &SigningContext<'_>,
     token_codec: TokenCodec,
-    caller: &str,
 ) -> Result<String> {
-    if signing.debug {
-        debug!(
-            "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
-            format_kid_half_display_lossy(signing.signer_kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] Ed25519: sign_artifact_bytes (kid: {})",
+        format_kid_half_display_lossy(signing.signer_kid)
+    );
     let body_bytes = build_kv_artifact_body_bytes_from_unsigned(unsigned);
-    let mac =
-        build_kv_key_possession_proof(&body_bytes, mac_key, signing.signer_kid, signing.debug)?;
+    let mac = build_kv_key_possession_proof(&body_bytes, mac_key, signing.signer_kid)?;
     let sig_input = build_artifact_signature_input(
         algorithm::SIGNATURE_ED25519,
         signing.signer_kid,
@@ -117,13 +106,7 @@ fn append_kv_signature(
         signing.signer_pub.clone(),
         mac,
     )?;
-    let sig_token = TokenCodec::encode_debug(
-        token_codec,
-        &signature,
-        signing.debug,
-        Some("SIG"),
-        Some(caller),
-    )?;
+    let sig_token = TokenCodec::encode(token_codec, &signature)?;
     Ok(format!("{}:SIG {}\n", unsigned, sig_token))
 }
 
@@ -131,14 +114,11 @@ pub fn verify_kv_signature(
     document: &KvEncDocument,
     verifying_key: &VerifyingKey,
     signature: &ArtifactSignature,
-    debug: bool,
 ) -> Result<()> {
-    if debug {
-        debug!(
-            "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
-            format_kid_half_display_lossy(&signature.kid)
-        );
-    }
+    debug!(
+        "[VERIFY] Ed25519: verify_artifact_bytes (kid: {})",
+        format_kid_half_display_lossy(&signature.kid)
+    );
     let body_bytes = build_kv_artifact_body_bytes(document);
     let sig_input = build_artifact_signature_input(
         signature.alg.as_str(),

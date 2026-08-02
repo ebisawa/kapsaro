@@ -49,7 +49,6 @@ fn test_encrypt_file_document() {
         signing_key,
         signer_kid: kid,
         signer_pub: public_key,
-        debug: false,
     };
     let encrypted_json =
         encrypt_file_content(content, &recipients, &attested_members, &signing).unwrap();
@@ -66,13 +65,12 @@ fn test_encrypt_file_document() {
 
     // Decrypt and verify
     let doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
-    let verified_doc = verify_file_document(&doc, false).unwrap();
+    let verified_doc = verify_file_document(&doc).unwrap();
     let decrypted = decrypt_file_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
     // Compare Zeroizing<Vec<u8>> with &[u8] using as_ref()
@@ -103,7 +101,6 @@ fn test_encrypt_file_document_recipient_count_mismatch() {
         signing_key: &signing_key,
         signer_kid: kid,
         signer_pub,
-        debug: false,
     };
     let result = encrypt_file_content(content, &recipients, &attested_members, &signing);
 
@@ -140,7 +137,6 @@ fn test_encrypt_kv_document_via_inner_api() {
         signing_key,
         signer_kid: kid,
         signer_pub: public_key,
-        debug: false,
     };
     let encrypted =
         encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
@@ -159,13 +155,12 @@ fn test_encrypt_kv_document_via_inner_api() {
     assert_eq!(sig.signer_pub.protected.subject_handle, ALICE_MEMBER_HANDLE);
 
     // Decrypt and verify
-    let verified_doc = verify_kv_document(&doc, false).unwrap();
+    let verified_doc = verify_kv_document(&doc).unwrap();
     let decrypted_map_zeroizing = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
     use crate::format::kv::dotenv::build_dotenv_string;

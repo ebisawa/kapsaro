@@ -78,7 +78,6 @@ fn save_github_bound_public_key_to_workspace_incoming(
         member_handle: member_handle.to_string(),
         created_at,
         expires_at,
-        debug: false,
         github_account: Some(GithubAccount {
             id: BOB_GITHUB_ID,
             login: BOB_GITHUB_LOGIN.to_string(),
@@ -204,7 +203,7 @@ fn test_build_rewrap_trust_treats_accepted_promotions_as_already_reviewed() {
     )
     .unwrap();
 
-    let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates, false).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates).unwrap();
 
     assert_eq!(trust_plan.recipient_trust, RecipientTrustOutcome::Accepted);
     assert_eq!(trust_plan.accepted_promotion_candidates.len(), 1);
@@ -237,7 +236,7 @@ fn test_build_rewrap_trust_uses_existing_trust_snapshot() {
         &key_ctx,
     );
 
-    let result = build_rewrap_trust(&plan, &[], false);
+    let result = build_rewrap_trust(&plan, &[]);
 
     assert!(result.is_err());
     assert!(result
@@ -272,7 +271,7 @@ fn test_build_rewrap_trust_includes_recipient_key_expiry_warning() {
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     plan.artifact_paths.clear();
 
-    let trust_plan = build_rewrap_trust(&plan, &[], false).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &[]).unwrap();
 
     assert!(trust_plan
         .warnings
@@ -328,7 +327,7 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         100,
     ));
 
-    let trust_plan = build_rewrap_trust(&plan, &accepted, false).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
     save_known_key_approvals(
         &options,
         &execution,
@@ -403,7 +402,7 @@ fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_
     .unwrap();
     let accepted = review_plan.auto_accepted_candidates.clone();
 
-    let trust_plan = build_rewrap_trust(&plan, &accepted, false).unwrap();
+    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
 
     assert_eq!(accepted.len(), 1);
     assert!(review_plan.prompt_candidates.is_empty());

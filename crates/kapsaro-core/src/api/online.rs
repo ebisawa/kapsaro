@@ -14,8 +14,6 @@ use crate::support::runtime::block_on_result;
 use crate::Result;
 
 use super::key::LocalKeyStore;
-use super::operation::OperationOptions;
-
 pub use crate::app::verification::OnlineVerificationStatus;
 
 /// GitHub account metadata used by online verification.
@@ -35,10 +33,8 @@ pub struct GitHubAccount {
 }
 
 /// Blocking GitHub online verification facade.
-#[derive(Debug, Clone, Copy)]
-pub struct GitHubOnlineVerifier {
-    options: OperationOptions,
-}
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GitHubOnlineVerifier;
 
 /// Online verification result without raw document model exposure.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,15 +49,14 @@ pub struct OnlineVerificationResult {
 }
 
 impl GitHubOnlineVerifier {
-    /// Build a blocking verifier from shared operation options.
-    pub fn new(options: OperationOptions) -> Self {
-        Self { options }
+    /// Build a blocking verifier.
+    pub fn new() -> Self {
+        Self
     }
 
     /// Resolve a GitHub account by login.
     pub fn resolve_account_by_login(&self, login: &str) -> Result<GitHubAccount> {
-        block_on_result(resolve_github_account_by_login(login, self.options.debug()))
-            .map(GitHubAccount::from_inner)
+        block_on_result(resolve_github_account_by_login(login)).map(GitHubAccount::from_inner)
     }
 
     /// Verify that an SSH public key is registered on the GitHub account.
@@ -70,12 +65,8 @@ impl GitHubOnlineVerifier {
         account: &GitHubAccount,
         ssh_pubkey: &str,
     ) -> Result<OnlineVerificationStatus> {
-        block_on_result(verify_ssh_key_on_github(
-            ssh_pubkey,
-            &account.to_inner(),
-            self.options.debug(),
-        ))
-        .map(OnlineVerificationStatus::from)
+        block_on_result(verify_ssh_key_on_github(ssh_pubkey, &account.to_inner()))
+            .map(OnlineVerificationStatus::from)
     }
 
     /// Verify a member public key loaded from a local keystore.
@@ -87,8 +78,7 @@ impl GitHubOnlineVerifier {
     ) -> Result<OnlineVerificationResult> {
         let resolved_kid = resolve_kid(key_store.root(), member_handle, kid)?;
         let public_key = load_public_key(key_store.root(), member_handle, &resolved_kid)?;
-        block_on_result(verify_github_account(&public_key, self.options.debug()))
-            .map(OnlineVerificationResult::from)
+        block_on_result(verify_github_account(&public_key)).map(OnlineVerificationResult::from)
     }
 }
 

@@ -184,7 +184,7 @@ async fn test_verify_github_account_with_fake_api() {
         }]),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -208,7 +208,7 @@ async fn test_verify_github_account_rejects_id_mismatch() {
         keys_result: Ok(Vec::new()),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api).await;
+    let result = verify_github_account_with_api(&public_key, &api).await;
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);
@@ -230,7 +230,7 @@ async fn test_verify_github_account_reports_empty_github_keys() {
         keys_result: Ok(Vec::new()),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -251,7 +251,7 @@ async fn test_verify_github_account_propagates_keys_api_error() {
         )),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api).await;
+    let result = verify_github_account_with_api(&public_key, &api).await;
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);
@@ -276,7 +276,7 @@ async fn test_verify_github_account_skips_malformed_key_records_before_match() {
         ]),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -301,7 +301,7 @@ async fn test_verify_github_account_reports_missing_key_when_all_records_are_mal
         ]),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -322,7 +322,7 @@ async fn test_verify_github_account_reports_missing_matching_key() {
         }]),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -336,7 +336,7 @@ async fn test_verify_github_account_reports_not_configured_without_binding_claim
     public_key.protected.binding_claims = None;
     let api = RecordingGitHubApi::new(Ok((42, "alice".to_string())), Ok(Vec::new()));
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -357,7 +357,7 @@ async fn test_verify_github_account_reports_not_configured_without_github_accoun
     });
     let api = RecordingGitHubApi::new(Ok((42, "alice".to_string())), Ok(Vec::new()));
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -380,7 +380,7 @@ async fn test_verify_github_account_reports_not_configured_for_invalid_attestati
         keys_result: Ok(Vec::new()),
     };
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 
@@ -411,7 +411,7 @@ async fn test_verify_github_account_uses_document_id_and_current_login() {
         }]),
     );
 
-    let result = verify_github_account_with_api(&public_key, false, &api)
+    let result = verify_github_account_with_api(&public_key, &api)
         .await
         .unwrap();
 

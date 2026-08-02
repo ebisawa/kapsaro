@@ -29,13 +29,11 @@ pub fn remove_known_key_command(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     kid: &str,
-    debug: bool,
 ) -> Result<RemoveKnownKeyResult> {
     execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::ExistingRequired,
-        debug,
         |protected| {
             let removed = remove_known_key(&mut protected.known_keys, kid)?;
             Ok(TrustStoreMutation {
@@ -54,13 +52,11 @@ pub fn remove_recipient_set_command(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     sid: &str,
-    debug: bool,
 ) -> Result<RemoveRecipientSetResult> {
     execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::ExistingRequired,
-        debug,
         |protected| {
             let removed = remove_recipient_set(&mut protected.recipient_sets, sid)?;
             Ok(TrustStoreMutation {
@@ -179,13 +175,11 @@ pub fn execute_purge(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     older_than_timestamp: OffsetDateTime,
-    debug: bool,
 ) -> Result<PurgeKnownKeysResult> {
     execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::ExistingRequired,
-        debug,
         |protected| {
             let removed = purge_known_keys(&mut protected.known_keys, older_than_timestamp)?;
             let count = removed.len();
@@ -202,13 +196,11 @@ pub fn execute_recipient_set_purge(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     older_than_timestamp: OffsetDateTime,
-    debug: bool,
 ) -> Result<PurgeRecipientSetsResult> {
     execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::ExistingRequired,
-        debug,
         |protected| {
             let removed =
                 purge_recipient_sets(&mut protected.recipient_sets, older_than_timestamp)?;

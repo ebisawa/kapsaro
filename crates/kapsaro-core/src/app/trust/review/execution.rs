@@ -63,7 +63,6 @@ where
             context_label: trust_plan.labels.context,
             approval_subject: trust_plan.labels.subject,
         },
-        execution.options.debug,
         confirm_known,
         confirm_non_member,
         confirm_recipients,
@@ -86,7 +85,6 @@ fn review_read_key_trust_with_confirmation_verifier<
     ConfirmRecipients,
 >(
     review: ReadKeyTrustReview<'_>,
-    verbose: bool,
     confirm_known: ConfirmKnown,
     confirm_non_member: ConfirmNonMember,
     confirm_recipients: ConfirmRecipients,
@@ -106,9 +104,7 @@ where
             review.signer_outcome,
             review.context_label,
             review.approval_subject,
-            |candidate| {
-                super::online_verification::verify_trust_candidate_online(candidate, verbose)
-            },
+            super::online_verification::verify_trust_candidate_online,
             confirm_known,
             confirm_non_member,
         )?);
@@ -118,7 +114,7 @@ where
     approvals.extend(review_recipient_trust_with_confirmation_verifier(
         &build_recipient_key_outcome(candidates),
         review.context_label,
-        |candidate| super::online_verification::verify_trust_candidate_online(candidate, verbose),
+        super::online_verification::verify_trust_candidate_online,
         confirm_recipients,
     )?);
     Ok(approvals)
@@ -233,14 +229,12 @@ where
     emit_warnings(execution.warnings);
     let mut approvals = review_write_signer_trust_with_confirmation_verifier(
         trust_plan,
-        execution.options.debug,
         confirm_known,
         confirm_non_member,
     )?;
     approvals.extend(review_write_recipient_trust_with_confirmation_verifier(
         trust_plan,
         approvals.as_slice(),
-        execution.options.debug,
         confirm_recipients,
     )?);
     save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
@@ -250,7 +244,6 @@ where
 
 fn review_write_signer_trust_with_confirmation_verifier<ConfirmKnown, ConfirmNonMember>(
     trust_plan: WriteRecipientTrustReviewPlan<'_>,
-    verbose: bool,
     confirm_known: ConfirmKnown,
     confirm_non_member: ConfirmNonMember,
 ) -> Result<Vec<ApprovedKnownKey>>
@@ -265,7 +258,7 @@ where
         trust_outcome,
         labels.context,
         labels.subject,
-        |candidate| super::online_verification::verify_trust_candidate_online(candidate, verbose),
+        super::online_verification::verify_trust_candidate_online,
         confirm_known,
         confirm_non_member,
     )
@@ -274,7 +267,6 @@ where
 fn review_write_recipient_trust_with_confirmation_verifier<ConfirmRecipients>(
     trust_plan: WriteRecipientTrustReviewPlan<'_>,
     approved_keys: &[ApprovedKnownKey],
-    verbose: bool,
     confirm_recipients: ConfirmRecipients,
 ) -> Result<Vec<ApprovedKnownKey>>
 where
@@ -286,7 +278,7 @@ where
     review_recipient_trust_with_confirmation_verifier(
         &recipient_trust,
         trust_plan.recipient_context_label,
-        |candidate| super::online_verification::verify_trust_candidate_online(candidate, verbose),
+        super::online_verification::verify_trust_candidate_online,
         confirm_recipients,
     )
 }

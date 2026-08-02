@@ -27,8 +27,8 @@ fn test_derive_cek() {
     let sid = test_sid();
     let nonce = test_nonce(0);
 
-    let cek = derive_cek(&mk_obj, &sid, test_key(), &nonce, false).unwrap();
-    let cek2 = derive_cek(&mk_obj, &sid, test_key(), &nonce, false).unwrap();
+    let cek = derive_cek(&mk_obj, &sid, test_key(), &nonce).unwrap();
+    let cek2 = derive_cek(&mk_obj, &sid, test_key(), &nonce).unwrap();
 
     assert_eq!(cek.as_bytes().len(), 32);
     assert_eq!(cek.as_bytes(), cek2.as_bytes());
@@ -39,8 +39,8 @@ fn test_derive_cek_different_nonce() {
     let mk_obj = MasterKey::new([0u8; 32]);
     let sid = test_sid();
 
-    let cek1 = derive_cek(&mk_obj, &sid, test_key(), &test_nonce(0), false).unwrap();
-    let cek2 = derive_cek(&mk_obj, &sid, test_key(), &test_nonce(1), false).unwrap();
+    let cek1 = derive_cek(&mk_obj, &sid, test_key(), &test_nonce(0)).unwrap();
+    let cek2 = derive_cek(&mk_obj, &sid, test_key(), &test_nonce(1)).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }
@@ -50,8 +50,8 @@ fn test_derive_cek_different_mk() {
     let sid = test_sid();
     let nonce = test_nonce(0);
 
-    let cek1 = derive_cek(&MasterKey::new([0u8; 32]), &sid, test_key(), &nonce, false).unwrap();
-    let cek2 = derive_cek(&MasterKey::new([1u8; 32]), &sid, test_key(), &nonce, false).unwrap();
+    let cek1 = derive_cek(&MasterKey::new([0u8; 32]), &sid, test_key(), &nonce).unwrap();
+    let cek2 = derive_cek(&MasterKey::new([1u8; 32]), &sid, test_key(), &nonce).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }
@@ -63,8 +63,8 @@ fn test_derive_cek_different_sid() {
     let sid1 = test_sid();
     let sid2 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
 
-    let cek1 = derive_cek(&mk_obj, &sid1, test_key(), &nonce, false).unwrap();
-    let cek2 = derive_cek(&mk_obj, &sid2, test_key(), &nonce, false).unwrap();
+    let cek1 = derive_cek(&mk_obj, &sid1, test_key(), &nonce).unwrap();
+    let cek2 = derive_cek(&mk_obj, &sid2, test_key(), &nonce).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }
@@ -75,8 +75,8 @@ fn test_derive_cek_different_key() {
     let sid = test_sid();
     let nonce = test_nonce(0);
 
-    let cek1 = derive_cek(&mk_obj, &sid, "DATABASE_URL", &nonce, false).unwrap();
-    let cek2 = derive_cek(&mk_obj, &sid, "API_KEY", &nonce, false).unwrap();
+    let cek1 = derive_cek(&mk_obj, &sid, "DATABASE_URL", &nonce).unwrap();
+    let cek2 = derive_cek(&mk_obj, &sid, "API_KEY", &nonce).unwrap();
 
     assert_ne!(cek1.as_bytes(), cek2.as_bytes());
 }

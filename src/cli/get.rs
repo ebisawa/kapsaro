@@ -72,7 +72,7 @@ pub(crate) fn run(args: GetArgs) -> Result<()> {
                 ssh_ctx,
             )
         },
-        |command| execute_kv_read_command(command, read_mode, args.common.debug.debug),
+        |command| execute_kv_read_command(command, read_mode),
     )?;
 
     print_kv_read_result(

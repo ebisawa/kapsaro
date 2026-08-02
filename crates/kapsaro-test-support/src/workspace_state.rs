@@ -103,7 +103,6 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
         member_handle: member_handle.to_string(),
         created_at,
         expires_at: expires_at.to_string(),
-        debug: false,
         github_account: None,
         ssh_binding,
     })

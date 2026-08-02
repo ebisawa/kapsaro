@@ -26,7 +26,6 @@ fn generate_real_ssh_attested_public_key(
         ssh_key: Some(ssh_priv),
         signing_method: Some(SshSigningMethod::SshKeygen),
         base_dir: Some(home_dir.clone()),
-        verbose: false,
         check_determinism: true,
     };
     let candidates = resolve_ssh_key_candidates_with_params(&params).unwrap();
@@ -37,7 +36,6 @@ fn generate_real_ssh_attested_public_key(
         member_handle: "attestation-test@example.com".to_string(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2026-12-31T23:59:59Z".to_string(),
-        debug: false,
         github_account: None,
         ssh_binding: ssh_signing_context.into_ssh_binding(),
     })
@@ -52,7 +50,7 @@ fn generated_public_key_verifies_with_attestation_repeatedly() {
     for _ in 0..5 {
         let temp_dir = TempDir::new().unwrap();
         let public_key = generate_real_ssh_attested_public_key(&temp_dir);
-        verify_public_key_with_attestation(&public_key, false).unwrap();
+        verify_public_key_with_attestation(&public_key).unwrap();
     }
 }
 
@@ -73,7 +71,7 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
     public_key.signature =
         encode_base64url_nopad(&sign_detached_bytes(&protected_jcs, &signing_key).unwrap());
 
-    let error = verify_public_key_with_attestation(&public_key, false)
+    let error = verify_public_key_with_attestation(&public_key)
         .unwrap_err()
         .to_string();
     assert!(

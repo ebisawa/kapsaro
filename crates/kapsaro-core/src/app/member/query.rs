@@ -23,12 +23,10 @@ pub fn list_members(options: &CommonCommandOptions) -> Result<MemberListResult> 
     Ok(MemberListResult {
         active: collect_member_entries(
             &list_active_member_paths(&workspace.root_path)?,
-            options.debug,
             &mut warnings,
         )?,
         incoming: collect_member_entries(
             &list_incoming_member_paths(&workspace.root_path)?,
-            options.debug,
             &mut warnings,
         )?,
         warnings,
@@ -54,12 +52,7 @@ pub fn load_member_show_result(
     };
     let public_key = load_member_file_from_path(&member_path)?;
     let source_name = format_path_relative_to_cwd(&member_path);
-    let verified = verify_member_public_key_file(
-        &public_key,
-        Some(member_handle),
-        &source_name,
-        options.debug,
-    )?;
+    let verified = verify_member_public_key_file(&public_key, Some(member_handle), &source_name)?;
     Ok(MemberShowResult {
         member: build_member_document_view(verified.public_key, verified.warnings)?,
         status: MembershipStatus::from(status),
@@ -68,7 +61,6 @@ pub fn load_member_show_result(
 
 fn collect_member_entries(
     member_paths: &[std::path::PathBuf],
-    debug: bool,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<super::types::MemberListEntry>> {
     let mut entries = Vec::new();
@@ -76,12 +68,7 @@ fn collect_member_entries(
         let source_name = format_path_relative_to_cwd(member_path);
         let expected_member_handle = derive_member_handle_from_path(member_path);
         let result = load_member_file_from_path(member_path).and_then(|public_key| {
-            verify_member_public_key_file(
-                &public_key,
-                Some(&expected_member_handle),
-                &source_name,
-                debug,
-            )
+            verify_member_public_key_file(&public_key, Some(&expected_member_handle), &source_name)
         });
         match result {
             Ok(verified) => entries.push(build_member_list_entry(verified.public_key)?),

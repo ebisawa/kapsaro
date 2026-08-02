@@ -8,15 +8,12 @@ use crate::model::public_key::GithubAccount;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 
-pub fn resolve_github_account(
-    github_user: Option<String>,
-    verbose: bool,
-) -> Result<Option<GithubAccount>> {
+pub fn resolve_github_account(github_user: Option<String>) -> Result<Option<GithubAccount>> {
     let Some(login) = github_user else {
         return Ok(None);
     };
 
-    let account = block_on_result(resolve_github_account_by_login(&login, verbose))?;
+    let account = block_on_result(resolve_github_account_by_login(&login))?;
     Ok(Some(account))
 }
 
@@ -24,8 +21,7 @@ pub fn resolve_github_account(
 pub fn verify_preflight_github_binding(
     ssh_pub_key: &str,
     account: &GithubAccount,
-    verbose: bool,
 ) -> Result<OnlineVerificationStatus> {
-    let status = block_on_result(verify_ssh_key_on_github(ssh_pub_key, account, verbose))?;
+    let status = block_on_result(verify_ssh_key_on_github(ssh_pub_key, account))?;
     Ok(OnlineVerificationStatus::from(status))
 }

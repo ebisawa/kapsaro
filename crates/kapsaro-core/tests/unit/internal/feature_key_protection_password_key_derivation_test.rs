@@ -20,8 +20,8 @@ fn test_derive_key_from_password_deterministic() {
     let kid = "test-kid-001";
     let password = secret("correct horse battery staple");
 
-    let key1 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt, kid, false).unwrap();
-    let key2 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt, kid, false).unwrap();
+    let key1 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt, kid).unwrap();
+    let key2 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt, kid).unwrap();
 
     assert_eq!(key1.as_bytes().len(), 32);
     assert_eq!(key1.as_bytes(), key2.as_bytes());
@@ -35,8 +35,8 @@ fn test_derive_key_different_passwords_differ() {
 
     let password_a = secret("password-a");
     let password_b = secret("password-b");
-    let key1 = derive_key_from_password(&password_a, &ikm_salt, &hkdf_salt, kid, false).unwrap();
-    let key2 = derive_key_from_password(&password_b, &ikm_salt, &hkdf_salt, kid, false).unwrap();
+    let key1 = derive_key_from_password(&password_a, &ikm_salt, &hkdf_salt, kid).unwrap();
+    let key2 = derive_key_from_password(&password_b, &ikm_salt, &hkdf_salt, kid).unwrap();
 
     assert_ne!(key1.as_bytes(), key2.as_bytes());
 }
@@ -49,8 +49,8 @@ fn test_derive_key_different_ikm_salts_differ() {
     let kid = "test-kid-003";
     let password = secret("same-password");
 
-    let key1 = derive_key_from_password(&password, &salt1, &hkdf_salt, kid, false).unwrap();
-    let key2 = derive_key_from_password(&password, &salt2, &hkdf_salt, kid, false).unwrap();
+    let key1 = derive_key_from_password(&password, &salt1, &hkdf_salt, kid).unwrap();
+    let key2 = derive_key_from_password(&password, &salt2, &hkdf_salt, kid).unwrap();
 
     assert_ne!(key1.as_bytes(), key2.as_bytes());
 }
@@ -77,10 +77,8 @@ fn test_derive_key_different_kids_differ() {
     let hkdf_salt = HkdfSalt::new([9u8; 32]);
     let password = secret("same-password-for-both");
 
-    let key1 =
-        derive_key_from_password(&password, &ikm_salt, &hkdf_salt, "kid-aaa", false).unwrap();
-    let key2 =
-        derive_key_from_password(&password, &ikm_salt, &hkdf_salt, "kid-bbb", false).unwrap();
+    let key1 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt, "kid-aaa").unwrap();
+    let key2 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt, "kid-bbb").unwrap();
 
     assert_ne!(
         key1.as_bytes(),
@@ -96,10 +94,8 @@ fn test_derive_key_different_hkdf_salts_differ() {
     let hkdf_salt2 = HkdfSalt::new([12u8; 32]);
 
     let password = secret("same-password");
-    let key1 =
-        derive_key_from_password(&password, &ikm_salt, &hkdf_salt1, "kid-ccc", false).unwrap();
-    let key2 =
-        derive_key_from_password(&password, &ikm_salt, &hkdf_salt2, "kid-ccc", false).unwrap();
+    let key1 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt1, "kid-ccc").unwrap();
+    let key2 = derive_key_from_password(&password, &ikm_salt, &hkdf_salt2, "kid-ccc").unwrap();
 
     assert_ne!(key1.as_bytes(), key2.as_bytes());
 }

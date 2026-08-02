@@ -124,7 +124,6 @@ fn encrypt_two_member_document(
             signing_key: key_ctx.signing_key(),
             signer_kid: alice_kid,
             signer_pub: alice_pub.clone(),
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -148,7 +147,6 @@ fn single_rewrap_request<'a>(
         target_members,
         rotate_key: false,
         clear_disclosure_history: false,
-        debug: false,
     }
 }
 
@@ -171,7 +169,7 @@ fn build_recipient_snapshot(
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys)?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -205,7 +203,7 @@ fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
     let flags_after_remove = extract_disclosed_flags(&after_remove);
     assert!(flags_after_remove.iter().all(|(_, disclosed)| *disclosed));
 
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
     let after_remove = KvEncContent::new_unchecked(after_remove);
     let result = set_kv_entry(
         Some(&after_remove),
@@ -233,7 +231,7 @@ fn test_set_kv_entry_new_entry_has_disclosed_false() {
     let encrypted = encrypt_two_member_document(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
     let after_remove = remove_bob_recipient(&temp_dir, encrypted, &key_ctx, &alice_kid);
 
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
     let after_remove = KvEncContent::new_unchecked(after_remove);
     let result = set_kv_entry(
         Some(&after_remove),

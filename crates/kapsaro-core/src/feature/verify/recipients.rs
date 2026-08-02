@@ -12,8 +12,7 @@ use crate::Result;
 pub fn verify_recipient_public_keys_from_source(
     pub_key_source: &dyn PublicKeySource,
     member_handles: &[String],
-    debug: bool,
 ) -> Result<Vec<VerifiedRecipientKey>> {
     let pubkeys = pub_key_source.load_public_keys_for_member_handles(member_handles)?;
-    verify_recipient_public_keys(&pubkeys, debug)
+    verify_recipient_public_keys(&pubkeys)
 }

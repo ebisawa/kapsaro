@@ -48,7 +48,7 @@ fn generate_and_export(
             .unwrap_or("2026-01-01T00:00:00Z"),
         &public_key.protected.expires_at,
         &password,
-        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended),
     )
     .expect("export should succeed")
     .into_plain_string_for_output();
@@ -67,7 +67,7 @@ fn test_env_key_roundtrip_with_attested_keys() {
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
     std::env::set_var(ENV_KEY_PASSWORD, password);
 
-    let result = load_private_key_from_env(false).expect("load from env should succeed");
+    let result = load_private_key_from_env().expect("load from env should succeed");
 
     assert_eq!(result.member_handle, member_handle);
     assert_eq!(result.verified_key.proof().member_handle(), member_handle);
@@ -104,7 +104,7 @@ fn test_env_key_wrong_password_error() {
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
     std::env::set_var(ENV_KEY_PASSWORD, "different-wrong-password");
 
-    let result = load_private_key_from_env(false);
+    let result = load_private_key_from_env();
     assert!(result.is_err(), "wrong password should fail");
     assert!(
         std::env::var(ENV_PRIVATE_KEY).is_err(),
@@ -131,7 +131,7 @@ fn test_load_crypto_context_from_env_does_not_require_workspace_member_file() {
     std::env::set_var(ENV_PRIVATE_KEY, &exported);
     std::env::set_var(ENV_KEY_PASSWORD, password);
 
-    let ctx = load_crypto_context_from_env(workspace.path().to_path_buf(), false)
+    let ctx = load_crypto_context_from_env(workspace.path().to_path_buf())
         .expect("env crypto context should not require own workspace member file");
 
     assert_eq!(ctx.member_handle(), public_key.protected.subject_handle);

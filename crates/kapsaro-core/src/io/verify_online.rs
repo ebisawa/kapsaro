@@ -15,10 +15,7 @@ pub mod github {
 
     use super::VerificationResult;
 
-    pub async fn verify_github_account(
-        public_key: &PublicKey,
-        _verbose: bool,
-    ) -> Result<VerificationResult> {
+    pub async fn verify_github_account(public_key: &PublicKey) -> Result<VerificationResult> {
         Err(Error::build_config_error(format!(
             "GitHub online verification for '{}' requires the 'online' feature",
             public_key.protected.subject_handle
@@ -33,7 +30,6 @@ pub mod github {
         pub async fn verify_ssh_key_on_github(
             _ssh_pub_key: &str,
             account: &GithubAccount,
-            _verbose: bool,
         ) -> Result<VerificationStatus> {
             Err(Error::build_config_error(format!(
                 "GitHub SSH key preflight for '{}' requires the 'online' feature",

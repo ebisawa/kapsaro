@@ -52,14 +52,12 @@ pub(crate) fn resolve_verified_recipients(
     target_members: Option<&[VerifiedRecipientKey]>,
     key_ctx: &CryptoContext,
     recipient_handles: &[String],
-    debug: bool,
 ) -> Result<Vec<VerifiedRecipientKey>> {
     match target_members {
         Some(members) => resolve_snapshot_verified_recipients(members, recipient_handles),
         None => verify_recipient_public_keys_from_source(
             key_ctx.pub_key_source.as_ref(),
             recipient_handles,
-            debug,
         ),
     }
 }

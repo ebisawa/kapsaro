@@ -19,14 +19,11 @@ use super::types::KvInputEntry;
 pub(crate) fn encode_kv_entries_to_tokens(
     entries: &[(String, KvEntryValue)],
     token_codec: TokenCodec,
-    debug: bool,
-    caller: &'static str,
 ) -> Result<Vec<(String, String)>> {
     entries
         .iter()
         .map(|(key, entry)| {
-            let token =
-                TokenCodec::encode_debug(token_codec, entry, debug, Some(key), Some(caller))?;
+            let token = TokenCodec::encode(token_codec, entry)?;
             Ok((key.clone(), token))
         })
         .collect()
@@ -48,8 +45,6 @@ pub(crate) fn build_entry_tokens<'a>(
     master_key: &MasterKey,
     sid: &Uuid,
     codec: TokenCodec,
-    verbose: bool,
-    caller: &'static str,
 ) -> Result<HashMap<&'a str, String>> {
     let key_schedule = KvKeySchedule::extract(master_key, sid)?;
     entries
@@ -61,8 +56,6 @@ pub(crate) fn build_entry_tokens<'a>(
                 &key_schedule,
                 sid,
                 codec,
-                verbose,
-                caller,
             )?;
             Ok((entry.key.as_str(), token))
         })
@@ -75,11 +68,16 @@ fn encode_encrypted_entry(
     key_schedule: &KvKeySchedule,
     sid: &Uuid,
     codec: TokenCodec,
-    verbose: bool,
-    caller: &'static str,
 ) -> Result<String> {
-    let new_entry = encrypt_entry(key, value, key_schedule, sid, verbose, caller, false)?;
-    TokenCodec::encode_debug(codec, &new_entry, verbose, Some(key), Some(caller))
+    let new_entry = encrypt_entry(
+        key,
+        value,
+        key_schedule,
+        sid,
+        "encode_encrypted_entry",
+        false,
+    )?;
+    TokenCodec::encode(codec, &new_entry)
 }
 
 #[cfg(test)]

@@ -32,9 +32,7 @@ impl ExecutionContext {
         explicit_kid: Option<&str>,
         ssh_ctx: SshSigningContextResolution,
     ) -> Result<Self> {
-        if options.debug {
-            debug!("[CTX] execution mode=ssh-backed");
-        }
+        debug!("[CTX] execution mode=ssh-backed");
         let resolved = resolve_command_member(options, member_handle)?;
         let workspace_root = resolved.paths.workspace_root.clone();
         let key_ctx = load_crypto_context(
@@ -44,7 +42,6 @@ impl ExecutionContext {
             explicit_kid,
             Some(&resolved.paths.keystore_root),
             workspace_root.as_ref().map(|w| w.root_path.clone()),
-            options.debug,
         )?;
 
         Ok(Self {
@@ -56,16 +53,13 @@ impl ExecutionContext {
 
     /// Load execution context from environment variables (CI mode).
     pub fn load_from_env(options: &CommonCommandOptions) -> Result<Self> {
-        if options.debug {
-            debug!("[CTX] execution mode=env-key");
-        }
+        debug!("[CTX] execution mode=env-key");
         let resolved = CommandPathResolution::require_workspace(
             options,
             "environment variable key loading (CI mode)",
         )?;
         let workspace_root = resolved.into_required_workspace_root();
-        let key_ctx =
-            load_crypto_context_from_env(workspace_root.root_path.clone(), options.debug)?;
+        let key_ctx = load_crypto_context_from_env(workspace_root.root_path.clone())?;
         let member_handle = key_ctx.member_handle_id().clone();
 
         Ok(Self {
@@ -109,28 +103,18 @@ pub fn enforce_selected_decryption_key_expiry(
     execution: &ExecutionContext,
     wrap_set: &WrapSet,
     allow_expired_key: bool,
-    debug_enabled: bool,
 ) -> Result<Option<String>> {
-    Ok(evaluate_selected_decryption_key_expiry(
-        execution,
-        wrap_set,
-        allow_expired_key,
-        debug_enabled,
-    )?
-    .warning)
+    Ok(evaluate_selected_decryption_key_expiry(execution, wrap_set, allow_expired_key)?.warning)
 }
 
 pub(crate) fn evaluate_selected_decryption_key_expiry(
     execution: &ExecutionContext,
     wrap_set: &WrapSet,
     allow_expired_key: bool,
-    debug_enabled: bool,
 ) -> Result<SelectedDecryptionKeyExpiry> {
-    let selected = execution.key_ctx.select_local_decryption_key(
-        wrap_set,
-        execution.member_handle.as_str(),
-        debug_enabled,
-    )?;
+    let selected = execution
+        .key_ctx
+        .select_local_decryption_key(wrap_set, execution.member_handle.as_str())?;
     Ok(SelectedDecryptionKeyExpiry {
         warning: selected
             .info()

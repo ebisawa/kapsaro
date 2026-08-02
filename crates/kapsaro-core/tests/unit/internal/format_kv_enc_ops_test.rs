@@ -58,7 +58,7 @@ fn decrypt_kv_document_for_test(
     // Wrap private key in Decrypted for API
     let decrypted_key = build_verified_private_key(private, member_handle, kid, "SHA256:test");
     let kv_map_zeroizing =
-        decrypt_kv_document(&verified_doc, member_handle, kid, &decrypted_key, false).unwrap();
+        decrypt_kv_document(&verified_doc, member_handle, kid, &decrypted_key).unwrap();
     // Convert Zeroizing<Vec<u8>> to String at the boundary
     kv_map_zeroizing
         .into_iter()
@@ -81,7 +81,6 @@ fn encrypt_kv_document_for_parse_test(input: &str) -> String {
             signing_key: &signing_key,
             signer_kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
             signer_pub: public,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -130,7 +129,6 @@ fn test_encrypt_and_decrypt_kv() {
             signing_key: &signing_key,
             signer_kid,
             signer_pub: public1.clone(),
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -228,7 +226,6 @@ fn test_encrypt_empty_input() {
             signing_key: &signing_key,
             signer_kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -276,7 +273,6 @@ API_KEY=secret123
             signing_key: &signing_key,
             signer_kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -331,7 +327,6 @@ fn test_large_value_in_kv_enc() {
             signing_key: &signing_key,
             signer_kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -379,7 +374,6 @@ fn test_wrap_line_with_many_recipients() {
             signing_key: &signing_key,
             signer_kid,
             signer_pub: members[0].clone(),
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -464,7 +458,6 @@ fn setup_crypto_ctx_for_test(
         Box::new(backend),
         ssh_pub_content.to_string(),
         workspace_path,
-        false,
     )
     .unwrap()
 }
@@ -507,7 +500,6 @@ fn encrypt_initial_kv_doc(
             signing_key: &signing_key,
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -571,7 +563,7 @@ fn build_recipient_snapshot(
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys)?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -609,7 +601,7 @@ fn test_set_existing_file_preserves_sid() {
         &ssh_priv,
         &ssh_pub_content,
     );
-    let ctx = KvWriteContext::new(member_handle, &key_ctx, false);
+    let ctx = KvWriteContext::new(member_handle, &key_ctx);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
     let workspace_dir = temp.path().join("workspace");
@@ -655,7 +647,7 @@ fn test_set_existing_file_uses_current_recipients_in_wrap() {
         &ssh_priv,
         &ssh_pub_content,
     );
-    let ctx = KvWriteContext::new(member_handle, &key_ctx, false);
+    let ctx = KvWriteContext::new(member_handle, &key_ctx);
     let entries = vec![("KEY2".to_string(), "value2".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
     let workspace_dir = temp.path().join("workspace");
@@ -701,7 +693,7 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
         &ssh_priv,
         &ssh_pub_content,
     );
-    let ctx = KvWriteContext::new(member_handle, &key_ctx, false);
+    let ctx = KvWriteContext::new(member_handle, &key_ctx);
     let entries = vec![("KEY3".to_string(), "value3".to_string())];
     let initial_content = KvEncContent::new_unchecked(initial);
     let workspace_dir = temp.path().join("workspace");
@@ -767,7 +759,7 @@ fn test_unset_preserves_sid_and_created_at() {
         setup_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
     let sid_before = kv_head_field(&initial, "sid");
     let created_at_before = kv_head_field(&initial, "created_at");
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx);
 
     let initial = KvEncContent::new_unchecked(initial);
     let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
@@ -788,7 +780,7 @@ fn test_unset_preserves_sid_and_created_at() {
 fn test_unset_uses_current_recipients_in_wrap() {
     let (initial, key_ctx, _temp, _ssh_temp) =
         setup_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx);
 
     let initial = KvEncContent::new_unchecked(initial);
     let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
@@ -807,7 +799,7 @@ fn test_unset_preserves_other_entry_tokens() {
     let (initial, key_ctx, _temp, _ssh_temp) =
         setup_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
     let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx, false);
+    let ctx = KvWriteContext::new("alice@example.com", &key_ctx);
 
     let initial = KvEncContent::new_unchecked(initial);
     let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();

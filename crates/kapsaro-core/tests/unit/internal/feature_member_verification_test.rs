@@ -79,7 +79,6 @@ fn test_verify_member_public_key_file_rejects_tampered_attestation_signature() {
         &public_key,
         Some(ALICE_MEMBER_HANDLE),
         "members/active/alice@example.com.json",
-        false,
     )
     .unwrap_err();
 

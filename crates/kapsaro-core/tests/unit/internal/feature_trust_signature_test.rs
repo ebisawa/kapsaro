@@ -64,7 +64,6 @@ fn build_self_signed_public_key(
         created_at: &created_at,
         expires_at: &expires_at,
         sig_sk: signing_key,
-        debug: false,
     })
     .unwrap();
 

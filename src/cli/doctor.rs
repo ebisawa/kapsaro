@@ -27,7 +27,6 @@ pub(crate) fn run(args: DoctorArgs) -> Result<i32> {
         workspace: args.common.workspace.workspace,
         home: args.common.home.home,
         member_handle: args.member.member_handle,
-        debug: args.common.debug.debug,
         verbose,
     })?;
     if args.common.json.json {

@@ -17,14 +17,12 @@ pub struct MemberAddition {
 pub fn build_member_addition_from_content(
     content: &str,
     source_name: &str,
-    debug: bool,
 ) -> Result<MemberAddition> {
     let public_key = parse_public_key_str(content, source_name)?;
     let verified = verify_member_public_key_file(
         &public_key,
         Some(&public_key.protected.subject_handle),
         source_name,
-        debug,
     )?;
 
     Ok(MemberAddition {

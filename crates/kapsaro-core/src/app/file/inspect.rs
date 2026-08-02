@@ -6,7 +6,6 @@
 
 use std::path::Path;
 
-use crate::app::context::options::CommonCommandOptions;
 use crate::feature::inspect::verification::build_signature_verification_section;
 use crate::feature::inspect::{
     build_inspect_view, InspectOutput as FeatureInspectOutput,
@@ -71,14 +70,11 @@ impl From<FeatureInspectSection> for InspectSection {
     }
 }
 
-pub fn execute_inspect_file_command(
-    options: &CommonCommandOptions,
-    input_path: &Path,
-) -> Result<InspectCommand> {
+pub fn execute_inspect_file_command(input_path: &Path) -> Result<InspectCommand> {
     let content = load_inspect_content(input_path)?;
     let mut inspect_output = InspectOutput::from(build_inspect_view(&content)?);
-    let signature_report = build_signature_report(&content, options.debug)?;
-    let online_output = build_online_output(options, &signature_report);
+    let signature_report = build_signature_report(&content)?;
+    let online_output = build_online_output(&signature_report);
 
     inspect_output
         .sections

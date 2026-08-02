@@ -17,39 +17,38 @@ use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::signature::ArtifactSignature;
 use crate::Result;
 
-pub fn verify_kv_content(content: &KvEncContent, debug: bool) -> Result<VerifiedKvEncDocument> {
+pub fn verify_kv_content(content: &KvEncContent) -> Result<VerifiedKvEncDocument> {
     let doc = content.parse()?;
-    verify_kv_document(&doc, debug)
+    verify_kv_document(&doc)
 }
 
 pub fn verify_kv_content_for_operation(
     content: &KvEncContent,
-    debug: bool,
     allow_expired_key: bool,
 ) -> Result<VerifiedKvEncDocument> {
-    let mut verified = verify_kv_content(content, debug)?;
+    let mut verified = verify_kv_content(content)?;
     append_operational_signer_expiry_warning(verified.proof_mut(), allow_expired_key)?;
     Ok(verified)
 }
 
-pub fn verify_kv_document_report(content: &str, debug: bool) -> SignatureVerificationReport {
+pub fn verify_kv_document_report(content: &str) -> SignatureVerificationReport {
     match parse_kv_document(content) {
         Ok(doc) => {
             let signature = doc.signature();
             build_signature_verification_report(
-                load_verifying_key_from_signature(signature, debug),
-                |loaded| verify_loaded_kv_signature(&doc, signature, loaded, debug),
+                load_verifying_key_from_signature(signature),
+                |loaded| verify_loaded_kv_signature(&doc, signature, loaded),
             )
         }
         Err(e) => build_error_report(e.format_user_message().to_string()),
     }
 }
 
-pub fn verify_kv_document(doc: &KvEncDocument, debug: bool) -> Result<VerifiedKvEncDocument> {
+pub fn verify_kv_document(doc: &KvEncDocument) -> Result<VerifiedKvEncDocument> {
     validate_wrap_items(&doc.wrap.wrap, "Document")?;
     let signature = doc.signature();
-    let proof = verify_signature_with_loaded_key(signature, debug, |loaded| {
-        verify_loaded_kv_signature(doc, signature, loaded, debug)
+    let proof = verify_signature_with_loaded_key(signature, |loaded| {
+        verify_loaded_kv_signature(doc, signature, loaded)
     })?;
 
     Ok(VerifiedKvEncDocument::new(doc.clone(), proof))
@@ -59,9 +58,8 @@ fn verify_loaded_kv_signature(
     doc: &KvEncDocument,
     signature: &ArtifactSignature,
     loaded: &SignatureVerificationKey,
-    debug: bool,
 ) -> Result<()> {
-    verify_kv_signature(doc, &loaded.verifying_key, signature, debug)
+    verify_kv_signature(doc, &loaded.verifying_key, signature)
 }
 
 #[cfg(test)]

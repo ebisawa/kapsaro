@@ -22,7 +22,6 @@ pub struct KeyGenerationOptions {
     pub member_handle: String,
     pub created_at: String,
     pub expires_at: String,
-    pub debug: bool,
     pub github_account: Option<GithubAccount>,
     /// Pre-resolved SSH signing context.
     pub ssh_binding: SshBindingContext,
@@ -33,7 +32,6 @@ struct KeyDocumentParams<'a> {
     created_at: &'a str,
     expires_at: &'a str,
     github_account: Option<GithubAccount>,
-    debug: bool,
 }
 
 /// Generate a new key pair and return unsigned persistence inputs.
@@ -42,46 +40,36 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
         member_handle,
         created_at,
         expires_at,
-        debug,
         github_account,
         ssh_binding,
     } = opts;
 
-    if debug {
-        debug!(
-            "[KEYGEN] start member_handle={}, github_binding={}",
-            member_handle,
-            github_account.is_some()
-        );
-    }
+    debug!(
+        "[KEYGEN] start member_handle={}, github_binding={}",
+        member_handle,
+        github_account.is_some()
+    );
     ensure_determinism(&ssh_binding.determinism)?;
-    if debug {
-        debug!("[KEYGEN] ssh determinism verified");
-    }
+    debug!("[KEYGEN] ssh determinism verified");
     let key_material = material::generate_keypairs()?;
     let request = KeyDocumentParams {
         member_handle: &member_handle,
         created_at: &created_at,
         expires_at: &expires_at,
         github_account,
-        debug,
     };
     let public_key = build_public_key_document(&request, &key_material, &ssh_binding)?;
     let derived_kid = public_key.protected.kid.clone();
-    if debug {
-        debug!(
-            "[KEYGEN] derived public key id kid={}",
-            format_kid_display_lossy(&derived_kid)
-        );
-    }
+    debug!(
+        "[KEYGEN] derived public key id kid={}",
+        format_kid_display_lossy(&derived_kid)
+    );
     let private_key =
         encrypt_private_key_document(&request, &key_material, &derived_kid, &ssh_binding)?;
-    if debug {
-        debug!(
-            "[KEYGEN] generated key pair member_handle={}",
-            member_handle
-        );
-    }
+    debug!(
+        "[KEYGEN] generated key pair member_handle={}",
+        member_handle
+    );
 
     Ok(KeyGenerationResult {
         member_handle,
@@ -133,7 +121,6 @@ fn build_public_key_document(
         created_at: request.created_at,
         expires_at: request.expires_at,
         sig_sk: &key_material.sig_sk,
-        debug: request.debug,
     })
 }
 
@@ -158,7 +145,6 @@ fn encrypt_private_key_document(
         ssh_fpr: ssh_binding.fingerprint.clone(),
         created_at: request.created_at.to_string(),
         expires_at: request.expires_at.to_string(),
-        debug: request.debug,
     })
 }
 

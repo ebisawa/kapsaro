@@ -56,7 +56,6 @@ pub struct SshSigningParams {
     pub ssh_key: Option<PathBuf>,
     pub signing_method: Option<crate::config::types::SshSigningMethod>,
     pub base_dir: Option<PathBuf>,
-    pub verbose: bool,
     pub check_determinism: bool,
 }
 
@@ -65,7 +64,6 @@ fn build_ssh_signing_params(options: &CommonCommandOptions) -> SshSigningParams 
         ssh_key: options.identity.clone(),
         signing_method: options.ssh_signing_method,
         base_dir: options.home.clone(),
-        verbose: options.debug,
         check_determinism: false,
     }
 }
@@ -81,9 +79,7 @@ pub fn resolve_ssh_key_candidates_with_params(
     params: &SshSigningParams,
 ) -> Result<Vec<SshKeyCandidateView>> {
     let candidates = resolve_app_ssh_key_candidates(params)?;
-    if params.verbose {
-        debug!("[SSH] candidate count={}", candidates.len());
-    }
+    debug!("[SSH] candidate count={}", candidates.len());
     Ok(build_ssh_candidate_views(candidates))
 }
 
@@ -102,13 +98,11 @@ pub fn build_ssh_signing_context_with_params(
     selected_pubkey: &str,
 ) -> Result<SshSigningContextResolution> {
     let ssh_signing_context = build_app_ssh_signing_context(params, selected_pubkey)?;
-    if params.verbose {
-        debug!(
-            "[SSH] signing context: fingerprint={}, determinism={}",
-            ssh_signing_context.fingerprint,
-            format_determinism(&ssh_signing_context.determinism)
-        );
-    }
+    debug!(
+        "[SSH] signing context: fingerprint={}, determinism={}",
+        ssh_signing_context.fingerprint,
+        format_determinism(&ssh_signing_context.determinism)
+    );
     Ok(SshSigningContextResolution {
         public_key: ssh_signing_context.public_key,
         fingerprint: ssh_signing_context.fingerprint,
@@ -183,9 +177,7 @@ fn resolve_ssh_context_for_fingerprint(
 ) -> Result<SshSigningContextResolution> {
     let candidates = resolve_ssh_key_candidates(options)?;
     let matched = find_ssh_candidate_by_fingerprint(&candidates, fingerprint)?;
-    if options.debug {
-        debug!("[SSH] matched active key fingerprint={}", fingerprint);
-    }
+    debug!("[SSH] matched active key fingerprint={}", fingerprint);
     build_ssh_signing_context(options, &matched.public_key, false)
 }
 

@@ -140,7 +140,6 @@ fn encrypt_kv_document_for_test(
         signing_key,
         signer_kid: kid,
         signer_pub: build_dummy_signer_pub(signing_key, kid),
-        debug: false,
     };
 
     encrypt_kv_document(&kv_map, &[verified_member], &signing, TokenCodec::JsonJcs).unwrap()
@@ -178,15 +177,10 @@ fn builder_set_entries(
     new_entries: &HashMap<&str, &str>,
     signing: &SigningContext<'_>,
 ) -> String {
-    let mut unsigned = KvDocumentBuilder::from_lines(
-        updated_head.clone(),
-        None,
-        &doc.lines,
-        TokenCodec::JsonJcs,
-        signing.debug,
-    )
-    .unwrap()
-    .build();
+    let mut unsigned =
+        KvDocumentBuilder::from_lines(updated_head.clone(), None, &doc.lines, TokenCodec::JsonJcs)
+            .unwrap()
+            .build();
     unsigned.set_entries(new_entries);
     unsigned.sign(&MasterKey::new([3u8; 32]), signing).unwrap()
 }
@@ -210,15 +204,10 @@ fn builder_unset_entry(
     target_key: &str,
     signing: &SigningContext<'_>,
 ) -> String {
-    let mut unsigned = KvDocumentBuilder::from_lines(
-        updated_head.clone(),
-        None,
-        &doc.lines,
-        TokenCodec::JsonJcs,
-        signing.debug,
-    )
-    .unwrap()
-    .build();
+    let mut unsigned =
+        KvDocumentBuilder::from_lines(updated_head.clone(), None, &doc.lines, TokenCodec::JsonJcs)
+            .unwrap()
+            .build();
     unsigned.unset_entry(target_key);
     unsigned.sign(&MasterKey::new([3u8; 32]), signing).unwrap()
 }
@@ -232,7 +221,6 @@ fn test_build_kv_set_entry_adds_new_key() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -256,7 +244,6 @@ fn test_build_kv_set_entry_replaces_existing_key() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let new_token = "newtoken456";
     let updated_head = KvHeader {
@@ -282,7 +269,6 @@ fn test_build_kv_set_entry_preserves_wrap_token() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -307,7 +293,6 @@ fn test_build_kv_unset_entry_removes_target_key() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -331,7 +316,6 @@ fn test_build_kv_unset_entry_preserves_wrap_token() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -354,7 +338,6 @@ fn test_build_kv_unset_entry_last_entry() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -382,7 +365,6 @@ fn test_build_kv_set_entries_updates_and_adds_multiple_keys() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -424,7 +406,6 @@ fn test_build_kv_set_entries_preserves_existing_keys_not_in_map() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,
@@ -456,7 +437,6 @@ fn test_build_kv_set_entries_new_keys_sorted_deterministically() {
         signing_key: &signing_key,
         signer_kid: &kid,
         signer_pub: build_dummy_signer_pub(&signing_key, &kid),
-        debug: false,
     };
     let updated_head = KvHeader {
         sid: doc.head.sid,

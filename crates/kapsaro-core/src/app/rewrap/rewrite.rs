@@ -32,6 +32,5 @@ fn build_rewrap_request<'a>(ctx: &'a RewrapRewriteContext<'a>) -> RewrapRequest<
         target_members: ctx.post_promotion_members.verified_members().to_vec(),
         rotate_key: ctx.request.rotate_key,
         clear_disclosure_history: ctx.request.clear_disclosure_history,
-        debug: ctx.request.options.debug,
     }
 }

@@ -67,16 +67,16 @@ impl MutationReviewSnapshot {
         })
     }
 
-    pub(super) fn ensure_current(&self, verbose: bool) -> Result<()> {
-        self.ensure_members_match(verbose)?;
+    pub(super) fn ensure_current(&self) -> Result<()> {
+        self.ensure_members_match()?;
         self.ensure_file_matches()
     }
 
-    pub(super) fn ensure_current_at<D>(&self, dir: &D, verbose: bool) -> Result<()>
+    pub(super) fn ensure_current_at<D>(&self, dir: &D) -> Result<()>
     where
         D: DirectoryFd,
     {
-        self.ensure_members_match(verbose)?;
+        self.ensure_members_match()?;
         self.file_snapshot.ensure_current_at(dir)
     }
 
@@ -107,11 +107,10 @@ impl MutationReviewSnapshot {
         EncContent::KvEnc(KvEncContent::new_unchecked(encrypted))
     }
 
-    fn ensure_members_match(&self, verbose: bool) -> Result<()> {
+    fn ensure_members_match(&self) -> Result<()> {
         ensure_workspace_members_match_snapshot(
             &self.target.workspace_root.root_path,
             &self.members,
-            verbose,
             "KV active members changed since review and must be reviewed again.",
         )
     }

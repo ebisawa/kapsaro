@@ -71,8 +71,7 @@ async fn test_verify_ssh_key_on_github() {
         key: TEST_SSH_PUBKEY.to_string(),
     }]));
 
-    let result =
-        verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), false, &api).await;
+    let result = verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), &api).await;
 
     let status = result.unwrap();
     assert_eq!(status, VerificationStatus::Verified);
@@ -85,8 +84,7 @@ async fn test_verify_ssh_key_on_github_no_matching_key() {
             key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA other@example.com".to_string(),
         }]));
 
-    let result =
-        verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), false, &api).await;
+    let result = verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), &api).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -98,8 +96,7 @@ async fn test_verify_ssh_key_on_github_no_matching_key() {
 async fn test_verify_ssh_key_on_github_no_keys_on_github() {
     let api = FakeGitHubApi::new(Ok(vec![]));
 
-    let result =
-        verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), false, &api).await;
+    let result = verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), &api).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -111,8 +108,7 @@ async fn test_verify_ssh_key_on_github_no_keys_on_github() {
 async fn test_verify_ssh_key_on_github_invalid_ssh_key() {
     let api = FakeGitHubApi::new(Ok(vec![]));
 
-    let result =
-        verify_ssh_key_on_github_with_api("invalid-key", &test_account(), false, &api).await;
+    let result = verify_ssh_key_on_github_with_api("invalid-key", &test_account(), &api).await;
 
     assert!(result.is_err());
 }
@@ -124,8 +120,7 @@ async fn test_verify_ssh_key_on_github_rejects_invalid_key_before_api_call() {
         key: TEST_SSH_PUBKEY.to_string(),
     }]));
 
-    let result =
-        verify_ssh_key_on_github_with_api("invalid-key", &test_account(), false, &api).await;
+    let result = verify_ssh_key_on_github_with_api("invalid-key", &test_account(), &api).await;
 
     assert!(result.is_err());
     assert_eq!(api.call_count(), 0);
@@ -138,8 +133,7 @@ async fn test_verify_ssh_key_on_github_propagates_keys_api_error() {
         "keys endpoint failed".to_string(),
     )));
 
-    let result =
-        verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), false, &api).await;
+    let result = verify_ssh_key_on_github_with_api(TEST_SSH_PUBKEY, &test_account(), &api).await;
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);

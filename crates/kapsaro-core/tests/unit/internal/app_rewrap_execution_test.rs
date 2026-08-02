@@ -80,7 +80,6 @@ fn encrypt_file_for_members(
             signing_key: key_ctx.signing_key(),
             signer_kid,
             signer_pub,
-            debug: false,
         },
     )
     .unwrap();
@@ -113,7 +112,6 @@ fn encrypt_kv_for_members(
             signing_key: key_ctx.signing_key(),
             signer_kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -168,7 +166,6 @@ fn build_empty_plan(
         workspace_dir,
         &execution.member_handle,
         Some(derive_self_sig_x(execution.key_ctx.signing_key())),
-        options.debug,
     )
     .unwrap()
     .trust_context()
@@ -184,7 +181,7 @@ fn build_empty_plan(
 fn build_verified_post_promotion_recipients(
     members: Vec<crate::model::public_key::PublicKey>,
 ) -> VerifiedPostPromotionRecipients {
-    let verified = verify_recipient_public_keys(&members, false).unwrap();
+    let verified = verify_recipient_public_keys(&members).unwrap();
     VerifiedPostPromotionRecipients::new(verified)
 }
 
@@ -600,7 +597,6 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &workspace_dir,
             &execution.member_handle,
             Some(derive_self_sig_x(execution.key_ctx.signing_key())),
-            options.debug,
         )
         .unwrap()
         .trust_context()

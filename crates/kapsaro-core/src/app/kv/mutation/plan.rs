@@ -35,7 +35,6 @@ pub struct MutationWriteTrustPlan<P> {
     pub(crate) trust_context: TrustContext,
     pub warnings: Vec<String>,
     pub(super) review: MutationReviewSnapshot,
-    pub(super) verbose: bool,
     _policy: PhantomData<P>,
 }
 
@@ -80,7 +79,6 @@ where
         &context.recipient_review,
         context.warnings,
         context.review,
-        operation_options.debug(),
     ))
 }
 
@@ -100,7 +98,6 @@ where
         review.existing_content(),
         recipient_review.trust_context(),
         &command.execution,
-        operation_options.debug(),
         operation_options.allow_expired_key(),
         P::CAPABILITY,
     )?;
@@ -125,7 +122,6 @@ fn build_mutation_write_trust_plan<P>(
     recipient_review: &WriteRecipientTrustPlan<P>,
     warnings: Vec<String>,
     review: MutationReviewSnapshot,
-    verbose: bool,
 ) -> MutationWriteTrustPlan<P>
 where
     P: WriteTrustPolicy,
@@ -138,7 +134,6 @@ where
         trust_context: recipient_review.trust_context().clone(),
         warnings,
         review,
-        verbose,
         _policy: PhantomData,
     }
 }
@@ -156,7 +151,6 @@ where
         &command.execution.member_handle,
         Some(command.execution.key_ctx.self_signature_public_key_x()),
         Some(command.execution.key_ctx.local_key_identity()),
-        options.debug,
     )
 }
 
@@ -179,16 +173,11 @@ fn evaluate_existing_signer_trust(
     reviewed_file: Option<&KvEncContent>,
     trust_ctx: &TrustContext,
     execution: &ExecutionContext,
-    verbose: bool,
     allow_expired_key: bool,
     capability: CommandCapability,
 ) -> Result<ExistingSignerTrustEvaluation> {
-    let selected_key_expiry = evaluate_existing_decryption_key_expiry(
-        reviewed_file,
-        execution,
-        allow_expired_key,
-        verbose,
-    )?;
+    let selected_key_expiry =
+        evaluate_existing_decryption_key_expiry(reviewed_file, execution, allow_expired_key)?;
     let mut warnings = Vec::new();
     let signer_trust = evaluate_signer_trust(
         reviewed_file,
@@ -196,7 +185,6 @@ fn evaluate_existing_signer_trust(
         selected_key_expiry
             .as_ref()
             .map(|expiry| &expiry.key_identity),
-        verbose,
         allow_expired_key,
         capability,
         &mut warnings,
@@ -226,22 +214,19 @@ fn evaluate_existing_decryption_key_expiry(
     reviewed_file: Option<&KvEncContent>,
     execution: &ExecutionContext,
     allow_expired_key: bool,
-    debug: bool,
 ) -> Result<Option<SelectedDecryptionKeyExpiry>> {
     let Some(content) = reviewed_file else {
         return Ok(None);
     };
     let doc = content.parse()?;
     let wrap_set = WrapSet::parse(&doc.wrap().wrap, "Document")?;
-    evaluate_selected_decryption_key_expiry(execution, &wrap_set, allow_expired_key, debug)
-        .map(Some)
+    evaluate_selected_decryption_key_expiry(execution, &wrap_set, allow_expired_key).map(Some)
 }
 
 fn evaluate_signer_trust(
     reviewed_file: Option<&KvEncContent>,
     trust_ctx: &TrustContext,
     local_key_identity: Option<&crate::feature::context::crypto::LocalKeyIdentity>,
-    verbose: bool,
     allow_expired_key: bool,
     capability: CommandCapability,
     warnings: &mut Vec<String>,
@@ -250,7 +235,7 @@ fn evaluate_signer_trust(
         return Ok(None);
     };
 
-    let verified_doc = verify_kv_content_for_operation(content, verbose, allow_expired_key)?;
+    let verified_doc = verify_kv_content_for_operation(content, allow_expired_key)?;
     push_signature_verification_warnings(warnings, verified_doc.proof(), local_key_identity)?;
     let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
     enforce_write_input_artifact_recipients(trust_ctx, &recipient_evidence.recipient_set)?;

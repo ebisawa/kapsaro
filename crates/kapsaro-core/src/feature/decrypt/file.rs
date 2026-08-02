@@ -61,16 +61,13 @@ fn validate_file_enc_document_payload(verified_doc: &VerifiedFileEncDocument) ->
 pub(crate) fn decrypt_file_payload(
     verified_doc: &VerifiedFileEncDocument,
     content_key: &XChaChaKey,
-    debug: bool,
     caller: &str,
 ) -> Result<Zeroizing<Vec<u8>>> {
     let doc = verified_doc.document();
-    if debug {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (key: dek)",
-            caller
-        );
-    }
+    debug!(
+        "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (key: dek)",
+        caller
+    );
     // Build AAD from payload.protected (JCS normalized)
     let aad = build_file_payload_aad(&doc.protected.payload.protected)?;
 
@@ -95,7 +92,6 @@ pub(crate) fn decrypt_file_payload(
 /// * `member_handle` - Resolved member handle used to find the wrap
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - PrivateKeyPlaintext containing the KEM private key
-/// * `debug` - Enable debug logging
 ///
 /// # Returns
 /// Decrypted content wrapped in Zeroizing to ensure it's zeroed when dropped
@@ -104,7 +100,6 @@ pub fn decrypt_file_document(
     member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
-    debug: bool,
 ) -> Result<Zeroizing<Vec<u8>>> {
     validate_file_enc_document_format(verified_doc)?;
     validate_file_enc_document_payload(verified_doc)?;
@@ -119,14 +114,12 @@ pub fn decrypt_file_document(
     }
 
     // Unwrap content key using the shared helper
-    let content_key =
-        unwrap_master_key_for_file(verified_doc, member_handle, kid, private_key, debug)?;
-    let possession = verify_file_key_possession(verified_doc, content_key, debug)?;
+    let content_key = unwrap_master_key_for_file(verified_doc, member_handle, kid, private_key)?;
+    let possession = verify_file_key_possession(verified_doc, content_key)?;
 
     decrypt_file_payload(
         possession.document(),
         possession.content_key(),
-        debug,
         "decrypt_file_document",
     )
 }
@@ -135,7 +128,6 @@ pub fn decrypt_file_document_with_context(
     verified_doc: &VerifiedFileEncDocument,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<DecryptionResult<Zeroizing<Vec<u8>>>> {
     validate_file_enc_document_format(verified_doc)?;
     validate_file_enc_document_payload(verified_doc)?;
@@ -149,13 +141,12 @@ pub fn decrypt_file_document_with_context(
     }
 
     let content_key =
-        unwrap_master_key_for_file_with_context(verified_doc, member_handle, key_ctx, debug)?;
+        unwrap_master_key_for_file_with_context(verified_doc, member_handle, key_ctx)?;
     let key_info = content_key.key_info;
-    let possession = verify_file_key_possession(verified_doc, content_key.value, debug)?;
+    let possession = verify_file_key_possession(verified_doc, content_key.value)?;
     let plaintext = decrypt_file_payload(
         possession.document(),
         possession.content_key(),
-        debug,
         "decrypt_file_document_with_context",
     )?;
     Ok(DecryptionResult {

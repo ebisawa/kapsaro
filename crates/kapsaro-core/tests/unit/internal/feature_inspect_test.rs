@@ -59,7 +59,6 @@ fn encrypt_kv_fixture(temp_dir: &TempDir, member_handle: &str, key: &str, value:
         signing_key: key_ctx.signing_key(),
         signer_kid: key_ctx.kid(),
         signer_pub: public_key.clone(),
-        debug: false,
     };
     encrypt_kv_document(
         &kv,
@@ -76,7 +75,6 @@ fn encrypt_file_fixture(temp_dir: &TempDir, member_handle: &str, content: &[u8])
         signing_key: key_ctx.signing_key(),
         signer_kid: key_ctx.kid(),
         signer_pub: public_key.clone(),
-        debug: false,
     };
     encrypt_file_content(
         content,
@@ -113,7 +111,7 @@ fn test_inspect_file_enc_preserves_structured_artifact_details() {
     let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_HANDLE);
     let doc: crate::model::file_enc::FileEncDocument = serde_json::from_str(&content).unwrap();
     let wrap_item = doc.protected.wrap.first().unwrap();
-    let report = verify_file_document_report(&doc, false);
+    let report = verify_file_document_report(&doc);
 
     assert_eq!(doc.protected.format, "kapsaro:format:file-enc@1");
     assert_eq!(doc.protected.recipients(), vec![ALICE_MEMBER_HANDLE]);
@@ -134,7 +132,7 @@ fn test_inspect_kv_enc_preserves_structured_artifact_details() {
     let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
     let doc = parse_kv_document(&content).unwrap();
     let entry = doc.entry("DATABASE_URL").unwrap();
-    let report = verify_kv_document_report(&content, false);
+    let report = verify_kv_document_report(&content);
 
     assert_eq!(doc.head().alg.aead, "xchacha20-poly1305");
     assert_eq!(doc.wrap().wrap[0].recipient_handle, ALICE_MEMBER_HANDLE);
@@ -365,7 +363,7 @@ fn test_build_error_report() {
     }
     let corrupted_content = new_lines.join("\n") + "\n";
 
-    let report = verify_kv_document_report(&corrupted_content, false);
+    let report = verify_kv_document_report(&corrupted_content);
 
     assert!(!report.verified, "Error report should have verified=false");
     assert!(
@@ -389,7 +387,7 @@ fn test_build_success_report() {
     let file_enc_doc: crate::model::file_enc::FileEncDocument =
         serde_json::from_str(&content).unwrap();
 
-    let report = verify_file_document_report(&file_enc_doc, false);
+    let report = verify_file_document_report(&file_enc_doc);
 
     assert!(report.verified, "Success report should have verified=true");
     assert_eq!(
@@ -424,7 +422,7 @@ fn test_inspect_kv_enc_with_verification() {
     // Inspect with verification
     let encrypted = EncContent::detect(encrypted_content.clone()).unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
-    let signature_report = verify_kv_document_report(&encrypted_content, false);
+    let signature_report = verify_kv_document_report(&encrypted_content);
 
     // Check that verification result is included
     assert!(
@@ -489,7 +487,7 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
         "Inspect should succeed even when keystore does not contain the signing key"
     );
     let output = result.unwrap();
-    let signature_report = verify_kv_document_report(&kv_content, false);
+    let signature_report = verify_kv_document_report(&kv_content);
     assert!(
         !signature_report.verified,
         "Output should show FAILED verification status: {output:?}",
@@ -502,7 +500,7 @@ fn test_verify_kv_document_report() {
     let encrypted_content = encrypt_kv_fixture(&temp_dir, BOB_MEMBER_HANDLE, "KEY", "value");
 
     // Verify signature
-    let report = verify_kv_document_report(&encrypted_content, false);
+    let report = verify_kv_document_report(&encrypted_content);
 
     assert!(report.verified, "Signature should be verified");
     assert_eq!(report.signer_handle, Some(BOB_MEMBER_HANDLE.to_string()));
@@ -521,7 +519,7 @@ fn test_verify_file_document_report() {
         serde_json::from_str(&encrypted_content).unwrap();
 
     // Verify signature
-    let report = verify_file_document_report(&file_enc_doc, false);
+    let report = verify_file_document_report(&file_enc_doc);
 
     assert!(report.verified, "Signature should be verified");
     assert_eq!(report.signer_handle, Some(CAROL_MEMBER_HANDLE.to_string()));
@@ -559,7 +557,7 @@ fn test_verify_kv_document_report_failure_wrong_key() {
     }
     kv_content = new_lines.join("\n") + "\n";
 
-    let report = verify_kv_document_report(&kv_content, false);
+    let report = verify_kv_document_report(&kv_content);
 
     assert!(!report.verified, "Signature should not be verified");
     assert!(report.signer_handle.is_none());
@@ -577,7 +575,7 @@ fn test_verify_kv_document_report_with_embedded_signer_pub() {
     let encrypted_content = encrypt_kv_fixture(&temp_dir, DAVE_MEMBER_HANDLE, "KEY", "value");
 
     // Verify signature with embedded signer_pub
-    let report = verify_kv_document_report(&encrypted_content, false);
+    let report = verify_kv_document_report(&encrypted_content);
 
     // Should succeed even with embedded signer_pub
     assert!(

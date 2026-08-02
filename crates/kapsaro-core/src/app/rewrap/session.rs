@@ -40,17 +40,12 @@ where
         &input.execution,
         &input.explicit_targets,
     )?;
-    let accepted_promotions =
-        collect_accepted_promotions(&plan, request.options.debug, confirm_promotions)?;
+    let accepted_promotions = collect_accepted_promotions(&plan, confirm_promotions)?;
     let request = RewrapBatchRequest {
         accepted_promotions,
         ..request
     };
-    let trust_plan = super::trust::build_rewrap_trust(
-        &plan,
-        &request.accepted_promotions,
-        request.options.debug,
-    )?;
+    let trust_plan = super::trust::build_rewrap_trust(&plan, &request.accepted_promotions)?;
     let approvals = review_rewrap_recipient_trust(&trust_plan, confirm_recipients)?;
     let post_promotion_trust = super::trust::build_post_promotion_trust_context(
         &plan.pre_promotion_trust,
@@ -77,7 +72,6 @@ fn build_rewrap_batch_request(input: &RewrapBatchCommandInput) -> RewrapBatchReq
 
 fn collect_accepted_promotions<ConfirmPromotions>(
     plan: &RewrapBatchPlan,
-    verbose: bool,
     confirm_promotions: &mut ConfirmPromotions,
 ) -> Result<Vec<IncomingPromotionCandidate>>
 where
@@ -92,7 +86,7 @@ where
         &plan.pre_promotion_trust.self_trust,
         plan.pre_promotion_trust.is_interactive,
     )?;
-    let session = super::promotion::build_promotion_review_session(&review_plan, verbose)?;
+    let session = super::promotion::build_promotion_review_session(&review_plan)?;
     let accepted_member_handles = confirm_promotions(session.view())?;
     Ok(session.into_accepted_candidates(&accepted_member_handles))
 }

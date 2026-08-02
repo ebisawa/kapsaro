@@ -95,29 +95,26 @@ pub fn build_file_key_possession_proof(
     body_bytes: &ArtifactBodyBytes,
     mac_key: &MacKey,
     signer_kid: &str,
-    debug_enabled: bool,
 ) -> Result<KeyPossessionProof> {
-    build_key_possession_proof("file", body_bytes, mac_key, signer_kid, debug_enabled)
+    build_key_possession_proof("file", body_bytes, mac_key, signer_kid)
 }
 
 pub fn build_kv_key_possession_proof(
     body_bytes: &ArtifactBodyBytes,
     mac_key: &MacKey,
     signer_kid: &str,
-    debug_enabled: bool,
 ) -> Result<KeyPossessionProof> {
-    build_key_possession_proof("kv", body_bytes, mac_key, signer_kid, debug_enabled)
+    build_key_possession_proof("kv", body_bytes, mac_key, signer_kid)
 }
 
 pub fn verify_file_key_possession<'a>(
     document: &'a VerifiedFileEncDocument,
     master_key: MasterKey,
-    debug_enabled: bool,
 ) -> Result<VerifiedFileKeyPossession<'a>> {
     let body_bytes = build_file_artifact_body_bytes(&document.document().protected)?;
-    debug_key_possession_hkdf_extract("file", debug_enabled);
+    debug_key_possession_hkdf_extract("file");
     let schedule = FileKeySchedule::extract(&master_key, &document.document().protected.sid)?;
-    debug_key_possession_hkdf_expand("file", "mac key", debug_enabled);
+    debug_key_possession_hkdf_expand("file", "mac key");
     let mac_key = schedule.derive_mac_key()?;
     verify_key_possession_proof(
         "file",
@@ -125,9 +122,8 @@ pub fn verify_file_key_possession<'a>(
         &mac_key,
         &body_bytes,
         &document.document().signature.kid,
-        debug_enabled,
     )?;
-    debug_key_possession_hkdf_expand("file", "content key", debug_enabled);
+    debug_key_possession_hkdf_expand("file", "content key");
     let content_key = schedule.derive_content_key()?;
     Ok(VerifiedFileKeyPossession::new(
         document,
@@ -139,12 +135,11 @@ pub fn verify_file_key_possession<'a>(
 pub fn verify_kv_key_possession<'a>(
     document: &'a VerifiedKvEncDocument,
     master_key: MasterKey,
-    debug_enabled: bool,
 ) -> Result<VerifiedKvKeyPossession<'a>> {
     let body_bytes = build_kv_artifact_body_bytes(document.document());
-    debug_key_possession_hkdf_extract("kv", debug_enabled);
+    debug_key_possession_hkdf_extract("kv");
     let schedule = KvKeySchedule::extract(&master_key, &document.document().head().sid)?;
-    debug_key_possession_hkdf_expand("kv", "mac key", debug_enabled);
+    debug_key_possession_hkdf_expand("kv", "mac key");
     let mac_key = schedule.derive_mac_key()?;
     verify_key_possession_proof(
         "kv",
@@ -152,7 +147,6 @@ pub fn verify_kv_key_possession<'a>(
         &mac_key,
         &body_bytes,
         &document.document().signature().kid,
-        debug_enabled,
     )?;
     Ok(VerifiedKvKeyPossession::new(document, master_key, schedule))
 }
@@ -162,24 +156,14 @@ fn build_key_possession_proof(
     body_bytes: &ArtifactBodyBytes,
     mac_key: &MacKey,
     signer_kid: &str,
-    debug_enabled: bool,
 ) -> Result<KeyPossessionProof> {
     let algorithm = KeyPossessionProofAlgorithm::HmacSha256;
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] key possession: build proof format={}, alg=hmac-sha256 (kid: {})",
-            format,
-            format_kid_half_display_lossy(signer_kid)
-        );
-    }
-    let tag = compute_key_possession_tag(
-        algorithm,
-        mac_key,
-        body_bytes,
-        signer_kid,
+    debug!(
+        "[CRYPTO] key possession: build proof format={}, alg=hmac-sha256 (kid: {})",
         format,
-        debug_enabled,
-    )?;
+        format_kid_half_display_lossy(signer_kid)
+    );
+    let tag = compute_key_possession_tag(algorithm, mac_key, body_bytes, signer_kid, format)?;
     KeyPossessionProof::try_new(algorithm, &tag)
         .map_err(|e| Error::build_crypto_error(format!("Key-possession proof error: {e}")))
 }
@@ -190,15 +174,12 @@ fn verify_key_possession_proof(
     key: &MacKey,
     body_bytes: &ArtifactBodyBytes,
     signer_kid: &str,
-    debug_enabled: bool,
 ) -> Result<()> {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] key possession: verify start format={}, alg=hmac-sha256 (kid: {})",
-            format,
-            format_kid_half_display_lossy(signer_kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] key possession: verify start format={}, alg=hmac-sha256 (kid: {})",
+        format,
+        format_kid_half_display_lossy(signer_kid)
+    );
     let is_valid = verify_key_possession_tag(
         proof.algorithm(),
         key,
@@ -206,23 +187,18 @@ fn verify_key_possession_proof(
         signer_kid,
         proof.tag(),
         format,
-        debug_enabled,
     )?;
     if is_valid {
-        if debug_enabled {
-            debug!(
-                "[CRYPTO] key possession: verify success (kid: {})",
-                format_kid_half_display_lossy(signer_kid)
-            );
-        }
+        debug!(
+            "[CRYPTO] key possession: verify success (kid: {})",
+            format_kid_half_display_lossy(signer_kid)
+        );
         Ok(())
     } else {
-        if debug_enabled {
-            debug!(
-                "[CRYPTO] key possession: verify failure (kid: {})",
-                format_kid_half_display_lossy(signer_kid)
-            );
-        }
+        debug!(
+            "[CRYPTO] key possession: verify failure (kid: {})",
+            format_kid_half_display_lossy(signer_kid)
+        );
         Err(Error::build_verification_error(
             "E_KEY_POSSESSION_MAC_INVALID",
             "Key-possession proof verification failed",
@@ -230,40 +206,32 @@ fn verify_key_possession_proof(
     }
 }
 
-fn debug_key_possession_hkdf_extract(format: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] HKDF-SHA256: key possession: extract artifact key schedule format={}",
-            format
-        );
-    }
+fn debug_key_possession_hkdf_extract(format: &str) {
+    debug!(
+        "[CRYPTO] HKDF-SHA256: key possession: extract artifact key schedule format={}",
+        format
+    );
 }
 
-fn debug_key_possession_hkdf_expand(format: &str, purpose: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] HKDF-SHA256: key possession: expand {} format={}",
-            purpose, format
-        );
-    }
+fn debug_key_possession_hkdf_expand(format: &str, purpose: &str) {
+    debug!(
+        "[CRYPTO] HKDF-SHA256: key possession: expand {} format={}",
+        purpose, format
+    );
 }
 
-fn debug_key_possession_hmac_message(operation: &str, format: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] HMAC-SHA256: key possession: build {} message format={}",
-            operation, format
-        );
-    }
+fn debug_key_possession_hmac_message(operation: &str, format: &str) {
+    debug!(
+        "[CRYPTO] HMAC-SHA256: key possession: build {} message format={}",
+        operation, format
+    );
 }
 
-fn debug_key_possession_hmac_tag(operation: &str, format: &str, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] HMAC-SHA256: key possession: {} tag format={}",
-            operation, format
-        );
-    }
+fn debug_key_possession_hmac_tag(operation: &str, format: &str) {
+    debug!(
+        "[CRYPTO] HMAC-SHA256: key possession: {} tag format={}",
+        operation, format
+    );
 }
 
 fn compute_key_possession_tag(
@@ -272,13 +240,12 @@ fn compute_key_possession_tag(
     body_bytes: &ArtifactBodyBytes,
     signer_kid: &str,
     format: &str,
-    debug_enabled: bool,
 ) -> Result<Vec<u8>> {
     match algorithm {
         KeyPossessionProofAlgorithm::HmacSha256 => {
-            debug_key_possession_hmac_message("proof", format, debug_enabled);
+            debug_key_possession_hmac_message("proof", format);
             let message = build_key_possession_mac_message(body_bytes, signer_kid);
-            debug_key_possession_hmac_tag("compute", format, debug_enabled);
+            debug_key_possession_hmac_tag("compute", format);
             compute_hmac_sha256_tag(key.as_bytes(), &message)
         }
     }
@@ -291,13 +258,12 @@ fn verify_key_possession_tag(
     signer_kid: &str,
     expected_tag: &[u8],
     format: &str,
-    debug_enabled: bool,
 ) -> Result<bool> {
     match algorithm {
         KeyPossessionProofAlgorithm::HmacSha256 => {
-            debug_key_possession_hmac_message("verification", format, debug_enabled);
+            debug_key_possession_hmac_message("verification", format);
             let message = build_key_possession_mac_message(body_bytes, signer_kid);
-            debug_key_possession_hmac_tag("verify", format, debug_enabled);
+            debug_key_possession_hmac_tag("verify", format);
             verify_hmac_sha256_tag(key.as_bytes(), &message, expected_tag)
         }
     }

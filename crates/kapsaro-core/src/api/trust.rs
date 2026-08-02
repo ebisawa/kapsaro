@@ -154,7 +154,7 @@ impl LocalTrustStore {
         key_ctx: &KeyContext,
     ) -> Result<()> {
         self.ensure_owner_key_context(key_ctx)?;
-        let signing = build_signing_context(key_ctx.inner(), false)?;
+        let signing = build_signing_context(key_ctx.inner())?;
         let keystore_root = key_ctx.keystore_root().ok_or_else(|| {
             Error::build_invalid_operation_error(
                 "Key context is not backed by a local keystore".to_string(),

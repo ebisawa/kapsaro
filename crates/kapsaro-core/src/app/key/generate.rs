@@ -23,7 +23,6 @@ pub(crate) struct AppKeyGenerationOptions {
     pub created_at: String,
     pub expires_at: String,
     pub no_activate: bool,
-    pub debug: bool,
     pub github_account: Option<GithubAccount>,
     pub github_verification: OnlineVerificationStatus,
     pub ssh_ctx: SshSigningContextResolution,
@@ -34,11 +33,11 @@ fn generate_key_with_github_user(
     mut options: AppKeyGenerationOptions,
     github_user: Option<String>,
 ) -> Result<KeyGenerationResult> {
-    let github_account = resolve_github_account(github_user, options.debug)?;
+    let github_account = resolve_github_account(github_user)?;
     options.github_account = github_account.clone();
 
     let github_verification = if let Some(account) = github_account.as_ref() {
-        verify_preflight_github_binding(&options.ssh_ctx.public_key, account, options.debug)?
+        verify_preflight_github_binding(&options.ssh_ctx.public_key, account)?
     } else {
         OnlineVerificationStatus::NotConfigured
     };
@@ -66,7 +65,6 @@ pub fn generate_key_command(
             created_at,
             expires_at,
             no_activate,
-            debug: options.debug,
             github_account: None,
             github_verification: OnlineVerificationStatus::NotConfigured,
             ssh_ctx,
@@ -85,7 +83,6 @@ pub(crate) fn generate_and_save_key(
         member_handle: options.member_handle,
         created_at: options.created_at,
         expires_at: options.expires_at,
-        debug: options.debug,
         github_account: options.github_account,
         ssh_binding: options.ssh_ctx.into_ssh_binding(),
     })?;

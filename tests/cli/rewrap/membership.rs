@@ -70,7 +70,6 @@ fn rewrite_member_with_foreign_identity(
         created_at: &created_at,
         expires_at: &expires_at,
         sig_sk: key_ctx.signing_key(),
-        debug: false,
     })
     .unwrap();
     fs::write(

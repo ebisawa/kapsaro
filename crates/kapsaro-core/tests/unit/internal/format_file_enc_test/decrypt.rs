@@ -35,7 +35,6 @@ fn test_decrypt_file_roundtrip() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -84,7 +83,6 @@ fn test_decrypt_file_multiple_recipients() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -130,7 +128,6 @@ fn test_decrypt_file_empty_content() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -168,7 +165,6 @@ fn test_decrypt_file_large_content() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -205,7 +201,6 @@ fn test_decrypt_file_wrong_member_handle() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -231,7 +226,6 @@ fn test_decrypt_file_wrong_member_handle() {
         BOB_MEMBER_HANDLE,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GJ",
         &decrypted_key,
-        false,
     );
     assert!(result.is_err());
 }
@@ -259,7 +253,6 @@ fn test_decrypt_file_wrong_key() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -284,7 +277,6 @@ fn test_decrypt_file_wrong_key() {
         ALICE_MEMBER_HANDLE,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         &wrong_key,
-        false,
     );
     assert!(result.is_err());
 }

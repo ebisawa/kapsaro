@@ -131,7 +131,6 @@ pub(super) fn encrypt_private_key_plaintext(
     plaintext: &PrivateKeyPlaintext,
     enc_key: &XChaChaKey,
     protected: &PrivateKeyProtected,
-    debug_enabled: bool,
     caller: &str,
 ) -> Result<PrivateKeyEncData> {
     let plaintext_json = serde_json::to_vec(plaintext).map_err(|e| {
@@ -139,13 +138,11 @@ pub(super) fn encrypt_private_key_plaintext(
     })?;
     let plaintext = Plaintext::from(plaintext_json);
     let aad = build_private_key_aad(protected)?;
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (kid: {})",
-            caller,
-            format_kid_half_display_lossy(&protected.kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] XChaCha20-Poly1305: {}: encrypt (kid: {})",
+        caller,
+        format_kid_half_display_lossy(&protected.kid)
+    );
     let (ct, nonce) = xchacha::encrypt_with_nonce(enc_key, &plaintext, &aad)?;
 
     Ok(PrivateKeyEncData {
@@ -169,16 +166,13 @@ pub(super) fn decrypt_private_key_plaintext(
     enc_key: &XChaChaKey,
     params: &PrivateKeyCiphertextParams,
     kid: &str,
-    debug_enabled: bool,
     caller: &str,
 ) -> Result<PrivateKeyPlaintext> {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (kid: {})",
-            caller,
-            format_kid_half_display_lossy(kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] XChaCha20-Poly1305: {}: decrypt (kid: {})",
+        caller,
+        format_kid_half_display_lossy(kid)
+    );
     let plaintext_json = xchacha::decrypt(enc_key, &params.nonce, &params.aad, &params.ct)?;
 
     serde_json::from_slice(plaintext_json.as_bytes())

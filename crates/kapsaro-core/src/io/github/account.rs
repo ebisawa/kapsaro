@@ -41,33 +41,28 @@ impl GitHubAccountLookupApi for GitHubAccountLookupClient {
     }
 }
 
-pub async fn resolve_github_account_by_login(login: &str, verbose: bool) -> Result<GithubAccount> {
+pub async fn resolve_github_account_by_login(login: &str) -> Result<GithubAccount> {
     let api = GitHubAccountLookupClient::new()?;
-    resolve_github_account_by_login_with_api(login, verbose, &api).await
+    resolve_github_account_by_login_with_api(login, &api).await
 }
 
 pub async fn resolve_github_account_by_login_with_api(
     login: &str,
-    verbose: bool,
     api: &impl GitHubAccountLookupApi,
 ) -> Result<GithubAccount> {
     validation::validate_github_login(login)?;
 
-    if verbose {
-        debug!(
-            "[VERIFY] GitHub API: GET https://api.github.com/users/{}",
-            login
-        );
-    }
+    debug!(
+        "[VERIFY] GitHub API: GET https://api.github.com/users/{}",
+        login
+    );
 
     let account = api.fetch_user_by_login(login).await?;
 
-    if verbose {
-        debug!(
-            "[VERIFY] GitHub API: user id={}, login={}",
-            account.id, account.login
-        );
-    }
+    debug!(
+        "[VERIFY] GitHub API: user id={}, login={}",
+        account.id, account.login
+    );
 
     Ok(account)
 }

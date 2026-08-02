@@ -43,10 +43,9 @@ pub fn build_rewrap_batch_plan(
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
         Some(execution.key_ctx.local_key_identity()),
-        options.debug,
     )?
     .trust_ctx;
-    let incoming_report = build_incoming_report(&incoming_index, options.debug)?;
+    let incoming_report = build_incoming_report(&incoming_index)?;
     if artifact_paths.is_empty() {
         return Err(Error::build_not_found_error(
             "No encrypted files found for rewrap.\n\
@@ -106,7 +105,6 @@ fn insert_rewrap_target_path(paths: &mut BTreeMap<PathBuf, PathBuf>, path: PathB
 
 fn build_incoming_report(
     incoming_index: &BTreeMap<String, IncomingSnapshot>,
-    debug: bool,
 ) -> Result<Option<IncomingVerificationReport>> {
     if incoming_index.is_empty() {
         return Ok(None);
@@ -114,7 +112,7 @@ fn build_incoming_report(
 
     let mut report = IncomingVerificationReport::default();
     for snapshot in incoming_index.values() {
-        let candidate = build_incoming_candidate(snapshot, debug)?;
+        let candidate = build_incoming_candidate(snapshot)?;
         match candidate.review.category {
             IncomingVerificationCategory::BindingConfigured => {
                 report.binding_configured.push(candidate);
@@ -128,13 +126,9 @@ fn build_incoming_report(
     Ok(Some(report))
 }
 
-fn build_incoming_candidate(
-    snapshot: &IncomingSnapshot,
-    debug: bool,
-) -> Result<IncomingPromotionCandidate> {
+fn build_incoming_candidate(snapshot: &IncomingSnapshot) -> Result<IncomingPromotionCandidate> {
     let review = match verify_public_key_for_verification_context(
         &snapshot.public_key,
-        debug,
         WORKSPACE_INCOMING_MEMBER_CONTEXT,
     ) {
         Ok(_) => build_pending_review(snapshot),

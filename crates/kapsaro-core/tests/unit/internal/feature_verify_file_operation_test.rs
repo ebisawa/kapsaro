@@ -29,7 +29,6 @@ fn build_file_enc_document() -> crate::model::file_enc::FileEncDocument {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
-            debug: false,
         },
     )
     .unwrap()
@@ -47,7 +46,7 @@ fn operational_file_verify_rejects_tampered_signature() {
     let doc = replace_file_signature_with_zero_tag(build_file_enc_document());
     let content = FileEncContent::new_unchecked(serde_json::to_string(&doc).unwrap());
 
-    let error = super::verify_file_content_for_operation(&content, false, false).unwrap_err();
+    let error = super::verify_file_content_for_operation(&content, false).unwrap_err();
 
     assert!(
         error.to_string().contains("Signature verification failed"),
@@ -59,7 +58,7 @@ fn operational_file_verify_rejects_tampered_signature() {
 fn file_verify_report_marks_tampered_signature_failed() {
     let doc = replace_file_signature_with_zero_tag(build_file_enc_document());
 
-    let report = verify_file_document_report(&doc, false);
+    let report = verify_file_document_report(&doc);
 
     assert!(!report.verified);
     assert!(
@@ -89,13 +88,12 @@ fn operational_file_verify_preserves_expired_signer_recovery_warning() {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key,
-            debug: false,
         },
     )
     .unwrap();
     let content = FileEncContent::new_unchecked(serde_json::to_string(&doc).unwrap());
 
-    let verified = super::verify_file_content_for_operation(&content, false, true).unwrap();
+    let verified = super::verify_file_content_for_operation(&content, true).unwrap();
 
     assert!(verified.proof().warnings.iter().any(|warning| {
         warning.contains("Artifact signing key has expired.")

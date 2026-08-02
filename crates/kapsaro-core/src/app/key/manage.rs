@@ -140,7 +140,6 @@ pub fn export_private_key_command(
         kid,
         ssh_ctx.backend.as_ref(),
         &ssh_ctx.public_key,
-        options.debug,
     )?;
 
     let encoded_key = export_private_key_portable(
@@ -150,7 +149,7 @@ pub fn export_private_key_command(
         &loaded.created_at,
         &loaded.expires_at,
         password,
-        PortableExportOptions::new(password_policy, options.debug),
+        PortableExportOptions::new(password_policy),
     )?;
 
     Ok(crate::feature::key::portable_export::PortableExportOutput {
@@ -253,18 +252,16 @@ fn load_private_key_export_material(
     kid: String,
     backend: &dyn SignatureBackend,
     ssh_pubkey: &str,
-    debug: bool,
 ) -> Result<PrivateKeyExportMaterial> {
     let encrypted = load_private_key(keystore_root, &member_handle, &kid)?;
     let public_key = load_public_key(keystore_root, &member_handle, &kid)?;
     let verified_public_key = verify_public_key_with_attestation_context(
         &public_key,
-        debug,
         KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT,
     )?;
     verify_private_key_matches_public_key(&encrypted, verified_public_key.document())?;
 
-    let plaintext = decrypt_private_key(&encrypted, backend, ssh_pubkey, debug)?;
+    let plaintext = decrypt_private_key(&encrypted, backend, ssh_pubkey)?;
     validate_private_key_material(&plaintext)?;
 
     Ok(PrivateKeyExportMaterial {

@@ -80,7 +80,6 @@ pub struct KvDocumentDraft {
     pub(crate) wrap: WrapSource,
     pub(crate) entries: Vec<KvDocumentEntry>,
     pub(crate) token_codec: TokenCodec,
-    pub(crate) debug: bool,
 }
 
 impl KvDocumentDraft {
@@ -181,25 +180,13 @@ impl KvDocumentDraft {
     }
 
     fn encode_head(&self) -> Result<String> {
-        TokenCodec::encode_debug(
-            self.token_codec,
-            &self.head,
-            self.debug,
-            Some("HEAD"),
-            Some("serialize_unsigned"),
-        )
+        TokenCodec::encode(self.token_codec, &self.head)
     }
 
     fn resolve_wrap_token(&self) -> Result<String> {
         match self.wrap.token() {
             Some(token) => Ok(token.to_owned()),
-            None => TokenCodec::encode_debug(
-                self.token_codec,
-                self.wrap.data(),
-                self.debug,
-                Some("WRAP"),
-                Some("serialize_unsigned"),
-            ),
+            None => TokenCodec::encode(self.token_codec, self.wrap.data()),
         }
     }
 }

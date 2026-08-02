@@ -82,7 +82,6 @@ fn test_sign_file_document_returns_valid_structure() {
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        false,
     )
     .unwrap();
 
@@ -109,10 +108,9 @@ fn test_verify_file_enc_signature_accepts_valid_signature() {
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        false,
     )
     .unwrap();
-    verify_file_signature(&doc, &vk, &sig, false).unwrap();
+    verify_file_signature(&doc, &vk, &sig).unwrap();
 }
 
 #[test]
@@ -131,7 +129,6 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        false,
     )
     .unwrap();
 
@@ -139,7 +136,7 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
     let mut tampered = doc.clone();
     tampered.updated_at = "2025-01-01T00:00:01Z".to_string();
 
-    let result = verify_file_signature(&tampered, &vk, &sig, false);
+    let result = verify_file_signature(&tampered, &vk, &sig);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -163,12 +160,11 @@ fn test_verify_file_enc_signature_rejects_tampered_signature_kid() {
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        false,
     )
     .unwrap();
     sig.kid = "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string();
 
-    let result = verify_file_signature(&doc, &vk, &sig, false);
+    let result = verify_file_signature(&doc, &vk, &sig);
 
     assert!(result.is_err());
     assert!(result
@@ -192,7 +188,6 @@ fn test_sign_file_document_deterministic() {
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        false,
     )
     .unwrap();
     let sig2 = sign_file_document(
@@ -201,7 +196,6 @@ fn test_sign_file_document_deterministic() {
         &sk,
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
         build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-        false,
     )
     .unwrap();
 

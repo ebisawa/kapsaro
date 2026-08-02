@@ -28,7 +28,7 @@ pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
 
 fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
-    let results = verify_members(&options, &args.member_handles, args.common.debug.debug)?;
+    let results = verify_members(&options, &args.member_handles)?;
     print_member_verification_results(args.common.json.json, &results)
 }
 

@@ -38,7 +38,6 @@ where
 
 pub(super) fn verify_trust_candidate_online(
     candidate: &TrustApprovalCandidate,
-    verbose: bool,
 ) -> Result<TrustApprovalCandidate> {
     if !candidate.github_binding_configured || candidate.verified_github.is_some() {
         return Ok(candidate.clone());
@@ -53,10 +52,7 @@ pub(super) fn verify_trust_candidate_online(
             ),
         )
     })?;
-    let results = block_on_result(verify_member_public_keys(
-        std::slice::from_ref(public_key),
-        verbose,
-    ))?;
+    let results = block_on_result(verify_member_public_keys(std::slice::from_ref(public_key)))?;
     let result = results.into_iter().next().ok_or_else(|| {
         Error::build_verification_error(
             "E_TRUST_ONLINE_VERIFY_MISSING".to_string(),

@@ -173,7 +173,7 @@ fn parse_json_token<T>(
 where
     T: DeserializeOwned,
 {
-    let (bytes, _) = decode_token_bytes(token, false, Some(token_name))?;
+    let (bytes, _) = decode_token_bytes(token)?;
     validate_json_limits(&bytes)?;
     let value = parse_json_value(&bytes, source_name, token_name)?;
     validate(load_embedded_validator(target)?, &value)

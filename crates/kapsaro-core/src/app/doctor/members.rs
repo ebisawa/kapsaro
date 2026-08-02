@@ -22,15 +22,15 @@ use crate::Result;
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
-pub fn check_members(workspace: &WorkspaceRoot, verbose: bool) -> Result<Vec<DoctorCheck>> {
+pub fn check_members(workspace: &WorkspaceRoot) -> Result<Vec<DoctorCheck>> {
     let mut checks = Vec::new();
-    checks.extend(check_active_members(&workspace.root_path, verbose)?);
-    checks.extend(check_incoming_members(&workspace.root_path, verbose)?);
+    checks.extend(check_active_members(&workspace.root_path)?);
+    checks.extend(check_incoming_members(&workspace.root_path)?);
     checks.push(check_kid_uniqueness(&workspace.root_path)?);
     Ok(checks)
 }
 
-fn check_active_members(workspace_root: &Path, verbose: bool) -> Result<Vec<DoctorCheck>> {
+fn check_active_members(workspace_root: &Path) -> Result<Vec<DoctorCheck>> {
     let paths = list_active_member_paths(workspace_root)?;
     let mut checks = Vec::new();
     if paths.is_empty() {
@@ -44,7 +44,6 @@ fn check_active_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Doct
         &paths,
         "members.active.file",
         DoctorCategory::MembersActive,
-        verbose,
     );
     Ok(checks)
 }
@@ -70,7 +69,7 @@ fn check_present_active_members(count: usize) -> DoctorCheck {
     )
 }
 
-fn check_incoming_members(workspace_root: &Path, verbose: bool) -> Result<Vec<DoctorCheck>> {
+fn check_incoming_members(workspace_root: &Path) -> Result<Vec<DoctorCheck>> {
     let paths = list_incoming_member_paths(workspace_root)?;
     let mut checks = Vec::new();
     if paths.is_empty() {
@@ -84,7 +83,6 @@ fn check_incoming_members(workspace_root: &Path, verbose: bool) -> Result<Vec<Do
         &paths,
         "members.incoming.file",
         DoctorCategory::MembersIncoming,
-        verbose,
     );
     Ok(checks)
 }
@@ -115,19 +113,13 @@ fn extend_member_path_checks(
     paths: &[PathBuf],
     id: &'static str,
     category: DoctorCategory,
-    verbose: bool,
 ) {
     for path in paths {
-        checks.extend(verify_member_path(id, category, path, verbose));
+        checks.extend(verify_member_path(id, category, path));
     }
 }
 
-fn verify_member_path(
-    id: &'static str,
-    category: DoctorCategory,
-    path: &Path,
-    verbose: bool,
-) -> Vec<DoctorCheck> {
+fn verify_member_path(id: &'static str, category: DoctorCategory, path: &Path) -> Vec<DoctorCheck> {
     let member_handle = derive_member_handle_from_path(path);
     let public_key = match load_member_file_for_doctor(id, category, path, &member_handle) {
         MemberFileCheck::Loaded(public_key) => public_key,
@@ -138,9 +130,8 @@ fn verify_member_path(
         &public_key,
         Some(&member_handle),
         &format_path_relative_to_cwd(path),
-        verbose,
     ) {
-        Ok(verified) => build_verified_member_path_checks(id, category, path, verified, verbose),
+        Ok(verified) => build_verified_member_path_checks(id, category, path, verified),
         Err(error) => vec![check_failed_member_verification(
             id,
             category,
@@ -181,7 +172,6 @@ fn build_verified_member_path_checks(
     category: DoctorCategory,
     path: &Path,
     verified: VerifiedMemberFile,
-    verbose: bool,
 ) -> Vec<DoctorCheck> {
     let mut checks = vec![DoctorCheck::ok(
         id,
@@ -194,7 +184,6 @@ fn build_verified_member_path_checks(
         category,
         &verified.member_handle,
         &verified.public_key,
-        verbose,
     ));
     checks
 }
@@ -219,13 +208,12 @@ fn check_github_verification(
     category: DoctorCategory,
     member_handle: &str,
     public_key: &crate::model::public_key::PublicKey,
-    verbose: bool,
 ) -> DoctorCheck {
     if !has_github_binding(public_key) {
         return check_missing_github_binding(category, member_handle);
     }
 
-    match block_on_result(verify_github_account(public_key, verbose)) {
+    match block_on_result(verify_github_account(public_key)) {
         Ok(result) => check_github_result(category, member_handle, result),
         Err(error) => DoctorCheck::skip(
             "github.verify",

@@ -43,7 +43,6 @@ pub fn parse_master_key_from_plaintext(mk_plaintext: Zeroizing<Plaintext>) -> Re
 /// * `sid` - Session ID (UUID)
 /// * `kem_secret_key` - X25519 secret key for unwrapping
 /// * `info_builder` - Function to build HPKE info
-/// * `debug` - Enable debug logging
 /// * `caller` - Caller function name for debug logging
 ///
 /// # Returns
@@ -53,19 +52,16 @@ pub fn unwrap_master_key(
     sid: &Uuid,
     kem_secret_key: &X25519SecretKey,
     info_builder: fn(&Uuid, &str) -> Result<Info>,
-    debug: bool,
     caller: &str,
 ) -> Result<MasterKey> {
     let info = info_builder(sid, wrap_item.kid().as_str())?;
     let aad = Aad::from(info.as_bytes());
 
-    if debug {
-        debug!(
-            "[CRYPTO] HPKE: {}: open_base (kid: {})",
-            caller,
-            format_kid_half_display_lossy(wrap_item.kid().as_str())
-        );
-    }
+    debug!(
+        "[CRYPTO] HPKE: {}: open_base (kid: {})",
+        caller,
+        format_kid_half_display_lossy(wrap_item.kid().as_str())
+    );
 
     let mk_plaintext = open_base(
         kem_secret_key,
@@ -91,7 +87,6 @@ pub fn unwrap_master_key_for_file(
     member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
-    debug: bool,
 ) -> Result<MasterKey> {
     let secret = verified.document();
     let wrap_set = WrapSet::parse(&secret.protected.wrap, "Document")?;
@@ -105,7 +100,6 @@ pub fn unwrap_master_key_for_file(
         &secret.protected.sid,
         &kem_sk,
         build_file_wrap_info,
-        debug,
         "unwrap_master_key_for_file",
     )
 }
@@ -114,11 +108,10 @@ pub fn unwrap_master_key_for_file_with_context(
     verified: &VerifiedFileEncDocument,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<DecryptionResult<MasterKey>> {
     let secret = verified.document();
     let wrap_set = WrapSet::parse(&secret.protected.wrap, "Document")?;
-    let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle, debug)?;
+    let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle)?;
     let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key(
@@ -126,7 +119,6 @@ pub fn unwrap_master_key_for_file_with_context(
         &secret.protected.sid,
         &kem_sk,
         build_file_wrap_info,
-        debug,
         "unwrap_master_key_for_file_with_context",
     )?;
     Ok(DecryptionResult {
@@ -141,19 +133,16 @@ pub fn unwrap_master_key_for_file_with_context(
 /// * `sid` - Session ID (UUID)
 /// * `wrap_item` - WrapItem to unwrap
 /// * `kem_secret_key` - X25519 secret key for unwrapping
-/// * `debug` - Enable debug logging
 pub fn unwrap_master_key_from_item(
     sid: &Uuid,
     wrap_item: &RecipientWrap,
     kem_secret_key: &X25519SecretKey,
-    debug: bool,
 ) -> Result<MasterKey> {
     unwrap_master_key(
         wrap_item,
         sid,
         kem_secret_key,
         build_kv_wrap_info,
-        debug,
         "unwrap_master_key_from_item",
     )
 }
@@ -168,19 +157,17 @@ pub fn unwrap_master_key_from_item(
 /// * `member_handle` - Resolved member handle for error messages
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - VerifiedPrivateKey containing the KEM private key
-/// * `debug` - Enable debug logging
 pub fn unwrap_master_key_for_kv(
     sid: &Uuid,
     wrap_items: &[WrapItem],
     member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
-    debug: bool,
 ) -> Result<MasterKey> {
     let wrap_set = WrapSet::parse(wrap_items, "Document")?;
     let wrap_item = wrap_set.find_by_kid_for_member(kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(private_key)?;
-    unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)
+    unwrap_master_key_from_item(sid, wrap_item, &kem_sk)
 }
 
 pub fn unwrap_master_key_for_kv_with_context(
@@ -188,13 +175,12 @@ pub fn unwrap_master_key_for_kv_with_context(
     wrap_items: &[WrapItem],
     member_handle: &str,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<DecryptionResult<MasterKey>> {
     let wrap_set = WrapSet::parse(wrap_items, "Document")?;
-    let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle, debug)?;
+    let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle)?;
     let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, member_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
-    let master_key = unwrap_master_key_from_item(sid, wrap_item, &kem_sk, debug)?;
+    let master_key = unwrap_master_key_from_item(sid, wrap_item, &kem_sk)?;
     Ok(DecryptionResult {
         value: master_key,
         key_info: selected_key.info().clone(),

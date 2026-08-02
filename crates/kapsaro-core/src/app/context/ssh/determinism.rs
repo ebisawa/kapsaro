@@ -41,11 +41,9 @@ pub(super) fn check_ssh_signature_determinism(
         Err(error) => Err(error),
     };
 
-    if params.verbose {
-        match &determinism {
-            Ok(status) => debug!("[SSH] Determinism check: {}", status.is_verified()),
-            Err(error) => debug!("[SSH] Determinism check failed: {}", error),
-        }
+    match &determinism {
+        Ok(status) => debug!("[SSH] Determinism check: {}", status.is_verified()),
+        Err(error) => debug!("[SSH] Determinism check failed: {}", error),
     }
 
     determinism

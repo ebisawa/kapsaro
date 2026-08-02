@@ -52,8 +52,7 @@ fn build_password_private_key_with_plaintext_json(
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
     };
-    let enc_key =
-        derive_key_from_password(password, &ikm_salt, &hkdf_salt, TEST_KID, false).unwrap();
+    let enc_key = derive_key_from_password(password, &ikm_salt, &hkdf_salt, TEST_KID).unwrap();
     let aad = build_private_key_aad(&protected).unwrap();
     let plaintext = Plaintext::from(plaintext_json.to_vec());
     let (ct, nonce) = xchacha::encrypt_with_nonce(&enc_key, &plaintext, &aad).unwrap();
@@ -79,11 +78,10 @@ fn test_password_encrypt_decrypt_roundtrip() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &password,
-        false,
     )
     .expect("encryption should succeed");
 
-    let decrypted = decrypt_private_key_with_password(&encrypted, &password, false)
+    let decrypted = decrypt_private_key_with_password(&encrypted, &password)
         .expect("decryption should succeed");
 
     assert_eq!(plaintext, decrypted);
@@ -101,12 +99,11 @@ fn test_password_encrypt_wrong_password_fails() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &correct_password,
-        false,
     )
     .expect("encryption should succeed");
 
     let wrong_password = secret("wrong-password");
-    let result = decrypt_private_key_with_password(&encrypted, &wrong_password, false);
+    let result = decrypt_private_key_with_password(&encrypted, &wrong_password);
     let err = result.expect_err("decryption with wrong password should fail");
     assert_eq!(
         err.format_user_message(),
@@ -119,7 +116,7 @@ fn test_password_decrypt_sanitizes_plaintext_deserialize_error() {
     let password = secret("test-password-42");
     let private_key = build_password_private_key_with_plaintext_json(b"{", &password);
 
-    let err = decrypt_private_key_with_password(&private_key, &password, false)
+    let err = decrypt_private_key_with_password(&private_key, &password)
         .expect_err("invalid plaintext JSON should fail");
 
     assert_eq!(
@@ -147,7 +144,6 @@ fn test_password_encrypt_preserves_metadata() {
         created_at,
         expires_at,
         &secret("pw"),
-        false,
     )
     .expect("encryption should succeed");
 
@@ -169,7 +165,6 @@ fn test_password_encrypt_protected_algorithm_shape() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &secret("test-password"),
-        false,
     )
     .expect("encryption should succeed");
 
@@ -207,7 +202,7 @@ fn test_password_decrypt_rejects_sshsig_key() {
         },
     };
 
-    let result = decrypt_private_key_with_password(&private_key, &secret("test-password"), false);
+    let result = decrypt_private_key_with_password(&private_key, &secret("test-password"));
     assert!(result.is_err(), "SshSig key should be rejected");
     let err = result.unwrap_err().to_string();
     assert!(
@@ -229,7 +224,6 @@ fn test_password_decrypt_rejects_unsupported_aead() {
         "2026-01-01T00:00:00Z",
         "2027-01-01T00:00:00Z",
         &password,
-        false,
     )
     .expect("encryption should succeed");
 
@@ -247,7 +241,7 @@ fn test_password_decrypt_rejects_unsupported_aead() {
         other => other,
     };
 
-    let result = decrypt_private_key_with_password(&encrypted, &password, false);
+    let result = decrypt_private_key_with_password(&encrypted, &password);
     assert!(result.is_err(), "unsupported AEAD should be rejected");
     let err = result.unwrap_err().to_string();
     assert!(

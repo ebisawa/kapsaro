@@ -52,7 +52,6 @@ fn test_parse_verify_decrypt_kv() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )
@@ -60,13 +59,12 @@ fn test_parse_verify_decrypt_kv() {
 
     // Verify and decrypt
     let doc = parse_kv_document(&encrypted).unwrap();
-    let verified_doc = verify_kv_document(&doc, false).unwrap();
+    let verified_doc = verify_kv_document(&doc).unwrap();
     let decrypted = decrypt_kv_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
 
@@ -109,7 +107,6 @@ fn test_parse_verify_decrypt_file() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -119,13 +116,12 @@ fn test_parse_verify_decrypt_file() {
     // Verify and decrypt
     let doc: crate::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
-    let verified_doc = verify_file_document(&doc, false).unwrap();
+    let verified_doc = verify_file_document(&doc).unwrap();
     let decrypted = decrypt_file_document(
         &verified_doc,
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
 
@@ -233,7 +229,6 @@ fn test_crypto_context_load_fails_when_public_key_mismatches_private_key() {
         Some(&kid1),
         Some(&keystore_root),
         Some(temp_dir.path().join("workspace")),
-        false,
     );
     assert!(result.is_err());
     let msg = format!("{}", result.err().unwrap());

@@ -47,7 +47,6 @@ fn build_test_kv_enc_content(
         signing_key: key_ctx.signing_key(),
         signer_kid: kid,
         signer_pub,
-        debug: false,
     };
     encrypt_kv_document(kv_map, &verified_members, &signing, TokenCodec::JsonJcs).unwrap()
 }
@@ -72,14 +71,13 @@ fn decrypt_kv_value(
     key_ctx: &crate::feature::context::crypto::CryptoContext,
     key: &str,
 ) -> kapsaro_core::Result<String> {
-    let verified = verify_kv_content(content, false)?;
+    let verified = verify_kv_content(content)?;
     let value = decrypt_kv_single_entry(
         &verified,
         member_handle,
         key_ctx.kid(),
         key_ctx.private_key(),
         key,
-        false,
     )?;
     String::from_utf8(value.to_vec()).map_err(|e| {
         kapsaro_core::Error::build_parse_error_with_source(
@@ -95,7 +93,7 @@ fn build_recipient_snapshot(
     let member_handles = list_active_member_handles(workspace_root)?;
     let public_keys = load_member_files(workspace_root, &member_handles)?;
     let verified_members =
-        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys, false)?;
+        crate::feature::verify::public_key::verify_recipient_public_keys(&public_keys)?;
     Ok(KvRecipientSnapshot {
         member_handles,
         verified_members,
@@ -219,7 +217,7 @@ fn test_set_kv_entry_new_file() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Set context
-    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
     ctx.token_codec = Some(TokenCodec::JsonJcs);
 
     // Set new key-value pair (new file)
@@ -255,7 +253,7 @@ fn test_set_kv_entry_existing_file() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Set context
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
 
     // Set new key-value pair (existing file - workspace_root not used for recipient lookup)
     let entries = vec![(
@@ -290,7 +288,7 @@ fn test_unset_kv_entry() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Unset context
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
 
     // Unset key
     let existing_content = KvEncContent::new_unchecked(existing_content);
@@ -319,7 +317,7 @@ fn test_unset_kv_entry_not_found() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
     // Unset context
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
 
     // Unset non-existent key
     let existing_content = KvEncContent::new_unchecked(existing_content);
@@ -337,7 +335,7 @@ fn test_set_kv_entry_multiple_entries_new_file() {
     let kid = kids.first().unwrap();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
-    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
     ctx.token_codec = Some(TokenCodec::JsonJcs);
 
     let entries = vec![
@@ -370,7 +368,7 @@ fn test_set_kv_entry_multiple_entries_existing_file() {
     let kid = kids.first().unwrap();
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(kid));
 
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
 
     let new_entries = vec![
         ("NEW_KEY_1".to_string(), "value1".to_string()),
@@ -402,7 +400,7 @@ fn test_set_kv_entry_existing_file_uses_current_workspace_recipients() {
         &std::collections::HashMap::from([("API_KEY".to_string(), "secret123".to_string())]),
     ));
     let recipients = build_recipient_snapshot(&workspace_dir).unwrap();
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
 
     let result = set_kv_entry_with_recipients(
         Some(&existing_content),
@@ -444,7 +442,7 @@ fn test_unset_kv_entry_existing_file_uses_current_workspace_recipients() {
         &std::collections::HashMap::from([("API_KEY".to_string(), "secret123".to_string())]),
     ));
     let recipients = build_recipient_snapshot(&workspace_dir).unwrap();
-    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
 
     let result =
         unset_kv_entry_with_recipients(&existing_content, "API_KEY", &recipients, &ctx).unwrap();
@@ -478,7 +476,7 @@ fn test_set_kv_entry_new_file_uses_recipients_snapshot_not_pub_key_source() {
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&kid));
     std::fs::remove_dir_all(keystore_root.join("bob@example.com")).unwrap();
     let recipients = build_recipient_snapshot(&workspace_dir).unwrap();
-    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx, false);
+    let mut ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
     ctx.token_codec = Some(TokenCodec::JsonJcs);
 
     let result = set_kv_entry_with_recipients(

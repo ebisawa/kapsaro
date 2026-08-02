@@ -9,7 +9,6 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::json::print_json_output;
 use crate::cli::common::output::text::inspect::{
     format_inspect_command_output, print_inspect_banner,
@@ -29,8 +28,7 @@ pub(crate) struct InspectArgs {
 }
 
 pub(crate) fn run(args: InspectArgs) -> Result<()> {
-    let options = resolve_options(&args.common);
-    let prepared = execute_inspect_file_command(&options, &args.input)?;
+    let prepared = execute_inspect_file_command(&args.input)?;
 
     if args.common.json.json {
         print_json_output(&prepared.json_output)?;

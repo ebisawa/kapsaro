@@ -211,11 +211,10 @@ fn test_encrypt_decrypt_private_key_roundtrip_with_deterministic_backend() {
         ssh_fpr: ssh_fpr.to_string(),
         created_at: created_at.to_string(),
         expires_at: expires_at.to_string(),
-        debug: false,
     })
     .expect("encrypt_private_key should succeed");
 
-    let decrypted = decrypt_private_key(&encrypted, &backend, ssh_pubkey, false)
+    let decrypted = decrypt_private_key(&encrypted, &backend, ssh_pubkey)
         .expect("decrypt_private_key should succeed");
 
     assert_eq!(decrypted, plaintext);
@@ -252,7 +251,6 @@ fn test_encrypt_private_key_protected_algorithm_shape() {
         ssh_fpr: ssh_fpr.clone(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .expect("encrypt_private_key should succeed");
 
@@ -301,11 +299,10 @@ fn test_decrypt_private_key_rejects_fingerprint_mismatch_before_kdf() {
         ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .unwrap();
 
-    let err = decrypt_private_key(&encrypted, &backend, OTHER_SSH_PUBKEY, false).unwrap_err();
+    let err = decrypt_private_key(&encrypted, &backend, OTHER_SSH_PUBKEY).unwrap_err();
     let err_msg = err.to_string();
     let expected = build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap();
     let actual = build_sha256_fingerprint(OTHER_SSH_PUBKEY).unwrap();
@@ -361,7 +358,6 @@ fn test_decrypt_private_key_rejects_unsupported_aead_before_kdf() {
         ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .unwrap();
     encrypted.protected.alg = match encrypted.protected.alg {
@@ -379,7 +375,7 @@ fn test_decrypt_private_key_rejects_unsupported_aead_before_kdf() {
         other => other,
     };
 
-    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY).unwrap_err();
     let err_msg = err.to_string();
 
     assert!(
@@ -424,11 +420,10 @@ fn test_decrypt_private_key_accepts_lowercase_fpr_prefix_roundtrip() {
         ssh_fpr,
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .unwrap();
 
-    let decrypted = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap();
+    let decrypted = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY).unwrap();
     assert_eq!(decrypted, plaintext);
 }
 
@@ -463,12 +458,11 @@ fn test_decrypt_private_key_retries_signature_only_after_failure() {
         ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .unwrap();
     encrypted.encrypted.ct = tamper_base64url(&encrypted.encrypted.ct);
 
-    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY).unwrap_err();
     let err_msg = err.to_string();
 
     assert!(
@@ -500,7 +494,7 @@ fn test_decrypt_private_key_sanitizes_plaintext_deserialize_error() {
     let backend = DeterministicBackend;
     let private_key = build_ssh_private_key_with_plaintext_json(b"{");
 
-    let err = decrypt_private_key(&private_key, &backend, TEST_SSH_PUBKEY, false)
+    let err = decrypt_private_key(&private_key, &backend, TEST_SSH_PUBKEY)
         .expect_err("invalid plaintext JSON should fail");
 
     assert_eq!(
@@ -555,7 +549,6 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
         ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .unwrap();
     encrypted.encrypted.ct = tamper_base64url(&encrypted.encrypted.ct);
@@ -563,7 +556,7 @@ fn test_decrypt_private_key_reports_non_deterministic_after_failed_retry() {
     let backend = RetryDiagnosticBackend {
         calls: Cell::new(0),
     };
-    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY).unwrap_err();
 
     assert!(
         err.to_string().contains("W_SSH_NONDETERMINISTIC"),
@@ -619,14 +612,13 @@ fn test_decrypt_private_key_preserves_initial_ssh_error_without_retry() {
         ssh_fpr: build_sha256_fingerprint(TEST_SSH_PUBKEY).unwrap(),
         created_at: "2026-01-01T00:00:00Z".to_string(),
         expires_at: "2027-01-01T00:00:00Z".to_string(),
-        debug: false,
     })
     .unwrap();
 
     let backend = FailingBackend {
         calls: Cell::new(0),
     };
-    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY, false).unwrap_err();
+    let err = decrypt_private_key(&encrypted, &backend, TEST_SSH_PUBKEY).unwrap_err();
 
     assert!(
         err.to_string().contains("synthetic decrypt ssh failure"),

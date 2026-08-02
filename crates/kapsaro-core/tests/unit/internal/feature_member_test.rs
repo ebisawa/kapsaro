@@ -79,7 +79,7 @@ async fn test_verify_member_all() {
         active_member_path(&workspace_dir, "bob@example.com"),
     ];
 
-    let result = verify_member_files(&member_files, false).await;
+    let result = verify_member_files(&member_files).await;
 
     assert_eq!(result.len(), 2);
 }
@@ -89,7 +89,7 @@ async fn test_verify_member_files_accepts_selected_member_file() {
     let (_temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
     let member_files = vec![active_member_path(&workspace_dir, ALICE_MEMBER_HANDLE)];
 
-    let result = verify_member_files(&member_files, false).await;
+    let result = verify_member_files(&member_files).await;
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].member_handle, ALICE_MEMBER_HANDLE);
@@ -101,7 +101,7 @@ async fn test_verify_member_files_reports_offline_verification_failure() {
     let alice_active = active_member_path(&workspace_dir, ALICE_MEMBER_HANDLE);
     std::fs::write(&alice_active, b"{").unwrap();
 
-    let result = verify_member_files(&[alice_active], false).await;
+    let result = verify_member_files(&[alice_active]).await;
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].member_handle, ALICE_MEMBER_HANDLE);

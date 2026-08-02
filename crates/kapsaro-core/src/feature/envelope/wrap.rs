@@ -35,14 +35,12 @@ pub enum WrapFormat {
 /// * `sid` - Session ID (UUID)
 /// * `master_key` - Master key to wrap
 /// * `info_builder` - Function to build HPKE info
-/// * `debug` - Enable debug logging
 /// * `caller` - Caller function name for debug logging
 fn build_wrap_item(
     member: &VerifiedRecipientKey,
     sid: &Uuid,
     master_key: &MasterKey,
     info_builder: fn(&Uuid, &str) -> Result<Info>,
-    debug: bool,
     caller: &str,
 ) -> Result<WrapItem> {
     let public_key = member.document();
@@ -51,13 +49,11 @@ fn build_wrap_item(
         decode_base64url_nopad_array(&public_key.protected.keys.kem.x, "KEM public key")?;
     let kem_pk = X25519PublicKey::from_bytes(kem_pk_bytes);
 
-    if debug {
-        debug!(
-            "[CRYPTO] HPKE: {}: seal_base (kid: {})",
-            caller,
-            format_kid_half_display_lossy(&public_key.protected.kid)
-        );
-    }
+    debug!(
+        "[CRYPTO] HPKE: {}: seal_base (kid: {})",
+        caller,
+        format_kid_half_display_lossy(&public_key.protected.kid)
+    );
 
     let master_key_plaintext = Plaintext::from(master_key.as_bytes().to_vec());
     // Reuse the same canonical context bytes for both HPKE info and AAD.
@@ -79,19 +75,16 @@ fn build_wrap_item(
 /// * `member` - VerifiedRecipientKey for the recipient
 /// * `sid` - Session ID (UUID)
 /// * `content_key` - Content key to wrap
-/// * `debug` - Enable debug logging
 pub fn build_wrap_item_for_file(
     member: &VerifiedRecipientKey,
     sid: &Uuid,
     content_key: &MasterKey,
-    debug: bool,
 ) -> Result<WrapItem> {
     build_wrap_item(
         member,
         sid,
         content_key,
         build_file_wrap_info,
-        debug,
         "build_wrap_item_for_file",
     )
 }
@@ -102,19 +95,16 @@ pub fn build_wrap_item_for_file(
 /// * `sid` - Session ID (UUID)
 /// * `member` - VerifiedRecipientKey for the recipient
 /// * `master_key` - Master key to wrap
-/// * `debug` - Enable debug logging
 pub fn build_wrap_item_for_kv(
     sid: &Uuid,
     member: &VerifiedRecipientKey,
     master_key: &MasterKey,
-    debug: bool,
 ) -> Result<WrapItem> {
     build_wrap_item(
         member,
         sid,
         master_key,
         build_kv_wrap_info,
-        debug,
         "build_wrap_item_for_kv",
     )
 }
@@ -130,7 +120,6 @@ pub fn build_wrap_item_for_kv(
 /// * `sid` - Session ID (UUID)
 /// * `master_key` - Master key to wrap
 /// * `format` - Format type (File or Kv)
-/// * `debug` - Enable debug logging
 ///
 /// # Returns
 /// Vector of WrapItem structures
@@ -139,14 +128,13 @@ pub fn build_wraps_for_recipients(
     sid: &Uuid,
     master_key: &MasterKey,
     format: WrapFormat,
-    debug: bool,
 ) -> Result<Vec<WrapItem>> {
     validate_wrap_count(members.len(), "Recipients set")?;
     members
         .iter()
         .map(|member| match format {
-            WrapFormat::File => build_wrap_item_for_file(member, sid, master_key, debug),
-            WrapFormat::Kv => build_wrap_item_for_kv(sid, member, master_key, debug),
+            WrapFormat::File => build_wrap_item_for_file(member, sid, master_key),
+            WrapFormat::Kv => build_wrap_item_for_kv(sid, member, master_key),
         })
         .collect()
 }

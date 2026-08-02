@@ -58,7 +58,7 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
 
     // Decrypt using Ed25519DirectBackend
     let backend = Ed25519DirectBackend::new(&ssh_priv).expect("should load SSH key");
-    let plaintext = decrypt_private_key(&private_key, &backend, &ssh_pub_content, false)
+    let plaintext = decrypt_private_key(&private_key, &backend, &ssh_pub_content)
         .expect("should decrypt private key");
 
     // Export as portable key
@@ -70,7 +70,7 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
         &private_key.protected.created_at,
         &private_key.protected.expires_at,
         &password,
-        PortableExportOptions::new(ExportPasswordPolicy::Recommended, false),
+        PortableExportOptions::new(ExportPasswordPolicy::Recommended),
     )
     .expect("should export private key")
     .into_plain_string_for_output();

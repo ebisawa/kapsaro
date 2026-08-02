@@ -30,17 +30,15 @@ pub struct KvWriteContext<'a> {
     pub member_handle: &'a str,
     pub key_ctx: &'a CryptoContext,
     pub token_codec: Option<TokenCodec>,
-    pub verbose: bool,
 }
 
 impl<'a> KvWriteContext<'a> {
     /// Build a new KvWriteContext.
-    pub fn new(member_handle: &'a str, key_ctx: &'a CryptoContext, verbose: bool) -> Self {
+    pub fn new(member_handle: &'a str, key_ctx: &'a CryptoContext) -> Self {
         Self {
             member_handle,
             key_ctx,
             token_codec: None,
-            verbose,
         }
     }
 }
@@ -95,7 +93,6 @@ fn set_kv_new_file(
         codec,
         false,
         |_| Ok(()),
-        ctx.verbose,
     )?;
     Ok(KvSetResult {
         encrypted: KvEncContent::new_unchecked(encrypted),
@@ -116,8 +113,6 @@ fn set_kv_existing_file(
                 master_key,
                 &session.document().head.sid,
                 session.token_codec(),
-                ctx.verbose,
-                "set_kv_entry",
             )?;
             let new_entries: HashMap<&str, &str> = entry_tokens
                 .iter()
@@ -150,7 +145,6 @@ where
         ctx.member_handle,
         ctx.key_ctx,
         ctx.token_codec,
-        ctx.verbose,
     )?;
     let head = build_updated_header(session.document())?;
     let sid = session.document().head.sid;
@@ -163,7 +157,6 @@ where
         recipients,
         &master_key,
         removed_recipients,
-        ctx.verbose,
     )?);
     session.sign(unsigned, &master_key)
 }
@@ -173,14 +166,12 @@ fn build_current_wrap(
     recipients: &KvRecipientSnapshot,
     master_key: &crate::crypto::types::keys::MasterKey,
     removed_recipients: Option<Vec<crate::model::common::RemovedRecipient>>,
-    debug: bool,
 ) -> Result<KvWrap> {
     let wrap = build_wraps_for_recipients(
         &recipients.verified_members,
         sid,
         master_key,
         WrapFormat::Kv,
-        debug,
     )?;
     Ok(KvWrap {
         wrap,

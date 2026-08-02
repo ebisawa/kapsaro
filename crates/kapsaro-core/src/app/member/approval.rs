@@ -59,16 +59,13 @@ pub fn evaluate_members_for_approval(
 
     let approval_targets =
         select_approval_targets(&active_members, member_handles, self_member_handle)?;
-    if options.debug {
-        debug!(
-            "[MEMBER] approve: verify candidate public keys active_count={}, target_count={}",
-            active_members.len(),
-            approval_targets.len()
-        );
-    }
+    debug!(
+        "[MEMBER] approve: verify candidate public keys active_count={}, target_count={}",
+        active_members.len(),
+        approval_targets.len()
+    );
     let verification_results = block_on_result(super::verification::verify_member_public_keys(
         &approval_targets,
-        options.debug,
     ))?;
 
     let (_, loaded) = load_or_build_trust_store_for_member(options, self_member_handle)?;

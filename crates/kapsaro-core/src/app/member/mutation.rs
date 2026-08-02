@@ -26,7 +26,7 @@ pub fn add_member(options: &CommonCommandOptions, filename: &Path, force: bool) 
     let workspace = require_workspace(options, "member add")?;
     let content = load_text_with_limit(filename, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
     let source_name = format_path_relative_to_cwd(filename);
-    let addition = build_member_addition_from_content(&content, &source_name, options.debug)?;
+    let addition = build_member_addition_from_content(&content, &source_name)?;
 
     save_member_content(
         &workspace.root_path,
@@ -59,12 +59,7 @@ pub fn evaluate_member_removal(
     let mut affected_artifacts = Vec::new();
     let mut warnings = Vec::new();
     for artifact_path in list_workspace_encrypted_artifacts(&workspace.root_path)? {
-        match artifact_contains_member(
-            &artifact_path,
-            member_handle,
-            options.allow_expired_key,
-            options.debug,
-        ) {
+        match artifact_contains_member(&artifact_path, member_handle, options.allow_expired_key) {
             Ok(result) => {
                 warnings.extend(result.warnings);
                 if result.contains_member {
@@ -103,27 +98,22 @@ fn artifact_contains_member(
     path: &Path,
     member_handle: &str,
     allow_expired_key: bool,
-    debug_enabled: bool,
 ) -> Result<ArtifactMemberScan> {
-    if debug_enabled {
-        debug!(
-            "[MEMBER] remove scan: verify artifact path={}",
-            format_path_relative_to_cwd(path)
-        );
-    }
+    debug!(
+        "[MEMBER] remove scan: verify artifact path={}",
+        format_path_relative_to_cwd(path)
+    );
     let content = load_artifact_content(path)?;
-    let result = verified_artifact_recipients(&content, allow_expired_key, debug_enabled)?;
+    let result = verified_artifact_recipients(&content, allow_expired_key)?;
     let contains_member = result
         .recipients
         .iter()
         .any(|recipient| recipient == member_handle);
-    if debug_enabled {
-        debug!(
-            "[MEMBER] remove scan: artifact recipients={} contains_target={}",
-            result.recipients.len(),
-            contains_member
-        );
-    }
+    debug!(
+        "[MEMBER] remove scan: artifact recipients={} contains_target={}",
+        result.recipients.len(),
+        contains_member
+    );
     Ok(ArtifactMemberScan {
         contains_member,
         warnings: result.warnings,
@@ -138,16 +128,15 @@ struct VerifiedArtifactRecipients {
 fn verified_artifact_recipients(
     content: &EncContent,
     allow_expired_key: bool,
-    debug_enabled: bool,
 ) -> Result<VerifiedArtifactRecipients> {
-    if debug_enabled {
+    if tracing::enabled!(tracing::Level::DEBUG) {
         let artifact_type = match content {
             EncContent::FileEnc(_) => "file",
             EncContent::KvEnc(_) => "kv",
         };
         debug!("[MEMBER] remove scan: detected {artifact_type} artifact");
     }
-    let proof = verify_artifact_signature_for_operation(content, debug_enabled, allow_expired_key)?;
+    let proof = verify_artifact_signature_for_operation(content, allow_expired_key)?;
     let evidence = artifact_recipient_evidence(content)?;
     Ok(VerifiedArtifactRecipients {
         recipients: evidence.recipient_handles,

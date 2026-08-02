@@ -27,9 +27,7 @@ pub fn resolve_command_member(
         Some(paths.base_dir.as_path()),
         false,
     )?)?;
-    if options.debug {
-        debug!("[CTX] member_handle={}", member_handle);
-    }
+    debug!("[CTX] member_handle={}", member_handle);
     Ok(CommandMemberResolution {
         member_handle,
         paths,

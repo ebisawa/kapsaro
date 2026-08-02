@@ -81,12 +81,8 @@ impl KvEncArtifact {
 
     /// Verify the artifact signature.
     pub fn verify(&self, options: OperationOptions) -> Result<VerifiedKvEncArtifact> {
-        verify_kv_content_for_operation(
-            self.text.content(),
-            options.debug(),
-            options.allow_expired_key(),
-        )
-        .map(|inner| VerifiedKvEncArtifact::from_inner(self.text.content().clone(), inner))
+        verify_kv_content_for_operation(self.text.content(), options.allow_expired_key())
+            .map(|inner| VerifiedKvEncArtifact::from_inner(self.text.content().clone(), inner))
     }
 
     /// Encrypt entries to a new signed kv-enc artifact.
@@ -94,9 +90,8 @@ impl KvEncArtifact {
         entries: Vec<KvInputEntry>,
         recipients: &RecipientKeys,
         key_ctx: &KeyContext,
-        options: OperationOptions,
     ) -> Result<Self> {
-        Self::rewrite_entries(None, entries, recipients, key_ctx, options)
+        Self::rewrite_entries(None, entries, recipients, key_ctx)
     }
 
     /// List entry keys without decrypting values.
@@ -122,9 +117,8 @@ impl KvEncArtifact {
         entries: Vec<KvInputEntry>,
         recipients: &RecipientKeys,
         key_ctx: &KeyContext,
-        options: OperationOptions,
     ) -> Result<Self> {
-        let input = build_kv_write_input(recipients, key_ctx, options);
+        let input = build_kv_write_input(recipients, key_ctx);
         let internal_entries = into_internal_entries(entries);
         let result = set_kv_entry_with_recipients(
             existing,
@@ -162,9 +156,8 @@ impl VerifiedKvEncArtifact {
         entries: Vec<KvInputEntry>,
         recipients: &RecipientKeys,
         key_ctx: &KeyContext,
-        options: OperationOptions,
     ) -> Result<KvEncArtifact> {
-        KvEncArtifact::rewrite_entries(Some(&self.content), entries, recipients, key_ctx, options)
+        KvEncArtifact::rewrite_entries(Some(&self.content), entries, recipients, key_ctx)
     }
 
     /// Remove an entry from a verified kv-enc artifact.
@@ -173,9 +166,8 @@ impl VerifiedKvEncArtifact {
         key: &str,
         recipients: &RecipientKeys,
         key_ctx: &KeyContext,
-        options: OperationOptions,
     ) -> Result<KvEncArtifact> {
-        let input = build_kv_write_input(recipients, key_ctx, options);
+        let input = build_kv_write_input(recipients, key_ctx);
         let content =
             unset_kv_entry_with_recipients(&self.content, key, &input.recipients, &input.ctx)?;
         KvEncArtifact::parse(content)
@@ -194,7 +186,6 @@ impl VerifiedKvEncArtifact {
             key_ctx.member_handle(),
             key_ctx.inner(),
             key,
-            options.debug(),
         )
         .map(|result| result.value)
         .map_err(|error| normalize_key_not_found_error(error, key))?;
@@ -212,7 +203,6 @@ impl VerifiedKvEncArtifact {
             self.inner(),
             key_ctx.member_handle(),
             key_ctx.inner(),
-            options.debug(),
         )?
         .value;
         decode_decrypted_kv_values(values).map(|values| {
@@ -235,14 +225,13 @@ fn enforce_key_context_expiry(
 fn build_kv_write_input<'a>(
     recipients: &RecipientKeys,
     key_ctx: &'a KeyContext,
-    options: OperationOptions,
 ) -> KvFacadeWriteInput<'a> {
     KvFacadeWriteInput {
         recipients: KvRecipientSnapshot {
             member_handles: recipients.handles().to_vec(),
             verified_members: recipients.keys().to_vec(),
         },
-        ctx: KvWriteContext::new(key_ctx.member_handle(), key_ctx.inner(), options.debug()),
+        ctx: KvWriteContext::new(key_ctx.member_handle(), key_ctx.inner()),
     }
 }
 

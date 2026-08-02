@@ -76,7 +76,6 @@ fn save_file_artifact(
             signing_key: key_ctx.signing_key(),
             signer_kid: &signer_kid,
             signer_pub,
-            debug: false,
         },
     )
     .unwrap();
@@ -103,7 +102,6 @@ fn save_kv_artifact(
             signing_key: key_ctx.signing_key(),
             signer_kid: &signer_kid,
             signer_pub,
-            debug: false,
         },
         TokenCodec::JsonJcs,
     )

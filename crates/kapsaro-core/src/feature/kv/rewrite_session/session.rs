@@ -30,7 +30,6 @@ pub(crate) struct VerifiedKvRewriteSession<'a> {
     member_handle: &'a str,
     key_ctx: &'a CryptoContext,
     token_codec: Option<TokenCodec>,
-    debug: bool,
 }
 
 pub(crate) struct KvRecipientRewriteRequest<'a> {
@@ -46,15 +45,13 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         member_handle: &'a str,
         key_ctx: &'a CryptoContext,
         token_codec: Option<TokenCodec>,
-        debug: bool,
     ) -> Result<Self> {
-        let verified = verify_kv_content(content, debug)?;
+        let verified = verify_kv_content(content)?;
         Ok(Self::from_verified(
             verified,
             member_handle,
             key_ctx,
             token_codec,
-            debug,
         ))
     }
 
@@ -63,14 +60,12 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         member_handle: &'a str,
         key_ctx: &'a CryptoContext,
         token_codec: Option<TokenCodec>,
-        debug: bool,
     ) -> Self {
         Self {
             verified,
             member_handle,
             key_ctx,
             token_codec,
-            debug,
         }
     }
 
@@ -92,30 +87,21 @@ impl<'a> VerifiedKvRewriteSession<'a> {
     }
 
     pub(crate) fn build_unsigned(&self, head: KvHeader) -> Result<KvDocumentDraft> {
-        build_unsigned_from_verified(&self.verified, head, self.token_codec, self.debug)
+        build_unsigned_from_verified(&self.verified, head, self.token_codec)
     }
 
     pub(crate) fn sign(&self, unsigned: KvDocumentDraft, master_key: &MasterKey) -> Result<String> {
-        sign_unsigned_with_key_context(unsigned, master_key, self.key_ctx, self.debug)
+        sign_unsigned_with_key_context(unsigned, master_key, self.key_ctx)
     }
 
     pub(crate) fn unwrap_master_key(&self) -> Result<MasterKey> {
-        unwrap_master_key_from_verified(
-            &self.verified,
-            self.member_handle,
-            self.key_ctx,
-            self.debug,
-        )
+        unwrap_master_key_from_verified(&self.verified, self.member_handle, self.key_ctx)
     }
 
     pub(crate) fn decrypt_all_values(&self) -> Result<HashMap<String, SecretString>> {
-        let kv_map = decrypt_kv_document_with_context(
-            &self.verified,
-            self.member_handle,
-            self.key_ctx,
-            self.debug,
-        )?
-        .value;
+        let kv_map =
+            decrypt_kv_document_with_context(&self.verified, self.member_handle, self.key_ctx)?
+                .value;
         Ok(decode_decrypted_kv_values(kv_map)?.into_iter().collect())
     }
 
@@ -124,12 +110,8 @@ impl<'a> VerifiedKvRewriteSession<'a> {
         target_members: Option<&[VerifiedRecipientKey]>,
         request: KvRecipientRewriteRequest<'_>,
     ) -> Result<String> {
-        let verified_members = resolve_verified_recipients(
-            target_members,
-            self.key_ctx,
-            request.new_recipients,
-            self.debug,
-        )?;
+        let verified_members =
+            resolve_verified_recipients(target_members, self.key_ctx, request.new_recipients)?;
         let decrypted_content = self.decrypt_all_values()?;
         let old_wrap = self.document().wrap();
 
@@ -145,7 +127,6 @@ impl<'a> VerifiedKvRewriteSession<'a> {
                 }
                 Ok(())
             },
-            self.debug,
         )
     }
 }

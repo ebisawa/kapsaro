@@ -122,14 +122,9 @@ where
 {
     let secrets_dir = plan.review.target().workspace_root.secrets_dir();
     lock::with_locked_dir(&secrets_dir, |locked_secrets_dir| {
-        plan.review
-            .ensure_current_at(locked_secrets_dir, plan.verbose)?;
+        plan.review.ensure_current_at(locked_secrets_dir)?;
         plan.execution.key_ctx.enforce_signing_key_not_expired()?;
-        let write_ctx = KvWriteContext::new(
-            &plan.execution.member_handle,
-            &plan.execution.key_ctx,
-            plan.verbose,
-        );
+        let write_ctx = KvWriteContext::new(&plan.execution.member_handle, &plan.execution.key_ctx);
         let encrypted = operation(
             plan.review.existing_content(),
             plan.review.recipients(),

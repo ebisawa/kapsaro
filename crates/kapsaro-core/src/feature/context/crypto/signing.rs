@@ -19,7 +19,6 @@ pub struct SigningContext<'a> {
     pub signing_key: &'a SigningKey,
     pub signer_kid: &'a str,
     pub signer_pub: PublicKey,
-    pub debug: bool,
 }
 
 pub struct VerifiedSigningContext<'a> {
@@ -44,10 +43,7 @@ impl<'a> Deref for VerifiedSigningContext<'a> {
     }
 }
 
-pub fn build_signing_context<'a>(
-    key_ctx: &'a CryptoContext,
-    debug: bool,
-) -> Result<VerifiedSigningContext<'a>> {
+pub fn build_signing_context(key_ctx: &CryptoContext) -> Result<VerifiedSigningContext<'_>> {
     key_ctx.enforce_signing_key_not_expired()?;
     let signer_pub =
         load_signer_public_key(key_ctx.pub_key_source.as_ref(), key_ctx.member_handle_id())?;
@@ -56,7 +52,6 @@ pub fn build_signing_context<'a>(
             signing_key: key_ctx.signing_key(),
             signer_kid: key_ctx.kid(),
             signer_pub,
-            debug,
         },
     })
 }

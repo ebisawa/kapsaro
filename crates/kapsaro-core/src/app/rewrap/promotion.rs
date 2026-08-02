@@ -172,25 +172,22 @@ fn is_self_promotion_candidate(
 
 pub fn build_promotion_review_session(
     review_plan: &IncomingPromotionReviewPlan,
-    verbose: bool,
 ) -> Result<PromotionReviewSession> {
     build_promotion_review_session_with_verifier(review_plan, |candidate| {
-        verify_prompt_candidate_online(candidate, verbose)
+        verify_prompt_candidate_online(candidate)
     })
 }
 
 pub fn verify_prompt_candidate_online(
     candidate: &IncomingPromotionCandidate,
-    verbose: bool,
 ) -> Result<IncomingPromotionCandidate> {
     if !candidate.review.github_binding_configured {
         return Ok(candidate.clone());
     }
 
-    let results = block_on_result(verify_member_public_keys(
-        std::slice::from_ref(&candidate.public_key),
-        verbose,
-    ))?;
+    let results = block_on_result(verify_member_public_keys(std::slice::from_ref(
+        &candidate.public_key,
+    )))?;
     let result = results.into_iter().next().ok_or_else(|| {
         Error::build_verification_error(
             "E_REWRAP_MISSING_VERIFICATION_RESULT".to_string(),

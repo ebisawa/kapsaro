@@ -39,7 +39,6 @@ fn test_encrypt_file_basic() {
             signing_key: &generate_ed25519_keypair([2u8; 32]),
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -120,7 +119,6 @@ fn test_encrypt_file_multiple_recipients() {
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
             ),
-            debug: false,
         },
     )
     .unwrap();
@@ -174,7 +172,6 @@ fn test_encrypt_file_sid_is_uuid() {
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
             ),
-            debug: false,
         },
     )
     .unwrap();
@@ -208,7 +205,6 @@ fn test_encrypt_file_deterministic_structure() {
             signing_key: &signing_key,
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -220,7 +216,6 @@ fn test_encrypt_file_deterministic_structure() {
             signing_key: &signing_key,
             signer_kid,
             signer_pub: build_test_public_key("signer@test", signer_kid, "dummy"),
-            debug: false,
         },
     )
     .unwrap();
@@ -255,7 +250,6 @@ fn test_encrypt_file_no_recipient_found() {
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
             ),
-            debug: false,
         },
     )
     .unwrap();
@@ -291,7 +285,6 @@ fn test_encrypt_file_signature_included() {
                 "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
                 "dummy",
             ),
-            debug: false,
         },
     )
     .unwrap();

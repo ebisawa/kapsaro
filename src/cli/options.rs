@@ -14,7 +14,6 @@ pub(crate) struct CommonOptions {
     pub(crate) ssh_agent: bool,
     pub(crate) ssh_keygen: bool,
     pub(crate) verbose: bool,
-    pub(crate) debug: bool,
     pub(crate) workspace: Option<PathBuf>,
 }
 
@@ -273,13 +272,11 @@ fn build_common_options(
     home: &HomeOption,
     workspace: Option<&WorkspaceOption>,
     verbose: Option<&VerboseOption>,
-    debug: Option<&DebugOption>,
 ) -> CommonOptions {
     CommonOptions {
         home: home.home.clone(),
         workspace: workspace.and_then(|option| option.workspace.clone()),
         verbose: verbose.is_some_and(|option| option.verbose),
-        debug: debug.is_some_and(|option| option.debug),
         ..CommonOptions::default()
     }
 }
@@ -289,9 +286,8 @@ fn build_signing_common_options(
     workspace: &WorkspaceOption,
     ssh: &SshSigningOptions,
     verbose: &VerboseOption,
-    debug: &DebugOption,
 ) -> CommonOptions {
-    let mut common = build_common_options(home, Some(workspace), Some(verbose), Some(debug));
+    let mut common = build_common_options(home, Some(workspace), Some(verbose));
     ssh.apply_to(&mut common);
     common
 }
@@ -304,78 +300,49 @@ impl ToCommonOptions for CommonOptions {
 
 impl ToCommonOptions for LocalOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, None, None, None)
+        build_common_options(&self.home, None, None)
     }
 }
 
 impl ToCommonOptions for LocalOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, None, Some(&self.verbose), Some(&self.debug))
+        build_common_options(&self.home, None, Some(&self.verbose))
     }
 }
 
 impl ToCommonOptions for WorkspaceOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, Some(&self.workspace), None, Some(&self.debug))
+        build_common_options(&self.home, Some(&self.workspace), None)
     }
 }
 
 impl ToCommonOptions for WorkspaceOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(
-            &self.home,
-            Some(&self.workspace),
-            Some(&self.verbose),
-            Some(&self.debug),
-        )
+        build_common_options(&self.home, Some(&self.workspace), Some(&self.verbose))
     }
 }
 
 impl ToCommonOptions for SigningOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(
-            &self.home,
-            &self.workspace,
-            &self.ssh,
-            &self.verbose,
-            &self.debug,
-        )
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
     }
 }
 
 impl ToCommonOptions for SigningOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(
-            &self.home,
-            &self.workspace,
-            &self.ssh,
-            &self.verbose,
-            &self.debug,
-        )
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
     }
 }
 
 impl ToCommonOptions for SigningQuietOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(
-            &self.home,
-            &self.workspace,
-            &self.ssh,
-            &self.verbose,
-            &self.debug,
-        )
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
     }
 }
 
 impl ToCommonOptions for SigningQuietOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(
-            &self.home,
-            &self.workspace,
-            &self.ssh,
-            &self.verbose,
-            &self.debug,
-        )
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
     }
 }
 
@@ -384,7 +351,6 @@ impl From<&CommonOptions> for CommonCommandOptions {
         Self {
             home: value.home.clone(),
             identity: value.identity.clone(),
-            debug: value.debug,
             verbose: value.verbose,
             workspace: value.workspace.clone(),
             ssh_signing_method: value.ssh_signing_method(),

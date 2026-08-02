@@ -54,7 +54,6 @@ fn build_test_signing_context<'a>(signing_key: &'a SigningKey, kid: &'a str) -> 
         signing_key,
         signer_kid: kid,
         signer_pub: build_dummy_public_key(kid),
-        debug: false,
     }
 }
 
@@ -71,7 +70,7 @@ fn test_append_kv_signature_produces_sig_line() {
     let unsigned = ":KAPSARO_KV 1\n:HEAD {}\n:WRAP {}\nKEY token\n";
     let signing = build_test_signing_context(&signing_key, kid);
 
-    let result = append_kv_signature(unsigned, &mac_key, &signing, TokenCodec::JsonJcs, "test");
+    let result = append_kv_signature(unsigned, &mac_key, &signing, TokenCodec::JsonJcs);
 
     assert!(result.is_ok());
     let signed = result.unwrap();
@@ -92,8 +91,7 @@ fn test_append_kv_signature_preserves_unsigned_content() {
     let unsigned = ":KAPSARO_KV 1\n:HEAD tok\n:WRAP tok\nA val\nB val\n";
     let signing = build_test_signing_context(&signing_key, "kid");
 
-    let signed =
-        append_kv_signature(unsigned, &mac_key, &signing, TokenCodec::JsonJcs, "test").unwrap();
+    let signed = append_kv_signature(unsigned, &mac_key, &signing, TokenCodec::JsonJcs).unwrap();
 
     assert!(signed.starts_with(unsigned));
     let extra = &signed[unsigned.len()..];
@@ -114,8 +112,7 @@ fn test_verify_kv_signature_rejects_tampered_signature_kid() {
     let unsigned = ":KAPSARO_KV 1\n:HEAD {}\n:WRAP {}\nKEY token\n";
     let signing = build_test_signing_context(&signing_key, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
     let body_bytes = build_kv_artifact_body_bytes_from_unsigned(unsigned);
-    let mac =
-        build_kv_key_possession_proof(&body_bytes, &mac_key, signing.signer_kid, false).unwrap();
+    let mac = build_kv_key_possession_proof(&body_bytes, &mac_key, signing.signer_kid).unwrap();
     let sig_input = build_artifact_signature_input(
         algorithm::SIGNATURE_ED25519,
         signing.signer_kid,
@@ -133,10 +130,10 @@ fn test_verify_kv_signature_rejects_tampered_signature_kid() {
     .unwrap();
     let document = build_test_kv_document(unsigned, sid, signature.clone());
 
-    verify_kv_signature(&document, &verifying_key, &signature, false).unwrap();
+    verify_kv_signature(&document, &verifying_key, &signature).unwrap();
 
     signature.kid = "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA".to_string();
-    let result = verify_kv_signature(&document, &verifying_key, &signature, false);
+    let result = verify_kv_signature(&document, &verifying_key, &signature);
 
     assert!(result.is_err());
     assert!(result

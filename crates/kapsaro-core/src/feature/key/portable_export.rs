@@ -31,15 +31,11 @@ pub enum ExportPasswordPolicy {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PortableExportOptions {
     pub password_policy: ExportPasswordPolicy,
-    pub debug: bool,
 }
 
 impl PortableExportOptions {
-    pub fn new(password_policy: ExportPasswordPolicy, debug: bool) -> Self {
-        Self {
-            password_policy,
-            debug,
-        }
+    pub fn new(password_policy: ExportPasswordPolicy) -> Self {
+        Self { password_policy }
     }
 }
 
@@ -68,7 +64,6 @@ pub fn export_private_key_portable(
         created_at,
         expires_at,
         password,
-        options.debug,
     )?;
 
     let jcs_bytes = SecretBytes::new(jcs::normalize(&private_key)?);

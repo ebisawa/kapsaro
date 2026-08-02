@@ -48,7 +48,6 @@ fn test_file_enc_content_detect_accepts_file_enc() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
@@ -97,7 +96,6 @@ fn test_verify_content_then_decrypt_file() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
@@ -105,13 +103,12 @@ fn test_verify_content_then_decrypt_file() {
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
     let file_enc = FileEncContent::new_unchecked(encrypted_json);
 
-    let verified = verify_file_content(&file_enc, false).unwrap();
+    let verified = verify_file_content(&file_enc).unwrap();
     let decrypted = decrypt_file_document(
         &verified,
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
     assert_eq!(decrypted.as_ref() as &[u8], content);
@@ -143,7 +140,6 @@ fn test_parse_verify_decrypt_file() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
@@ -153,13 +149,12 @@ fn test_parse_verify_decrypt_file() {
     // Use verify+decrypt API
     let file_doc: crate::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
-    let verified_file_doc = verify_file_document(&file_doc, false).unwrap();
+    let verified_file_doc = verify_file_document(&file_doc).unwrap();
     let decrypted = decrypt_file_document(
         &verified_file_doc,
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     )
     .unwrap();
 
@@ -187,7 +182,6 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
             signing_key: old_key_ctx.signing_key(),
             signer_kid: &old_kid,
             signer_pub: old_public_key,
-            debug: false,
         },
     )
     .unwrap();
@@ -201,11 +195,9 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
     assert_ne!(new_key_ctx.kid().to_string(), old_kid);
 
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
-    let verified =
-        verify_file_content(&FileEncContent::new_unchecked(encrypted_json), false).unwrap();
+    let verified = verify_file_content(&FileEncContent::new_unchecked(encrypted_json)).unwrap();
     let decrypted =
-        decrypt_file_document_with_context(&verified, ALICE_MEMBER_HANDLE, &new_key_ctx, false)
-            .unwrap();
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_HANDLE, &new_key_ctx).unwrap();
 
     assert_eq!(decrypted.value.as_ref() as &[u8], content);
     assert_eq!(decrypted.key_info.kid, old_kid);
@@ -238,13 +230,12 @@ fn test_verify_file_document_returns_verified() {
             signing_key: key_ctx.signing_key(),
             signer_kid: kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
 
     // Verify document (returns Verified<FileEncDocument>)
-    let verified_doc = verify_file_document(&file_enc_doc, false).unwrap();
+    let verified_doc = verify_file_document(&file_enc_doc).unwrap();
 
     // Check that we have verified proof information
     assert_eq!(verified_doc.proof().member_handle, ALICE_MEMBER_HANDLE);
@@ -284,7 +275,6 @@ fn build_encrypted_file_for_error_tests() -> (
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
             signer_pub: public_key.clone(),
-            debug: false,
         },
     )
     .unwrap();
@@ -319,7 +309,6 @@ fn test_decrypt_file_wrong_format() {
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     );
 
     assert!(result.is_err());
@@ -343,7 +332,6 @@ fn test_decrypt_file_wrong_payload_format() {
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     );
 
     assert!(result.is_err());
@@ -367,7 +355,6 @@ fn test_decrypt_file_unsupported_aead() {
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     );
 
     assert!(result.is_err());
@@ -391,7 +378,6 @@ fn test_decrypt_file_sid_mismatch() {
         ALICE_MEMBER_HANDLE,
         key_ctx.kid(),
         key_ctx.private_key(),
-        false,
     );
 
     assert!(result.is_err());

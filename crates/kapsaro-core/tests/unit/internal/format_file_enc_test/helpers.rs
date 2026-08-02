@@ -32,7 +32,7 @@ pub(super) fn decrypt_file_document_for_test(
     );
     let verified_doc = VerifiedFileEncDocument::new(file_enc_doc.clone(), proof);
     let decrypted_key = build_verified_private_key(private_key, member_handle, kid, "SHA256:test");
-    decrypt_file_document(&verified_doc, member_handle, kid, &decrypted_key, false).unwrap()
+    decrypt_file_document(&verified_doc, member_handle, kid, &decrypted_key).unwrap()
 }
 
 pub(super) fn generate_x25519_keypair(seed: [u8; 32]) -> (X25519SecretKey, X25519PublicKey) {

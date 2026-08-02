@@ -10,11 +10,7 @@ use crate::Result;
 
 /// Decode a token's raw bytes.
 /// Returns (bytes, codec).
-pub fn decode_token_bytes(
-    token: &str,
-    _debug: bool,
-    _caller: Option<&str>,
-) -> Result<(Vec<u8>, TokenCodec)> {
+pub fn decode_token_bytes(token: &str) -> Result<(Vec<u8>, TokenCodec)> {
     // CBOR tokens were supported in earlier versions but are removed in the current spec.
     if token.starts_with("cb:") || token.starts_with("cz:") {
         return Err(FormatError::build_parse_error(

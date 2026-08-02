@@ -145,9 +145,9 @@ fn resolve_generated_member_setup(
     github_user: Option<String>,
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<MemberSetupResult> {
-    let github_account = resolve_github_account(github_user, common.debug)?;
+    let github_account = resolve_github_account(github_user)?;
     let github_verification =
-        resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref(), common.debug)?;
+        resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref())?;
     let key_result = generate_member_key_result(
         common,
         member_handle,
@@ -197,10 +197,9 @@ fn resolve_registration_context(
 fn resolve_github_verification(
     ssh_public_key: &str,
     github_account: Option<&GithubAccount>,
-    verbose: bool,
 ) -> Result<OnlineVerificationStatus> {
     match github_account {
-        Some(account) => verify_preflight_github_binding(ssh_public_key, account, verbose),
+        Some(account) => verify_preflight_github_binding(ssh_public_key, account),
         None => Ok(OnlineVerificationStatus::NotConfigured),
     }
 }
@@ -219,7 +218,6 @@ fn generate_member_key_result(
         created_at,
         expires_at,
         no_activate: false,
-        debug: common.debug,
         github_account,
         github_verification,
         ssh_ctx,

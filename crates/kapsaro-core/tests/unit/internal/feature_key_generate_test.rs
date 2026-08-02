@@ -150,7 +150,6 @@ fn test_build_public_key_with_github_account() {
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk,
-        debug: false,
     })
     .unwrap();
 
@@ -179,7 +178,6 @@ fn test_build_public_key_without_github_account() {
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk,
-        debug: false,
     })
     .unwrap();
 
@@ -205,7 +203,6 @@ fn test_build_public_key_self_signature_valid_base64url() {
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk,
-        debug: false,
     })
     .unwrap();
 
@@ -239,7 +236,6 @@ fn test_build_public_key_changes_kid_when_github_account_changes() {
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk_with_claim,
-        debug: false,
     })
     .unwrap();
     let (keys_without_claim, attestation_without_claim, sig_sk_without_claim) =
@@ -252,7 +248,6 @@ fn test_build_public_key_changes_kid_when_github_account_changes() {
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &sig_sk_without_claim,
-        debug: false,
     })
     .unwrap();
 
@@ -282,7 +277,6 @@ fn test_derive_key_from_ssh_preserves_ssh_backend_errors() {
         &crate::crypto::types::primitives::HkdfSalt::new([7u8; 32]),
         &FailingBackend,
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
-        false,
     );
 
     let error = match result {
@@ -332,7 +326,6 @@ fn test_derive_key_from_ssh_maps_non_deterministic_error() {
             counter: Cell::new(0),
         },
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com",
-        false,
     );
 
     let error = match result {
@@ -531,7 +524,6 @@ fn test_build_public_key() {
         created_at: "2024-01-01T00:00:00Z",
         expires_at: "2025-01-01T00:00:00Z",
         sig_sk: &keypairs.sig_sk,
-        debug: false,
     })
     .unwrap();
 
@@ -590,7 +582,6 @@ fn test_generate_key_rejects_skipped_determinism() {
         member_handle: ALICE_MEMBER_HANDLE.to_string(),
         created_at,
         expires_at,
-        debug: false,
         github_account: None,
         ssh_binding,
     });

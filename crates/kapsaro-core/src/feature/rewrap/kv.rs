@@ -44,7 +44,6 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             recipients,
             &master_key,
             self.ctx.target_members(),
-            self.ctx.options().debug,
         )?;
         self.update_timestamp()
     }
@@ -58,7 +57,6 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
             recipients,
             &master_key,
             self.ctx.target_members(),
-            self.ctx.options().debug,
         )?;
         self.update_timestamp()
     }
@@ -128,7 +126,6 @@ impl<'a> KvRewrapExecutor<'a> {
             ctx.member_handle,
             ctx.key_ctx(),
             ctx.options().token_codec,
-            ctx.options().debug,
         );
         let kv_doc = session.document();
         let doc = session.build_unsigned(kv_doc.head().clone())?;
@@ -144,7 +141,6 @@ impl<'a> KvRewrapExecutor<'a> {
             self.ctx.member_handle,
             self.ctx.key_ctx(),
             self.ctx.options().token_codec,
-            self.ctx.options().debug,
         )?;
         let kv_doc = self.session.document();
         self.doc = self.session.build_unsigned(kv_doc.head().clone())?;
@@ -170,8 +166,8 @@ impl RewrapDocumentAdapter for KvRewrapAdapter {
     type Verified = VerifiedKvEncDocument;
     type Executor<'ctx> = KvRewrapExecutor<'ctx>;
 
-    fn verify_content(content: &Self::Content, debug: bool) -> Result<Self::Verified> {
-        verify_kv_content(content, debug)
+    fn verify_content(content: &Self::Content) -> Result<Self::Verified> {
+        verify_kv_content(content)
     }
 
     fn build_executor<'ctx>(

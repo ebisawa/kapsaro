@@ -64,7 +64,6 @@ fn encrypt_payload(
     plaintext: &Zeroizing<Vec<u8>>,
     key: &XChaChaKey,
     sid: &Uuid,
-    debug: bool,
     caller: &str,
 ) -> Result<(FilePayloadHeader, FilePayloadCiphertext)> {
     let payload_protected = FilePayloadHeader {
@@ -76,8 +75,7 @@ fn encrypt_payload(
     };
 
     let plaintext_obj = Plaintext::from(plaintext.as_slice());
-    let encrypted =
-        encrypt_file_payload_content(&plaintext_obj, key, &payload_protected, debug, caller)?;
+    let encrypted = encrypt_file_payload_content(&plaintext_obj, key, &payload_protected, caller)?;
 
     Ok((payload_protected, encrypted))
 }
@@ -92,9 +90,8 @@ fn build_recipient_wraps(
     members: &[VerifiedRecipientKey],
     sid: &Uuid,
     master_key: &MasterKey,
-    debug: bool,
 ) -> Result<Vec<WrapItem>> {
-    build_wraps_for_recipients(members, sid, master_key, WrapFormat::File, debug)
+    build_wraps_for_recipients(members, sid, master_key, WrapFormat::File)
 }
 
 /// Build FileEncDocumentProtected structure
@@ -121,7 +118,7 @@ fn build_file_enc_document_protected(
 /// * `content` - File content bytes to encrypt
 /// * `recipient_handles` - Normalized list of recipient member handles (order must match members)
 /// * `members` - Verified public keys with attested identity
-/// * `signing` - Signing context (signing_key, signer_kid, signer_pub, debug)
+/// * `signing` - Signing context (signing_key, signer_kid, signer_pub)
 ///
 /// # Returns
 /// FileEncDocument structure
@@ -135,9 +132,8 @@ pub fn encrypt_file_document(
     let sid = Uuid::new_v4();
     let timestamp = generate_current_timestamp()?;
     let (master_key, payload, mac_key) =
-        encrypt_content_into_payload(content, &sid, signing.debug, "encrypt_file_document")?;
-    let protected =
-        assemble_file_enc_protected(sid, &master_key, members, payload, timestamp, signing.debug)?;
+        encrypt_content_into_payload(content, &sid, "encrypt_file_document")?;
+    let protected = assemble_file_enc_protected(sid, &master_key, members, payload, timestamp)?;
     finalize_file_document_signature(protected, &mac_key, signing)
 }
 
@@ -148,7 +144,6 @@ pub fn encrypt_file_document(
 fn encrypt_content_into_payload(
     content: &[u8],
     sid: &Uuid,
-    debug: bool,
     caller: &str,
 ) -> Result<(MasterKey, FilePayload, MacKey)> {
     let (master_key, bytes_to_encrypt) = build_encrypt_context(content)?;
@@ -156,7 +151,7 @@ fn encrypt_content_into_payload(
     let xchacha_key = schedule.derive_content_key()?;
     let mac_key = schedule.derive_mac_key()?;
     let (payload_protected, payload_encrypted) =
-        encrypt_payload(&bytes_to_encrypt, &xchacha_key, sid, debug, caller)?;
+        encrypt_payload(&bytes_to_encrypt, &xchacha_key, sid, caller)?;
     Ok((
         master_key,
         FilePayload {
@@ -174,9 +169,8 @@ fn assemble_file_enc_protected(
     members: &[VerifiedRecipientKey],
     payload: FilePayload,
     timestamp: String,
-    debug: bool,
 ) -> Result<FileEncDocumentProtected> {
-    let wrap = build_recipient_wraps(members, &sid, master_key, debug)?;
+    let wrap = build_recipient_wraps(members, &sid, master_key)?;
     Ok(build_file_enc_document_protected(
         sid, wrap, payload, timestamp,
     ))
@@ -194,7 +188,6 @@ fn finalize_file_document_signature(
         signing.signing_key,
         signing.signer_kid,
         signing.signer_pub.clone(),
-        signing.debug,
     )?;
     Ok(FileEncDocument {
         protected,

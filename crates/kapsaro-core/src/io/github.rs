@@ -13,10 +13,7 @@ pub mod account {
     use crate::model::public_key::GithubAccount;
     use crate::{Error, Result};
 
-    pub async fn resolve_github_account_by_login(
-        login: &str,
-        _verbose: bool,
-    ) -> Result<GithubAccount> {
+    pub async fn resolve_github_account_by_login(login: &str) -> Result<GithubAccount> {
         Err(Error::build_config_error(format!(
             "GitHub account lookup for '{}' requires the 'online' feature",
             login

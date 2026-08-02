@@ -25,7 +25,6 @@ use zeroize::Zeroizing;
 /// * `entries` - Parsed KvEncLine entries (filtered to KV lines)
 /// * `key_schedule` - Artifact key schedule for CEK derivation
 /// * `sid` - Session ID from HEAD
-/// * `debug` - Enable debug logging
 ///
 /// # Returns
 /// Decrypted key-value map with values wrapped in `Zeroizing<Vec<u8>>`
@@ -34,7 +33,6 @@ pub(crate) fn decrypt_kv_entries(
     key_schedule: &KvKeySchedule,
     sid: &Uuid,
     aead: &str,
-    debug: bool,
 ) -> Result<HashMap<String, Zeroizing<Vec<u8>>>> {
     let mut kv_map = HashMap::new();
     for entry in entries {
@@ -44,7 +42,6 @@ pub(crate) fn decrypt_kv_entries(
             aead,
             key_schedule,
             sid,
-            debug,
             "decrypt_kv_entries",
         )?;
         kv_map.insert(entry.key().to_string(), value);
@@ -59,20 +56,13 @@ pub fn decrypt_kv_single_entry(
     kid: &str,
     private_key: &VerifiedPrivateKey,
     key: &str,
-    debug: bool,
 ) -> Result<Zeroizing<Vec<u8>>> {
     let doc = verified_doc.document();
     let sid = doc.head().sid;
 
-    let master_key = unwrap_master_key_for_kv(
-        &sid,
-        &doc.wrap().wrap,
-        member_handle,
-        kid,
-        private_key,
-        debug,
-    )?;
-    let possession = verify_kv_key_possession(verified_doc, master_key, debug)?;
+    let master_key =
+        unwrap_master_key_for_kv(&sid, &doc.wrap().wrap, member_handle, kid, private_key)?;
+    let possession = verify_kv_key_possession(verified_doc, master_key)?;
 
     let entry = doc
         .entry(key)
@@ -83,7 +73,6 @@ pub fn decrypt_kv_single_entry(
         &doc.head().alg.aead,
         possession.key_schedule(),
         &sid,
-        debug,
         "decrypt_kv_single_entry",
     )
 }
@@ -93,19 +82,13 @@ pub fn decrypt_kv_single_entry_with_context(
     member_handle: &str,
     key_ctx: &CryptoContext,
     key: &str,
-    debug: bool,
 ) -> Result<DecryptionResult<Zeroizing<Vec<u8>>>> {
     let doc = verified_doc.document();
     let sid = doc.head().sid;
-    let master_key = unwrap_master_key_for_kv_with_context(
-        &sid,
-        &doc.wrap().wrap,
-        member_handle,
-        key_ctx,
-        debug,
-    )?;
+    let master_key =
+        unwrap_master_key_for_kv_with_context(&sid, &doc.wrap().wrap, member_handle, key_ctx)?;
     let key_info = master_key.key_info;
-    let possession = verify_kv_key_possession(verified_doc, master_key.value, debug)?;
+    let possession = verify_kv_key_possession(verified_doc, master_key.value)?;
 
     let entry = doc
         .entry(key)
@@ -116,7 +99,6 @@ pub fn decrypt_kv_single_entry_with_context(
         &doc.head().alg.aead,
         possession.key_schedule(),
         &sid,
-        debug,
         "decrypt_kv_single_entry_with_context",
     )?;
     Ok(DecryptionResult { value, key_info })
@@ -132,7 +114,6 @@ pub fn decrypt_kv_single_entry_with_context(
 /// * `member_handle` - Resolved member handle used to find the wrap
 /// * `kid` - Key ID to find the wrap item
 /// * `private_key` - PrivateKeyPlaintext containing the KEM private key
-/// * `debug` - Enable debug logging
 ///
 /// # Returns
 /// Decrypted key-value map with values wrapped in `Zeroizing<Vec<u8>>`
@@ -141,27 +122,19 @@ pub fn decrypt_kv_document(
     member_handle: &str,
     kid: &str,
     private_key: &VerifiedPrivateKey,
-    debug: bool,
 ) -> Result<HashMap<String, Zeroizing<Vec<u8>>>> {
     let doc = verified_doc.document();
     let sid = doc.head().sid;
 
-    let master_key = unwrap_master_key_for_kv(
-        &sid,
-        &doc.wrap().wrap,
-        member_handle,
-        kid,
-        private_key,
-        debug,
-    )?;
-    let possession = verify_kv_key_possession(verified_doc, master_key, debug)?;
+    let master_key =
+        unwrap_master_key_for_kv(&sid, &doc.wrap().wrap, member_handle, kid, private_key)?;
+    let possession = verify_kv_key_possession(verified_doc, master_key)?;
 
     decrypt_kv_entries(
         doc.entries(),
         possession.key_schedule(),
         &sid,
         &doc.head().alg.aead,
-        debug,
     )
 }
 
@@ -169,25 +142,18 @@ pub fn decrypt_kv_document_with_context(
     verified_doc: &VerifiedKvEncDocument,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<DecryptionResult<HashMap<String, Zeroizing<Vec<u8>>>>> {
     let doc = verified_doc.document();
     let sid = doc.head().sid;
-    let master_key = unwrap_master_key_for_kv_with_context(
-        &sid,
-        &doc.wrap().wrap,
-        member_handle,
-        key_ctx,
-        debug,
-    )?;
+    let master_key =
+        unwrap_master_key_for_kv_with_context(&sid, &doc.wrap().wrap, member_handle, key_ctx)?;
     let key_info = master_key.key_info;
-    let possession = verify_kv_key_possession(verified_doc, master_key.value, debug)?;
+    let possession = verify_kv_key_possession(verified_doc, master_key.value)?;
     let kv_map = decrypt_kv_entries(
         doc.entries(),
         possession.key_schedule(),
         &sid,
         &doc.head().alg.aead,
-        debug,
     )?;
     Ok(DecryptionResult {
         value: kv_map,

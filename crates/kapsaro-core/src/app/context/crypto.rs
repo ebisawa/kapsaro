@@ -23,9 +23,8 @@ pub fn load_crypto_context(
     explicit_kid: Option<&str>,
     keystore_root: Option<&PathBuf>,
     workspace_path: Option<PathBuf>,
-    debug_enabled: bool,
 ) -> Result<CryptoContext> {
-    log_crypto_context_load(member_handle, explicit_kid, debug_enabled);
+    log_crypto_context_load(member_handle, explicit_kid);
     let keystore_root = resolve_keystore_root(keystore_root)?;
     load_crypto_context_from_keystore(
         keystore_root,
@@ -34,15 +33,11 @@ pub fn load_crypto_context(
         backend,
         ssh_pubkey,
         workspace_path,
-        debug_enabled,
     )
 }
 
-pub fn load_crypto_context_from_env(
-    workspace_path: PathBuf,
-    debug_enabled: bool,
-) -> Result<CryptoContext> {
-    let result = crate::feature::context::env_key::load_private_key_from_env(debug_enabled)?;
+pub fn load_crypto_context_from_env(workspace_path: PathBuf) -> Result<CryptoContext> {
+    let result = crate::feature::context::env_key::load_private_key_from_env()?;
     let kid = Kid::try_from(result.verified_key.proof().kid().to_string())?;
     let signing_key = build_signing_key(result.verified_key.document())?;
     let context = CryptoContext::new(
@@ -57,14 +52,12 @@ pub fn load_crypto_context_from_env(
     Ok(context.with_local_key_access(None, None))
 }
 
-fn log_crypto_context_load(member_handle: &str, explicit_kid: Option<&str>, debug_enabled: bool) {
-    if debug_enabled {
-        debug!(
-            "[CRYPTO] load_crypto_context: member_handle={}, explicit_kid={}",
-            member_handle,
-            explicit_kid.unwrap_or("(none)")
-        );
-    }
+fn log_crypto_context_load(member_handle: &str, explicit_kid: Option<&str>) {
+    debug!(
+        "[CRYPTO] load_crypto_context: member_handle={}, explicit_kid={}",
+        member_handle,
+        explicit_kid.unwrap_or("(none)")
+    );
 }
 
 fn resolve_keystore_root(keystore_root: Option<&PathBuf>) -> Result<PathBuf> {

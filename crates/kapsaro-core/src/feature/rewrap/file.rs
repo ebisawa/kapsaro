@@ -57,7 +57,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             content_key,
             recipients,
             self.ctx.target_members(),
-            self.ctx.options().debug,
         )
     }
 
@@ -69,7 +68,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             content_key,
             recipients,
             self.ctx.target_members(),
-            self.ctx.options().debug,
         )
     }
 
@@ -88,7 +86,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             &self.verified,
             self.content_key.as_ref(),
             self.ctx.target_members(),
-            self.ctx.options().debug,
         )?;
         self.content_key = FileContentKeyState::Rotated(content_key);
         Ok(())
@@ -109,7 +106,7 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             ..
         } = executor;
         protected.updated_at = time::generate_current_timestamp()?;
-        let signing = build_signing_context(ctx.key_ctx(), ctx.options().debug)?;
+        let signing = build_signing_context(ctx.key_ctx())?;
         let content_key = content_key.into_key();
         let mac_key = FileKeySchedule::extract(&content_key, &protected.sid)?.derive_mac_key()?;
         let signature = sign_file_document(
@@ -118,7 +115,6 @@ impl<'a> RewrapExecutor for FileRewrapExecutor<'a> {
             signing.signing_key(),
             signing.signer_kid(),
             signing.signer_pub.clone(),
-            ctx.options().debug,
         )?;
 
         let doc = FileEncDocument {
@@ -151,7 +147,6 @@ impl<'a> FileRewrapExecutor<'a> {
                 &self.verified,
                 self.ctx.member_handle(),
                 self.ctx.key_ctx(),
-                self.ctx.options().debug,
             )?;
             self.content_key = FileContentKeyState::Original(content_key);
         }
@@ -192,8 +187,8 @@ impl RewrapDocumentAdapter for FileRewrapAdapter {
     type Verified = VerifiedFileEncDocument;
     type Executor<'ctx> = FileRewrapExecutor<'ctx>;
 
-    fn verify_content(content: &Self::Content, debug: bool) -> Result<Self::Verified> {
-        verify_file_content(content, debug)
+    fn verify_content(content: &Self::Content) -> Result<Self::Verified> {
+        verify_file_content(content)
     }
 
     fn build_executor<'ctx>(

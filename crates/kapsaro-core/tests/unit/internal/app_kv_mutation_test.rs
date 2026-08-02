@@ -95,7 +95,7 @@ fn read_kv_values(
         ssh_ctx,
     )
     .unwrap();
-    execute_kv_read_command(&command, mode, false)
+    execute_kv_read_command(&command, mode)
         .unwrap()
         .values
         .into_iter()

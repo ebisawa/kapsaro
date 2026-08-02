@@ -195,12 +195,10 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    if ctx.request.options.debug {
-        debug!(
-            "[REWRAP] artifact: process path={}",
-            format_path_relative_to_cwd(file_path)
-        );
-    }
+    debug!(
+        "[REWRAP] artifact: process path={}",
+        format_path_relative_to_cwd(file_path)
+    );
     let (captured, content) = load_rewrap_artifact_content(file_path)?;
     execute_loaded_rewrap_file(file_path, &captured, &content, ctx, warnings, confirmations)
 }
@@ -344,7 +342,6 @@ fn build_rewrap_decryption_key_warning(
         ctx.execution,
         &wrap_set,
         ctx.request.options.allow_expired_key,
-        ctx.request.options.debug,
     )
 }
 
@@ -369,7 +366,6 @@ where
         content,
         &trust_ctx,
         ctx.request.options.allow_expired_key,
-        ctx.request.options.debug,
         &ctx.current_recipients,
         warnings,
     )?
@@ -403,7 +399,6 @@ fn load_rewrap_signer_trust_context(
         &execution.member_handle,
         Some(execution.key_ctx.self_signature_public_key_x()),
         Some(execution.key_ctx.local_key_identity()),
-        request.options.debug,
     )?
     .trust_ctx;
     trust_ctx.active_members_by_kid = plan.pre_promotion_trust.active_members_by_kid.clone();
@@ -417,14 +412,11 @@ fn build_rewrap_input_trust_requirement(
     content: &EncContent,
     trust_ctx: &TrustContext,
     allow_expired_key: bool,
-    debug_enabled: bool,
     current_recipients: &[String],
     warnings: &mut Vec<String>,
 ) -> Result<Option<RewrapInputTrustRequirement>> {
-    if debug_enabled {
-        debug!("[REWRAP] input signer: verify captured artifact proof");
-    }
-    let proof = extract_signature_proof(content, allow_expired_key, debug_enabled)?;
+    debug!("[REWRAP] input signer: verify captured artifact proof");
+    let proof = extract_signature_proof(content, allow_expired_key)?;
     for warning in &proof.warnings {
         push_unique_warning(warnings, warning.clone());
     }
@@ -459,9 +451,8 @@ fn input_trust_accepted(
 fn extract_signature_proof(
     content: &EncContent,
     allow_expired_key: bool,
-    debug_enabled: bool,
 ) -> Result<SignatureVerificationProof> {
-    verify_artifact_signature_for_operation(content, debug_enabled, allow_expired_key)
+    verify_artifact_signature_for_operation(content, allow_expired_key)
 }
 
 fn save_known_key_approval_warnings(

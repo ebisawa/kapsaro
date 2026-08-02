@@ -16,9 +16,8 @@ pub(in crate::feature::rewrap) fn unwrap_verified_file_content_key(
     verified: &VerifiedFileEncDocument,
     member_handle: &str,
     key_ctx: &CryptoContext,
-    debug: bool,
 ) -> Result<MasterKey> {
     let master_key =
-        unwrap_master_key_for_file_with_context(verified, member_handle, key_ctx, debug)?.value;
-    verify_file_key_possession(verified, master_key, debug).map(|proof| proof.into_master_key())
+        unwrap_master_key_for_file_with_context(verified, member_handle, key_ctx)?.value;
+    verify_file_key_possession(verified, master_key).map(|proof| proof.into_master_key())
 }

@@ -8,11 +8,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use kapsaro_core::api::file::FileEncArtifact;
+use kapsaro_core::api::file::{FileEncArtifact, FileReadOperation};
 use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore};
-use kapsaro_core::api::kv::KvEncArtifact;
+use kapsaro_core::api::kv::{KvEncArtifact, KvReadOperation};
 use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
+use kapsaro_core::api::trust::{CurrentMemberSnapshot, TrustDecision, TrustPolicyEvaluator};
 use kapsaro_core::Result;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -65,9 +66,20 @@ fn test_golden_file_enc_verifies_and_decrypts() {
 
     let artifact = FileEncArtifact::load(fixture_dir().join("file_enc.json")).unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let plaintext = verified
-        .decrypt_bytes(&key_ctx, OperationOptions::default())
-        .unwrap();
+    let members = CurrentMemberSnapshot::load(staged.path()).unwrap();
+    let evaluator = TrustPolicyEvaluator::new(members, None);
+    let TrustDecision::Trusted(trusted) = evaluator
+        .evaluate_file(
+            &verified,
+            &key_ctx,
+            FileReadOperation::Decrypt,
+            OperationOptions::default(),
+        )
+        .unwrap()
+    else {
+        panic!("self-signed golden artifact must not require review");
+    };
+    let plaintext = trusted.decrypt_bytes().unwrap();
 
     assert_eq!(
         plaintext.expose_secret(),
@@ -83,9 +95,20 @@ fn test_golden_kv_enc_verifies_and_decrypts() {
 
     let artifact = KvEncArtifact::load(fixture_dir().join("kv_enc.kvenc")).unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let entries = verified
-        .decrypt_entries(&key_ctx, OperationOptions::default())
-        .unwrap();
+    let members = CurrentMemberSnapshot::load(staged.path()).unwrap();
+    let evaluator = TrustPolicyEvaluator::new(members, None);
+    let TrustDecision::Trusted(trusted) = evaluator
+        .evaluate_kv(
+            &verified,
+            &key_ctx,
+            KvReadOperation::Entries,
+            OperationOptions::default(),
+        )
+        .unwrap()
+    else {
+        panic!("self-signed golden artifact must not require review");
+    };
+    let entries = trusted.decrypt_entries().unwrap();
 
     let decrypted = entries
         .iter()
@@ -153,6 +176,11 @@ fn stage_keystore() -> TempDir {
     );
     copy_restricted(&fixture_dir().join("public.json"), &key_dir, "public.json");
     write_restricted(&temp.path().join("keys").join(&handle), "active", &kid);
+    copy_restricted(
+        &fixture_dir().join("public.json"),
+        &temp.path().join("members").join("active"),
+        &format!("{handle}.json"),
+    );
     copy_restricted(
         &fixture_dir().join("id_ed25519"),
         &temp.path().join("ssh"),

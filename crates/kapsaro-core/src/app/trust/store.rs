@@ -172,7 +172,7 @@ where
 {
     let path = resolve_trust_store_path(options, &execution.member_handle)?;
     let keystore_root = options.resolve_keystore_root()?;
-    let signing = build_signing_context(&execution.key_ctx)?;
+    let signing = build_signing_context(execution.key_ctx.inner())?;
     execute_trust_store_mutation(
         &path,
         &keystore_root,

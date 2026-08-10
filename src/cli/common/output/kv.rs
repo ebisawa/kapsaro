@@ -18,8 +18,15 @@ use crate::cli::common::output::text::kv::{
     print_single_kv_value as print_single_kv_value_text,
 };
 use crate::cli::common::output::text::print_warning_line;
-use kapsaro_core::cli_api::app::kv::types::{KvDisclosedEntry, KvReadResult};
+use kapsaro_core::api::kv::KvDisclosedEntry;
+use kapsaro_core::api::secret::SecretString;
 use kapsaro_core::Result;
+use std::collections::BTreeMap;
+
+pub(crate) struct KvReadResult {
+    pub(crate) values: BTreeMap<String, SecretString>,
+    pub(crate) disclosed: Vec<KvDisclosedEntry>,
+}
 
 pub(crate) fn print_kv_key_list(keys: &[KvDisclosedEntry], json_output: bool) -> Result<()> {
     let key_views = view::build_kv_key_views(keys);

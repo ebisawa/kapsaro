@@ -1,72 +1,43 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use zeroize::Zeroizing;
-
+use crate::api::file::VerifiedFileEncArtifact;
 use crate::app::context::execution::{
-    evaluate_selected_decryption_key_expiry, resolve_read_execution, ExecutionContext,
-    SelectedDecryptionKeyExpiry,
+    evaluate_selected_decryption_key_expiry, ExecutionContext, SelectedDecryptionKeyExpiry,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::evaluation::ReadArtifactTrustPlan;
 use crate::app::trust::{
     evaluate_read_artifact_trust, push_signature_verification_warnings, DecryptPolicy,
     RecipientTrustOutcome, SignerTrustOutcome,
 };
-use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::trust::recipient_sets::file_recipient_evidence;
-use crate::feature::verify::file::verify_file_content_for_operation;
-use crate::format::content::FileEncContent;
 use crate::support::warning::push_unique_warning;
 use crate::Result;
 use crate::{api::operation::OperationOptions, model::file_enc::VerifiedFileEncDocument};
 
-pub struct DecryptFileCommand {
-    pub execution: ExecutionContext,
-    pub verified_doc: crate::model::file_enc::VerifiedFileEncDocument,
-    pub trust_outcome: SignerTrustOutcome,
-    pub recipient_trust_outcome: RecipientTrustOutcome,
-    pub warnings: Vec<String>,
-}
-
-pub fn resolve_decrypt_file_command(
+pub fn evaluate_decrypt_file_trust_plan(
     options: &CommonCommandOptions,
-    member_handle: Option<String>,
-    kid: Option<&str>,
-    content: String,
-    source_name: impl Into<String>,
-    ssh_ctx: Option<SshSigningContextResolution>,
-) -> Result<DecryptFileCommand> {
-    let execution = resolve_read_execution(options, member_handle, kid, ssh_ctx)?;
-    let content = FileEncContent::detect_with_source(content, source_name)?;
+    execution: &ExecutionContext,
+    verified_artifact: &VerifiedFileEncArtifact,
+) -> Result<ReadArtifactTrustPlan> {
     let operation_options = options.operation_options();
-
-    let verified_doc = verify_decrypt_file_content(&content, operation_options)?;
+    let verified_doc = verified_artifact.inner();
     let selected_key_expiry =
-        evaluate_decrypt_file_key_expiry(&execution, &verified_doc, operation_options)?;
-    let trust_plan = evaluate_decrypt_file_trust(options, &execution, &verified_doc)?;
+        evaluate_decrypt_file_key_expiry(execution, verified_doc, operation_options)?;
+    let trust_plan = evaluate_decrypt_file_trust(options, execution, verified_doc)?;
     let warnings = collect_decrypt_file_warnings(
         verified_doc.proof(),
         selected_key_expiry,
         trust_plan.warnings,
     )?;
 
-    Ok(DecryptFileCommand {
-        execution,
-        verified_doc,
-        trust_outcome: trust_plan.signer_outcome,
-        recipient_trust_outcome: trust_plan.recipient_outcome,
+    Ok(ReadArtifactTrustPlan {
+        signer_outcome: trust_plan.signer_outcome,
+        recipient_outcome: trust_plan.recipient_outcome,
         warnings,
     })
-}
-
-fn verify_decrypt_file_content(
-    content: &FileEncContent,
-    options: OperationOptions,
-) -> Result<VerifiedFileEncDocument> {
-    verify_file_content_for_operation(content, options.allow_expired_key())
 }
 
 fn evaluate_decrypt_file_key_expiry(
@@ -111,19 +82,6 @@ fn collect_decrypt_file_warnings(
         push_unique_warning(&mut warnings, warning);
     }
     Ok(warnings)
-}
-
-pub fn validate_decrypt_file_input(content: &str, source_name: impl Into<String>) -> Result<()> {
-    FileEncContent::detect_with_source(content.to_string(), source_name).map(|_| ())
-}
-
-pub fn execute_decrypt_file_command(command: &DecryptFileCommand) -> Result<Zeroizing<Vec<u8>>> {
-    decrypt_file_document_with_context(
-        &command.verified_doc,
-        &command.execution.member_handle,
-        &command.execution.key_ctx,
-    )
-    .map(|result| result.value)
 }
 
 #[cfg(test)]

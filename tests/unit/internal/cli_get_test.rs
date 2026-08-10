@@ -1,9 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::app::kv::types::KvReadMode;
-
-use super::resolve_get_read_mode;
+use super::{resolve_get_read_mode, KvReadMode};
 
 #[test]
 fn test_resolve_get_read_mode_rejects_all_with_key() {

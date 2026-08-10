@@ -45,8 +45,8 @@ pub fn resolve_encrypt_file_command(
         options,
         &workspace_root.root_path,
         &execution.member_handle,
-        Some(execution.key_ctx.self_signature_public_key_x()),
-        Some(execution.key_ctx.local_key_identity()),
+        Some(execution.key_ctx.inner().self_signature_public_key_x()),
+        Some(execution.key_ctx.inner().local_key_identity()),
     )?;
     let workspace_members = trust_plan.workspace_members();
     let mut warnings = build_write_execution_warnings(&execution)?;
@@ -64,7 +64,7 @@ pub fn resolve_encrypt_file_command(
 }
 
 pub fn execute_encrypt_file_command(command: &EncryptFileCommand) -> Result<String> {
-    let signing = build_signing_context(&command.execution.key_ctx)?;
+    let signing = build_signing_context(command.execution.key_ctx.inner())?;
     encrypt_file_content(
         &command.input_bytes,
         &command.member_handles,
@@ -117,7 +117,10 @@ fn resolve_encrypt_execution(
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<ExecutionContext> {
     let execution = resolve_write_execution(options, member_handle, ssh_ctx)?;
-    execution.key_ctx.enforce_signing_key_not_expired()?;
+    execution
+        .key_ctx
+        .inner()
+        .enforce_signing_key_not_expired()?;
     Ok(execution)
 }
 

@@ -19,8 +19,8 @@ pub use artifact_recipient::{
 };
 pub use execution::TrustExecutionContext;
 pub use execution::{
-    execute_read_with_signer_trust, execute_write_with_recipient_trust,
-    review_artifact_recipient_set_output, ArtifactRecipientSetReviewInput,
+    execute_read_with_signer_trust, review_artifact_recipient_set_output,
+    review_write_recipient_trust, ArtifactRecipientSetReviewInput,
 };
 pub use persistence::save_approved_known_key_warnings;
 pub use recipient::review_recipient_trust_with_confirmation;

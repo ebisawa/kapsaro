@@ -8,12 +8,19 @@ mod execution;
 mod plan;
 mod snapshot;
 
+#[cfg(test)]
+pub(crate) use execution::{authorized_mutation_count, reset_authorized_mutation_count};
 pub use execution::{
     import_kv_command_with_recipient_set_confirmation,
     set_kv_command_with_recipient_set_confirmation,
     unset_kv_command_with_recipient_set_confirmation,
 };
-pub use plan::{resolve_mutation_write_plan, MutationWriteTrustPlan};
+#[cfg(test)]
+pub(crate) use execution::{set_post_authorized_mutation_hook, set_post_recipient_approval_hook};
+pub use plan::{
+    reevaluate_mutation_write_plan_after_review, resolve_mutation_write_plan,
+    MutationWriteTrustPlan,
+};
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/app_kv_mutation_test.rs"]

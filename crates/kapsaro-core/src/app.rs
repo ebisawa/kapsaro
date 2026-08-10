@@ -14,6 +14,5 @@ pub(crate) mod kv;
 pub(crate) mod member;
 pub(crate) mod registration;
 pub(crate) mod rewrap;
-pub(crate) mod run;
 pub(crate) mod trust;
 pub(crate) mod verification;

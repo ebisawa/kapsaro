@@ -118,7 +118,10 @@ fn save_rewrap_approval_warnings(
     review_session: &RewrapReviewSession,
     execution: &ExecutionContext,
 ) -> Result<Vec<String>> {
-    execution.key_ctx.enforce_signing_key_not_expired()?;
+    execution
+        .key_ctx
+        .inner()
+        .enforce_signing_key_not_expired()?;
     save_approved_known_key_warnings(
         TrustExecutionContext {
             options: &review_session.request.options,
@@ -165,7 +168,10 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    execution.key_ctx.enforce_signing_key_not_expired()?;
+    execution
+        .key_ctx
+        .inner()
+        .enforce_signing_key_not_expired()?;
     let ctx = RewrapArtifactExecutionContext::new(
         request,
         plan,

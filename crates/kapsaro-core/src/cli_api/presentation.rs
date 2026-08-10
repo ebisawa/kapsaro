@@ -25,6 +25,10 @@ pub mod path {
     pub use crate::support::path::format_path_relative_to_cwd;
 }
 
+pub mod process {
+    pub use crate::io::process::remove_parent_kapsaro_env_vars;
+}
+
 pub mod ssh {
     pub use crate::model::ssh::SshDeterminismStatus;
 }

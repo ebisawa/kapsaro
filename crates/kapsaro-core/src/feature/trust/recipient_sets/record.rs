@@ -71,6 +71,39 @@ impl ArtifactRecipientSet {
         Ok(set)
     }
 
+    pub(crate) fn from_public_keys(sid: Uuid, public_keys: &[PublicKey]) -> Result<Self> {
+        let mut set = Self::new(
+            sid,
+            public_keys
+                .iter()
+                .map(|key| key.protected.kid.clone())
+                .collect(),
+        )?;
+        set.recipient_handle_hints = public_keys
+            .iter()
+            .map(|key| RecipientHandleHint {
+                kid: key.protected.kid.clone(),
+                recipient_handle: key.protected.subject_handle.clone(),
+            })
+            .collect();
+        set.recipient_handle_hints
+            .sort_by(|left, right| left.kid.cmp(&right.kid));
+        Ok(set)
+    }
+
+    pub(crate) fn from_parts(
+        sid: Uuid,
+        recipient_kids: Vec<String>,
+        recipient_handle_hints: Vec<RecipientHandleHint>,
+    ) -> Result<Self> {
+        let mut set = Self::new(sid, recipient_kids)?;
+        validate_recipient_handle_hints(set.recipient_kids(), &recipient_handle_hints)?;
+        set.recipient_handle_hints = recipient_handle_hints;
+        set.recipient_handle_hints
+            .sort_by(|left, right| left.kid.cmp(&right.kid));
+        Ok(set)
+    }
+
     pub fn sid(&self) -> Uuid {
         self.sid
     }
@@ -249,6 +282,24 @@ fn build_recipient_handle_hints(wrap_items: &[WrapItem]) -> Result<Vec<Recipient
     }
     hints.sort_by(|left, right| left.kid.cmp(&right.kid));
     Ok(hints)
+}
+
+fn validate_recipient_handle_hints(
+    recipient_kids: &[String],
+    hints: &[RecipientHandleHint],
+) -> Result<()> {
+    let mut seen = BTreeSet::new();
+    for hint in hints {
+        let kid = Kid::try_from(hint.kid.clone())?.into_string();
+        MemberHandle::try_from(hint.recipient_handle.clone())?;
+        if !recipient_kids.contains(&kid) || !seen.insert(kid.clone()) {
+            return Err(Error::build_invalid_argument_error(format!(
+                "recipient handle hint does not identify one unique recipient kid: '{}'",
+                kid
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn non_empty_hints(hints: Vec<RecipientHandleHint>) -> Option<Vec<RecipientHandleHint>> {

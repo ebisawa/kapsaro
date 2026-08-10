@@ -6,8 +6,8 @@ use std::fs;
 
 use crate::app_test_utils::build_test_command_options;
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, resolve_options_with_read_trust_allowances,
-    resolve_required_member_handle_with_prompt,
+    ensure_reviewed_artifact_unchanged, resolve_options_with_allow_expired_key,
+    resolve_options_with_read_trust_allowances, resolve_required_member_handle_with_prompt,
 };
 use crate::cli::options::CommonOptions;
 use crate::test_utils::EnvGuard;
@@ -16,6 +16,26 @@ use tempfile::TempDir;
 fn save_global_config(temp_home: &TempDir, lines: &[&str]) {
     let config_path = temp_home.path().join("config.toml");
     fs::write(config_path, lines.join("\n")).unwrap();
+}
+
+#[test]
+fn test_reviewed_artifact_comparison_accepts_exact_content() {
+    ensure_reviewed_artifact_unchanged("artifact", "artifact", "read authorization").unwrap();
+}
+
+#[test]
+fn test_reviewed_artifact_comparison_rejects_tampered_content_before_verification() {
+    let error = ensure_reviewed_artifact_unchanged(
+        "reviewed artifact",
+        "signature-tampered artifact",
+        "read authorization",
+    )
+    .unwrap_err();
+
+    assert_eq!(error.verification_rule(), Some("E_TRUST_TARGET_CHANGED"));
+    assert!(error
+        .format_user_message()
+        .contains("run the command again"));
 }
 
 #[test]

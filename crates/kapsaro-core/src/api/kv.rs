@@ -3,9 +3,13 @@
 
 //! kv-enc artifact facade.
 
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::io::Read;
 
 use crate::api::artifact_text::{ArtifactLoadPolicy, ArtifactText};
+use crate::feature::envelope::key_possession::verify_kv_key_possession;
+use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
 use crate::feature::kv::decrypt::{
     decrypt_kv_document_with_context, decrypt_kv_single_entry_with_context,
 };
@@ -41,6 +45,37 @@ pub struct VerifiedKvEncArtifact {
     inner: VerifiedKvEncDocument,
 }
 
+/// Trust-authorized kv-enc artifact bound to one read operation and key.
+pub struct TrustedKvEncArtifact<'a> {
+    artifact: &'a VerifiedKvEncArtifact,
+    key_ctx: &'a KeyContext,
+    operation: KvReadOperation,
+}
+
+/// Trust-authorized KV mutation bound to one artifact, recipient set, key, and operation.
+pub struct AuthorizedKvMutation<'a> {
+    artifact: &'a VerifiedKvEncArtifact,
+    recipients: &'a RecipientKeys,
+    key_ctx: &'a KeyContext,
+    operation: KvMutationOperation,
+}
+
+/// Authorized KV read operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KvReadOperation {
+    Entry(String),
+    Entries,
+    List,
+    Environment,
+}
+
+/// Authorized KV mutation operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KvMutationOperation {
+    Set,
+    Unset,
+}
+
 /// Secret entry input for kv-enc writes.
 #[derive(Debug)]
 pub struct KvInputEntry {
@@ -66,12 +101,17 @@ const KV_ENC_LOAD_POLICY: ArtifactLoadPolicy =
 impl KvEncArtifact {
     /// Parse kv-enc text after format detection.
     pub fn parse(content: impl Into<String>) -> Result<Self> {
-        ArtifactText::parse(content).map(Self::from_text)
+        ArtifactText::parse(content, KV_ENC_LOAD_POLICY).map(Self::from_text)
     }
 
     /// Load kv-enc text from a path.
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
         ArtifactText::load(path, KV_ENC_LOAD_POLICY).map(Self::from_text)
+    }
+
+    /// Load kv-enc text from a bounded UTF-8 reader.
+    pub fn load_reader(reader: impl Read, source_name: impl Into<String>) -> Result<Self> {
+        ArtifactText::load_reader(reader, source_name, KV_ENC_LOAD_POLICY).map(Self::from_text)
     }
 
     /// Save the artifact text.
@@ -94,19 +134,6 @@ impl KvEncArtifact {
         Self::rewrite_entries(None, entries, recipients, key_ctx)
     }
 
-    /// List entry keys without decrypting values.
-    pub fn list_entry_keys(&self) -> Result<Vec<KvDisclosedEntry>> {
-        list_kv_keys_with_disclosed(self.text.content()).map(|entries| {
-            entries
-                .into_iter()
-                .map(|entry| KvDisclosedEntry {
-                    key: entry.key,
-                    disclosed: entry.disclosed,
-                })
-                .collect()
-        })
-    }
-
     /// Return the serialized artifact text.
     pub fn as_str(&self) -> &str {
         self.text.as_str()
@@ -118,14 +145,19 @@ impl KvEncArtifact {
         recipients: &RecipientKeys,
         key_ctx: &KeyContext,
     ) -> Result<Self> {
-        let input = build_kv_write_input(recipients, key_ctx);
         let internal_entries = into_internal_entries(entries);
-        let result = set_kv_entry_with_recipients(
-            existing,
-            &internal_entries,
-            &input.recipients,
-            &input.ctx,
-        )?;
+        Self::rewrite_internal_entries(existing, &internal_entries, recipients, key_ctx)
+    }
+
+    fn rewrite_internal_entries(
+        existing: Option<&KvEncContent>,
+        entries: &[InternalKvInputEntry],
+        recipients: &RecipientKeys,
+        key_ctx: &KeyContext,
+    ) -> Result<Self> {
+        let input = build_kv_write_input(recipients, key_ctx);
+        let result =
+            set_kv_entry_with_recipients(existing, entries, &input.recipients, &input.ctx)?;
         Ok(Self::from_text(ArtifactText::from_content(
             result.encrypted,
         )))
@@ -145,46 +177,124 @@ impl VerifiedKvEncArtifact {
         &self.inner
     }
 
+    pub(crate) fn binding_digest(&self) -> [u8; 32] {
+        Sha256::digest(self.content.as_str().as_bytes()).into()
+    }
+
     /// Extract the recipient-set subject for trust policy evaluation.
     pub fn recipient_set_subject(&self) -> Result<RecipientSetSubject> {
         RecipientSetSubject::from_verified_kv(self.inner())
     }
+}
 
-    /// Add or replace entries in a verified kv-enc artifact.
-    pub fn set_entries(
-        &self,
-        entries: Vec<KvInputEntry>,
-        recipients: &RecipientKeys,
-        key_ctx: &KeyContext,
-    ) -> Result<KvEncArtifact> {
-        KvEncArtifact::rewrite_entries(Some(&self.content), entries, recipients, key_ctx)
+impl<'a> AuthorizedKvMutation<'a> {
+    pub(crate) fn from_authorized(
+        artifact: &'a VerifiedKvEncArtifact,
+        recipients: &'a RecipientKeys,
+        key_ctx: &'a KeyContext,
+        options: OperationOptions,
+        operation: KvMutationOperation,
+    ) -> Result<Self> {
+        key_ctx.enforce_decryption_key_not_expired(
+            &artifact.inner().document().wrap().wrap,
+            options,
+        )?;
+        key_ctx.inner().enforce_signing_key_not_expired()?;
+        verify_kv_key_possession_with_context(artifact, key_ctx)?;
+        Ok(Self {
+            artifact,
+            recipients,
+            key_ctx,
+            operation,
+        })
     }
 
-    /// Remove an entry from a verified kv-enc artifact.
-    pub fn unset_entry(
+    /// Add or replace entries using the bound artifact, recipients, and signing key.
+    pub fn set_entries(&self, entries: Vec<KvInputEntry>) -> Result<KvEncArtifact> {
+        let entries = into_internal_entries(entries);
+        self.set_internal_entries(&entries)
+    }
+
+    pub(crate) fn set_internal_entries(
         &self,
-        key: &str,
-        recipients: &RecipientKeys,
-        key_ctx: &KeyContext,
+        entries: &[InternalKvInputEntry],
     ) -> Result<KvEncArtifact> {
-        let input = build_kv_write_input(recipients, key_ctx);
-        let content =
-            unset_kv_entry_with_recipients(&self.content, key, &input.recipients, &input.ctx)?;
+        self.enforce_operation("set", matches!(self.operation, KvMutationOperation::Set))?;
+        KvEncArtifact::rewrite_internal_entries(
+            Some(&self.artifact.content),
+            entries,
+            self.recipients,
+            self.key_ctx,
+        )
+    }
+
+    /// Remove an entry using the bound artifact, recipients, and signing key.
+    pub fn unset_entry(&self, key: &str) -> Result<KvEncArtifact> {
+        self.enforce_operation(
+            "unset",
+            matches!(self.operation, KvMutationOperation::Unset),
+        )?;
+        let input = build_kv_write_input(self.recipients, self.key_ctx);
+        let content = unset_kv_entry_with_recipients(
+            &self.artifact.content,
+            key,
+            &input.recipients,
+            &input.ctx,
+        )?;
         KvEncArtifact::parse(content)
     }
 
-    /// Decrypt one entry value from a verified artifact.
-    pub fn decrypt_entry(
-        &self,
-        key_ctx: &KeyContext,
-        key: &str,
+    fn enforce_operation(&self, expected: &str, matches: bool) -> Result<()> {
+        if matches {
+            Ok(())
+        } else {
+            Err(mutation_operation_mismatch(expected))
+        }
+    }
+}
+
+impl<'a> TrustedKvEncArtifact<'a> {
+    pub(crate) fn from_authorized(
+        artifact: &'a VerifiedKvEncArtifact,
+        key_ctx: &'a KeyContext,
+        operation: KvReadOperation,
         options: OperationOptions,
-    ) -> Result<SecretString> {
-        enforce_key_context_expiry(self, key_ctx, options)?;
+    ) -> Result<Self> {
+        key_ctx.enforce_decryption_key_not_expired(
+            &artifact.inner().document().wrap().wrap,
+            options,
+        )?;
+        verify_kv_key_possession_with_context(artifact, key_ctx)?;
+        Ok(Self {
+            artifact,
+            key_ctx,
+            operation,
+        })
+    }
+
+    /// List key names and disclosure metadata after key-possession verification.
+    pub fn list_entry_keys(&self) -> Result<Vec<KvDisclosedEntry>> {
+        self.enforce_operation("list", matches!(self.operation, KvReadOperation::List))?;
+        list_kv_keys_with_disclosed(&self.artifact.content).map(|entries| {
+            entries
+                .into_iter()
+                .map(|entry| KvDisclosedEntry {
+                    key: entry.key,
+                    disclosed: entry.disclosed,
+                })
+                .collect()
+        })
+    }
+
+    /// Decrypt the entry bound to this trust decision.
+    pub fn decrypt_entry(&self) -> Result<SecretString> {
+        let KvReadOperation::Entry(key) = &self.operation else {
+            return Err(operation_mismatch("entry"));
+        };
         let value = decrypt_kv_single_entry_with_context(
-            self.inner(),
-            key_ctx.member_handle(),
-            key_ctx.inner(),
+            self.artifact.inner(),
+            self.key_ctx.member_handle(),
+            self.key_ctx.inner(),
             key,
         )
         .map(|result| result.value)
@@ -192,17 +302,29 @@ impl VerifiedKvEncArtifact {
         decode_decrypted_kv_value(key, value).map(SecretString::from_inner)
     }
 
-    /// Decrypt all entry values from a verified artifact.
-    pub fn decrypt_entries(
-        &self,
-        key_ctx: &KeyContext,
-        options: OperationOptions,
-    ) -> Result<BTreeMap<String, SecretString>> {
-        enforce_key_context_expiry(self, key_ctx, options)?;
+    /// Decrypt all entry values for a values read operation.
+    pub fn decrypt_entries(&self) -> Result<BTreeMap<String, SecretString>> {
+        self.enforce_operation(
+            "entries",
+            matches!(self.operation, KvReadOperation::Entries),
+        )?;
+        self.decrypt_all_values()
+    }
+
+    /// Decrypt all values for child-process environment injection.
+    pub fn decrypt_environment(&self) -> Result<BTreeMap<String, SecretString>> {
+        self.enforce_operation(
+            "environment",
+            matches!(self.operation, KvReadOperation::Environment),
+        )?;
+        self.decrypt_all_values()
+    }
+
+    fn decrypt_all_values(&self) -> Result<BTreeMap<String, SecretString>> {
         let values = decrypt_kv_document_with_context(
-            self.inner(),
-            key_ctx.member_handle(),
-            key_ctx.inner(),
+            self.artifact.inner(),
+            self.key_ctx.member_handle(),
+            self.key_ctx.inner(),
         )?
         .value;
         decode_decrypted_kv_values(values).map(|values| {
@@ -212,14 +334,40 @@ impl VerifiedKvEncArtifact {
                 .collect()
         })
     }
+
+    fn enforce_operation(&self, expected: &str, matches: bool) -> Result<()> {
+        if matches {
+            Ok(())
+        } else {
+            Err(operation_mismatch(expected))
+        }
+    }
 }
 
-fn enforce_key_context_expiry(
+fn operation_mismatch(expected: &str) -> crate::Error {
+    crate::Error::build_invalid_operation_error(format!(
+        "Trusted KV artifact is not authorized for {expected} reads"
+    ))
+}
+
+fn mutation_operation_mismatch(expected: &str) -> crate::Error {
+    crate::Error::build_invalid_operation_error(format!(
+        "Authorized KV mutation is not authorized for {expected} mutations"
+    ))
+}
+
+fn verify_kv_key_possession_with_context(
     artifact: &VerifiedKvEncArtifact,
     key_ctx: &KeyContext,
-    options: OperationOptions,
 ) -> Result<()> {
-    key_ctx.enforce_decryption_key_not_expired(&artifact.inner().document().wrap().wrap, options)
+    let doc = artifact.inner().document();
+    let master_key = unwrap_master_key_for_kv_with_context(
+        &doc.head().sid,
+        &doc.wrap().wrap,
+        key_ctx.member_handle(),
+        key_ctx.inner(),
+    )?;
+    verify_kv_key_possession(artifact.inner(), master_key.value).map(|_| ())
 }
 
 fn build_kv_write_input<'a>(
@@ -276,3 +424,7 @@ impl KvDisclosedEntry {
         self.disclosed
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/api_kv_mutation_test.rs"]
+mod api_kv_mutation_test;

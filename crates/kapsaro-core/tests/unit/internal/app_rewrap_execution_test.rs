@@ -165,7 +165,7 @@ fn build_empty_plan(
         options,
         workspace_dir,
         &execution.member_handle,
-        Some(derive_self_sig_x(execution.key_ctx.signing_key())),
+        Some(derive_self_sig_x(execution.key_ctx.inner().signing_key())),
     )
     .unwrap()
     .trust_context()
@@ -226,14 +226,14 @@ fn test_execute_reviewed_rewrap_artifacts_adds_active_member_to_kv_wrap() {
         temp_dir.path(),
         &workspace_dir,
         ALICE_MEMBER_HANDLE,
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
     );
     let secret_path = workspace_dir.join("secrets").join("add-member.kvenc");
     let encrypted = encrypt_kv_for_members(
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
         execution.key_ctx.kid(),
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
         &[ALICE_MEMBER_HANDLE],
     );
     fs::write(&secret_path, &encrypted).unwrap();
@@ -342,7 +342,7 @@ fn test_execute_reviewed_rewrap_artifacts_bubbles_trust_store_reset_required_err
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
         execution.key_ctx.kid(),
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
         &[ALICE_MEMBER_HANDLE],
     );
     fs::write(&secret_path, &encrypted).unwrap();
@@ -397,7 +397,7 @@ fn test_execute_reviewed_rewrap_artifacts_rejects_unreviewed_output_member_set_n
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
         execution.key_ctx.kid(),
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
         &[ALICE_MEMBER_HANDLE],
     );
     fs::write(&secret_path, &encrypted).unwrap();
@@ -509,7 +509,7 @@ fn test_execute_confirmed_rewrap_batch_auto_accepts_self_only_output_after_self_
         temp_dir.path(),
         &workspace_dir,
         ALICE_MEMBER_HANDLE,
-        &old_execution.key_ctx,
+        old_execution.key_ctx.inner(),
     );
     let secret_path = workspace_dir.join("secrets").join("self-rotation.json");
     fs::write(
@@ -518,7 +518,7 @@ fn test_execute_confirmed_rewrap_batch_auto_accepts_self_only_output_after_self_
             temp_dir.path(),
             ALICE_MEMBER_HANDLE,
             old_execution.key_ctx.kid(),
-            &old_execution.key_ctx,
+            old_execution.key_ctx.inner(),
             &[ALICE_MEMBER_HANDLE],
         ),
     )
@@ -596,7 +596,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &options,
             &workspace_dir,
             &execution.member_handle,
-            Some(derive_self_sig_x(execution.key_ctx.signing_key())),
+            Some(derive_self_sig_x(execution.key_ctx.inner().signing_key())),
         )
         .unwrap()
         .trust_context()
@@ -791,7 +791,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_fixed_post_promotion_members() {
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
         &alice_kid,
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("snapshot-file.json");
@@ -849,7 +849,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_current_artifact_content_at_execu
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
         &alice_kid,
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("stale-file.json");
@@ -1030,7 +1030,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_recipient_approval_before_rew
             temp_dir.path(),
             ALICE_MEMBER_HANDLE,
             execution.key_ctx.kid(),
-            &execution.key_ctx,
+            execution.key_ctx.inner(),
             &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
         ),
     )
@@ -1107,7 +1107,7 @@ fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejectio
             temp_dir.path(),
             ALICE_MEMBER_HANDLE,
             execution.key_ctx.kid(),
-            &execution.key_ctx,
+            execution.key_ctx.inner(),
             &[ALICE_MEMBER_HANDLE],
         ),
     )
@@ -1290,7 +1290,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
         temp_dir.path(),
         ALICE_MEMBER_HANDLE,
         execution.key_ctx.kid(),
-        &execution.key_ctx,
+        execution.key_ctx.inner(),
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     let secret_path = workspace_dir.join("secrets").join("invalid-recipient.json");

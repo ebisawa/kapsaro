@@ -12,39 +12,34 @@ kapsaro は、オフライン優先（offline-first）の暗号ファイル共�
 
 - ルート crate `kapsaro` (bin) — `src/cli/`, `src/main.rs`。CLI バイナリのみ
 - `crates/kapsaro-core` (lib) — domain ロジック全て（`app/`, `feature/`, `crypto/`, `format/`, `model/`, `io/`, `config/`, `support/` と公開 API `api/`）
+- `crates/kapsaro-test-support` (lib) — workspace 内テストで共有する fixture と環境制御 helper
 
 ### kapsaro-core の API 境界
 
-- `kapsaro_core::api` — 外部埋め込み向けの安定公開 API。`FileEncArtifact`, `KvEncArtifact`, `VerifiedFileEncArtifact`, `VerifiedKvEncArtifact`, `LocalKeyStore`, `LocalTrustStore`, `VerifiedLocalTrustStore`, `GitHubOnlineVerifier`, `KeyContext`, `OperationOptions`, `SecretString` など
-- `kapsaro_core::Error` / `ErrorKind` / `Result` — crate 共通のエラー型、安定したエラー分類、結果型
-- `kapsaro_core::cli_api` — 本リポジトリ内 CLI 専用の内部境界（`cli-internal` feature でのみ公開）
-  - `cli_api::app::*` — ユースケース層への入口。CLI はここを経由する
-  - `cli_api::presentation::*` — CLI 出力で使う型・関数の再エクスポート（`SecretString`, `format_kid_display`, `tty`, `validation`, `limits` 等）
-  - `cli_api::test_support::*` — 本リポジトリのテスト専用 hidden bridge（`cli-test-support` feature）。production CLI と外部埋め込み用途では使用しない。`settings` / `primitives` / `operations` / `wire` / `storage` / `domain` / `helpers` の用途別 helper root を経由し、core 内部 layer root 名の mirror は作らない
-
-default build の `kapsaro-core` は保存形式 DTO を public API として再 export しない。外部埋め込み用途では、raw document model ではなく `api` の opaque facade を経由する。
-
-`app` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` の実装 module root は crate-private とし、外部向け root surface として扱わない。必要な first-party access は `cli_api` の明示 allow-list だけを経由する。
-
-外部埋め込み用途では `kapsaro_core::api` の用途別 module path から明示 import する。外部向け `api::secret::SecretString` / `SecretBytes` は `expose_secret()` と所有権消費の boundary conversion を使い、暗黙的な `AsRef<str>` や equality を公開しない。
-
-ルートの `kapsaro` crate (CLI) は `kapsaro_core::api` と `cli_api::app` / `cli_api::presentation` のみを参照します。`feature/`, `io/`, `crypto/` 等の internal モジュールへの直接アクセスは禁止です。
+- `kapsaro_core::api` — 外部アプリケーションと first-party CLI が共有する標準公開 API
+- `kapsaro_core::Error` / `ErrorKind` / `Result` — crate 共通のエラー API
+- `kapsaro_core::cli_api` — first-party CLI 向けの内部 API
+  - `cli_api::app` — CLI ユースケースの入口
+  - `cli_api::presentation` — CLI 表示の補助
+  - `cli_api::test_support` — test harness 専用の補助
+- `app` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` — crate-private の実装モジュール
 
 ### Feature flags
 
 - `cli-internal` — `cli_api` を有効化（CLI バイナリビルド時に必須）
 - `cli-test-support` — `cli_api::test_support` を有効化（dev-dependencies で有効）
-- `online` — GitHub オンライン検証など外部 I/O 経路
+- `online` — GitHub オンライン検証のネットワーク実装を有効化（core は既定で無効、ルート CLI は既定で有効）
 
-`cli-test-support` は first-party test harness 用であり、外部 API 契約ではない。CLI production code は `cli_api::test_support` を import せず、`cli_api::app` / `cli_api::presentation` の allow-list のみを使う。`cli_api::test_support` は下位実装 layer root の broad mirror を提供せず、用途別 helper root だけを公開する。外部 API の facade 境界は `crates/kapsaro-core/tests/public_api.rs` で固定する。
+`cli-test-support` は first-party test harness 用であり、外部 API 契約ではない。CLI production code は `cli_api::test_support` を import せず、標準 `api` または `cli_api::app` / `cli_api::presentation` の allow-list を使う。`cli_api::test_support` は下位実装 layer root の broad mirror を提供せず、用途別 helper root だけを公開する。外部 API の facade 境界は `crates/kapsaro-core/tests/public_api.rs` で固定する。
 
 ## Build/Test/Lint Commands
 
 ```bash
-cargo build                    # Build (workspace 全体)
-cargo build --release          # Release build
+cargo build                    # ルート package `kapsaro` をビルド
+cargo build --workspace        # workspace 全体をビルド
+cargo build --release          # ルート package `kapsaro` の release build
 cargo test --workspace         # Run all tests (workspace 全体。--workspace なしだとルート crate のみ)
-cargo test                     # ルート crate (kapsaro bin) のテストのみ
+cargo test                     # ルート package `kapsaro` の全 test target
 cargo test -p kapsaro --bin kapsaro  # ルート crate の CLI 内部テスト（src/ 内 #[cfg(test)]）
 cargo test -p kapsaro-core   # kapsaro-core crate のテストのみ
 cargo test --test unit         # ルート crate の独立ユニットテスト（CLI API 境界・リポジトリ規約チェック）
@@ -79,7 +74,8 @@ cargo llvm-cov clean --workspace               # 計測データを掃除（前�
 ### レイヤー構造と依存方向
 
 ```
-cli -> app -> feature
+cli -> api
+cli -> cli_api -> app -> feature
 app -> io | format | model | config
 feature -> crypto | format | model | io | config
 format -> crypto | model | support
@@ -87,7 +83,7 @@ crypto -> model | support
 config -> io | support
 ```
 
-- `cli` (ルート crate) は `feature` / `io` に直接依存しない（`kapsaro_core::cli_api::app` 経由）
+- `cli` (ルート crate) は標準 `api` または `cli_api` の allow-list を使い、`feature` / `io` に直接依存しない
 - `feature` は `cli` / `app` に依存しない
 - `app` は `cli` に依存しない
 - `io` は `feature` / `app` / `cli` に依存しない
@@ -98,10 +94,10 @@ config -> io | support
 
 ### レイヤー責務
 
-- **`cli/`**（ルート crate） — presentation 層。clap 引数定義、対話入力（dialoguer）、stdout/stderr 出力、`app` の request/result を CLI 表現に変換。`common/` に共有オプション・出力・コンテキスト構築。`io::*` / `feature::*` への直接アクセス禁止（`cli_api::app` / `cli_api::presentation` のみ）
+- **`cli/`**（ルート crate） — presentation 層。clap 引数定義、対話入力（dialoguer）、stdout/stderr 出力、標準 `api` と `cli_api` の request/result を CLI 表現に変換。`common/` に共有オプション・出力・コンテキスト構築。`io::*` / `feature::*` への直接アクセス禁止
 - **`app/`** — ユースケースオーケストレーション層。コマンド単位の処理順序定義、workspace/config/keystore/member 解決、複数 feature/io 呼び出しの束ね込み、CLI が描画しやすい結果 DTO の返却。`println!` / `dialoguer` 禁止
 - **`feature/`** — ドメイン処理本体。CLI の存在を知らず、再利用可能な機能を提供
-  - `envelope/` — HPKE wrap/unwrap、CEK 生成、エントリ暗号化
+  - `envelope/` — artifact key schedule、HPKE wrap/unwrap、key-possession proof、エントリ暗号化
   - `kv/` — KV ドキュメント操作（builder, encrypt, decrypt, mutate, rewrite）
   - `decrypt/`, `encrypt/` — ファイル暗号化・復号
   - `verify/` — 署名検証、鍵ローダー
@@ -109,7 +105,7 @@ config -> io | support
   - `inspect/` — ドキュメント検査
   - `key/` — 鍵生成・管理（保護付き秘密鍵含む）
   - `member/`, `trust/`, `recipient/`, `disclosure/` — メンバー・信頼・受信者・開示処理
-  - `context/` — CryptoContext（鍵ロード）、SshSigningContext（SSH 署名環境解決）
+  - `context/` — CryptoContext（鍵ロード）、env key、鍵期限の処理。SSH 署名環境の解決は `app/context/ssh` が担当
 - **`config/`** — 設定モデル（`types.rs`）と設定解決ロジック（`resolution/`）。CLI > env > config > default の優先順
 - **`model/`** — 共有ドメインモデル（`file_enc`, `kv_enc`, `public_key`, `private_key`, `signature`, `verified`, `trust_store` 等）
 - **`crypto/`** — 暗号プリミティブ（AEAD, KDF, KEM, Ed25519 署名）
@@ -122,40 +118,54 @@ config -> io | support
   - `trust/` — トラストストア I/O
   - `verify_online/` — GitHub 経由の公開鍵オンライン検証
   - `github/` — GitHub API クライアント
-  - `process.rs` — 外部プロセス実行ラッパー
+  - `process.rs` — 子プロセスへ継承する環境変数の分離 helper
   - `document_store.rs` — ドキュメント永続化
-- **`support/`** — ユーティリティ（recipients, 時刻, ファイルシステム操作, SecretString, kid フォーマット, validation, tty）
-- **`api/`**（kapsaro-core 公開） — 外部埋め込み向け安定 API ファサード
+- **`support/`** — ユーティリティ（表示、時刻、ファイルシステム操作、secret、limits、path、runtime、kid、validation、tty、warning）
+- **`api/`**（kapsaro-core 公開） — 外部アプリケーションと first-party CLI が共有する標準 API facade
 
 ### 暗号化フロー
 
-ファイル暗号化: 平文 → CEK 生成 → XChaCha20-Poly1305 暗号化 → HPKE で CEK を各受信者に wrap → Ed25519 署名 → JSON エンコード
+ファイル暗号化: 平文 → MK 生成 → payload key と MAC key を導出 → XChaCha20-Poly1305 暗号化 → HPKE で MK を各受信者に wrap → key-possession MAC → Ed25519 署名 → JSON エンコード
 
-KV 暗号化: KV マップ → エントリごとに CEK で暗号化 → トークンエンコード → KvDocumentBuilder で署名付きドキュメント構築
+KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC key を導出 → XChaCha20-Poly1305 暗号化 → HPKE で MK を各受信者に wrap → key-possession MAC → Ed25519 署名 → line-based text 構築
 
 ### テスト構成
 
-テストファイルは以下の 2 つの `tests/` ツリーに分かれる。
+テストファイルはルート crate、`kapsaro-core`、`kapsaro-test-support` の 3 つの `tests/` ツリーに分かれる。
 
-**ルート crate (`tests/`)**
+#### ルート crate (`tests/`)
+
 - `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する CLI レベルのテストとリポジトリ規約チェック
-- `tests/unit.rs` — 上記を登録するエントリポイント。`tests/test_utils/` にある `test_support/mod.rs` を `test_utils` モジュールとして import
-- `tests/cli_integration.rs` — CLI の E2E テスト
+- `tests/unit/internal/` — `src/` の production module から `#[cfg(test)] #[path = "..."]` で登録する crate-private ユニットテスト
+- `tests/unit.rs` — `tests/unit/external/` を登録するエントリポイント
+- `tests/cli_integration.rs` — `tests/cli.rs` と `tests/test_utils.rs` を登録する CLI E2E のエントリポイント
+- `tests/cli/` — コマンド別の CLI E2E テスト
+- `tests/test_utils.rs` / `tests/test_utils/` — CLI E2E と bin 内部テストの共通 helper
 
-**kapsaro-core crate (`crates/kapsaro-core/tests/`)**
+#### kapsaro-core crate (`crates/kapsaro-core/tests/`)
+
 - `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する独立ユニットテスト。`cli_api::test_support` と公開 API 経由でアクセス
-- `tests/unit/internal/` — `crates/kapsaro-core/src/` 内の production ファイルから `#[cfg(test)] #[path = "../../tests/unit/internal/..."]` で登録する crate-private ユニットテスト
+- `tests/unit/internal/` — `crates/kapsaro-core/src/` 内の production module から `#[cfg(test)] #[path = "..."]` で登録する crate-private ユニットテスト
 - `tests/unit.rs` — 上記外部テストを登録するエントリポイント。`tests/test_support/mod.rs` を import
 - `tests/public_api.rs` — `kapsaro_core::api` の公開 API 境界テスト
 
-**テストを追加する際の手順**
-- 外部テスト（public/cli_api アクセス）: `tests/unit/external/` にファイルを作成し、`tests/unit.rs` に `#[path = "unit/external/<file>.rs"] pub mod <mod>;` を追加
-- 内部テスト（crate-private アクセス）: `crates/kapsaro-core/tests/unit/internal/` にファイルを作成し、対応する production ファイルに `#[cfg(test)] #[path = "../../tests/unit/internal/<file>.rs"] mod <mod>;` を追加
+#### kapsaro-test-support crate (`crates/kapsaro-test-support/tests/`)
+
+- `tests/ed25519_backend_test.rs` — 共有する Ed25519 署名 backend の独立テスト
+
+#### テストを追加する際の手順
+
+- ルート外部テスト: `tests/unit/external/` にファイルを作成し、`tests/unit.rs` に登録
+- core 外部テスト: `crates/kapsaro-core/tests/unit/external/` にファイルを作成し、`crates/kapsaro-core/tests/unit.rs` に登録
+- crate-private テスト: 対象 crate の `tests/unit/internal/` にファイルを作成し、対応する production module から配置深度に合う相対 `#[path]` で登録
+- CLI E2E: `tests/cli/` の該当モジュールへ追加し、新規モジュールの場合は親モジュールから登録
+- 複数 crate で共有する fixture/helper: `crates/kapsaro-test-support` に追加
 
 ## Reference Documents
 
 - `crates/kapsaro-core/schemas/kapsaro_public_key_schema.json` — PublicKey JSON Schema
 - `crates/kapsaro-core/schemas/kapsaro_private_key_schema.json` — PrivateKey JSON Schema
+- `crates/kapsaro-core/schemas/kapsaro_common_schema.json` — 各 schema が共有する定義
 - `crates/kapsaro-core/schemas/kapsaro_file_enc_schema.json` — file-enc JSON Schema
 - `crates/kapsaro-core/schemas/kapsaro_kv_enc_schema.json` — kv-enc JSON Schema
 - `crates/kapsaro-core/schemas/kapsaro_artifact_signature_schema.json` — artifact signature JSON Schema

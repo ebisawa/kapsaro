@@ -5,7 +5,10 @@
 //!
 //! Keeps parse/load/save mechanics private while facade modules own domain operations.
 
+use std::io::Read;
 use std::path::Path;
+
+use zeroize::Zeroizing;
 
 use crate::format::content::{FileEncContent, KvEncContent};
 use crate::support::fs::atomic::save_text;
@@ -71,9 +74,11 @@ impl<C> ArtifactText<C>
 where
     C: ArtifactContent,
 {
-    pub(super) fn parse(content: impl Into<String>) -> Result<Self> {
+    pub(super) fn parse(content: impl Into<String>, policy: ArtifactLoadPolicy) -> Result<Self> {
+        let content = content.into();
+        enforce_text_size(&content, policy, "inline content")?;
         Ok(Self {
-            content: C::detect(content.into())?,
+            content: C::detect(content)?,
         })
     }
 
@@ -93,6 +98,16 @@ where
         Self::parse_with_source(content, format_path_relative_to_cwd(path))
     }
 
+    pub(super) fn load_reader(
+        reader: impl Read,
+        source_name: impl Into<String>,
+        policy: ArtifactLoadPolicy,
+    ) -> Result<Self> {
+        let source_name = source_name.into();
+        let content = load_reader_text(reader, &source_name, policy)?;
+        Self::parse_with_source(content, source_name)
+    }
+
     pub(super) fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         save_text(path.as_ref(), self.as_str())
     }
@@ -104,4 +119,46 @@ where
     pub(super) fn content(&self) -> &C {
         &self.content
     }
+}
+
+fn enforce_text_size(content: &str, policy: ArtifactLoadPolicy, source_name: &str) -> Result<()> {
+    if content.len() > policy.max_bytes {
+        return Err(crate::Error::build_parse_error(format!(
+            "{} exceeds maximum size limit ({} bytes > {} bytes): {}",
+            policy.read_subject,
+            content.len(),
+            policy.max_bytes,
+            source_name
+        )));
+    }
+    Ok(())
+}
+
+fn load_reader_text(
+    mut reader: impl Read,
+    source_name: &str,
+    policy: ArtifactLoadPolicy,
+) -> Result<String> {
+    let mut bytes = Zeroizing::new(Vec::new());
+    reader
+        .by_ref()
+        .take((policy.max_bytes + 1) as u64)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > policy.max_bytes {
+        return Err(crate::Error::build_parse_error(format!(
+            "{} exceeds maximum size limit ({} bytes > {} bytes): {}",
+            policy.read_subject,
+            bytes.len(),
+            policy.max_bytes,
+            source_name
+        )));
+    }
+    String::from_utf8(std::mem::take(&mut *bytes)).map_err(|error| {
+        let utf8_error = error.utf8_error();
+        *bytes = error.into_bytes();
+        crate::Error::build_parse_error_with_source(
+            format!("Failed to read {} as UTF-8: {}", source_name, utf8_error),
+            utf8_error,
+        )
+    })
 }

@@ -1,9 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::api::file::{FileEncArtifact, VerifiedFileEncArtifact};
+use kapsaro_core::api::file::{
+    FileEncArtifact, FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
+};
 use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, RecipientKeys};
-use kapsaro_core::api::kv::{KvDisclosedEntry, KvEncArtifact, KvInputEntry, VerifiedKvEncArtifact};
+use kapsaro_core::api::kv::{
+    AuthorizedKvMutation, KvDisclosedEntry, KvEncArtifact, KvInputEntry, KvMutationOperation,
+    KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact,
+};
 use kapsaro_core::api::online::{
     GitHubAccount, GitHubOnlineVerifier, OnlineVerificationResult, OnlineVerificationStatus,
 };
@@ -11,8 +16,8 @@ use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::secret::{SecretBytes, SecretString};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
 use kapsaro_core::api::trust::{
-    LocalTrustStore, RecipientSetSubject, TrustApproval, TrustDecision, TrustPolicyEvaluator,
-    TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
+    CurrentMemberSnapshot, LocalTrustStore, RecipientSetSubject, TrustApproval, TrustDecision,
+    TrustPolicyEvaluator, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
     VerifiedLocalTrustStoreLoadResult,
 };
 use kapsaro_core::{Error, ErrorKind, Result};
@@ -103,7 +108,10 @@ fn canonical_api_exposes_facade_helper_types() {
     assert!(std::any::type_name::<VerifiedKvEncArtifact>().contains("VerifiedKvEncArtifact"));
     assert!(std::any::type_name::<VerifiedLocalTrustStore>().contains("VerifiedLocalTrustStore"));
     assert!(std::any::type_name::<LocalTrustStore>().contains("LocalTrustStore"));
-    assert!(std::any::type_name::<TrustDecision>().contains("TrustDecision"));
+    assert!(
+        std::any::type_name::<TrustDecision<TrustedFileEncArtifact<'static>>>()
+            .contains("TrustDecision")
+    );
     assert!(std::any::type_name::<TrustPolicyEvaluator>().contains("TrustPolicyEvaluator"));
     assert!(std::any::type_name::<GitHubAccount>().contains("GitHubAccount"));
     assert!(std::any::type_name::<OnlineVerificationResult>().contains("OnlineVerificationResult"));
@@ -153,42 +161,38 @@ fn kv_artifact_exposes_entry_named_operations() {
     .contains("fn"));
 
     let _encrypt_entries = KvEncArtifact::encrypt_entries;
-    let _list_entry_keys = KvEncArtifact::list_entry_keys;
-    let _decrypt_entry = VerifiedKvEncArtifact::decrypt_entry;
-    let _decrypt_entries = VerifiedKvEncArtifact::decrypt_entries;
-    let _set_entries = VerifiedKvEncArtifact::set_entries;
-    let _unset_entry = VerifiedKvEncArtifact::unset_entry;
+    let _list_entry_keys = TrustedKvEncArtifact::list_entry_keys;
+    let _decrypt_entry = TrustedKvEncArtifact::decrypt_entry;
+    let _decrypt_entries = TrustedKvEncArtifact::decrypt_entries;
+    let _decrypt_environment = TrustedKvEncArtifact::decrypt_environment;
+    let _set_entries = AuthorizedKvMutation::set_entries;
+    let _unset_entry = AuthorizedKvMutation::unset_entry;
 }
 
 #[test]
 fn artifact_facades_expose_verified_operations() {
     let _verify_file = FileEncArtifact::verify;
     let _verify_kv = KvEncArtifact::verify;
-    let _decrypt_file = VerifiedFileEncArtifact::decrypt_bytes;
-    let _decrypt_kv_entry = VerifiedKvEncArtifact::decrypt_entry;
-    let _decrypt_kv_entries = VerifiedKvEncArtifact::decrypt_entries;
-    let _set_kv_entries = VerifiedKvEncArtifact::set_entries;
-    let _unset_kv_entry = VerifiedKvEncArtifact::unset_entry;
+    let _decrypt_file = TrustedFileEncArtifact::decrypt_bytes;
+    let _decrypt_kv_entry = TrustedKvEncArtifact::decrypt_entry;
+    let _decrypt_kv_entries = TrustedKvEncArtifact::decrypt_entries;
+    let _set_kv_entries = AuthorizedKvMutation::set_entries;
+    let _unset_kv_entry = AuthorizedKvMutation::unset_entry;
 
     assert!(std::any::type_name::<VerifiedFileEncArtifact>().contains("VerifiedFileEncArtifact"));
     assert!(std::any::type_name::<VerifiedKvEncArtifact>().contains("VerifiedKvEncArtifact"));
 }
 
 #[test]
-fn trust_evaluator_returns_review_without_prompting() {
-    let evaluator = TrustPolicyEvaluator::new(None);
-    let decision = evaluator
-        .evaluate_known_key("alice@example.com", "0123456789ABCDEFGHJKMNPQRSTVWXYZ")
-        .expect("decision");
-
-    match decision {
-        TrustDecision::ReviewRequired(requests) => {
-            assert_eq!(requests.len(), 1);
-            assert_eq!(requests[0].kind(), TrustReviewKind::KnownKey);
-            assert_eq!(requests[0].subject_handle(), Some("alice@example.com"));
-        }
-        TrustDecision::Accepted => panic!("missing trust store should require review"),
-    }
+fn trust_evaluator_exposes_operation_bound_decisions() {
+    let _load_snapshot = CurrentMemberSnapshot::load;
+    let _evaluate_file = TrustPolicyEvaluator::evaluate_file;
+    let _evaluate_kv = TrustPolicyEvaluator::evaluate_kv;
+    let _evaluate_kv_mutation = TrustPolicyEvaluator::evaluate_kv_mutation;
+    let _file_operation = FileReadOperation::Decrypt;
+    let _kv_operation = KvReadOperation::Entry("DATABASE_URL".to_string());
+    let _kv_mutation = KvMutationOperation::Set;
+    let _review_kind = TrustReviewKind::KnownKey;
 }
 
 #[test]
@@ -209,6 +213,8 @@ fn test_file_artifact_io_methods_pinned() {
     // Pin parse/load/save/encrypt_bytes/as_str method shapes on FileEncArtifact.
     let _parse: fn(String) -> Result<FileEncArtifact> = FileEncArtifact::parse;
     let _load: fn(&std::path::Path) -> Result<FileEncArtifact> = |p| FileEncArtifact::load(p);
+    let _load_reader: fn(std::io::Cursor<Vec<u8>>, String) -> Result<FileEncArtifact> =
+        FileEncArtifact::load_reader;
     let _save_fn: fn(&FileEncArtifact, &std::path::Path) -> Result<()> = |a, p| a.save(p);
     let _as_str_fn: fn(&FileEncArtifact) -> &str = FileEncArtifact::as_str;
     let _encrypt_bytes: fn(&[u8], &RecipientKeys, &KeyContext) -> Result<FileEncArtifact> =
@@ -223,6 +229,8 @@ fn test_kv_artifact_io_methods_pinned() {
     // Pin parse/load/save/as_str on KvEncArtifact.
     let _parse: fn(String) -> Result<KvEncArtifact> = KvEncArtifact::parse;
     let _load: fn(&std::path::Path) -> Result<KvEncArtifact> = |p| KvEncArtifact::load(p);
+    let _load_reader: fn(std::io::Cursor<Vec<u8>>, String) -> Result<KvEncArtifact> =
+        KvEncArtifact::load_reader;
     let _save_fn: fn(&KvEncArtifact, &std::path::Path) -> Result<()> = |a, p| a.save(p);
     let _as_str_fn: fn(&KvEncArtifact) -> &str = KvEncArtifact::as_str;
     // Pin recipient_set_subject on VerifiedKvEncArtifact.
@@ -343,11 +351,12 @@ fn test_recipient_set_subject_accessors_pinned() {
 
 #[test]
 fn test_trust_review_request_accessors_pinned() {
-    // Pin kid/sid/recipient_kids accessors on TrustReviewRequest.
+    // Pin review evidence accessors on TrustReviewRequest.
     let _kid_fn: fn(&TrustReviewRequest) -> Option<&str> = TrustReviewRequest::kid;
     let _sid_fn: fn(&TrustReviewRequest) -> Option<&str> = TrustReviewRequest::sid;
     let _recipient_kids_fn: fn(&TrustReviewRequest) -> &[String] =
         TrustReviewRequest::recipient_kids;
+    let _recipient_handle_hints_fn = TrustReviewRequest::recipient_handle_hints;
 }
 
 #[test]

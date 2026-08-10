@@ -12,6 +12,11 @@ use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::Path;
 
+#[cfg(test)]
+thread_local! {
+    static FAIL_NEXT_TRUST_STORE_SAVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Load result including the document and any permission warnings.
 #[derive(Debug)]
 pub struct TrustStoreLoadResult {
@@ -85,7 +90,27 @@ pub(crate) fn save_trust_store_at<D>(
 where
     D: DirectoryFd,
 {
+    enforce_test_save_allowed()?;
     DocumentStore::<CollectPermissionWarnings>::save_json_restricted_at(dir, path, document)
+}
+
+#[cfg(test)]
+pub(crate) fn fail_next_trust_store_save() {
+    FAIL_NEXT_TRUST_STORE_SAVE.with(|fail| fail.set(true));
+}
+
+#[cfg(test)]
+fn enforce_test_save_allowed() -> Result<()> {
+    let should_fail = FAIL_NEXT_TRUST_STORE_SAVE.with(|fail| fail.replace(false));
+    if should_fail {
+        return Err(Error::build_io_error("Injected trust store save failure"));
+    }
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn enforce_test_save_allowed() -> Result<()> {
+    Ok(())
 }
 
 fn parse_trust_store(content: &str, path: &Path) -> Result<TrustStoreDocument> {

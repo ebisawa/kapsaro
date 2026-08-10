@@ -196,6 +196,18 @@ impl RecipientKeys {
     pub(crate) fn keys(&self) -> &[VerifiedRecipientKey] {
         &self.keys
     }
+
+    pub(crate) fn from_verified_parts(
+        handles: Vec<String>,
+        keys: Vec<VerifiedRecipientKey>,
+    ) -> Result<Self> {
+        let public_keys = keys
+            .iter()
+            .map(|key| key.document().clone())
+            .collect::<Vec<_>>();
+        validate_recipient_key_subjects(&handles, &public_keys)?;
+        Ok(Self { handles, keys })
+    }
 }
 
 fn validate_recipient_key_subjects(handles: &[String], public_keys: &[PublicKey]) -> Result<()> {

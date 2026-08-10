@@ -202,13 +202,11 @@ where
     )
 }
 
-pub fn execute_write_with_recipient_trust<
-    T,
+pub fn review_write_recipient_trust<
     EmitWarnings,
     ConfirmKnown,
     ConfirmNonMember,
     ConfirmRecipients,
-    Execute,
 >(
     execution: TrustExecutionContext<'_>,
     trust_plan: WriteRecipientTrustReviewPlan<'_>,
@@ -216,15 +214,13 @@ pub fn execute_write_with_recipient_trust<
     confirm_known: ConfirmKnown,
     confirm_non_member: ConfirmNonMember,
     confirm_recipients: ConfirmRecipients,
-    execute: Execute,
-) -> Result<T>
+) -> Result<()>
 where
     EmitWarnings: FnMut(&[String]),
     ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
     ConfirmRecipients:
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
-    Execute: FnOnce() -> Result<T>,
 {
     emit_warnings(execution.warnings);
     let mut approvals = review_write_signer_trust_with_confirmation_verifier(
@@ -238,8 +234,7 @@ where
         confirm_recipients,
     )?);
     save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
-    let result = execute()?;
-    Ok(result)
+    Ok(())
 }
 
 fn review_write_signer_trust_with_confirmation_verifier<ConfirmKnown, ConfirmNonMember>(

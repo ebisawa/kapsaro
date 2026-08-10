@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::api::key::KeyContext;
+use crate::api::key::LocalKeyStore;
+use crate::api::trust::{CurrentMemberSnapshot, LocalTrustStore, TrustPolicyEvaluator};
 use crate::app::context::crypto::{load_crypto_context, load_crypto_context_from_env};
 use crate::app::context::member::resolve_command_member;
 use crate::app::context::options::CommonCommandOptions;
@@ -15,7 +18,7 @@ use tracing::debug;
 /// Fully resolved command execution context.
 pub struct ExecutionContext {
     pub member_handle: MemberHandle,
-    pub key_ctx: CryptoContext,
+    pub key_ctx: KeyContext,
     pub workspace_root: Option<crate::io::workspace::detection::WorkspaceRoot>,
 }
 
@@ -46,7 +49,7 @@ impl ExecutionContext {
 
         Ok(Self {
             member_handle: resolved.member_handle,
-            key_ctx,
+            key_ctx: KeyContext::from_inner(key_ctx),
             workspace_root,
         })
     }
@@ -64,7 +67,7 @@ impl ExecutionContext {
 
         Ok(Self {
             member_handle,
-            key_ctx,
+            key_ctx: KeyContext::from_inner(key_ctx),
             workspace_root: Some(workspace_root),
         })
     }
@@ -95,8 +98,32 @@ pub fn resolve_write_execution(
     }
 }
 
+pub fn resolve_read_trust_evaluator(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+) -> Result<TrustPolicyEvaluator> {
+    let workspace = execution.workspace_root.as_ref().ok_or_else(|| {
+        Error::build_invalid_operation_error(
+            "Workspace is required for read trust evaluation".to_string(),
+        )
+    })?;
+    let members = CurrentMemberSnapshot::load(&workspace.root_path)?;
+    let base_dir = options.resolve_base_dir()?;
+    let trust_store = LocalTrustStore::new(base_dir, execution.member_handle.to_string());
+    let key_store = LocalKeyStore::new(options.resolve_keystore_root()?);
+    let store = trust_store
+        .load_verified(&key_store)?
+        .map(|loaded| loaded.into_store());
+    Ok(TrustPolicyEvaluator::new(members, store))
+}
+
 pub fn build_write_execution_warnings(execution: &ExecutionContext) -> Result<Vec<String>> {
-    build_execution_warnings(execution.key_ctx.build_signing_key_expiry_warning()?)
+    build_execution_warnings(
+        execution
+            .key_ctx
+            .inner()
+            .build_signing_key_expiry_warning()?,
+    )
 }
 
 pub fn enforce_selected_decryption_key_expiry(
@@ -114,6 +141,7 @@ pub(crate) fn evaluate_selected_decryption_key_expiry(
 ) -> Result<SelectedDecryptionKeyExpiry> {
     let selected = execution
         .key_ctx
+        .inner()
         .select_local_decryption_key(wrap_set, execution.member_handle.as_str())?;
     Ok(SelectedDecryptionKeyExpiry {
         warning: selected

@@ -4,13 +4,16 @@
 //! Review-time snapshots for KV mutations.
 //! Tracks the active member set and target file state used by later execution.
 
+use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::review::{ensure_workspace_members_match_snapshot, ReviewedTextFile};
-use crate::app::trust::WorkspaceMemberSnapshot;
+use crate::app::trust::store::load_optional_trust_store_for_member;
+use crate::app::trust::{TrustContext, WorkspaceMemberSnapshot};
 use crate::feature::kv::mutate::KvRecipientSnapshot;
 use crate::format::content::{EncContent, KvEncContent};
+use crate::model::trust_store::TrustStoreProtected;
 use crate::support::fs::relative::DirectoryFd;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
-use crate::Result;
+use crate::{Error, Result};
 
 use super::super::session::{load_existing_content, KvFileTarget};
 
@@ -20,6 +23,13 @@ pub(super) struct MutationReviewSnapshot {
     file_snapshot: ReviewedTextFile,
     members: WorkspaceMemberSnapshot,
     recipients: KvRecipientSnapshot,
+    trust_store: MutationTrustStoreSnapshot,
+}
+
+pub(super) struct MutationTrustStoreSnapshot {
+    options: CommonCommandOptions,
+    owner_handle: String,
+    protected: Option<TrustStoreProtected>,
 }
 
 enum ReviewedKvFileState {
@@ -47,10 +57,14 @@ impl MutationReviewSnapshot {
     pub(super) fn build(
         target: KvFileTarget,
         workspace_members: WorkspaceMemberSnapshot,
+        options: &CommonCommandOptions,
+        owner_handle: &str,
+        trust_context: &TrustContext,
         allow_missing: bool,
     ) -> Result<Self> {
         let recipients = build_recipient_snapshot(&workspace_members);
         let file = ReviewedKvFileState::load(&target, allow_missing)?;
+        let trust_store = MutationTrustStoreSnapshot::load(options, owner_handle, trust_context)?;
         let file_snapshot = ReviewedTextFile::from_optional_content(
             &target.file_path,
             file.as_content()
@@ -64,15 +78,26 @@ impl MutationReviewSnapshot {
             file_snapshot,
             members: workspace_members,
             recipients,
+            trust_store,
         })
     }
 
     pub(super) fn ensure_current(&self) -> Result<()> {
         self.ensure_members_match()?;
-        self.ensure_file_matches()
+        self.ensure_file_matches()?;
+        self.ensure_trust_store_current()
     }
 
     pub(super) fn ensure_current_at<D>(&self, dir: &D) -> Result<()>
+    where
+        D: DirectoryFd,
+    {
+        self.ensure_members_match()?;
+        self.file_snapshot.ensure_current_at(dir)?;
+        self.trust_store.ensure_current()
+    }
+
+    pub(super) fn ensure_target_current_at<D>(&self, dir: &D) -> Result<()>
     where
         D: DirectoryFd,
     {
@@ -92,8 +117,18 @@ impl MutationReviewSnapshot {
         &self.target
     }
 
-    pub(super) fn save_replacement(&self, encrypted: &str) -> Result<()> {
-        self.file_snapshot.save_replacement(encrypted)
+    pub(super) fn ensure_reviewed_state_matches(&self, current: &Self) -> Result<()> {
+        if !self.members.matches_active_members(&current.members) {
+            return Err(Error::build_invalid_operation_error(
+                "KV active members changed since review and must be reviewed again.".to_string(),
+            ));
+        }
+        if self.file_snapshot != current.file_snapshot {
+            return Err(Error::build_invalid_operation_error(
+                "KV file changed since review and must be reviewed again.".to_string(),
+            ));
+        }
+        Ok(())
     }
 
     pub(super) fn save_replacement_at<D>(&self, dir: &D, encrypted: &str) -> Result<()>
@@ -107,6 +142,10 @@ impl MutationReviewSnapshot {
         EncContent::KvEnc(KvEncContent::new_unchecked(encrypted))
     }
 
+    pub(super) fn ensure_trust_store_current(&self) -> Result<()> {
+        self.trust_store.ensure_current()
+    }
+
     fn ensure_members_match(&self) -> Result<()> {
         ensure_workspace_members_match_snapshot(
             &self.target.workspace_root.root_path,
@@ -118,6 +157,64 @@ impl MutationReviewSnapshot {
     fn ensure_file_matches(&self) -> Result<()> {
         self.file_snapshot.ensure_current()
     }
+}
+
+impl MutationTrustStoreSnapshot {
+    pub(super) fn from_protected(
+        options: &CommonCommandOptions,
+        owner_handle: &str,
+        protected: Option<TrustStoreProtected>,
+    ) -> Self {
+        Self {
+            options: options.clone(),
+            owner_handle: owner_handle.to_string(),
+            protected,
+        }
+    }
+
+    fn load(
+        options: &CommonCommandOptions,
+        owner_handle: &str,
+        trust_context: &TrustContext,
+    ) -> Result<Self> {
+        let (_, state) = load_optional_trust_store_for_member(options, owner_handle)?;
+        let protected = state.map(|state| state.protected);
+        ensure_trust_context_matches(&protected, trust_context)?;
+        Ok(Self {
+            options: options.clone(),
+            owner_handle: owner_handle.to_string(),
+            protected,
+        })
+    }
+
+    pub(super) fn ensure_current(&self) -> Result<()> {
+        let (_, state) = load_optional_trust_store_for_member(&self.options, &self.owner_handle)?;
+        let current = state.map(|state| state.protected);
+        if current == self.protected {
+            return Ok(());
+        }
+        Err(build_trust_store_changed_error())
+    }
+}
+
+fn ensure_trust_context_matches(
+    protected: &Option<TrustStoreProtected>,
+    trust_context: &TrustContext,
+) -> Result<()> {
+    let (known_keys, recipient_sets) = protected
+        .as_ref()
+        .map(|state| (&state.known_keys[..], &state.recipient_sets[..]))
+        .unwrap_or_default();
+    if known_keys == trust_context.known_keys && recipient_sets == trust_context.recipient_sets {
+        return Ok(());
+    }
+    Err(build_trust_store_changed_error())
+}
+
+fn build_trust_store_changed_error() -> Error {
+    Error::build_invalid_operation_error(
+        "KV trust store changed since review and must be reviewed again.".to_string(),
+    )
 }
 
 fn build_recipient_snapshot(workspace_members: &WorkspaceMemberSnapshot) -> KvRecipientSnapshot {

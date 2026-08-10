@@ -78,7 +78,8 @@ fn test_get_nonexistent_key() {
         .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not found"));
+        .stderr(predicate::str::contains("Key 'NONEXISTENT_KEY' not found"))
+        .stderr(predicate::str::contains("default.kvenc"));
 }
 
 #[test]

@@ -44,7 +44,7 @@ fn cli_api_uses_explicit_allow_lists() {
     assert!(app.contains("pub mod file {"));
     assert!(app.contains("pub mod kv {"));
     assert!(app.contains("pub mod trust {"));
-    assert!(app.contains("execute_decrypt_file_command"));
+    assert!(app.contains("evaluate_decrypt_file_trust_plan"));
     assert!(app.contains("execute_inspect_file_command"));
     assert!(app.contains("InspectOutput, InspectSection"));
     assert!(presentation.contains("pub use crate::support::fs::atomic::{save_bytes, save_text};"));
@@ -553,6 +553,8 @@ fn test_cli_api_app_allow_list_snapshot() {
         "config::unset_config_command",
         "context::env_key::is_env_key_mode",
         "context::execution::ExecutionContext",
+        "context::execution::resolve_read_execution",
+        "context::execution::resolve_read_trust_evaluator",
         "context::execution::resolve_write_execution",
         "context::identity::build_missing_member_handle_error",
         "context::identity::resolve_github_user_input",
@@ -574,10 +576,8 @@ fn test_cli_api_app_allow_list_snapshot() {
         "doctor::types::DoctorReport",
         "doctor::types::DoctorStatus",
         "doctor::types::DoctorSubject",
-        "file::decrypt::DecryptFileCommand",
-        "file::decrypt::execute_decrypt_file_command",
-        "file::decrypt::resolve_decrypt_file_command",
-        "file::decrypt::validate_decrypt_file_input",
+        "errors::build_kv_key_not_found_error",
+        "file::decrypt::evaluate_decrypt_file_trust_plan",
         "file::encrypt::EncryptFileCommand",
         "file::encrypt::execute_encrypt_file_command_with_recipient_set_confirmation",
         "file::encrypt::resolve_encrypt_file_command",
@@ -601,17 +601,13 @@ fn test_cli_api_app_allow_list_snapshot() {
         "key::types::KeyRemoveResult",
         "kv::mutation::MutationWriteTrustPlan",
         "kv::mutation::import_kv_command_with_recipient_set_confirmation",
+        "kv::mutation::reevaluate_mutation_write_plan_after_review",
         "kv::mutation::resolve_mutation_write_plan",
         "kv::mutation::set_kv_command_with_recipient_set_confirmation",
         "kv::mutation::unset_kv_command_with_recipient_set_confirmation",
-        "kv::query::KvReadCommand",
-        "kv::query::execute_kv_list_command",
-        "kv::query::execute_kv_read_command",
-        "kv::query::resolve_kv_read_command",
-        "kv::types::KvDisclosedEntry",
+        "kv::query::evaluate_kv_read_trust_plan",
+        "kv::query::resolve_kv_read_path",
         "kv::types::KvImportResult",
-        "kv::types::KvReadMode",
-        "kv::types::KvReadResult",
         "kv::types::KvWriteOutcome",
         "member::approval::MemberApprovalEvaluation",
         "member::approval::MemberApprovalResult",
@@ -654,19 +650,21 @@ fn test_cli_api_app_allow_list_snapshot() {
         "rewrap::promotion::PromotionReviewPrompt",
         "rewrap::promotion::PromotionReviewView",
         "rewrap::types::RewrapBatchOutcome",
-        "run::execute_run_command",
         "trust::ArtifactRecipientTrustOutcome",
         "trust::CommandCapability",
         "trust::GetPolicy",
         "trust::ImportPolicy",
         "trust::ListPolicy",
         "trust::RecipientTrustOutcome",
+        "trust::ReadArtifactTrustPlan",
         "trust::RunPolicy",
         "trust::SetPolicy",
         "trust::SignerTrustOutcome",
         "trust::TrustApprovalCandidate",
         "trust::UnsetPolicy",
         "trust::WriteTrustPolicy",
+        "trust::evaluate_file_after_cli_review",
+        "trust::evaluate_kv_after_cli_review",
         "trust::enforcement::ArtifactRecipientHandleHint",
         "trust::enforcement::ArtifactRecipientSetReview",
         "trust::enforcement::ArtifactRecipientSetSnapshot",
@@ -695,7 +693,7 @@ fn test_cli_api_app_allow_list_snapshot() {
         "trust::review::TrustExecutionContext",
         "trust::review::WriteRecipientTrustReviewPlan",
         "trust::review::execute_read_with_signer_trust",
-        "trust::review::execute_write_with_recipient_trust",
+        "trust::review::review_write_recipient_trust",
     ];
     assert_allow_list_matches(&actual, expected, "cli_api/app.rs");
 }
@@ -715,6 +713,7 @@ fn test_cli_api_presentation_allow_list_snapshot() {
         "limits::MAX_JSON_DOCUMENT_READ_SIZE",
         "limits::MAX_KV_ENC_FILE_SIZE",
         "path::format_path_relative_to_cwd",
+        "process::remove_parent_kapsaro_env_vars",
         "ssh::SshDeterminismStatus",
         "tty::is_interactive",
         "validation::validate_github_login",

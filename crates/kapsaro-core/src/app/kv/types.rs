@@ -1,9 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
-use crate::feature::kv::query as feature_query;
 use crate::feature::kv::types as feature_types;
 use crate::support::secret::SecretString;
 
@@ -33,40 +30,14 @@ impl KvInputEntry {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KvDisclosedEntry {
-    pub key: String,
-    pub disclosed: bool,
-}
-
-impl From<feature_query::KvDisclosedEntry> for KvDisclosedEntry {
-    fn from(value: feature_query::KvDisclosedEntry) -> Self {
-        Self {
-            key: value.key,
-            disclosed: value.disclosed,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct KvWriteOutcome {
     pub message: Option<String>,
     pub warnings: Vec<String>,
 }
 
-pub struct KvReadResult {
-    pub values: BTreeMap<String, SecretString>,
-    pub disclosed: Vec<KvDisclosedEntry>,
-}
-
 #[derive(Debug)]
 pub struct KvImportResult {
     pub write_outcome: KvWriteOutcome,
     pub entry_count: usize,
-}
-
-#[derive(Clone, Copy)]
-pub enum KvReadMode<'a> {
-    All,
-    Single(&'a str),
 }

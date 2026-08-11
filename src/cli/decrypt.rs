@@ -4,22 +4,24 @@
 //! decrypt command - file-enc decryption
 
 use clap::Args;
-use std::io::{self, Read};
+use std::io;
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_options_with_read_trust_allowances, run_read_command_with_recovery, ReadCommandLabels,
+    ensure_reviewed_artifact_unchanged, resolve_options_with_read_trust_allowances,
+    run_read_command_with_recovery, ReadCommandContext, ReadCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOptions,
 };
-use kapsaro_core::cli_api::app::file::decrypt::{
-    execute_decrypt_file_command, resolve_decrypt_file_command, validate_decrypt_file_input,
+use kapsaro_core::api::file::FileEncArtifact;
+use kapsaro_core::api::trust::TrustDecision;
+use kapsaro_core::cli_api::app::context::execution::{
+    resolve_read_execution, resolve_read_trust_evaluator,
 };
-use kapsaro_core::cli_api::presentation::fs::load_text_with_limit;
-use kapsaro_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use kapsaro_core::cli_api::app::file::decrypt::evaluate_decrypt_file_trust_plan;
+use kapsaro_core::cli_api::app::trust::evaluate_file_after_cli_review;
 use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
@@ -66,15 +68,14 @@ pub(crate) struct DecryptArgs {
 // ============================================================================
 
 pub(crate) fn run(args: DecryptArgs) -> Result<()> {
-    let source_name = resolve_decrypt_input_source(args.input.as_ref(), args.stdin);
-    let content = resolve_decrypt_input_content(args.input.as_ref(), args.stdin)?;
-    validate_decrypt_file_input(&content, source_name.clone())?;
+    let artifact = load_decrypt_artifact(args.input.as_ref(), args.stdin)?;
     let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
     let options = resolve_options_with_read_trust_allowances(
         &args.common,
         args.allow_expired_key.allow_expired_key,
         args.allow_non_member.allow_non_member,
     )?;
+    let verified = artifact.verify(options.operation_options())?;
     let plaintext_bytes = run_read_command_with_recovery(
         &options,
         args.member.member_handle.clone(),
@@ -85,64 +86,74 @@ pub(crate) fn run(args: DecryptArgs) -> Result<()> {
             allow_non_member: options.allow_non_member,
         },
         |ssh_ctx| {
-            resolve_decrypt_file_command(
+            let execution = resolve_read_execution(
                 &options,
                 args.member.member_handle.clone(),
                 args.kid.as_deref(),
-                content.clone(),
-                source_name.clone(),
                 ssh_ctx,
-            )
+            )?;
+            let trust = evaluate_decrypt_file_trust_plan(&options, &execution, &verified)?;
+            Ok(ReadCommandContext::new(execution, trust))
         },
-        execute_decrypt_file_command,
+        |context| {
+            let evaluator = resolve_read_trust_evaluator(&options, &context.execution)?;
+            if args.stdin {
+                return decrypt_after_review(&evaluator, &verified, &verified, context, &options);
+            }
+            let current_artifact = load_decrypt_artifact(args.input.as_ref(), false)?;
+            ensure_reviewed_artifact_unchanged(
+                artifact.as_str(),
+                current_artifact.as_str(),
+                "decrypt authorization",
+            )?;
+            let current = current_artifact.verify(options.operation_options())?;
+            decrypt_after_review(&evaluator, &verified, &current, context, &options)
+        },
     )?;
 
     save_decrypted_output(
         output_path.as_deref(),
-        plaintext_bytes.as_ref(),
+        plaintext_bytes.expose_secret(),
         args.common.quiet.quiet,
     )?;
     Ok(())
 }
 
-fn resolve_decrypt_input_content(input_path: Option<&PathBuf>, from_stdin: bool) -> Result<String> {
+fn decrypt_after_review(
+    evaluator: &kapsaro_core::api::trust::TrustPolicyEvaluator,
+    reviewed: &kapsaro_core::api::file::VerifiedFileEncArtifact,
+    current: &kapsaro_core::api::file::VerifiedFileEncArtifact,
+    context: &ReadCommandContext,
+    options: &kapsaro_core::cli_api::app::context::options::CommonCommandOptions,
+) -> Result<kapsaro_core::api::secret::SecretBytes> {
+    match evaluate_file_after_cli_review(
+        evaluator,
+        reviewed,
+        current,
+        &context.execution.key_ctx,
+        context.signer_outcome(),
+        options.operation_options(),
+    )? {
+        TrustDecision::Trusted(trusted) => trusted.decrypt_bytes(),
+        TrustDecision::ReviewRequired(_) => Err(Error::build_verification_error(
+            "E_TRUST_REVIEW_REQUIRED".to_string(),
+            "Trust state changed while reviewing the file artifact".to_string(),
+        )),
+    }
+}
+
+fn load_decrypt_artifact(
+    input_path: Option<&PathBuf>,
+    from_stdin: bool,
+) -> Result<FileEncArtifact> {
     if from_stdin {
-        return load_decrypt_input_from_stdin();
+        return FileEncArtifact::load_reader(io::stdin().lock(), "stdin");
     }
 
     input_path
-        .map(|path| load_text_with_limit(path, MAX_JSON_DOCUMENT_READ_SIZE, "file-enc file"))
+        .map(FileEncArtifact::load)
         .transpose()?
         .ok_or_else(|| {
             Error::build_invalid_argument_error("INPUT is required unless --stdin is used")
         })
-}
-
-fn resolve_decrypt_input_source(input_path: Option<&PathBuf>, from_stdin: bool) -> String {
-    if from_stdin {
-        return "stdin".to_string();
-    }
-    input_path
-        .map(|path| format_path_relative_to_cwd(path))
-        .unwrap_or_else(|| "input".to_string())
-}
-
-fn load_decrypt_input_from_stdin() -> Result<String> {
-    let max_bytes = MAX_JSON_DOCUMENT_READ_SIZE;
-    let stdin = io::stdin();
-    let mut reader = stdin.lock().take((max_bytes + 1) as u64);
-    let mut bytes = Vec::new();
-    reader.read_to_end(&mut bytes)?;
-
-    if bytes.len() > max_bytes {
-        return Err(Error::build_parse_error(format!(
-            "file-enc input exceeds maximum size limit ({} bytes > {} bytes): stdin",
-            bytes.len(),
-            max_bytes
-        )));
-    }
-
-    String::from_utf8(bytes).map_err(|e| {
-        Error::build_parse_error_with_source(format!("Failed to read stdin as UTF-8: {}", e), e)
-    })
 }

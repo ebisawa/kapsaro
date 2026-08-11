@@ -22,20 +22,19 @@ use kapsaro_core::cli_api::app::context::options::{
 };
 use kapsaro_core::cli_api::app::context::paths::require_workspace;
 use kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution;
-use kapsaro_core::cli_api::app::file::decrypt::DecryptFileCommand;
 use kapsaro_core::cli_api::app::file::encrypt::EncryptFileCommand;
 use kapsaro_core::cli_api::app::kv::mutation::{
-    resolve_mutation_write_plan, MutationWriteTrustPlan,
+    reevaluate_mutation_write_plan_after_review, resolve_mutation_write_plan,
+    MutationWriteTrustPlan,
 };
-use kapsaro_core::cli_api::app::kv::query::KvReadCommand;
 use kapsaro_core::cli_api::app::trust::review::{
-    execute_read_with_signer_trust, execute_write_with_recipient_trust, ReadSignerTrustReviewPlan,
+    execute_read_with_signer_trust, review_write_recipient_trust, ReadSignerTrustReviewPlan,
     SignerTrustLabels, TrustExecutionContext, WriteRecipientTrustReviewPlan,
 };
 use kapsaro_core::cli_api::app::trust::{
-    RecipientTrustOutcome, SignerTrustOutcome, WriteTrustPolicy,
+    ReadArtifactTrustPlan, RecipientTrustOutcome, SignerTrustOutcome, WriteTrustPolicy,
 };
-use kapsaro_core::Result;
+use kapsaro_core::{Error, Result};
 use tracing::debug;
 
 #[derive(Clone, Copy)]
@@ -64,6 +63,39 @@ pub(crate) trait WriteCommandPlan {
     fn warnings(&self) -> &[String];
     fn signer_trust(&self) -> Option<&SignerTrustOutcome>;
     fn recipient_trust(&self) -> &RecipientTrustOutcome;
+
+    fn ensure_current_after_confirmation(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub(crate) struct ReadCommandContext {
+    pub(crate) execution: ExecutionContext,
+    trust: ReadArtifactTrustPlan,
+}
+
+impl ReadCommandContext {
+    pub(crate) fn new(execution: ExecutionContext, trust: ReadArtifactTrustPlan) -> Self {
+        Self { execution, trust }
+    }
+
+    pub(crate) fn signer_outcome(&self) -> &SignerTrustOutcome {
+        &self.trust.signer_outcome
+    }
+}
+
+pub(crate) fn ensure_reviewed_artifact_unchanged(
+    reviewed: &str,
+    current: &str,
+    operation: &str,
+) -> Result<()> {
+    if reviewed == current {
+        return Ok(());
+    }
+    Err(Error::build_verification_error(
+        "E_TRUST_TARGET_CHANGED".to_string(),
+        format!("Reviewed artifact changed before {operation}; run the command again"),
+    ))
 }
 
 pub(crate) fn resolve_options(common: &impl ToCommonOptions) -> CommonCommandOptions {
@@ -200,6 +232,18 @@ where
     Plan: WriteCommandPlan,
     Execute: FnOnce() -> Result<T>,
 {
+    review_write_command_trust(options, plan, labels)?;
+    execute()
+}
+
+fn review_write_command_trust<Plan>(
+    options: &CommonCommandOptions,
+    plan: &Plan,
+    labels: WriteCommandLabels<'_>,
+) -> Result<()>
+where
+    Plan: WriteCommandPlan,
+{
     debug!(
         "[TRUST] write gate: signer={}, recipients={}",
         plan.signer_trust()
@@ -207,7 +251,7 @@ where
             .unwrap_or("not-applicable"),
         describe_recipient_trust(plan.recipient_trust())
     );
-    execute_write_with_recipient_trust(
+    review_write_recipient_trust(
         TrustExecutionContext {
             options,
             execution: plan.execution(),
@@ -222,10 +266,21 @@ where
             recipient_context_label: labels.recipient_context,
         },
         print_warnings,
-        confirm_signer_key_approval,
-        confirm_non_member_acceptance,
-        confirm_recipient_approvals,
-        execute,
+        |candidate, context| {
+            let confirmed = confirm_signer_key_approval(candidate, context)?;
+            plan.ensure_current_after_confirmation()?;
+            Ok(confirmed)
+        },
+        |candidate, subject, recipients| {
+            let confirmed = confirm_non_member_acceptance(candidate, subject, recipients)?;
+            plan.ensure_current_after_confirmation()?;
+            Ok(confirmed)
+        },
+        |candidates, context| {
+            let approved = confirm_recipient_approvals(candidates, context)?;
+            plan.ensure_current_after_confirmation()?;
+            Ok(approved)
+        },
     )
 }
 
@@ -249,9 +304,9 @@ where
         allow_missing,
         ssh_ctx,
     )?;
-    run_write_command_with_trust(options, &trust_plan, labels, || {
-        execute(options, &trust_plan)
-    })
+    review_write_command_trust(options, &trust_plan, labels)?;
+    let trust_plan = reevaluate_mutation_write_plan_after_review(trust_plan)?;
+    execute(options, &trust_plan)
 }
 
 pub(crate) fn run_read_command_with_recovery<Plan, T, ResolvePlan, Execute>(
@@ -322,39 +377,21 @@ fn describe_recipient_trust(outcome: &RecipientTrustOutcome) -> &'static str {
     }
 }
 
-impl ReadCommandPlan for DecryptFileCommand {
+impl ReadCommandPlan for ReadCommandContext {
     fn execution(&self) -> &ExecutionContext {
         &self.execution
     }
 
     fn warnings(&self) -> &[String] {
-        &self.warnings
+        &self.trust.warnings
     }
 
     fn signer_trust(&self) -> &SignerTrustOutcome {
-        &self.trust_outcome
+        &self.trust.signer_outcome
     }
 
     fn recipient_trust(&self) -> &RecipientTrustOutcome {
-        &self.recipient_trust_outcome
-    }
-}
-
-impl ReadCommandPlan for KvReadCommand {
-    fn execution(&self) -> &ExecutionContext {
-        &self.execution
-    }
-
-    fn warnings(&self) -> &[String] {
-        &self.warnings
-    }
-
-    fn signer_trust(&self) -> &SignerTrustOutcome {
-        &self.trust_outcome
-    }
-
-    fn recipient_trust(&self) -> &RecipientTrustOutcome {
-        &self.recipient_trust_outcome
+        &self.trust.recipient_outcome
     }
 }
 
@@ -391,6 +428,10 @@ impl<P> WriteCommandPlan for MutationWriteTrustPlan<P> {
 
     fn recipient_trust(&self) -> &RecipientTrustOutcome {
         &self.recipient_trust
+    }
+
+    fn ensure_current_after_confirmation(&self) -> Result<()> {
+        MutationWriteTrustPlan::ensure_current_after_confirmation(self)
     }
 }
 

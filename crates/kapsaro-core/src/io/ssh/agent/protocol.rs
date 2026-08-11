@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Encodes ssh-agent requests and validates response packet structure.
+//! Bounds identity parsing and allocation by the bytes delivered by the agent.
+
 use super::validation::AgentIdentity;
 use crate::io::ssh::protocol::constants::KEY_TYPE_ED25519;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
@@ -16,11 +19,7 @@ const SSH_AGENTC_SIGN_REQUEST: u8 = 13;
 
 pub(super) const MAX_AGENT_PACKET_SIZE: usize = 1024 * 1024;
 
-/// Upper bound on identities accepted from an agent response.
-///
-/// The declared count is read before any identity is parsed, so it has to be
-/// bounded independently of the packet size.
-const MAX_AGENT_IDENTITIES: usize = 256;
+const MIN_AGENT_IDENTITY_WIRE_SIZE: usize = 2 * size_of::<u32>();
 
 pub(super) fn build_request_identities() -> Vec<u8> {
     vec![SSH_AGENTC_REQUEST_IDENTITIES]
@@ -76,14 +75,15 @@ fn split_packet(packet: &[u8]) -> Result<(u8, &[u8])> {
 
 fn parse_identities(mut payload: &[u8]) -> Result<Vec<AgentIdentity>> {
     let count = decode_u32(&mut payload, "identity count")?;
-    if count > MAX_AGENT_IDENTITIES {
+    let packet_capacity = payload.len() / MIN_AGENT_IDENTITY_WIRE_SIZE;
+    if count > packet_capacity {
         return Err(SshError::build_operation_failed_error(format!(
-            "ssh-agent reported {} identities (maximum {})",
-            count, MAX_AGENT_IDENTITIES
+            "ssh-agent reported {} identities but response payload capacity is {}",
+            count, packet_capacity
         ))
         .into());
     }
-    let mut identities = Vec::with_capacity(count);
+    let mut identities = Vec::new();
 
     for _ in 0..count {
         let (key_blob, rest) = decode_ssh_string(payload)?;

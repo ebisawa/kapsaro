@@ -22,7 +22,7 @@ use crate::feature::trust::recipient_sets::kv_recipient_evidence;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
 use crate::support::warning::push_unique_warning;
-use crate::Result;
+use crate::{Error, Result};
 
 use super::super::session::KvCommandSession;
 use super::snapshot::MutationReviewSnapshot;
@@ -35,7 +35,16 @@ pub struct MutationWriteTrustPlan<P> {
     pub(crate) trust_context: TrustContext,
     pub warnings: Vec<String>,
     pub(super) review: MutationReviewSnapshot,
+    command_warnings: Vec<String>,
+    allow_missing: bool,
     _policy: PhantomData<P>,
+}
+
+impl<P> MutationWriteTrustPlan<P> {
+    /// Ensure the reviewed artifact, members, and trust store still match.
+    pub fn ensure_current_after_confirmation(&self) -> Result<()> {
+        self.review.ensure_current()
+    }
 }
 
 struct ExistingSignerTrustEvaluation {
@@ -74,11 +83,36 @@ where
     )?;
     Ok(build_mutation_write_trust_plan(
         options,
-        command.execution,
-        context.signer_trust,
-        &context.recipient_review,
-        context.warnings,
-        context.review,
+        command,
+        context,
+        allow_missing,
+    ))
+}
+
+pub fn reevaluate_mutation_write_plan_after_review<P>(
+    plan: MutationWriteTrustPlan<P>,
+) -> Result<MutationWriteTrustPlan<P>>
+where
+    P: WriteTrustPolicy,
+{
+    let command = KvCommandSession {
+        target: plan.review.target().clone(),
+        execution: plan.execution,
+        warnings: plan.command_warnings,
+    };
+    let context = resolve_mutation_write_review_context::<P>(
+        &plan.options,
+        &command,
+        plan.options.operation_options(),
+        plan.allow_missing,
+    )?;
+    plan.review.ensure_reviewed_state_matches(&context.review)?;
+    ensure_reevaluated_trust_is_accepted(&context)?;
+    Ok(build_mutation_write_trust_plan(
+        &plan.options,
+        command,
+        context,
+        plan.allow_missing,
     ))
 }
 
@@ -93,7 +127,7 @@ where
 {
     let recipient_review = resolve_mutation_recipient_review::<P>(options, command)?;
     let review =
-        build_mutation_review_snapshot(command.target.clone(), &recipient_review, allow_missing)?;
+        build_mutation_review_snapshot(options, command, &recipient_review, allow_missing)?;
     let existing_signer = evaluate_existing_signer_trust(
         review.existing_content(),
         recipient_review.trust_context(),
@@ -117,25 +151,50 @@ where
 
 fn build_mutation_write_trust_plan<P>(
     options: &CommonCommandOptions,
-    execution: ExecutionContext,
-    signer_trust: Option<SignerTrustOutcome>,
-    recipient_review: &WriteRecipientTrustPlan<P>,
-    warnings: Vec<String>,
-    review: MutationReviewSnapshot,
+    command: KvCommandSession,
+    context: MutationWriteReviewContext<P>,
+    allow_missing: bool,
 ) -> MutationWriteTrustPlan<P>
 where
     P: WriteTrustPolicy,
 {
     MutationWriteTrustPlan {
         options: options.clone(),
-        execution,
-        signer_trust,
-        recipient_trust: recipient_review.recipient_trust().clone(),
-        trust_context: recipient_review.trust_context().clone(),
-        warnings,
-        review,
+        execution: command.execution,
+        signer_trust: context.signer_trust,
+        recipient_trust: context.recipient_review.recipient_trust().clone(),
+        trust_context: context.recipient_review.trust_context().clone(),
+        warnings: context.warnings,
+        review: context.review,
+        command_warnings: command.warnings,
+        allow_missing,
         _policy: PhantomData,
     }
+}
+
+fn ensure_reevaluated_trust_is_accepted<P>(context: &MutationWriteReviewContext<P>) -> Result<()>
+where
+    P: WriteTrustPolicy,
+{
+    let signer_accepted = context
+        .signer_trust
+        .as_ref()
+        .is_none_or(|outcome| matches!(outcome, SignerTrustOutcome::Accepted));
+    let recipients_accepted = matches!(
+        context.recipient_review.recipient_trust(),
+        RecipientTrustOutcome::Accepted
+    );
+    if signer_accepted && recipients_accepted {
+        return Ok(());
+    }
+    Err(build_mutation_review_changed_error())
+}
+
+/// Build the error raised when trust state no longer matches what the user reviewed.
+pub(super) fn build_mutation_review_changed_error() -> Error {
+    Error::build_invalid_operation_error(
+        "KV mutation trust changed and must be reviewed again.".to_string(),
+    )
 }
 
 fn resolve_mutation_recipient_review<P>(
@@ -149,13 +208,20 @@ where
         options,
         &command.target.workspace_root.root_path,
         &command.execution.member_handle,
-        Some(command.execution.key_ctx.self_signature_public_key_x()),
-        Some(command.execution.key_ctx.local_key_identity()),
+        Some(
+            command
+                .execution
+                .key_ctx
+                .inner()
+                .self_signature_public_key_x(),
+        ),
+        Some(command.execution.key_ctx.inner().local_key_identity()),
     )
 }
 
 fn build_mutation_review_snapshot<P>(
-    target: crate::app::kv::session::KvFileTarget,
+    options: &CommonCommandOptions,
+    command: &KvCommandSession,
     recipient_review: &WriteRecipientTrustPlan<P>,
     allow_missing: bool,
 ) -> Result<MutationReviewSnapshot>
@@ -163,8 +229,11 @@ where
     P: WriteTrustPolicy,
 {
     MutationReviewSnapshot::build(
-        target,
+        command.target.clone(),
         recipient_review.workspace_members().clone(),
+        options,
+        &command.execution.member_handle,
+        recipient_review.trust_context(),
         allow_missing,
     )
 }

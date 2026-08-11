@@ -7,6 +7,7 @@ use tempfile::TempDir;
 
 use crate::test_utils::member_handle as test_member_handle;
 use crate::test_utils::setup_member_key_context;
+use kapsaro_core::api::key::KeyContext;
 use kapsaro_core::cli_api::app::context::execution::{resolve_write_execution, ExecutionContext};
 use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::context::ssh::{
@@ -22,7 +23,7 @@ pub(crate) fn build_test_execution_context(
 ) -> ExecutionContext {
     ExecutionContext {
         member_handle: test_member_handle(member_handle),
-        key_ctx: setup_member_key_context(home, member_handle, None),
+        key_ctx: KeyContext::from_inner(setup_member_key_context(home, member_handle, None)),
         workspace_root: workspace.map(build_test_workspace_root),
     }
 }

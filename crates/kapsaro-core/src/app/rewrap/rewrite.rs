@@ -28,7 +28,7 @@ pub fn build_rewritten_artifact(
 fn build_rewrap_request<'a>(ctx: &'a RewrapRewriteContext<'a>) -> RewrapRequest<'a> {
     RewrapRequest {
         member_handle: ctx.execution.member_handle.as_str(),
-        key_ctx: &ctx.execution.key_ctx,
+        key_ctx: ctx.execution.key_ctx.inner(),
         target_members: ctx.post_promotion_members.verified_members().to_vec(),
         rotate_key: ctx.request.rotate_key,
         clear_disclosure_history: ctx.request.clear_disclosure_history,

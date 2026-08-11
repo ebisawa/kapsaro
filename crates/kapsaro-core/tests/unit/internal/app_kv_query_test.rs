@@ -76,7 +76,7 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_kv_read_command::<GetPolicy>(
+        let command = resolve_kv_read_command_for_test::<GetPolicy>(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -138,7 +138,7 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_kv_read_command::<GetPolicy>(
+        let command = resolve_kv_read_command_for_test::<GetPolicy>(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -203,7 +203,7 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_kv_read_command::<ListPolicy>(
+        let command = resolve_kv_read_command_for_test::<ListPolicy>(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -211,9 +211,48 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
         )
         .unwrap();
 
-        let error = super::execute_kv_list_command(&command).unwrap_err();
+        let error = crate::api::kv::TrustedKvEncArtifact::from_authorized(
+            &command.verified,
+            &command.execution.key_ctx,
+            crate::api::kv::KvReadOperation::List,
+            options.operation_options(),
+        )
+        .err()
+        .expect("invalid key-possession MAC must fail authorization");
         assert!(error.to_string().contains("E_KEY_POSSESSION_MAC_INVALID"));
     });
+}
+
+fn resolve_kv_read_command_for_test<P>(
+    options: &crate::app::context::options::CommonCommandOptions,
+    member_handle: Option<String>,
+    file_name: Option<&str>,
+    ssh_ctx: Option<crate::app::context::ssh::SshSigningContextResolution>,
+) -> crate::Result<TestKvReadContext>
+where
+    P: crate::app::trust::ReadTrustPolicy,
+{
+    let path = super::resolve_kv_read_path(options, file_name)?;
+    let artifact = crate::api::kv::KvEncArtifact::load(path)?;
+    let verified = artifact.verify(options.operation_options())?;
+    let execution = crate::app::context::execution::resolve_read_execution(
+        options,
+        member_handle,
+        None,
+        ssh_ctx,
+    )?;
+    let trust = super::evaluate_kv_read_trust_plan::<P>(options, &execution, &verified)?;
+    Ok(TestKvReadContext {
+        execution,
+        verified,
+        warnings: trust.warnings,
+    })
+}
+
+struct TestKvReadContext {
+    execution: crate::app::context::execution::ExecutionContext,
+    verified: crate::api::kv::VerifiedKvEncArtifact,
+    warnings: Vec<String>,
 }
 
 fn strip_kv_signature(content: &str) -> String {

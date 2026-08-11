@@ -62,7 +62,7 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_decrypt_file_command(
+        let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -77,6 +77,36 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
                 && warning.contains("Reason: expired key use was explicitly allowed.")
         }));
     });
+}
+
+fn resolve_decrypt_file_command_for_test(
+    options: &crate::app::context::options::CommonCommandOptions,
+    member_handle: Option<String>,
+    kid: Option<&str>,
+    content: String,
+    source_name: &str,
+    ssh_ctx: Option<crate::app::context::ssh::SshSigningContextResolution>,
+) -> crate::Result<TestDecryptContext> {
+    let artifact = crate::api::file::FileEncArtifact::load_reader(content.as_bytes(), source_name)?;
+    let verified = artifact.verify(options.operation_options())?;
+    let execution = crate::app::context::execution::resolve_read_execution(
+        options,
+        member_handle,
+        kid,
+        ssh_ctx,
+    )?;
+    let trust = super::evaluate_decrypt_file_trust_plan(options, &execution, &verified)?;
+    Ok(TestDecryptContext {
+        execution,
+        trust_outcome: trust.signer_outcome,
+        warnings: trust.warnings,
+    })
+}
+
+struct TestDecryptContext {
+    execution: crate::app::context::execution::ExecutionContext,
+    trust_outcome: crate::app::trust::SignerTrustOutcome,
+    warnings: Vec<String>,
 }
 
 #[test]
@@ -114,7 +144,7 @@ fn decrypt_command_coalesces_local_key_pair_expiry_warning() {
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_decrypt_file_command(
+        let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -179,7 +209,7 @@ fn decrypt_command_preserves_historical_signer_expiry_warning_with_same_expires_
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_decrypt_file_command(
+        let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -242,7 +272,7 @@ fn decrypt_command_coalesces_selected_fallback_key_pair_expiry_warning() {
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_decrypt_file_command(
+        let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
@@ -306,7 +336,7 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
 
     with_temp_cwd(temp_dir.path(), || {
         let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
-        let command = super::resolve_decrypt_file_command(
+        let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,

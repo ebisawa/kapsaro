@@ -4,8 +4,12 @@
 //! Integration tests for `set` command
 
 use crate::cli::common::{
-    cmd, set_stdin_with_member_set_review, set_value_with_member_set_review, setup_workspace,
+    cmd, kapsaro_std_cmd, run_command_with_pty, set_stdin_with_member_set_review,
+    set_value_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
+use crate::test_utils::setup_trust_store_for_workspace;
+use kapsaro_test_support::crypto_context::setup_member_key_context;
+use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -60,6 +64,210 @@ fn test_set_debug_does_not_log_secret_value() {
         .stdout(predicate::str::contains("[CLI] command=set"))
         .stdout(predicate::str::contains("[TRUST] write gate:"))
         .stdout(predicate::str::contains("do-not-log-this-token").not());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_set_after_approving_recipient_key_in_same_command() {
+    let (home_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&home_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        home_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let ssh_identity = home_dir.path().join(".ssh").join("test_ed25519");
+
+    set_value_with_member_set_review(
+        &workspace_dir,
+        home_dir.path(),
+        &ssh_identity,
+        "EXISTING_KEY",
+        "existing-value",
+        Some(ALICE_MEMBER_HANDLE),
+        None,
+    );
+
+    let bob_member: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            workspace_dir
+                .join("members")
+                .join("active")
+                .join(format!("{BOB_MEMBER_HANDLE}.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let bob_kid = bob_member["protected"]["kid"].as_str().unwrap();
+    cmd()
+        .arg("trust")
+        .arg("keys")
+        .arg("remove")
+        .arg(bob_kid)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_identity)
+        .assert()
+        .success();
+
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("set")
+        .arg("NEW_KEY")
+        .arg("new-value")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_identity)
+        .env_remove("CI");
+    let result = run_command_with_pty(&mut command, "Approve this key?", b"y\r");
+    assert!(
+        result.status.success(),
+        "set should continue after approving Bob's recipient key:\n{}",
+        result.output
+    );
+
+    cmd()
+        .arg("get")
+        .arg("NEW_KEY")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_identity)
+        .assert()
+        .success()
+        .stdout(predicate::str::ends_with("new-value\n"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_set_existing_kv_approves_recipient_set_before_update() {
+    let (home_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&home_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        home_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let ssh_identity = home_dir.path().join(".ssh").join("test_ed25519");
+    set_value_with_member_set_review(
+        &workspace_dir,
+        home_dir.path(),
+        &ssh_identity,
+        "KEY",
+        "old",
+        Some(ALICE_MEMBER_HANDLE),
+        None,
+    );
+    remove_first_recipient_set(home_dir.path(), &ssh_identity);
+
+    let mut command = existing_set_command(&workspace_dir, home_dir.path(), &ssh_identity, "new");
+    let result = run_command_with_pty(&mut command, "Trust this member set", b"y\r");
+
+    assert!(result.status.success(), "set failed:\n{}", result.output);
+    assert!(result.output.contains(BOB_MEMBER_HANDLE));
+    assert!(!result.output.contains("unknown"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_set_existing_kv_rejects_recipient_set_without_update() {
+    let (home_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&home_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        home_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let ssh_identity = home_dir.path().join(".ssh").join("test_ed25519");
+    set_value_with_member_set_review(
+        &workspace_dir,
+        home_dir.path(),
+        &ssh_identity,
+        "KEY",
+        "old",
+        Some(ALICE_MEMBER_HANDLE),
+        None,
+    );
+    remove_first_recipient_set(home_dir.path(), &ssh_identity);
+    let path = workspace_dir.join("secrets").join("default.kvenc");
+    let before = fs::read_to_string(&path).unwrap();
+
+    let mut command = existing_set_command(&workspace_dir, home_dir.path(), &ssh_identity, "new");
+    let result = run_command_with_pty(&mut command, "Trust this member set", b"n\r");
+
+    assert!(!result.status.success());
+    assert!(result.output.contains("approval declined"));
+    assert_eq!(fs::read_to_string(path).unwrap(), before);
+}
+
+#[cfg(unix)]
+fn existing_set_command(
+    workspace: &std::path::Path,
+    home: &std::path::Path,
+    ssh_identity: &std::path::Path,
+    value: &str,
+) -> std::process::Command {
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("set")
+        .arg("KEY")
+        .arg(value)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace)
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity)
+        .env_remove("CI");
+    command
+}
+
+#[cfg(unix)]
+fn remove_first_recipient_set(home: &std::path::Path, ssh_identity: &std::path::Path) {
+    let output = cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("list")
+        .arg("--json")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--home")
+        .arg(home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let start = output.stdout.iter().position(|byte| *byte == b'{').unwrap();
+    let end = output
+        .stdout
+        .iter()
+        .rposition(|byte| *byte == b'}')
+        .unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout[start..=end]).unwrap();
+    let sid = value["recipient_sets"][0]["sid"].as_str().unwrap();
+    cmd()
+        .arg("trust")
+        .arg("recipients")
+        .arg("remove")
+        .arg(sid)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--home")
+        .arg(home)
+        .arg("--ssh-identity")
+        .arg(ssh_identity)
+        .assert()
+        .success();
 }
 
 #[test]

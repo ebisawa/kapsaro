@@ -71,8 +71,8 @@ where
         options,
         &workspace.root_path,
         &execution.member_handle,
-        Some(execution.key_ctx.self_signature_public_key_x()),
-        Some(execution.key_ctx.local_key_identity()),
+        Some(execution.key_ctx.inner().self_signature_public_key_x()),
+        Some(execution.key_ctx.inner().local_key_identity()),
     )
 }
 

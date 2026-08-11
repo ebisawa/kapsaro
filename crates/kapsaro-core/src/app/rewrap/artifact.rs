@@ -397,8 +397,8 @@ fn load_rewrap_signer_trust_context(
         &request.options,
         &plan.workspace_root,
         &execution.member_handle,
-        Some(execution.key_ctx.self_signature_public_key_x()),
-        Some(execution.key_ctx.local_key_identity()),
+        Some(execution.key_ctx.inner().self_signature_public_key_x()),
+        Some(execution.key_ctx.inner().local_key_identity()),
     )?
     .trust_ctx;
     trust_ctx.active_members_by_kid = plan.pre_promotion_trust.active_members_by_kid.clone();

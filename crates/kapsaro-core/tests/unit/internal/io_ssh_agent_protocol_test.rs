@@ -13,34 +13,84 @@ use crate::io::ssh::protocol::wire::encode_ssh_string;
 const TEST_AGENT_PUBLIC_KEY: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkB6jid+Y/7wt0S+9jTJGX1UytxIHOO3GXVPZPY1OYT test-agent";
 
+fn build_identities_packet(identity_count: u32) -> Vec<u8> {
+    let mut packet = vec![12];
+    packet.extend_from_slice(&identity_count.to_be_bytes());
+    packet
+}
+
+fn append_identity(packet: &mut Vec<u8>, key_blob: &[u8], comment: &[u8]) {
+    packet.extend_from_slice(&encode_ssh_string(key_blob));
+    packet.extend_from_slice(&encode_ssh_string(comment));
+}
+
 #[test]
 fn test_build_request_identities_packet_body() {
     assert_eq!(build_request_identities(), vec![11]);
 }
 
-/// The declared count is read before any identity is parsed, so an
-/// oversized value would otherwise reserve memory for identities the
-/// packet cannot contain.
 #[test]
-fn test_parse_identities_response_rejects_an_oversized_identity_count() {
-    let mut packet = vec![12];
-    packet.extend_from_slice(&u32::MAX.to_be_bytes());
+fn test_parse_identities_response_count_exceeds_empty_payload_capacity_error() {
+    let packet = build_identities_packet(u32::MAX);
 
     let error = parse_identities_response(&packet).unwrap_err();
 
     assert!(
-        error.to_string().contains("maximum"),
+        error.to_string().contains("payload capacity is 0"),
         "unexpected error: {error}",
     );
 }
 
 #[test]
+fn test_parse_identities_response_count_exceeds_single_identity_payload_capacity_error() {
+    let mut packet = build_identities_packet(2);
+    append_identity(&mut packet, &[], &[]);
+
+    let error = parse_identities_response(&packet).unwrap_err();
+
+    assert!(
+        error.to_string().contains("payload capacity is 1"),
+        "unexpected error: {error}",
+    );
+}
+
+#[test]
+fn test_parse_identities_response_incomplete_ssh_string_after_capacity_check_error() {
+    let mut packet = build_identities_packet(1);
+    packet.extend_from_slice(&5u32.to_be_bytes());
+    packet.extend_from_slice(&[1, 2, 3, 4]);
+
+    let error = parse_identities_response(&packet).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("Expected 9 bytes for SSH_STRING, got 8"),
+        "unexpected error: {error}",
+    );
+}
+
+#[test]
+fn test_parse_identities_response_with_257_ed25519_identities() {
+    let key_blob = decode_ssh_public_key_blob(TEST_AGENT_PUBLIC_KEY).unwrap();
+    let mut packet = build_identities_packet(257);
+    for _ in 0..257 {
+        append_identity(&mut packet, &key_blob, b"test-agent");
+    }
+
+    let identities = parse_identities_response(&packet).unwrap();
+
+    assert_eq!(identities.len(), 257);
+    assert!(identities
+        .iter()
+        .all(|identity| identity.key_blob() == key_blob.as_slice()));
+}
+
+#[test]
 fn test_parse_identities_response_with_key_blob_comment() {
     let key_blob = decode_ssh_public_key_blob(TEST_AGENT_PUBLIC_KEY).unwrap();
-    let mut packet = vec![12];
-    packet.extend_from_slice(&1u32.to_be_bytes());
-    packet.extend_from_slice(&encode_ssh_string(&key_blob));
-    packet.extend_from_slice(&encode_ssh_string(b"test-agent"));
+    let mut packet = build_identities_packet(1);
+    append_identity(&mut packet, &key_blob, b"test-agent");
 
     let identities = parse_identities_response(&packet).unwrap();
 

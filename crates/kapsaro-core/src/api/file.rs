@@ -3,10 +3,15 @@
 
 //! file-enc artifact facade.
 
+use sha2::{Digest, Sha256};
+use std::io::Read;
+
 use crate::api::artifact_text::{ArtifactLoadPolicy, ArtifactText};
 use crate::feature::context::crypto::build_signing_context;
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
+use crate::feature::envelope::key_possession::verify_file_key_possession;
+use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
 use crate::feature::verify::file::verify_file_content_for_operation;
 use crate::format::content::FileEncContent;
 use crate::model::file_enc::VerifiedFileEncDocument;
@@ -29,18 +34,35 @@ pub struct VerifiedFileEncArtifact {
     inner: VerifiedFileEncDocument,
 }
 
+/// Trust-authorized file-enc artifact bound to its decryption key.
+pub struct TrustedFileEncArtifact<'a> {
+    artifact: &'a VerifiedFileEncArtifact,
+    key_ctx: &'a KeyContext,
+}
+
+/// Authorized file read operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileReadOperation {
+    Decrypt,
+}
+
 const FILE_ENC_LOAD_POLICY: ArtifactLoadPolicy =
     ArtifactLoadPolicy::new(MAX_JSON_DOCUMENT_READ_SIZE, "file-enc artifact");
 
 impl FileEncArtifact {
     /// Parse file-enc JSON text after format detection.
     pub fn parse(content: impl Into<String>) -> Result<Self> {
-        ArtifactText::parse(content).map(Self::from_text)
+        ArtifactText::parse(content, FILE_ENC_LOAD_POLICY).map(Self::from_text)
     }
 
     /// Load file-enc JSON from a path.
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
         ArtifactText::load(path, FILE_ENC_LOAD_POLICY).map(Self::from_text)
+    }
+
+    /// Load file-enc JSON from a bounded UTF-8 reader.
+    pub fn load_reader(reader: impl Read, source_name: impl Into<String>) -> Result<Self> {
+        ArtifactText::load_reader(reader, source_name, FILE_ENC_LOAD_POLICY).map(Self::from_text)
     }
 
     /// Save the artifact text.
@@ -85,20 +107,48 @@ impl VerifiedFileEncArtifact {
         &self.inner
     }
 
+    pub(crate) fn binding_digest(&self) -> Result<[u8; 32]> {
+        let bytes = serde_json::to_vec(self.inner.document()).map_err(|error| {
+            crate::Error::build_parse_error_with_source(
+                "Failed to serialize verified file artifact binding".to_string(),
+                error,
+            )
+        })?;
+        Ok(Sha256::digest(bytes).into())
+    }
+
     /// Extract the recipient-set subject for trust policy evaluation.
     pub fn recipient_set_subject(&self) -> Result<RecipientSetSubject> {
         RecipientSetSubject::from_verified_file(self.inner())
     }
+}
 
-    /// Decrypt the verified artifact.
-    pub fn decrypt_bytes(
-        &self,
-        key_ctx: &KeyContext,
+impl<'a> TrustedFileEncArtifact<'a> {
+    pub(crate) fn from_authorized(
+        artifact: &'a VerifiedFileEncArtifact,
+        key_ctx: &'a KeyContext,
         options: OperationOptions,
-    ) -> Result<SecretBytes> {
-        key_ctx
-            .enforce_decryption_key_not_expired(&self.inner().document().protected.wrap, options)?;
-        decrypt_file_document_with_context(self.inner(), key_ctx.member_handle(), key_ctx.inner())
-            .map(|result| SecretBytes::from_zeroizing(result.value))
+    ) -> Result<Self> {
+        key_ctx.enforce_decryption_key_not_expired(
+            &artifact.inner().document().protected.wrap,
+            options,
+        )?;
+        let master_key = unwrap_master_key_for_file_with_context(
+            artifact.inner(),
+            key_ctx.member_handle(),
+            key_ctx.inner(),
+        )?;
+        verify_file_key_possession(artifact.inner(), master_key.value)?;
+        Ok(Self { artifact, key_ctx })
+    }
+
+    /// Decrypt the trust-authorized artifact.
+    pub fn decrypt_bytes(&self) -> Result<SecretBytes> {
+        decrypt_file_document_with_context(
+            self.artifact.inner(),
+            self.key_ctx.member_handle(),
+            self.key_ctx.inner(),
+        )
+        .map(|result| SecretBytes::from_zeroizing(result.value))
     }
 }

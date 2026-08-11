@@ -17,7 +17,10 @@ pub mod context {
     }
 
     pub mod execution {
-        pub use crate::app::context::execution::{resolve_write_execution, ExecutionContext};
+        pub use crate::app::context::execution::{
+            resolve_read_execution, resolve_read_trust_evaluator, resolve_write_execution,
+            ExecutionContext,
+        };
     }
 
     pub mod identity {
@@ -59,12 +62,13 @@ pub mod doctor {
     }
 }
 
+pub mod errors {
+    pub use crate::app::errors::build_kv_key_not_found_error;
+}
+
 pub mod file {
     pub mod decrypt {
-        pub use crate::app::file::decrypt::{
-            execute_decrypt_file_command, resolve_decrypt_file_command,
-            validate_decrypt_file_input, DecryptFileCommand,
-        };
+        pub use crate::app::file::decrypt::evaluate_decrypt_file_trust_plan;
     }
 
     pub mod encrypt {
@@ -133,7 +137,8 @@ pub mod kv {
         use crate::Result;
 
         pub use crate::app::kv::mutation::{
-            import_kv_command_with_recipient_set_confirmation, resolve_mutation_write_plan,
+            import_kv_command_with_recipient_set_confirmation,
+            reevaluate_mutation_write_plan_after_review, resolve_mutation_write_plan,
             unset_kv_command_with_recipient_set_confirmation, MutationWriteTrustPlan,
         };
 
@@ -162,16 +167,11 @@ pub mod kv {
     }
 
     pub mod query {
-        pub use crate::app::kv::query::{
-            execute_kv_list_command, execute_kv_read_command, resolve_kv_read_command,
-            KvReadCommand,
-        };
+        pub use crate::app::kv::query::{evaluate_kv_read_trust_plan, resolve_kv_read_path};
     }
 
     pub mod types {
-        pub use crate::app::kv::types::{
-            KvDisclosedEntry, KvImportResult, KvReadMode, KvReadResult, KvWriteOutcome,
-        };
+        pub use crate::app::kv::types::{KvImportResult, KvWriteOutcome};
     }
 }
 
@@ -244,15 +244,12 @@ pub mod rewrap {
     }
 }
 
-pub mod run {
-    pub use crate::app::run::execute_run_command;
-}
-
 pub mod trust {
     pub use crate::app::trust::{
+        evaluate_file_after_cli_review, evaluate_kv_after_cli_review,
         ArtifactRecipientTrustOutcome, CommandCapability, GetPolicy, ImportPolicy, ListPolicy,
-        RecipientTrustOutcome, RunPolicy, SetPolicy, SignerTrustOutcome, TrustApprovalCandidate,
-        UnsetPolicy, WriteTrustPolicy,
+        ReadArtifactTrustPlan, RecipientTrustOutcome, RunPolicy, SetPolicy, SignerTrustOutcome,
+        TrustApprovalCandidate, UnsetPolicy, WriteTrustPolicy,
     };
 
     pub mod enforcement {
@@ -286,7 +283,7 @@ pub mod trust {
 
     pub mod review {
         pub use crate::app::trust::review::{
-            execute_read_with_signer_trust, execute_write_with_recipient_trust,
+            execute_read_with_signer_trust, review_write_recipient_trust,
             ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext,
             WriteRecipientTrustReviewPlan,
         };

@@ -838,8 +838,9 @@ fn test_relative_list_child_names_reports_a_non_utf8_entry() {
     let error =
         with_locked_workspace_dir(temp_dir.path(), |dir| list_child_names_at(dir)).unwrap_err();
 
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
     assert!(
-        error.format_user_message().contains("non-UTF-8"),
+        error.format_user_message().contains("name is not UTF-8"),
         "{}",
         error.format_user_message()
     );

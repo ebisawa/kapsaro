@@ -5,6 +5,7 @@
 
 mod artifact_text;
 
+pub mod diagnostics;
 pub mod file;
 pub mod key;
 pub mod kv;

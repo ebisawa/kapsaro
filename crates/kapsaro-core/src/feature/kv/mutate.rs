@@ -19,12 +19,6 @@ use super::entry_codec::build_entry_tokens;
 use super::header::build_updated_header;
 use super::types::KvInputEntry;
 
-/// Result of kv set operation.
-pub struct KvSetResult {
-    pub encrypted: KvEncContent,
-    pub recipients: Vec<String>,
-}
-
 /// Context for kv write operations (set/unset).
 pub struct KvWriteContext<'a> {
     pub member_handle: &'a str,
@@ -54,7 +48,7 @@ pub fn set_kv_entry_with_recipients(
     entries: &[KvInputEntry],
     recipients: &KvRecipientSnapshot,
     ctx: &KvWriteContext<'_>,
-) -> Result<KvSetResult> {
+) -> Result<KvEncContent> {
     match existing_content {
         None => set_kv_new_file(entries, recipients, ctx),
         Some(content) => set_kv_existing_file(content, entries, recipients, ctx),
@@ -80,7 +74,7 @@ fn set_kv_new_file(
     entries: &[KvInputEntry],
     recipients: &KvRecipientSnapshot,
     ctx: &KvWriteContext<'_>,
-) -> Result<KvSetResult> {
+) -> Result<KvEncContent> {
     let codec = ctx.token_codec.unwrap_or(TokenCodec::JsonJcs);
     let kv_map: HashMap<String, &crate::support::secret::SecretString> = entries
         .iter()
@@ -94,10 +88,7 @@ fn set_kv_new_file(
         false,
         |_| Ok(()),
     )?;
-    Ok(KvSetResult {
-        encrypted: KvEncContent::new_unchecked(encrypted),
-        recipients: recipients.member_handles.clone(),
-    })
+    Ok(KvEncContent::new_unchecked(encrypted))
 }
 
 fn set_kv_existing_file(
@@ -105,7 +96,7 @@ fn set_kv_existing_file(
     entries: &[KvInputEntry],
     recipients: &KvRecipientSnapshot,
     ctx: &KvWriteContext<'_>,
-) -> Result<KvSetResult> {
+) -> Result<KvEncContent> {
     let encrypted =
         rewrite_existing_kv_content(content, recipients, ctx, |unsigned, session, master_key| {
             let entry_tokens = build_entry_tokens(
@@ -121,10 +112,7 @@ fn set_kv_existing_file(
             unsigned.set_entries(&new_entries);
             Ok(())
         })?;
-    Ok(KvSetResult {
-        encrypted: KvEncContent::new_unchecked(encrypted),
-        recipients: recipients.member_handles.clone(),
-    })
+    Ok(KvEncContent::new_unchecked(encrypted))
 }
 
 fn rewrite_existing_kv_content<F>(

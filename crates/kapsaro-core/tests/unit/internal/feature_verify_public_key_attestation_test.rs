@@ -7,13 +7,16 @@ use crate::app::context::ssh::{
 use crate::config::types::SshSigningMethod;
 use crate::crypto::sign::sign_detached_bytes;
 use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
-use crate::feature::verify::public_key::verify_public_key_with_attestation;
+use crate::feature::verify::public_key::verify_public_key_with_attestation_context;
 use crate::format::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::format::jcs;
-use crate::model::wire::algorithm;
 use crate::test_utils::generate_temp_ssh_keypair_in_dir;
 use serial_test::serial;
 use tempfile::TempDir;
+
+/// What these cases verify is a freshly generated key, not a key read back out
+/// of a keystore, so the failure message names the case rather than a file.
+const TEST_VERIFICATION_CONTEXT: &str = "public key verification test";
 
 fn generate_real_ssh_attested_public_key(
     temp_dir: &TempDir,
@@ -50,7 +53,7 @@ fn generated_public_key_verifies_with_attestation_repeatedly() {
     for _ in 0..5 {
         let temp_dir = TempDir::new().unwrap();
         let public_key = generate_real_ssh_attested_public_key(&temp_dir);
-        verify_public_key_with_attestation(&public_key).unwrap();
+        verify_public_key_with_attestation_context(&public_key, TEST_VERIFICATION_CONTEXT).unwrap();
     }
 }
 
@@ -71,7 +74,7 @@ fn public_key_with_resigned_but_mismatched_kid_fails_verification() {
     public_key.signature =
         encode_base64url_nopad(&sign_detached_bytes(&protected_jcs, &signing_key).unwrap());
 
-    let error = verify_public_key_with_attestation(&public_key)
+    let error = verify_public_key_with_attestation_context(&public_key, TEST_VERIFICATION_CONTEXT)
         .unwrap_err()
         .to_string();
     assert!(

@@ -3,13 +3,13 @@
 
 use std::collections::HashMap;
 
+use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::content::KvEncContent;
 use crate::format::schema::document::parse_kv_signature_token;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures,
@@ -24,7 +24,7 @@ fn build_kv_enc_content() -> String {
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
 
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
@@ -33,6 +33,8 @@ fn build_kv_enc_content() -> String {
             signer_pub: public_key,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -80,7 +82,7 @@ fn operational_kv_verify_preserves_expired_signer_recovery_warning() {
     let kid = key_ctx.kid().to_string();
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
@@ -89,6 +91,8 @@ fn operational_kv_verify_preserves_expired_signer_recovery_warning() {
             signer_pub: public_key,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
     let content = KvEncContent::new_unchecked(encrypted);

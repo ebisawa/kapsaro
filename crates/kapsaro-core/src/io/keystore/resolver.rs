@@ -8,7 +8,6 @@
 
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::paths::get_keystore_root_from_base;
-use crate::support::fs::ensure_dir_restricted;
 use crate::Result;
 use std::path::PathBuf;
 
@@ -31,23 +30,6 @@ impl KeystoreResolver {
                 get_keystore_root_from_base(&base)
             }
         };
-        Ok(keystore_root)
-    }
-
-    /// Resolve keystore root and ensure the directory exists.
-    ///
-    /// # Arguments
-    /// * `home` - Optional home directory override (if None, uses default from config)
-    ///
-    /// # Returns
-    /// Path to keystore root directory (created if it doesn't exist)
-    pub fn ensure_keystore_root(home: Option<&PathBuf>) -> Result<PathBuf> {
-        let keystore_root = Self::resolve(home)?;
-
-        if !keystore_root.exists() {
-            ensure_dir_restricted(&keystore_root)?;
-        }
-
         Ok(keystore_root)
     }
 }

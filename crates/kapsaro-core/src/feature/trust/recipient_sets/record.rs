@@ -136,10 +136,17 @@ impl ArtifactRecipientSet {
     }
 }
 
+/// Sort one recipient set's key ids and refuse a repeated one.
+///
+/// The kids come from stored documents -- an artifact's wrap, a keystore public
+/// key, an approval record -- and the set hash is computed over exactly these
+/// strings, so each must already be canonical. Normalizing a display form here
+/// would hash bytes no stored document carries and produce a set that matches
+/// none of them.
 pub fn normalize_recipient_kids(recipient_kids: Vec<String>) -> Result<Vec<String>> {
     let mut seen = BTreeSet::new();
     for kid in recipient_kids {
-        let kid = Kid::try_from(kid)?.into_string();
+        let kid = Kid::from_canonical(kid)?.into_string();
         if !seen.insert(kid.clone()) {
             return Err(Error::build_verification_error(
                 "E_RECIPIENT_SET_DUPLICATE_KID".to_string(),
@@ -224,17 +231,6 @@ pub fn find_recipient_handle_mismatch(
     })
 }
 
-pub fn is_signer_in_recipient_set(
-    signer_kid: &str,
-    current: &ArtifactRecipientSet,
-) -> Result<bool> {
-    let signer_kid = Kid::try_from(signer_kid.to_string())?.into_string();
-    Ok(current
-        .recipient_kids()
-        .iter()
-        .any(|kid| kid == &signer_kid))
-}
-
 pub fn is_self_only_recipient_set(
     current: &ArtifactRecipientSet,
     active_members_by_kid: &BTreeMap<String, PublicKey>,
@@ -276,7 +272,7 @@ fn build_recipient_handle_hints(wrap_items: &[WrapItem]) -> Result<Vec<Recipient
     let mut hints = Vec::with_capacity(wrap_items.len());
     for item in wrap_items {
         hints.push(RecipientHandleHint {
-            kid: Kid::try_from(item.kid.clone())?.into_string(),
+            kid: Kid::from_canonical(item.kid.clone())?.into_string(),
             recipient_handle: MemberHandle::try_from(item.recipient_handle.clone())?.into_string(),
         });
     }
@@ -290,7 +286,7 @@ fn validate_recipient_handle_hints(
 ) -> Result<()> {
     let mut seen = BTreeSet::new();
     for hint in hints {
-        let kid = Kid::try_from(hint.kid.clone())?.into_string();
+        let kid = Kid::from_canonical(hint.kid.clone())?.into_string();
         MemberHandle::try_from(hint.recipient_handle.clone())?;
         if !recipient_kids.contains(&kid) || !seen.insert(kid.clone()) {
             return Err(Error::build_invalid_argument_error(format!(

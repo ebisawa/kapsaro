@@ -44,7 +44,7 @@ impl GitHubVerificationApi for FakeGitHubApi {
                 Ok(keys) => Ok(keys.clone()),
                 Err(error) if error.kind() == ErrorKind::Verify => {
                     Err(Error::build_verification_error(
-                        error.verification_rule().expect("verification rule"),
+                        error.rule().expect("verification rule"),
                         error.format_user_message(),
                     ))
                 }
@@ -89,7 +89,7 @@ async fn test_verify_ssh_key_on_github_no_matching_key() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Verify);
-    assert_eq!(err.verification_rule(), Some("V-GITHUB-KEY-NEW"));
+    assert_eq!(err.rule(), Some("V-GITHUB-KEY-NEW"));
 }
 
 #[tokio::test]
@@ -101,7 +101,7 @@ async fn test_verify_ssh_key_on_github_no_keys_on_github() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Verify);
-    assert_eq!(err.verification_rule(), Some("V-GITHUB-KEY-NEW"));
+    assert_eq!(err.rule(), Some("V-GITHUB-KEY-NEW"));
 }
 
 #[tokio::test]
@@ -137,7 +137,7 @@ async fn test_verify_ssh_key_on_github_propagates_keys_api_error() {
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert_eq!(error.format_user_message(), "keys endpoint failed");
     assert_eq!(api.call_count(), 1);
 }

@@ -1334,7 +1334,7 @@ Auditors should treat structural validation -> `signer_pub` validation -> artifa
 | `STRICT_KEY_CHECKING` scope | `KAPSARO_STRICT_KEY_CHECKING=no` is limited to explicitly requested read paths and has no effect on write paths or key-possession proof verification | The approval cache may be unintentionally disabled in CI or daily operation |
 | Secret-output boundary | Do not expose MK, CEK, PrivateKey-protection IKM, raw SSH signatures, plaintext, `KAPSARO_PRIVATE_KEY`, or `KAPSARO_KEY_PASSWORD` through `--debug`, normal errors, tracing, panic output, or test snapshots | Diagnostic paths or test artifacts may leak secrets |
 | Constant-time comparison | Do not use early-exit comparison for MACs, AEAD tags, signatures, or secret-derived digests | Match position or matching prefix length may leak secret-derived information |
-| Local keystore permissions | Check permissions during key load and abort if `private.json` is readable by other users | Leakage of local private-key files may be missed |
+| Local state permissions | The permissions and ownership of local state, and write access on the path leading to `<KAPSARO_HOME>`, are inspected and any deviation is reported as a warning. The private key file is the one exception: a read is refused when another user can read it or another account owns it | Approval caches and configuration may leak to other users unnoticed |
 | Environment variable-based key loading | Used only in trusted CI contexts, never in fork PRs, untrusted PRs, `pull_request_target`, attacker-controlled checkouts, or untrusted runners; key loading never performs workspace lookup for the self PublicKey | Private keys may be misused in attacker-controlled checkouts or runners |
 
 ### 12.2 Input Validation and DoS Resistance
@@ -1419,9 +1419,21 @@ At first approval, confirm the key-statement information and the SSH key fingerp
 
 ### 13.5 Local Trusted Area
 
+Kapsaro assumes a local trusted area. Protection of the files it keeps on the machine is delegated to the access control the operating system provides, and that delegation includes the assumption that the user, and the administrator of a shared machine, have configured it correctly. Kapsaro therefore respects the permissions actually set on local state and operates within them.
+
 The signature on the local trust store is effective for integrity checks, corruption detection, and malformed-format detection. However, against an attacker who can write to or roll back the local trust store (`<KAPSARO_HOME>/trust/`), Kapsaro cannot completely prevent injection of a coherently replaced trust store. Kapsaro treats this as a residual risk outside the local trusted area assumption.
 
-Ensure proper OS-level access control on the local machine. Verify the local trust store permission chain from `<KAPSARO_HOME>/` through `trust/<owner_handle>.json`: directories should be owner-only (`0700` on Unix), and trust store files should be owner-only (`0600` on Unix).
+The recommended configuration keeps local state owner-only throughout: directories at `0700` and files at `0600` on Unix, with each entry owned by the current effective user. Kapsaro applies those modes to the entries it creates.
+
+So that a user can confirm the assumption holds, Kapsaro inspects the permissions and ownership of local state and reports any deviation as a warning. `kapsaro doctor` is the way to see all of it at once. This is an aid to that confirmation rather than an enforcement mechanism, so processing continues on the permissions the machine actually carries. A range that could not be inspected is never passed as clean.
+
+The private key file is the one exception. A read is refused when another user can read it or another account owns it. Every other document keeps its authenticity and confidentiality through signatures and encryption even once it leaks, while the private key is the ground those properties rest on: exposing it removes the ground. The refusal applies only where the permissions are actually wide; a permission that could not be inspected is still reported as a warning and processing continues.
+
+The path from `/` down to `<KAPSARO_HOME>` is inspected as well, for a directory another user can write, because such a directory lets them move the whole local state tree aside and put their own in its place. Ancestor ownership, by contrast, is not inspected: who owns a directory up there is the layout the machine's administrator chose, not a difference Kapsaro can close while it runs. `kapsaro doctor` reports ancestor ownership as information to inform that judgement, not as a finding. Local state entries themselves are inspected for ownership, and that asymmetry is deliberate.
+
+Symlinks along that path, `<KAPSARO_HOME>` itself included, are accepted, because pointing the local state at a directory on an encrypted volume is a legitimate layout. Instead of refusing to follow links, Kapsaro opens the directory once and performs the operation through the directory it holds open, so replacing a link or a component of the path afterwards does not redirect the operation elsewhere. When `<KAPSARO_HOME>` itself is a symlink, both chains leading to it are inspected: the directories holding the link, and the directories above what it resolves to.
+
+Artifacts shared through Git, meaning the public documents under `members/` and the encrypted files, are outside this constraint.
 
 ### 13.6 Post-Decryption Control and Distribution Policy
 
@@ -1567,7 +1579,8 @@ CI/CD Security (§9.3)
 
 Local Keystore and Local Trust Store (§9, §10.4, §13.5)
 
-- Verify the local keystore and local trust store permission chain: directories under `<KAPSARO_HOME>/` use `0700`, and files use `0600`
-- Do not operate with a `private.json` that is readable by other users. If detected, abort key loading and repair permissions
+- Verify the permissions and ownership under `<KAPSARO_HOME>`: directories use `0700`, files use `0600`, and each entry belongs to the current effective user
+- Verify that no directory on the path from `/` down to `<KAPSARO_HOME>` is writable by another user
+- Run `kapsaro doctor` and bring the reported paths to the recommended settings where the environment allows it, treating any path left as-is as local state whose protection rests on the surrounding access control
 - Ensure proper OS-level access control on the local machine
 - Run `member verify` periodically to re-validate workspace members

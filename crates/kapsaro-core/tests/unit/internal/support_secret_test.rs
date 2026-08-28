@@ -43,3 +43,29 @@ fn test_secret_array_debug_is_redacted() {
     assert!(debug.contains("REDACTED"), "got: {debug}");
     assert!(!debug.contains("7"), "got: {debug}");
 }
+
+#[test]
+fn test_secret_bytes_to_secret_string_invalid_utf8_omits_plaintext() {
+    let mut invalid = b"top-secret-value".to_vec();
+    invalid.push(0xff);
+    let bytes = SecretBytes::from_zeroizing(Zeroizing::new(invalid));
+
+    let error = SecretString::try_from(bytes).expect_err("invalid utf-8 must be rejected");
+
+    let debug = format!("{error:?}");
+    let display = format!("{error}");
+    assert!(!debug.contains("top-secret-value"), "got: {debug}");
+    assert!(!display.contains("top-secret-value"), "got: {display}");
+}
+
+#[test]
+fn test_zeroizing_vec_to_secret_string_invalid_utf8_omits_plaintext() {
+    let mut invalid = b"another-secret".to_vec();
+    invalid.push(0xff);
+
+    let error = SecretString::try_from(Zeroizing::new(invalid))
+        .expect_err("invalid utf-8 must be rejected");
+
+    let debug = format!("{error:?}");
+    assert!(!debug.contains("another-secret"), "got: {debug}");
+}

@@ -6,31 +6,27 @@
 pub(crate) mod review;
 pub(crate) mod view;
 
-use std::collections::BTreeSet;
-
 use crate::cli::common::output::json::trust::print_known_key_list as print_known_key_list_json;
 use crate::cli::common::output::json::trust::print_recipient_set_list as print_recipient_set_list_json;
-use crate::cli::common::output::print_empty_or_json_or_text_with_warnings;
-use crate::cli::common::output::text::print_warning;
+use crate::cli::common::output::print_empty_or_json_or_text;
 use crate::cli::common::output::text::trust::{
     print_empty_known_key_list, print_empty_recipient_set_list,
     print_known_key_list as print_known_key_list_text, print_no_entries_to_purge,
     print_recipient_set_list as print_recipient_set_list_text,
     print_recipient_set_purge_candidates, print_recipient_set_purge_summary,
-    print_trust_purge_candidates, print_trust_purge_summary,
+    print_trust_purge_candidates, print_trust_purge_resigned, print_trust_purge_summary,
 };
-use kapsaro_core::cli_api::app::trust::list::{RecipientSetListResult, TrustListResult};
-use kapsaro_core::cli_api::app::trust::management::{
-    PurgeKnownKeysResult, PurgeRecipientSetsResult,
+use kapsaro_core::cli_api::app::trust::list::{
+    RecipientSetListItem, RecipientSetListResult, TrustListItem, TrustListResult,
 };
+use kapsaro_core::cli_api::app::trust::management::{PurgeOutcome, ReviewedPurgeCandidates};
 use kapsaro_core::Result;
 
 pub(crate) fn print_trust_list(json_output: bool, result: &TrustListResult) -> Result<()> {
     let items = view::build_trust_list_views(&result.items);
-    print_empty_or_json_or_text_with_warnings(
+    print_empty_or_json_or_text(
         json_output,
         items.is_empty(),
-        &result.warnings,
         || print_known_key_list_json(&[]),
         print_empty_known_key_list,
         || print_known_key_list_json(&items),
@@ -43,10 +39,9 @@ pub(crate) fn print_recipient_set_list(
     result: &RecipientSetListResult,
 ) -> Result<()> {
     let items = view::build_recipient_set_list_views(&result.items);
-    print_empty_or_json_or_text_with_warnings(
+    print_empty_or_json_or_text(
         json_output,
         items.is_empty(),
-        &result.warnings,
         || print_recipient_set_list_json(&[]),
         print_empty_recipient_set_list,
         || print_recipient_set_list_json(&items),
@@ -54,11 +49,7 @@ pub(crate) fn print_recipient_set_list(
     )
 }
 
-pub(crate) fn print_trust_purge_preview(
-    result: &TrustListResult,
-    shown_warnings: &mut BTreeSet<String>,
-) -> bool {
-    print_unique_warnings(&result.warnings, shown_warnings);
+pub(crate) fn print_trust_purge_preview(result: &ReviewedPurgeCandidates<TrustListItem>) -> bool {
     if result.items.is_empty() {
         print_no_entries_to_purge();
         return false;
@@ -69,10 +60,8 @@ pub(crate) fn print_trust_purge_preview(
 }
 
 pub(crate) fn print_recipient_set_purge_preview(
-    result: &RecipientSetListResult,
-    shown_warnings: &mut BTreeSet<String>,
+    result: &ReviewedPurgeCandidates<RecipientSetListItem>,
 ) -> bool {
-    print_unique_warnings(&result.warnings, shown_warnings);
     if result.items.is_empty() {
         print_no_entries_to_purge();
         return false;
@@ -82,26 +71,25 @@ pub(crate) fn print_recipient_set_purge_preview(
     true
 }
 
-pub(crate) fn print_trust_purge_outcome(
-    result: &PurgeKnownKeysResult,
-    shown_warnings: &mut BTreeSet<String>,
-) {
-    print_unique_warnings(&result.warnings, shown_warnings);
-    print_trust_purge_summary(result.value);
+pub(crate) fn print_trust_purge_outcome(outcome: &PurgeOutcome) {
+    print_trust_purge_summary(outcome.removed);
+    report_purge_resigned(outcome);
 }
 
-pub(crate) fn print_recipient_set_purge_outcome(
-    result: &PurgeRecipientSetsResult,
-    shown_warnings: &mut BTreeSet<String>,
-) {
-    print_unique_warnings(&result.warnings, shown_warnings);
-    print_recipient_set_purge_summary(result.value);
+pub(crate) fn print_recipient_set_purge_outcome(outcome: &PurgeOutcome) {
+    print_recipient_set_purge_summary(outcome.removed);
+    report_purge_resigned(outcome);
 }
 
-fn print_unique_warnings(warnings: &[String], shown: &mut BTreeSet<String>) {
-    for warning in warnings {
-        if shown.insert(warning.clone()) {
-            print_warning(warning);
-        }
+/// Say that the purge moved the stored signature, which it does whenever the
+/// signing key has changed since the store was last written.
+///
+/// The signature moves whether or not anything was removed, so a purge that
+/// removed nothing still rewrites the file. Reporting only the count would let
+/// that write pass unmentioned.
+fn report_purge_resigned(outcome: &PurgeOutcome) {
+    if !outcome.resigned {
+        return;
     }
+    print_trust_purge_resigned();
 }

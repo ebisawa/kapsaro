@@ -3,12 +3,12 @@
 
 //! Unit tests for feature/rewrap/file module (file-enc document rewrap operations).
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::format::content::{EncContent, FileEncContent};
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
@@ -174,7 +174,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    crate::io::keystore::storage::save_key_pair_atomic(
+    crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,

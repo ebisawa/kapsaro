@@ -38,7 +38,7 @@ impl SignatureBackend for Ed25519DirectBackend {
         _ssh_pubkey: &str,
         message: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace);
+        let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace)?;
         let signature = self.signing_key.sign(&sshsig_signed_data);
         Ok(Ed25519RawSignature::new(signature.to_bytes()))
     }

@@ -5,22 +5,25 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::paths::require_workspace;
-use crate::app::trust::approval::{save_known_key_approvals, ApprovalSaveResult, ApprovedKnownKey};
-use crate::app::trust::store::load_or_build_trust_store_for_member;
+use crate::app::context::paths::build_workspace_not_found_error;
+use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
+use crate::app::trust::store::{load_execution_trust_store, trust_store_or_empty};
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
-use crate::io::verify_online::{VerificationStatus, VerifiedGithubIdentity};
-use crate::io::workspace::members::load_active_member_files;
+use crate::io::verify_online::{VerificationResult, VerificationStatus, VerifiedGithubIdentity};
+use crate::io::workspace::members::load_active_member_files_at;
+use crate::model::identity::MemberHandle;
+use crate::model::public_key::PublicKey;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
 use tracing::debug;
 
+const APPROVAL_SUBJECT: &str = "member verify --approve";
+
 #[derive(Debug)]
 pub struct MemberApprovalEvaluation {
     pub results: Vec<MemberApprovalResult>,
-    pub warnings: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -42,45 +45,51 @@ pub struct MemberApprovalResult {
 
 /// Evaluate members for approval (does NOT write trust store).
 ///
-/// `self_member_handle` must be the resolved identity of the current user
-/// (from ExecutionContext or equivalent). This ensures evaluate and
-/// commit operate on the same trust store.
+/// Every identity is taken from `execution`, so the store read here is the one
+/// `save_member_approvals` later commits to.
 pub fn evaluate_members_for_approval(
-    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
     member_handles: &[String],
-    self_member_handle: &str,
 ) -> Result<MemberApprovalEvaluation> {
-    let workspace = require_workspace(options, "member verify --approve")?;
+    let workspace = execution
+        .fixed_workspace_directory()
+        .map_err(|_| build_workspace_not_found_error(APPROVAL_SUBJECT))?;
 
     // Load active members once as the authoritative approval snapshot.
     // This same snapshot is used for both verification and kid resolution,
     // preventing TOCTOU where a file changes between verify and evaluate.
-    let active_members = load_active_member_files(&workspace.root_path)?;
+    // The read goes through the descriptor this command bound to, so a
+    // workspace repointed while it runs cannot substitute another tree.
+    let active_members = load_active_member_files_at(workspace)?;
 
-    let approval_targets =
-        select_approval_targets(&active_members, member_handles, self_member_handle)?;
+    let owner = execution.member_handle.clone();
+    let verification_results = verify_approval_targets(&active_members, member_handles, &owner)?;
+
+    let loaded = load_execution_trust_store(execution)?;
+    let known_keys = trust_store_or_empty(&owner, loaded)?.protected.known_keys;
+
+    let results = verification_results
+        .iter()
+        .map(|vr| evaluate_candidate_with_snapshot(vr, &active_members, &known_keys))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(MemberApprovalEvaluation { results })
+}
+
+/// Verify the public keys of the members this approval run targets.
+fn verify_approval_targets(
+    active_members: &[PublicKey],
+    member_handles: &[String],
+    owner: &MemberHandle,
+) -> Result<Vec<VerificationResult>> {
+    let approval_targets = select_approval_targets(active_members, member_handles, owner.as_str())?;
     debug!(
         "[MEMBER] approve: verify candidate public keys active_count={}, target_count={}",
         active_members.len(),
         approval_targets.len()
     );
-    let verification_results = block_on_result(super::verification::verify_member_public_keys(
+    block_on_result(super::verification::verify_member_public_keys(
         &approval_targets,
-    ))?;
-
-    let (_, loaded) = load_or_build_trust_store_for_member(options, self_member_handle)?;
-    let protected = loaded.protected;
-
-    let mut results = Vec::new();
-    for vr in &verification_results {
-        let result = evaluate_candidate_with_snapshot(vr, &active_members, &protected.known_keys)?;
-        results.push(result);
-    }
-
-    Ok(MemberApprovalEvaluation {
-        results,
-        warnings: loaded.warnings,
-    })
+    ))
 }
 
 /// Persist approved members to the trust store.
@@ -90,13 +99,10 @@ pub fn save_member_approvals(
     options: &CommonCommandOptions,
     results: &[MemberApprovalResult],
     execution: &ExecutionContext,
-) -> Result<ApprovalSaveResult> {
+) -> Result<usize> {
     let approvals = collect_persistable_approvals(results);
     if approvals.is_empty() {
-        return Ok(crate::app::trust::types::TrustMutationResult::new(
-            0,
-            Vec::new(),
-        ));
+        return Ok(0);
     }
 
     save_known_key_approvals(options, execution, &approvals)

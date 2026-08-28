@@ -18,7 +18,7 @@ mod join;
 mod key;
 mod kv;
 mod member;
-mod registration_guard;
+mod output_permissions;
 mod rewrap;
 mod run;
 mod trust;

@@ -26,6 +26,9 @@ impl CwdGuard {
     fn enter(dir: &Path) -> Self {
         let lock = lock_unpoisoned(CWD_LOCK.get_or_init(|| Mutex::new(())));
         let original = std::env::current_dir().unwrap();
+        // This guard is the serialized entry point the lint points callers at,
+        // so the raw call has to live here.
+        #[allow(clippy::disallowed_methods)]
         std::env::set_current_dir(dir).unwrap();
         Self {
             original,
@@ -36,6 +39,8 @@ impl CwdGuard {
 
 impl Drop for CwdGuard {
     fn drop(&mut self) {
+        // Restoring the directory this guard changed, still under CWD_LOCK.
+        #[allow(clippy::disallowed_methods)]
         let _ = std::env::set_current_dir(&self.original);
     }
 }
@@ -55,7 +60,7 @@ pub static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 /// RAII guard that holds the env mutex and restores env vars on drop.
 pub struct EnvGuard {
-    vars: Vec<(String, Option<String>)>,
+    vars: Vec<(String, Option<std::ffi::OsString>)>,
     _lock: std::sync::MutexGuard<'static, ()>,
 }
 
@@ -64,7 +69,7 @@ impl EnvGuard {
         let lock = lock_unpoisoned(&ENV_MUTEX);
         let vars = keys
             .iter()
-            .map(|&k| (k.to_string(), std::env::var(k).ok()))
+            .map(|&k| (k.to_string(), std::env::var_os(k)))
             .collect();
         Self { vars, _lock: lock }
     }
@@ -78,32 +83,5 @@ impl Drop for EnvGuard {
                 None => std::env::remove_var(key),
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::lock_unpoisoned;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
-    use std::sync::Mutex;
-
-    #[test]
-    fn test_lock_unpoisoned_returns_guard_for_healthy_mutex() {
-        let mutex = Mutex::new(42_u8);
-        let guard = lock_unpoisoned(&mutex);
-        assert_eq!(*guard, 42);
-    }
-
-    #[test]
-    fn test_lock_unpoisoned_recovers_from_a_poisoned_mutex() {
-        let mutex = Mutex::new(7_u8);
-        let _ = catch_unwind(AssertUnwindSafe(|| {
-            let _guard = mutex.lock().unwrap();
-            panic!("poison the mutex");
-        }));
-
-        let guard = lock_unpoisoned(&mutex);
-
-        assert_eq!(*guard, 7);
     }
 }

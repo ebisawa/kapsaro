@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Persists an exported public key document to disk.
+//! Serializes it to pretty JSON and writes atomically to avoid partial files.
+
 use crate::model::public_key::PublicKey;
 use crate::support::fs::atomic;
 use crate::{Error, Result};

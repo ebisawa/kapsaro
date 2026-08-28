@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Token encoding for KV entries.
+//! Encrypts each entry under its own derived key and renders it as one token.
+
 use std::collections::HashMap;
 
 use uuid::Uuid;
@@ -10,7 +13,6 @@ use crate::feature::envelope::entry::encrypt_entry;
 use crate::feature::envelope::key_schedule::KvKeySchedule;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::entry::KvEntryValue;
-use crate::model::kv_enc::line::KvEncLine;
 use crate::Result;
 
 use super::types::KvInputEntry;

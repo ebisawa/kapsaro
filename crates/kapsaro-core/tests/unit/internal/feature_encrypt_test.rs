@@ -5,14 +5,14 @@
 //!
 //! Tests for encryption use cases.
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::decrypt::file::decrypt_file_document;
+use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
-use crate::feature::kv::decrypt::decrypt_kv_document;
+use crate::feature::kv::decrypt::decrypt_kv_document_with_context;
 use crate::feature::verify::file::verify_file_document;
 use crate::feature::verify::kv::signature::verify_kv_document;
 use crate::format::kv::document::parse_kv_document;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::file_enc::FileEncDocument;
 use crate::model::wire::format::FILE_ENC_V1;
 use crate::test_utils::keygen_helpers::build_verified_recipient_key;
@@ -66,15 +66,10 @@ fn test_encrypt_file_document() {
     // Decrypt and verify
     let doc: FileEncDocument = serde_json::from_str(&encrypted_json).unwrap();
     let verified_doc = verify_file_document(&doc).unwrap();
-    let decrypted = decrypt_file_document(
-        &verified_doc,
-        ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    )
-    .unwrap();
+    let decrypted =
+        decrypt_file_document_with_context(&verified_doc, ALICE_MEMBER_HANDLE, &key_ctx).unwrap();
     // Compare Zeroizing<Vec<u8>> with &[u8] using as_ref()
-    assert_eq!(decrypted.as_ref() as &[u8], content);
+    assert_eq!(decrypted.value.as_ref() as &[u8], content);
 }
 
 #[test]
@@ -110,7 +105,7 @@ fn test_encrypt_file_document_recipient_count_mismatch() {
 
 #[test]
 fn test_encrypt_kv_document_via_inner_api() {
-    use crate::feature::kv::encrypt::encrypt_kv_document;
+    use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
     use crate::format::token::TokenCodec;
     use std::collections::HashMap;
 
@@ -138,8 +133,15 @@ fn test_encrypt_kv_document_via_inner_api() {
         signer_kid: kid,
         signer_pub: public_key,
     };
-    let encrypted =
-        encrypt_kv_document(&kv_map, &attested_members, &signing, TokenCodec::JsonJcs).unwrap();
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
+        &kv_map,
+        &attested_members,
+        &signing,
+        TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
+    )
+    .unwrap();
 
     // Verify structure
     assert!(encrypted.starts_with(":KAPSARO_KV 1\n"));
@@ -156,19 +158,19 @@ fn test_encrypt_kv_document_via_inner_api() {
 
     // Decrypt and verify
     let verified_doc = verify_kv_document(&doc).unwrap();
-    let decrypted_map_zeroizing = decrypt_kv_document(
-        &verified_doc,
-        ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    )
-    .unwrap();
-    use crate::format::kv::dotenv::build_dotenv_string;
+    let decrypted_map_zeroizing =
+        decrypt_kv_document_with_context(&verified_doc, ALICE_MEMBER_HANDLE, &key_ctx).unwrap();
     let decrypted_map: HashMap<String, String> = decrypted_map_zeroizing
+        .value
         .into_iter()
         .map(|(k, v)| (k, String::from_utf8(v.to_vec()).unwrap()))
         .collect();
-    let decrypted = build_dotenv_string(&decrypted_map);
-    assert!(decrypted.contains("DATABASE_URL=postgres://localhost"));
-    assert!(decrypted.contains("API_KEY=secret123"));
+    assert_eq!(
+        decrypted_map.get("DATABASE_URL").map(String::as_str),
+        Some("postgres://localhost")
+    );
+    assert_eq!(
+        decrypted_map.get("API_KEY").map(String::as_str),
+        Some("secret123")
+    );
 }

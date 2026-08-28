@@ -46,3 +46,47 @@ fn test_kid_serde_roundtrip() {
 
     assert_eq!(decoded, kid);
 }
+
+#[test]
+fn test_kid_deserialization_invalid_error() {
+    let error = serde_json::from_str::<Kid>(r#""../../outside""#).unwrap_err();
+
+    assert!(error.to_string().contains("kid"));
+}
+
+#[test]
+fn test_kid_deserialization_requires_canonical_form() {
+    let error =
+        serde_json::from_str::<Kid>(r#""rdkj-8yhm-ppjh-w7qc-3446-gpnx-hnrt-x61n""#).unwrap_err();
+
+    assert!(error.to_string().contains("canonical"), "{error}");
+}
+
+#[test]
+fn test_kid_deserialization_error_carries_its_rule_code() {
+    let error = serde_json::from_str::<Kid>(r#""INVALID""#).unwrap_err();
+
+    assert!(error.to_string().contains("E_KID_INVALID"), "{error}");
+}
+
+#[test]
+fn test_member_handle_deserialization_error_carries_its_rule_code() {
+    let error = serde_json::from_str::<MemberHandle>(r#""../outside""#).unwrap_err();
+
+    assert!(
+        error.to_string().contains("E_MEMBER_HANDLE_INVALID"),
+        "{error}"
+    );
+}
+
+#[test]
+fn test_kid_from_canonical_rejects_display_form_accepted_by_operator_input() {
+    let display = "rdkj-8yhm-ppjh-w7qc-3446-gpnx-hnrt-x61n";
+
+    let normalized = Kid::try_from(display).unwrap();
+    let stored = Kid::from_canonical(display);
+
+    assert_eq!(normalized.as_str(), "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N");
+    assert!(stored.is_err());
+    assert!(Kid::from_canonical(normalized.as_str()).is_ok());
+}

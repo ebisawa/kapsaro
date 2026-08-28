@@ -5,6 +5,10 @@
 //!
 //! This module provides type-safe wrappers for SSH key paths, distinguishing
 //! between private keys and public keys at the type level.
+//!
+//! Some accessors below exist only for the first-party test harness, which
+//! reaches them through the `cli-test-support` allow-list. Without that feature
+//! the crate has no caller for them, so dead_code is allowed in that build only.
 
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -76,6 +80,7 @@ impl SshKeyDescriptor {
     /// # Errors
     ///
     /// Returns `Error::InvalidOperation` if this descriptor represents a public key.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn require_private_key(&self) -> Result<&SshPrivateKeyPath> {
         match self {
             Self::PrivateKey(pk) => Ok(pk),
@@ -107,6 +112,7 @@ impl SshKeyDescriptor {
     /// Convert to PathBuf
     ///
     /// Returns the path as PathBuf regardless of whether this is a private or public key.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn to_path_buf(&self) -> PathBuf {
         self.as_path().to_path_buf()
     }
@@ -116,6 +122,7 @@ impl SshKeyDescriptor {
     /// # Errors
     ///
     /// Returns `Error::InvalidOperation` if this descriptor represents a private key.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn require_public_key(&self) -> Result<&SshPublicKeyPath> {
         match self {
             Self::PublicKey(pk) => Ok(pk),
@@ -133,6 +140,7 @@ impl SshKeyDescriptor {
     }
 
     /// Check if this descriptor represents a private key file
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn is_private_key_file(&self) -> bool {
         matches!(self, Self::PrivateKey(_))
     }
@@ -148,11 +156,6 @@ impl SshPrivateKeyPath {
     pub fn as_path(&self) -> &Path {
         self.path.as_path()
     }
-
-    /// Convert to PathBuf
-    pub fn into_path_buf(self) -> PathBuf {
-        self.path
-    }
 }
 
 impl SshPublicKeyPath {
@@ -164,10 +167,5 @@ impl SshPublicKeyPath {
     /// Get the path as a reference
     pub fn as_path(&self) -> &Path {
         self.path.as_path()
-    }
-
-    /// Convert to PathBuf
-    pub fn into_path_buf(self) -> PathBuf {
-        self.path
     }
 }

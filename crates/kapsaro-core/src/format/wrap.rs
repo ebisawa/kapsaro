@@ -43,9 +43,15 @@ fn validate_unique_recipient_handle<'a>(
     ))
 }
 
+/// Check one stored wrap entry against what the wire format allows.
+///
+/// The key id is read as the canonical form a stored document carries: the kid
+/// names the recipient key the entry is bound to and is covered by the
+/// signature, so accepting a display form would let the entry be read under a
+/// name its own bytes never carried.
 fn validate_wrap_item(item: &WrapItem) -> Result<()> {
     let _ = MemberHandle::try_from(item.recipient_handle.clone())?;
-    let _ = Kid::try_from(item.kid.clone())?;
+    let _ = Kid::from_canonical(item.kid.clone())?;
     validate_wrap_algorithm(&item.alg)?;
     let _ = decode_base64url_nopad_array::<32>(&item.enc, "enc")?;
     let _ = decode_base64url_nopad_array::<48>(&item.ct, "ct")?;
@@ -63,3 +69,7 @@ fn validate_wrap_algorithm(value: &str) -> Result<()> {
         algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305
     )))
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/format_wrap_test.rs"]
+mod format_wrap_test;

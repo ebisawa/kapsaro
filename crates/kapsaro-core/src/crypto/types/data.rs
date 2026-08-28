@@ -8,19 +8,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 /// Plaintext data
 ///
-/// ```compile_fail
-/// use kapsaro_core::crypto::types::data::Plaintext;
-///
-/// let plaintext = Plaintext::from(b"secret" as &[u8]);
-/// let _copy = plaintext.clone();
-/// ```
-///
-/// ```compile_fail
-/// use kapsaro_core::crypto::types::data::Plaintext;
-///
-/// let plaintext = Plaintext::from(b"secret" as &[u8]);
-/// let _bytes = plaintext.into_bytes();
-/// ```
+/// Neither copyable nor convertible into a plain `Vec<u8>`: the bytes leave
+/// only through `take_zeroizing_vec`, so every copy that exists is zeroized.
 pub struct Plaintext(Vec<u8>);
 
 impl Zeroize for Plaintext {
@@ -44,11 +33,6 @@ impl Plaintext {
     /// Get the plaintext bytes
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
-    }
-
-    /// Convert to a zeroizing vector of bytes
-    pub fn to_zeroizing_vec(&self) -> Zeroizing<Vec<u8>> {
-        Zeroizing::new(self.0.clone())
     }
 
     /// Move plaintext bytes into a zeroizing vector without cloning.
@@ -98,16 +82,6 @@ impl Ciphertext {
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
-
-    /// Convert into bytes
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.0
-    }
-
-    /// Convert to a vector of bytes (cloning)
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.clone()
-    }
 }
 
 impl From<Vec<u8>> for Ciphertext {
@@ -129,11 +103,6 @@ impl Aad {
     /// Get the AAD bytes
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
-    }
-
-    /// Create an empty AAD
-    pub fn empty() -> Self {
-        Self(Vec::new())
     }
 }
 
@@ -190,14 +159,9 @@ impl From<&str> for Info {
 
 /// Input Keying Material (IKM) for HKDF
 ///
-/// This is wrapped in Zeroizing for secure memory clearing.
-///
-/// ```compile_fail
-/// use kapsaro_core::crypto::types::data::Ikm;
-///
-/// let ikm = Ikm::from(b"secret" as &[u8]);
-/// let _copy = ikm.clone();
-/// ```
+/// This is wrapped in Zeroizing for secure memory clearing, and is not
+/// copyable, so every copy of the material is zeroized when it goes out of
+/// scope.
 pub struct Ikm(Zeroizing<Vec<u8>>);
 
 impl Ikm {
@@ -237,11 +201,6 @@ impl Enc {
     /// Get the Enc bytes
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
-    }
-
-    /// Convert into bytes
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.0
     }
 }
 

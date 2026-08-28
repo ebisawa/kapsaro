@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Decides which recipients of a document still need trust approval.
+//! Skips self keys and keys already known exactly, collecting the rest for approval.
+
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::Result;
 

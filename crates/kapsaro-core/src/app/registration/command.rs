@@ -1,21 +1,30 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Registration use case entry points.
+//! Decides whether a workspace and member key have to be created, then does it.
+
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::ssh::SshSigningContextResolution;
-use crate::app::key::generate::{generate_and_save_key, AppKeyGenerationOptions};
+use crate::app::key::generate::{
+    generate_and_save_key_with_access, AppKeyGenerationOptions, KeyGenerationHome,
+};
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
 use crate::app::verification::OnlineVerificationStatus;
+use crate::io::keystore::access::KeystoreAccess;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::GithubAccount;
 use crate::Result;
 
 use super::types::{
     ActiveMembershipState, MemberKeySetupResult, MemberSetupResult, RegistrationCommand,
-    RegistrationKeyPlan, RegistrationMode, RegistrationOutcome, RegistrationResult,
+    RegistrationKeyPlan, RegistrationKeyPlanResolution, RegistrationMode, RegistrationOutcome,
+    RegistrationResult,
 };
 use super::workspace::{
-    resolve_active_membership_state, resolve_registration_paths, save_registration_member,
+    resolve_active_membership_state, resolve_registration_paths,
+    save_registration_member_with_access,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,21 +42,21 @@ pub fn resolve_registration_command(
     mode: RegistrationMode,
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<RegistrationCommand> {
-    let setup =
-        ensure_registration_member_setup(common, member_handle, github_user, key_plan, ssh_ctx)?;
-    resolve_registration_context(common, mode, setup)
+    let (setup, keystore) =
+        ensure_registration_member_setup(member_handle, github_user, key_plan, ssh_ctx)?;
+    resolve_registration_context(common, mode, setup, keystore)
 }
 
 pub fn execute_registration_command(
     command: &RegistrationCommand,
     overwrite: bool,
 ) -> Result<RegistrationOutcome> {
-    let result = save_registration_member(
+    let result = save_registration_member_with_access(
         &command.workspace_path,
         &command.setup.member_handle,
         command.setup.kid(),
         overwrite,
-        &command.keystore_root,
+        &command.keystore,
         command.target,
     )?;
 
@@ -120,19 +129,24 @@ fn build_registration_outcome(
 }
 
 fn ensure_registration_member_setup(
-    common: &CommonCommandOptions,
     member_handle: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     ssh_ctx: Option<SshSigningContextResolution>,
-) -> Result<MemberSetupResult> {
-    match key_plan {
-        RegistrationKeyPlan::UseExisting { kid, expires_at } => {
-            Ok(build_existing_member_setup(member_handle, kid, expires_at))
-        }
-        RegistrationKeyPlan::GenerateNew => resolve_generated_member_setup(
-            common,
-            &member_handle,
+) -> Result<(MemberSetupResult, KeystoreAccess)> {
+    let member_handle = MemberHandle::try_from(member_handle)?;
+    match key_plan.into_resolution() {
+        RegistrationKeyPlanResolution::UseExisting {
+            kid,
+            expires_at,
+            keystore,
+        } => Ok((
+            build_existing_member_setup(member_handle, kid, expires_at),
+            keystore,
+        )),
+        RegistrationKeyPlanResolution::GenerateNew { home } => resolve_generated_member_setup(
+            home,
+            member_handle,
             github_user,
             require_generation_ssh_context(ssh_ctx)?,
         ),
@@ -140,28 +154,31 @@ fn ensure_registration_member_setup(
 }
 
 fn resolve_generated_member_setup(
-    common: &CommonCommandOptions,
-    member_handle: &str,
+    home: KeyGenerationHome,
+    member_handle: MemberHandle,
     github_user: Option<String>,
     ssh_ctx: SshSigningContextResolution,
-) -> Result<MemberSetupResult> {
+) -> Result<(MemberSetupResult, KeystoreAccess)> {
     let github_account = resolve_github_account(github_user)?;
     let github_verification =
         resolve_github_verification(&ssh_ctx.public_key, github_account.as_ref())?;
-    let key_result = generate_member_key_result(
-        common,
-        member_handle,
+    let (key_result, keystore) = generate_member_key_result(
+        home,
+        member_handle.as_str(),
         github_account,
         github_verification,
         ssh_ctx,
     )?;
 
-    Ok(build_generated_member_setup(member_handle, key_result))
+    Ok((
+        build_generated_member_setup(member_handle, key_result),
+        keystore,
+    ))
 }
 
 fn build_existing_member_setup(
-    member_handle: String,
-    kid: String,
+    member_handle: MemberHandle,
+    kid: Kid,
     expires_at: String,
 ) -> MemberSetupResult {
     MemberSetupResult {
@@ -174,6 +191,7 @@ fn resolve_registration_context(
     common: &CommonCommandOptions,
     mode: RegistrationMode,
     setup: MemberSetupResult,
+    keystore: KeystoreAccess,
 ) -> Result<RegistrationCommand> {
     let paths = resolve_registration_paths(common, mode, &setup.member_handle)?;
     let active_membership = resolve_active_membership_state(
@@ -185,12 +203,12 @@ fn resolve_registration_context(
     Ok(RegistrationCommand {
         mode,
         workspace_path: paths.workspace_path,
-        keystore_root: paths.keystore_root,
         setup,
         target: paths.target,
         is_new_workspace: paths.is_new_workspace,
         conflict_exists: paths.conflict_exists,
         active_membership,
+        keystore,
     })
 }
 
@@ -205,16 +223,16 @@ fn resolve_github_verification(
 }
 
 fn generate_member_key_result(
-    common: &CommonCommandOptions,
+    home: KeyGenerationHome,
     member_handle: &str,
     github_account: Option<GithubAccount>,
     github_verification: OnlineVerificationStatus,
     ssh_ctx: SshSigningContextResolution,
-) -> Result<MemberKeySetupResult> {
+) -> Result<(MemberKeySetupResult, KeystoreAccess)> {
     let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
-    let result = generate_and_save_key(AppKeyGenerationOptions {
+    let saved = generate_and_save_key_with_access(AppKeyGenerationOptions {
         member_handle: member_handle.to_string(),
-        home: common.home.clone(),
+        home,
         created_at,
         expires_at,
         no_activate: false,
@@ -222,27 +240,28 @@ fn generate_member_key_result(
         github_verification,
         ssh_ctx,
     })?;
-    Ok(MemberKeySetupResult {
-        kid: result.kid,
+    let key_result = MemberKeySetupResult {
+        kid: Kid::try_from(saved.result.kid)?,
         created: true,
-        expires_at: result.expires_at,
-        ssh_fingerprint: Some(result.ssh_fingerprint),
-        ssh_determinism: Some(result.ssh_determinism),
-        github_verification: result.github_verification,
-    })
+        expires_at: saved.result.expires_at,
+        ssh_fingerprint: Some(saved.result.ssh_fingerprint),
+        ssh_determinism: Some(saved.result.ssh_determinism),
+        github_verification: saved.result.github_verification,
+    };
+    Ok((key_result, saved.keystore))
 }
 
 fn build_generated_member_setup(
-    member_handle: &str,
+    member_handle: MemberHandle,
     key_result: MemberKeySetupResult,
 ) -> MemberSetupResult {
     MemberSetupResult {
-        member_handle: member_handle.to_string(),
+        member_handle,
         key_result,
     }
 }
 
-fn build_existing_member_key_result(kid: String, expires_at: String) -> MemberKeySetupResult {
+fn build_existing_member_key_result(kid: Kid, expires_at: String) -> MemberKeySetupResult {
     MemberKeySetupResult {
         kid,
         created: false,

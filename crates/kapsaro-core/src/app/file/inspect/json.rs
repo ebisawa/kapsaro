@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Builds serde DTOs for inspect command JSON output.
-// Keeps wire-facing JSON shape separate from inspect orchestration.
+//! Builds serde DTOs for inspect command JSON output.
+//! Keeps wire-facing JSON shape separate from inspect orchestration.
 
 use crate::app::file::inspect::OnlineVerificationDisplay;
 use crate::feature::verify::SignatureVerificationReport;

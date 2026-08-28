@@ -85,7 +85,7 @@ impl SshKeygen for MockSshKeygen {
 
     fn sign(
         &self,
-        _key_path: &std::path::Path,
+        _key: &crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor,
         _namespace: &str,
         _ssh_pubkey: &str,
         _data: &[u8],
@@ -147,7 +147,7 @@ fn test_load_ssh_public_key_file_not_found() {
 
 #[cfg(unix)]
 #[test]
-fn test_load_ssh_public_key_file_rejects_symlink() {
+fn test_load_ssh_public_key_file_reads_symlink() {
     use std::os::unix::fs::symlink;
 
     let temp_dir = TempDir::new().unwrap();
@@ -156,10 +156,9 @@ fn test_load_ssh_public_key_file_rejects_symlink() {
     std::fs::write(&real_path, VALID_ED25519_KEY).unwrap();
     symlink(&real_path, &link_path).unwrap();
 
-    let result = load_ssh_public_key_file(&link_path);
-    assert!(result.is_err());
-    let message = result.unwrap_err().to_string();
-    assert!(message.contains("symlink"), "unexpected error: {message}");
+    let loaded = load_ssh_public_key_file(&link_path).unwrap();
+
+    assert_eq!(loaded, VALID_ED25519_KEY);
 }
 
 #[test]

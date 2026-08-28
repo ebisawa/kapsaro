@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Raw Ed25519 signature bytes produced by an SSH agent, used as key derivation input.
+//! Wraps the 64 bytes in zeroizing storage and compares them in constant time.
+
 use crate::io::ssh::SshError;
 use crate::Result;
 use zeroize::Zeroizing;

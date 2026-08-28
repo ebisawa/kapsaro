@@ -41,9 +41,10 @@ fn test_verified_new() {
         },
     };
 
-    let proof = SignatureVerificationProof::new(
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
         "alice".to_string(),
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
     );
@@ -87,9 +88,10 @@ fn test_verified_into_inner() {
         },
     };
 
-    let proof = SignatureVerificationProof::new(
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
         "alice".to_string(),
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+        build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
     );
@@ -99,33 +101,6 @@ fn test_verified_into_inner() {
 
     assert_eq!(document, file_enc_doc);
     assert_eq!(extracted_proof, proof);
-}
-
-#[test]
-fn test_verified_binding_claims_new() {
-    use crate::model::public_key::VerifiedBindingClaims;
-    use crate::model::public_key::{BindingClaims, GithubAccount};
-    use crate::model::verification::BindingVerificationProof;
-
-    let claims = BindingClaims {
-        github_account: Some(GithubAccount {
-            id: 12345,
-            login: "alice".to_string(),
-        }),
-    };
-    let proof = BindingVerificationProof::new(
-        "github".to_string(),
-        Some("SHA256:abc123".to_string()),
-        Some(42),
-    );
-
-    let verified = VerifiedBindingClaims::new(claims.clone(), proof.clone());
-
-    assert_eq!(verified.claims(), &claims);
-    assert_eq!(verified.proof(), &proof);
-    assert_eq!(verified.claims().github_account.as_ref().unwrap().id, 12345);
-    assert_eq!(verified.proof().method, "github");
-    assert_eq!(verified.proof().matched_key_id, Some(42));
 }
 
 #[test]

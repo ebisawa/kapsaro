@@ -4,7 +4,7 @@
 //! Unit tests for JSON Schema validator
 
 use crate::format::codec::base64_public::encode_base64url_nopad;
-use crate::format::schema::validator::{load_embedded_validator, SchemaTarget, Validator};
+use crate::format::schema::validator::{load_embedded_validator, SchemaTarget};
 use crate::model::wire::algorithm;
 use crate::test_utils::keygen_helpers::build_dummy_public_key;
 
@@ -18,54 +18,6 @@ const B64URL_VARIABLE_MOD3: &str = "AAA";
 const B64URL_VARIABLE_MOD1: &str = "A";
 const B64URL_VARIABLE_NON_CANONICAL_MOD2: &str = "AB";
 const B64URL_VARIABLE_NON_CANONICAL_MOD3: &str = "AAB";
-
-#[test]
-fn test_target_schemas_use_stable_metadata() {
-    for (target, expected_id, expected_title) in [
-        (
-            SchemaTarget::PublicKey,
-            "kapsaro.public.key.schema.json",
-            "kapsaro public key schema",
-        ),
-        (
-            SchemaTarget::PrivateKey,
-            "kapsaro.private.key.schema.json",
-            "kapsaro private key schema",
-        ),
-        (
-            SchemaTarget::FileEnc,
-            "kapsaro.file.enc.schema.json",
-            "kapsaro file enc schema",
-        ),
-        (
-            SchemaTarget::ArtifactSignature,
-            "kapsaro.artifact.signature.schema.json",
-            "kapsaro artifact signature schema",
-        ),
-        (
-            SchemaTarget::LocalTrust,
-            "kapsaro.local.trust.schema.json",
-            "kapsaro local trust schema",
-        ),
-    ] {
-        let schema = Validator::load_schema_from_paths(target.filename())
-            .expect("target schema should be loadable");
-
-        assert_stable_schema_metadata(&schema, expected_id, expected_title);
-    }
-}
-
-#[test]
-fn test_kv_schema_uses_stable_metadata() {
-    let schema = Validator::load_schema_from_paths(SchemaTarget::KvHead.filename())
-        .expect("KV schema should be loadable");
-
-    assert_stable_schema_metadata(
-        &schema,
-        "kapsaro.kv.enc.schema.json",
-        "kapsaro kv enc schema",
-    );
-}
 
 #[test]
 fn test_embedded_target_validators_compile() {
@@ -83,41 +35,9 @@ fn test_embedded_target_validators_compile() {
     }
 }
 
-fn assert_stable_schema_metadata(
-    schema: &serde_json::Value,
-    expected_id: &str,
-    expected_title: &str,
-) {
-    let id = schema.get("$id").and_then(serde_json::Value::as_str);
-    let title = schema.get("title").and_then(serde_json::Value::as_str);
-
-    assert_eq!(id, Some(expected_id));
-    assert_eq!(title, Some(expected_title));
-    for value in [expected_id, expected_title] {
-        assert!(!contains_schema_version_or_revision(value));
-    }
-}
-
-fn contains_schema_version_or_revision(value: &str) -> bool {
-    value
-        .split(|ch: char| !ch.is_ascii_alphanumeric())
-        .any(is_version_or_revision_token)
-}
-
-fn is_version_or_revision_token(token: &str) -> bool {
-    token == "rev" || is_version_token(token)
-}
-
-fn is_version_token(token: &str) -> bool {
-    let Some(digits) = token.strip_prefix('v') else {
-        return false;
-    };
-    !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit())
-}
-
 #[test]
 fn test_validate_public_key_accepts_valid_github_login() {
-    let validator = Validator::for_target(SchemaTarget::PublicKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PublicKey).unwrap();
     let public_key = build_public_key_with_github_login("alice-gh");
 
     let result = validator.validate_public_key(&public_key);
@@ -131,7 +51,7 @@ fn test_validate_public_key_accepts_valid_github_login() {
 
 #[test]
 fn test_validate_public_key_rejects_invalid_github_login() {
-    let validator = Validator::for_target(SchemaTarget::PublicKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PublicKey).unwrap();
 
     for login in ["../alice", "alice/keys", "alice?tab=keys", "alice#keys"] {
         let public_key = build_public_key_with_github_login(login);
@@ -142,7 +62,7 @@ fn test_validate_public_key_rejects_invalid_github_login() {
 
 #[test]
 fn test_validate_public_key_rejects_wrong_crypto_field_lengths() {
-    let validator = Validator::for_target(SchemaTarget::PublicKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PublicKey).unwrap();
 
     for (field, path, value) in [
         (
@@ -173,7 +93,7 @@ fn test_validate_public_key_rejects_wrong_crypto_field_lengths() {
 
 #[test]
 fn test_validate_public_key_rejects_non_canonical_fixed_length_tail_bits() {
-    let validator = Validator::for_target(SchemaTarget::PublicKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PublicKey).unwrap();
     let mut public_key = build_public_key_with_github_login("alice-gh");
     set_json_path(
         &mut public_key,
@@ -188,7 +108,7 @@ fn test_validate_public_key_rejects_non_canonical_fixed_length_tail_bits() {
 
 #[test]
 fn test_schema_error_message_describes_invalid_field_without_raw_value() {
-    let validator = Validator::for_target(SchemaTarget::PublicKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PublicKey).unwrap();
     let invalid_login = "alice#keys";
     let public_key = build_public_key_with_github_login(invalid_login);
 
@@ -250,7 +170,7 @@ fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
 
 #[test]
 fn test_validate_private_key_basic() {
-    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
     let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     // PrivateKey external format includes protected and encrypted sections.
@@ -283,9 +203,11 @@ fn test_validate_private_key_basic() {
     );
 }
 
+/// Pins `PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256` to the enum entry in the
+/// PrivateKey JSON Schema, the one spelling the constant cannot replace.
 #[test]
 fn test_validate_private_key_argon2id_without_params() {
-    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
     let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
     let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
     let valid_private_key = serde_json::json!({
@@ -318,7 +240,7 @@ fn test_validate_private_key_argon2id_without_params() {
 
 #[test]
 fn test_validate_private_key_rejects_wrong_fixed_lengths() {
-    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
 
     for (field, path, value) in [
         (
@@ -373,7 +295,7 @@ fn build_valid_private_key() -> serde_json::Value {
 
 #[test]
 fn test_validate_private_key_accepts_canonical_variable_length_ct() {
-    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
 
     for ct in [B64URL_VARIABLE_MOD2, B64URL_VARIABLE_MOD3, B64URL_48] {
         let mut private_key = build_valid_private_key();
@@ -387,7 +309,7 @@ fn test_validate_private_key_accepts_canonical_variable_length_ct() {
 
 #[test]
 fn test_validate_private_key_rejects_non_canonical_variable_length_ct() {
-    let validator = Validator::for_target(SchemaTarget::PrivateKey).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
 
     for ct in [
         B64URL_VARIABLE_MOD1,
@@ -405,7 +327,7 @@ fn test_validate_private_key_rejects_non_canonical_variable_length_ct() {
 
 #[test]
 fn test_validate_file_enc_rejects_wrong_fixed_lengths() {
-    let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::FileEnc).unwrap();
 
     for (field, path, value) in [
         (
@@ -440,7 +362,7 @@ fn test_validate_file_enc_rejects_wrong_fixed_lengths() {
 
 #[test]
 fn test_validate_file_enc_accepts_canonical_variable_length_payload_ct() {
-    let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::FileEnc).unwrap();
 
     for ct in [B64URL_VARIABLE_MOD2, B64URL_VARIABLE_MOD3, B64URL_48] {
         let mut file_enc = build_valid_file_enc_doc("alice@example.com");
@@ -458,7 +380,7 @@ fn test_validate_file_enc_accepts_canonical_variable_length_payload_ct() {
 
 #[test]
 fn test_validate_file_enc_rejects_non_canonical_variable_length_payload_ct() {
-    let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::FileEnc).unwrap();
 
     for ct in [
         B64URL_VARIABLE_MOD1,
@@ -483,7 +405,7 @@ fn test_validate_file_enc_rejects_non_canonical_variable_length_payload_ct() {
 
 #[test]
 fn test_validate_kv_entry_accepts_canonical_variable_length_ct() {
-    let validator = Validator::for_target(SchemaTarget::KvEntry).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::KvEntry).unwrap();
 
     for ct in [B64URL_VARIABLE_MOD2, B64URL_VARIABLE_MOD3, B64URL_48] {
         let entry = build_kv_entry_value(ct);
@@ -496,7 +418,7 @@ fn test_validate_kv_entry_accepts_canonical_variable_length_ct() {
 
 #[test]
 fn test_validate_kv_entry_rejects_non_canonical_variable_length_ct() {
-    let validator = Validator::for_target(SchemaTarget::KvEntry).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::KvEntry).unwrap();
 
     for ct in [
         B64URL_VARIABLE_MOD1,
@@ -573,7 +495,7 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
 
 #[test]
 fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
-    let validator = Validator::for_target(SchemaTarget::FileEnc).unwrap();
+    let validator = load_embedded_validator(SchemaTarget::FileEnc).unwrap();
 
     // Regression test:
     // - CLI validation allows member_handle without '@' (e.g. GitHub login like "ebisawa")

@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::cli::common::{kapsaro_bin, run_command_with_pty};
-use crate::test_utils::setup_trust_store_for_workspace;
+use crate::test_utils::{member_handle, setup_trust_store_for_workspace};
 use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
 use kapsaro_core::cli_api::test_support::operations::key::public_key_document::{
     build_attestation, build_public_key, PublicKeyDocumentParams,
@@ -238,7 +238,7 @@ fn test_rewrap_requires_recipient_trust_approval() {
 
     fs::remove_file(get_trust_store_file_path(
         temp_dir.path(),
-        ALICE_MEMBER_HANDLE,
+        &member_handle(ALICE_MEMBER_HANDLE),
     ))
     .unwrap();
 

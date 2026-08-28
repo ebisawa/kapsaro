@@ -18,5 +18,9 @@ pub const HEADER_LINE_V1: &str = ":KAPSARO_KV 1";
 
 /// File extension for kv-enc files.
 pub const KV_ENC_EXTENSION: &str = ".kvenc";
+/// The support layer sizes a validated basename against this length and cannot
+/// reach this module to read it, so a change here has to be carried over there
+/// by hand. Fail the build instead of letting the two drift apart silently.
+const _: () = assert!(KV_ENC_EXTENSION.len() == 6);
 /// Default base name for kv-enc files.
 pub const DEFAULT_KV_ENC_BASENAME: &str = "default";

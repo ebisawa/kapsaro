@@ -6,8 +6,7 @@
 //! This module keeps non-member acceptance policy aligned with
 //! the standard CLI > environment > config > default precedence.
 
-use std::path::Path;
-
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::types::ConfigKey;
 use crate::{Error, Result};
 
@@ -16,7 +15,10 @@ use super::common::resolve_string_with_source;
 const ENV_VAR: &str = "KAPSARO_ALLOW_NON_MEMBER";
 
 /// Resolve whether read paths may prompt for one-shot non-member acceptance.
-pub fn resolve_allow_non_member(cli_value: Option<bool>, base_dir: Option<&Path>) -> Result<bool> {
+pub(crate) fn resolve_allow_non_member(
+    cli_value: Option<bool>,
+    config: &GlobalConfigSnapshot,
+) -> Result<bool> {
     if matches!(cli_value, Some(true)) {
         return Ok(true);
     }
@@ -25,7 +27,7 @@ pub fn resolve_allow_non_member(cli_value: Option<bool>, base_dir: Option<&Path>
         None,
         Some(ENV_VAR),
         ConfigKey::AllowNonMember.canonical_name(),
-        base_dir,
+        config,
         Some("no".into()),
     )?;
     let value = resolved

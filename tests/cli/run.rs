@@ -386,3 +386,36 @@ fn test_run_kapsaro_overrides_standard_env_vars() {
         .success()
         .stdout(predicate::str::contains("secret_path"));
 }
+
+/// Local state permission warnings recorded while loading the signing key must
+/// still reach the operator for `run`, not just for commands that return quickly.
+/// This pins that the drain wired in before the child spawns actually surfaces
+/// the warning, rather than only the deferred drain after the command returns.
+#[cfg(unix)]
+#[test]
+fn test_run_warns_about_insecure_home_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace_with_default_file();
+    fs::set_permissions(home_dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+
+    let assert = cmd()
+        .arg("run")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--")
+        .arg("echo")
+        .arg("test")
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("test"));
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("Insecure permissions 0755") && stderr.contains("(expected 0700)"),
+        "expected the insecure permission warning in stderr, got: {}",
+        stderr
+    );
+}

@@ -24,6 +24,11 @@ pub(crate) fn confirm_incoming_promotions(
     collect_confirmed_promotions(review_view, prompt_tofu_confirmation)
 }
 
+/// Walk the promotion prompts, answering each from a reader.
+///
+/// The candidate ordering and the accept/skip bookkeeping stay in
+/// `collect_confirmed_promotions`, which both paths call; only the per
+/// candidate question is swapped, because the production one needs a terminal.
 #[cfg(test)]
 pub(crate) fn confirm_incoming_promotions_with_reader(
     review_view: &PromotionReviewView,
@@ -66,6 +71,7 @@ fn prompt_tofu_confirmation(prompt: &PromotionReviewPrompt) -> Result<bool> {
     prompt_yes_no(promotion_prompt_label(), false)
 }
 
+/// Print one candidate review and read its answer from a reader.
 #[cfg(test)]
 fn prompt_tofu_confirmation_with_reader(
     prompt: &PromotionReviewPrompt,

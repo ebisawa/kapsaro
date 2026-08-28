@@ -8,11 +8,10 @@ use crate::feature::rewrap::{rewrap_content as rewrap_feature_content, RewrapReq
 use crate::format::content::EncContent;
 use crate::Result;
 
-use super::types::{RewrapBatchPlan, RewrapBatchRequest, VerifiedPostPromotionRecipients};
+use super::types::{RewrapBatchRequest, VerifiedPostPromotionRecipients};
 
 pub struct RewrapRewriteContext<'a> {
     pub request: &'a RewrapBatchRequest,
-    pub plan: &'a RewrapBatchPlan,
     pub execution: &'a ExecutionContext,
     pub post_promotion_members: &'a VerifiedPostPromotionRecipients,
 }

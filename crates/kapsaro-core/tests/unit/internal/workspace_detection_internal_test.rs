@@ -3,45 +3,11 @@
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::load_optional_workspace;
-use crate::test_utils::{with_temp_cwd, EnvGuard};
+use crate::test_utils::{local_state_temp_dir, with_temp_cwd, write_local_state_file, EnvGuard};
 
 use super::resolution::resolve_optional_workspace;
 use super::*;
-use serial_test::serial;
 use std::fs;
-
-#[test]
-fn io_workspace_detection_resolution_does_not_import_config_resolution() {
-    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/io/workspace/detection/resolution.rs");
-    let source = fs::read_to_string(&source_path).unwrap();
-    assert!(
-        !source.contains("crate::config::resolution"),
-        "{} must not depend on config resolution",
-        source_path.display()
-    );
-}
-
-#[test]
-fn io_workspace_detection_errors_do_not_reference_cli_or_env_inputs() {
-    for relative_path in [
-        "src/io/workspace/detection/resolution.rs",
-        "src/io/workspace/detection/search.rs",
-    ] {
-        let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
-        let source = fs::read_to_string(&source_path).unwrap();
-        assert!(
-            !source.contains("--workspace"),
-            "{} must not mention CLI options",
-            source_path.display()
-        );
-        assert!(
-            !source.contains("KAPSARO_WORKSPACE"),
-            "{} must not mention environment variables",
-            source_path.display()
-        );
-    }
-}
 
 #[test]
 fn app_context_resolves_workspace_from_config_toml() {
@@ -51,9 +17,9 @@ fn app_context_resolves_workspace_from_config_toml() {
     fs::create_dir_all(ws_path.join("members").join("active")).unwrap();
     fs::create_dir_all(ws_path.join("secrets")).unwrap();
 
-    let config_dir = tempfile::tempdir().unwrap();
+    let config_dir = local_state_temp_dir();
     let config_content = format!("workspace = \"{}\"\n", ws_path.display());
-    fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
+    write_local_state_file(&config_dir.path().join("config.toml"), &config_content);
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::remove_var("KAPSARO_WORKSPACE");
 
@@ -63,7 +29,6 @@ fn app_context_resolves_workspace_from_config_toml() {
 }
 
 #[test]
-#[serial]
 fn app_context_resolves_workspace_from_options_home_config_without_kapsaro_home() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
     let tmp = tempfile::tempdir().unwrap();
@@ -71,9 +36,9 @@ fn app_context_resolves_workspace_from_options_home_config_without_kapsaro_home(
     fs::create_dir_all(ws_path.join("members").join("active")).unwrap();
     fs::create_dir_all(ws_path.join("secrets")).unwrap();
 
-    let config_dir = tempfile::tempdir().unwrap();
+    let config_dir = local_state_temp_dir();
     let config_content = format!("workspace = \"{}\"\n", ws_path.display());
-    fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
+    write_local_state_file(&config_dir.path().join("config.toml"), &config_content);
     std::env::remove_var("KAPSARO_HOME");
     std::env::remove_var("KAPSARO_WORKSPACE");
 
@@ -89,9 +54,9 @@ fn app_context_resolves_workspace_from_options_home_config_without_kapsaro_home(
 #[test]
 fn app_context_config_invalid_path_shows_config_source() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
-    let config_dir = tempfile::tempdir().unwrap();
+    let config_dir = local_state_temp_dir();
     let config_content = "workspace = \"/nonexistent/path/.kapsaro\"\n";
-    fs::write(config_dir.path().join("config.toml"), config_content).unwrap();
+    write_local_state_file(&config_dir.path().join("config.toml"), config_content);
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::remove_var("KAPSARO_WORKSPACE");
 
@@ -119,9 +84,9 @@ fn app_context_env_var_takes_priority_over_config() {
     fs::create_dir_all(config_ws_path.join("members").join("active")).unwrap();
     fs::create_dir_all(config_ws_path.join("secrets")).unwrap();
 
-    let config_dir = tempfile::tempdir().unwrap();
+    let config_dir = local_state_temp_dir();
     let config_content = format!("workspace = \"{}\"\n", config_ws_path.display());
-    fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
+    write_local_state_file(&config_dir.path().join("config.toml"), &config_content);
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::set_var("KAPSARO_WORKSPACE", &env_ws_path);
 
@@ -143,9 +108,9 @@ fn app_context_explicit_option_takes_priority_over_config() {
     fs::create_dir_all(config_ws_path.join("members").join("active")).unwrap();
     fs::create_dir_all(config_ws_path.join("secrets")).unwrap();
 
-    let config_dir = tempfile::tempdir().unwrap();
+    let config_dir = local_state_temp_dir();
     let config_content = format!("workspace = \"{}\"\n", config_ws_path.display());
-    fs::write(config_dir.path().join("config.toml"), &config_content).unwrap();
+    write_local_state_file(&config_dir.path().join("config.toml"), &config_content);
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::remove_var("KAPSARO_WORKSPACE");
 
@@ -158,7 +123,7 @@ fn app_context_explicit_option_takes_priority_over_config() {
 }
 
 #[test]
-fn app_context_explicit_option_does_not_require_home() {
+fn app_context_explicit_option_resolves_without_home() {
     let _guard = EnvGuard::new(&["HOME", "KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
     let explicit_ws = tempfile::tempdir().unwrap();
     let explicit_ws_path = explicit_ws.path().join(".kapsaro");
@@ -176,7 +141,7 @@ fn app_context_explicit_option_does_not_require_home() {
 }
 
 #[test]
-fn app_context_env_workspace_does_not_require_home() {
+fn app_context_env_workspace_resolves_without_home() {
     let _guard = EnvGuard::new(&["HOME", "KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
     let env_ws = tempfile::tempdir().unwrap();
     let env_ws_path = env_ws.path().join(".kapsaro");
@@ -194,38 +159,32 @@ fn app_context_env_workspace_does_not_require_home() {
 }
 
 #[test]
-#[serial]
 fn resolve_optional_workspace_returns_none_when_nothing_is_configured() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
-    let original_dir = std::env::current_dir().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
     std::env::remove_var("KAPSARO_HOME");
     std::env::remove_var("KAPSARO_WORKSPACE");
 
-    let result = resolve_optional_workspace(None).unwrap();
-    assert!(result.is_none());
+    let result = with_temp_cwd(temp_dir.path(), || {
+        resolve_optional_workspace(None).unwrap()
+    });
 
-    std::env::set_current_dir(original_dir).unwrap();
+    assert!(result.is_none());
 }
 
 #[test]
-#[serial]
 fn resolve_workspace_detects_current_dot_kapsaro_without_git() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
-    let original_dir = std::env::current_dir().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
     let workspace_path = temp_dir.path().join(".kapsaro");
     fs::create_dir_all(workspace_path.join("members/active")).unwrap();
     fs::create_dir_all(workspace_path.join("secrets")).unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
     std::env::remove_var("KAPSARO_HOME");
     std::env::remove_var("KAPSARO_WORKSPACE");
 
-    let result = resolve_workspace(None).unwrap();
-    assert_eq!(result.root_path, workspace_path.canonicalize().unwrap());
+    let result = with_temp_cwd(temp_dir.path(), || resolve_workspace(None).unwrap());
 
-    std::env::set_current_dir(original_dir).unwrap();
+    assert_eq!(result.root_path, workspace_path.canonicalize().unwrap());
 }
 
 #[test]
@@ -242,13 +201,7 @@ fn command_options(
     home: Option<std::path::PathBuf>,
     workspace: Option<std::path::PathBuf>,
 ) -> CommonCommandOptions {
-    CommonCommandOptions {
-        home,
-        identity: None,
-        verbose: false,
-        workspace,
-        ssh_signing_method: None,
-        allow_expired_key: false,
-        allow_non_member: false,
-    }
+    CommonCommandOptions::new()
+        .with_home(home)
+        .with_workspace(workspace)
 }

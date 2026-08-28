@@ -4,9 +4,9 @@
 //! rewrap command - recipient management for encrypted files
 
 use crate::cli::common::command::{
-    resolve_options_with_read_trust_allowances, resolve_trust_store_owner_member,
+    resolve_options_with_read_trust_allowances, resolve_write_execution_input,
 };
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::common::trust::run_with_execution_trust_store_reset_recovery;
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOutputOptions,
 };
@@ -51,9 +51,8 @@ pub(crate) fn run(args: RewrapArgs) -> Result<()> {
         args.allow_expired_key.allow_expired_key,
         args.allow_non_member.allow_non_member,
     )?;
-    run_with_trust_store_reset_recovery(
-        &options,
-        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || batch::run_batch_rewrap(&args, &options),
-    )
+    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
+    run_with_execution_trust_store_reset_recovery(&execution, || {
+        batch::run_batch_rewrap(&args, &options, &execution)
+    })
 }

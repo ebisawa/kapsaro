@@ -200,7 +200,6 @@ fn trust_ctx(strict: StrictKeyChecking, interactive: bool) -> TrustContext {
         strict_key_checking: StrictKeyCheckingResolution::explicit(strict),
         is_interactive: interactive,
         allow_non_member: false,
-        permission_warnings: Vec::new(),
     }
 }
 
@@ -259,5 +258,5 @@ fn wrap_item(recipient_handle: &str, kid: &str) -> WrapItem {
 
 fn assert_verify_rule(error: Error, expected_rule: &str) {
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some(expected_rule));
+    assert_eq!(error.rule(), Some(expected_rule));
 }

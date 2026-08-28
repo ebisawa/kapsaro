@@ -84,43 +84,18 @@ where
     Ok(entries)
 }
 
-/// Encrypt KV map to kv-enc v1 format
+/// Encrypt a KV map to kv-enc v1 format, letting the caller adjust the WRAP.
 ///
 /// # Arguments
 /// * `kv_map` - Key-value map to encrypt
-/// * `recipients` - List of recipient member_handles
 /// * `members` - Verified public keys with attested identity for recipients
 /// * `signing` - Signing context (signing_key, signer_kid, signer_pub)
 /// * `token_codec` - Token codec to use (JSON/JCS or CBOR)
+/// * `disclosed` - Whether entry values are stored disclosed
+/// * `mutate_wrap` - Applied to the freshly built WRAP before entries are encrypted
 ///
 /// # Returns
 /// kv-enc v1 format string with SIG line
-pub fn encrypt_kv_document<V>(
-    kv_map: &HashMap<String, V>,
-    members: &[VerifiedRecipientKey],
-    signing: &SigningContext<'_>,
-    token_codec: TokenCodec,
-) -> Result<String>
-where
-    V: AsRef<str>,
-{
-    encrypt_kv_document_with_disclosed(kv_map, members, signing, token_codec, false)
-}
-
-/// Encrypt KV map to kv-enc v1 format with disclosed flag control
-pub(crate) fn encrypt_kv_document_with_disclosed<V>(
-    kv_map: &HashMap<String, V>,
-    members: &[VerifiedRecipientKey],
-    signing: &SigningContext<'_>,
-    token_codec: TokenCodec,
-    disclosed: bool,
-) -> Result<String>
-where
-    V: AsRef<str>,
-{
-    encrypt_kv_map_with_wrap_mutation(kv_map, members, signing, token_codec, disclosed, |_| Ok(()))
-}
-
 pub fn encrypt_kv_map_with_wrap_mutation<V, F>(
     kv_map: &HashMap<String, V>,
     members: &[VerifiedRecipientKey],

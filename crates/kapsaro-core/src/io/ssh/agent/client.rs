@@ -72,7 +72,7 @@ impl AgentClient {
     }
 
     fn sign(&mut self, public_key_blob: &[u8], message: &[u8]) -> Result<Ed25519RawSignature> {
-        self.save_packet(&build_sign_request(public_key_blob, message))?;
+        self.save_packet(&build_sign_request(public_key_blob, message)?)?;
         let response = self.load_packet()?;
         parse_sign_response(&response)
     }

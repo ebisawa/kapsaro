@@ -3,7 +3,7 @@
 
 //! Tests for HKDF type-safe salt interface
 
-use crate::crypto::kdf::{derive_hkdf_sha256_array, derive_hkdf_sha256_bytes};
+use crate::crypto::kdf::derive_hkdf_sha256_array;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::primitives::HkdfSalt;
 
@@ -38,38 +38,4 @@ fn test_derive_hkdf_sha256_array_different_salts_produce_different_keys() {
     let key2 = derive_hkdf_sha256_array(&ikm, Some(&salt2), &info).unwrap();
 
     assert_ne!(&key1[..], &key2[..]);
-}
-
-#[test]
-fn test_derive_hkdf_sha256_bytes_returns_requested_length() {
-    let ikm = Ikm::from(&[3u8; 32][..]);
-    let salt = HkdfSalt::new([4u8; 32]);
-    let info = Info::from_string("variable-length-info");
-
-    let result = derive_hkdf_sha256_bytes(&ikm, Some(&salt), &info, 48).unwrap();
-
-    assert_eq!(result.len(), 48);
-}
-
-#[test]
-fn test_derive_hkdf_sha256_bytes_zero_length_is_allowed() {
-    let ikm = Ikm::from(&[3u8; 32][..]);
-    let info = Info::from_string("zero-length-info");
-
-    let result = derive_hkdf_sha256_bytes::<HkdfSalt>(&ikm, None, &info, 0).unwrap();
-
-    assert!(result.is_empty());
-}
-
-#[test]
-fn test_derive_hkdf_sha256_bytes_rejects_hkdf_output_longer_than_limit() {
-    let ikm = Ikm::from(&[3u8; 32][..]);
-    let salt = HkdfSalt::new([4u8; 32]);
-    let info = Info::from_string("too-long-info");
-
-    let err = derive_hkdf_sha256_bytes(&ikm, Some(&salt), &info, 8161)
-        .unwrap_err()
-        .to_string();
-
-    assert!(err.contains("HKDF expand failed"));
 }

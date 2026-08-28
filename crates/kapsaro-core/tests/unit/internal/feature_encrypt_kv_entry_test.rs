@@ -6,7 +6,8 @@
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::key::material::generate_keypairs;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
+use crate::feature::kv::sign::sign_unsigned_kv_document;
 use crate::format::kv::document::parse_kv_document;
 use crate::format::kv::document::KvDocumentBuilder;
 use crate::format::token::TokenCodec;
@@ -15,6 +16,7 @@ use crate::model::kv_enc::header::KvHeader;
 use crate::model::public_key::VerifiedRecipientKey;
 use ed25519_dalek::SigningKey;
 use std::collections::HashMap;
+use zeroize::Zeroizing;
 
 fn generate_signing_ctx_for_test() -> (SigningKey, String) {
     (
@@ -71,12 +73,11 @@ fn build_verified_recipient_key_for_test(
     signing_key: &SigningKey,
     kid: &str,
 ) -> VerifiedRecipientKey {
+    use crate::cli_api::test_support::domain::public_key::build_unverified_recipient_key;
     use crate::format::codec::base64_public::encode_base64url_nopad;
     use crate::model::public_key::{
-        Attestation, AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey,
-        PublicKey, PublicKeyProtected, VerifiedPublicKeyAttested,
+        Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
     };
-    use crate::model::verification::{ExpiryProof, SelfSignatureProof};
     use ed25519_dalek::Signer;
 
     let b64url = |b: &[u8]| encode_base64url_nopad(b);
@@ -113,15 +114,7 @@ fn build_verified_recipient_key_for_test(
         signature: b64url(signing_key.sign(b"test").to_bytes().as_ref()),
     };
 
-    let proof = AttestationProof {
-        method: "test".to_string(),
-        ssh_pub: "test".to_string(),
-        verified_at: None,
-    };
-    let attested = AttestedKeyStatement::new(test_pk.protected.keys.clone(), proof);
-    let self_sig_proof = SelfSignatureProof::new();
-    let attested_key = VerifiedPublicKeyAttested::new(test_pk, self_sig_proof, attested);
-    VerifiedRecipientKey::new(attested_key, ExpiryProof::new())
+    build_unverified_recipient_key(test_pk)
 }
 
 fn encrypt_kv_document_for_test(
@@ -142,7 +135,15 @@ fn encrypt_kv_document_for_test(
         signer_pub: build_dummy_signer_pub(signing_key, kid),
     };
 
-    encrypt_kv_document(&kv_map, &[verified_member], &signing, TokenCodec::JsonJcs).unwrap()
+    encrypt_kv_map_with_wrap_mutation(
+        &kv_map,
+        &[verified_member],
+        &signing,
+        TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
+    )
+    .unwrap()
 }
 
 /// Build a test context for set/unset tests: (initial_content, doc, signing_key, kid)
@@ -178,11 +179,12 @@ fn builder_set_entries(
     signing: &SigningContext<'_>,
 ) -> String {
     let mut unsigned =
-        KvDocumentBuilder::from_lines(updated_head.clone(), None, &doc.lines, TokenCodec::JsonJcs)
+        KvDocumentBuilder::from_document(updated_head.clone(), None, doc, TokenCodec::JsonJcs)
             .unwrap()
             .build();
     unsigned.set_entries(new_entries);
-    unsigned.sign(&MasterKey::new([3u8; 32]), signing).unwrap()
+    let master_key = MasterKey::from_zeroizing(Zeroizing::new([3u8; 32]));
+    sign_unsigned_kv_document(unsigned, &master_key, signing).unwrap()
 }
 
 /// Helper: build a signed document with set_entries for a single entry
@@ -205,11 +207,12 @@ fn builder_unset_entry(
     signing: &SigningContext<'_>,
 ) -> String {
     let mut unsigned =
-        KvDocumentBuilder::from_lines(updated_head.clone(), None, &doc.lines, TokenCodec::JsonJcs)
+        KvDocumentBuilder::from_document(updated_head.clone(), None, doc, TokenCodec::JsonJcs)
             .unwrap()
             .build();
     unsigned.unset_entry(target_key);
-    unsigned.sign(&MasterKey::new([3u8; 32]), signing).unwrap()
+    let master_key = MasterKey::from_zeroizing(Zeroizing::new([3u8; 32]));
+    sign_unsigned_kv_document(unsigned, &master_key, signing).unwrap()
 }
 
 // --- set_entry テスト ---

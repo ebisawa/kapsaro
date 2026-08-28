@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Validates the line structure and tokens of a parsed kv-enc v1 file.
+//! Enforces line order (HEADER, HEAD, WRAP, entries, SIG), unique keys, and well-formed tokens.
+
 use crate::format::kv::dotenv::is_valid_key_name;
 use crate::format::schema::document::{
     parse_kv_entry_token_with_source,
@@ -99,23 +102,44 @@ struct ValidatedSignature {
     signature: KvFileSignature,
 }
 
-fn validate_unique_line(
-    logical_lines: &[(usize, &KvEncLine)],
+/// One line a kv-enc document must carry exactly once, at a known position.
+struct RequiredLine {
     matcher: fn(&KvEncLine) -> bool,
-    label: &str,
-    missing_rule: &str,
-    expected_position: Option<usize>,
-    position_rule: &str,
-    position_message: &str,
+    label: &'static str,
+    missing_rule: &'static str,
+    position_rule: &'static str,
+    position_message: &'static str,
+}
+
+fn validate_required_line(
+    logical_lines: &[(usize, &KvEncLine)],
+    required: &RequiredLine,
+    expected_position: usize,
+) -> Result<()> {
+    validate_required_line_count(logical_lines, required)?;
+    if logical_lines.len() <= expected_position
+        || !(required.matcher)(logical_lines[expected_position].1)
+    {
+        return Err(Error::build_verification_error(
+            required.position_rule.to_string(),
+            required.position_message.to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_required_line_count(
+    logical_lines: &[(usize, &KvEncLine)],
+    required: &RequiredLine,
 ) -> Result<()> {
     let count = logical_lines
         .iter()
-        .filter(|(_, line)| matcher(line))
+        .filter(|(_, line)| (required.matcher)(line))
         .count();
     if count == 0 {
         return Err(Error::build_verification_error(
-            missing_rule.to_string(),
-            format!("kv-enc v1: missing {} line", label),
+            required.missing_rule.to_string(),
+            format!("kv-enc v1: missing {} line", required.label),
         ));
     }
     if count > 1 {
@@ -123,17 +147,9 @@ fn validate_unique_line(
             "E_SCHEMA_INVALID".to_string(),
             format!(
                 "kv-enc v1: {} line appears {} times (must be exactly once)",
-                label, count
+                required.label, count
             ),
         ));
-    }
-    if let Some(pos) = expected_position {
-        if logical_lines.len() <= pos || !matcher(logical_lines[pos].1) {
-            return Err(Error::build_verification_error(
-                position_rule.to_string(),
-                position_message.to_string(),
-            ));
-        }
     }
     Ok(())
 }
@@ -189,41 +205,46 @@ fn validate_kv_keys(lines: &[KvEncLine]) -> Result<()> {
 }
 
 fn validate_kv_header_lines(logical_lines: &[(usize, &KvEncLine)]) -> Result<()> {
-    validate_unique_line(
-        logical_lines,
-        |line| matches!(line, KvEncLine::Header { .. }),
-        ":KAPSARO_KV",
-        "E_SCHEMA_INVALID",
-        Some(0),
-        "E_SCHEMA_INVALID",
-        "kv-enc v1: :KAPSARO_KV 1 must be the first line",
-    )?;
-    validate_unique_line(
-        logical_lines,
-        |line| matches!(line, KvEncLine::Head { .. }),
-        ":HEAD",
-        "E_SCHEMA_INVALID",
-        Some(1),
-        "E_SCHEMA_INVALID",
-        "kv-enc v1: :HEAD must be the second line (after :KAPSARO_KV 1)",
-    )?;
-    validate_unique_line(
-        logical_lines,
-        |line| matches!(line, KvEncLine::Wrap { .. }),
-        ":WRAP",
-        "E_WRAP_LINE_MISSING",
-        Some(2),
-        "E_WRAP_LINE_POSITION",
-        "kv-enc v1: :WRAP must be the third line (after :HEAD)",
-    )?;
-    validate_unique_line(
-        logical_lines,
-        |line| matches!(line, KvEncLine::Sig { .. }),
-        ":SIG",
-        "E_SIG_LINE_MISSING",
-        Some(logical_lines.len() - 1),
-        "E_SCHEMA_INVALID",
-        "kv-enc v1: :SIG must be the last logical line (after all KV entries)",
-    )?;
-    Ok(())
+    for (position, required) in leading_required_lines().iter().enumerate() {
+        validate_required_line(logical_lines, required, position)?;
+    }
+    // The signature closes the document, so its position follows the entries.
+    validate_required_line(logical_lines, &required_sig_line(), logical_lines.len() - 1)
+}
+
+/// The lines that open a kv-enc document, in the order they must appear.
+fn leading_required_lines() -> [RequiredLine; 3] {
+    [
+        RequiredLine {
+            matcher: |line| matches!(line, KvEncLine::Header { .. }),
+            label: ":KAPSARO_KV",
+            missing_rule: "E_SCHEMA_INVALID",
+            position_rule: "E_SCHEMA_INVALID",
+            position_message: "kv-enc v1: :KAPSARO_KV 1 must be the first line",
+        },
+        RequiredLine {
+            matcher: |line| matches!(line, KvEncLine::Head { .. }),
+            label: ":HEAD",
+            missing_rule: "E_SCHEMA_INVALID",
+            position_rule: "E_SCHEMA_INVALID",
+            position_message: "kv-enc v1: :HEAD must be the second line (after :KAPSARO_KV 1)",
+        },
+        RequiredLine {
+            matcher: |line| matches!(line, KvEncLine::Wrap { .. }),
+            label: ":WRAP",
+            missing_rule: "E_WRAP_LINE_MISSING",
+            position_rule: "E_WRAP_LINE_POSITION",
+            position_message: "kv-enc v1: :WRAP must be the third line (after :HEAD)",
+        },
+    ]
+}
+
+fn required_sig_line() -> RequiredLine {
+    RequiredLine {
+        matcher: |line| matches!(line, KvEncLine::Sig { .. }),
+        label: ":SIG",
+        missing_rule: "E_SIG_LINE_MISSING",
+        position_rule: "E_SCHEMA_INVALID",
+        position_message: "kv-enc v1: :SIG must be the last logical line (after all KV entries)",
+    }
 }

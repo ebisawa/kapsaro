@@ -63,7 +63,7 @@ pub fn setup_trust_store_for_workspace(
     };
 
     let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
-    let path = get_trust_store_file_path(home, owner_handle);
+    let path = get_trust_store_file_path(home, &member_handle(owner_handle));
     save_trust_store(&path, &doc).unwrap();
 }
 

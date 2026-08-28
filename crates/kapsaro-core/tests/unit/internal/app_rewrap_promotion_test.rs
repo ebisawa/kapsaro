@@ -10,6 +10,7 @@ use crate::app::rewrap::types::{
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::io::verify_online::VerifiedGithubIdentity;
+use crate::io::workspace::members::PromotionDestinationState;
 use crate::model::public_key::{
     Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyParts,
 };
@@ -83,8 +84,8 @@ fn build_candidate(
 
     IncomingPromotionCandidate {
         review,
-        source_path: std::path::PathBuf::from(format!("members/incoming/{}.json", member_handle)),
         source_content: "{}".to_string(),
+        destination: PromotionDestinationState::Missing,
         public_key: PublicKey::new(PublicKeyParts {
             subject_handle: member_handle.to_string(),
             kid: kid_for(member_handle).to_string(),

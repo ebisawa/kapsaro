@@ -11,9 +11,6 @@ use crate::Result;
 pub struct XChaChaNonce([u8; 24]);
 
 impl XChaChaNonce {
-    /// Size of XChaCha nonce in bytes
-    pub const SIZE: usize = 24;
-
     /// Create a new XChaCha nonce from 24 bytes
     pub fn new(bytes: [u8; 24]) -> Self {
         Self(bytes)
@@ -25,14 +22,10 @@ impl XChaChaNonce {
     }
 }
 
-impl_fixed_size_type!(XChaChaNonce, 24, "XChaCha nonce");
-
 /// Fresh XChaCha20-Poly1305 nonce generated for a single encryption.
 ///
-/// ```compile_fail
-/// use kapsaro_core::crypto::types::primitives::FreshXChaChaNonce;
-/// let _nonce = FreshXChaChaNonce::new([0u8; 24]);
-/// ```
+/// Built only by `generate`, so a nonce reaching an encryption call came from
+/// the CSPRNG rather than from bytes a caller chose.
 #[derive(Debug)]
 pub struct FreshXChaChaNonce(XChaChaNonce);
 
@@ -79,8 +72,6 @@ impl PrivateKeyIkmSalt {
     }
 }
 
-impl_fixed_size_type!(PrivateKeyIkmSalt, 32, "private key ikm salt");
-
 /// HKDF salt (32 bytes)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HkdfSalt([u8; 32]);
@@ -96,8 +87,6 @@ impl HkdfSalt {
         &self.0
     }
 }
-
-impl_fixed_size_type!(HkdfSalt, 32, "HKDF salt");
 
 impl AsHkdfSalt for HkdfSalt {
     fn as_hkdf_salt_bytes(&self) -> &[u8] {

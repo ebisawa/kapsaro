@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! CLI entry point for `member add`.
+//! Adds a member from a public key file and prints a summary of the added handle.
+
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::text::member::print_member_add_summary;
 use kapsaro_core::cli_api::app::member::mutation::add_member;

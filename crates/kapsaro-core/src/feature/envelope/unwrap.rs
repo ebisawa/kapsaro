@@ -11,7 +11,6 @@ use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info
 use crate::feature::envelope::wrap_set::{RecipientWrap, WrapSet};
 use crate::model::common::WrapItem;
 use crate::model::file_enc::VerifiedFileEncDocument;
-use crate::model::verified::VerifiedPrivateKey;
 use crate::support::kid::format_kid_half_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
@@ -73,37 +72,12 @@ pub fn unwrap_master_key(
     parse_master_key_from_plaintext(mk_plaintext)
 }
 
-/// Unwrap master key from file-enc v3 format for a specific member
+/// Unwrap the master key of a file-enc document with the local key the context selects.
 ///
-/// This is useful for rewrap operations where you need to get the content key
-/// without decrypting the entire payload.
-///
-/// **Note**: This function selects wrap_item by `kid` rather than the recipient handle label,
-/// then validates that the located wrap_item carries the expected `member_handle`.
-/// This preserves the cryptographic binding on `kid` (HPKE info includes `kid`) while
-/// rejecting inconsistent recipient metadata.
-pub fn unwrap_master_key_for_file(
-    verified: &VerifiedFileEncDocument,
-    member_handle: &str,
-    kid: &str,
-    private_key: &VerifiedPrivateKey,
-) -> Result<MasterKey> {
-    let secret = verified.document();
-    let wrap_set = WrapSet::parse(&secret.protected.wrap, "Document")?;
-    let wrap_item = wrap_set.find_by_kid_for_member(kid, member_handle)?;
-
-    // Decode KEM secret key
-    let kem_sk = decode_kem_secret_key(private_key)?;
-
-    unwrap_master_key(
-        wrap_item,
-        &secret.protected.sid,
-        &kem_sk,
-        build_file_wrap_info,
-        "unwrap_master_key_for_file",
-    )
-}
-
+/// The wrap item is located by `kid` rather than by the recipient handle label, then the
+/// located item is required to carry the expected `member_handle`. This keeps the
+/// cryptographic binding on `kid` (the HPKE info includes it) while rejecting a wrap set
+/// whose recipient metadata disagrees with the key that was selected.
 pub fn unwrap_master_key_for_file_with_context(
     verified: &VerifiedFileEncDocument,
     member_handle: &str,
@@ -147,29 +121,10 @@ pub fn unwrap_master_key_from_item(
     )
 }
 
-/// Unwrap master key from kv-enc wrap data (high-level API).
+/// Unwrap the master key of a kv-enc document with the local key the context selects.
 ///
-/// Handles finding the wrap item by kid and unwrapping the key.
-///
-/// # Arguments
-/// * `sid` - Session ID (UUID)
-/// * `wrap_items` - Slice of WrapItems to search
-/// * `member_handle` - Resolved member handle for error messages
-/// * `kid` - Key ID to find the wrap item
-/// * `private_key` - VerifiedPrivateKey containing the KEM private key
-pub fn unwrap_master_key_for_kv(
-    sid: &Uuid,
-    wrap_items: &[WrapItem],
-    member_handle: &str,
-    kid: &str,
-    private_key: &VerifiedPrivateKey,
-) -> Result<MasterKey> {
-    let wrap_set = WrapSet::parse(wrap_items, "Document")?;
-    let wrap_item = wrap_set.find_by_kid_for_member(kid, member_handle)?;
-    let kem_sk = decode_kem_secret_key(private_key)?;
-    unwrap_master_key_from_item(sid, wrap_item, &kem_sk)
-}
-
+/// Like the file-enc path, the wrap item is located by `kid` and the located item is then
+/// required to carry the expected `member_handle`.
 pub fn unwrap_master_key_for_kv_with_context(
     sid: &Uuid,
     wrap_items: &[WrapItem],

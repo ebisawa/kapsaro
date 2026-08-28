@@ -7,16 +7,19 @@
 use std::path::Path;
 
 use crate::test_utils::{
-    build_test_private_key, keygen_test, setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE,
-    BOB_MEMBER_HANDLE,
+    build_test_private_key, keygen_test, local_state_temp_dir, setup_test_keystore_from_fixtures,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
+use kapsaro_core::api::key::MemberHandle;
 use kapsaro_core::api::secret::SecretString;
+use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
 use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution;
 use kapsaro_core::cli_api::app::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, list_keys_command,
     remove_key_command,
 };
+use kapsaro_core::cli_api::app::key::types::KeyInfo;
 use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
 use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
@@ -24,15 +27,12 @@ use kapsaro_core::cli_api::test_support::storage::keystore::storage::save_key_pa
 use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
 
 fn build_options(home: &Path) -> CommonCommandOptions {
-    CommonCommandOptions {
-        home: Some(home.to_path_buf()),
-        identity: None,
-        verbose: false,
-        workspace: None,
-        ssh_signing_method: None,
-        allow_expired_key: false,
-        allow_non_member: false,
-    }
+    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
+}
+
+/// Signing capability for a keystore that holds no trust store to re-sign.
+fn unreachable_resign(_member_handle: &MemberHandle) -> kapsaro_core::Result<ExecutionContext> {
+    panic!("a keystore without a trust store must not re-sign one");
 }
 
 fn add_second_key(temp_dir: &tempfile::TempDir, member_handle: &str) -> String {
@@ -69,7 +69,23 @@ fn test_list_keys_command_single_member() {
     assert_eq!(result.entries.len(), 1);
     assert_eq!(result.entries[0].0, ALICE_MEMBER_HANDLE);
     assert_eq!(result.entries[0].1.len(), 1);
-    assert!(result.entries[0].1[0].active);
+    assert!(matches!(
+        result.entries[0].1[0],
+        KeyInfo::Complete { active: true, .. }
+    ));
+}
+
+/// A local state root that holds no keystore holds no keys, so the listing is
+/// empty. Every other key command acts on a key and still refuses.
+#[test]
+fn test_list_keys_command_without_a_keystore_lists_nothing() {
+    let temp_dir = local_state_temp_dir();
+    let options = build_options(temp_dir.path());
+
+    let result = list_keys_command(&options, None).unwrap();
+
+    assert_eq!(result.total_keys, 0);
+    assert!(result.entries.is_empty());
 }
 
 #[test]
@@ -88,6 +104,44 @@ fn test_list_keys_command_filtered_by_member_handle() {
 }
 
 #[test]
+fn test_list_keys_command_includes_an_incomplete_active_key() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let complete_kid = add_second_key(&temp_dir, ALICE_MEMBER_HANDLE);
+    let keystore_root = temp_dir.path().join("keys");
+    let active_kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
+        .unwrap()
+        .unwrap();
+    std::fs::remove_file(
+        keystore_root
+            .join(ALICE_MEMBER_HANDLE)
+            .join(&active_kid)
+            .join("public.json"),
+    )
+    .unwrap();
+    let options = build_options(temp_dir.path());
+
+    let result = list_keys_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+
+    assert_eq!(result.total_keys, 2);
+    assert_eq!(result.entries[0].1.len(), 2);
+    assert!(result.entries[0].1.iter().any(|key| matches!(
+        key,
+        KeyInfo::Incomplete {
+            kid,
+            member_handle,
+            active: true,
+            missing_document,
+        } if kid == &active_kid
+            && member_handle == ALICE_MEMBER_HANDLE
+            && missing_document.as_str() == "public.json"
+    )));
+    assert!(result.entries[0].1.iter().any(|key| matches!(
+        key,
+        KeyInfo::Complete { kid, active: false, .. } if kid == &complete_kid
+    )));
+}
+
+#[test]
 fn test_export_key_command_active_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_options(temp_dir.path());
@@ -101,6 +155,22 @@ fn test_export_key_command_active_key() {
         result.public_key.protected.subject_handle,
         ALICE_MEMBER_HANDLE
     );
+    assert!(out.exists());
+}
+
+/// An export reads the keystore and writes the file the caller named, so a
+/// workspace it never touches is not something it has to resolve first.
+#[test]
+fn test_export_key_command_writes_without_resolving_a_workspace() {
+    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let mut options = build_options(temp_dir.path());
+    options.workspace = Some(temp_dir.path().join("absent-workspace"));
+    let out = temp_dir.path().join("exported-public.json");
+
+    let result =
+        export_key_command(&options, Some(ALICE_MEMBER_HANDLE.to_string()), None, &out).unwrap();
+
+    assert_eq!(result.member_handle, ALICE_MEMBER_HANDLE);
     assert!(out.exists());
 }
 
@@ -213,6 +283,7 @@ fn test_remove_key_command_non_active() {
         None,
         format_kid_display(&second_kid).unwrap().to_lowercase(),
         false,
+        unreachable_resign,
     )
     .unwrap();
 
@@ -235,12 +306,13 @@ fn test_remove_key_command_active_without_force() {
         Some(ALICE_MEMBER_HANDLE.to_string()),
         active_kid,
         false,
+        unreachable_resign,
     );
 
     assert!(result.is_err());
     let msg = format!("{}", result.err().unwrap());
     assert!(
-        msg.contains("active") || msg.contains("force"),
+        msg.contains("kapsaro key activate <other-kid> --member-handle alice@example.com"),
         "unexpected error: {msg}"
     );
 }
@@ -259,6 +331,7 @@ fn test_remove_key_command_active_with_force() {
         Some(ALICE_MEMBER_HANDLE.to_string()),
         active_kid.clone(),
         true,
+        unreachable_resign,
     )
     .unwrap();
 

@@ -18,6 +18,7 @@ use crate::model::wire::jwk::{self, CURVE_ED25519, CURVE_X25519};
 use crate::support::secret::SecretArray;
 use crate::{Error, Result};
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use subtle::ConstantTimeEq;
 use zeroize::ZeroizeOnDrop;
 
 #[derive(ZeroizeOnDrop)]
@@ -119,6 +120,8 @@ pub fn validate_okp_key(
 }
 
 /// Validate that an Ed25519 private key derives to the provided public key.
+///
+/// The two public keys are compared in constant time, as key material is.
 pub fn validate_ed25519_consistency(
     sig_d_bytes: &SecretArray<32>,
     sig_x_bytes: &[u8; 32],
@@ -126,7 +129,7 @@ pub fn validate_ed25519_consistency(
     let signing_key = SigningKey::from_bytes(sig_d_bytes.as_array());
     let derived_vk = signing_key.verifying_key();
     let derived_x_bytes = derived_vk.as_bytes();
-    if derived_x_bytes != sig_x_bytes {
+    if !bool::from(derived_x_bytes.as_slice().ct_eq(sig_x_bytes.as_slice())) {
         return Err(Error::build_crypto_error(
             "Ed25519 key pair inconsistency: private key does not derive to public key".to_string(),
         ));
@@ -135,13 +138,20 @@ pub fn validate_ed25519_consistency(
 }
 
 /// Validate that an X25519 private key derives to the provided public key.
+///
+/// The two public keys are compared in constant time, as key material is.
 pub fn validate_x25519_consistency(
     kem_d_bytes: &SecretArray<32>,
     kem_x_bytes: &[u8; 32],
 ) -> Result<()> {
     let secret_key = X25519SecretKey::from_bytes(*kem_d_bytes.as_array());
     let derived_public = derive_public_key_from_secret(&secret_key)?;
-    if derived_public.as_bytes() != kem_x_bytes {
+    if !bool::from(
+        derived_public
+            .as_bytes()
+            .as_slice()
+            .ct_eq(kem_x_bytes.as_slice()),
+    ) {
         return Err(Error::build_crypto_error(
             "X25519 key pair inconsistency: private key does not derive to public key".to_string(),
         ));

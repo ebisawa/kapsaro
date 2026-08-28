@@ -1,61 +1,156 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+//! Doctor checks for encrypted artifacts found in the workspace.
+//! Verifies format, signature, signer and recipient membership, and disclosure history for each artifact.
 
-use crate::app::artifact::{list_workspace_encrypted_artifacts, load_artifact_content};
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::app::artifact::{
+    list_workspace_encrypted_artifacts_at, load_artifact_content, ArtifactRef,
+};
 use crate::feature::artifact::{artifact_recipient_evidence, verify_artifact_signature};
 use crate::feature::trust::recipient_sets::{
     find_recipient_handle_mismatch, ArtifactRecipientEvidence, RecipientHandleMismatch,
 };
 use crate::format::content::EncContent;
-use crate::io::workspace::detection::WorkspaceRoot;
-use crate::io::workspace::members::load_active_member_files;
+use crate::io::workspace::members::{
+    load_active_member_files_at, ACTIVE_DIR_NAME, MEMBERS_DIR_NAME,
+};
+use crate::io::workspace::setup::SECRETS_DIR_NAME;
 use crate::model::common::RemovedRecipient;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::SignatureVerificationProof;
+use crate::support::fs::anchor::AnchoredDir;
+use crate::support::fs::relative::DirectoryFd;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
-pub fn check_artifacts(
-    _member_handle: Option<&str>,
-    workspace: &WorkspaceRoot,
-) -> Result<Vec<DoctorCheck>> {
-    let artifact_paths = list_workspace_encrypted_artifacts(&workspace.root_path)?;
-    if artifact_paths.is_empty() {
-        return Ok(vec![DoctorCheck::warn(
-            "artifacts.discovered",
-            DoctorCategory::Artifacts,
-            DoctorSubject::Path(format_path_relative_to_cwd(&workspace.secrets_dir())),
-            "No encrypted artifacts found",
-        )
-        .with_next_action(
-            "add a secret if this workspace should contain secrets",
-        )]);
+/// Diagnose every artifact the workspace holds.
+///
+/// The artifacts and the member set they are judged against are both read
+/// through the descriptor the diagnosis bound to, so the whole check speaks
+/// about the tree the run started in even if the workspace path is repointed
+/// while it runs.
+pub fn check_artifacts(workspace_dir: &AnchoredDir) -> Result<Vec<DoctorCheck>> {
+    let listing = list_workspace_encrypted_artifacts_at(workspace_dir)?;
+    let secrets_dir = workspace_dir.path().join(SECRETS_DIR_NAME);
+    let secrets_subject = DoctorSubject::Path(format_path_relative_to_cwd(&secrets_dir));
+    let mut checks = check_skipped_secrets_entries(&listing.warnings, &secrets_subject);
+    if listing.artifacts.is_empty() {
+        checks.push(
+            DoctorCheck::warn(
+                "artifacts.discovered",
+                DoctorCategory::Artifacts,
+                secrets_subject,
+                "No encrypted artifacts found",
+            )
+            .with_next_action("add a secret if this workspace should contain secrets"),
+        );
+        return Ok(checks);
     }
 
-    let active_members_by_kid = load_active_member_index(&workspace.root_path).unwrap_or_default();
-    let mut checks = vec![DoctorCheck::ok(
+    let active_members = resolve_active_member_index(workspace_dir, &mut checks);
+    checks.push(DoctorCheck::ok(
         "artifacts.discovered",
         DoctorCategory::Artifacts,
-        DoctorSubject::Path(format_path_relative_to_cwd(&workspace.secrets_dir())),
-        format!("{} encrypted artifact(s) found", artifact_paths.len()),
-    )];
-    for path in artifact_paths {
-        checks.extend(check_artifact(&path, &active_members_by_kid));
+        secrets_subject,
+        format!("{} encrypted artifact(s) found", listing.artifacts.len()),
+    ));
+    for artifact in listing.artifacts {
+        checks.extend(check_artifact(&artifact, &active_members));
     }
     Ok(checks)
 }
 
-fn check_artifact(
-    path: &Path,
-    active_members_by_kid: &BTreeMap<String, PublicKey>,
+/// The active member set the signer and recipient judgments are made against.
+///
+/// A set that could not be read is kept apart from an empty one. Judging on an
+/// empty set would mark every artifact as signed by somebody who is no longer a
+/// member and send the operator to rewrap, which repairs nothing when the real
+/// fault is that members/active cannot be read.
+enum ActiveMemberIndex {
+    Loaded(BTreeMap<String, PublicKey>),
+    Unreadable,
+}
+
+impl ActiveMemberIndex {
+    /// The member set to judge against, absent when it could not be read.
+    fn judged(&self) -> Option<&BTreeMap<String, PublicKey>> {
+        match self {
+            Self::Loaded(index) => Some(index),
+            Self::Unreadable => None,
+        }
+    }
+}
+
+/// Read the member set once, reporting a failure as a finding of its own.
+fn resolve_active_member_index(
+    workspace_dir: &AnchoredDir,
+    checks: &mut Vec<DoctorCheck>,
+) -> ActiveMemberIndex {
+    match load_active_member_index(workspace_dir) {
+        Ok(index) => ActiveMemberIndex::Loaded(index),
+        Err(error) => {
+            checks.push(build_unreadable_active_members_check(
+                workspace_dir,
+                error.format_user_message(),
+            ));
+            ActiveMemberIndex::Unreadable
+        }
+    }
+}
+
+fn build_unreadable_active_members_check(workspace_dir: &AnchoredDir, reason: &str) -> DoctorCheck {
+    let active_dir = workspace_dir
+        .path()
+        .join(MEMBERS_DIR_NAME)
+        .join(ACTIVE_DIR_NAME);
+    DoctorCheck::fail_with_reason_and_next_action(
+        "artifacts.active_members",
+        DoctorCategory::Artifacts,
+        DoctorSubject::Path(format_path_relative_to_cwd(&active_dir)),
+        "Active members could not be read, so artifact signers and recipients were not judged",
+        reason,
+        "repair members/active, then run the diagnosis again",
+    )
+}
+
+/// Report the entries the artifact listing had to leave out.
+///
+/// An entry nobody can inspect is exactly the one worth naming, so it becomes a
+/// finding of its own rather than disappearing behind the artifacts that were
+/// readable.
+fn check_skipped_secrets_entries(
+    warnings: &[String],
+    secrets_subject: &DoctorSubject,
 ) -> Vec<DoctorCheck> {
-    let subject = DoctorSubject::Artifact(format_path_relative_to_cwd(path));
-    let content = match load_artifact_for_doctor(path, &subject) {
+    warnings
+        .iter()
+        .map(|warning| {
+            DoctorCheck::warn_with_reason_and_next_action(
+                "artifacts.entry",
+                DoctorCategory::Artifacts,
+                secrets_subject.clone(),
+                "Secrets entry could not be inspected",
+                warning.as_str(),
+                "make the entry readable, then run the diagnosis again",
+            )
+        })
+        .collect()
+}
+
+/// Diagnose one artifact.
+///
+/// The format, signature and disclosure history are judged on the artifact
+/// alone, so they still run when the member set is unavailable. Only the two
+/// judgments that need that set are left out, and the reason they were is
+/// already reported once for the whole run.
+fn check_artifact(artifact: &ArtifactRef, active_members: &ActiveMemberIndex) -> Vec<DoctorCheck> {
+    let subject = DoctorSubject::Artifact(format_path_relative_to_cwd(artifact.path()));
+    let content = match load_artifact_for_doctor(artifact, &subject) {
         ArtifactContentCheck::Loaded(content) => content,
         ArtifactContentCheck::Finding(check) => return vec![check],
     };
@@ -70,8 +165,10 @@ fn check_artifact(
     };
     checks.push(check_valid_artifact_signature(&subject));
 
-    checks.extend(check_signer(&proof, active_members_by_kid, &subject));
-    checks.extend(check_recipients(&content, active_members_by_kid, &subject));
+    if let Some(active_members_by_kid) = active_members.judged() {
+        checks.extend(check_signer(&proof, active_members_by_kid, &subject));
+        checks.extend(check_recipients(&content, active_members_by_kid, &subject));
+    }
     checks.extend(check_disclosure_history(&content, &subject));
     checks
 }
@@ -81,8 +178,11 @@ enum ArtifactContentCheck {
     Finding(DoctorCheck),
 }
 
-fn load_artifact_for_doctor(path: &Path, subject: &DoctorSubject) -> ArtifactContentCheck {
-    match load_artifact_content(path) {
+fn load_artifact_for_doctor(
+    artifact: &ArtifactRef,
+    subject: &DoctorSubject,
+) -> ArtifactContentCheck {
+    match load_artifact_content(artifact) {
         Ok(content) => ArtifactContentCheck::Loaded(content),
         Err(error) => ArtifactContentCheck::Finding(DoctorCheck::fail_with_reason_and_next_action(
             "artifacts.read",
@@ -382,9 +482,9 @@ fn removed_recipients(content: &EncContent) -> Result<Vec<RemovedRecipient>> {
     })
 }
 
-fn load_active_member_index(workspace_root: &Path) -> Result<BTreeMap<String, PublicKey>> {
+fn load_active_member_index(workspace: &AnchoredDir) -> Result<BTreeMap<String, PublicKey>> {
     let mut index = BTreeMap::new();
-    for member in load_active_member_files(workspace_root)? {
+    for member in load_active_member_files_at(workspace)? {
         index.insert(member.protected.kid.clone(), member);
     }
     Ok(index)

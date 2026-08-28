@@ -6,6 +6,7 @@
 //! These traits enable dependency injection of ssh-keygen and ssh-add commands,
 //! allowing mock implementations for testing without `#[cfg(test)]` conditional compilation.
 
+use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::Result;
 use std::path::Path;
@@ -18,10 +19,14 @@ pub trait SshKeygen: Send + Sync {
     fn derive_public_key(&self, key_path: &Path) -> Result<String>;
 
     /// `ssh-keygen -Y sign` — produce an Ed25519 raw signature for IKM derivation.
+    ///
+    /// Takes the descriptor rather than a bare path because only a public key
+    /// needs the agent, and handing the agent to a private-key signature would
+    /// wake the operator's agent for work it has no part in.
     /// Implementations must avoid persisting secret signature material on disk.
     fn sign(
         &self,
-        key_path: &Path,
+        key: &SshKeyDescriptor,
         namespace: &str,
         ssh_pubkey: &str,
         data: &[u8],

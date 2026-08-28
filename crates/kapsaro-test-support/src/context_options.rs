@@ -14,15 +14,13 @@ pub fn build_test_command_options(home: &Path, workspace: Option<&Path>) -> Comm
 }
 
 pub fn build_test_signing_command_options(home: &Path, workspace: &Path) -> CommonCommandOptions {
-    CommonCommandOptions {
-        home: Some(home.to_path_buf()),
-        identity: Some(home.join(".ssh").join("test_ed25519")),
-        verbose: false,
-        workspace: Some(workspace.to_path_buf()),
-        ssh_signing_method: Some(SshSigningMethod::SshKeygen),
-        allow_expired_key: false,
-        allow_non_member: false,
-    }
+    build_test_command_options_with(
+        home,
+        Some(workspace),
+        Some(&home.join(".ssh").join("test_ed25519")),
+        false,
+        Some(SshSigningMethod::SshKeygen),
+    )
 }
 
 pub fn build_test_command_options_with(
@@ -32,13 +30,10 @@ pub fn build_test_command_options_with(
     verbose: bool,
     ssh_signing_method: Option<SshSigningMethod>,
 ) -> CommonCommandOptions {
-    CommonCommandOptions {
-        home: Some(home.to_path_buf()),
-        identity: identity.map(Path::to_path_buf),
-        verbose,
-        workspace: workspace.map(Path::to_path_buf),
-        ssh_signing_method,
-        allow_expired_key: false,
-        allow_non_member: false,
-    }
+    CommonCommandOptions::new()
+        .with_home(Some(home.to_path_buf()))
+        .with_identity(identity.map(Path::to_path_buf))
+        .with_verbose(verbose)
+        .with_workspace(workspace.map(Path::to_path_buf))
+        .with_ssh_signing_method(ssh_signing_method)
 }

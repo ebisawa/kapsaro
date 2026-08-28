@@ -15,11 +15,11 @@ use super::execution::{
     review_artifact_recipient_set_output, ArtifactRecipientSetReviewInput, TrustExecutionContext,
 };
 
-pub struct ArtifactContentReviewInput<'a> {
-    pub trust_ctx: &'a TrustContext,
-    pub content: &'a EncContent,
-    pub capability: CommandCapability,
-    pub context_label: &'a str,
+struct ArtifactContentReviewInput<'a> {
+    trust_ctx: &'a TrustContext,
+    content: &'a EncContent,
+    capability: CommandCapability,
+    context_label: &'a str,
 }
 
 pub struct ArtifactOutputRecipientSetReviewInput<'a> {
@@ -33,7 +33,6 @@ pub struct ArtifactOutputRecipientSetReviewInput<'a> {
 
 pub fn review_artifact_output_recipient_set<ConfirmRecipientSet>(
     review: ArtifactOutputRecipientSetReviewInput<'_>,
-    warnings: &mut Vec<String>,
     confirm_recipient_set: ConfirmRecipientSet,
 ) -> Result<()>
 where
@@ -43,7 +42,6 @@ where
         TrustExecutionContext {
             options: review.options,
             execution: review.execution,
-            warnings: &[],
         },
         ArtifactContentReviewInput {
             trust_ctx: review.trust_ctx,
@@ -51,19 +49,16 @@ where
             capability: review.capability,
             context_label: review.context_label,
         },
-        &mut |new_warnings| warnings.extend_from_slice(new_warnings),
         confirm_recipient_set,
     )
 }
 
-pub fn review_artifact_content_recipient_set_output<EmitWarnings, ConfirmRecipientSet>(
+fn review_artifact_content_recipient_set_output<ConfirmRecipientSet>(
     execution: TrustExecutionContext<'_>,
     review: ArtifactContentReviewInput<'_>,
-    emit_warnings: &mut EmitWarnings,
     confirm_recipient_set: ConfirmRecipientSet,
 ) -> Result<()>
 where
-    EmitWarnings: FnMut(&[String]),
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
     let evidence = artifact_recipient_evidence(review.content)?;
@@ -75,7 +70,6 @@ where
             capability: review.capability,
             context_label: review.context_label,
         },
-        emit_warnings,
         confirm_recipient_set,
     )
 }

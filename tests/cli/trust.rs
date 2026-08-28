@@ -8,20 +8,19 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::cli::common::{cmd, copy_dir_all, ALICE_MEMBER_HANDLE};
-use assert_cmd::cargo;
-#[cfg(unix)]
-use console::strip_ansi_codes;
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
-    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
+use crate::cli::common::{
+    cmd, copy_dir_all, save_trust_store_signed_by_active_key, ALICE_MEMBER_HANDLE,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
+#[cfg(unix)]
+use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script_at_prompt};
+use crate::test_utils::member_handle;
+use assert_cmd::cargo;
+use kapsaro_core::cli_api::test_support::domain::trust_store::{
+    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord,
+};
 use kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339;
 use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
-use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
 use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-use kapsaro_core::cli_api::test_support::storage::trust::store::save_trust_store;
-use kapsaro_test_support::crypto_context::setup_member_key_context;
 use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use predicates::prelude::*;
 use serde_json::Value;
@@ -65,29 +64,33 @@ fn build_recipient_set(
     }
 }
 
-fn save_signed_trust_store(home: &TempDir) {
-    save_signed_trust_store_with_recipient_sets(home, Vec::new());
+fn save_signed_trust_store(home: &TempDir) -> String {
+    save_signed_trust_store_with_recipient_sets(home, Vec::new())
+}
+
+fn invalidate_trust_store_signature(path: &std::path::Path) {
+    let mut document: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let signature = document["signature"]["sig"]
+        .as_str()
+        .expect("signed trust store must contain a signature");
+    let replacement = if signature.starts_with('A') { 'B' } else { 'A' };
+    document["signature"]["sig"] = Value::String(format!("{replacement}{}", &signature[1..]));
+    fs::write(path, serde_json::to_vec_pretty(&document).unwrap()).unwrap();
 }
 
 fn save_signed_trust_store_with_recipient_sets(
     home: &TempDir,
     recipient_sets: Vec<RecipientSetRecord>,
-) {
-    let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, None);
-    let protected = TrustStoreProtected {
-        format: LOCAL_TRUST_V1.to_string(),
-        owner_handle: ALICE_MEMBER_HANDLE.to_string(),
-        created_at: "2026-03-29T12:34:56Z".to_string(),
-        updated_at: "2026-03-29T12:34:56Z".to_string(),
-        known_keys: vec![
+) -> String {
+    save_trust_store_signed_by_active_key(
+        home,
+        ALICE_MEMBER_HANDLE,
+        vec![
             build_known_key(KID_BOB, BOB_MEMBER_HANDLE, "2026-03-29T12:40:00Z"),
             build_known_key(KID_CHARLIE, CHARLIE_MEMBER_HANDLE, "2026-03-29T12:41:00Z"),
         ],
         recipient_sets,
-    };
-    let document = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
-    let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
-    save_trust_store(&path, &document).unwrap();
+    )
 }
 
 fn save_signed_trust_store_with_default_recipient_sets(home: &TempDir) {
@@ -148,6 +151,43 @@ fn test_trust_list_succeeds_without_ssh_agent() {
         stderr
     );
     assert.stderr(predicate::str::contains(BOB_MEMBER_HANDLE));
+}
+
+/// The listing reports the approvals it read and the permission problem it met
+/// on the way, and the warning has to survive alongside the listing output.
+#[cfg(unix)]
+#[test]
+fn test_trust_list_warns_about_insecure_trust_store_permissions() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("keys")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains(BOB_MEMBER_HANDLE),
+        "expected the known key listing in stderr, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Insecure permissions 0644"),
+        "expected the insecure permission warning in stderr, got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("(expected 0600)") && stderr.contains("chmod 0600"),
+        "expected the warning to name the expected mode and the repair, got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -265,10 +305,10 @@ fn test_trust_recipients_remove_deletes_requested_sid() {
 
 #[cfg(unix)]
 #[test]
-fn test_trust_remove_prints_insecure_permission_warning() {
+fn test_trust_remove_warns_about_insecure_trust_store_permissions() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let assert = cmd()
@@ -285,53 +325,18 @@ fn test_trust_remove_prints_insecure_permission_warning() {
 
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
     assert!(
-        stderr.contains("Insecure permissions"),
-        "expected warning in stderr, got: {}",
+        stderr.contains("from trust store"),
+        "expected the removal summary in stderr, got: {}",
         stderr
     );
     assert!(
-        stderr.contains("Removed kid"),
-        "expected removal confirmation in stderr, got: {}",
+        stderr.contains("Insecure permissions 0644"),
+        "expected the insecure permission warning in stderr, got: {}",
         stderr
     );
     assert!(
-        stderr.contains(DISPLAY_KID_BOB),
-        "expected removal confirmation to contain display kid '{}', got: {}",
-        DISPLAY_KID_BOB,
-        stderr
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn test_trust_remove_colors_warning_when_forced() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
-    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
-    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
-
-    let assert = cmd()
-        .arg("trust")
-        .arg("keys")
-        .arg("remove")
-        .arg(KID_BOB)
-        .arg("--home")
-        .arg(home.path())
-        .arg("--ssh-identity")
-        .arg(home.path().join(".ssh").join("test_ed25519"))
-        .env("CLICOLOR_FORCE", "1")
-        .assert()
-        .success();
-
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
-    assert!(
-        stderr.contains("\u{1b}[33mWarning: Insecure permissions"),
-        "expected ANSI-colored warning in stderr, got: {}",
-        stderr
-    );
-    assert!(
-        strip_ansi_codes(&stderr).contains("Warning: Insecure permissions"),
-        "expected warning text to remain intact after stripping ANSI, got: {}",
+        stderr.contains("(expected 0600)") && stderr.contains("chmod 0600"),
+        "warning must name the required permissions and the fix, got: {}",
         stderr
     );
 }
@@ -429,31 +434,75 @@ fn test_trust_remove_accepts_unique_prefix_kid() {
         .stderr(predicate::str::contains(DISPLAY_KID_BOB));
 }
 
+/// A reset takes the whole store, so the key the operator asked to remove is
+/// gone with it. Retrying the removal against the empty cache would only report
+/// the store as missing, which reads as a failure for a command that did what
+/// it was asked.
 #[cfg(unix)]
 #[test]
-fn test_trust_list_prints_warning_after_known_key_output() {
+fn test_trust_keys_remove_after_a_reset_reports_an_empty_store() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let trust_path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
-    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
-
-    let assert = cmd()
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    invalidate_trust_store_signature(&trust_path);
+    let mut command = kapsaro_std_cmd();
+    command
         .arg("trust")
         .arg("keys")
-        .arg("list")
+        .arg("remove")
+        .arg(KID_BOB)
         .arg("--home")
         .arg(home.path())
-        .assert()
-        .success();
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"));
 
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
-    let known_key_pos = stderr.find(BOB_MEMBER_HANDLE).unwrap();
-    let warning_pos = stderr.find("Warning: Insecure permissions").unwrap();
-    assert!(
-        known_key_pos < warning_pos,
-        "expected known key output before permission warning, got: {}",
-        stderr
+    let result = run_command_with_pty_script_at_prompt(
+        &mut command,
+        "continue with an empty trust cache?",
+        || {},
+        b"y",
+        &[],
     );
+
+    assert!(result.status.success(), "{}", result.output);
+    assert!(result.output.contains("Deleted local trust store"));
+    assert!(result
+        .output
+        .contains("Trust store was reset, so there was no approved key left to remove"));
+    assert!(!trust_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_trust_recipients_remove_after_a_reset_reports_an_empty_store() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store_with_default_recipient_sets(&home);
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    invalidate_trust_store_signature(&trust_path);
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("trust")
+        .arg("recipients")
+        .arg("remove")
+        .arg(SID_OLD)
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"));
+
+    let result = run_command_with_pty_script_at_prompt(
+        &mut command,
+        "continue with an empty trust cache?",
+        || {},
+        b"y",
+        &[],
+    );
+
+    assert!(result.status.success(), "{}", result.output);
+    assert!(result
+        .output
+        .contains("Trust store was reset, so there was no recipient set left to remove"));
+    assert!(!trust_path.exists());
 }
 
 #[test]
@@ -533,6 +582,131 @@ fn test_trust_purge_without_force_in_non_interactive_mode_error() {
         ));
 }
 
+/// A store replaced while the operator was reading the purge preview no longer
+/// holds what they reviewed, so the command reports the conflict and leaves the
+/// file alone. Offering to delete it here would let a mid-flight replacement
+/// walk the operator into discarding every pinned key.
+#[cfg(unix)]
+#[test]
+fn test_trust_purge_reports_a_conflict_when_the_reviewed_store_is_replaced() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("trust")
+        .arg("keys")
+        .arg("purge")
+        .arg("--older-than")
+        .arg("1d")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"));
+
+    let result = run_command_with_pty_script_at_prompt(
+        &mut command,
+        "Proceed?",
+        || fs::write(&trust_path, "invalid trust store").unwrap(),
+        b"y",
+        &[],
+    );
+
+    assert!(!result.status.success(), "{}", result.output);
+    assert!(result.output.contains("changed since this command read it"));
+    assert_eq!(
+        fs::read_to_string(&trust_path).unwrap(),
+        "invalid trust store"
+    );
+}
+
+/// The replacement a purge has to catch is a store that still verifies. Signed
+/// by the same owner key and readable in full, it clears every check the write
+/// path applies to the bytes, so only the binding to the reviewed content tells
+/// the command that the entries it listed are no longer the ones on disk.
+#[cfg(unix)]
+#[test]
+fn test_trust_purge_reports_a_conflict_when_the_reviewed_store_is_replaced_by_a_valid_store() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("trust")
+        .arg("keys")
+        .arg("purge")
+        .arg("--older-than")
+        .arg("1d")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"));
+
+    let result = run_command_with_pty_script_at_prompt(
+        &mut command,
+        "Proceed?",
+        || {
+            save_trust_store_signed_by_active_key(
+                &home,
+                ALICE_MEMBER_HANDLE,
+                vec![build_known_key(
+                    KID_CHARLIE,
+                    CHARLIE_MEMBER_HANDLE,
+                    "2026-03-29T12:41:00Z",
+                )],
+                Vec::new(),
+            );
+        },
+        b"y",
+        &[],
+    );
+
+    assert!(!result.status.success(), "{}", result.output);
+    assert!(result.output.contains("changed since this command read it"));
+    let stored: Value = serde_json::from_slice(&fs::read(&trust_path).unwrap()).unwrap();
+    let known_keys = stored["protected"]["known_keys"].as_array().unwrap();
+    assert_eq!(known_keys.len(), 1);
+    assert_eq!(known_keys[0]["kid"].as_str(), Some(KID_CHARLIE));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_trust_purge_reset_at_list_time_exits_with_empty_result() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+    let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    invalidate_trust_store_signature(&trust_path);
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("trust")
+        .arg("keys")
+        .arg("purge")
+        .arg("--older-than")
+        .arg("1d")
+        .arg("--force")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"));
+
+    let result = run_command_with_pty_script_at_prompt(
+        &mut command,
+        "continue with an empty trust cache?",
+        || {},
+        b"y",
+        &[],
+    );
+
+    assert!(result.status.success(), "{}", result.output);
+    assert!(result.output.contains("Deleted local trust store"));
+    // The store was discarded whole, so the summary says that rather than
+    // reporting a purge count that reads as "nothing happened".
+    assert!(result
+        .output
+        .contains("Trust store was reset, so there were no known keys left to purge"));
+    assert!(!trust_path.exists());
+}
+
 #[test]
 fn test_trust_recipients_purge_with_force_removes_only_old_records() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
@@ -584,4 +758,173 @@ fn test_trust_recipients_purge_without_force_in_non_interactive_mode_error() {
         .stderr(predicate::str::contains(
             "Non-interactive mode requires --force flag for purge",
         ));
+}
+
+/// Find the kid of the key a member holds that is not the one named.
+fn find_other_kid(home: &TempDir, member_handle: &str, known_kid: &str) -> String {
+    let member_dir = home.path().join("keys").join(member_handle);
+    fs::read_dir(&member_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_str().unwrap().to_string())
+        .find(|kid| kid != known_kid)
+        .expect("a second key must exist")
+}
+
+fn generate_and_activate_second_key(home: &TempDir) {
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+}
+
+/// Rotating the signing key and removing the old one is ordinary maintenance,
+/// so it must complete without ever proposing to delete the trust store.
+#[test]
+fn test_key_rotation_removes_the_previous_signer_without_a_reset_prompt() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let previous_kid = save_signed_trust_store(&home);
+    generate_and_activate_second_key(&home);
+
+    let assert = cmd()
+        .arg("key")
+        .arg("remove")
+        .arg(&previous_kid)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        stderr.contains("Re-signed local trust store"),
+        "the trust store signature must move before the key goes, got: {stderr}"
+    );
+    assert!(!home
+        .path()
+        .join("keys")
+        .join(ALICE_MEMBER_HANDLE)
+        .join(&previous_kid)
+        .exists());
+
+    cmd()
+        .arg("trust")
+        .arg("keys")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(BOB_MEMBER_HANDLE));
+}
+
+#[test]
+fn test_trust_resign_moves_the_signature_to_the_active_key() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let previous_kid = save_signed_trust_store(&home);
+    generate_and_activate_second_key(&home);
+    let rotated_kid = find_other_kid(&home, ALICE_MEMBER_HANDLE, &previous_kid);
+
+    cmd()
+        .arg("trust")
+        .arg("resign")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Re-signed local trust store for"));
+
+    let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    let document: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(document["signature"]["kid"], rotated_kid);
+    assert_eq!(document["protected"]["updated_at"], "2026-03-29T12:34:56Z");
+}
+
+/// `trust resign` is the repair for a signer key whose public half is gone, so
+/// it names that key and the way back rather than offering to delete the store.
+#[test]
+fn test_trust_resign_reports_a_missing_signer_public_key_without_a_reset_prompt() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
+    let previous_kid = save_signed_trust_store(&home);
+    generate_and_activate_second_key(&home);
+    fs::remove_file(
+        home.path()
+            .join("keys")
+            .join(ALICE_MEMBER_HANDLE)
+            .join(&previous_kid)
+            .join("public.json"),
+    )
+    .unwrap();
+
+    let assert = cmd()
+        .arg("trust")
+        .arg("resign")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .arg("--home")
+        .arg(home.path())
+        .env("KAPSARO_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
+        .assert()
+        .failure();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains("public.json"),
+        "expected the restore path in stderr, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("trusted backup or known-good copy"),
+        "expected the trusted-copy hint in stderr, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("owner-only permissions"),
+        "expected the permission hint in stderr, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("kapsaro trust resign --member-handle alice@example.com"),
+        "expected the re-signing hint in stderr, got: {stderr}"
+    );
+    assert!(!stderr.contains("kapsaro key export"), "got: {stderr}");
+    assert!(
+        get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE)).exists(),
+        "the trust store must still be on disk"
+    );
+}
+
+#[test]
+fn test_trust_resign_reports_a_store_already_signed_by_the_active_key() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("resign")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .arg("--home")
+        .arg(home.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("already signed by kid"));
 }

@@ -6,9 +6,10 @@
 //! Tests for untested functions:
 //! - build_private_key_plaintext (tested indirectly via keygen_test)
 //! - save_and_activate (tested via public save_key_pair_atomic + set_active_kid)
-//! - ensure_keystore_dir (tested via KeystoreResolver::ensure_keystore_root)
 //! - build_public_key with github_account
 
+use crate::cli_api::test_support::storage::keystore::active::load_active_kid;
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, save_key_pair_atomic};
 use crate::crypto::kem::{derive_public_key_from_secret, X25519SecretKey};
 use crate::feature::key::generate::KeyGenerationOptions;
 use crate::feature::key::material::{build_identity_keys, generate_keypairs, KeypairMaterial};
@@ -16,13 +17,12 @@ use crate::feature::key::public_key_document::{build_public_key, PublicKeyDocume
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::format::codec::base64_public::decode_base64url_nopad;
 use crate::format::kid::derive_public_key_kid;
-use crate::io::keystore::active::load_active_kid;
-use crate::io::keystore::resolver::KeystoreResolver;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::io::keystore::signer::load_signer_public_key;
-use crate::io::keystore::storage::{list_kids, save_key_pair_atomic};
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
+use crate::model::identity::MemberHandle;
 use crate::model::public_key::{Attestation, BindingClaims, GithubAccount, IdentityKeys};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::model::wire::jwk::{CURVE_ED25519, CURVE_X25519};
@@ -376,8 +376,12 @@ fn test_save_and_activate_activates() {
     )
     .unwrap();
     // no_activate=false means we DO activate
-    crate::io::keystore::active::set_active_kid(ALICE_MEMBER_HANDLE, new_kid, &keystore_root)
-        .unwrap();
+    crate::cli_api::test_support::storage::keystore::active::set_active_kid(
+        ALICE_MEMBER_HANDLE,
+        new_kid,
+        &keystore_root,
+    )
+    .unwrap();
 
     let active = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root).unwrap();
     assert_eq!(
@@ -389,9 +393,9 @@ fn test_save_and_activate_activates() {
 
 #[test]
 fn test_save_and_activate_no_activate() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = crate::test_utils::local_state_temp_dir();
     let keystore_root = temp_dir.path().join("keys");
-    std::fs::create_dir_all(&keystore_root).unwrap();
+    crate::test_utils::create_local_state_dir(&keystore_root);
 
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&temp_dir);
@@ -430,44 +434,6 @@ fn test_save_and_activate_no_activate() {
         active.is_none(),
         "No key should be active after save_and_activate with no_activate=true"
     );
-}
-
-// ============================================================================
-// ensure_keystore_dir tests (via KeystoreResolver::ensure_keystore_root)
-// ============================================================================
-
-#[test]
-fn test_ensure_keystore_dir_creates_directory() {
-    let temp_dir = TempDir::new().unwrap();
-    let home = temp_dir.path().to_path_buf();
-    let expected_keystore = home.join("keys");
-
-    // Directory should not exist yet
-    assert!(!expected_keystore.exists());
-
-    let result = KeystoreResolver::ensure_keystore_root(Some(&home)).unwrap();
-
-    assert_eq!(result, expected_keystore);
-    assert!(
-        expected_keystore.exists(),
-        "Keystore directory should be created"
-    );
-    assert!(
-        expected_keystore.is_dir(),
-        "Keystore path should be a directory"
-    );
-}
-
-#[test]
-fn test_ensure_keystore_dir_idempotent() {
-    let temp_dir = TempDir::new().unwrap();
-    let home = temp_dir.path().to_path_buf();
-
-    // Call twice - second call should succeed without error
-    let result1 = KeystoreResolver::ensure_keystore_root(Some(&home)).unwrap();
-    let result2 = KeystoreResolver::ensure_keystore_root(Some(&home)).unwrap();
-
-    assert_eq!(result1, result2, "Both calls should return the same path");
 }
 
 // ============================================================================
@@ -539,12 +505,16 @@ fn test_build_public_key() {
 fn test_load_signer_public_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
+    let keystore_access = KeystoreAccess::open(keystore_root).unwrap();
+    let member_handle = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
+    let kid = keystore_access.resolve_kid(&member_handle, None).unwrap();
     let pub_key_source =
-        crate::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_root);
+        crate::io::keystore::public_key_source::KeystorePublicKeySource::new(keystore_access);
 
-    let result = load_signer_public_key(&pub_key_source, ALICE_MEMBER_HANDLE).unwrap();
+    let result = load_signer_public_key(&pub_key_source, &member_handle, &kid).unwrap();
 
     assert_eq!(result.protected.subject_handle, ALICE_MEMBER_HANDLE);
+    assert_eq!(result.protected.kid, kid.as_str());
 }
 
 #[test]

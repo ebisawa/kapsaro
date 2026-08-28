@@ -13,18 +13,19 @@ use crate::model::public_key::PublicKey;
 /// This proof indicates that the PublicKey document's self-signature has been
 /// cryptographically verified. Used by verified public-key wrappers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SelfSignatureProof {}
+pub struct SelfSignatureProof(
+    // Never read: the private field is what keeps the proof unconstructible
+    // outside the crate, which is the whole of what it states.
+    #[allow(dead_code)] (),
+);
 
 impl SelfSignatureProof {
-    /// Create a new SelfSignatureProof
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Default for SelfSignatureProof {
-    fn default() -> Self {
-        Self::new()
+    /// Create a new SelfSignatureProof.
+    ///
+    /// Kept out of the crate's external surface: the proof states that the
+    /// self-signature check ran, so it is minted where that check happens.
+    pub(crate) fn new() -> Self {
+        Self(())
     }
 }
 
@@ -33,18 +34,18 @@ impl Default for SelfSignatureProof {
 /// This proof indicates that the PublicKey's expiration date has been validated
 /// and the key is not expired. Used in `VerifiedRecipientKey`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExpiryProof {}
+pub struct ExpiryProof(
+    // Never read: see `SelfSignatureProof`.
+    #[allow(dead_code)] (),
+);
 
 impl ExpiryProof {
-    /// Create a new ExpiryProof
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Default for ExpiryProof {
-    fn default() -> Self {
-        Self::new()
+    /// Create a new ExpiryProof.
+    ///
+    /// Kept out of the crate's external surface: the proof states that the
+    /// expiry check ran, so it is minted where that check happens.
+    pub(crate) fn new() -> Self {
+        Self(())
     }
 }
 
@@ -76,23 +77,10 @@ pub struct SignatureVerificationProof {
 }
 
 impl SignatureVerificationProof {
-    /// Create a new SignatureVerificationProof
-    pub fn new(
-        member_handle: String,
-        kid: String,
-        verifying_key_source: VerifyingKeySource,
-        warnings: Vec<String>,
-    ) -> Self {
-        Self {
-            member_handle,
-            kid,
-            signer_public_key: None,
-            verifying_key_source,
-            warnings,
-        }
-    }
-
     /// Create a new SignatureVerificationProof with embedded signer metadata.
+    ///
+    /// Signature verification always carries the key it verified with, so the
+    /// embedded key is required rather than optional here.
     pub fn new_with_signer_public_key(
         member_handle: String,
         kid: String,
@@ -106,31 +94,6 @@ impl SignatureVerificationProof {
             signer_public_key: Some(signer_public_key),
             verifying_key_source,
             warnings,
-        }
-    }
-}
-
-/// Proof of binding_claims online verification
-///
-/// This proof indicates that the document's binding_claims (e.g. github_account)
-/// have been verified against an external service (e.g. GitHub API). Used in
-/// `VerifiedBindingClaims`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BindingVerificationProof {
-    /// Verification method (e.g. "github")
-    pub method: String,
-    /// SSH key fingerprint that was matched (when applicable)
-    pub fingerprint: Option<String>,
-    /// External service key id (e.g. GitHub key id) when matched
-    pub matched_key_id: Option<i64>,
-}
-impl BindingVerificationProof {
-    /// Create a new BindingVerificationProof
-    pub fn new(method: String, fingerprint: Option<String>, matched_key_id: Option<i64>) -> Self {
-        Self {
-            method,
-            fingerprint,
-            matched_key_id,
         }
     }
 }

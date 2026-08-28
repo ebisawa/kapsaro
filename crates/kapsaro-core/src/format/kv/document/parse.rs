@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Parsing of a kv-enc document from its line-based text.
+//! Validates the file structure and its tokens before building the document.
+
 use crate::format::kv::document::structure::{validate_kv_file_structure, validate_kv_tokens};
 use crate::format::kv::enc::canonical::extract_kv_header_tokens;
 use crate::format::kv::enc::parser::KvEncParser;
@@ -22,7 +25,6 @@ pub(super) fn parse_kv_document(content: &str, source_name: &str) -> Result<KvEn
         parse_kv_wrap_token_with_source(&wrap_token, &token_source(source_name, "WRAP token"))?;
 
     Ok(KvEncDocument::new(
-        content.to_string(),
         lines,
         head,
         wrap,

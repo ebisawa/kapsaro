@@ -1,33 +1,57 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::kv::VerifiedKvEncArtifact;
+//! Read-path orchestration for the KV query commands.
+//! Resolves which document to read and the trust plan that read runs under.
+
+use crate::api::kv::{KvEncArtifact, VerifiedKvEncArtifact};
 use crate::app::context::execution::evaluate_selected_decryption_key_expiry;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::errors::build_default_kv_file_not_found_error;
 use crate::app::trust::{
     evaluate_read_artifact_trust, push_signature_verification_warnings, ReadTrustPolicy,
-    RecipientTrustOutcome, SignerTrustOutcome,
 };
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::trust::recipient_sets::kv_recipient_evidence;
+use crate::support::fs::relative::file_exists_at;
 use crate::support::warning::push_unique_warning;
-use crate::Result;
+use crate::{ErrorKind, Result};
 
 use super::session::KvFileTarget;
 use crate::app::context::execution::SelectedDecryptionKeyExpiry;
 use crate::app::trust::evaluation::ReadArtifactTrustPlan;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 
-pub fn resolve_kv_read_path(
-    options: &CommonCommandOptions,
+/// One KV input read through the workspace capability a command fixed.
+pub struct KvReadInput {
+    pub file_path: std::path::PathBuf,
+    pub file_name: String,
+    pub artifact: KvEncArtifact,
+}
+
+/// Load a KV artifact from the secrets directory fixed by `execution`.
+pub fn load_kv_read_input(
+    execution: &crate::app::context::execution::ExecutionContext,
     file_name: Option<&str>,
-) -> Result<std::path::PathBuf> {
-    let target = KvFileTarget::resolve(options, file_name)?;
-    if !target.file_path.exists() {
-        return Err(build_default_kv_file_not_found_error(&target.file_path));
-    }
-    Ok(target.file_path)
+) -> Result<KvReadInput> {
+    let target = KvFileTarget::bind(execution, file_name)?;
+    let secrets_directory = execution.ensured_secrets_directory()?;
+    let artifact =
+        KvEncArtifact::load_at(secrets_directory.as_ref(), &target.file_name).map_err(|error| {
+            let is_absent = matches!(
+                file_exists_at(secrets_directory.as_ref(), &target.file_name),
+                Ok(false)
+            );
+            if error.kind() == ErrorKind::NotFound || is_absent {
+                return build_default_kv_file_not_found_error(&target.file_path);
+            }
+            error
+        })?;
+    Ok(KvReadInput {
+        file_path: target.file_path,
+        file_name: target.file_name,
+        artifact,
+    })
 }
 
 pub fn evaluate_kv_read_trust_plan<P>(
@@ -44,7 +68,6 @@ where
         evaluate_kv_read_key_expiry(execution, verified_doc, operation_options)?;
     let trust_plan = evaluate_kv_read_trust::<P>(options, execution, verified_doc)?;
     let warnings = collect_kv_read_warnings(
-        Vec::new(),
         verified_doc.proof(),
         selected_key_expiry,
         trust_plan.warnings,
@@ -85,11 +108,11 @@ where
 }
 
 fn collect_kv_read_warnings(
-    mut warnings: Vec<String>,
     proof: &crate::model::verification::SignatureVerificationProof,
     selected_key_expiry: SelectedDecryptionKeyExpiry,
     trust_warnings: Vec<String>,
 ) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
     push_signature_verification_warnings(
         &mut warnings,
         proof,

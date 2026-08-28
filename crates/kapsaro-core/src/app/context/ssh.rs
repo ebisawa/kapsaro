@@ -1,22 +1,25 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! SSH signing environment resolution for commands.
+//! Selects the identity and signing method the local key will be unlocked with.
+
 use std::path::PathBuf;
 
 mod candidate;
 mod determinism;
 mod resolution;
 
-use crate::app::context::member::resolve_command_member;
+use crate::app::context::member::{resolve_command_member, CommandMemberResolution};
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::key::build_no_active_key_error;
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::feature::key::ssh_binding::SshBindingContext;
-use crate::io::keystore::active::load_active_kid;
-use crate::io::keystore::storage::load_private_key;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::io::ssh::backend::{build_backend, SignatureBackend};
 use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::external::pubkey::SshKeyCandidate;
 use crate::io::ssh::protocol::build_sha256_fingerprint;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::private_key::PrivateKey;
 use crate::model::private_key::PrivateKeyAlgorithm;
 use crate::model::ssh::SshDeterminismStatus;
@@ -31,6 +34,12 @@ pub struct SshSigningContextResolution {
     pub fingerprint: String,
     pub backend: Box<dyn SignatureBackend>,
     pub determinism: SshDeterminismStatus,
+}
+
+/// SSH context bound to the canonical KID selected from the keystore.
+pub(crate) struct SshSigningKeyResolution {
+    pub(crate) kid: Kid,
+    pub(crate) context: SshSigningContextResolution,
 }
 
 impl SshSigningContextResolution {
@@ -55,14 +64,27 @@ pub struct SshKeyCandidateView {
 pub struct SshSigningParams {
     pub ssh_key: Option<PathBuf>,
     pub signing_method: Option<crate::config::types::SshSigningMethod>,
+    #[cfg(test)]
     pub base_dir: Option<PathBuf>,
     pub check_determinism: bool,
+}
+
+impl SshSigningParams {
+    /// The configuration this signing environment resolves its settings from.
+    ///
+    /// The signing method, both external commands and the key path are all
+    /// configured in one file, so one snapshot answers for all of them.
+    #[cfg(test)]
+    fn global_config(&self) -> GlobalConfigSnapshot {
+        GlobalConfigSnapshot::for_base_dir(self.base_dir.as_deref())
+    }
 }
 
 fn build_ssh_signing_params(options: &CommonCommandOptions) -> SshSigningParams {
     SshSigningParams {
         ssh_key: options.identity.clone(),
         signing_method: options.ssh_signing_method,
+        #[cfg(test)]
         base_dir: options.home.clone(),
         check_determinism: false,
     }
@@ -72,13 +94,21 @@ pub fn resolve_ssh_key_candidates(
     options: &CommonCommandOptions,
 ) -> Result<Vec<SshKeyCandidateView>> {
     let params = build_ssh_signing_params(options);
-    resolve_ssh_key_candidates_with_params(&params)
+    resolve_ssh_key_candidates_with_config(&params, options.global_config()?)
 }
 
+#[cfg(test)]
 pub fn resolve_ssh_key_candidates_with_params(
     params: &SshSigningParams,
 ) -> Result<Vec<SshKeyCandidateView>> {
-    let candidates = resolve_app_ssh_key_candidates(params)?;
+    resolve_ssh_key_candidates_with_config(params, &params.global_config())
+}
+
+fn resolve_ssh_key_candidates_with_config(
+    params: &SshSigningParams,
+    config: &GlobalConfigSnapshot,
+) -> Result<Vec<SshKeyCandidateView>> {
+    let candidates = resolve_app_ssh_key_candidates(params, config)?;
     debug!("[SSH] candidate count={}", candidates.len());
     Ok(build_ssh_candidate_views(candidates))
 }
@@ -90,14 +120,23 @@ pub fn build_ssh_signing_context(
 ) -> Result<SshSigningContextResolution> {
     let mut params = build_ssh_signing_params(options);
     params.check_determinism = check_determinism;
-    build_ssh_signing_context_with_params(&params, selected_pubkey)
+    build_ssh_signing_context_with_config(&params, options.global_config()?, selected_pubkey)
 }
 
+#[cfg(test)]
 pub fn build_ssh_signing_context_with_params(
     params: &SshSigningParams,
     selected_pubkey: &str,
 ) -> Result<SshSigningContextResolution> {
-    let ssh_signing_context = build_app_ssh_signing_context(params, selected_pubkey)?;
+    build_ssh_signing_context_with_config(params, &params.global_config(), selected_pubkey)
+}
+
+fn build_ssh_signing_context_with_config(
+    params: &SshSigningParams,
+    config: &GlobalConfigSnapshot,
+    selected_pubkey: &str,
+) -> Result<SshSigningContextResolution> {
+    let ssh_signing_context = build_app_ssh_signing_context(params, config, selected_pubkey)?;
     debug!(
         "[SSH] signing context: fingerprint={}, determinism={}",
         ssh_signing_context.fingerprint,
@@ -113,15 +152,15 @@ pub fn build_ssh_signing_context_with_params(
 
 fn build_app_ssh_signing_context(
     params: &SshSigningParams,
+    config: &GlobalConfigSnapshot,
     selected_pubkey: &str,
 ) -> Result<SshSigningContextResolution> {
-    let base_dir = params.base_dir.as_deref();
-    let signing_method = resolve_signing_method(params, base_dir)?;
-    let commands = resolve_ssh_commands(base_dir)?;
+    let signing_method = resolve_signing_method(params, config)?;
+    let commands = resolve_ssh_commands(config)?;
 
     validate_ssh_key_type(selected_pubkey)?;
     let fingerprint = build_sha256_fingerprint(selected_pubkey)?;
-    let key_descriptor = resolve_backend_key_descriptor(signing_method, &params.ssh_key, base_dir)?;
+    let key_descriptor = resolve_backend_key_descriptor(signing_method, &params.ssh_key, config)?;
 
     let ssh_keygen = Box::new(DefaultSshKeygen::new(commands.ssh_keygen_path));
     let backend = build_backend(signing_method, ssh_keygen, key_descriptor)?;
@@ -135,14 +174,44 @@ fn build_app_ssh_signing_context(
     })
 }
 
-pub fn resolve_ssh_context_by_active_key(
+/// Choose the SSH key that backs one key of a member.
+///
+/// `explicit_kid` names the key the caller asked for, and the SSH identity is
+/// chosen for that key rather than for whichever one is active; a caller that
+/// names none falls back to the active key. For a command that goes on to load
+/// the signing key, resolve the member first and use
+/// [`resolve_ssh_context_for_resolved_member`] instead: resolving twice lets a
+/// rotation land between the two reads.
+pub fn resolve_ssh_context_for_member_key(
     options: &CommonCommandOptions,
     member_handle: Option<String>,
+    explicit_kid: Option<&str>,
 ) -> Result<SshSigningContextResolution> {
     let resolved = resolve_command_member(options, member_handle)?;
-    let fingerprint =
-        resolve_active_key_ssh_fingerprint(&resolved.member_handle, &resolved.paths.keystore_root)?;
-    resolve_ssh_context_for_fingerprint(options, &fingerprint)
+    resolve_ssh_context_for_resolved_member(options, &resolved, explicit_kid)
+        .map(|resolution| resolution.context)
+}
+
+/// Choose the SSH key that backs one key of an already resolved member.
+///
+/// The resolution is borrowed rather than made again so the fingerprint comes
+/// from the same keystore view the caller goes on to load the signing key from.
+/// `explicit_kid` names the key the caller asked for, and is the same value the
+/// private key loader resolves against, so both settle on one key pair.
+pub(crate) fn resolve_ssh_context_for_resolved_member(
+    options: &CommonCommandOptions,
+    resolved: &CommandMemberResolution,
+    explicit_kid: Option<&str>,
+) -> Result<SshSigningKeyResolution> {
+    let (kid, fingerprint) = resolve_selected_key_ssh_fingerprint(
+        &resolved.keystore_access,
+        &resolved.member_handle,
+        explicit_kid,
+    )?;
+    let ctx =
+        resolve_ssh_context_for_fingerprint(options, &resolved.paths.global_config, &fingerprint)?;
+    debug!("[SSH] Using SSH key: {}", ctx.fingerprint);
+    Ok(SshSigningKeyResolution { kid, context: ctx })
 }
 
 pub fn find_ssh_candidate_by_fingerprint<'a>(
@@ -154,7 +223,7 @@ pub fn find_ssh_candidate_by_fingerprint<'a>(
         .find(|candidate| candidate.fingerprint == fingerprint)
         .ok_or_else(|| {
             Error::build_not_found_error(format!(
-                "SSH key for active key ({fingerprint}) not found in ssh-agent. \
+                "SSH key for the selected key ({fingerprint}) not found in ssh-agent. \
                  Load it with ssh-add or specify with -i"
             ))
         })
@@ -171,23 +240,38 @@ fn build_ssh_candidate_views(candidates: Vec<SshKeyCandidate>) -> Vec<SshKeyCand
         .collect()
 }
 
+/// Build the signing context for one fingerprint against a configuration the
+/// command already read, so listing the candidates and building the context do
+/// not open and parse the same file twice.
 fn resolve_ssh_context_for_fingerprint(
     options: &CommonCommandOptions,
+    config: &GlobalConfigSnapshot,
     fingerprint: &str,
 ) -> Result<SshSigningContextResolution> {
-    let candidates = resolve_ssh_key_candidates(options)?;
+    let params = build_ssh_signing_params(options);
+    let candidates = resolve_ssh_key_candidates_with_config(&params, config)?;
     let matched = find_ssh_candidate_by_fingerprint(&candidates, fingerprint)?;
-    debug!("[SSH] matched active key fingerprint={}", fingerprint);
-    build_ssh_signing_context(options, &matched.public_key, false)
+    debug!("[SSH] matched selected key fingerprint={}", fingerprint);
+    build_ssh_signing_context_with_config(&params, config, &matched.public_key)
 }
 
-fn resolve_active_key_ssh_fingerprint(
-    member_handle: &str,
-    keystore_root: &std::path::Path,
-) -> Result<String> {
-    let kid = load_active_kid_for_ssh_context(member_handle, keystore_root)?;
-    let private_key = load_private_key(keystore_root, member_handle, &kid)?;
-    Ok(resolve_ssh_fingerprint_from_private_key(&private_key)?.to_string())
+/// Resolve the SSH fingerprint stored on the key this command will unlock.
+///
+/// The key is settled first — the one the caller named, or the member's active
+/// one when it named none — and the fingerprint is then read from that very key
+/// pair under one shared lock on the member. Choosing the SSH identity from the
+/// active key while the caller named another one would hand a key protected
+/// under one SSH identity to a context built for a different one, so a
+/// `decrypt --kid K1` against a member whose active key is protected elsewhere
+/// would fail to unlock a key that is perfectly valid.
+fn resolve_selected_key_ssh_fingerprint(
+    access: &KeystoreAccess,
+    member_handle: &MemberHandle,
+    explicit_kid: Option<&str>,
+) -> Result<(Kid, String)> {
+    let (kid, private_key, _) = access.resolve_key_pair(member_handle, explicit_kid)?;
+    let fingerprint = resolve_ssh_fingerprint_from_private_key(&private_key)?.to_string();
+    Ok((kid, fingerprint))
 }
 
 fn format_determinism(status: &SshDeterminismStatus) -> &str {
@@ -196,14 +280,6 @@ fn format_determinism(status: &SshDeterminismStatus) -> &str {
         SshDeterminismStatus::Skipped => "skipped",
         SshDeterminismStatus::Failed { .. } => "failed",
     }
-}
-
-fn load_active_kid_for_ssh_context(
-    member_handle: &str,
-    keystore_root: &std::path::Path,
-) -> Result<String> {
-    load_active_kid(member_handle, keystore_root)?
-        .ok_or_else(|| build_no_active_key_error(member_handle))
 }
 
 fn resolve_ssh_fingerprint_from_private_key(private_key: &PrivateKey) -> Result<&str> {
@@ -218,6 +294,10 @@ fn resolve_ssh_fingerprint_from_private_key(private_key: &PrivateKey) -> Result<
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/app_context_ssh_member_handle_test.rs"]
 mod app_context_ssh_member_handle_test;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_context_ssh_selected_key_test.rs"]
+mod app_context_ssh_selected_key_test;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_context_ssh_match_test.rs"]

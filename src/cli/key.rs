@@ -14,7 +14,8 @@ use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
 use crate::cli::options::{
-    ForceOption, LocalOptions, LocalOutputOptions, MemberHandleOption, SigningOptions,
+    ForceOption, LocalOptions, LocalOutputOptions, LocalSigningOptions, MemberHandleOption,
+    SigningOptions,
 };
 use kapsaro_core::Result;
 
@@ -107,7 +108,7 @@ pub(crate) struct ActivateArgs {
 pub(crate) struct RemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
-    pub common: LocalOptions,
+    pub common: LocalSigningOptions,
 
     #[command(flatten)]
     pub force: ForceOption,

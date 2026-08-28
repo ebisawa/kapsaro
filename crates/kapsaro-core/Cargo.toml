@@ -29,7 +29,6 @@ subtle = "2"
 toml = "1.0"
 shellexpand = "3"
 tempfile = "3"
-fd-lock = "4.0"
 tracing = "0.1"
 thiserror = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
@@ -37,7 +36,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = tr
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-rustix = { version = "1.1.4", features = ["fs"] }
+rustix = { version = "1.1.4", features = ["fs", "process"] }
 
 [features]
 default = []
@@ -55,3 +54,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 [[test]]
 name = "unit"
 path = "tests/unit.rs"
+
+[[test]]
+name = "cli_api_boundary"
+path = "tests/cli_api_boundary.rs"
+required-features = ["cli-test-support"]

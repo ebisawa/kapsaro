@@ -9,6 +9,7 @@
 //! 3. Global config (KAPSARO_HOME/config.toml)
 //! 4. Default (auto)
 
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::types::{SshSigningMethod, SshSigningMethodConfig};
 use crate::test_utils::EnvGuard;
 use serial_test::serial;
@@ -44,14 +45,17 @@ fn test_parse_ssh_signing_method_config_invalid() {
 
 #[test]
 fn test_resolve_ssh_signing_method_config_cli_ssh_agent() {
-    let result = resolve_ssh_signing_method_config(Some(SshSigningMethod::SshAgent), None).unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(None);
+    let result =
+        resolve_ssh_signing_method_config(Some(SshSigningMethod::SshAgent), &config).unwrap();
     assert_eq!(result, SshSigningMethodConfig::SshAgent);
 }
 
 #[test]
 fn test_resolve_ssh_signing_method_config_cli_ssh_keygen() {
+    let config = GlobalConfigSnapshot::for_base_dir(None);
     let result =
-        resolve_ssh_signing_method_config(Some(SshSigningMethod::SshKeygen), None).unwrap();
+        resolve_ssh_signing_method_config(Some(SshSigningMethod::SshKeygen), &config).unwrap();
     assert_eq!(result, SshSigningMethodConfig::SshKeygen);
 }
 
@@ -61,7 +65,8 @@ fn test_resolve_ssh_signing_method_config_default_is_auto() {
     let _guard = EnvGuard::new(&["KAPSARO_SSH_SIGNER", "KAPSARO_SSH_SIGNING_METHOD"]);
 
     let temp = TempDir::new().unwrap();
-    let result = resolve_ssh_signing_method_config(None, Some(temp.path())).unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(Some(temp.path()));
+    let result = resolve_ssh_signing_method_config(None, &config).unwrap();
 
     assert_eq!(result, SshSigningMethodConfig::Auto);
 }
@@ -72,7 +77,8 @@ fn test_resolve_ssh_signing_method_config_env_var_ssh_agent() {
     let _guard = EnvGuard::new(&["KAPSARO_SSH_SIGNER", "KAPSARO_SSH_SIGNING_METHOD"]);
     std::env::set_var("KAPSARO_SSH_SIGNING_METHOD", "ssh-agent");
 
-    let result = resolve_ssh_signing_method_config(None, None).unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(None);
+    let result = resolve_ssh_signing_method_config(None, &config).unwrap();
 
     assert_eq!(result, SshSigningMethodConfig::SshAgent);
 }

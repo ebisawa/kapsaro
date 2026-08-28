@@ -5,13 +5,13 @@
 //!
 //! Tests for file-enc decryption.
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::decrypt::file::{decrypt_file_document, decrypt_file_document_with_context};
+use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::verify::file::{verify_file_content, verify_file_document};
 use crate::format::content::FileEncContent;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
@@ -104,14 +104,9 @@ fn test_verify_content_then_decrypt_file() {
     let file_enc = FileEncContent::new_unchecked(encrypted_json);
 
     let verified = verify_file_content(&file_enc).unwrap();
-    let decrypted = decrypt_file_document(
-        &verified,
-        ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    )
-    .unwrap();
-    assert_eq!(decrypted.as_ref() as &[u8], content);
+    let decrypted =
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_HANDLE, &key_ctx).unwrap();
+    assert_eq!(decrypted.value.as_ref() as &[u8], content);
 }
 
 #[test]
@@ -150,20 +145,17 @@ fn test_parse_verify_decrypt_file() {
     let file_doc: crate::model::file_enc::FileEncDocument =
         serde_json::from_str(&encrypted_json).unwrap();
     let verified_file_doc = verify_file_document(&file_doc).unwrap();
-    let decrypted = decrypt_file_document(
-        &verified_file_doc,
-        ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    )
-    .unwrap();
+    let decrypted =
+        decrypt_file_document_with_context(&verified_file_doc, ALICE_MEMBER_HANDLE, &key_ctx)
+            .unwrap();
 
     // Compare Zeroizing<Vec<u8>> with &[u8] using as_ref()
-    assert_eq!(decrypted.as_ref() as &[u8], content);
+    assert_eq!(decrypted.value.as_ref() as &[u8], content);
 }
 
+#[cfg(unix)]
 #[test]
-fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
+fn test_decrypt_file_with_context_falls_back_after_root_path_replacement() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
@@ -193,6 +185,10 @@ fn test_decrypt_file_with_context_falls_back_to_old_local_key() {
     );
     let new_key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     assert_ne!(new_key_ctx.kid().to_string(), old_kid);
+
+    let moved_keystore_root = temp_dir.path().join("keys-original");
+    std::fs::rename(&keystore_root, &moved_keystore_root).unwrap();
+    std::fs::create_dir(&keystore_root).unwrap();
 
     let encrypted_json = serde_json::to_string(&file_enc_doc).unwrap();
     let verified = verify_file_content(&FileEncContent::new_unchecked(encrypted_json)).unwrap();
@@ -243,7 +239,7 @@ fn test_verify_file_document_returns_verified() {
 }
 
 // ---------------------------------------------------------------------------
-// Error-path tests for decrypt_file_document
+// Error-path tests for decrypt_file_document_with_context
 // ---------------------------------------------------------------------------
 
 /// Helper: create an encrypted FileEncDocument + CryptoContext for error-path tests
@@ -282,14 +278,26 @@ fn build_encrypted_file_for_error_tests() -> (
     (file_enc_doc, key_ctx, kid, temp_dir)
 }
 
-/// Helper: wrap a FileEncDocument into VerifiedFileEncDocument with a dummy proof
+/// Helper: take the error out of a decryption that must fail
+///
+/// `DecryptionResult` carries key material and has no `Debug`, so `unwrap_err` is
+/// not available on a decryption result.
+fn expect_decryption_error<T>(result: crate::Result<T>) -> crate::Error {
+    match result {
+        Ok(_) => panic!("decryption should have failed"),
+        Err(error) => error,
+    }
+}
+
+/// Helper: wrap a FileEncDocument into VerifiedFileEncDocument with a stand-in proof
 fn wrap_as_verified(
     doc: crate::model::file_enc::FileEncDocument,
     kid: &str,
 ) -> VerifiedFileEncDocument {
-    let proof = SignatureVerificationProof::new(
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
         ALICE_MEMBER_HANDLE.to_string(),
         kid.to_string(),
+        doc.signature.signer_pub.clone(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
     );
@@ -304,15 +312,12 @@ fn test_decrypt_file_wrong_format() {
     doc.protected.format = "kapsaro.file.invalid".to_string();
 
     let verified = wrap_as_verified(doc, &kid);
-    let result = decrypt_file_document(
+    let err_msg = expect_decryption_error(decrypt_file_document_with_context(
         &verified,
         ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    );
-
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
+        &key_ctx,
+    ))
+    .to_string();
     assert!(
         err_msg.contains("Invalid format"),
         "Expected 'Invalid format' in error, got: {err_msg}"
@@ -327,15 +332,12 @@ fn test_decrypt_file_wrong_payload_format() {
     doc.protected.payload.protected.format = "kapsaro.file.payload.invalid".to_string();
 
     let verified = wrap_as_verified(doc, &kid);
-    let result = decrypt_file_document(
+    let err_msg = expect_decryption_error(decrypt_file_document_with_context(
         &verified,
         ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    );
-
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
+        &key_ctx,
+    ))
+    .to_string();
     assert!(
         err_msg.contains("Invalid payload format"),
         "Expected 'Invalid payload format' in error, got: {err_msg}"
@@ -350,15 +352,12 @@ fn test_decrypt_file_unsupported_aead() {
     doc.protected.payload.protected.alg.aead = "aes-256-gcm".to_string();
 
     let verified = wrap_as_verified(doc, &kid);
-    let result = decrypt_file_document(
+    let err_msg = expect_decryption_error(decrypt_file_document_with_context(
         &verified,
         ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    );
-
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
+        &key_ctx,
+    ))
+    .to_string();
     assert!(
         err_msg.contains("Unsupported AEAD algorithm"),
         "Expected 'Unsupported AEAD algorithm' in error, got: {err_msg}"
@@ -373,15 +372,12 @@ fn test_decrypt_file_sid_mismatch() {
     doc.protected.payload.protected.sid = uuid::Uuid::new_v4();
 
     let verified = wrap_as_verified(doc, &kid);
-    let result = decrypt_file_document(
+    let err_msg = expect_decryption_error(decrypt_file_document_with_context(
         &verified,
         ALICE_MEMBER_HANDLE,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-    );
-
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
+        &key_ctx,
+    ))
+    .to_string();
     assert!(
         err_msg.contains("SID mismatch"),
         "Expected 'SID mismatch' in error, got: {err_msg}"

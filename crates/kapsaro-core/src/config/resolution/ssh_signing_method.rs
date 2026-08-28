@@ -9,9 +9,9 @@
 //! 3. Global config (KAPSARO_HOME/config.toml)
 //! 4. Default (auto)
 
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::types::{self, ConfigKey};
 use crate::{Error, Result};
-use std::path::Path;
 
 use super::common::resolve_string_required;
 
@@ -38,7 +38,7 @@ pub(crate) fn parse_ssh_signing_method_config(s: &str) -> Result<types::SshSigni
 /// 4. Default (auto)
 pub(crate) fn resolve_ssh_signing_method_config(
     ssh_signing_method_opt: Option<types::SshSigningMethod>,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<types::SshSigningMethodConfig> {
     // Priority 1: CLI option (explicit SshSigningMethod → convert to Config)
     if let Some(signer) = ssh_signing_method_opt {
@@ -53,7 +53,7 @@ pub(crate) fn resolve_ssh_signing_method_config(
         None,
         Some("KAPSARO_SSH_SIGNING_METHOD"),
         ConfigKey::SshSigningMethod.canonical_name(),
-        base_dir,
+        config,
         "auto".to_string(),
     )?;
 

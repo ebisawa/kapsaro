@@ -12,6 +12,7 @@ use crate::model::private_key::{
     PrivateKey, PrivateKeyAlgorithm, PrivateKeyEncData, PrivateKeyPlaintext, PrivateKeyProtected,
 };
 use crate::model::wire::format;
+use crate::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256;
 use crate::support::secret::SecretString;
 
 use crate::test_utils::EnvGuard;
@@ -220,6 +221,47 @@ fn test_env_key_rejects_sshsig_algorithm() {
     assert!(
         err.contains("password-protected") || err.contains("argon2id"),
         "error should mention password-protected requirement: {}",
+        err
+    );
+    assert_env_key_vars_cleared();
+}
+
+#[test]
+fn test_env_key_rejects_sshsig_algorithm_names_the_accepted_kdf() {
+    let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
+
+    let sshsig_key = PrivateKey {
+        protected: PrivateKeyProtected {
+            format: format::PRIVATE_KEY_V1.to_string(),
+            subject_handle: "alice@example.com".to_string(),
+            kid: TEST_KID.to_string(),
+            alg: PrivateKeyAlgorithm::SshSig {
+                fpr: "SHA256:dummy".to_string(),
+                ikm_salt: encode_base64url_nopad(&[0u8; 32]),
+                hkdf_salt: encode_base64url_nopad(&[1u8; 32]),
+                aead: "xchacha20-poly1305".to_string(),
+            },
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            expires_at: "2027-01-01T00:00:00Z".to_string(),
+        },
+        encrypted: PrivateKeyEncData {
+            nonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            ct: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string(),
+        },
+    };
+
+    let json = serde_json::to_vec(&sshsig_key).expect("serialize");
+    let encoded = encode_base64url_nopad(&json);
+
+    std::env::set_var(ENV_PRIVATE_KEY, &encoded);
+    std::env::set_var(ENV_KEY_PASSWORD, "test-password");
+
+    let result = load_private_key_from_env();
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains(PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256),
+        "error should name the accepted kdf {}: {}",
+        PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
         err
     );
     assert_env_key_vars_cleared();

@@ -9,9 +9,10 @@ use std::io::BufRead;
 
 use crate::cli::common::command::{
     ensure_workspace_required, resolve_options_with_allow_expired_key,
-    resolve_required_member_handle, run_kv_write_command_with_recovery, WriteCommandLabels,
+    resolve_required_member_handle, resolve_write_execution_input,
+    run_kv_write_command_with_recovery, WriteCommandLabels, KV_MUTATION_PURPOSE,
 };
-use crate::cli::common::output::text::{print_optional_status, print_warnings};
+use crate::cli::common::output::text::print_optional_status;
 use crate::cli::common::prompt::confirm_destructive_action;
 #[cfg(test)]
 use crate::cli::common::prompt::confirm_destructive_action_with_reader;
@@ -19,7 +20,10 @@ use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
+use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::cli_api::app::kv::types::KvWriteOutcome;
 use kapsaro_core::cli_api::app::trust::UnsetPolicy;
 use kapsaro_core::Result;
 
@@ -50,36 +54,45 @@ pub(crate) fn run(args: UnsetArgs) -> Result<()> {
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    ensure_workspace_required(&options, "kv mutation")?;
+    ensure_workspace_required(&options, KV_MUTATION_PURPOSE)?;
     let member_handle =
         resolve_required_member_handle(&options, args.member.member_handle.clone(), false)?;
     confirm_unset_operation(args.force.force, &args.key)?;
-    let outcome = run_kv_write_command_with_recovery::<UnsetPolicy, _, _>(
-        &options,
-        Some(member_handle.clone()),
-        args.store.name.as_deref(),
+    let execution = resolve_write_execution_input(&options, Some(member_handle.clone()))?;
+    let outcome = remove_entry(&options, &execution, args.store.name.as_deref(), &args.key)?;
+    print_optional_status(outcome.message.as_deref(), args.common.quiet.quiet);
+    Ok(())
+}
+
+fn remove_entry(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    store_name: Option<&str>,
+    key: &str,
+) -> Result<KvWriteOutcome> {
+    let success_message = format!(
+        "Removed key '{}' from '{}'",
+        key,
+        store_name.unwrap_or("default")
+    );
+    run_kv_write_command_with_recovery::<UnsetPolicy, _, _>(
+        options,
+        execution,
+        store_name,
         false,
         WriteCommandLabels {
             signer_context: Some(("unset input signer", "input signer")),
             recipient_context: "unset recipients",
         },
         |_, trust_plan| {
-            let success_message = format!(
-                "Removed key '{}' from '{}'",
-                args.key,
-                args.store.name.as_deref().unwrap_or("default")
-            );
             unset_kv_command_with_recipient_set_confirmation(
                 trust_plan,
-                &args.key,
+                key,
                 Some(&success_message),
                 confirm_recipient_set_approval,
             )
         },
-    )?;
-    print_warnings(&outcome.warnings);
-    print_optional_status(outcome.message.as_deref(), args.common.quiet.quiet);
-    Ok(())
+    )
 }
 
 fn confirm_unset_operation(force: bool, key: &str) -> Result<()> {
@@ -92,6 +105,10 @@ fn confirm_unset_operation(force: bool, key: &str) -> Result<()> {
     Ok(())
 }
 
+/// Confirm an unset against a reader rather than the terminal.
+///
+/// Wording and error mapping are shared with `confirm_unset_operation`; only
+/// the prompt is swapped, because the production one needs a terminal.
 #[cfg(test)]
 fn confirm_unset_operation_with_reader<R>(
     force: bool,

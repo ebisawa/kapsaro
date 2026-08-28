@@ -28,10 +28,7 @@ pub fn build_attestation_signed_data(input: &AttestationBodyInput<'_>) -> Result
         ))
     })?;
 
-    Ok(sshsig::build_sshsig_signed_data(
-        &attestation_body,
-        ssh::ATTESTATION_NAMESPACE,
-    ))
+    sshsig::build_sshsig_signed_data(&attestation_body, ssh::ATTESTATION_NAMESPACE)
 }
 
 /// Decode attestation signature from base64url

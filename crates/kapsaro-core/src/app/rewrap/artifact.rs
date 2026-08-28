@@ -5,15 +5,15 @@
 
 use std::path::Path;
 
-use crate::app::artifact::{detect_reviewed_artifact, load_reviewed_artifact};
+use crate::app::artifact::{detect_reviewed_artifact, load_reviewed_artifact, ArtifactRef};
 use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::review::ReviewedTextFile;
-use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
 use crate::app::trust::enforcement::evaluate_read_artifact_recipient_keys;
-use crate::app::trust::recovery::requires_trust_store_reset;
+use crate::app::trust::recovery::classify_trust_store_reset;
 use crate::app::trust::review::{
     review_artifact_output_recipient_set, review_rewrap_input_trust_requirements_with_confirmation,
-    ArtifactOutputRecipientSetReviewInput,
+    save_approved_known_key_documents, ArtifactOutputRecipientSetReviewInput,
+    TrustExecutionContext,
 };
 use crate::app::trust::{
     evaluate_signer_trust_with_proof, load_read_trust_context, ArtifactRecipientTrustOutcome,
@@ -25,7 +25,8 @@ use crate::feature::artifact::{
 };
 use crate::format::content::EncContent;
 use crate::model::verification::SignatureVerificationProof;
-use crate::support::path::format_path_relative_to_cwd;
+use crate::support::fs::lock;
+use crate::support::path::{format_finding_path, format_path_relative_to_cwd};
 use crate::support::warning::push_unique_warning;
 use crate::Result;
 use tracing::debug;
@@ -102,10 +103,10 @@ where
         recipients: confirm_recipients,
         recipient_set: confirm_recipient_set,
     };
-    execute_rewrap_artifact_paths(ctx, &mut confirmations)
+    execute_planned_rewrap_artifacts(ctx, &mut confirmations)
 }
 
-fn execute_rewrap_artifact_paths<
+fn execute_planned_rewrap_artifacts<
     ConfirmKnown,
     ConfirmNonMember,
     ConfirmRecipients,
@@ -131,14 +132,14 @@ where
     let mut failed_files = Vec::new();
     let mut warnings = Vec::new();
 
-    for file_path in &ctx.plan.artifact_paths {
-        match execute_rewrap_file(file_path, ctx, &mut warnings, confirmations) {
+    for artifact in &ctx.plan.artifacts {
+        match execute_rewrap_file(artifact, ctx, &mut warnings, confirmations) {
             Ok(()) => processed_files.push(RewrapFileSuccess {
-                output_path: file_path.clone(),
+                output_path: artifact.path().to_path_buf(),
             }),
-            Err(error) if requires_trust_store_reset(&error) => return Err(error),
+            Err(error) if classify_trust_store_reset(&error).is_some() => return Err(error),
             Err(error) => failed_files.push(RewrapFileFailure {
-                output_path: file_path.clone(),
+                output_path: artifact.path().to_path_buf(),
                 error_message: error.format_user_message().to_string(),
             }),
         }
@@ -177,7 +178,7 @@ fn collect_current_recipient_handles(
 }
 
 fn execute_rewrap_file<ConfirmKnown, ConfirmNonMember, ConfirmRecipients, ConfirmRecipientSet>(
-    file_path: &Path,
+    artifact: &ArtifactRef,
     ctx: &RewrapArtifactExecutionContext<'_>,
     warnings: &mut Vec<String>,
     confirmations: &mut RewrapArtifactConfirmations<
@@ -197,14 +198,14 @@ where
 {
     debug!(
         "[REWRAP] artifact: process path={}",
-        format_path_relative_to_cwd(file_path)
+        format_path_relative_to_cwd(artifact.path())
     );
-    let (captured, content) = load_rewrap_artifact_content(file_path)?;
-    execute_loaded_rewrap_file(file_path, &captured, &content, ctx, warnings, confirmations)
+    let (captured, content) = load_rewrap_artifact_content(artifact)?;
+    execute_loaded_rewrap_file(artifact, &captured, &content, ctx, warnings, confirmations)
 }
 
-fn load_rewrap_artifact_content(file_path: &Path) -> Result<(ReviewedTextFile, EncContent)> {
-    let captured = load_reviewed_artifact(file_path)?;
+fn load_rewrap_artifact_content(artifact: &ArtifactRef) -> Result<(ReviewedTextFile, EncContent)> {
+    let captured = load_reviewed_artifact(artifact)?;
     let content = detect_reviewed_artifact(&captured)?;
     Ok((captured, content))
 }
@@ -215,7 +216,7 @@ fn execute_loaded_rewrap_file<
     ConfirmRecipients,
     ConfirmRecipientSet,
 >(
-    file_path: &Path,
+    artifact: &ArtifactRef,
     captured: &ReviewedTextFile,
     content: &EncContent,
     ctx: &RewrapArtifactExecutionContext<'_>,
@@ -246,11 +247,10 @@ where
         confirmations.recipients,
     )?;
     execute_rewrap_artifact_replacement(
-        file_path,
+        artifact,
         captured,
         content,
         ctx,
-        warnings,
         confirmations.recipient_set,
     )
 }
@@ -267,31 +267,47 @@ fn collect_rewrap_file_warning(
 }
 
 fn execute_rewrap_artifact_replacement<ConfirmRecipientSet>(
-    file_path: &Path,
+    artifact: &ArtifactRef,
     captured: &ReviewedTextFile,
     content: &EncContent,
     ctx: &RewrapArtifactExecutionContext<'_>,
-    warnings: &mut Vec<String>,
     confirm_recipient_set: &mut ConfirmRecipientSet,
 ) -> Result<()>
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    let rewritten = rewrite_and_review_output_artifact(
-        file_path,
-        content,
-        ctx,
-        warnings,
-        confirm_recipient_set,
-    )?;
-    captured.save_replacement(&rewritten)
+    let rewritten =
+        rewrite_and_review_output_artifact(artifact.path(), content, ctx, confirm_recipient_set)?;
+    save_rewritten_artifact(artifact, captured, &rewritten)
+}
+
+/// Replace the artifact through the descriptor it was listed under.
+///
+/// That descriptor is locked and the entry addressed relative to it, so the
+/// write lands in the very directory the artifact was read from even if the
+/// path naming it is repointed in between, and no other kapsaro process is
+/// writing the same tree while it runs.
+///
+/// The stored entry is confirmed to be the reviewed one first, by identity as
+/// well as by content. Approval prompts run between the read and this write, so
+/// an edit made while the operator was deciding would otherwise be overwritten
+/// without anyone seeing it go, and a name repointed at another regular file
+/// holding the same bytes would take the rewrapped secrets with it.
+fn save_rewritten_artifact(
+    artifact: &ArtifactRef,
+    captured: &ReviewedTextFile,
+    rewritten: &str,
+) -> Result<()> {
+    lock::with_exclusive_locked_directory(artifact.directory().as_ref(), |locked_dir| {
+        captured.ensure_identity_and_content_current_at(locked_dir)?;
+        captured.save_replacement_at(locked_dir, rewritten)
+    })
 }
 
 fn rewrite_and_review_output_artifact<ConfirmRecipientSet>(
     file_path: &Path,
     content: &EncContent,
     ctx: &RewrapArtifactExecutionContext<'_>,
-    warnings: &mut Vec<String>,
     confirm_recipient_set: &mut ConfirmRecipientSet,
 ) -> Result<String>
 where
@@ -299,21 +315,22 @@ where
 {
     let rewrite_ctx = RewrapRewriteContext {
         request: ctx.request,
-        plan: ctx.plan,
         execution: ctx.execution,
         post_promotion_members: ctx.post_promotion_members,
     };
     let rewritten = build_rewritten_artifact(content, &rewrite_ctx)?;
+    // The name reaches the operator inside a parse failure on standard error,
+    // and it comes from a scan of `secrets/`, which holds whatever a teammate
+    // committed.
     let rewritten_content =
-        EncContent::detect_with_source(rewritten.clone(), format_path_relative_to_cwd(file_path))?;
-    review_rewrap_output_recipient_set(&rewritten_content, ctx, warnings, confirm_recipient_set)?;
+        EncContent::detect_with_source(rewritten.clone(), format_finding_path(file_path))?;
+    review_rewrap_output_recipient_set(&rewritten_content, ctx, confirm_recipient_set)?;
     Ok(rewritten)
 }
 
 fn review_rewrap_output_recipient_set<ConfirmRecipientSet>(
     rewritten_content: &EncContent,
     ctx: &RewrapArtifactExecutionContext<'_>,
-    warnings: &mut Vec<String>,
     confirm_recipient_set: &mut ConfirmRecipientSet,
 ) -> Result<()>
 where
@@ -328,7 +345,6 @@ where
             capability: CommandCapability::Rewrap,
             context_label: "rewrap output member set",
         },
-        warnings,
         confirm_recipient_set,
     )
 }
@@ -380,11 +396,13 @@ where
         confirm_non_member,
         confirm_recipients,
     )?;
-    warnings.extend(save_known_key_approval_warnings(
-        &ctx.request.options,
-        ctx.execution,
+    save_approved_known_key_documents(
+        TrustExecutionContext {
+            options: &ctx.request.options,
+            execution: ctx.execution,
+        },
         &approvals,
-    )?);
+    )?;
     Ok(())
 }
 
@@ -393,14 +411,7 @@ fn load_rewrap_signer_trust_context(
     plan: &RewrapBatchPlan,
     execution: &ExecutionContext,
 ) -> Result<TrustContext> {
-    let mut trust_ctx = load_read_trust_context(
-        &request.options,
-        &plan.workspace_root,
-        &execution.member_handle,
-        Some(execution.key_ctx.inner().self_signature_public_key_x()),
-        Some(execution.key_ctx.inner().local_key_identity()),
-    )?
-    .trust_ctx;
+    let mut trust_ctx = load_read_trust_context(&request.options, execution, "rewrap")?.trust_ctx;
     trust_ctx.active_members_by_kid = plan.pre_promotion_trust.active_members_by_kid.clone();
     trust_ctx.is_interactive = plan.pre_promotion_trust.is_interactive;
     trust_ctx.allow_non_member = plan.pre_promotion_trust.allow_non_member;
@@ -453,15 +464,4 @@ fn extract_signature_proof(
     allow_expired_key: bool,
 ) -> Result<SignatureVerificationProof> {
     verify_artifact_signature_for_operation(content, allow_expired_key)
-}
-
-fn save_known_key_approval_warnings(
-    options: &crate::app::context::options::CommonCommandOptions,
-    execution: &ExecutionContext,
-    approvals: &[ApprovedKnownKey],
-) -> Result<Vec<String>> {
-    if approvals.is_empty() {
-        return Ok(Vec::new());
-    }
-    Ok(save_known_key_approvals(options, execution, approvals)?.warnings)
 }

@@ -4,17 +4,20 @@
 //! Tests for cli::identity_prompt
 
 use std::env;
-use std::fs;
 
-use crate::test_utils::EnvGuard;
+use crate::test_utils::{local_state_temp_dir, write_local_state_file, EnvGuard};
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::context::ssh::SshKeyCandidateView;
 use serial_test::serial;
-use tempfile::TempDir;
 
 use super::{
     format_candidate, is_prompt_available, resolve_key_generation_github_user_with_prompt,
     select_ssh_key,
 };
+
+fn command_options(home: &std::path::Path) -> CommonCommandOptions {
+    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
+}
 
 #[test]
 fn test_select_ssh_key_empty_candidates_fails() {
@@ -102,7 +105,7 @@ fn test_select_ssh_key_multiple_candidates_non_tty_fails() {
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_returns_none_when_key_reuse() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
-    let temp_home = TempDir::new().unwrap();
+    let temp_home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", temp_home.path());
     env::set_var("KAPSARO_GITHUB_USER", "env-user");
 
@@ -110,7 +113,7 @@ fn test_resolve_key_generation_github_user_with_prompt_returns_none_when_key_reu
     let result = resolve_key_generation_github_user_with_prompt(
         false,
         None,
-        Some(temp_home.path()),
+        &command_options(temp_home.path()),
         true,
         || {
             prompted = true;
@@ -127,19 +130,18 @@ fn test_resolve_key_generation_github_user_with_prompt_returns_none_when_key_reu
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_prefers_config_before_prompt() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
-    let temp_home = TempDir::new().unwrap();
+    let temp_home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", temp_home.path());
-    fs::write(
-        temp_home.path().join("config.toml"),
+    write_local_state_file(
+        &temp_home.path().join("config.toml"),
         "github_user = \"config-user\"\n",
-    )
-    .unwrap();
+    );
 
     let mut prompted = false;
     let result = resolve_key_generation_github_user_with_prompt(
         true,
         None,
-        Some(temp_home.path()),
+        &command_options(temp_home.path()),
         true,
         || {
             prompted = true;
@@ -156,14 +158,14 @@ fn test_resolve_key_generation_github_user_with_prompt_prefers_config_before_pro
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_uses_prompt_when_tty_and_unset() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
-    let temp_home = TempDir::new().unwrap();
+    let temp_home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", temp_home.path());
 
     let mut prompted = false;
     let result = resolve_key_generation_github_user_with_prompt(
         true,
         None,
-        Some(temp_home.path()),
+        &command_options(temp_home.path()),
         true,
         || {
             prompted = true;
@@ -180,14 +182,14 @@ fn test_resolve_key_generation_github_user_with_prompt_uses_prompt_when_tty_and_
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_returns_none_without_tty() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
-    let temp_home = TempDir::new().unwrap();
+    let temp_home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", temp_home.path());
 
     let mut prompted = false;
     let result = resolve_key_generation_github_user_with_prompt(
         true,
         None,
-        Some(temp_home.path()),
+        &command_options(temp_home.path()),
         false,
         || {
             prompted = true;
@@ -204,13 +206,13 @@ fn test_resolve_key_generation_github_user_with_prompt_returns_none_without_tty(
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_allows_empty_prompt_input() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
-    let temp_home = TempDir::new().unwrap();
+    let temp_home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", temp_home.path());
 
     let result = resolve_key_generation_github_user_with_prompt(
         true,
         None,
-        Some(temp_home.path()),
+        &command_options(temp_home.path()),
         true,
         || Ok(None),
     )
@@ -223,13 +225,13 @@ fn test_resolve_key_generation_github_user_with_prompt_allows_empty_prompt_input
 #[serial]
 fn test_resolve_key_generation_github_user_with_prompt_rejects_invalid_prompt_input() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_GITHUB_USER"]);
-    let temp_home = TempDir::new().unwrap();
+    let temp_home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", temp_home.path());
 
     let result = resolve_key_generation_github_user_with_prompt(
         true,
         None,
-        Some(temp_home.path()),
+        &command_options(temp_home.path()),
         true,
         || Ok(Some("alice/keys".to_string())),
     );

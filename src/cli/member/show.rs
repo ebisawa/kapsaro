@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! CLI entry point for `member show`.
+//! Loads a single member's details by handle and renders them as text or JSON.
+
 use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::member::print_member_show;
 use kapsaro_core::cli_api::app::member::query::load_member_show_result;

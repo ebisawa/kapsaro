@@ -46,14 +46,6 @@ impl<'a> VerifiedFileKeyPossession<'a> {
         &self.content_key
     }
 
-    pub fn master_key(&self) -> &MasterKey {
-        &self.master_key
-    }
-
-    pub fn into_content_key(self) -> XChaChaKey {
-        self.content_key
-    }
-
     pub fn into_master_key(self) -> MasterKey {
         self.master_key
     }
@@ -76,10 +68,6 @@ impl<'a> VerifiedKvKeyPossession<'a> {
             master_key,
             key_schedule,
         }
-    }
-
-    pub fn master_key(&self) -> &MasterKey {
-        &self.master_key
     }
 
     pub fn key_schedule(&self) -> &KvKeySchedule {

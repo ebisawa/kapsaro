@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Error builders for rejected trust approvals during review.
+//! Centralizes the wording so approval, non-member, and rewrap rejections stay consistent.
+
 use std::path::Path;
 
 use crate::app::trust::TrustApprovalCandidate;

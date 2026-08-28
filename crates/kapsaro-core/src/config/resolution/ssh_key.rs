@@ -9,10 +9,11 @@
 //! 3. Global config (KAPSARO_HOME/config.toml)
 //! 4. Default (~/.ssh/id_ed25519)
 
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::io::ssh::protocol::SshKeyDescriptor;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::common::{
     expand_tilde, get_default_ssh_key_path, resolve_string_with_source, StringSourceResolution,
@@ -56,13 +57,13 @@ pub(crate) struct SshKeyResolution {
 /// 4. Default path (`~/.ssh/id_ed25519`)
 pub(crate) fn resolve_ssh_key_candidate(
     ssh_key_opt: Option<PathBuf>,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<SshKeyResolution> {
     if let Some(ssh_key) = ssh_key_opt {
         return Ok(build_ssh_key_resolution(ssh_key, SshKeySource::Cli));
     }
 
-    if let Some(candidate) = resolve_configured_ssh_key_candidate(base_dir)? {
+    if let Some(candidate) = resolve_configured_ssh_key_candidate(config)? {
         return Ok(candidate);
     }
 
@@ -117,9 +118,9 @@ pub(crate) fn build_ssh_key_not_found_error(candidate: &SshKeyResolution) -> Err
 /// All other files are treated as private keys.
 pub(crate) fn resolve_ssh_key_descriptor(
     ssh_key_opt: Option<PathBuf>,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<SshKeyDescriptor> {
-    let candidate = resolve_ssh_key_candidate(ssh_key_opt, base_dir)?;
+    let candidate = resolve_ssh_key_candidate(ssh_key_opt, config)?;
     if !candidate.exists {
         return Err(build_ssh_key_not_found_error(&candidate));
     }
@@ -127,13 +128,13 @@ pub(crate) fn resolve_ssh_key_descriptor(
 }
 
 fn resolve_configured_ssh_key_candidate(
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Option<SshKeyResolution>> {
     resolve_string_with_source(
         None,
         Some("KAPSARO_SSH_IDENTITY"),
         ConfigKey::SshIdentity.canonical_name(),
-        base_dir,
+        config,
         None,
     )?
     .map(build_candidate_from_source)

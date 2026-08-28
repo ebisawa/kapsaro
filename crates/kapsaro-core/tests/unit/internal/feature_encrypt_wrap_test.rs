@@ -14,10 +14,11 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use tempfile::TempDir;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 fn build_test_master_key() -> MasterKey {
     let key_bytes = [1u8; 32];
-    MasterKey::new(key_bytes)
+    MasterKey::from_zeroizing(Zeroizing::new(key_bytes))
 }
 
 #[test]

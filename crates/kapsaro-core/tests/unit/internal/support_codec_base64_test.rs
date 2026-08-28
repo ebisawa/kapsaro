@@ -4,12 +4,11 @@
 //! Unit tests for support/codec base64 modules.
 
 use crate::format::codec::base64_public::{
-    decode_base64_standard, decode_base64url_nopad, encode_base64_standard,
-    encode_base64_standard_nopad, encode_base64url_nopad,
+    decode_base64_standard, decode_base64url_nopad, encode_base64_standard_nopad,
+    encode_base64url_nopad,
 };
 use crate::format::codec::base64_secret::{
-    decode_base64url_nopad_secret_32, decode_base64url_nopad_secret_64,
-    encode_base64url_nopad_secret_32, encode_base64url_nopad_secret_64,
+    decode_base64url_nopad_secret_32, encode_base64url_nopad_secret_32,
 };
 use crate::support::secret::SecretArray;
 
@@ -24,13 +23,10 @@ fn test_encode_base64url_nopad_roundtrip() {
 }
 
 #[test]
-fn test_encode_base64_standard_roundtrip() {
-    let data = b"hello world";
-    let encoded = encode_base64_standard(data);
-    let decoded = decode_base64_standard(&encoded, "test").unwrap();
+fn test_decode_base64_standard_accepts_padded_known_value() {
+    let decoded = decode_base64_standard("aGVsbG8gd29ybGQ=", "test").unwrap();
 
-    assert_eq!(encoded, "aGVsbG8gd29ybGQ=");
-    assert_eq!(decoded, data);
+    assert_eq!(decoded, b"hello world");
 }
 
 #[test]
@@ -108,17 +104,6 @@ fn test_encode_base64url_nopad_secret_32_matches_public_encoding() {
 }
 
 #[test]
-fn test_encode_base64url_nopad_secret_64_matches_public_encoding() {
-    let secret = SecretArray::new((0u8..64).collect::<Vec<_>>().try_into().unwrap());
-    let encoded = encode_base64url_nopad_secret_64(&secret);
-
-    assert_eq!(
-        encoded.as_str(),
-        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw"
-    );
-}
-
-#[test]
 fn test_decode_base64url_nopad_secret_32_roundtrip() {
     let decoded =
         decode_base64url_nopad_secret_32("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8", "secret")
@@ -127,20 +112,6 @@ fn test_decode_base64url_nopad_secret_32_roundtrip() {
     assert_eq!(
         decoded.expose_secret(),
         (0u8..32).collect::<Vec<_>>().as_slice()
-    );
-}
-
-#[test]
-fn test_decode_base64url_nopad_secret_64_roundtrip() {
-    let decoded = decode_base64url_nopad_secret_64(
-        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw",
-        "secret",
-    )
-    .unwrap();
-
-    assert_eq!(
-        decoded.expose_secret(),
-        (0u8..64).collect::<Vec<_>>().as_slice()
     );
 }
 

@@ -4,7 +4,7 @@
 //! Unit tests for feature/member_add module
 
 use crate::cli_api::test_support::operations::member::add::add_member_from_file;
-use crate::io::workspace::members::load_incoming_member_files;
+use crate::io::workspace::members::test_support::load_incoming_member_files;
 use crate::test_utils::setup_test_workspace;
 use serde_json::Value;
 use std::fs;
@@ -169,7 +169,7 @@ fn test_add_member_invalid_attestation_error() {
 
 #[cfg(unix)]
 #[test]
-fn test_add_member_rejects_symlink_input_file() {
+fn test_add_member_reads_symlinked_input_file() {
     use std::os::unix::fs::symlink;
 
     let (_temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
@@ -184,11 +184,7 @@ fn test_add_member_rejects_symlink_input_file() {
     fs::create_dir_all(workspace_dir2.join("members/active")).unwrap();
     fs::create_dir_all(workspace_dir2.join("members/incoming")).unwrap();
 
-    let result = add_member_from_file(&workspace_dir2, &export_file, false);
-    assert!(result.is_err());
-    let message = result.unwrap_err().to_string();
-    assert!(
-        message.contains("symlink"),
-        "unexpected error for symlink input: {message}"
-    );
+    let member_handle = add_member_from_file(&workspace_dir2, &export_file, false).unwrap();
+
+    assert_eq!(member_handle, "alice@example.com");
 }

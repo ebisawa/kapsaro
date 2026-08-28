@@ -227,6 +227,8 @@ SSH 鍵は必ず Ed25519 形式を使用してください（RSA 等は非対応
 ssh-keygen -t ed25519 -C "your@email.com"
 ```
 
+SSH エージェントを使いたくない場合は、鍵ファイルで直接署名する方式に切り替えることもできます。この方式の違いは FAQ の「SSH エージェントが必要な理由は？」を参照してください。
+
 ---
 
 ## 6. クイックスタート（チームリーダー向け）
@@ -563,6 +565,10 @@ kapsaro doctor --workspace .kapsaro --home ~/.config/kapsaro
 - active / incoming のメンバーファイル、鍵の有効期限、重複 `kid`、GitHub 連携情報と検証状態
 - ローカルキーストアと active な秘密鍵の利用可否
 - active なメンバーに対するローカル信頼ストアの承認状態
+- `<KAPSARO_HOME>` 配下のアクセス権と所有者
+- ローカル状態より上位のディレクトリの所有者（参考情報）
+- ローカル状態とワークスペースのディレクトリロックが、実際に他の書き手を排除できているか
+- 中断した書き込みが `<KAPSARO_HOME>` 配下に残した痕跡
 - `.kapsaro/secrets/` 配下の暗号ファイル
 - `KAPSARO_PRIVATE_KEY` が設定されている場合の CI 環境変数鍵の利用準備状態
 
@@ -593,6 +599,29 @@ kapsaro doctor --workspace .kapsaro --home ~/.config/kapsaro
 FAIL がある場合だけ終了ステータスは 1 になります。WARN と SKIP は終了ステータス 0 のため、手元での原因調査の流れを止めずに内容を確認できます。CI で結果を判定する場合は、必要に応じて `--json` の `status`、`next_actions`、`checks` を読み取り、WARN や SKIP を許容するかをワークフロー側で決めてください。
 
 `kapsaro doctor` は承認プロンプトを出しません。鍵の信頼確認、受信者集合の確認、`rewrap` が推奨された場合は、確認結果の内容を確認してから次の作業として表示されたコマンドを実行してください。
+
+### ローカル状態のアクセス権
+
+`<KAPSARO_HOME>` 配下は、自分だけが読める状態（ディレクトリ `0700`、ファイル `0600`）が推奨です。kapsaro が作成するエントリにはこの値を設定します。
+
+権限がこれより広い場合や、別のアカウントが所有しているエントリがある場合、kapsaro は警告を出したうえで処理を続けます。該当するパスは `kapsaro doctor` が一覧します。放置すると、秘密鍵と承認キャッシュが同じマシンの他のアカウントから見える状態のままになります。
+
+ただし秘密鍵ファイル本体は例外です。ファイル自体の権限が他のアカウントから読める状態、または他のアカウントが所有する状態になっている場合、kapsaro は警告ではなく読み込みの拒否で応じます。この拒否は秘密鍵ファイル本体の権限が実際に広い場合に限られ、権限を確認できなかった場合は他の項目と同様に警告を出したうえで処理を続けます。
+
+```bash
+chmod -R go-rwx ~/.config/kapsaro
+kapsaro doctor
+```
+
+`KAPSARO_HOME` や `--home` を使っている場合は、実際のパスに読み替えてください。
+
+所有者が別のアカウントであるパスは `chmod` では解消しません。自分が所有する場所へローカル状態を移すか、`--home` や `KAPSARO_HOME` で別の root を指定してください。
+
+`~/.config/kapsaro` を暗号化ボリューム上のディレクトリへ向ける symlink 構成は利用できます。
+
+`kapsaro doctor` はローカル状態より上位のディレクトリの所有者を示すことがありますが、これは参考情報で、対処は不要です。
+
+ワークスペース側の暗号化済みファイルと `members/` 配下の公開文書は対象外です。Git で共有する成果物なので、権限はリポジトリのチェックアウトに従います。
 
 ---
 
@@ -653,6 +682,8 @@ git push
 
 `member add` は公開鍵を `members/incoming/` に置くだけです。この時点では新メンバーはまだ秘密情報を読めません。PR レビューの後、既存メンバーが `rewrap` を実行して incoming 鍵を active に昇格し、暗号ファイルの受信者へ追加します。その後の確認とローカル信頼ストアへの登録は、通常のメンバー追加と同じく `member verify --approve` を使います。
 
+入力パスには symlink も指定できます。kapsaro は symlink をたどってリンク先のファイルを読み込みます。入力パスは操作者が明示的に指定するものであり、内容は保存前に暗号的に検証されます（公開鍵文書としての自己署名検証を通過する必要があります）。この検証があるため、symlink 経由の入力を受理しても安全です。
+
 ### メンバー一覧の確認
 
 ```bash
@@ -712,6 +743,24 @@ kapsaro trust recipients purge --older-than 180d --force
 ```
 
 `trust keys ...` と `trust recipients ...` が変更するのは自分の端末上の記録だけです。ワークスペースの `members/active` や暗号ファイルの受信者は変更されません。つまり、これらのコマンドは「チームのメンバー構成を変える」のではなく、「自分が次回どこまで再確認を求められるか」を変える操作です。
+
+### 信頼ストアの署名を現在の鍵へ移す
+
+ローカル信頼ストアは自分の鍵で署名されており、その署名を作った鍵がキーストアに残っていることを前提に検証されます。鍵をローテーションしたあと、署名だけが古い鍵のまま残ることがあります。この状態でも日常の承認操作で自動的に現在の鍵へ移りますが、明示的に移したいときは `trust resign` を使います。
+
+```bash
+kapsaro trust resign
+```
+
+署名が既に現在の active 鍵によるものであれば、何も書き換えずにその旨を表示します。
+
+`key activate` で鍵を切り替えたときに、信頼ストアが別の鍵で署名されたままであることを知らせるメッセージが出た場合も、このコマンドで解消できます。`key remove` は削除対象の鍵が信頼ストアに署名していた場合、削除の前に自動で署名を移すので、通常は手で実行する必要はありません。
+
+特定の操作から回復コマンドが表示された場合、そのコマンドには操作時に解決されたメンバーハンドルが `kapsaro trust resign --member-handle alice@example.com` のように含まれます。環境変数や設定の既定値によって別のメンバーへ切り替わらないよう、表示された完全なコマンドをそのまま実行してください。
+
+保存されている内容が現在の署名鍵で検証できない場合、`trust resign` は署名を付け替えずにエラーで終了します。検証できない内容を現在の鍵で署名し直すと、他人が置いた信頼ストアを正規の署名付きに格上げする経路になってしまうためです。
+
+信頼ストアの署名に使われた `public.json` がキーストアから失われた場合は、信頼できるバックアップまたは既知の正常な別コピーから、元の完全な `public.json` をエラーに表示されたパスへ復元します。復元したファイルは所有者だけが読み書きできる権限に設定し、その後 `kapsaro trust resign` を実行してください。秘密鍵や `kapsaro key export` から元の公開鍵文書を再構成することはできません。信頼できるコピーがない場合は、信頼ストアをリセットして承認をやり直します。
 
 ### メンバー削除
 
@@ -788,6 +837,8 @@ kapsaro key list
 ```
 
 `key list` は、どの鍵が現在 `active` なのか、古い鍵がまだ残っているのか、期限切れが近い鍵がないかを確認したいときに使います。ローテーション前後や、古い鍵を削除してよいか判断するときにまず確認すると安全です。
+
+鍵ディレクトリから `public.json` が失われた場合も、テキスト出力ではその鍵を一覧に残し、`Incomplete (missing public.json)` と表示します。KID と `ACTIVE` の表示は残り、表示件数にも含まれます。JSON 出力では `status: "incomplete"` と `missing_document: "public.json"` を返し、取得できない `created_at`、`expires_at`、`format` は `null` になります。完全な鍵の JSON 形式は従来どおりです。
 
 CLI では kid がハイフン入りで表示されることがありますが、`key activate`、`key remove`、`key export` などではハイフンの有無を問わず入力できます。
 
@@ -1105,6 +1156,8 @@ kapsaro の秘密鍵は、パスフレーズの代わりに SSH Ed25519 鍵で�
 
 SSH エージェントが使えない環境では `--ssh-keygen` オプションで `ssh-keygen` コマンドによる署名に切り替えることもできます。
 
+`ssh_signing_method` に明示的に `ssh-keygen` を指定した場合（または `--ssh-keygen` を渡した場合）、kapsaro は子プロセスから `SSH_AUTH_SOCK` を取り除き、エージェントを経由せず鍵ファイル自体で直接署名します。パスフレーズ付きの秘密鍵をエージェントに登録して普段は一度だけ解錠している場合、このモードでは署名のたびにパスフレーズの入力を求められます。既定の `auto` はエージェントが利用可能であればエージェント経由の署名を選ぶため、この影響を受けません。
+
 SSH エージェントに複数の鍵がロードされている場合、`-i` オプションまたは `ssh_identity` 設定で使用する鍵を明示的に指定できます：
 
 ```bash
@@ -1221,7 +1274,7 @@ SSH 鍵が同じ入力に対して 2 回連続で異なる署名を生成した�
 | `-v` / `--verbose` | 対応コマンドの詳細表示を出力 |
 | `--debug` | 内部デバッグトレースログを出力 |
 | `-n` / `--name <name>` | KV ストア名を指定（省略時は `default`） |
-| `-f` / `--force` | 対応コマンドで確認なしに実行 |
+| `-f` / `--force` | 対応コマンドで、実行を止める確認プロンプトや安全確認を通して続行する |
 | `--allow-expired-key` | 対応コマンドで期限切れ鍵による recovery 復号や操作対象 artifact の署名検証を明示的に許可 |
 
 ### 初期化と参加
@@ -1284,6 +1337,7 @@ SSH 鍵が同じ入力に対して 2 回連続で異なる署名を生成した�
 | `kapsaro trust recipients list [-m <handle>] [--json] [--verbose]` | ローカル信頼ストアに保存されている確認済み暗号ファイル受信者集合を一覧表示 |
 | `kapsaro trust recipients remove [-m <handle>] <sid>` | 特定の暗号ファイル受信者集合の確認記録を削除 |
 | `kapsaro trust recipients purge [-m <handle>] --older-than <duration> [--force]` | 指定期間より古い暗号ファイル受信者集合確認記録を削除 |
+| `kapsaro trust resign [-m <handle>]` | ローカル信頼ストアの署名を現在の active 鍵へ移す。既に active 鍵で署名されていれば書き換えない |
 
 ### 鍵管理
 
@@ -1292,7 +1346,7 @@ SSH 鍵が同じ入力に対して 2 回連続で異なる署名を生成した�
 | `kapsaro key new [-m <handle>] [--github-user <login>] [--no-activate] [--expires-at <datetime> \| --valid-for <duration>]` | 新しい鍵を生成。デフォルトでは生成した鍵を active にする |
 | `kapsaro key list [-m <handle>] [--json] [--verbose]` | 鍵一覧を表示 |
 | `kapsaro key activate [-m <handle>] [<kid>]` | 特定の鍵を active にする。`kid` 省略時は最新の有効な鍵を選択 |
-| `kapsaro key remove [-m <handle>] <kid> [--force]` | 鍵を削除。active 鍵の削除には `--force` が必要 |
+| `kapsaro key remove [-m <handle>] <kid> [--force]` | 鍵を削除。active 鍵の削除には `--force` が必要。削除する鍵がローカル trust store に署名していた場合は、現在の active 鍵で自動的に署名し直してから削除する |
 | `kapsaro key export [-m <handle>] [<kid>] --out <path>` | 公開鍵をエクスポート |
 | `kapsaro key export --private [-m <handle>] [<kid>] [--allow-weak-password] (--stdout \| --out <path>)` | 秘密鍵をエクスポート（パスワード保護、CI/CD 用） |
 
@@ -1362,7 +1416,7 @@ kapsaro は設定値を複数のソースから以下の優先順位で解決し
 
 | キー | 説明 | デフォルト | CLI オプション | 環境変数 |
 |------|------|------------|--------------|----------|
-| `member_handle` | デフォルトのメンバーハンドル（パターン: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`） | （なし） | `-m` / `--member-handle` | `KAPSARO_MEMBER_HANDLE` |
+| `member_handle` | デフォルトのメンバーハンドル（パターン: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$`） | （なし） | `-m` / `--member-handle` | `KAPSARO_MEMBER_HANDLE` |
 | `workspace` | デフォルトのワークスペースルートパス。チルダ展開（`~/...`）対応 | （なし。未設定時は自動検出） | `-w` / `--workspace` | `KAPSARO_WORKSPACE` |
 | `ssh_identity` | SSH 秘密鍵ファイル（Ed25519）のパス。チルダ展開（`~/...`）対応 | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `KAPSARO_SSH_IDENTITY` |
 | `ssh_signing_method` | SSH 署名方式: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `KAPSARO_SSH_SIGNING_METHOD` |

@@ -93,6 +93,14 @@ where
     }
 }
 
+/// Read a yes/no answer from a supplied reader instead of the terminal.
+///
+/// Production asks through `dialoguer::Confirm`, which needs a real tty and
+/// cannot be driven from a test. The seam swaps only the question-and-answer
+/// step: the decision logic a test is checking stays in
+/// `confirm_destructive_action_with`, which both paths call. The rendering and
+/// answer parsing here are therefore this reader's own, not the ones an
+/// operator sees.
 #[cfg(test)]
 pub(crate) fn prompt_yes_no_with_reader<R>(
     prompt: &str,
@@ -114,6 +122,11 @@ where
     Ok(matches!(trimmed.to_ascii_lowercase().as_str(), "y" | "yes"))
 }
 
+/// Confirm a destructive action against a supplied reader.
+///
+/// Same seam as `prompt_yes_no_with_reader`: force, interactivity and
+/// cancellation are decided by the shared `confirm_destructive_action_with`,
+/// and only the prompt itself is replaced.
 #[cfg(test)]
 pub(crate) fn confirm_destructive_action_with_reader<R>(
     force: bool,

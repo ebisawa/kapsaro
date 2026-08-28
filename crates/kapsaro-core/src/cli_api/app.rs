@@ -30,13 +30,10 @@ pub mod context {
         };
     }
 
-    pub mod member {
-        pub use crate::app::context::member::resolve_required_member;
-    }
-
     pub mod options {
         pub use crate::app::context::options::{
-            resolve_allow_expired_key_option, resolve_allow_non_member_option, CommonCommandOptions,
+            resolve_allow_expired_key_option, resolve_read_trust_allowances, CommonCommandOptions,
+            ReadTrustAllowances,
         };
     }
 
@@ -46,7 +43,7 @@ pub mod context {
 
     pub mod ssh {
         pub use crate::app::context::ssh::{
-            build_ssh_signing_context, resolve_ssh_context_by_active_key,
+            build_ssh_signing_context, resolve_ssh_context_for_member_key,
             resolve_ssh_key_candidates, SshKeyCandidateView, SshSigningContextResolution,
         };
     }
@@ -57,7 +54,7 @@ pub mod doctor {
 
     pub mod types {
         pub use crate::app::doctor::types::{
-            DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
+            DoctorCategory, DoctorCheck, DoctorReason, DoctorReport, DoctorStatus, DoctorSubject,
         };
     }
 }
@@ -87,7 +84,9 @@ pub mod file {
 
 pub mod key {
     pub mod generate {
-        pub use crate::app::key::generate::generate_key_command;
+        pub use crate::app::key::generate::{
+            generate_key_command, KeyExpiryRequest, KeyGenerationHome,
+        };
     }
 
     pub mod manage {
@@ -124,7 +123,7 @@ pub mod key {
     pub mod types {
         pub use crate::app::key::types::{
             KeyActivateResult, KeyExportPrivateResult, KeyExportResult, KeyGenerationResult,
-            KeyInfo, KeyListResult, KeyRemoveResult,
+            KeyInfo, KeyListResult, KeyRemoveResult, MissingKeyDocument,
         };
     }
 }
@@ -167,7 +166,9 @@ pub mod kv {
     }
 
     pub mod query {
-        pub use crate::app::kv::query::{evaluate_kv_read_trust_plan, resolve_kv_read_path};
+        pub use crate::app::kv::query::{
+            evaluate_kv_read_trust_plan, load_kv_read_input, KvReadInput,
+        };
     }
 
     pub mod types {
@@ -219,7 +220,9 @@ pub mod registration {
     }
 
     pub mod key_plan {
-        pub use crate::app::registration::key_plan::resolve_registration_key_plan;
+        pub use crate::app::registration::key_plan::{
+            open_registration_local_state, RegistrationLocalState,
+        };
     }
 
     pub mod types {
@@ -260,8 +263,9 @@ pub mod trust {
 
     pub mod list {
         pub use crate::app::trust::list::{
-            list_known_keys, list_recipient_sets, RecipientSetListItem, RecipientSetListResult,
-            TrustListItem, TrustListResult,
+            list_known_keys_command, list_recipient_sets_command, resolve_trust_list_command,
+            RecipientSetListItem, RecipientSetListResult, TrustListCommand, TrustListItem,
+            TrustListResult,
         };
     }
 
@@ -269,23 +273,29 @@ pub mod trust {
         pub use crate::app::trust::management::{
             execute_purge, execute_recipient_set_purge, list_purge_candidates,
             list_recipient_set_purge_candidates, remove_known_key_command,
-            remove_recipient_set_command, PurgeKnownKeysResult, PurgeRecipientSetsResult,
-            RemoveKnownKeyResult, RemoveRecipientSetResult,
+            remove_recipient_set_command, PurgeOutcome, ReviewedPurgeCandidates,
         };
     }
 
     pub mod recovery {
         pub use crate::app::trust::recovery::{
-            build_trust_store_reset_plan, execute_trust_store_reset, requires_trust_store_reset,
-            TrustStoreResetPlan,
+            build_trust_store_reset_plan_from_execution,
+            build_trust_store_reset_plan_from_list_command, classify_trust_store_reset,
+            execute_trust_store_reset, observe_trust_store_recovery_from_execution,
+            observe_trust_store_recovery_from_list_command, TrustStoreRecoveryToken,
+            TrustStoreResetCause, TrustStoreResetLoss, TrustStoreResetPlan,
         };
+    }
+
+    pub mod resign {
+        pub use crate::app::trust::resign::{resign_trust_store_command, TrustStoreResignResult};
     }
 
     pub mod review {
         pub use crate::app::trust::review::{
             execute_read_with_signer_trust, review_write_recipient_trust,
             ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext,
-            WriteRecipientTrustReviewPlan,
+            TrustReviewContext, WriteRecipientTrustReviewPlan,
         };
     }
 }

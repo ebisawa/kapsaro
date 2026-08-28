@@ -103,7 +103,7 @@ fn test_find_identity_agent_tilde_expansion() {
 
 #[cfg(unix)]
 #[test]
-fn test_find_identity_agent_rejects_symlinked_config_file() {
+fn test_find_identity_agent_reads_symlinked_config_file() {
     use std::os::unix::fs::symlink;
 
     let _guard = EnvGuard::new(&["HOME"]);
@@ -123,10 +123,9 @@ fn test_find_identity_agent_rejects_symlinked_config_file() {
     .unwrap();
     symlink(&real_config, ssh_dir.join("config")).unwrap();
 
-    let result = find_identity_agent();
-    assert!(result.is_err());
-    let message = result.unwrap_err().to_string();
-    assert!(message.contains("symlink"), "unexpected error: {message}");
+    let path = find_identity_agent().unwrap().unwrap();
+
+    assert_eq!(path, home.join("test").join("agent.sock"));
 }
 
 #[test]

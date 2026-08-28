@@ -10,6 +10,7 @@ pub(crate) mod doctor;
 pub(crate) mod errors;
 pub(crate) mod file;
 pub(crate) mod key;
+pub(crate) mod keystore;
 pub(crate) mod kv;
 pub(crate) mod member;
 pub(crate) mod registration;

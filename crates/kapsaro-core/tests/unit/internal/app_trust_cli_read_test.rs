@@ -5,20 +5,26 @@
 //! Ensures one-shot policy exceptions cannot weaken current membership or target identity.
 
 use crate::api::file::{FileEncArtifact, VerifiedFileEncArtifact};
-use crate::api::key::{KeyContext, LocalKeyStore};
+use crate::api::key::{KeyContext, LocalKeyStore, MemberHandle};
 use crate::api::kv::{KvEncArtifact, KvInputEntry, KvReadOperation, VerifiedKvEncArtifact};
 use crate::api::operation::OperationOptions;
 use crate::api::secret::SecretString;
 use crate::api::trust::{CurrentMemberSnapshot, TrustDecision, TrustPolicyEvaluator};
+use crate::app::context::execution::resolve_read_trust_evaluator;
 use crate::app::trust::{SignerTrustOutcome, TrustApprovalCandidateBuilder};
-use crate::io::keystore::storage::load_public_key;
-use crate::io::workspace::members::remove_member;
+use crate::app_test_utils::build_test_execution_context;
+use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
+use crate::io::workspace::members::test_support::remove_active_member as remove_member;
 use crate::test_utils::{
     setup_member_key_context, setup_test_workspace_from_fixtures, EnvGuard, ALICE_MEMBER_HANDLE,
     BOB_MEMBER_HANDLE,
 };
 
 use super::{evaluate_file_after_cli_review, evaluate_kv_after_cli_review};
+
+fn member_handle(value: &str) -> MemberHandle {
+    MemberHandle::try_from(value).expect("valid member handle")
+}
 
 #[test]
 fn test_strict_no_still_rejects_signer_removed_from_current_members() {
@@ -43,7 +49,44 @@ fn test_strict_no_still_rejects_signer_removed_from_current_members() {
     .err()
     .expect("strict=no must preserve current-member enforcement");
 
-    assert_eq!(error.verification_rule(), Some("E_TRUST_NON_MEMBER"));
+    assert_eq!(error.rule(), Some("E_TRUST_NON_MEMBER"));
+}
+
+/// The trust gate a read runs under answers from the workspace the execution
+/// bound to. A tree swapped in behind the workspace path lists the signer as an
+/// active member again, and the read keeps refusing him as a non-member of the
+/// tree it opened.
+#[cfg(unix)]
+#[test]
+fn test_read_evaluator_keeps_the_member_set_of_the_bound_workspace() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let (_replacement_home, replacement) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let decrypt_ctx = key_context(&home, ALICE_MEMBER_HANDLE);
+    let signer_ctx = key_context(&home, BOB_MEMBER_HANDLE);
+    let verified = file_artifact(&home, &signer_ctx, b"secret");
+    remove_member(&workspace, BOB_MEMBER_HANDLE).unwrap();
+    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, Some(&workspace));
+    let opened_workspace = workspace.with_extension("opened");
+    std::fs::rename(&workspace, &opened_workspace).unwrap();
+    std::fs::rename(&replacement, &workspace).unwrap();
+
+    let evaluator = resolve_read_trust_evaluator(&execution).unwrap();
+    let error = evaluate_file_after_cli_review(
+        &evaluator,
+        &verified,
+        &verified,
+        &decrypt_ctx,
+        &SignerTrustOutcome::Accepted,
+        OperationOptions::default(),
+    )
+    .err()
+    .expect("a signer removed from the bound workspace must stay a non-member");
+
+    assert_eq!(error.rule(), Some("E_TRUST_NON_MEMBER"));
 }
 
 #[test]
@@ -71,7 +114,7 @@ fn test_non_member_allowance_rejects_changed_artifact() {
     .err()
     .expect("non-member allowance must be artifact-bound");
 
-    assert_eq!(error.verification_rule(), Some("E_TRUST_TARGET_CHANGED"));
+    assert_eq!(error.rule(), Some("E_TRUST_TARGET_CHANGED"));
 }
 
 #[test]
@@ -122,7 +165,7 @@ fn test_normal_file_policy_rejects_changed_artifact() {
     .err()
     .expect("normal policy must bind review to the exact artifact");
 
-    assert_eq!(error.verification_rule(), Some("E_TRUST_TARGET_CHANGED"));
+    assert_eq!(error.rule(), Some("E_TRUST_TARGET_CHANGED"));
 }
 
 #[test]
@@ -167,7 +210,7 @@ fn test_normal_kv_policy_rejects_changed_artifact() {
     .err()
     .expect("normal policy must bind review to the exact KV artifact");
 
-    assert_eq!(error.verification_rule(), Some("E_TRUST_TARGET_CHANGED"));
+    assert_eq!(error.rule(), Some("E_TRUST_TARGET_CHANGED"));
 }
 
 #[test]
@@ -201,8 +244,9 @@ fn file_artifact(
     signer_ctx: &KeyContext,
     plaintext: &[u8],
 ) -> VerifiedFileEncArtifact {
-    let recipients = LocalKeyStore::new(home.path().join("keys"))
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+    let recipients = LocalKeyStore::open(home.path().join("keys"))
+        .expect("open keystore")
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     FileEncArtifact::encrypt_bytes(plaintext, &recipients, signer_ctx)
         .unwrap()
@@ -215,8 +259,9 @@ fn kv_artifact(
     signer_ctx: &KeyContext,
     value: &str,
 ) -> VerifiedKvEncArtifact {
-    let recipients = LocalKeyStore::new(home.path().join("keys"))
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+    let recipients = LocalKeyStore::open(home.path().join("keys"))
+        .expect("open keystore")
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(

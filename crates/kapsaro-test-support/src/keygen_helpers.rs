@@ -7,12 +7,11 @@
 use kapsaro_core::cli_api::test_support::domain::{
     private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKey, PrivateKeyPlaintext},
     public_key::{
-        AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey, PublicKey,
-        VerifiedPublicKeyAttested, VerifiedRecipientKey,
+        build_unverified_recipient_key, IdentityKeys, JwkOkpPublicKey, PublicKey,
+        VerifiedRecipientKey,
     },
     signature::KeyPossessionProof,
     ssh::SshDeterminismStatus,
-    verification::{ExpiryProof, SelfSignatureProof},
     verified::{DecryptionProof, VerifiedPrivateKey},
 };
 use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::{
@@ -112,7 +111,7 @@ fn generate_sig_keypair() -> (JwkOkpPrivateKey, String) {
 /// Generate a test key pair with real SSH attestation.
 ///
 /// Uses the provided SSH key to create a proper attestation signature.
-/// The returned PublicKey passes `verify_public_key_with_attestation()`.
+/// The returned PublicKey passes attestation verification.
 pub fn keygen_test(
     member_handle: &str,
     ssh_key_path: &Path,
@@ -253,7 +252,7 @@ fn clone_private_key_plaintext_for_test(plaintext: &PrivateKeyPlaintext) -> Priv
 
 /// Convert a slice of PublicKeys to VerifiedRecipientKey (for testing only).
 ///
-/// Used by tests that call encrypt_kv_document or similar with a list of keys.
+/// Used by tests that encrypt a KV map for a list of recipient keys.
 pub fn build_verified_recipient_keys(members: &[PublicKey]) -> Vec<VerifiedRecipientKey> {
     members
         .iter()
@@ -266,20 +265,7 @@ pub fn build_verified_recipient_keys(members: &[PublicKey]) -> Vec<VerifiedRecip
 /// This function wraps a PublicKey in a VerifiedRecipientKey type without
 /// performing full verification. It's intended for test code only.
 pub fn build_verified_recipient_key(public_key: PublicKey) -> VerifiedRecipientKey {
-    let attested = build_verified_public_key_attested(public_key);
-    VerifiedRecipientKey::new(attested, ExpiryProof::new())
-}
-
-/// Build a VerifiedPublicKeyAttested wrapper for PublicKey (for testing only).
-fn build_verified_public_key_attested(public_key: PublicKey) -> VerifiedPublicKeyAttested {
-    let proof = AttestationProof {
-        method: public_key.protected.attestation.method.clone(),
-        ssh_pub: public_key.protected.attestation.pub_.clone(),
-        verified_at: None,
-    };
-    let attested_statement = AttestedKeyStatement::new(public_key.protected.keys.clone(), proof);
-    let self_sig_proof = SelfSignatureProof::new();
-    VerifiedPublicKeyAttested::new(public_key, self_sig_proof, attested_statement)
+    build_unverified_recipient_key(public_key)
 }
 
 /// Build a dummy PublicKey for tests that only need the structural shape.

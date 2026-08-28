@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Trust evaluation for the file decrypt command.
+//! Builds the plan a decrypt runs under and reports the key it selected.
+
 use crate::api::file::VerifiedFileEncArtifact;
 use crate::app::context::execution::{
     evaluate_selected_decryption_key_expiry, ExecutionContext, SelectedDecryptionKeyExpiry,
@@ -9,7 +12,6 @@ use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::evaluation::ReadArtifactTrustPlan;
 use crate::app::trust::{
     evaluate_read_artifact_trust, push_signature_verification_warnings, DecryptPolicy,
-    RecipientTrustOutcome, SignerTrustOutcome,
 };
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::trust::recipient_sets::file_recipient_evidence;

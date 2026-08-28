@@ -45,10 +45,10 @@ fn test_format_key_list_lines_keeps_long_member_handles_and_kids_inline() {
     let view = KeyListView {
         entries: vec![KeyMemberView {
             member_handle: &member_handle,
-            keys: vec![KeyInfoView {
+            keys: vec![KeyInfoView::Complete {
                 kid: &raw_kid,
                 member_handle: &member_handle,
-                created_at: "2026-05-01T00:00:00Z",
+                created_at: Some("2026-05-01T00:00:00Z"),
                 expires_at: "2027-05-01T00:00:00Z",
                 active: true,
                 format: "kapsaro-public-key-v5",
@@ -79,4 +79,55 @@ fn test_format_key_export_summary_lines_keeps_long_paths_inline() {
     assert!(rendered.contains(&member_handle));
     assert!(rendered.contains(&raw_kid));
     assert!(rendered.contains(path.to_string_lossy().as_ref()));
+}
+
+#[test]
+fn test_format_key_list_lines_omits_the_created_field_when_the_key_has_no_timestamp() {
+    let view = KeyListView {
+        entries: vec![KeyMemberView {
+            member_handle: "alice@example.com",
+            keys: vec![KeyInfoView::Complete {
+                kid: "rdkj8yhmppjhw7qc3446gpnxhnrtx61n",
+                member_handle: "alice@example.com",
+                created_at: None,
+                expires_at: "2027-05-01T00:00:00Z",
+                active: true,
+                format: "kapsaro-public-key-v5",
+            }],
+        }],
+        total_keys: 1,
+    };
+
+    let rendered = format_key_list_lines(&view, true).join("\n");
+
+    assert!(
+        !rendered.contains("Created"),
+        "a key without a stored timestamp must not render an empty Created field: {rendered}"
+    );
+    assert!(rendered.contains("Expires"));
+}
+
+#[test]
+fn test_format_key_list_lines_shows_an_incomplete_active_key() {
+    let view = KeyListView {
+        entries: vec![KeyMemberView {
+            member_handle: "alice@example.com",
+            keys: vec![KeyInfoView::Incomplete {
+                kid: "rdkj8yhmppjhw7qc3446gpnxhnrtx61n",
+                member_handle: "alice@example.com",
+                active: true,
+                missing_document: "public.json",
+            }],
+        }],
+        total_keys: 1,
+    };
+
+    let rendered = format_key_list_lines(&view, false).join("\n");
+
+    assert!(rendered.contains("ACTIVE"), "{rendered}");
+    assert!(
+        rendered.contains("Incomplete (missing public.json)"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("Total: 1 key(s)"), "{rendered}");
 }

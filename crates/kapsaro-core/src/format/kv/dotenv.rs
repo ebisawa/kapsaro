@@ -7,7 +7,7 @@
 //! quoted values and escape sequences.
 
 use crate::support::secret::SecretString;
-use crate::Result;
+use crate::{Error, Result};
 use std::collections::HashMap;
 
 // ============================================================================
@@ -89,41 +89,13 @@ pub fn validate_dotenv_strict(content: &str) -> Result<()> {
     let mut entry_count = 0;
 
     for (line_num, line) in content.lines().enumerate() {
-        let line = line.trim();
-
-        // Skip empty lines and comments
-        if line.is_empty() || line.starts_with('#') {
-            continue;
+        if validate_dotenv_line(line.trim(), line_num + 1)? {
+            entry_count += 1;
         }
-
-        // Remove optional "export" prefix (same as parse_dotenv)
-        let original_line = line;
-        let line = line.strip_prefix("export ").unwrap_or(line).trim();
-
-        // Must have '=' separator
-        let eq_pos = line.find('=').ok_or_else(|| {
-            crate::Error::build_parse_error(format!(
-                "Line {}: missing '=' separator: {}",
-                line_num + 1,
-                original_line
-            ))
-        })?;
-
-        // Key must be valid
-        let key = line[..eq_pos].trim();
-        if !is_valid_key_name(key) {
-            return Err(crate::Error::build_parse_error(format!(
-                "Line {}: invalid key name: '{}'",
-                line_num + 1,
-                key
-            )));
-        }
-
-        entry_count += 1;
     }
 
     if entry_count == 0 {
-        return Err(crate::Error::build_parse_error(
+        return Err(Error::build_parse_error(
             "No valid entries found in dotenv file".to_string(),
         ));
     }
@@ -131,69 +103,31 @@ pub fn validate_dotenv_strict(content: &str) -> Result<()> {
     Ok(())
 }
 
-// ============================================================================
-// Dotenv Serialization
-// ============================================================================
-
-/// Quote a value for dotenv format if needed.
-///
-/// Serialization rules:
-/// - Unquoted: if value contains no special characters
-/// - Double-quoted: if value contains special characters, with escaping
-/// - Single-quoted: not used in serialization (only for parsing)
-fn quote_value(value: &str) -> String {
-    // Check if value needs quoting (contains special characters or is empty)
-    let needs_quoting = value.is_empty()
-        || value.contains(' ')
-        || value.contains('\n')
-        || value.contains('\r')
-        || value.contains('\t')
-        || value.contains('"')
-        || value.contains('\'')
-        || value.contains('\\')
-        || value.contains('#')
-        || value.contains('=');
-
-    if !needs_quoting {
-        return value.to_string();
+/// Validate one trimmed line, reporting whether it declares an entry.
+fn validate_dotenv_line(line: &str, line_number: usize) -> Result<bool> {
+    // Empty lines and comments carry no entry
+    if line.is_empty() || line.starts_with('#') {
+        return Ok(false);
     }
 
-    // Double-quote with escaping
-    let mut result = String::with_capacity(value.len() + 2);
-    result.push('"');
-    for ch in value.chars() {
-        match ch {
-            '\\' => result.push_str("\\\\"),
-            '"' => result.push_str("\\\""),
-            '\n' => result.push_str("\\n"),
-            '\r' => result.push_str("\\r"),
-            '\t' => result.push_str("\\t"),
-            _ => result.push(ch),
-        }
-    }
-    result.push('"');
-    result
-}
+    // Remove optional "export" prefix (same as parse_dotenv)
+    let entry = line.strip_prefix("export ").unwrap_or(line).trim();
 
-/// Build a dotenv format string from a HashMap.
-///
-/// Keys are sorted for deterministic output.
-/// Values are quoted if they contain special characters.
-pub fn build_dotenv_string<V>(map: &HashMap<String, V>) -> String
-where
-    V: AsRef<str>,
-{
-    let mut entries: Vec<_> = map.iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(b.0));
+    // The line body is not included: it may carry a secret value the caller
+    // mistyped without an `=`, and this error text can reach stderr/CI logs.
+    let eq_pos = entry.find('=').ok_or_else(|| {
+        Error::build_parse_error(format!("Line {}: missing '=' separator", line_number))
+    })?;
 
-    let mut result = String::new();
-    for (key, value) in entries {
-        result.push_str(key);
-        result.push('=');
-        result.push_str(&quote_value(value.as_ref()));
-        result.push('\n');
+    let key = entry[..eq_pos].trim();
+    if !is_valid_key_name(key) {
+        return Err(Error::build_parse_error(format!(
+            "Line {}: invalid key name: '{}'",
+            line_number, key
+        )));
     }
-    result
+
+    Ok(true)
 }
 
 // ============================================================================

@@ -19,6 +19,9 @@ pub mod guards;
 #[path = "../../../kapsaro-test-support/src/keygen_helpers.rs"]
 #[allow(dead_code)]
 pub mod keygen_helpers;
+#[path = "../../../kapsaro-test-support/src/privilege.rs"]
+#[allow(dead_code)]
+pub mod privilege;
 #[path = "process_output.rs"]
 #[allow(dead_code)]
 pub mod process_output;
@@ -37,14 +40,37 @@ pub use constants::{
 pub use crypto_context::setup_member_key_context;
 #[allow(unused_imports)]
 pub use fixture::{
-    generate_temp_ssh_keypair_in_dir, load_fixture_ssh_pubkey, save_public_key,
-    setup_test_keystore, setup_test_keystore_from_fixtures, setup_test_workspace,
-    setup_test_workspace_from_fixtures,
+    create_local_state_dir, generate_temp_ssh_keypair_in_dir, load_fixture_ssh_pubkey,
+    local_state_temp_dir, restrict_local_state_file, setup_test_keystore,
+    setup_test_keystore_from_fixtures, setup_test_workspace, setup_test_workspace_from_fixtures,
+    write_local_state_file,
 };
+
+/// Save a public key into a keystore, keeping every directory it creates
+/// owner-only.
+///
+/// The shared fixture restricts only the leaf key directory, so the member level
+/// would keep the developer's umask and local state would refuse to read the key
+/// back before the test reached its subject.
+#[allow(dead_code)]
+pub fn save_public_key(
+    keystore_root: &std::path::Path,
+    member_handle: &str,
+    kid: &str,
+    public_key: &kapsaro_core::cli_api::test_support::domain::public_key::PublicKey,
+) -> kapsaro_core::Result<()> {
+    create_local_state_dir(keystore_root);
+    create_local_state_dir(&keystore_root.join(member_handle));
+    fixture::save_public_key(keystore_root, member_handle, kid, public_key)
+}
 #[allow(unused_imports)]
 pub use guards::{with_temp_cwd, EnvGuard};
 #[allow(unused_imports)]
 pub use keygen_helpers::{build_test_private_key, keygen_test};
+// The privilege helper is unix-only, matching the permission bits the tests stage.
+#[cfg(unix)]
+#[allow(unused_imports)]
+pub use privilege::{permission_denial_can_be_staged, REQUIRE_UNPRIVILEGED_ENV};
 #[allow(unused_imports)]
 pub use ssh_stubs::stub_agent_signer;
 #[allow(unused_imports)]

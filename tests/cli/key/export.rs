@@ -534,3 +534,83 @@ fn test_key_export_private_rejects_stdout_and_out_together() {
 
     drop(ssh_temp);
 }
+
+/// A private key file group or other can read is not exported at all.
+///
+/// Every other local state entry is reported as a warning and the command goes
+/// on, because the mode of a file on a shared host is the operator's decision.
+/// The private half is where that decision cannot be deferred: once the key is
+/// exported, whoever else could read the file holds it too.
+#[cfg(unix)]
+#[test]
+fn test_key_export_private_refuses_a_private_key_others_can_read() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
+
+    let member_dir = temp_dir.path().join("keys").join(member_handle);
+    let kid = find_kid_in_member_dir(&member_dir);
+    let private_path = member_dir.join(&kid).join("private.json");
+    fs::set_permissions(&private_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--out")
+        .arg(temp_dir.path().join("portable-private-key.txt"))
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Insecure permissions 0644"))
+        .stderr(predicate::str::contains("chmod 0600"));
+
+    drop(ssh_temp);
+}
+
+/// The public half carries no secret, so a mode others can read is named and
+/// the command still produces what the operator asked for.
+#[cfg(unix)]
+#[test]
+fn test_key_export_private_warns_about_a_public_key_others_can_read() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let member_handle = TEST_MEMBER_HANDLE;
+    generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
+
+    let member_dir = temp_dir.path().join("keys").join(member_handle);
+    let kid = find_kid_in_member_dir(&member_dir);
+    let public_path = member_dir.join(&kid).join("public.json");
+    fs::set_permissions(&public_path, fs::Permissions::from_mode(0o644)).unwrap();
+    let export_file = temp_dir.path().join("portable-private-key.txt");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--member-handle")
+        .arg(member_handle)
+        .arg("--out")
+        .arg(export_file.to_str().unwrap())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Insecure permissions 0644"));
+
+    assert!(export_file.exists());
+
+    drop(ssh_temp);
+}

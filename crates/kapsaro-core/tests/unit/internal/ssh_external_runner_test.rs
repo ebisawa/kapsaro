@@ -74,6 +74,44 @@ fn test_command_removes_kapsaro_env_and_sets_only_the_agent_socket() {
     assert_eq!(delta["SSH_AUTH_SOCK"], Some(AGENT_SOCKET.to_string()));
 }
 
+/// A command that signs with a key file schedules the inherited agent socket
+/// for removal. Leaving the value out of the child environment would not be
+/// enough, because the child inherits this process's own `SSH_AUTH_SOCK`.
+#[test]
+#[serial_test::serial]
+fn test_command_without_agent_removes_the_inherited_agent_socket() {
+    let (_guard, _home) = guard_with_empty_home(&["HOME", "SSH_AUTH_SOCK"]);
+    std::env::set_var("SSH_AUTH_SOCK", AGENT_SOCKET);
+
+    let command = SshCommandRunner::without_agent("/usr/bin/ssh-keygen")
+        .command()
+        .unwrap();
+    let delta = env_delta(&command);
+
+    assert_eq!(delta.get("SSH_AUTH_SOCK"), Some(&None));
+}
+
+/// The removal reaches the child process itself, not just the `Command` record.
+#[test]
+#[serial_test::serial]
+fn test_output_without_agent_leaves_the_child_without_an_agent_socket() {
+    let (_guard, _home) = guard_with_empty_home(&["HOME", "SSH_AUTH_SOCK"]);
+    std::env::set_var("SSH_AUTH_SOCK", AGENT_SOCKET);
+
+    let output = SshCommandRunner::without_agent(ENV_DUMP_PROGRAM)
+        .output(no_args(), spawn_error)
+        .unwrap();
+    let dumped = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(
+        !dumped
+            .lines()
+            .any(|line| line.starts_with("SSH_AUTH_SOCK=")),
+        "child kept an agent socket: {dumped}"
+    );
+}
+
 /// The child keeps the rest of the parent environment. Only a real process can
 /// show this, because clearing the environment leaves no trace on `Command`.
 #[test]

@@ -1,7 +1,28 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Result types shared by the doctor checks.
+//! Carries check outcomes and the opened local-state root between stages.
+
+use std::borrow::Cow;
 use std::collections::BTreeSet;
+
+use crate::support::fs::anchor::AnchoredDir;
+
+pub(crate) enum LocalStateHome {
+    Opened(AnchoredDir),
+    Missing,
+    Unavailable { reason: String },
+}
+
+impl LocalStateHome {
+    pub(crate) fn opened(&self) -> Option<&AnchoredDir> {
+        match self {
+            Self::Opened(home) => Some(home),
+            Self::Missing | Self::Unavailable { .. } => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DoctorStatus {
@@ -27,6 +48,7 @@ pub enum DoctorCategory {
     Workspace,
     MembersActive,
     MembersIncoming,
+    LocalState,
     LocalKeystore,
     LocalTrustStore,
     Artifacts,
@@ -39,6 +61,7 @@ impl DoctorCategory {
             Self::Workspace => "Workspace structure",
             Self::MembersActive => "Active members",
             Self::MembersIncoming => "Incoming members",
+            Self::LocalState => "Local state",
             Self::LocalKeystore => "Local keystore",
             Self::LocalTrustStore => "Local trust store",
             Self::Artifacts => "Artifacts",
@@ -68,6 +91,37 @@ impl DoctorSubject {
     }
 }
 
+/// Why a check reported what it did.
+///
+/// A reason built from names the filesystem holds keeps those names apart. The
+/// names are chosen by whoever can write the directory, so one of them may
+/// contain the separator a joined line would be split on, and a machine-readable
+/// consumer would then read one name as two.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DoctorReason {
+    Message(String),
+    Names(Vec<String>),
+}
+
+const NAME_SEPARATOR: &str = ", ";
+
+impl DoctorReason {
+    /// The reason as the single line a reader sees.
+    ///
+    /// Joining is lossy in the other direction: a name that itself holds the
+    /// separator reads on that line as two names, and two names whose join
+    /// spells one entry read as one. The line is for a person, who has the
+    /// entry in front of them; a consumer that has to tell the names apart
+    /// reads the variant itself, which every structured rendering carries as
+    /// the array it is.
+    pub fn as_line(&self) -> Cow<'_, str> {
+        match self {
+            Self::Message(message) => Cow::Borrowed(message),
+            Self::Names(names) => Cow::Owned(names.join(NAME_SEPARATOR)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoctorCheck {
     pub id: &'static str,
@@ -75,7 +129,7 @@ pub struct DoctorCheck {
     pub status: DoctorStatus,
     pub subject: DoctorSubject,
     pub message: String,
-    pub reason: Option<String>,
+    pub reason: Option<DoctorReason>,
     pub next_action: Option<String>,
     pub rule: Option<String>,
 }
@@ -137,12 +191,28 @@ impl DoctorCheck {
     }
 
     pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
-        self.reason = Some(reason.into());
+        self.reason = Some(DoctorReason::Message(reason.into()));
         self
+    }
+
+    /// Attach a reason that names separate entries.
+    pub fn with_reason_names(mut self, names: Vec<String>) -> Self {
+        self.reason = Some(DoctorReason::Names(names));
+        self
+    }
+
+    /// The reason as the single line a reader sees, when the check has one.
+    pub fn reason_line(&self) -> Option<Cow<'_, str>> {
+        self.reason.as_ref().map(DoctorReason::as_line)
     }
 
     pub fn with_next_action(mut self, next_action: impl Into<String>) -> Self {
         self.next_action = Some(next_action.into());
+        self
+    }
+
+    pub fn with_rule(mut self, rule: Option<&str>) -> Self {
+        self.rule = rule.map(ToOwned::to_owned);
         self
     }
 

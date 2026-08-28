@@ -9,19 +9,28 @@ use crate::feature::context::crypto::{load_crypto_context_from_keystore, CryptoC
 use crate::feature::context::expiry::enforce_expired_key_usage;
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
-use crate::io::keystore::active::{load_active_kid, set_active_kid};
-use crate::io::keystore::storage::{list_kids, list_member_handles, load_public_key};
+use crate::io::keystore::access::KeystoreAccess;
 use crate::model::common::WrapItem;
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
 use crate::Result;
+
+pub use crate::model::identity::{Kid, MemberHandle};
 
 use super::operation::OperationOptions;
 use super::ssh::{into_internal_backend, SshSignatureBackend};
 
 /// Filesystem-backed local keystore.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LocalKeyStore {
-    root: PathBuf,
+    access: KeystoreAccess,
+}
+
+impl std::fmt::Debug for LocalKeyStore {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LocalKeyStore")
+            .finish_non_exhaustive()
+    }
 }
 
 /// Loaded local key context for signing and decrypting artifacts.
@@ -31,8 +40,8 @@ pub struct KeyContext {
 
 /// Inputs required to load and decrypt a local key context.
 pub struct KeyContextOptions {
-    member_handle: String,
-    kid: Option<String>,
+    member_handle: MemberHandle,
+    kid: Option<Kid>,
     ssh_backend: Box<dyn SshSignatureBackend>,
     ssh_pubkey: String,
     workspace_path: Option<PathBuf>,
@@ -46,42 +55,53 @@ pub struct RecipientKeys {
 }
 
 impl LocalKeyStore {
-    /// Build a keystore facade from an explicit `keys` directory path.
-    pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+    /// Open an existing keystore from an explicit `keys` directory path.
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
+        KeystoreAccess::open(root).map(|access| Self { access })
+    }
+
+    /// Create or reuse a restricted keystore directory.
+    pub fn create(root: impl Into<PathBuf>) -> Result<Self> {
+        KeystoreAccess::create(root).map(|access| Self { access })
     }
 
     /// Return the keystore root directory.
     pub fn root(&self) -> &Path {
-        &self.root
+        self.access.root()
     }
 
     /// List member handles stored in the local keystore.
-    pub fn list_members(&self) -> Result<Vec<String>> {
-        list_member_handles(&self.root)
+    pub fn list_members(&self) -> Result<Vec<MemberHandle>> {
+        self.access.list_members()
     }
 
     /// List key IDs stored for a member.
-    pub fn list_kids(&self, member_handle: &str) -> Result<Vec<String>> {
-        list_kids(&self.root, member_handle)
+    pub fn list_kids(&self, member_handle: &MemberHandle) -> Result<Vec<Kid>> {
+        self.access.list_kids(member_handle)
     }
 
     /// Load the active key ID for a member.
-    pub fn load_active_kid(&self, member_handle: &str) -> Result<Option<String>> {
-        load_active_kid(member_handle, &self.root)
+    pub fn load_active_kid(&self, member_handle: &MemberHandle) -> Result<Option<Kid>> {
+        self.access.load_active_kid(member_handle)
     }
 
     /// Set the active key ID for a member.
-    pub fn set_active_kid(&self, member_handle: &str, kid: &str) -> Result<()> {
-        set_active_kid(member_handle, kid, &self.root)
+    ///
+    /// The key has to already be in the keystore. Pointing the marker at a key
+    /// that is not there would leave the member unusable, and naming an absent
+    /// member would create a directory holding no key at all, which makes the
+    /// keystore look like it has two members and stops the handle from being
+    /// resolved automatically.
+    pub fn set_active_kid(&self, member_handle: &MemberHandle, kid: &Kid) -> Result<()> {
+        self.access.activate_existing_key(member_handle, kid)
     }
 
     /// Load and decrypt a local key context using a caller-supplied SSH backend.
     pub fn load_key_context(&self, options: KeyContextOptions) -> Result<KeyContext> {
         load_crypto_context_from_keystore(
-            self.root.clone(),
-            &options.member_handle,
-            options.kid.as_deref(),
+            self.access.clone(),
+            options.member_handle,
+            options.kid.as_ref().map(Kid::as_str),
             into_internal_backend(options.ssh_backend),
             options.ssh_pubkey,
             options.workspace_path,
@@ -90,32 +110,40 @@ impl LocalKeyStore {
     }
 
     /// Load and verify recipient public keys.
-    pub fn load_recipient_keys<I, S>(&self, recipients: I) -> Result<RecipientKeys>
+    pub fn load_recipient_keys<I>(&self, recipients: I) -> Result<RecipientKeys>
     where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
+        I: IntoIterator<Item = MemberHandle>,
     {
-        let recipients = recipients.into_iter().map(Into::into).collect::<Vec<_>>();
+        let recipients = recipients.into_iter().collect::<Vec<_>>();
         let public_keys = recipients
             .iter()
             .map(|handle| {
-                let kid = crate::io::keystore::helpers::resolve_kid(&self.root, handle, None)?;
-                load_public_key(&self.root, handle, &kid)
+                self.access
+                    .resolve_public_key(handle, None)
+                    .map(|(_, public_key)| public_key)
             })
             .collect::<Result<Vec<_>>>()?;
-        RecipientKeys::verify(recipients, &public_keys)
+        let handles = recipients
+            .into_iter()
+            .map(MemberHandle::into_string)
+            .collect();
+        RecipientKeys::verify(handles, &public_keys)
+    }
+
+    pub(crate) fn access(&self) -> &KeystoreAccess {
+        &self.access
     }
 }
 
 impl KeyContextOptions {
     /// Build key context loading options from required SSH inputs.
     pub fn new(
-        member_handle: impl Into<String>,
+        member_handle: MemberHandle,
         ssh_backend: Box<dyn SshSignatureBackend>,
         ssh_pubkey: impl Into<String>,
     ) -> Self {
         Self {
-            member_handle: member_handle.into(),
+            member_handle,
             kid: None,
             ssh_backend,
             ssh_pubkey: ssh_pubkey.into(),
@@ -124,8 +152,8 @@ impl KeyContextOptions {
     }
 
     /// Set an explicit key ID.
-    pub fn with_kid(mut self, kid: impl Into<String>) -> Self {
-        self.kid = Some(kid.into());
+    pub fn with_kid(mut self, kid: Kid) -> Self {
+        self.kid = Some(kid);
         self
     }
 
@@ -143,10 +171,6 @@ impl KeyContext {
 
     pub(crate) fn inner(&self) -> &CryptoContext {
         &self.inner
-    }
-
-    pub(crate) fn keystore_root(&self) -> Option<&Path> {
-        self.inner.local_keystore_root()
     }
 
     pub(crate) fn enforce_decryption_key_not_expired(
@@ -167,13 +191,13 @@ impl KeyContext {
     }
 
     /// Return the loaded member handle.
-    pub fn member_handle(&self) -> &str {
-        self.inner.member_handle()
+    pub fn member_handle(&self) -> &MemberHandle {
+        self.inner.member_handle_id()
     }
 
     /// Return the loaded key ID.
-    pub fn kid(&self) -> &str {
-        self.inner.kid()
+    pub fn kid(&self) -> &Kid {
+        self.inner.kid_id()
     }
 
     /// Return the verified key expiration timestamp.

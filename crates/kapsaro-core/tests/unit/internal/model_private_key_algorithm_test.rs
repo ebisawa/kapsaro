@@ -33,6 +33,8 @@ fn test_sshsig_variant_roundtrip() {
     assert_eq!(alg, deserialized);
 }
 
+/// Pins `PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256` to the `#[serde(rename)]`
+/// on `PrivateKeyAlgorithm::Argon2id`, the one spelling the constant cannot replace.
 #[test]
 fn test_argon2id_variant_roundtrip() {
     let alg = PrivateKeyAlgorithm::Argon2id {

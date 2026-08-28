@@ -69,17 +69,6 @@ impl FileEncContent {
         parse_file_enc_str(&self.content, &self.source_name)
     }
 
-    /// Serialize a `FileEncDocument` back to pretty-printed JSON.
-    pub fn from_document(doc: &FileEncDocument) -> Result<Self> {
-        let json = serde_json::to_string_pretty(doc).map_err(|e| {
-            Error::build_parse_error_with_source(
-                format!("Failed to serialize FileEncDocument: {}", e),
-                e,
-            )
-        })?;
-        Ok(Self::new_unchecked(json))
-    }
-
     /// Access the underlying string.
     pub fn as_str(&self) -> &str {
         &self.content
@@ -132,11 +121,6 @@ impl KvEncContent {
 }
 
 impl EncContent {
-    /// Detect format and wrap in the appropriate variant.
-    pub fn detect(content: String) -> Result<Self> {
-        Self::detect_with_source(content, "encrypted content")
-    }
-
     /// Detect format and wrap in the appropriate variant.
     pub fn detect_with_source(content: String, source_name: impl Into<String>) -> Result<Self> {
         let source_name = source_name.into();

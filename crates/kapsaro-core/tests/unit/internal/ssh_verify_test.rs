@@ -5,10 +5,10 @@
 //!
 //! Covers the signed data construction and rejection of tampered fields.
 
-use crate::format::codec::base64_public::{encode_base64_standard, encode_base64url_nopad};
+use crate::format::codec::base64_public::encode_base64url_nopad;
+use crate::format::codec::codec_base64_fixtures::encode_base64_standard;
 use crate::format::public_key::AttestationBodyInput;
 use crate::io::ssh::protocol::constants::ATTESTATION_METHOD_SSH_SIGN;
-use crate::io::ssh::protocol::constants::ATTESTATION_NAMESPACE;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
 use crate::io::ssh::verify::{build_attestation_signed_data, verify_attestation};
 use crate::model::public_key::{BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey};
@@ -59,16 +59,16 @@ fn test_signing_key() -> SigningKey {
 fn ssh_public_key_text(signing_key: &SigningKey) -> String {
     let verifying_key = signing_key.verifying_key();
     let mut blob = Vec::new();
-    blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    blob.extend_from_slice(&encode_ssh_string(verifying_key.as_bytes()));
+    blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    blob.extend_from_slice(&encode_ssh_string(verifying_key.as_bytes()).unwrap());
     format!("ssh-ed25519 {} test-key", encode_base64_standard(&blob))
 }
 
 fn ssh_public_key_text_with_trailing_data(signing_key: &SigningKey) -> String {
     let verifying_key = signing_key.verifying_key();
     let mut blob = Vec::new();
-    blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    blob.extend_from_slice(&encode_ssh_string(verifying_key.as_bytes()));
+    blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    blob.extend_from_slice(&encode_ssh_string(verifying_key.as_bytes()).unwrap());
     blob.push(1);
     format!("ssh-ed25519 {} test-key", encode_base64_standard(&blob))
 }

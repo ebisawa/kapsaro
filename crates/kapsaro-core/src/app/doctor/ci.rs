@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Doctor checks for CI readiness when the environment-variable key mode is active.
+//! Covers strict key checking, command scope, private key loading, and CI trust caveats.
+
 use crate::feature::context::env_key::{is_env_key_mode, load_private_key_from_env};
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};

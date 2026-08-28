@@ -10,6 +10,7 @@ pub mod generate;
 pub mod github;
 pub mod manage;
 pub mod timestamp;
+pub(crate) mod trust_signer;
 pub mod types;
 
 pub(crate) fn build_no_active_key_error(member_handle: &str) -> Error {

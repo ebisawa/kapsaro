@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! The identity a trust judgment is made about.
+//! Pairs a member handle with the key statement that handle names.
+
 use crate::format::codec::base64_public::decode_base64url_nopad_array;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
@@ -14,6 +17,12 @@ pub struct TrustIdentity {
 }
 
 impl TrustIdentity {
+    /// Build an identity from inputs known to be valid.
+    ///
+    /// Production always goes through `try_new` or `from_public_key` because
+    /// its inputs come off the wire; the panicking form keeps the tests that
+    /// spell a literal handle and kid readable.
+    #[cfg(test)]
     pub fn new<M, K>(member_handle: M, kid: K, sig_x: [u8; 32]) -> Self
     where
         M: IntoMemberHandle,
@@ -34,10 +43,16 @@ impl TrustIdentity {
         })
     }
 
+    /// Read the identity one stored public key states.
+    ///
+    /// The key id is taken as the canonical form a stored document carries.
+    /// Normalizing a display form here would let a judgment be made about a key
+    /// id the document itself never named, which is not the same key statement
+    /// the signature covers.
     pub fn from_public_key(public_key: &PublicKey) -> Result<Self> {
         Self::try_new(
             public_key.protected.subject_handle.clone(),
-            public_key.protected.kid.clone(),
+            Kid::from_canonical(public_key.protected.kid.clone())?,
             decode_base64url_nopad_array(
                 &public_key.protected.keys.sig.x,
                 "signer Ed25519 public key",

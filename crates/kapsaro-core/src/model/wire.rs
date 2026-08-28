@@ -86,6 +86,7 @@ pub mod context {
 /// PrivateKey protection method identifiers.
 pub mod private_key {
     /// Production KDF identifier for PrivateKey encryption.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub const PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256: &str = "sshsig-ed25519-hkdf-sha256";
     /// Argon2id-based KDF identifier for portable PrivateKey encryption.
     pub const PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256: &str = "argon2id-m64t3p4-hkdf-sha256";

@@ -30,7 +30,7 @@ impl GitHubVerificationApi for FakeGitHubApi {
                 Ok((id, login)) => Ok((*id, login.clone())),
                 Err(error) if error.kind() == ErrorKind::Verify => {
                     Err(Error::build_verification_error(
-                        error.verification_rule().expect("verification rule"),
+                        error.rule().expect("verification rule"),
                         error.format_user_message(),
                     ))
                 }
@@ -48,7 +48,7 @@ impl GitHubVerificationApi for FakeGitHubApi {
                 Ok(keys) => Ok(keys.clone()),
                 Err(error) if error.kind() == ErrorKind::Verify => {
                     Err(Error::build_verification_error(
-                        error.verification_rule().expect("verification rule"),
+                        error.rule().expect("verification rule"),
                         error.format_user_message(),
                     ))
                 }
@@ -104,7 +104,7 @@ impl GitHubVerificationApi for RecordingGitHubApi {
                 Ok((id, login)) => Ok((*id, login.clone())),
                 Err(error) if error.kind() == ErrorKind::Verify => {
                     Err(Error::build_verification_error(
-                        error.verification_rule().expect("verification rule"),
+                        error.rule().expect("verification rule"),
                         error.format_user_message(),
                     ))
                 }
@@ -124,7 +124,7 @@ impl GitHubVerificationApi for RecordingGitHubApi {
                 Ok(keys) => Ok(keys.clone()),
                 Err(error) if error.kind() == ErrorKind::Verify => {
                     Err(Error::build_verification_error(
-                        error.verification_rule().expect("verification rule"),
+                        error.rule().expect("verification rule"),
                         error.format_user_message(),
                     ))
                 }
@@ -212,7 +212,7 @@ async fn test_verify_github_account_rejects_id_mismatch() {
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert!(
         error
             .format_user_message()
@@ -255,7 +255,7 @@ async fn test_verify_github_account_propagates_keys_api_error() {
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert_eq!(error.format_user_message(), "keys endpoint failed");
 }
 

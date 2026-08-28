@@ -73,8 +73,8 @@ fn push_finding(out: &mut String, check: &DoctorCheck, verbose: bool) {
         }
     }
     push_value(out, "      Target: ", check.subject.as_str());
-    if let Some(reason) = check.reason.as_deref() {
-        push_value(out, "      Reason: ", reason);
+    if let Some(reason) = check.reason_line() {
+        push_value(out, "      Reason: ", &reason);
     }
     if let Some(next) = check.next_action.as_deref() {
         push_value(out, "      Next: ", next);

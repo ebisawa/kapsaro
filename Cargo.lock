@@ -750,17 +750,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
-name = "fd-lock"
-version = "4.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
-dependencies = [
- "cfg-if",
- "rustix",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1396,7 +1385,6 @@ dependencies = [
  "clap",
  "console",
  "dialoguer",
- "ed25519-dalek",
  "kapsaro-core",
  "kapsaro-test-support",
  "libc",
@@ -1404,7 +1392,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "temp-env",
  "tempfile",
  "time",
  "tracing",
@@ -1420,7 +1407,6 @@ dependencies = [
  "argon2",
  "chacha20poly1305",
  "ed25519-dalek",
- "fd-lock",
  "hex",
  "hkdf 0.13.0",
  "hmac 0.13.0",
@@ -1455,6 +1441,7 @@ version = "0.99.2-beta"
 dependencies = [
  "ed25519-dalek",
  "kapsaro-core",
+ "rustix",
  "serde_json",
  "tempfile",
  "time",
@@ -2555,15 +2542,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "temp-env"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96374855068f47402c3121c6eed88d29cb1de8f3ab27090e273e420bdabcf050"
-dependencies = [
- "parking_lot",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3104,15 +3082,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets",
 ]

@@ -1,48 +1,30 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
-use std::fs;
+//! Unit tests for the member handle identity helpers.
+//! Covers the guidance the error carries when no handle could be determined.
 
-use crate::app::context::identity::{
-    build_missing_member_handle_error, require_member_handle_input,
-};
-use crate::test_utils::EnvGuard;
-use tempfile::TempDir;
+use crate::app::context::identity::build_missing_member_handle_error;
 
-fn setup_keystore(temp_dir: &TempDir, member_handles: &[&str]) {
-    let keystore_root = temp_dir.path().join("keys");
-    fs::create_dir_all(&keystore_root).unwrap();
-    for &id in member_handles {
-        fs::create_dir_all(keystore_root.join(id)).unwrap();
-    }
-}
-
+/// The operator has to be told both ways out, because a handle that could not
+/// be determined is fixed either per command or once in the configuration.
 #[test]
-fn test_require_member_handle_input_errors_when_missing() {
-    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let temp_home = TempDir::new().unwrap();
-    env::set_var("KAPSARO_HOME", temp_home.path());
-    setup_keystore(&temp_home, &[]);
+fn test_build_missing_member_handle_error_names_both_ways_to_supply_a_handle() {
+    let error = build_missing_member_handle_error(false);
 
-    let error = require_member_handle_input(None, Some(temp_home.path()), false).unwrap_err();
-
+    let message = error.format_user_message();
     assert!(
-        error
-            .format_user_message()
-            .contains("member handle is required but could not be determined"),
-        "unexpected error: {}",
-        error.format_user_message()
+        message.contains("member handle is required but could not be determined"),
+        "{message}"
     );
-    assert!(error
-        .format_user_message()
-        .contains("Specify a member handle with --member-handle <handle>"));
-    assert!(error
-        .format_user_message()
-        .contains("Configure a default member handle explicitly"));
-    assert!(!error
-        .format_user_message()
-        .contains("KAPSARO_MEMBER_HANDLE"));
+    assert!(
+        message.contains("Specify a member handle with --member-handle <handle>"),
+        "{message}"
+    );
+    assert!(
+        message.contains("Configure a default member handle explicitly"),
+        "{message}"
+    );
 }
 
 #[test]

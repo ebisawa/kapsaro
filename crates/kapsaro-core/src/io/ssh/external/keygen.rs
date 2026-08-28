@@ -6,6 +6,7 @@
 use super::runner;
 use super::traits::SshKeygen;
 use crate::io::ssh::external::runner::SshCommandRunner;
+use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::protocol::sshsig::parse_sshsig_armored;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
 use crate::io::ssh::SshError;
@@ -57,8 +58,9 @@ fn build_sign_args<'a>(key_path: &'a str, namespace: &'a str) -> [&'a str; 8] {
 impl SshKeygen for DefaultSshKeygen {
     fn derive_public_key(&self, key_path: &Path) -> Result<String> {
         let args = build_derive_public_key_args(key_path);
+        // `-y -f` reads the private key file itself and never asks the agent.
         let output =
-            SshCommandRunner::optional_agent(self.ssh_keygen_path.clone()).output(args, |e| {
+            SshCommandRunner::without_agent(self.ssh_keygen_path.clone()).output(args, |e| {
                 SshError::build_operation_failed_error_with_source(
                     "Failed to execute ssh-keygen",
                     e,
@@ -80,15 +82,13 @@ impl SshKeygen for DefaultSshKeygen {
 
     fn sign(
         &self,
-        key_path: &Path,
+        key: &SshKeyDescriptor,
         namespace: &str,
         ssh_pubkey: &str,
         data: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let is_public_key = key_path
-            .extension()
-            .map(|ext| ext == "pub")
-            .unwrap_or(false);
+        let is_public_key = key.is_public_key_file();
+        let key_path = key.as_path();
 
         let key_path_str = key_path.to_str().ok_or_else(|| {
             Error::from(SshError::build_operation_failed_error(format!(
@@ -97,19 +97,37 @@ impl SshKeygen for DefaultSshKeygen {
             )))
         })?;
 
-        let output = execute_sign_command(&self.ssh_keygen_path, key_path_str, namespace, data)?;
+        let output = execute_sign_command(
+            &self.ssh_keygen_path,
+            key_path_str,
+            namespace,
+            data,
+            is_public_key,
+        )?;
         check_sign_output(&output, is_public_key)?;
         parse_sign_stdout(output.stdout, namespace, ssh_pubkey)
     }
 }
 
+/// Run `ssh-keygen -Y sign`, handing it the agent only when it needs one.
+///
+/// A public key carries no secret, so signing with it means asking the agent
+/// for the private half. A private key file signs on its own, and `ssh-keygen`
+/// still opens the agent whenever `SSH_AUTH_SOCK` is set, so the socket is kept
+/// away from the child in that case.
 fn execute_sign_command(
     ssh_keygen_path: &str,
     key_path_str: &str,
     namespace: &str,
     data: &[u8],
+    is_public_key: bool,
 ) -> Result<std::process::Output> {
-    SshCommandRunner::optional_agent(ssh_keygen_path.to_string()).output_with_stdin(
+    let runner = if is_public_key {
+        SshCommandRunner::optional_agent(ssh_keygen_path.to_string())
+    } else {
+        SshCommandRunner::without_agent(ssh_keygen_path.to_string())
+    };
+    runner.output_with_stdin(
         build_sign_args(key_path_str, namespace),
         data,
         |e| {
@@ -136,8 +154,11 @@ fn check_sign_output(output: &Output, is_public_key: bool) -> Result<()> {
         Check: ssh-add -l\n\
         Or use the private key file (without .pub extension) instead."
     } else {
-        "Ensure the private key file is accessible and has correct permissions.\n\
-        Or load the key in ssh-agent: ssh-add <key-file>"
+        // Signing from a private key file runs without the agent, so loading
+        // the key into one changes nothing here.
+        "Check that the private key file is readable, and enter its passphrase when the key is \
+        protected by one.\n\
+        Or pass the matching .pub file to sign through ssh-agent instead."
     };
     Err(SshError::build_operation_failed_error(format!(
         "ssh-keygen -Y sign failed: {}\nHint: {}",

@@ -7,13 +7,10 @@ use crate::feature::context::crypto::{CryptoContext, DecryptionResult};
 use crate::feature::envelope::entry::decrypt_entry;
 use crate::feature::envelope::key_possession::verify_kv_key_possession;
 use crate::feature::envelope::key_schedule::KvKeySchedule;
-use crate::feature::envelope::unwrap::{
-    unwrap_master_key_for_kv, unwrap_master_key_for_kv_with_context,
-};
+use crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context;
 use crate::feature::kv::error::build_key_not_found_error;
 use crate::model::kv_enc::document::KvEncEntry;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
-use crate::model::verified::VerifiedPrivateKey;
 use crate::Result;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -49,34 +46,7 @@ pub(crate) fn decrypt_kv_entries(
     Ok(kv_map)
 }
 
-/// Decrypt a single KV entry by key name from a verified kv-enc document.
-pub fn decrypt_kv_single_entry(
-    verified_doc: &VerifiedKvEncDocument,
-    member_handle: &str,
-    kid: &str,
-    private_key: &VerifiedPrivateKey,
-    key: &str,
-) -> Result<Zeroizing<Vec<u8>>> {
-    let doc = verified_doc.document();
-    let sid = doc.head().sid;
-
-    let master_key =
-        unwrap_master_key_for_kv(&sid, &doc.wrap().wrap, member_handle, kid, private_key)?;
-    let possession = verify_kv_key_possession(verified_doc, master_key)?;
-
-    let entry = doc
-        .entry(key)
-        .ok_or_else(|| build_key_not_found_error(key))?;
-    decrypt_entry(
-        entry.value(),
-        entry.key(),
-        &doc.head().alg.aead,
-        possession.key_schedule(),
-        &sid,
-        "decrypt_kv_single_entry",
-    )
-}
-
+/// Decrypt a single KV entry by key name, with the local key the crypto context selects.
 pub fn decrypt_kv_single_entry_with_context(
     verified_doc: &VerifiedKvEncDocument,
     member_handle: &str,
@@ -104,7 +74,7 @@ pub fn decrypt_kv_single_entry_with_context(
     Ok(DecryptionResult { value, key_info })
 }
 
-/// Decrypt kv-enc v1 format to KV map
+/// Decrypt kv-enc v1 format to a KV map, with the local key the crypto context selects.
 ///
 /// This function requires a VerifiedKvEncDocument, ensuring that signature
 /// verification has occurred before decryption. This is enforced by the type system.
@@ -112,32 +82,11 @@ pub fn decrypt_kv_single_entry_with_context(
 /// # Arguments
 /// * `verified_doc` - Verified KvEncDocument (signature must be verified)
 /// * `member_handle` - Resolved member handle used to find the wrap
-/// * `kid` - Key ID to find the wrap item
-/// * `private_key` - PrivateKeyPlaintext containing the KEM private key
+/// * `key_ctx` - Crypto context that selects the local key to unwrap with
 ///
 /// # Returns
-/// Decrypted key-value map with values wrapped in `Zeroizing<Vec<u8>>`
-pub fn decrypt_kv_document(
-    verified_doc: &VerifiedKvEncDocument,
-    member_handle: &str,
-    kid: &str,
-    private_key: &VerifiedPrivateKey,
-) -> Result<HashMap<String, Zeroizing<Vec<u8>>>> {
-    let doc = verified_doc.document();
-    let sid = doc.head().sid;
-
-    let master_key =
-        unwrap_master_key_for_kv(&sid, &doc.wrap().wrap, member_handle, kid, private_key)?;
-    let possession = verify_kv_key_possession(verified_doc, master_key)?;
-
-    decrypt_kv_entries(
-        doc.entries(),
-        possession.key_schedule(),
-        &sid,
-        &doc.head().alg.aead,
-    )
-}
-
+/// Decrypted key-value map with values wrapped in `Zeroizing<Vec<u8>>`,
+/// alongside the key the unwrap step ended up using
 pub fn decrypt_kv_document_with_context(
     verified_doc: &VerifiedKvEncDocument,
     member_handle: &str,

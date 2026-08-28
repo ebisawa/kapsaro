@@ -35,13 +35,14 @@ fn kv_enc_detect_rejects_json() {
 
 #[test]
 fn encrypted_content_detect_rejects_unknown() {
-    let result = EncContent::detect("random text".to_string());
+    let result = EncContent::detect_with_source("random text".to_string(), "encrypted content");
     assert!(result.is_err());
 }
 
 #[test]
 fn encrypted_content_detect_rejects_json_exceeding_depth_limit() {
-    let result = EncContent::detect(deeply_nested_json(MAX_JSON_DEPTH + 1));
+    let result =
+        EncContent::detect_with_source(deeply_nested_json(MAX_JSON_DEPTH + 1), "encrypted content");
     assert!(result.is_err());
     let err = match result {
         Ok(_) => panic!("expected depth-limit error"),

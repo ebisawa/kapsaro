@@ -21,10 +21,3 @@ pub(crate) fn sign_unsigned_kv_document(
     let content = unsigned.serialize_unsigned()?;
     sign_kv_document(&content, &mac_key, signing, token_codec)
 }
-
-impl KvDocumentDraft {
-    /// Serialize and sign the document.
-    pub fn sign(self, master_key: &MasterKey, signing: &SigningContext<'_>) -> Result<String> {
-        sign_unsigned_kv_document(self, master_key, signing)
-    }
-}

@@ -36,7 +36,7 @@ fn test_set_creates_new_file() {
 }
 
 #[test]
-fn test_set_debug_does_not_log_secret_value() {
+fn test_set_debug_logs_without_the_secret_value() {
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
 
     set_value_with_member_set_review(

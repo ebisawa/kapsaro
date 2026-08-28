@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Session type carrying a verified kv-enc document through a rewrite.
+//! Exposes decrypt, re-sign, and recipient rewrap steps over the same loaded document so callers can share the unwrapped master key across them.
+
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::kv::decrypt::decrypt_kv_document_with_context;

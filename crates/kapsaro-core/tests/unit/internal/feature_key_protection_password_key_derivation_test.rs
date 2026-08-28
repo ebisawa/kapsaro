@@ -4,9 +4,7 @@
 //! Tests for password-based key derivation (Argon2id + HKDF-SHA256)
 
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt};
-use crate::feature::key::protection::password_key_derivation::{
-    derive_key_from_password, generate_hkdf_salt, generate_ikm_salt,
-};
+use crate::feature::key::protection::password_key_derivation::derive_key_from_password;
 use crate::support::secret::SecretString;
 
 fn secret(value: &str) -> SecretString {
@@ -53,22 +51,6 @@ fn test_derive_key_different_ikm_salts_differ() {
     let key2 = derive_key_from_password(&password, &salt2, &hkdf_salt, kid).unwrap();
 
     assert_ne!(key1.as_bytes(), key2.as_bytes());
-}
-
-#[test]
-fn test_generate_salt_lengths() {
-    assert_eq!(generate_ikm_salt().unwrap().as_bytes().len(), 32);
-    assert_eq!(generate_hkdf_salt().unwrap().as_bytes().len(), 32);
-}
-
-#[test]
-fn test_generate_salt_randomness() {
-    let ikm_salt1 = generate_ikm_salt().unwrap();
-    let ikm_salt2 = generate_ikm_salt().unwrap();
-    let hkdf_salt1 = generate_hkdf_salt().unwrap();
-    let hkdf_salt2 = generate_hkdf_salt().unwrap();
-    assert_ne!(ikm_salt1.as_bytes(), ikm_salt2.as_bytes());
-    assert_ne!(hkdf_salt1.as_bytes(), hkdf_salt2.as_bytes());
 }
 
 #[test]

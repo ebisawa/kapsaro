@@ -24,6 +24,8 @@ pub mod app_key_manage_test;
 pub mod format_token_encode_test;
 #[path = "unit/external/golden_v0_99_compat_test.rs"]
 pub mod golden_v0_99_compat_test;
+#[path = "unit/external/keystore_path_security_test.rs"]
+pub mod keystore_path_security_test;
 #[path = "unit/external/model_identity_test.rs"]
 pub mod model_identity_test;
 #[path = "unit/external/model_ssh_test.rs"]

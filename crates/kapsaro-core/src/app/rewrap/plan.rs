@@ -1,7 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::artifact::list_workspace_encrypted_artifacts;
+//! Rewrap planning.
+//! Works out which artifacts and recipients a key rotation has to touch.
+
+use crate::app::artifact::{list_workspace_encrypted_artifacts_at, ArtifactRef};
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
@@ -11,16 +14,15 @@ use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
 };
 use crate::io::workspace::members::{
-    ensure_workspace_member_kid_uniqueness, list_incoming_member_paths,
-    load_verified_member_file_from_path,
+    capture_promotion_destination_at, ensure_workspace_member_kid_uniqueness,
+    open_member_documents_at, MemberStatus, PromotionDestinationState,
 };
 use crate::model::public_key::PublicKey;
-use crate::support::fs::load_text_with_limit;
-use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::support::path::format_path_relative_to_cwd;
+use crate::support::fs::anchor::AnchoredDir;
+use crate::support::fs::relative::{open_dir_identity, DirectoryFd};
 use crate::{Error, Result};
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 use super::types::{
     IncomingPromotionCandidate, IncomingVerificationCategory, IncomingVerificationItem,
@@ -35,72 +37,96 @@ pub fn build_rewrap_batch_plan(
 ) -> Result<RewrapBatchPlan> {
     let workspace = require_workspace(options, "rewrap")?;
     ensure_workspace_member_kid_uniqueness(&workspace.root_path)?;
-    let incoming_index = load_incoming_index(&workspace.root_path)?;
-    let artifact_paths = collect_rewrap_target_paths(&workspace.root_path, explicit_targets)?;
-    let pre_promotion_trust = load_read_trust_context(
-        options,
-        &workspace.root_path,
-        &execution.member_handle,
-        Some(execution.key_ctx.inner().self_signature_public_key_x()),
-        Some(execution.key_ctx.inner().local_key_identity()),
-    )?
-    .trust_ctx;
+    let workspace_dir = execution.fixed_workspace_directory()?;
+    let incoming_index = load_incoming_index(workspace_dir)?;
+    let targets = collect_rewrap_targets(workspace_dir, explicit_targets)?;
+    let pre_promotion_trust = load_read_trust_context(options, execution, "rewrap")?.trust_ctx;
     let incoming_report = build_incoming_report(&incoming_index)?;
-    if artifact_paths.is_empty() {
-        return Err(Error::build_not_found_error(
-            "No encrypted files found for rewrap.\n\
-             Searched: workspace secrets/\n\
-             Action: Pass --target <path> for an explicit file.",
-        ));
+    if targets.artifacts.is_empty() {
+        return Err(build_no_rewrap_target_error(&targets.warnings));
     }
 
     Ok(RewrapBatchPlan {
-        workspace_root: workspace.root_path,
         pre_promotion_trust,
         incoming_report,
-        artifact_paths,
+        artifacts: targets.artifacts,
+        discovery_warnings: targets.warnings,
     })
+}
+
+/// Report that nothing was found, naming the entries the search had to skip.
+///
+/// A secrets directory whose entries could not all be inspected can look empty
+/// for a reason the operator can fix, so the skipped entries travel with the
+/// failure instead of being dropped with the empty list.
+fn build_no_rewrap_target_error(warnings: &[String]) -> Error {
+    let mut message = String::from(
+        "No encrypted files found for rewrap.\n\
+         Searched: workspace secrets/",
+    );
+    for warning in warnings {
+        message.push('\n');
+        message.push_str(warning);
+    }
+    message.push_str("\nAction: Pass --target <path> for an explicit file.");
+    Error::build_not_found_error(message)
 }
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/app_rewrap_plan_test.rs"]
 mod tests;
 
-fn collect_rewrap_target_paths(
-    workspace_root: &Path,
-    explicit_targets: &[PathBuf],
-) -> Result<Vec<PathBuf>> {
-    let mut paths = BTreeMap::new();
-    let candidate_paths = if explicit_targets.is_empty() {
-        list_workspace_encrypted_artifacts(workspace_root)?
-    } else {
-        explicit_targets.to_vec()
-    };
-    for path in candidate_paths {
-        insert_rewrap_target_path(&mut paths, path)?;
-    }
-    Ok(paths.into_values().collect())
+/// The artifacts one rewrap run acts on, and what its search had to skip.
+struct RewrapTargets {
+    artifacts: Vec<ArtifactRef>,
+    warnings: Vec<String>,
 }
 
-fn insert_rewrap_target_path(paths: &mut BTreeMap<PathBuf, PathBuf>, path: PathBuf) -> Result<()> {
-    let canonical = path.canonicalize().map_err(|e| {
-        Error::build_io_error_with_source(
-            format!(
-                "Failed to resolve rewrap target {}: {}",
-                format_path_relative_to_cwd(&path),
-                e
-            ),
-            e,
-        )
-    })?;
-    if !canonical.is_file() {
-        return Err(Error::build_invalid_argument_error(format!(
-            "Rewrap target must be a file: {}",
-            format_path_relative_to_cwd(&path)
-        )));
+/// Resolve the artifacts to rewrap, from explicit targets or from the workspace.
+///
+/// The search reads through the descriptor this command bound to, so the set of
+/// artifacts it rewrites comes from the tree it started in. Explicit targets
+/// name what the operator already chose, so nothing is searched and nothing can
+/// be skipped; each is bound to its own directory the same way.
+fn collect_rewrap_targets(
+    workspace: &AnchoredDir,
+    explicit_targets: &[PathBuf],
+) -> Result<RewrapTargets> {
+    let (candidates, warnings) = if explicit_targets.is_empty() {
+        let listing = list_workspace_encrypted_artifacts_at(workspace)?;
+        (listing.artifacts, listing.warnings)
+    } else {
+        (open_explicit_rewrap_targets(explicit_targets)?, Vec::new())
+    };
+    Ok(RewrapTargets {
+        artifacts: dedupe_rewrap_targets(candidates)?,
+        warnings,
+    })
+}
+
+fn open_explicit_rewrap_targets(explicit_targets: &[PathBuf]) -> Result<Vec<ArtifactRef>> {
+    explicit_targets
+        .iter()
+        .map(|path| ArtifactRef::open_from_path(path.as_path()))
+        .collect()
+}
+
+/// Keep one entry per directory-and-name, in the order the targets arrived.
+///
+/// Two spellings of the same entry are one target. Two entries that merely
+/// share an inode are not: the replacement is published by rename, which breaks
+/// the link, so folding hardlinked names together would leave the second one
+/// still holding the content nobody rewrapped.
+fn dedupe_rewrap_targets(candidates: Vec<ArtifactRef>) -> Result<Vec<ArtifactRef>> {
+    let mut seen = BTreeSet::new();
+    let mut kept = Vec::new();
+    for artifact in candidates {
+        let directory = open_dir_identity(artifact.directory().as_ref())?;
+        if seen.insert((directory, artifact.name().to_string())) {
+            kept.push(artifact);
+        }
     }
-    paths.entry(canonical).or_insert(path);
-    Ok(())
+    Ok(kept)
 }
 
 fn build_incoming_report(
@@ -149,8 +175,8 @@ fn build_incoming_candidate(snapshot: &IncomingSnapshot) -> Result<IncomingPromo
 
     Ok(IncomingPromotionCandidate {
         review,
-        source_path: snapshot.source_path.clone(),
         source_content: snapshot.source_content.clone(),
+        destination: snapshot.destination.clone(),
         public_key: snapshot.public_key.clone(),
     })
 }
@@ -199,23 +225,38 @@ fn build_pending_review_category(
 
 #[derive(Debug, Clone)]
 struct IncomingSnapshot {
-    source_path: PathBuf,
     source_content: String,
+    destination: PromotionDestinationState,
     public_key: PublicKey,
 }
 
-fn load_incoming_index(workspace_root: &Path) -> Result<BTreeMap<String, IncomingSnapshot>> {
+/// Read every incoming document together with the active document it would
+/// replace, so both sides of a promotion are reviewed as one state.
+///
+/// Both sides are read through the workspace descriptor the command bound to,
+/// which is the descriptor the promotion later checks its snapshots against.
+///
+/// Each incoming document is read once, and the bytes kept for the promotion are
+/// the bytes that were verified and shown to the operator. Reading the name a
+/// second time to get them would put a window between the review and the capture
+/// in which the document could be replaced, and the promotion's own check only
+/// compares against what that second read returned.
+fn load_incoming_index<D>(workspace: &D) -> Result<BTreeMap<String, IncomingSnapshot>>
+where
+    D: DirectoryFd,
+{
+    let documents = open_member_documents_at(workspace, MemberStatus::Incoming)?;
     let mut index = BTreeMap::new();
-    for source_path in list_incoming_member_paths(workspace_root)? {
-        let public_key = load_verified_member_file_from_path(&source_path)?;
-        let source_content =
-            load_text_with_limit(&source_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
+    for name in documents.names() {
+        let document = documents.load_verified_document(name)?;
+        let member_handle = document.public_key.protected.subject_handle.clone();
+        let destination = capture_promotion_destination_at(workspace, &member_handle)?;
         index.insert(
-            public_key.protected.subject_handle.clone(),
+            member_handle,
             IncomingSnapshot {
-                source_path,
-                source_content,
-                public_key,
+                source_content: document.content,
+                destination,
+                public_key: document.public_key,
             },
         );
     }

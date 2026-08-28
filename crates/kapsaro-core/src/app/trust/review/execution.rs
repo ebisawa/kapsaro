@@ -1,11 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Trust review orchestration around a read or write.
+//! Runs the operation, collects review requests and saves what was approved.
+
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use std::collections::BTreeSet;
 
-use crate::app::trust::approval::ApprovedKnownKey;
+use crate::app::trust::approval::{
+    observe_recipient_set_approval_store, save_reviewed_recipient_set_approval, ApprovedKnownKey,
+};
 use crate::app::trust::{
     evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome, CommandCapability,
     RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate, TrustContext,
@@ -14,17 +19,28 @@ use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::Result;
 
-use super::persistence::{save_approved_known_keys, save_approved_recipient_set};
+use super::persistence::save_approved_known_key_documents;
 use super::recipient::review_recipient_trust_with_confirmation_verifier;
 use super::signer::{
     enforce_read_trust_member_eligibility, review_signer_trust_with_confirmation_verifier,
 };
 use super::types::{ReadSignerTrustReviewPlan, WriteRecipientTrustReviewPlan};
 
+/// The capabilities one reviewed approval is saved through.
 #[derive(Clone, Copy)]
 pub struct TrustExecutionContext<'a> {
     pub options: &'a CommonCommandOptions,
     pub execution: &'a ExecutionContext,
+}
+
+/// A review that reports what the operation already found before it prompts.
+///
+/// Only the entry points that gate a whole command carry warnings; a review of
+/// one artifact's recipient set has none to report and says so by taking the
+/// capabilities alone.
+#[derive(Clone, Copy)]
+pub struct TrustReviewContext<'a> {
+    pub trust: TrustExecutionContext<'a>,
     pub warnings: &'a [String],
 }
 
@@ -36,7 +52,7 @@ pub fn execute_read_with_signer_trust<
     ConfirmRecipients,
     Execute,
 >(
-    execution: TrustExecutionContext<'_>,
+    review_context: TrustReviewContext<'_>,
     trust_plan: ReadSignerTrustReviewPlan<'_>,
     mut emit_warnings: EmitWarnings,
     confirm_known: ConfirmKnown,
@@ -52,7 +68,7 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     Execute: FnOnce() -> Result<T>,
 {
-    emit_warnings(execution.warnings);
+    emit_warnings(review_context.warnings);
     if !trust_plan.allow_non_member {
         enforce_read_trust_member_eligibility(trust_plan.trust_outcome, trust_plan.labels.subject)?;
     }
@@ -67,7 +83,7 @@ where
         confirm_non_member,
         confirm_recipients,
     )?;
-    save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
+    save_approved_known_key_documents(review_context.trust, &approvals)?;
     let result = execute()?;
     Ok(result)
 }
@@ -155,20 +171,36 @@ fn build_recipient_key_outcome(candidates: Vec<TrustApprovalCandidate>) -> Recip
     }
 }
 
-pub fn review_and_save_artifact_recipient_set<EmitWarnings, ConfirmRecipientSet>(
+/// Ask the operator about one artifact's recipient set and store what they
+/// agreed to, bound to the trust store the decision was made against.
+///
+/// The store is observed before the prompt, so the record this write replaces
+/// is the one the operator was shown. An outcome that needs no approval reaches
+/// the trust store not at all.
+pub fn review_and_save_artifact_recipient_set<ConfirmRecipientSet>(
     execution: TrustExecutionContext<'_>,
     outcome: &ArtifactRecipientTrustOutcome,
     context_label: &str,
-    emit_warnings: &mut EmitWarnings,
-    confirm_recipient_set: ConfirmRecipientSet,
+    mut confirm_recipient_set: ConfirmRecipientSet,
 ) -> Result<()>
 where
-    EmitWarnings: FnMut(&[String]),
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    let approval =
-        review_artifact_recipient_set_trust(outcome, context_label, confirm_recipient_set)?;
-    save_approved_recipient_set(execution, approval, emit_warnings)
+    let ArtifactRecipientTrustOutcome::NeedsManualApproval(review) = outcome else {
+        return Ok(());
+    };
+    let observed = observe_recipient_set_approval_store(execution.execution)?;
+    if !confirm_recipient_set(outcome, context_label)? {
+        return Err(crate::Error::build_invalid_operation_error(
+            "Recipient set approval declined".to_string(),
+        ));
+    }
+    save_reviewed_recipient_set_approval(
+        execution.execution,
+        &observed,
+        review.current_set().clone(),
+    )
+    .map(|_| ())
 }
 
 pub struct ArtifactRecipientSetReviewInput<'a> {
@@ -178,14 +210,12 @@ pub struct ArtifactRecipientSetReviewInput<'a> {
     pub context_label: &'a str,
 }
 
-pub fn review_artifact_recipient_set_output<EmitWarnings, ConfirmRecipientSet>(
+pub fn review_artifact_recipient_set_output<ConfirmRecipientSet>(
     execution: TrustExecutionContext<'_>,
     review: ArtifactRecipientSetReviewInput<'_>,
-    emit_warnings: &mut EmitWarnings,
     confirm_recipient_set: ConfirmRecipientSet,
 ) -> Result<()>
 where
-    EmitWarnings: FnMut(&[String]),
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
     let outcome = evaluate_output_recipient_set_trust(
@@ -197,7 +227,6 @@ where
         execution,
         &outcome,
         review.context_label,
-        emit_warnings,
         confirm_recipient_set,
     )
 }
@@ -208,7 +237,7 @@ pub fn review_write_recipient_trust<
     ConfirmNonMember,
     ConfirmRecipients,
 >(
-    execution: TrustExecutionContext<'_>,
+    review_context: TrustReviewContext<'_>,
     trust_plan: WriteRecipientTrustReviewPlan<'_>,
     mut emit_warnings: EmitWarnings,
     confirm_known: ConfirmKnown,
@@ -222,7 +251,7 @@ where
     ConfirmRecipients:
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
 {
-    emit_warnings(execution.warnings);
+    emit_warnings(review_context.warnings);
     let mut approvals = review_write_signer_trust_with_confirmation_verifier(
         trust_plan,
         confirm_known,
@@ -233,7 +262,7 @@ where
         approvals.as_slice(),
         confirm_recipients,
     )?);
-    save_approved_known_keys(execution, &approvals, &mut emit_warnings)?;
+    save_approved_known_key_documents(review_context.trust, &approvals)?;
     Ok(())
 }
 
@@ -302,27 +331,4 @@ fn is_approved_candidate(
         identity.member_handle() == candidate.member_handle.as_str()
             && identity.kid() == candidate.kid.as_str()
     })
-}
-
-pub fn review_artifact_recipient_set_trust<ConfirmRecipientSet>(
-    outcome: &ArtifactRecipientTrustOutcome,
-    context_label: &str,
-    mut confirm: ConfirmRecipientSet,
-) -> Result<Option<ArtifactRecipientSet>>
-where
-    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
-{
-    match outcome {
-        ArtifactRecipientTrustOutcome::Accepted
-        | ArtifactRecipientTrustOutcome::SkippedStrictKeyCheckingNo => Ok(None),
-        ArtifactRecipientTrustOutcome::NeedsManualApproval(review) => {
-            if confirm(outcome, context_label)? {
-                Ok(Some(review.current_set().clone()))
-            } else {
-                Err(crate::Error::build_invalid_operation_error(
-                    "Recipient set approval declined".to_string(),
-                ))
-            }
-        }
-    }
 }

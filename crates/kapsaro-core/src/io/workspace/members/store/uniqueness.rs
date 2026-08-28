@@ -1,12 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::paths::{members_dir, MemberStatus};
-use super::load::{
-    load_json_file_names_in_dir_at, load_json_files_in_dir, load_verified_member_file_at,
-    load_verified_member_file_from_path,
-};
-use super::save::member_status_dir_name;
+//! Uniqueness of the key identifiers the workspace members carry.
+//! Reads every member document through its directory descriptor to find a kid claimed twice.
+
+use super::super::paths::{open_optional_members_dir, status_dir_name, MemberStatus};
+use super::load::{load_member_document_names_at, load_verified_member_file_at};
 use crate::support::fs::relative::DirectoryFd;
 use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, Result};
@@ -20,13 +19,43 @@ pub(crate) struct MemberKidCandidate {
     pub status: MemberStatus,
 }
 
-pub fn ensure_member_document_kid_is_unique(
-    workspace_path: &Path,
+/// Judge one saved document's kid against the status directories the caller
+/// already holds open.
+///
+/// A save runs this and its write under one lock on `members/`, so the member
+/// set the kid was judged against is the set the document lands in.
+pub(crate) fn ensure_member_document_kid_is_unique_in_open_dirs<A, I>(
+    active_dir: &A,
+    incoming_dir: &I,
     status: MemberStatus,
     member_handle: &str,
     kid: &str,
     allow_replace_self: bool,
-) -> Result<()> {
+) -> Result<()>
+where
+    A: DirectoryFd,
+    I: DirectoryFd,
+{
+    let (candidate, ignored_existing) =
+        build_saved_member_candidate(status, member_handle, kid, allow_replace_self);
+    check_workspace_member_kid_uniqueness_in_open_dirs(
+        active_dir,
+        incoming_dir,
+        &[candidate],
+        &ignored_existing,
+    )
+}
+
+/// The candidate one saved document offers, and the document it replaces.
+///
+/// A save that overwrites its own document must not collide with the version it
+/// is replacing, so that one is left out of the existing set.
+fn build_saved_member_candidate(
+    status: MemberStatus,
+    member_handle: &str,
+    kid: &str,
+    allow_replace_self: bool,
+) -> (MemberKidCandidate, Vec<(MemberStatus, String)>) {
     let ignored_existing = if allow_replace_self {
         vec![(status, member_handle.to_string())]
     } else {
@@ -37,12 +66,7 @@ pub fn ensure_member_document_kid_is_unique(
         kid: kid.to_string(),
         status,
     };
-    check_workspace_member_kid_uniqueness(
-        workspace_path,
-        &[candidate],
-        &ignored_existing,
-        &[MemberStatus::Active, MemberStatus::Incoming],
-    )
+    (candidate, ignored_existing)
 }
 
 pub fn ensure_workspace_member_kid_uniqueness(workspace_path: &Path) -> Result<()> {
@@ -54,7 +78,7 @@ pub fn ensure_workspace_member_kid_uniqueness(workspace_path: &Path) -> Result<(
     )
 }
 
-pub(crate) fn check_workspace_member_kid_uniqueness(
+fn check_workspace_member_kid_uniqueness(
     workspace_path: &Path,
     candidates: &[MemberKidCandidate],
     ignored_existing: &[(MemberStatus, String)],
@@ -133,7 +157,7 @@ where
     D: DirectoryFd,
 {
     let mut candidates = Vec::new();
-    for name in load_json_file_names_in_dir_at(dir)? {
+    for name in load_member_document_names_at(dir)? {
         let Some(member_handle) = Path::new(&name)
             .file_stem()
             .and_then(|stem| stem.to_str())
@@ -161,24 +185,14 @@ fn load_member_kid_candidates(
 ) -> Result<Vec<MemberKidCandidate>> {
     let mut candidates = Vec::new();
     for status in statuses {
-        for path in load_json_files_in_dir(&members_dir(workspace_path, *status))? {
-            let Some(member_handle) = path
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .map(String::from)
-            else {
-                continue;
-            };
-            if is_ignored_existing(ignored_existing, *status, &member_handle) {
-                continue;
-            }
-            let member = load_verified_member_file_from_path(&path)?;
-            candidates.push(MemberKidCandidate {
-                member_handle,
-                kid: member.protected.kid.clone(),
-                status: *status,
-            });
-        }
+        let Some(dir) = open_optional_members_dir(workspace_path, *status)? else {
+            continue;
+        };
+        candidates.extend(load_member_kid_candidates_from_open_dir(
+            &dir,
+            *status,
+            ignored_existing,
+        )?);
     }
     Ok(candidates)
 }
@@ -199,9 +213,9 @@ fn duplicate_kid_error(existing: &MemberKidCandidate, candidate: &MemberKidCandi
     Error::build_config_error(format!(
         "Duplicate kid '{}' in workspace members: {}/'{}' conflicts with {}/'{}'",
         format_kid_display_lossy(&candidate.kid),
-        member_status_dir_name(existing.status),
+        status_dir_name(existing.status),
         existing.member_handle,
-        member_status_dir_name(candidate.status),
+        status_dir_name(candidate.status),
         candidate.member_handle
     ))
 }

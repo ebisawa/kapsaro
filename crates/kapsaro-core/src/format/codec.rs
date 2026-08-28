@@ -25,32 +25,32 @@ pub(crate) struct StandardDecodeLayout {
     pub(crate) output_len: usize,
 }
 
-pub(crate) fn encode_public(data: &[u8], alphabet: &[u8; 64], pad: bool) -> String {
-    let mut out = vec![0u8; compute_encoded_len(data.len(), pad)];
-    fill_encoded(data, &mut out, alphabet, pad);
+/// Encode without padding, which is the only form kapsaro emits.
+///
+/// The padded form appears only on the way in, where OpenSSH spells its blobs,
+/// and the decoders accept it there.
+pub(crate) fn encode_public(data: &[u8], alphabet: &[u8; 64]) -> String {
+    let mut out = vec![0u8; compute_encoded_len(data.len())];
+    fill_encoded(data, &mut out, alphabet);
     String::from_utf8(out).expect("base64 output must be valid ASCII")
 }
 
-pub(crate) fn encode_secret(data: &[u8], alphabet: &[u8; 64], pad: bool) -> Zeroizing<Vec<u8>> {
-    let mut out = Zeroizing::new(vec![0u8; compute_encoded_len(data.len(), pad)]);
-    fill_encoded(data, &mut out, alphabet, pad);
+pub(crate) fn encode_secret(data: &[u8], alphabet: &[u8; 64]) -> Zeroizing<Vec<u8>> {
+    let mut out = Zeroizing::new(vec![0u8; compute_encoded_len(data.len())]);
+    fill_encoded(data, &mut out, alphabet);
     out
 }
 
-pub(crate) fn compute_encoded_len(input_len: usize, pad: bool) -> usize {
-    let chunks = input_len / 3;
-    let rem = input_len % 3;
-    let base = chunks * 4;
-    match (rem, pad) {
-        (0, _) => base,
-        (_, true) => base + 4,
-        (1, false) => base + 2,
-        (2, false) => base + 3,
-        _ => base,
+fn compute_encoded_len(input_len: usize) -> usize {
+    let base = (input_len / 3) * 4;
+    match input_len % 3 {
+        0 => base,
+        1 => base + 2,
+        _ => base + 3,
     }
 }
 
-fn fill_encoded(data: &[u8], out: &mut [u8], alphabet: &[u8; 64], pad: bool) {
+fn fill_encoded(data: &[u8], out: &mut [u8], alphabet: &[u8; 64]) {
     let mut in_idx = 0;
     let mut out_idx = 0;
 
@@ -65,13 +65,8 @@ fn fill_encoded(data: &[u8], out: &mut [u8], alphabet: &[u8; 64], pad: bool) {
     }
 
     match data.len() - in_idx {
-        1 => encode_tail_one(data[in_idx], &mut out[out_idx..], alphabet, pad),
-        2 => encode_tail_two(
-            &data[in_idx..in_idx + 2],
-            &mut out[out_idx..],
-            alphabet,
-            pad,
-        ),
+        1 => encode_tail_one(data[in_idx], &mut out[out_idx..], alphabet),
+        2 => encode_tail_two(&data[in_idx..in_idx + 2], &mut out[out_idx..], alphabet),
         _ => {}
     }
 }
@@ -86,24 +81,17 @@ fn encode_full_block(input: &[u8], out: &mut [u8], alphabet: &[u8; 64]) {
     out[3] = alphabet[(b2 & 0x3f) as usize];
 }
 
-fn encode_tail_one(input: u8, out: &mut [u8], alphabet: &[u8; 64], pad: bool) {
+fn encode_tail_one(input: u8, out: &mut [u8], alphabet: &[u8; 64]) {
     out[0] = alphabet[(input >> 2) as usize];
     out[1] = alphabet[((input & 0x03) << 4) as usize];
-    if pad {
-        out[2] = b'=';
-        out[3] = b'=';
-    }
 }
 
-fn encode_tail_two(input: &[u8], out: &mut [u8], alphabet: &[u8; 64], pad: bool) {
+fn encode_tail_two(input: &[u8], out: &mut [u8], alphabet: &[u8; 64]) {
     let b0 = input[0];
     let b1 = input[1];
     out[0] = alphabet[(b0 >> 2) as usize];
     out[1] = alphabet[(((b0 & 0x03) << 4) | (b1 >> 4)) as usize];
     out[2] = alphabet[((b1 & 0x0f) << 2) as usize];
-    if pad {
-        out[3] = b'=';
-    }
 }
 
 pub(crate) fn decode_base64url_input_len(data: &str, field_name: &str) -> Result<usize> {
@@ -347,6 +335,12 @@ fn invalid_character_error(field_name: &str, detail: &str) -> Error {
 fn invalid_length_error(field_name: &str, detail: &str) -> Error {
     Error::build_parse_error(format!("{}: {}", field_name, detail))
 }
+
+// Fixture encoder shared by the internal tests that build OpenSSH blobs. It
+// lives in the test tree and compiles out of production builds.
+#[cfg(test)]
+#[path = "../../tests/unit/internal/codec_base64_fixtures.rs"]
+pub(crate) mod codec_base64_fixtures;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/support_codec_base64_test.rs"]

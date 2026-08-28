@@ -7,7 +7,18 @@
 
 use super::*;
 use crate::crypto::types::data::{Ikm, Info};
-use crate::crypto::types::primitives::HkdfSalt;
+use crate::crypto::types::primitives::{AsHkdfSalt, HkdfSalt};
+
+/// The salt type `derive_hkdf_sha256_array` accepts, held still at compile time.
+///
+/// `AsHkdfSalt` is what the signature asks for, so applying this to `HkdfSalt`
+/// states which salt the HKDF-Extract input is spelled with.
+fn assert_hkdf_salt<T: AsHkdfSalt>() {}
+
+#[test]
+fn hkdf_extract_salt_is_the_hkdf_salt_type() {
+    assert_hkdf_salt::<HkdfSalt>();
+}
 
 #[test]
 fn hkdf_sha256_prk_expansion_matches_one_shot_derivation() {

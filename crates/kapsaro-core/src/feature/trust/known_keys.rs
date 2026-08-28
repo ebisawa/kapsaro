@@ -54,10 +54,6 @@ impl KnownKeyIdentity {
     pub fn kid(&self) -> &str {
         self.kid.as_str()
     }
-
-    pub fn kid_value(&self) -> &Kid {
-        &self.kid
-    }
 }
 
 /// Add a known key entry.

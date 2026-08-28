@@ -3,15 +3,23 @@
 
 //! View builders for key command output.
 
-use kapsaro_core::cli_api::app::key::types::KeyListResult;
+use kapsaro_core::cli_api::app::key::types::{KeyInfo, KeyListResult};
 
-pub(crate) struct KeyInfoView<'a> {
-    pub(crate) kid: &'a str,
-    pub(crate) member_handle: &'a str,
-    pub(crate) created_at: &'a str,
-    pub(crate) expires_at: &'a str,
-    pub(crate) active: bool,
-    pub(crate) format: &'a str,
+pub(crate) enum KeyInfoView<'a> {
+    Complete {
+        kid: &'a str,
+        member_handle: &'a str,
+        created_at: Option<&'a str>,
+        expires_at: &'a str,
+        active: bool,
+        format: &'a str,
+    },
+    Incomplete {
+        kid: &'a str,
+        member_handle: &'a str,
+        active: bool,
+        missing_document: &'static str,
+    },
 }
 
 pub(crate) struct KeyMemberView<'a> {
@@ -33,13 +41,33 @@ pub(super) fn build_key_list_view(result: &KeyListResult) -> KeyListView<'_> {
                 member_handle,
                 keys: keys
                     .iter()
-                    .map(|key| KeyInfoView {
-                        kid: &key.kid,
-                        member_handle: &key.member_handle,
-                        created_at: &key.created_at,
-                        expires_at: &key.expires_at,
-                        active: key.active,
-                        format: &key.format,
+                    .map(|key| match key {
+                        KeyInfo::Complete {
+                            kid,
+                            member_handle,
+                            created_at,
+                            expires_at,
+                            active,
+                            format,
+                        } => KeyInfoView::Complete {
+                            kid,
+                            member_handle,
+                            created_at: created_at.as_deref(),
+                            expires_at,
+                            active: *active,
+                            format,
+                        },
+                        KeyInfo::Incomplete {
+                            kid,
+                            member_handle,
+                            active,
+                            missing_document,
+                        } => KeyInfoView::Incomplete {
+                            kid,
+                            member_handle,
+                            active: *active,
+                            missing_document: missing_document.as_str(),
+                        },
                     })
                     .collect(),
             })

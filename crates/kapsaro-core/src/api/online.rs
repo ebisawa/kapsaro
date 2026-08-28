@@ -4,8 +4,6 @@
 //! Blocking online verification facade.
 
 use crate::io::github::account::resolve_github_account_by_login;
-use crate::io::keystore::helpers::resolve_kid;
-use crate::io::keystore::storage::load_public_key;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::VerificationResult;
@@ -13,7 +11,7 @@ use crate::model::public_key::GithubAccount as InternalGithubAccount;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 
-use super::key::LocalKeyStore;
+use super::key::{Kid, LocalKeyStore, MemberHandle};
 pub use crate::app::verification::OnlineVerificationStatus;
 
 /// GitHub account metadata used by online verification.
@@ -39,7 +37,7 @@ pub struct GitHubOnlineVerifier;
 /// Online verification result without raw document model exposure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OnlineVerificationResult {
-    member_handle: String,
+    member_handle: MemberHandle,
     status: OnlineVerificationStatus,
     message: String,
     fingerprint: Option<String>,
@@ -73,12 +71,13 @@ impl GitHubOnlineVerifier {
     pub fn verify_keystore_member(
         &self,
         key_store: &LocalKeyStore,
-        member_handle: &str,
-        kid: Option<&str>,
+        member_handle: &MemberHandle,
+        kid: Option<&Kid>,
     ) -> Result<OnlineVerificationResult> {
-        let resolved_kid = resolve_kid(key_store.root(), member_handle, kid)?;
-        let public_key = load_public_key(key_store.root(), member_handle, &resolved_kid)?;
-        block_on_result(verify_github_account(&public_key)).map(OnlineVerificationResult::from)
+        let (_, public_key) = key_store
+            .access()
+            .resolve_public_key(member_handle, kid.map(Kid::as_str))?;
+        block_on_result(verify_github_account(&public_key))?.try_into()
     }
 }
 
@@ -114,7 +113,7 @@ impl GitHubAccount {
 
 impl OnlineVerificationResult {
     /// Return the member handle from the verified public key.
-    pub fn member_handle(&self) -> &str {
+    pub fn member_handle(&self) -> &MemberHandle {
         &self.member_handle
     }
 
@@ -149,10 +148,12 @@ impl OnlineVerificationResult {
     }
 }
 
-impl From<VerificationResult> for OnlineVerificationResult {
-    fn from(value: VerificationResult) -> Self {
-        Self {
-            member_handle: value.member_handle,
+impl TryFrom<VerificationResult> for OnlineVerificationResult {
+    type Error = crate::Error;
+
+    fn try_from(value: VerificationResult) -> Result<Self> {
+        Ok(Self {
+            member_handle: MemberHandle::try_from(value.member_handle)?,
             status: OnlineVerificationStatus::from(value.status),
             message: value.message,
             fingerprint: value.fingerprint,
@@ -161,6 +162,6 @@ impl From<VerificationResult> for OnlineVerificationResult {
             verified_account: value
                 .verified_github
                 .map(|account| GitHubAccount::new(account.id, account.login)),
-        }
+        })
     }
 }

@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Reviews recipient trust outcomes that need manual approval.
+//! Verifies each candidate online, then delegates the accept/reject decision to a caller-supplied confirmation callback.
+
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{RecipientTrustOutcome, TrustApprovalCandidate};
 use crate::{Error, Result};

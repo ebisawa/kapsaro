@@ -3,7 +3,12 @@
 
 //! Path resolution for keystore
 
+use super::access::{PRIVATE_KEY_FILE, PUBLIC_KEY_FILE};
+use crate::model::identity::{Kid, MemberHandle};
 use std::path::{Path, PathBuf};
+
+/// Name of the keystore root directory under a local state home.
+pub(crate) const KEYSTORE_DIR_NAME: &str = "keys";
 
 /// Get keystore root directory from base directory
 ///
@@ -15,36 +20,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Path to `base_dir/keys/`
 pub fn get_keystore_root_from_base(base_dir: &Path) -> PathBuf {
-    base_dir.join("keys")
-}
-
-/// Get member keystore path from keystore root
-///
-/// # Arguments
-///
-/// * `keystore_root` - Path to keystore root directory
-/// * `member_handle` - Member handle
-///
-/// # Returns
-///
-/// Path to `keystore_root/<member_handle>/`
-pub fn get_member_keystore_path_from_root(keystore_root: &Path, member_handle: &str) -> PathBuf {
-    keystore_root.join(member_handle)
-}
-
-/// Get key path for a specific kid from keystore root
-///
-/// # Arguments
-///
-/// * `keystore_root` - Path to keystore root directory
-/// * `member_handle` - Member handle
-/// * `kid` - Key ID
-///
-/// # Returns
-///
-/// Path to `keystore_root/<member_handle>/<kid>/`
-pub fn get_key_path_from_root(keystore_root: &Path, member_handle: &str, kid: &str) -> PathBuf {
-    get_member_keystore_path_from_root(keystore_root, member_handle).join(kid)
+    base_dir.join(KEYSTORE_DIR_NAME)
 }
 
 /// Get private key file path from keystore root
@@ -60,10 +36,10 @@ pub fn get_key_path_from_root(keystore_root: &Path, member_handle: &str, kid: &s
 /// Path to `keystore_root/<member_handle>/<kid>/private.json`
 pub fn get_private_key_file_path_from_root(
     keystore_root: &Path,
-    member_handle: &str,
-    kid: &str,
+    member_handle: &MemberHandle,
+    kid: &Kid,
 ) -> PathBuf {
-    get_key_path_from_root(keystore_root, member_handle, kid).join("private.json")
+    get_key_dir_from_root(keystore_root, member_handle, kid).join(PRIVATE_KEY_FILE)
 }
 
 /// Get public key file path from keystore root
@@ -79,24 +55,17 @@ pub fn get_private_key_file_path_from_root(
 /// Path to `keystore_root/<member_handle>/<kid>/public.json`
 pub fn get_public_key_file_path_from_root(
     keystore_root: &Path,
-    member_handle: &str,
-    kid: &str,
+    member_handle: &MemberHandle,
+    kid: &Kid,
 ) -> PathBuf {
-    get_key_path_from_root(keystore_root, member_handle, kid).join("public.json")
+    get_key_dir_from_root(keystore_root, member_handle, kid).join(PUBLIC_KEY_FILE)
 }
 
-/// Get active key file path from keystore root
-///
-/// # Arguments
-///
-/// * `keystore_root` - Path to keystore root directory
-/// * `member_handle` - Member handle
-///
-/// # Returns
-///
-/// Path to `keystore_root/<member_handle>/active`
-pub fn get_active_file_path_from_root(keystore_root: &Path, member_handle: &str) -> PathBuf {
-    get_member_keystore_path_from_root(keystore_root, member_handle).join("active")
+/// Directory holding both key documents: `keystore_root/<member_handle>/<kid>/`
+fn get_key_dir_from_root(keystore_root: &Path, member_handle: &MemberHandle, kid: &Kid) -> PathBuf {
+    keystore_root
+        .join(member_handle.as_str())
+        .join(kid.as_str())
 }
 
 #[cfg(test)]

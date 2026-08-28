@@ -20,15 +20,11 @@ use super::{
 };
 
 pub fn encode_base64url_nopad_secret_bytes(data: &SecretBytes) -> SecretString {
-    SecretString::try_from(encode_secret(data.as_bytes(), URL_SAFE_ALPHABET, false))
+    SecretString::try_from(encode_secret(data.as_bytes(), URL_SAFE_ALPHABET))
         .expect("base64 output must be valid UTF-8")
 }
 
 pub fn encode_base64url_nopad_secret_32(data: &SecretArray<32>) -> SecretString {
-    encode_secret_array(data)
-}
-
-pub fn encode_base64url_nopad_secret_64(data: &SecretArray<64>) -> SecretString {
     encode_secret_array(data)
 }
 
@@ -58,12 +54,8 @@ pub fn decode_base64url_nopad_secret_32(data: &str, field_name: &str) -> Result<
     decode_secret_array(data, field_name)
 }
 
-pub fn decode_base64url_nopad_secret_64(data: &str, field_name: &str) -> Result<SecretArray<64>> {
-    decode_secret_array(data, field_name)
-}
-
 fn encode_secret_array<const N: usize>(data: &SecretArray<N>) -> SecretString {
-    SecretString::try_from(encode_secret(data.as_array(), URL_SAFE_ALPHABET, false))
+    SecretString::try_from(encode_secret(data.as_array(), URL_SAFE_ALPHABET))
         .expect("base64 output must be valid UTF-8")
 }
 

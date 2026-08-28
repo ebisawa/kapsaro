@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Sorts incoming member public keys found during rewrap into auto-accepted
+//! and manual-review buckets, then runs online verification on the latter.
+
 use std::collections::BTreeSet;
 
 use crate::app::member::verification::verify_member_public_keys;

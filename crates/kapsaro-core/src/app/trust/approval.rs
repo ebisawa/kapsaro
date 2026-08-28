@@ -6,19 +6,21 @@
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::store::{
-    build_now_timestamp, execute_trust_store_mutation_with_execution, TrustStoreMutation,
-    TrustStoreMutationMode,
+    execute_trust_store_mutation_with_execution, execute_trust_store_mutation_with_preparation,
+    observe_execution_trust_store, TrustStoreWriteBinding,
 };
-use crate::app::trust::types::TrustMutationResult;
 use crate::app::trust::TrustApprovalCandidate;
 use crate::feature::trust::known_keys::add_known_key;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::{upsert_recipient_set, ArtifactRecipientSet};
+use crate::feature::trust::store_mutation::{TrustStoreMutation, TrustStoreMutationMode};
+use crate::feature::trust::transaction::ObservedTrustStore;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{
-    KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount,
+    KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreProtected,
 };
+use crate::support::time::generate_current_timestamp;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 
@@ -30,8 +32,6 @@ pub struct ApprovedKnownKey {
     github_login: Option<String>,
     attestor_pub: Option<String>,
 }
-
-pub type ApprovalSaveResult = TrustMutationResult<usize>;
 
 impl ApprovedKnownKey {
     pub fn from_review(
@@ -91,7 +91,7 @@ impl ApprovedKnownKey {
     }
 
     fn into_known_key(self) -> Result<KnownKey> {
-        Ok(self.to_known_key_with_approved_at(build_now_timestamp()?))
+        Ok(self.to_known_key_with_approved_at(generate_current_timestamp()?))
     }
 }
 
@@ -112,19 +112,26 @@ impl From<&ApprovedKnownKey> for KnownKeyIdentity {
     }
 }
 
+/// Store the key approvals an operator just agreed to.
+///
+/// Every caller reaches here after showing the operator what it was about to
+/// approve, and two runs approving different keys must each keep what they
+/// approved, so the write merges into the latest stored content rather than
+/// binding itself to the bytes the observation saw.
 pub fn save_known_key_approvals(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
     approvals: &[ApprovedKnownKey],
-) -> Result<ApprovalSaveResult> {
+) -> Result<usize> {
     if approvals.is_empty() {
-        return Ok(TrustMutationResult::new(0, Vec::new()));
+        return Ok(0);
     }
 
     execute_trust_store_mutation_with_execution(
         options,
         execution,
         TrustStoreMutationMode::CreateIfMissing,
+        TrustStoreWriteBinding::MergedApproval,
         |protected| {
             let mut added = 0usize;
 
@@ -145,31 +152,64 @@ pub fn save_known_key_approvals(
     )
 }
 
-pub fn save_recipient_set_approval(
-    options: &CommonCommandOptions,
-    execution: &ExecutionContext,
-    approval: Option<ArtifactRecipientSet>,
-) -> Result<ApprovalSaveResult> {
-    let Some(approval) = approval else {
-        return Ok(TrustMutationResult::new(0, Vec::new()));
-    };
+/// Mode one recipient-set approval is written with.
+const RECIPIENT_SET_APPROVAL_MODE: TrustStoreMutationMode = TrustStoreMutationMode::CreateIfMissing;
 
-    execute_trust_store_mutation_with_execution(
-        options,
+/// Observe the trust store one recipient-set review will be decided against.
+///
+/// Approving a recipient set replaces the whole record its sid names rather
+/// than adding one beside it, so merging has no ground here. The operator
+/// decides on the strength of the store as it stood when they were asked, and
+/// a run that replaced the record for that sid while they were deciding left
+/// one they never saw: writing the reviewed set over it would put back a
+/// recipient that run dropped. Observing before the prompt is what makes the
+/// commit refuse that, so the operator reviews the artifact again instead.
+///
+/// `CreateIfMissing` means this observation creates the trust directory when
+/// it is absent, and this call runs before the operator has confirmed
+/// anything. Declining the approval afterward therefore still leaves an empty
+/// trust directory behind; before this moved to observing ahead of the
+/// prompt, the directory was only created once the operator had confirmed.
+/// The trust-approval facade documents an empty directory left behind this
+/// way as harmless, so this is recorded here as the move that introduced this
+/// particular path to it rather than as a new case to guard against.
+pub(crate) fn observe_recipient_set_approval_store(
+    execution: &ExecutionContext,
+) -> Result<ObservedTrustStore> {
+    observe_execution_trust_store(execution, RECIPIENT_SET_APPROVAL_MODE)
+}
+
+/// Store the recipient-set approval an operator just agreed to.
+///
+/// `observed` is the store the decision was made against, and the commit
+/// accepts nothing else.
+pub(crate) fn save_reviewed_recipient_set_approval(
+    execution: &ExecutionContext,
+    observed: &ObservedTrustStore,
+    approval: ArtifactRecipientSet,
+) -> Result<usize> {
+    execute_trust_store_mutation_with_preparation(
         execution,
-        TrustStoreMutationMode::CreateIfMissing,
-        |protected| {
-            let changed = upsert_recipient_set(
-                &mut protected.recipient_sets,
-                approval,
-                build_now_timestamp()?,
-            );
-            Ok(TrustStoreMutation {
-                value: usize::from(changed),
-                changed,
-            })
-        },
+        RECIPIENT_SET_APPROVAL_MODE,
+        observed.prepared(),
+        |protected| apply_recipient_set_approval(protected, approval),
     )
+}
+
+/// Put the approved recipient set into the content the commit settled on.
+fn apply_recipient_set_approval(
+    protected: &mut TrustStoreProtected,
+    approval: ArtifactRecipientSet,
+) -> Result<TrustStoreMutation<usize>> {
+    let changed = upsert_recipient_set(
+        &mut protected.recipient_sets,
+        approval,
+        generate_current_timestamp()?,
+    );
+    Ok(TrustStoreMutation {
+        value: usize::from(changed),
+        changed,
+    })
 }
 
 fn enforce_non_self_approval(owner_handle: &str, member_handle: &str) -> Result<()> {

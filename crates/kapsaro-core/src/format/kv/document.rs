@@ -10,11 +10,10 @@ mod parse;
 mod structure;
 
 use crate::model::kv_enc::document::KvEncDocument;
-use crate::model::kv_enc::line::KvEncLine;
 use crate::Result;
 
 pub use builder::KvDocumentBuilder;
-pub(crate) use draft::{KvDocumentDraft, KvDocumentEntry, WrapSource};
+pub(crate) use draft::KvDocumentDraft;
 
 pub fn parse_kv_document(content: &str) -> Result<KvEncDocument> {
     parse::parse_kv_document(content, "kv-enc content")
@@ -22,10 +21,6 @@ pub fn parse_kv_document(content: &str) -> Result<KvEncDocument> {
 
 pub fn parse_kv_document_with_source(content: &str, source_name: &str) -> Result<KvEncDocument> {
     parse::parse_kv_document(content, source_name)
-}
-
-pub fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {
-    structure::validate_kv_file_structure(lines)
 }
 
 #[cfg(test)]

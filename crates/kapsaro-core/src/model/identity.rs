@@ -3,14 +3,18 @@
 
 //! Strongly typed internal identity values.
 
+use crate::error::{KID_INVALID_RULE, MEMBER_HANDLE_INVALID_RULE};
 use crate::support::kid::normalize_kid;
 use crate::support::validation::validate_member_handle;
-use crate::Result;
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// A syntactically validated member handle.
+///
+/// This type validates identifier syntax only; it does not establish identity trust.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct MemberHandle(String);
 
@@ -66,6 +70,16 @@ impl TryFrom<String> for MemberHandle {
     }
 }
 
+impl<'de> Deserialize<'de> for MemberHandle {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(|error| coded_de_error(MEMBER_HANDLE_INVALID_RULE, &error))
+    }
+}
+
 impl From<MemberHandle> for String {
     fn from(value: MemberHandle) -> Self {
         value.into_string()
@@ -84,13 +98,30 @@ impl PartialEq<String> for MemberHandle {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct Kid(String);
 
 impl Kid {
+    /// Build a `kid` from operator input, normalizing display form to canonical.
     pub fn new(value: impl Into<String>) -> Result<Self> {
         Ok(Self(normalize_kid(&value.into())?))
+    }
+
+    /// Build a `kid` from a stored value that must already be canonical.
+    ///
+    /// Serialized documents carry the canonical form, so accepting display form
+    /// here would silently rewrite bytes that a signature was computed over.
+    pub fn from_canonical(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        let canonical = normalize_kid(&value)?;
+        if canonical != value {
+            return Err(Error::build_invalid_argument_error(format!(
+                "kid must be stored in canonical form: '{}'",
+                value
+            )));
+        }
+        Ok(Self(canonical))
     }
 
     pub fn as_str(&self) -> &str {
@@ -138,6 +169,25 @@ impl TryFrom<String> for Kid {
     }
 }
 
+/// Reject a stored `kid` that is not canonical.
+///
+/// The wire models spell `kid` as a `String`, so nothing in the crate currently
+/// deserializes straight into this type: stored documents are validated against
+/// their JSON Schema, which pins the canonical shape, and a malformed `kid` is
+/// refused there as a schema error. This impl keeps the invariant with the type
+/// rather than with the callers, so a future wire model holding a `Kid` cannot
+/// arrive at a non-canonical one, and the rule code names the constraint for
+/// whoever reads the message.
+impl<'de> Deserialize<'de> for Kid {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_canonical(value).map_err(|error| coded_de_error(KID_INVALID_RULE, &error))
+    }
+}
+
 impl From<Kid> for String {
     fn from(value: Kid) -> Self {
         value.into_string()
@@ -154,4 +204,13 @@ impl PartialEq<String> for Kid {
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other
     }
+}
+
+/// Carry the stable rule code into a serde error, which cannot hold our own
+/// error type. The code stays visible to whoever reads the message.
+fn coded_de_error<E>(rule: &str, error: &crate::Error) -> E
+where
+    E: serde::de::Error,
+{
+    E::custom(format!("{}: {}", rule, error.format_user_message()))
 }

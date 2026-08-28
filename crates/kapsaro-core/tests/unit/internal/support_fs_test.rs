@@ -3,38 +3,13 @@
 
 //! Unit tests for support/fs module.
 
-use crate::support::fs::permission::check_permission;
 use crate::support::fs::read::load_bytes_with_limit;
-use crate::support::fs::snapshot::ensure_text_file_matches_snapshot;
-use crate::support::fs::{
-    check_permission_chain, ensure_dir, ensure_dir_restricted,
-    ensure_text_file_matches_snapshot_with_limit, list_dir, load_text, load_text_with_limit,
-};
+use crate::support::fs::snapshot::TextFileSnapshot;
+use crate::support::fs::{ensure_dir, load_bytes, load_text_with_limit};
+use crate::support::limits::MAX_PLAINTEXT_INPUT_SIZE;
+use crate::support::path::format_path_relative_to_cwd;
 use std::fs;
 use tempfile::TempDir;
-
-#[test]
-fn test_load_text() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.txt");
-    fs::write(&file_path, "hello").unwrap();
-
-    let content = load_text(&file_path).unwrap();
-
-    assert_eq!(content, "hello");
-}
-
-#[test]
-fn test_load_text_missing_file_error() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("missing.txt");
-
-    let error = load_text(&file_path).unwrap_err();
-
-    let message = error.to_string();
-    assert!(message.contains("Failed to read file"));
-    assert!(message.contains("missing.txt"));
-}
 
 #[test]
 fn test_load_text_with_limit() {
@@ -58,33 +33,6 @@ fn test_load_text_with_limit_rejects_oversized_file() {
     let message = error.to_string();
     assert!(message.contains("exceeds maximum size limit"));
     assert!(message.contains("test file"));
-}
-
-#[test]
-fn test_list_dir() {
-    let temp_dir = TempDir::new().unwrap();
-    fs::write(temp_dir.path().join("a.txt"), "a").unwrap();
-    fs::create_dir(temp_dir.path().join("subdir")).unwrap();
-
-    let entries = list_dir(temp_dir.path()).unwrap();
-    let names: Vec<String> = entries
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-
-    assert!(names.contains(&"a.txt".to_string()));
-    assert!(names.contains(&"subdir".to_string()));
-}
-
-#[test]
-fn test_list_dir_missing_directory_error() {
-    let temp_dir = TempDir::new().unwrap();
-    let dir_path = temp_dir.path().join("missing");
-
-    let error = list_dir(&dir_path).unwrap_err();
-
-    let message = error.to_string();
-    assert!(message.contains("Failed to read directory"));
-    assert!(message.contains("missing"));
 }
 
 #[test]
@@ -121,146 +69,7 @@ fn test_ensure_dir_rejects_symlinked_ancestor() {
 
 #[cfg(unix)]
 #[test]
-fn test_ensure_dir_restricted_sets_mode_0700() {
-    use std::os::unix::fs::PermissionsExt;
-    let temp_dir = TempDir::new().unwrap();
-    let dir_path = temp_dir.path().join("a/b/c");
-    ensure_dir_restricted(&dir_path).unwrap();
-    assert!(dir_path.exists());
-    let mode = fs::metadata(&dir_path).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o700);
-}
-
-#[cfg(unix)]
-#[test]
-fn test_ensure_dir_restricted_rejects_symlinked_ancestor() {
-    use std::os::unix::fs::symlink;
-
-    let temp_dir = TempDir::new().unwrap();
-    let real_parent = temp_dir.path().join("outside");
-    let linked_parent = temp_dir.path().join("linked");
-    fs::create_dir(&real_parent).unwrap();
-    symlink(&real_parent, &linked_parent).unwrap();
-
-    let error = ensure_dir_restricted(&linked_parent.join("nested")).unwrap_err();
-
-    let message = error.to_string();
-    assert!(message.contains("symlink"), "unexpected error: {message}");
-    assert!(
-        !real_parent.join("nested").exists(),
-        "restricted directory creation must not follow a symlinked ancestor"
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn test_ensure_dir_restricted_fixes_existing_dir_permissions() {
-    use std::os::unix::fs::PermissionsExt;
-    let temp_dir = TempDir::new().unwrap();
-    let dir_path = temp_dir.path().join("existing");
-    fs::create_dir(&dir_path).unwrap();
-    fs::set_permissions(&dir_path, fs::Permissions::from_mode(0o755)).unwrap();
-    ensure_dir_restricted(&dir_path).unwrap();
-    let mode = fs::metadata(&dir_path).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o700);
-}
-
-#[cfg(unix)]
-#[test]
-fn test_check_permission_detects_insecure_file() {
-    use std::os::unix::fs::PermissionsExt;
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.txt");
-    fs::write(&file_path, "secret").unwrap();
-    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644)).unwrap();
-    let result = check_permission(&file_path);
-    assert!(result.is_some());
-    let msg = result.unwrap();
-    assert!(msg.contains("0644"));
-    assert!(msg.contains("expected 0600"));
-}
-
-#[cfg(unix)]
-#[test]
-fn test_check_permission_accepts_secure_file() {
-    use std::os::unix::fs::PermissionsExt;
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.txt");
-    fs::write(&file_path, "secret").unwrap();
-    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o600)).unwrap();
-    assert!(check_permission(&file_path).is_none());
-}
-
-#[cfg(unix)]
-#[test]
-fn test_check_permission_detects_insecure_directory() {
-    use std::os::unix::fs::PermissionsExt;
-    let temp_dir = TempDir::new().unwrap();
-    let dir_path = temp_dir.path().join("testdir");
-    fs::create_dir(&dir_path).unwrap();
-    fs::set_permissions(&dir_path, fs::Permissions::from_mode(0o755)).unwrap();
-    let result = check_permission(&dir_path);
-    assert!(result.is_some());
-    assert!(result.unwrap().contains("expected 0700"));
-}
-
-#[cfg(unix)]
-#[test]
-fn test_check_permission_nonexistent_path_returns_warning() {
-    let temp_dir = TempDir::new().unwrap();
-    let missing = temp_dir.path().join("nonexistent");
-    let result = check_permission(&missing);
-    assert!(result.is_some());
-    assert!(result.unwrap().contains("Cannot check permissions"));
-}
-
-#[cfg(unix)]
-#[test]
-fn test_check_permission_chain_detects_insecure_intermediate_directory() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let temp_dir = TempDir::new().unwrap();
-    let root = temp_dir.path().join("kapsaro");
-    let key_dir = root.join("keys").join("alice").join("KID");
-    fs::create_dir_all(&key_dir).unwrap();
-    fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
-    fs::set_permissions(root.join("keys"), fs::Permissions::from_mode(0o755)).unwrap();
-    fs::set_permissions(
-        root.join("keys").join("alice"),
-        fs::Permissions::from_mode(0o700),
-    )
-    .unwrap();
-    fs::set_permissions(&key_dir, fs::Permissions::from_mode(0o700)).unwrap();
-
-    let file_path = key_dir.join("private.json");
-    fs::write(&file_path, "{}").unwrap();
-    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o600)).unwrap();
-
-    let warnings = check_permission_chain(&file_path, &root);
-
-    assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].contains("keys"));
-    assert!(warnings[0].contains("expected 0700"));
-}
-
-#[cfg(unix)]
-#[test]
-fn test_check_permission_chain_rejects_path_outside_logical_root() {
-    let temp_dir = TempDir::new().unwrap();
-    let root = temp_dir.path().join("kapsaro");
-    let file_path = temp_dir.path().join("outside.txt");
-    fs::create_dir_all(&root).unwrap();
-    fs::write(&file_path, "secret").unwrap();
-
-    let warnings = check_permission_chain(&file_path, &root);
-
-    assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].contains("outside logical root"));
-}
-
-#[cfg(unix)]
-#[test]
-fn test_load_text_with_limit_rejects_symlink() {
+fn test_load_text_with_limit_reads_symlink() {
     use std::os::unix::fs::symlink;
     let temp_dir = TempDir::new().unwrap();
     let real_path = temp_dir.path().join("real.txt");
@@ -268,27 +77,29 @@ fn test_load_text_with_limit_rejects_symlink() {
     let link_path = temp_dir.path().join("link.txt");
     symlink(&real_path, &link_path).unwrap();
 
-    let error = load_text_with_limit(&link_path, 64, "test file").unwrap_err();
+    let content = load_text_with_limit(&link_path, 64, "test file").unwrap();
 
-    let message = error.to_string();
-    assert!(
-        message.contains("refusing to read symlink"),
-        "unexpected error: {message}"
-    );
+    assert_eq!(content, "hello");
 }
 
 #[cfg(unix)]
-#[test]
-fn test_load_bytes_with_limit_rejects_fifo() {
+fn create_fifo(path: &std::path::Path) {
     use std::ffi::CString;
-    let temp_dir = TempDir::new().unwrap();
-    let fifo_path = temp_dir.path().join("pipe");
-    let c_path = CString::new(fifo_path.to_str().unwrap()).unwrap();
+
+    let c_path = CString::new(path.to_str().unwrap()).unwrap();
     // mkfifo has no safe wrapper. The path is a valid CString inside a
     // temporary directory this test owns.
     #[allow(unsafe_code)]
     let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
     assert_eq!(rc, 0, "mkfifo failed");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_load_bytes_with_limit_rejects_fifo() {
+    let temp_dir = TempDir::new().unwrap();
+    let fifo_path = temp_dir.path().join("pipe");
+    create_fifo(&fifo_path);
 
     let error = load_bytes_with_limit(&fifo_path, 64, "test file").unwrap_err();
 
@@ -296,6 +107,58 @@ fn test_load_bytes_with_limit_rejects_fifo() {
     assert!(
         message.contains("refusing to read non-regular file"),
         "unexpected error: {message}"
+    );
+}
+
+#[test]
+fn test_load_bytes_reads_an_input_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("secret.env");
+    fs::write(&file_path, b"SECRET=value\n").unwrap();
+
+    let bytes = load_bytes(&file_path).unwrap();
+
+    assert_eq!(bytes, b"SECRET=value\n");
+}
+
+/// An input path comes from a command-line argument, so nothing bounds what
+/// stands there. A plaintext past the bound could never be read back out of the
+/// document it would produce, so it is refused before it is held in memory.
+#[test]
+fn test_load_bytes_rejects_an_input_past_the_plaintext_bound() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("oversized.bin");
+    fs::write(&file_path, vec![0_u8; MAX_PLAINTEXT_INPUT_SIZE + 1]).unwrap();
+
+    let error = load_bytes(&file_path).unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("exceeds maximum size limit"),
+        "unexpected error: {message}"
+    );
+    assert!(
+        message.contains("Input file"),
+        "unexpected error: {message}"
+    );
+}
+
+/// A FIFO named where an input file was expected would otherwise hand the
+/// command an unbounded stream and no end to wait for.
+#[cfg(unix)]
+#[test]
+fn test_load_bytes_rejects_a_non_regular_input() {
+    let temp_dir = TempDir::new().unwrap();
+    let fifo_path = temp_dir.path().join("pipe");
+    create_fifo(&fifo_path);
+
+    let error = load_bytes(&fifo_path).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("refusing to read non-regular file"),
+        "unexpected error: {error}"
     );
 }
 
@@ -318,109 +181,211 @@ fn test_load_bytes_with_limit_caps_streaming_read() {
     assert!(message.contains("capped read"));
 }
 
+/// The read stops one byte past the limit, so the size the file really has never
+/// reaches the message. Naming the limit is what tells the operator how far the
+/// file has to come down.
 #[test]
-fn test_ensure_text_file_matches_snapshot_with_limit_accepts_matching_content() {
+fn test_load_bytes_with_limit_names_the_limit_the_file_went_past() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("oversized.bin");
+    fs::write(&file_path, vec![b'x'; 42]).unwrap();
+
+    let error = load_bytes_with_limit(&file_path, 32, "test file").unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.contains("test file exceeds maximum size limit (32 bytes)"),
+        "unexpected error: {message}"
+    );
+    assert!(
+        message.contains(&format_path_relative_to_cwd(&file_path)),
+        "unexpected error: {message}"
+    );
+}
+
+const REVIEWED: &str = "Reviewed file";
+
+/// A snapshot is addressed to a directory descriptor, so a test binds the
+/// directory the way a command does before capturing what it holds.
+#[cfg(unix)]
+fn open_dir(path: &std::path::Path) -> std::sync::Arc<crate::support::fs::relative::OpenDir> {
+    use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope};
+
+    std::sync::Arc::new(open_dir_nofollow(path, DirectoryScope::Generic).unwrap())
+}
+
+#[cfg(unix)]
+#[test]
+fn test_text_file_snapshot_accepts_a_file_that_did_not_change() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("reviewed.txt");
     fs::write(&file_path, "same content").unwrap();
 
-    let result = ensure_text_file_matches_snapshot_with_limit(
-        &file_path,
-        Some("same content"),
-        "Reviewed file",
-        64,
-    );
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 64, REVIEWED)
+            .unwrap();
 
-    assert!(result.is_ok(), "expected snapshot match to succeed");
+    assert_eq!(snapshot.content(), Some("same content"));
+    assert_eq!(snapshot.path(), file_path);
+    snapshot.ensure_current(REVIEWED, 64).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
-fn test_ensure_text_file_matches_snapshot_accepts_missing_file_without_reviewed_content() {
+fn test_text_file_snapshot_accepts_an_absence_that_persists() {
     let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("missing.txt");
 
-    let result = ensure_text_file_matches_snapshot(&file_path, None, "Reviewed file");
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "missing.txt", 64, REVIEWED)
+            .unwrap();
 
-    assert!(
-        result.is_ok(),
-        "expected missing unreviewed file to succeed"
-    );
+    assert_eq!(snapshot.content(), None);
+    snapshot.ensure_current(REVIEWED, 64).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
-fn test_ensure_text_file_matches_snapshot_rejects_existing_file_without_reviewed_content() {
+fn test_text_file_snapshot_rejects_a_file_created_after_review() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("reviewed.txt");
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 64, REVIEWED)
+            .unwrap();
+
     fs::write(&file_path, "created after review").unwrap();
 
-    let error = ensure_text_file_matches_snapshot(&file_path, None, "Reviewed file").unwrap_err();
-
-    let message = error.to_string();
+    let error = snapshot.ensure_current(REVIEWED, 64).unwrap_err();
     assert!(
-        message.contains("Reviewed file changed since review"),
-        "unexpected error: {message}"
-    );
-}
-
-#[test]
-fn test_ensure_text_file_matches_snapshot_rejects_changed_content() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("reviewed.txt");
-    fs::write(&file_path, "changed content").unwrap();
-
-    let error = ensure_text_file_matches_snapshot(&file_path, Some("old content"), "Reviewed file")
-        .unwrap_err();
-
-    let message = error.to_string();
-    assert!(
-        message.contains("Reviewed file changed since review"),
-        "unexpected error: {message}"
-    );
-}
-
-#[test]
-fn test_ensure_text_file_matches_snapshot_with_limit_rejects_oversized_file() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("reviewed.txt");
-    fs::write(&file_path, "abcdef").unwrap();
-
-    let error = ensure_text_file_matches_snapshot_with_limit(
-        &file_path,
-        Some("abcdef"),
-        "Reviewed file",
-        5,
-    )
-    .unwrap_err();
-
-    let message = error.to_string();
-    assert!(
-        message.contains("changed since review"),
-        "unexpected error: {message}"
+        error
+            .to_string()
+            .contains("Reviewed file changed since review"),
+        "unexpected error: {error}"
     );
 }
 
 #[cfg(unix)]
 #[test]
-fn test_ensure_text_file_matches_snapshot_with_limit_rejects_symlink() {
+fn test_text_file_snapshot_rejects_a_file_rewritten_in_place() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&file_path, "old content").unwrap();
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 64, REVIEWED)
+            .unwrap();
+
+    fs::write(&file_path, "changed content").unwrap();
+
+    let error = snapshot.ensure_current(REVIEWED, 64).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Reviewed file changed since review"),
+        "unexpected error: {error}"
+    );
+}
+
+/// Content alone cannot say whether the file about to be acted on is the file
+/// that was read. Replacing it with an identical copy swaps the inode behind
+/// the name, and the bytes that arrive on a re-read were never reviewed.
+#[cfg(unix)]
+#[test]
+fn test_text_file_snapshot_rejects_a_replacement_holding_the_same_bytes() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    fs::write(&file_path, "same content").unwrap();
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 64, REVIEWED)
+            .unwrap();
+
+    let replacement = temp_dir.path().join("reviewed.txt.new");
+    fs::write(&replacement, "same content").unwrap();
+    fs::rename(&replacement, &file_path).unwrap();
+
+    let error = snapshot.ensure_current(REVIEWED, 64).unwrap_err();
+    assert!(
+        error.to_string().contains("must be reviewed again"),
+        "unexpected error: {error}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_text_file_snapshot_rejects_an_oversized_file() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(temp_dir.path().join("reviewed.txt"), "abcdef").unwrap();
+
+    let error =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 5, REVIEWED)
+            .unwrap_err();
+
+    assert!(
+        error.to_string().contains("exceeds maximum size limit"),
+        "unexpected error: {error}"
+    );
+}
+
+/// A reviewed document is a regular file. A link standing where one is expected
+/// sends the read outside the directory the snapshot is bound to, so it is
+/// refused rather than followed.
+#[cfg(unix)]
+#[test]
+fn test_text_file_snapshot_refuses_a_symlinked_entry() {
     use std::os::unix::fs::symlink;
 
     let temp_dir = TempDir::new().unwrap();
     let real_path = temp_dir.path().join("real.txt");
-    let link_path = temp_dir.path().join("reviewed.txt");
     fs::write(&real_path, "same content").unwrap();
-    symlink(&real_path, &link_path).unwrap();
+    symlink(&real_path, temp_dir.path().join("reviewed.txt")).unwrap();
 
-    let error = ensure_text_file_matches_snapshot_with_limit(
-        &link_path,
-        Some("same content"),
-        "Reviewed file",
-        64,
-    )
-    .unwrap_err();
+    let error =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 64, REVIEWED)
+            .unwrap_err();
 
-    let message = error.to_string();
     assert!(
-        message.contains("changed since review"),
-        "unexpected error: {message}"
+        error
+            .to_string()
+            .contains("refusing to read non-regular file"),
+        "unexpected error: {error}"
     );
+}
+
+/// A dangling link is an entry, so a reviewed absence no longer holds once a
+/// name appears, whatever it points at.
+#[cfg(unix)]
+#[test]
+fn test_text_file_snapshot_rejects_a_dangling_link_created_after_review() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("reviewed.txt");
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(temp_dir.path()), "reviewed.txt", 64, REVIEWED)
+            .unwrap();
+
+    symlink(temp_dir.path().join("gone"), &file_path).unwrap();
+
+    snapshot.ensure_current(REVIEWED, 64).unwrap_err();
+}
+
+/// The re-check goes through the directory descriptor the review read from, so
+/// a directory path repointed at another tree does not get to answer for the
+/// file that was reviewed.
+#[cfg(unix)]
+#[test]
+fn test_text_file_snapshot_answers_from_the_directory_it_captured() {
+    let temp_dir = TempDir::new().unwrap();
+    let reviewed_dir = temp_dir.path().join("reviewed");
+    let substitute_dir = temp_dir.path().join("substitute");
+    fs::create_dir(&reviewed_dir).unwrap();
+    fs::create_dir(&substitute_dir).unwrap();
+    fs::write(reviewed_dir.join("doc.txt"), "reviewed content").unwrap();
+    fs::write(substitute_dir.join("doc.txt"), "other content").unwrap();
+
+    let snapshot =
+        TextFileSnapshot::capture_at(open_dir(&reviewed_dir), "doc.txt", 64, REVIEWED).unwrap();
+    fs::rename(&reviewed_dir, temp_dir.path().join("moved-aside")).unwrap();
+    fs::rename(&substitute_dir, &reviewed_dir).unwrap();
+
+    assert_eq!(snapshot.content(), Some("reviewed content"));
+    snapshot.ensure_current(REVIEWED, 64).unwrap();
 }

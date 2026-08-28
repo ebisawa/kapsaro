@@ -4,7 +4,6 @@
 //! Envelope encryption primitives - shared HPKE wrap/unwrap operations.
 
 pub mod binding;
-pub mod cek;
 pub mod entry;
 pub mod key_possession;
 pub mod key_schedule;

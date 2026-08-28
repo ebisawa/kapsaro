@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Decides the overall trust judgment for a document's signer.
+//! Combines active-member and known-key matching into one Trusted/NeedsApproval/NonMember/anomaly outcome.
+
 use crate::model::identity::{Kid, MemberHandle};
 use crate::Result;
 

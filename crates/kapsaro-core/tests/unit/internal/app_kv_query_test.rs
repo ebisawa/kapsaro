@@ -2,23 +2,81 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::app::trust::{GetPolicy, ListPolicy};
-use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
+use crate::app_test_utils::build_test_signing_command_options;
+use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
+use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::crypto::types::keys::MacKey;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::envelope::signature::sign_kv_document;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
 use crate::format::token::TokenCodec;
-use crate::io::keystore::active::set_active_kid;
-use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
     update_active_private_key_expires_at, with_temp_cwd, ALICE_MEMBER_HANDLE,
 };
+use zeroize::Zeroizing;
+
+#[cfg(unix)]
+#[test]
+fn test_kv_read_input_uses_the_workspace_fixed_by_the_execution() {
+    use std::fs;
+
+    let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let (_replacement_home, replacement_workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let file_name = format!("{DEFAULT_KV_ENC_BASENAME}{KV_ENC_EXTENSION}");
+    let kid = key_ctx.kid().to_string();
+    let public_key = load_public_key(&home.path().join("keys"), ALICE_MEMBER_HANDLE, &kid).unwrap();
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
+    let encrypt = |value: &str| {
+        encrypt_kv_map_with_wrap_mutation(
+            &HashMap::from([("SOURCE".to_string(), value.to_string())]),
+            &recipients,
+            &SigningContext {
+                signing_key: key_ctx.signing_key(),
+                signer_kid: &kid,
+                signer_pub: public_key.clone(),
+            },
+            TokenCodec::JsonJcs,
+            false,
+            |_| Ok(()),
+        )
+        .unwrap()
+    };
+    let artifact_a = encrypt("from-a");
+    let artifact_b = encrypt("from-b");
+    fs::write(workspace.join("secrets").join(&file_name), &artifact_a).unwrap();
+    fs::write(
+        replacement_workspace.join("secrets").join(&file_name),
+        artifact_b,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+    let execution = crate::app::context::execution::resolve_read_execution(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+    )
+    .unwrap();
+    let opened_workspace = workspace.with_extension("opened");
+    fs::rename(&workspace, &opened_workspace).unwrap();
+    fs::rename(&replacement_workspace, &workspace).unwrap();
+
+    let input = super::load_kv_read_input(&execution, None).unwrap();
+
+    assert_eq!(input.artifact.as_str(), artifact_a);
+    assert_eq!(input.file_name, file_name);
+    assert!(input
+        .file_path
+        .ends_with(Path::new("secrets").join(file_name)));
+}
 
 #[test]
 fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
@@ -53,7 +111,7 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
     );
 
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&current_public_key));
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
@@ -62,6 +120,8 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
             signer_pub: expired_public_key,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
     std::fs::write(
@@ -75,12 +135,10 @@ fn kv_read_command_surfaces_expired_artifact_signer_recovery_warning() {
     options.allow_expired_key = true;
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_kv_read_command_for_test::<GetPolicy>(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
-            ssh_ctx,
         )
         .unwrap();
 
@@ -107,7 +165,7 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
     );
 
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&valid_public_key));
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
@@ -116,6 +174,8 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
             signer_pub: valid_public_key,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
     std::fs::write(
@@ -137,12 +197,10 @@ fn kv_read_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_kv_read_command_for_test::<GetPolicy>(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
-            ssh_ctx,
         )
         .unwrap();
 
@@ -169,7 +227,7 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
     );
 
     let recipients = build_verified_recipient_keys(std::slice::from_ref(&public_key));
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
         &recipients,
         &SigningContext {
@@ -178,12 +236,14 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
             signer_pub: public_key,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
     let unsigned = strip_kv_signature(&encrypted);
     let signed_with_wrong_mac = sign_kv_document(
         &unsigned,
-        &MacKey::new([9u8; 32]),
+        &MacKey::from_zeroizing(Zeroizing::new([9u8; 32])),
         &SigningContext {
             signing_key: key_ctx.signing_key(),
             signer_kid: &kid,
@@ -202,12 +262,10 @@ fn kv_list_command_rejects_invalid_key_possession_without_decrypting_entries() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_kv_read_command_for_test::<ListPolicy>(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
-            ssh_ctx,
         )
         .unwrap();
 
@@ -227,20 +285,14 @@ fn resolve_kv_read_command_for_test<P>(
     options: &crate::app::context::options::CommonCommandOptions,
     member_handle: Option<String>,
     file_name: Option<&str>,
-    ssh_ctx: Option<crate::app::context::ssh::SshSigningContextResolution>,
 ) -> crate::Result<TestKvReadContext>
 where
     P: crate::app::trust::ReadTrustPolicy,
 {
-    let path = super::resolve_kv_read_path(options, file_name)?;
-    let artifact = crate::api::kv::KvEncArtifact::load(path)?;
-    let verified = artifact.verify(options.operation_options())?;
-    let execution = crate::app::context::execution::resolve_read_execution(
-        options,
-        member_handle,
-        None,
-        ssh_ctx,
-    )?;
+    let execution =
+        crate::app::context::execution::resolve_read_execution(options, member_handle, None)?;
+    let input = super::load_kv_read_input(&execution, file_name)?;
+    let verified = input.artifact.verify(options.operation_options())?;
     let trust = super::evaluate_kv_read_trust_plan::<P>(options, &execution, &verified)?;
     Ok(TestKvReadContext {
         execution,

@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Collects inspect content and verification reports from lower layers.
-// Resolves online verification data into text and JSON-ready sections.
+//! Collects inspect content and verification reports from lower layers.
+//! Resolves online verification data into text and JSON-ready sections.
 
 use std::path::Path;
 

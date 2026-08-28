@@ -9,7 +9,9 @@ pub mod config {
 }
 
 pub mod fs {
-    pub use crate::support::fs::atomic::{save_bytes, save_text};
+    pub use crate::support::fs::atomic::{
+        save_bytes, save_bytes_restricted, save_text, save_text_restricted,
+    };
     pub use crate::support::fs::{load_bytes, load_text_with_limit};
 }
 

@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Builds member view types from a verified public key document.
+//! Any verification warning marks the document as expired for display purposes.
+
 use crate::app::errors::serialize_to_json_value;
 use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::model::public_key::PublicKey;

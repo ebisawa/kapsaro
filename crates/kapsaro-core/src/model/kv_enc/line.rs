@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Line-level model of a kv-enc text file: its version marker and each logical line kind.
+//! KvEncVersion only accepts the current version 1, so a future bump has one place to extend.
+
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

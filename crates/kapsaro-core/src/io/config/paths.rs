@@ -31,23 +31,6 @@ pub fn get_base_dir() -> Result<PathBuf> {
         .map_err(|_| Error::build_home_environment_not_set_error())
 }
 
-/// Resolve the global configuration file path
-///
-/// Returns the absolute path to the global config file based on environment variables.
-/// Does NOT check if the file exists.
-///
-/// # Priority
-///
-/// 1. `$KAPSARO_HOME/config.toml`
-/// 2. `~/.config/kapsaro/config.toml`
-///
-/// # Errors
-///
-/// Returns `Error::Config` if `HOME` environment variable is not set.
-pub fn get_global_config_path() -> Result<PathBuf> {
-    Ok(get_base_dir()?.join("config.toml"))
-}
-
 /// Resolve the global configuration file path from an explicit base_dir
 ///
 /// # Arguments

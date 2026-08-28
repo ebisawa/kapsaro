@@ -9,7 +9,7 @@
 mod blob;
 mod signature;
 
-pub use blob::{SshSignatureBlob, SshsigBlob};
+pub use blob::SshSignatureBlob;
 pub use signature::Ed25519RawSignature;
 
 #[cfg(test)]

@@ -8,20 +8,20 @@ use crate::io::ssh::protocol::wire::{decode_ssh_string, encode_ssh_string};
 
 #[test]
 fn test_ssh_string_encode_empty() {
-    let result = encode_ssh_string(b"");
+    let result = encode_ssh_string(b"").unwrap();
     assert_eq!(result, vec![0, 0, 0, 0]);
 }
 
 #[test]
 fn test_ssh_string_encode_short() {
-    let result = encode_ssh_string(b"test");
+    let result = encode_ssh_string(b"test").unwrap();
     assert_eq!(result, vec![0, 0, 0, 4, b't', b'e', b's', b't']);
 }
 
 #[test]
 fn test_ssh_string_encode_256_bytes() {
     let data = vec![0x42u8; 256];
-    let result = encode_ssh_string(&data);
+    let result = encode_ssh_string(&data).unwrap();
     // Length: 0x00000100 (256 in big-endian)
     assert_eq!(&result[0..4], &[0, 0, 1, 0]);
     assert_eq!(result.len(), 4 + 256);
@@ -30,7 +30,7 @@ fn test_ssh_string_encode_256_bytes() {
 
 #[test]
 fn test_ssh_string_decode_roundtrip() {
-    let encoded = encode_ssh_string(b"hello");
+    let encoded = encode_ssh_string(b"hello").unwrap();
     let (decoded, rest) = decode_ssh_string(&encoded).unwrap();
     assert_eq!(decoded, b"hello");
     assert_eq!(rest.len(), 0usize);
@@ -39,8 +39,8 @@ fn test_ssh_string_decode_roundtrip() {
 #[test]
 fn test_ssh_string_decode_multiple() {
     let mut data = Vec::new();
-    data.extend_from_slice(&encode_ssh_string(b"first"));
-    data.extend_from_slice(&encode_ssh_string(b"second"));
+    data.extend_from_slice(&encode_ssh_string(b"first").unwrap());
+    data.extend_from_slice(&encode_ssh_string(b"second").unwrap());
 
     let (first, rest) = decode_ssh_string(&data).unwrap();
     assert_eq!(first, b"first");
@@ -68,9 +68,27 @@ fn test_ssh_string_decode_insufficient_data_for_payload() {
     assert!(err_msg.contains("Expected") || err_msg.contains("bytes"));
 }
 
+/// The length field spans the whole `u32` range, and the largest value it can
+/// state overflows the sum with the prefix on a 32-bit target. The declared
+/// length is reported against the bytes actually delivered instead of being
+/// acted on, whatever width the platform counts in.
+#[test]
+fn test_ssh_string_decode_reports_a_length_the_payload_cannot_cover() {
+    let mut data = u32::MAX.to_be_bytes().to_vec();
+    data.extend_from_slice(&[1, 2]);
+
+    let error = decode_ssh_string(&data).unwrap_err();
+
+    let message = error.format_user_message();
+    assert!(
+        message.contains("SSH_STRING") || message.contains("bytes"),
+        "{message}"
+    );
+}
+
 #[test]
 fn test_ssh_string_decode_with_trailing_data() {
-    let mut data = encode_ssh_string(b"test");
+    let mut data = encode_ssh_string(b"test").unwrap();
     data.extend_from_slice(b"trailing");
 
     let (decoded, rest) = decode_ssh_string(&data).unwrap();
@@ -90,7 +108,7 @@ fn test_ssh_string_decode_zero_length() {
 fn test_ssh_string_encode_large() {
     // Test with 1MB of data
     let large_data = vec![0xAAu8; 1024 * 1024];
-    let encoded = encode_ssh_string(&large_data);
+    let encoded = encode_ssh_string(&large_data).unwrap();
 
     let len_bytes = u32::to_be_bytes(1024 * 1024);
     assert_eq!(&encoded[0..4], &len_bytes);

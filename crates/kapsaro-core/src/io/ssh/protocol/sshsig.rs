@@ -41,17 +41,21 @@ pub const SSHSIG_HASHALG: &str = "sha256";
 /// # Returns
 ///
 /// Byte vector ready to be signed by ssh-agent or ssh-keygen
-pub fn build_sshsig_signed_data(message: &[u8], namespace: &str) -> Vec<u8> {
+///
+/// # Errors
+///
+/// - `Error::Ssh` - A field is longer than an SSH_STRING length field can state
+pub fn build_sshsig_signed_data(message: &[u8], namespace: &str) -> Result<Vec<u8>> {
     let hash = Sha256::digest(message);
 
     let mut result = Vec::new();
     result.extend_from_slice(SSHSIG_MAGIC);
-    result.extend_from_slice(&encode_ssh_string(namespace.as_bytes()));
-    result.extend_from_slice(&encode_ssh_string(b"")); // reserved (empty)
-    result.extend_from_slice(&encode_ssh_string(SSHSIG_HASHALG.as_bytes()));
-    result.extend_from_slice(&encode_ssh_string(&hash));
+    result.extend_from_slice(&encode_ssh_string(namespace.as_bytes())?);
+    result.extend_from_slice(&encode_ssh_string(b"")?); // reserved (empty)
+    result.extend_from_slice(&encode_ssh_string(SSHSIG_HASHALG.as_bytes())?);
+    result.extend_from_slice(&encode_ssh_string(&hash)?);
 
-    result
+    Ok(result)
 }
 /// Validate SSHSIG magic and version
 ///

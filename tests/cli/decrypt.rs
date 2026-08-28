@@ -6,57 +6,14 @@
 //! Tests the decrypt command with CommonOptions, member_handle resolution, and file-enc format
 
 use crate::cli::common::{
-    cmd, encrypt_file_with_member_set_review, setup_workspace, ALICE_MEMBER_HANDLE,
-    TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, setup_workspace, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
-use kapsaro_core::cli_api::test_support::domain::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256;
 use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
 use kapsaro_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
-
-/// Create a test keystore with a private key
-fn build_test_keystore(temp_dir: &TempDir, member_handle: &str, kid: &str) -> std::path::PathBuf {
-    let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_handle);
-    let kid_dir = member_dir.join(kid);
-    fs::create_dir_all(&kid_dir).unwrap();
-
-    // Create active file
-    fs::write(member_dir.join("active"), kid).unwrap();
-
-    // Create a dummy private.json (minimal structure for testing)
-    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
-    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
-    let private_json = format!(
-        r#"{{
-    "protected": {{
-        "format": "kapsaro:format:private-key@1",
-        "subject_handle": "{}",
-        "kid": "{}",
-        "alg": {{
-            "kdf": "{}",
-            "fpr": "SHA256:dummy",
-            "ikm_salt": "{}",
-            "hkdf_salt": "{}",
-            "aead": "xchacha20-poly1305"
-        }},
-        "created_at": "2026-01-16T00:00:00Z",
-        "expires_at": "2027-01-16T00:00:00Z"
-    }},
-    "encrypted": {{
-        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "ct": "dGVzdA"
-    }}
-}}"#,
-        member_handle, kid, PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256, ikm_salt, hkdf_salt
-    );
-    fs::write(kid_dir.join("private.json"), private_json).unwrap();
-
-    keystore_root
-}
 
 /// Create a minimal test file-enc v7 file.
 fn save_test_encrypted_file(path: &std::path::Path) {
@@ -120,8 +77,8 @@ fn test_decrypt_missing_input() {
 #[test]
 fn test_decrypt_rejects_kv_enc_format() {
     // kv-enc format should be rejected with guidance to use `get` command
-    let temp_dir = TempDir::new().unwrap();
-    let test_dir = temp_dir.path();
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let test_dir = home_dir.path();
 
     let encrypted_path = test_dir.join("test.kv");
     let content = r#":KAPSARO_KV 1
@@ -131,20 +88,17 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 "#;
     fs::write(&encrypted_path, content).unwrap();
 
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
     cmd()
         .arg("decrypt")
         .arg(encrypted_path.to_str().unwrap())
         .arg("--out")
         .arg(test_dir.join("out.dat").to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("KAPSARO_HOME", test_dir.to_str().unwrap())
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv)
         .assert()
         .failure()
         .stderr(predicate::str::contains("Expected file-enc format"));
@@ -153,27 +107,24 @@ DATABASE_URL eyJ2IjozLCJrIjoiREFUQUJBU0VfVVJMIiwiZSI6ImR1bW15In0
 #[test]
 fn test_decrypt_rejects_unknown_format() {
     // Test that decrypt rejects files with unknown format
-    let temp_dir = TempDir::new().unwrap();
-    let test_dir = temp_dir.path();
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
+    let test_dir = home_dir.path();
 
     // Create a file with unknown content
     let unknown_path = test_dir.join("unknown.txt");
     let content = "This is just some random text that doesn't match any format\n";
     fs::write(&unknown_path, content).unwrap();
 
-    build_test_keystore(
-        &temp_dir,
-        ALICE_MEMBER_HANDLE,
-        "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    );
-
     // Try to decrypt unknown file - should fail with specific error
     cmd()
         .arg("decrypt")
         .arg(unknown_path.to_str().unwrap())
         .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("KAPSARO_HOME", test_dir.to_str().unwrap())
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv)
         .assert()
         .failure()
         .stderr(predicate::str::contains("Expected file-enc format"));

@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Verifies a kv-enc document's signature and wrap items, producing a verified document.
+//! Loads the signing key from the signature itself and reports failures without raising for report-style callers.
+
 use crate::feature::envelope::signature::verify_kv_signature;
 use crate::feature::verify::append_operational_signer_expiry_warning;
 use crate::feature::verify::key_loader::{

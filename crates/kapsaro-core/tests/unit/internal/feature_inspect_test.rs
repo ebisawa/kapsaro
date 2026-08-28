@@ -6,17 +6,17 @@
 //! Tests inspect output sections for file-enc and kv-enc formats,
 //! and verify report construction via the public verify_*_document_report API.
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::encrypt_file_content;
 use crate::feature::inspect::{build_inspect_view, InspectOutput};
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::verify::file::verify_file_document_report;
 use crate::feature::verify::kv::signature::verify_kv_document_report;
 use crate::format::content::EncContent;
 use crate::format::kv::document::parse_kv_document;
 use crate::format::schema::document::parse_kv_signature_token;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::verification::VerifyingKeySource;
 use crate::test_utils::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore, EnvGuard};
@@ -60,11 +60,13 @@ fn encrypt_kv_fixture(temp_dir: &TempDir, member_handle: &str, key: &str, value:
         signer_kid: key_ctx.kid(),
         signer_pub: public_key.clone(),
     };
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv,
         &[build_verified_recipient_key(public_key)],
         &signing,
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -153,7 +155,7 @@ fn test_inspect_kv_enc_preserves_structured_artifact_details() {
 fn test_inspect_file_enc_header_contains_sid_and_timestamps() {
     let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let header = output
@@ -187,7 +189,7 @@ fn test_inspect_file_enc_header_contains_sid_and_timestamps() {
 fn test_inspect_file_enc_wrap_data_contains_recipients() {
     let (_temp_dir, content) = build_file_enc_content(BOB_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let wrap_section = output
@@ -210,7 +212,7 @@ fn test_inspect_file_enc_wrap_data_contains_recipients() {
 fn test_inspect_file_enc_payload_contains_sid() {
     let (_temp_dir, content) = build_file_enc_content(ALICE_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let payload = output
@@ -229,7 +231,7 @@ fn test_inspect_file_enc_payload_contains_sid() {
 fn test_inspect_file_enc_shows_signature() {
     let (_temp_dir, content) = build_file_enc_content(CAROL_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -263,7 +265,7 @@ fn test_inspect_file_enc_shows_signature() {
 fn test_inspect_kv_enc_shows_header() {
     let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -285,7 +287,7 @@ fn test_inspect_kv_enc_shows_header() {
 fn test_inspect_kv_enc_shows_entries() {
     let (_temp_dir, content) = build_kv_enc_content(BOB_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -302,7 +304,7 @@ fn test_inspect_kv_enc_shows_entries() {
 fn test_inspect_kv_enc_shows_wrap_data() {
     let (_temp_dir, content) = build_kv_enc_content(CAROL_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     assert!(
@@ -318,7 +320,7 @@ fn test_inspect_kv_enc_shows_wrap_data() {
 fn test_inspect_kv_enc_shows_header_aead_not_entry_k() {
     let (_temp_dir, content) = build_kv_enc_content(ALICE_MEMBER_HANDLE);
 
-    let encrypted = EncContent::detect(content).unwrap();
+    let encrypted = EncContent::detect_with_source(content, "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
 
     let entries = output
@@ -420,7 +422,8 @@ fn test_inspect_kv_enc_with_verification() {
     );
 
     // Inspect with verification
-    let encrypted = EncContent::detect(encrypted_content.clone()).unwrap();
+    let encrypted =
+        EncContent::detect_with_source(encrypted_content.clone(), "encrypted content").unwrap();
     let output = build_inspect_view(&encrypted).unwrap();
     let signature_report = verify_kv_document_report(&encrypted_content);
 
@@ -479,7 +482,8 @@ fn test_inspect_kv_enc_with_verification_failure_no_keystore() {
 
     // Inspect with verification (keystore doesn't have the key).
     // With graceful degradation, inspect succeeds and shows FAILED verification status.
-    let encrypted = EncContent::detect(kv_content.clone()).unwrap();
+    let encrypted =
+        EncContent::detect_with_source(kv_content.clone(), "encrypted content").unwrap();
     let result = build_inspect_view(&encrypted);
 
     assert!(

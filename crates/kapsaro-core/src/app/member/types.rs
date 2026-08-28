@@ -1,6 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Result and view types returned by the member app-layer operations.
+//! Plain data carriers; the conversions that populate them live with their producers.
+
+use crate::io::workspace::members::ReviewedMemberDocument;
+
 #[derive(Debug)]
 pub struct MemberListEntry {
     pub member_handle: String,
@@ -91,6 +96,12 @@ pub struct MemberRemovalReport {
     pub member_handle: String,
     pub affected_artifacts: Vec<std::path::PathBuf>,
     pub warnings: Vec<String>,
+    /// The document this review read, held open for the removal that follows.
+    ///
+    /// The confirmation prompt sits between the review and the write, so what
+    /// the operator approved travels with the report rather than being looked
+    /// up again once they answer.
+    pub(crate) reviewed: ReviewedMemberDocument,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

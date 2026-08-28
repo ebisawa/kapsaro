@@ -95,14 +95,6 @@ impl KvDocumentDraft {
         self.wrap.data_mut()
     }
 
-    pub fn entry_keys(&self) -> Vec<&str> {
-        self.entries.iter().map(|entry| entry.key()).collect()
-    }
-
-    pub fn has_entry(&self, key: &str) -> bool {
-        self.entries.iter().any(|entry| entry.key() == key)
-    }
-
     pub fn set_entries(&mut self, entries: &HashMap<&str, &str>) {
         let mut found: HashSet<&str> = HashSet::new();
 

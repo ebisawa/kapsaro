@@ -50,42 +50,10 @@ pub fn derive_hkdf_sha256_array_from_prk(
     Ok(okm)
 }
 
-/// Expand HKDF-SHA256
-///
-/// # Arguments
-/// * `ikm` - Input keying material
-/// * `salt` - Optional salt (None for empty salt)
-/// * `info` - Context and application specific information
-/// * `length` - Output length in bytes
-///
-/// # Returns
-/// Derived key material
-pub fn derive_hkdf_sha256_bytes<S: AsHkdfSalt>(
-    ikm: &Ikm,
-    salt: Option<&S>,
-    info: &Info,
-    length: usize,
-) -> Result<Zeroizing<Vec<u8>>> {
-    let mut okm = vec![0u8; length];
-    let raw_salt = salt.map(|s| s.as_hkdf_salt_bytes());
-    expand_from_ikm(ikm, raw_salt, info, &mut okm)?;
-    Ok(Zeroizing::new(okm))
-}
-
 /// Expand HKDF-SHA256 to fixed-size array
 ///
-/// Only types implementing [`AsHkdfSalt`] can be passed as `salt`.
-/// `PrivateKeyIkmSalt` does not implement this trait, preventing accidental misuse:
-///
-/// ```compile_fail
-/// use kapsaro_core::crypto::kdf::derive_hkdf_sha256_array;
-/// use kapsaro_core::crypto::types::data::{Ikm, Info};
-/// use kapsaro_core::crypto::types::primitives::PrivateKeyIkmSalt;
-/// let ikm = Ikm::from(&[0u8; 32][..]);
-/// let salt = PrivateKeyIkmSalt::new([1u8; 32]);
-/// let info = Info::from_string("test");
-/// let _ = derive_hkdf_sha256_array(&ikm, Some(&salt), &info);
-/// ```
+/// Only types implementing [`AsHkdfSalt`] can be passed as `salt`, which keeps
+/// salts meant for other key schedules out of HKDF-Extract.
 ///
 /// # Arguments
 /// * `ikm` - Input keying material

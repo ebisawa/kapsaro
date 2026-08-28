@@ -1,13 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for dotenv format parsing and serialization
+//! Unit tests for dotenv format parsing
 
 use crate::format::kv::dotenv::{
-    build_dotenv_string, is_valid_key_name, parse_dotenv, parse_dotenv_value,
-    validate_dotenv_strict,
+    is_valid_key_name, parse_dotenv, parse_dotenv_value, validate_dotenv_strict,
 };
-use std::collections::HashMap;
 
 #[test]
 fn test_is_valid_key_name() {
@@ -74,50 +72,6 @@ INVALID-KEY=ignored
     assert_eq!(map.get("123INVALID"), None);
 }
 
-#[test]
-fn test_build_dotenv_string() {
-    let mut map = HashMap::new();
-    map.insert("KEY1".to_string(), "value1".to_string());
-    map.insert("KEY2".to_string(), "value with spaces".to_string());
-    map.insert("KEY3".to_string(), "value\nwith\nnewlines".to_string());
-    map.insert("KEY4".to_string(), "value\"with\"quotes".to_string());
-    map.insert("KEY5".to_string(), "simple".to_string());
-
-    let output = build_dotenv_string(&map);
-
-    // Should be sorted
-    assert!(output.find("KEY1") < output.find("KEY2"));
-    assert!(output.find("KEY2") < output.find("KEY3"));
-
-    // Simple value should not be quoted
-    assert!(output.contains("KEY5=simple\n"));
-
-    // Values with special characters should be quoted
-    assert!(output.contains("KEY2=\"value with spaces\"\n"));
-    assert!(output.contains("KEY3=\"value\\nwith\\nnewlines\"\n"));
-    assert!(output.contains("KEY4=\"value\\\"with\\\"quotes\"\n"));
-}
-
-#[test]
-fn test_roundtrip() {
-    let mut original = HashMap::new();
-    original.insert("KEY1".to_string(), "simple".to_string());
-    original.insert("KEY2".to_string(), "value with spaces".to_string());
-    original.insert("KEY3".to_string(), "value\nwith\nnewlines".to_string());
-    original.insert("KEY4".to_string(), "value\"with\"quotes".to_string());
-    original.insert("KEY5".to_string(), "value\\with\\backslashes".to_string());
-
-    let serialized = build_dotenv_string(&original);
-    let parsed = parse_dotenv(&serialized).unwrap();
-
-    for (key, value) in original {
-        assert_eq!(
-            parsed.get(&key).map(|value| value.as_str()),
-            Some(value.as_str())
-        );
-    }
-}
-
 // ============================================================================
 // validate_dotenv_strict tests
 // ============================================================================
@@ -162,4 +116,23 @@ fn test_validate_dotenv_strict_empty_content() {
 fn test_validate_dotenv_strict_only_comments() {
     let content = "# just a comment\n# another\n";
     assert!(validate_dotenv_strict(content).is_err());
+}
+
+/// A line missing '=' may be a secret value mistyped without a separator, so
+/// the error must name the line number without echoing the line body in any
+/// representation an operator or a log could surface.
+#[test]
+fn test_validate_dotenv_strict_missing_equals_error_omits_line_content() {
+    let content = "VALID_KEY=value\nDATABASE_PASSWORD hunter2\n";
+    let error = validate_dotenv_strict(content).unwrap_err();
+
+    let display = error.to_string();
+    let debug = format!("{:?}", error);
+
+    assert!(display.contains("Line 2"));
+    assert!(!display.contains("hunter2"));
+    assert!(!display.contains("DATABASE_PASSWORD"));
+    assert!(!debug.contains("hunter2"));
+    assert!(!debug.contains("DATABASE_PASSWORD"));
+    assert!(std::error::Error::source(&error).is_none());
 }

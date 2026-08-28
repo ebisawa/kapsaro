@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Encrypts a KV map back to text as part of a rewrite session.
+//! Derives the signing context from the caller's crypto context, then defers to the shared encrypt path.
+
 use crate::feature::context::crypto::build_signing_context;
 use crate::feature::context::crypto::CryptoContext;
 use crate::format::token::TokenCodec;

@@ -226,6 +226,8 @@ Note: SSH keys must be in Ed25519 format (RSA and others are not supported).
 ssh-keygen -t ed25519 -C "your@email.com"
 ```
 
+If you don't want to run an SSH agent, kapsaro can sign directly with the key file instead; see [Why is the SSH agent needed?](#q-why-is-the-ssh-agent-needed) for how that mode differs.
+
 ---
 
 ## 6. Quick Start (Team Leader)
@@ -562,6 +564,10 @@ Run it before or after work such as:
 - Active and incoming member files, key expiry, duplicate `kid` values, and GitHub binding or verification state
 - Local keystore availability and active private key readiness
 - Local trust store approvals for active members
+- Permissions and ownership under `<KAPSARO_HOME>`
+- Ownership of directories above your local state (information only)
+- Whether a directory lock on your local state and workspace actually excludes another writer
+- Leftovers a write that was interrupted left behind under `<KAPSARO_HOME>`
 - Encrypted artifacts under `.kapsaro/secrets/`
 - CI environment-key readiness when `KAPSARO_PRIVATE_KEY` is set
 
@@ -592,6 +598,29 @@ Interpret `Status` as follows.
 The command exits with status 1 only when a FAIL finding exists. WARN and SKIP findings exit with status 0 so local troubleshooting flows can continue while you review the details. In CI, use `--json` and inspect `status`, `next_actions`, and `checks` if the workflow needs its own policy for allowing WARN or SKIP results.
 
 `kapsaro doctor` does not prompt for approval. If it recommends trusting a key, approving a recipient set, or running `rewrap`, run the command shown in the next-action line after reviewing the finding.
+
+### Local State Permissions
+
+Everything under `<KAPSARO_HOME>` should be readable only by you: directories at `0700` and files at `0600`. kapsaro applies those modes to the entries it creates.
+
+When a permission is wider than that, or an entry is owned by another account, kapsaro reports a warning and continues. `kapsaro doctor` lists every affected path. Left alone, your private key and your approval cache stay visible to other accounts on the machine.
+
+The private key file itself is the one exception: when its own permissions let another account read it, or another account owns it, kapsaro refuses to load it instead of warning and continuing. That refusal applies only where the permissions on the private key file are actually wide; when they cannot be inspected, kapsaro still reports a warning and continues, as elsewhere.
+
+```bash
+chmod -R go-rwx ~/.config/kapsaro
+kapsaro doctor
+```
+
+Replace `~/.config/kapsaro` with your own path if you set `KAPSARO_HOME` or pass `--home`.
+
+`chmod` does not clear a path owned by another account. Move the local state to a location you own, or point kapsaro at a different root with `--home` or `KAPSARO_HOME`.
+
+Pointing `~/.config/kapsaro` at a directory on an encrypted volume with a symlink is a supported layout.
+
+`kapsaro doctor` may name the owner of a directory above your local state. That is information, not something you have to repair.
+
+The encrypted files and the public documents under `members/` in your workspace are outside this recommendation. They are shared through Git, so their permissions follow the repository checkout.
 
 ---
 
@@ -652,6 +681,8 @@ git push
 
 `member add` only places the public key under `members/incoming/`. The new member still cannot read secrets at that point. After PR review, an existing member runs `rewrap` to promote the incoming key to active and add it as a recipient in encrypted files. Use `member verify --approve` afterward the same way you would for the normal member addition flow.
 
+The input path may be a symlink; kapsaro follows it and reads the target file. Because the operator names this path explicitly, and the contents are cryptographically verified before being stored (the file must pass self-signature verification as a public key document), accepting a symlinked input path is safe.
+
 ### Listing Members
 
 ```bash
@@ -711,6 +742,24 @@ kapsaro trust recipients purge --older-than 180d --force
 ```
 
 `trust keys ...` and `trust recipients ...` change only the records on your own machine. They do not modify workspace membership or recipients in encrypted files. In other words, these commands do not change who is in the team; they change how much you will be asked to re-confirm on later operations.
+
+### Moving the Trust Store Signature to Your Current Key
+
+Your local trust store is signed with one of your own keys, and verifying it requires that key to still be in your keystore. After a key rotation the signature can stay on the old key for a while. Everyday approvals move it to your current key on their own, but `trust resign` moves it on request.
+
+```bash
+kapsaro trust resign
+```
+
+When the signature already belongs to your active key, nothing is rewritten and the command says so.
+
+`key activate` reports a trust store still signed by another key, and this command is how you clear that report. `key remove` hands the signature over to the active key before removing a key that signed the store, so you rarely need to run this by hand.
+
+When a particular operation prints a recovery command, the command includes the member handle that operation resolved, such as `kapsaro trust resign --member-handle alice@example.com`. Run the complete command as shown so an environment variable or configuration default cannot redirect the recovery to another member.
+
+When the stored content does not verify under your current signing key, `trust resign` fails instead of replacing the signature. Re-signing content that could not be verified would promote a trust store planted by someone else into one carrying a genuine signature.
+
+If the `public.json` that signed the trust store is missing from the keystore, restore the complete original `public.json` from a trusted backup or known-good copy to the path shown in the error. Set the restored file to owner-only permissions, then run `kapsaro trust resign`. The original public key document cannot be reconstructed from the private key or with `kapsaro key export`. If no trusted copy exists, reset the trust store and review the approvals again.
 
 ### Removing Members
 
@@ -787,6 +836,8 @@ kapsaro key list
 ```
 
 Use `key list` when you want to check which key is currently active, whether old keys are still present, or whether an expiration date is approaching. It is a good first step before rotation or cleanup.
+
+If a key directory has lost its `public.json`, the text output keeps the key in the list and marks it as `Incomplete (missing public.json)`. Its KID and `ACTIVE` marker remain visible, and it still counts toward the displayed total. In JSON output, the entry has `status: "incomplete"`, `missing_document: "public.json"`, and `null` for unavailable `created_at`, `expires_at`, and `format` values. Complete key entries keep their existing JSON shape.
 
 The CLI may show kids with hyphens, but commands such as `key activate`, `key remove`, and `key export` accept both hyphenated and non-hyphenated input.
 
@@ -1104,6 +1155,8 @@ kapsaro private keys are protected by an SSH Ed25519 key instead of a passphrase
 
 In environments where an SSH agent is unavailable, you can switch to signing with the `ssh-keygen` command using the `--ssh-keygen` option.
 
+When `ssh_signing_method` is explicitly set to `ssh-keygen` (or `--ssh-keygen` is passed), kapsaro removes `SSH_AUTH_SOCK` from the child process and signs directly with the key file, bypassing the agent entirely. If your private key is passphrase-protected and you normally unlock it once through the agent, this mode prompts for the passphrase on every signing operation. The default `auto` method is unaffected, since it only falls back to `ssh-keygen` when no agent is present.
+
 When multiple keys are loaded in the SSH agent, you can explicitly specify which key to use with the `-i` option or the `ssh_identity` configuration:
 
 ```bash
@@ -1220,7 +1273,7 @@ Accepted options differ by command. These options are shared by multiple command
 | `-v` / `--verbose` | Show command-specific verbose output |
 | `--debug` | Show internal debug trace logs |
 | `-n` / `--name <name>` | Select a KV store name (default: `default`) |
-| `-f` / `--force` | Skip confirmation for commands that support it |
+| `-f` / `--force` | Proceed past the confirmation or safety check that would stop the command, where a command supports it |
 | `--allow-expired-key` | Explicitly allow recovery decryption and operational artifact signature verification with expired keys for commands that support it |
 
 ### Initialization and Joining
@@ -1283,6 +1336,7 @@ When `--target` is omitted, `rewrap` processes all encrypted files in the worksp
 | `kapsaro trust recipients list [-m <handle>] [--json] [--verbose]` | List reviewed artifact member sets saved in the local trust store |
 | `kapsaro trust recipients remove [-m <handle>] <sid>` | Remove the review record for a specific artifact member set |
 | `kapsaro trust recipients purge [-m <handle>] --older-than <duration> [--force]` | Remove artifact member set review records older than the given duration |
+| `kapsaro trust resign [-m <handle>]` | Move the local trust store signature to your current active key. Nothing is rewritten when it already carries that key |
 
 ### Key Management
 
@@ -1291,7 +1345,7 @@ When `--target` is omitted, `rewrap` processes all encrypted files in the worksp
 | `kapsaro key new [-m <handle>] [--github-user <login>] [--no-activate] [--expires-at <datetime> \| --valid-for <duration>]` | Generate a new key. The generated key becomes active by default |
 | `kapsaro key list [-m <handle>] [--json] [--verbose]` | List keys |
 | `kapsaro key activate [-m <handle>] [<kid>]` | Activate a specific key. If `kid` is omitted, the newest valid key is selected |
-| `kapsaro key remove [-m <handle>] <kid> [--force]` | Remove a key. Removing the active key requires `--force` |
+| `kapsaro key remove [-m <handle>] <kid> [--force]` | Remove a key. Removing the active key requires `--force`. When the key being removed signed the local trust store, the store is re-signed with the current active key first |
 | `kapsaro key export [-m <handle>] [<kid>] --out <path>` | Export public key |
 | `kapsaro key export --private [-m <handle>] [<kid>] [--allow-weak-password] (--stdout \| --out <path>)` | Export private key (password-protected, for CI/CD) |
 
@@ -1361,7 +1415,7 @@ The global config file is located at `<KAPSARO_HOME>/config.toml` (default: `~/.
 
 | Key | Description | Default | CLI Option | Environment Variable |
 |-----|-------------|---------|------------|---------------------|
-| `member_handle` | Default member handle (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$`) | (none) | `-m` / `--member-handle` | `KAPSARO_MEMBER_HANDLE` |
+| `member_handle` | Default member handle (pattern: `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$`) | (none) | `-m` / `--member-handle` | `KAPSARO_MEMBER_HANDLE` |
 | `workspace` | Default Workspace Root path. Supports tilde expansion (`~/...`) | (none; auto-detected when unset) | `-w` / `--workspace` | `KAPSARO_WORKSPACE` |
 | `ssh_identity` | Path to SSH private key file (Ed25519). Supports tilde expansion (`~/...`) | `~/.ssh/id_ed25519` | `-i` / `--ssh-identity` | `KAPSARO_SSH_IDENTITY` |
 | `ssh_signing_method` | SSH signing method: `auto`, `ssh-agent`, `ssh-keygen` | `auto` | `--ssh-agent` / `--ssh-keygen` | `KAPSARO_SSH_SIGNING_METHOD` |

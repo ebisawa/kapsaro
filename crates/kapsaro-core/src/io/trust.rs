@@ -4,4 +4,5 @@
 //! Local Trust Store I/O operations.
 
 pub mod paths;
+pub mod remove;
 pub mod store;

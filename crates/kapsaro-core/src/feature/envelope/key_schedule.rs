@@ -66,3 +66,7 @@ impl KvKeySchedule {
         kdf::derive_hkdf_sha256_array_from_prk(&self.prk, &info).map(MacKey::from_zeroizing)
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/feature_envelope_key_schedule_test.rs"]
+mod feature_envelope_key_schedule_test;

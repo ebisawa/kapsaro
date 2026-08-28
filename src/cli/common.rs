@@ -5,6 +5,7 @@
 
 pub(crate) mod command;
 pub(crate) mod env_mode;
+pub(crate) mod kv_read;
 pub(crate) mod prompt;
 
 pub(crate) mod output;

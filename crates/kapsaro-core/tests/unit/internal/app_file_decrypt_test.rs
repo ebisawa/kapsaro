@@ -1,10 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app_test_utils::{build_test_signing_command_options, resolve_test_ssh_context};
+use crate::app_test_utils::build_test_signing_command_options;
+use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::io::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
@@ -61,14 +61,12 @@ fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
     options.allow_expired_key = true;
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
             "test.fileenc",
-            ssh_ctx,
         )
         .unwrap();
 
@@ -85,27 +83,20 @@ fn resolve_decrypt_file_command_for_test(
     kid: Option<&str>,
     content: String,
     source_name: &str,
-    ssh_ctx: Option<crate::app::context::ssh::SshSigningContextResolution>,
 ) -> crate::Result<TestDecryptContext> {
     let artifact = crate::api::file::FileEncArtifact::load_reader(content.as_bytes(), source_name)?;
     let verified = artifact.verify(options.operation_options())?;
-    let execution = crate::app::context::execution::resolve_read_execution(
-        options,
-        member_handle,
-        kid,
-        ssh_ctx,
-    )?;
+    let execution =
+        crate::app::context::execution::resolve_read_execution(options, member_handle, kid)?;
     let trust = super::evaluate_decrypt_file_trust_plan(options, &execution, &verified)?;
     Ok(TestDecryptContext {
         execution,
-        trust_outcome: trust.signer_outcome,
         warnings: trust.warnings,
     })
 }
 
 struct TestDecryptContext {
     execution: crate::app::context::execution::ExecutionContext,
-    trust_outcome: crate::app::trust::SignerTrustOutcome,
     warnings: Vec<String>,
 }
 
@@ -143,14 +134,12 @@ fn decrypt_command_coalesces_local_key_pair_expiry_warning() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
             "test.fileenc",
-            ssh_ctx,
         )
         .unwrap();
 
@@ -208,14 +197,12 @@ fn decrypt_command_preserves_historical_signer_expiry_warning_with_same_expires_
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
             "test.fileenc",
-            ssh_ctx,
         )
         .unwrap();
 
@@ -271,14 +258,12 @@ fn decrypt_command_coalesces_selected_fallback_key_pair_expiry_warning() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
             "test.fileenc",
-            ssh_ctx,
         )
         .unwrap();
 
@@ -335,14 +320,12 @@ fn decrypt_command_ignores_expired_unused_active_key_when_fallback_key_is_valid(
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
     with_temp_cwd(temp_dir.path(), || {
-        let ssh_ctx = Some(resolve_test_ssh_context(&options, ALICE_MEMBER_HANDLE));
         let command = resolve_decrypt_file_command_for_test(
             &options,
             Some(ALICE_MEMBER_HANDLE.to_string()),
             None,
             content,
             "test.fileenc",
-            ssh_ctx,
         )
         .unwrap();
 

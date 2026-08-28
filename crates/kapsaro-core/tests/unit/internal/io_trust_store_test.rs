@@ -3,17 +3,39 @@
 
 //! Unit tests for trust store file I/O
 
-use crate::io::trust::store::{load_trust_store, save_trust_store};
+use crate::io::trust::store::{
+    load_trust_store_with_shared_lock, save_trust_store_at, set_post_trust_store_save_hook,
+    validate_trust_directory,
+};
 use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreDocument,
     TrustStoreProtected, TrustStoreSignature,
 };
 use crate::model::wire::format::LOCAL_TRUST_V1;
 use crate::support::limits::MAX_JSON_DEPTH;
+use crate::support::warning::LocalStateWarningGuard;
+use crate::test_utils::{create_local_state_dir, local_state_temp_dir, write_local_state_file};
 use std::collections::BTreeMap;
 #[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-use tempfile::TempDir;
+use std::os::unix::fs::{symlink, PermissionsExt};
+use std::path::Path;
+
+use crate::cli_api::test_support::storage::trust::store::save_trust_store;
+use crate::support::fs::anchor::AnchoredDir;
+use crate::support::fs::relative::{open_optional_child_dir, DirectoryScope, OpenDir};
+
+fn open_trust_directory(base_dir: &Path) -> (AnchoredDir, OpenDir) {
+    let base = AnchoredDir::open(
+        base_dir,
+        DirectoryScope::LocalState,
+        "test local state root",
+    )
+    .unwrap();
+    let trust_dir = open_optional_child_dir(&base, "trust")
+        .unwrap()
+        .expect("test trust directory must exist");
+    (base, trust_dir)
+}
 
 fn build_test_document(owner: &str) -> TrustStoreDocument {
     TrustStoreDocument {
@@ -60,28 +82,141 @@ fn deeply_nested_json(depth: usize) -> String {
 
 #[test]
 fn test_load_trust_store_nonexistent_returns_none() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("nonexistent.json");
-    let result = load_trust_store(&path, dir.path()).unwrap();
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    create_local_state_dir(&trust_dir);
+    let path = trust_dir.join("nonexistent.json");
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path).unwrap();
     assert!(result.is_none());
 }
 
 #[test]
 fn test_save_and_load_trust_store_roundtrip() {
-    let dir = TempDir::new().unwrap();
+    let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let path = trust_dir.join("alice@example.com.json");
 
     let doc = build_test_document("alice@example.com");
     save_trust_store(&path, &doc).unwrap();
 
-    let loaded = load_trust_store(&path, dir.path()).unwrap().unwrap();
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let loaded = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path)
+        .unwrap()
+        .unwrap();
     assert_eq!(loaded.document, doc);
 }
 
 #[test]
+fn test_validate_trust_directory_ignores_unrelated_entries() {
+    let dir = local_state_temp_dir();
+    std::fs::write(dir.path().join(".DS_Store"), "metadata").unwrap();
+    std::fs::create_dir(dir.path().join("unrelated-directory")).unwrap();
+    let anchored = AnchoredDir::open(
+        dir.path(),
+        DirectoryScope::LocalState,
+        "test trust directory",
+    )
+    .unwrap();
+
+    validate_trust_directory(&anchored).unwrap();
+}
+
+#[test]
+fn test_validate_trust_directory_rejects_canonical_name_with_wrong_type() {
+    let dir = local_state_temp_dir();
+    std::fs::create_dir(dir.path().join("alice@example.com.json")).unwrap();
+    let anchored = AnchoredDir::open(
+        dir.path(),
+        DirectoryScope::LocalState,
+        "test trust directory",
+    )
+    .unwrap();
+
+    let error = validate_trust_directory(&anchored).unwrap_err();
+
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert_eq!(error.recovery(), Some("E_LOCAL_STATE_PATH_UNSAFE"));
+}
+
+/// A symlink wearing a trust store's own name would stand in for the document
+/// the loader looks up, so it is refused just as a directory of that name is.
+#[cfg(unix)]
+#[test]
+fn test_validate_trust_directory_rejects_symlink_under_a_trust_store_name() {
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let outside = dir.path().join("outside.json");
+    create_local_state_dir(&trust_dir);
+    std::fs::write(&outside, "outside").unwrap();
+    symlink(&outside, trust_dir.join("unrelated.json")).unwrap();
+    let anchored = AnchoredDir::open(
+        &trust_dir,
+        DirectoryScope::LocalState,
+        "test trust directory",
+    )
+    .unwrap();
+
+    let error = validate_trust_directory(&anchored).unwrap_err();
+
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert_eq!(error.recovery(), Some("E_LOCAL_STATE_PATH_UNSAFE"));
+}
+
+/// Under any other name a symlink names no trust store, so it is left alone the
+/// way an unrelated regular file is.
+#[cfg(unix)]
+#[test]
+fn test_validate_trust_directory_allows_symlink_outside_trust_store_names() {
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let outside = dir.path().join("outside.txt");
+    create_local_state_dir(&trust_dir);
+    std::fs::write(&outside, "outside").unwrap();
+    symlink(&outside, trust_dir.join("notes.txt")).unwrap();
+    let anchored = AnchoredDir::open(
+        &trust_dir,
+        DirectoryScope::LocalState,
+        "test trust directory",
+    )
+    .unwrap();
+
+    validate_trust_directory(&anchored).unwrap();
+}
+
+/// An entry named like an unpublished staging write marks a write that was
+/// interrupted, so the directory is refused until an operator resolves it.
+#[test]
+fn test_validate_trust_directory_rejects_leftover_staging_entry() {
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    create_local_state_dir(&trust_dir);
+    std::fs::write(
+        trust_dir.join(".alice@example.com.json.tmp.3f2504e0-4f89-41d3-9a0c-0305e82c3301"),
+        "staged",
+    )
+    .unwrap();
+    let anchored = AnchoredDir::open(
+        &trust_dir,
+        DirectoryScope::LocalState,
+        "test trust directory",
+    )
+    .unwrap();
+
+    let error = validate_trust_directory(&anchored).unwrap_err();
+
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert_eq!(error.recovery(), Some("E_LOCAL_STATE_PATH_UNSAFE"));
+    let message = error.format_user_message();
+    assert!(
+        message.contains("run: rm -r -- '") && message.contains(".alice@example.com.json.tmp."),
+        "{message}"
+    );
+}
+
+#[test]
 fn test_save_trust_store_creates_parent_directory() {
-    let dir = TempDir::new().unwrap();
+    let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let path = trust_dir.join("alice@example.com.json");
 
@@ -95,8 +230,8 @@ fn test_save_trust_store_creates_parent_directory() {
 fn test_save_trust_store_file_permission_0600() {
     use std::os::unix::fs::PermissionsExt;
 
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("alice@example.com.json");
+    let dir = local_state_temp_dir();
+    let path = dir.path().join("trust").join("alice@example.com.json");
 
     save_trust_store(&path, &build_test_document("alice@example.com")).unwrap();
 
@@ -107,14 +242,17 @@ fn test_save_trust_store_file_permission_0600() {
 
 #[test]
 fn test_load_trust_store_filename_mismatch_fails() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("wrong_name.json");
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let path = trust_dir.join("wrong_name.json");
+    create_local_state_dir(&trust_dir);
 
     let doc = build_test_document("alice@example.com");
     let json = serde_json::to_string_pretty(&doc).unwrap();
-    std::fs::write(&path, json).unwrap();
+    write_local_state_file(&path, json);
 
-    let result = load_trust_store(&path, dir.path());
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("FILENAME_MISMATCH") || err_msg.contains("does not match"));
@@ -122,19 +260,24 @@ fn test_load_trust_store_filename_mismatch_fails() {
 
 #[test]
 fn test_load_trust_store_invalid_json_fails() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("alice@example.com.json");
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let path = trust_dir.join("alice@example.com.json");
+    create_local_state_dir(&trust_dir);
 
-    std::fs::write(&path, "not valid json").unwrap();
+    write_local_state_file(&path, "not valid json");
 
-    let result = load_trust_store(&path, dir.path());
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_load_trust_store_rejects_duplicate_top_level_member() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("alice@example.com.json");
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let path = trust_dir.join("alice@example.com.json");
+    create_local_state_dir(&trust_dir);
     let duplicate_signature = r#"{
         "protected": {
             "format": "kapsaro:format:local-trust@1",
@@ -155,9 +298,10 @@ fn test_load_trust_store_rejects_duplicate_top_level_member() {
             "sig": "second_signature"
         }
     }"#;
-    std::fs::write(&path, duplicate_signature).unwrap();
+    write_local_state_file(&path, duplicate_signature);
 
-    let result = load_trust_store(&path, dir.path());
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -168,8 +312,10 @@ fn test_load_trust_store_rejects_duplicate_top_level_member() {
 
 #[test]
 fn test_load_trust_store_rejects_duplicate_nested_member() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("alice@example.com.json");
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let path = trust_dir.join("alice@example.com.json");
+    create_local_state_dir(&trust_dir);
     let duplicate_owner = r#"{
         "protected": {
             "format": "kapsaro:format:local-trust@1",
@@ -186,9 +332,10 @@ fn test_load_trust_store_rejects_duplicate_nested_member() {
             "sig": "test_signature"
         }
     }"#;
-    std::fs::write(&path, duplicate_owner).unwrap();
+    write_local_state_file(&path, duplicate_owner);
 
-    let result = load_trust_store(&path, dir.path());
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -199,14 +346,15 @@ fn test_load_trust_store_rejects_duplicate_nested_member() {
 
 #[test]
 fn test_load_trust_store_rejects_json_exceeding_depth_limit_before_parse() {
-    let dir = TempDir::new().unwrap();
+    let dir = local_state_temp_dir();
     let base_dir = dir.path().join("kapsaro");
     let trust_dir = base_dir.join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    std::fs::create_dir_all(&trust_dir).unwrap();
-    std::fs::write(&path, deeply_nested_json(MAX_JSON_DEPTH + 1)).unwrap();
+    create_local_state_dir(&trust_dir);
+    write_local_state_file(&path, deeply_nested_json(MAX_JSON_DEPTH + 1));
 
-    let result = load_trust_store(&path, &base_dir);
+    let (base, opened_trust_dir) = open_trust_directory(&base_dir);
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     assert!(result
@@ -217,8 +365,8 @@ fn test_load_trust_store_rejects_json_exceeding_depth_limit_before_parse() {
 
 #[cfg(unix)]
 #[test]
-fn test_load_trust_store_warns_on_insecure_parent_directory_permissions() {
-    let dir = TempDir::new().unwrap();
+fn test_load_trust_store_warns_about_insecure_parent_directory_permissions() {
+    let dir = local_state_temp_dir();
     let base_dir = dir.path().join("kapsaro");
     let trust_dir = base_dir.join("trust");
     let path = trust_dir.join("alice@example.com.json");
@@ -231,28 +379,93 @@ fn test_load_trust_store_warns_on_insecure_parent_directory_permissions() {
     std::fs::write(&path, json).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
 
-    let loaded = load_trust_store(&path, &base_dir).unwrap().unwrap();
+    let (base, opened_trust_dir) = open_trust_directory(&base_dir);
 
-    assert_eq!(loaded.permission_warnings.len(), 1);
-    assert!(loaded.permission_warnings[0].contains("expected 0700"));
+    let guard = LocalStateWarningGuard::new();
+    let loaded = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path)
+        .unwrap()
+        .unwrap();
+    let warnings = guard.take_reasons();
+
+    assert_eq!(loaded.document, doc);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("expected 0700"), "{warnings:?}");
+    assert!(warnings[0].contains("chmod 0700"), "{warnings:?}");
 }
 
 #[test]
 fn test_load_trust_store_rejects_oversized_document_before_parse() {
     use kapsaro_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 
-    let dir = TempDir::new().unwrap();
+    let dir = local_state_temp_dir();
     let base_dir = dir.path().join("kapsaro");
     let trust_dir = base_dir.join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    std::fs::create_dir_all(&trust_dir).unwrap();
-    std::fs::write(&path, vec![b'A'; MAX_JSON_DOCUMENT_READ_SIZE + 1]).unwrap();
+    create_local_state_dir(&trust_dir);
+    write_local_state_file(&path, vec![b'A'; MAX_JSON_DOCUMENT_READ_SIZE + 1]);
 
-    let result = load_trust_store(&path, &base_dir);
+    let (base, opened_trust_dir) = open_trust_directory(&base_dir);
+    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
         .to_string()
         .contains("exceeds maximum size limit"));
+}
+
+/// The directory the approvals land in is inspected on the way in, the way the
+/// read path inspects it before handing a store back. The write goes ahead, so
+/// the operator gets the approval they asked for and is told at once that the
+/// directory holding it is open to others.
+#[cfg(unix)]
+#[test]
+fn test_save_trust_store_at_reports_a_trust_directory_open_to_others() {
+    let dir = local_state_temp_dir();
+    let base_dir = dir.path().join("kapsaro");
+    let trust_dir = base_dir.join("trust");
+    std::fs::create_dir_all(&trust_dir).unwrap();
+    std::fs::set_permissions(&base_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::set_permissions(&trust_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = trust_dir.join("alice@example.com.json");
+    let document = build_test_document("alice@example.com");
+    let (base, opened_trust_dir) = open_trust_directory(&base_dir);
+
+    let guard = LocalStateWarningGuard::new();
+    crate::support::fs::lock::with_exclusive_locked_directory(&opened_trust_dir, |locked| {
+        save_trust_store_at(&base, locked, &path, &document)
+    })
+    .unwrap();
+    let warnings = guard.take_reasons();
+
+    assert!(path.exists(), "the document must land");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("expected 0700"), "{warnings:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_save_trust_store_at_reports_a_completed_write_when_the_directory_turns_unsafe() {
+    let dir = local_state_temp_dir();
+    let trust_dir = dir.path().join("trust");
+    let outside = dir.path().join("outside.json");
+    create_local_state_dir(&trust_dir);
+    std::fs::write(&outside, "outside").unwrap();
+    let path = trust_dir.join("alice@example.com.json");
+    let document = build_test_document("alice@example.com");
+
+    let planted = trust_dir.join("planted.json");
+    set_post_trust_store_save_hook(move || symlink(&outside, &planted).unwrap());
+
+    let (base, opened_trust_dir) = open_trust_directory(dir.path());
+    let error =
+        crate::support::fs::lock::with_exclusive_locked_directory(&opened_trust_dir, |locked| {
+            save_trust_store_at(&base, locked, &path, &document)
+        })
+        .expect_err("a trust directory that turns unsafe after the write must be reported");
+
+    assert_eq!(error.recovery(), Some("E_LOCAL_STATE_PATH_UNSAFE"));
+    let message = error.format_user_message();
+    assert!(message.contains("was written"), "unexpected: {message}");
+    assert!(path.exists(), "the document must stay on disk");
 }

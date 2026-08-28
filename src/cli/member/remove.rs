@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! CLI entry point for `member remove`.
+//! Previews affected artifacts, requires confirmation unless forced, then removes the member.
+
 #[cfg(test)]
 use std::io::BufRead;
 
@@ -24,7 +27,7 @@ pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     let preview = evaluate_member_removal(&options, &args.member_handle)?;
     print_member_remove_preview(&preview);
     confirm_member_remove(args.force.force, &args.member_handle)?;
-    let result = remove_member(&options, &args.member_handle)?;
+    let result = remove_member(&preview)?;
     print_member_remove_summary(&result.member_handle);
 
     Ok(())
@@ -64,6 +67,10 @@ fn confirm_member_remove(force: bool, member_handle: &str) -> Result<(), Error> 
     Ok(())
 }
 
+/// Confirm a member removal against a reader rather than the terminal.
+///
+/// Wording and error mapping are shared with `confirm_member_remove`; only the
+/// prompt is swapped, because the production one needs a terminal.
 #[cfg(test)]
 fn confirm_member_remove_with_reader<R>(
     force: bool,

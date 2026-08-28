@@ -3,6 +3,7 @@
 
 use std::fs;
 
+use crate::app::artifact::ArtifactRef;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::rewrap::execution::{
@@ -17,28 +18,31 @@ use crate::app::rewrap::types::{
     VerifiedPostPromotionRecipients,
 };
 use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::{derive_self_sig_x, CommandTrustSnapshot, RewrapInputPolicy, TrustContext};
-use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
+use crate::app::trust::{CommandTrustSnapshot, RewrapInputPolicy, TrustContext};
+use crate::app_test_utils::{
+    build_test_signing_command_options, load_test_trust_store, resolve_test_write_execution,
+};
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::kv::encrypt::encrypt_kv_document;
-use crate::feature::trust::verification::verify_trust_store;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::format::content::FileEncContent;
 use crate::format::kv::dotenv::parse_dotenv;
 use crate::format::schema::document::parse_kv_wrap_token;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::io::trust::paths::get_trust_store_file_path;
-use crate::io::trust::store::load_trust_store;
+use crate::io::workspace::members::test_support::load_incoming_member_files;
 use crate::io::workspace::members::{
-    get_incoming_member_file_path, load_active_member_files, load_incoming_member_files,
+    capture_promotion_destination_at, get_incoming_member_file_path, load_active_member_files,
     load_member_file_from_path,
 };
+use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope, OpenDir};
 use crate::test_utils::{
-    build_expiring_soon_timestamp, save_active_public_key_to_workspace_incoming,
-    setup_member_key_context, setup_test_workspace, setup_trust_store_for_workspace,
-    update_active_private_key_expires_at, EnvGuard,
+    build_expiring_soon_timestamp, create_local_state_dir, member_handle,
+    save_active_public_key_to_workspace_incoming, setup_member_key_context, setup_test_workspace,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at, write_local_state_file,
+    EnvGuard,
 };
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
@@ -105,7 +109,7 @@ fn encrypt_kv_for_members(
     let verified_members =
         crate::test_utils::keygen_helpers::build_verified_recipient_keys(&recipient_members);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -114,6 +118,8 @@ fn encrypt_kv_for_members(
             signer_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -139,6 +145,8 @@ fn find_incoming_candidate(
     let source_path = get_incoming_member_file_path(workspace, member_handle);
     let public_key = load_member_file_from_path(&source_path).unwrap();
     let source_content = fs::read_to_string(&source_path).unwrap();
+    let destination =
+        capture_promotion_destination_at(&open_workspace(workspace), member_handle).unwrap();
     IncomingPromotionCandidate {
         review: crate::app::rewrap::types::IncomingVerificationItem {
             member_handle: member_handle.to_string(),
@@ -150,8 +158,8 @@ fn find_incoming_candidate(
             github_binding_configured: false,
             attestor_pub: Some(public_key.protected.attestation.pub_.clone()),
         },
-        source_path,
         source_content,
+        destination,
         public_key,
     }
 }
@@ -159,22 +167,24 @@ fn find_incoming_candidate(
 fn build_empty_plan(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
-    workspace_dir: &std::path::Path,
 ) -> RewrapBatchPlan {
     let pre_promotion_trust = CommandTrustSnapshot::<RewrapInputPolicy>::load(
         options,
-        workspace_dir,
-        &execution.member_handle,
-        Some(derive_self_sig_x(execution.key_ctx.inner().signing_key())),
+        execution,
+        execution
+            .key_ctx
+            .inner()
+            .local_keystore_access()
+            .expect("local keystore"),
     )
     .unwrap()
     .trust_context()
     .clone();
     RewrapBatchPlan {
-        workspace_root: workspace_dir.to_path_buf(),
         pre_promotion_trust,
         incoming_report: None,
-        artifact_paths: Vec::new(),
+        artifacts: Vec::new(),
+        discovery_warnings: Vec::new(),
     }
 }
 
@@ -257,7 +267,7 @@ fn test_execute_reviewed_rewrap_artifacts_adds_active_member_to_kv_wrap() {
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -284,7 +294,7 @@ fn test_execute_reviewed_rewrap_artifacts_adds_active_member_to_kv_wrap() {
 }
 
 #[test]
-fn test_execute_reviewed_rewrap_artifacts_does_not_promote_members() {
+fn test_execute_reviewed_rewrap_artifacts_leaves_membership_unchanged() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
@@ -299,7 +309,7 @@ fn test_execute_reviewed_rewrap_artifacts_does_not_promote_members() {
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let plan = build_empty_plan(&options, &execution, &workspace_dir);
+    let plan = build_empty_plan(&options, &execution);
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
@@ -314,7 +324,7 @@ fn test_execute_reviewed_rewrap_artifacts_does_not_promote_members() {
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -358,14 +368,15 @@ fn test_execute_reviewed_rewrap_artifacts_bubbles_trust_store_reset_required_err
     let post_members = load_active_member_files(&workspace_dir).unwrap();
     let (fixed_members, post_promotion_trust) =
         build_verified_post_promotion_state(&plan, post_members);
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    fs::create_dir_all(trust_path.parent().unwrap()).unwrap();
-    fs::write(&trust_path, "{ invalid trust store").unwrap();
+    let trust_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    create_local_state_dir(trust_path.parent().unwrap());
+    write_local_state_file(&trust_path, "{ invalid trust store");
 
     let result = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -378,11 +389,8 @@ fn test_execute_reviewed_rewrap_artifacts_bubbles_trust_store_reset_required_err
         Err(error) => error,
         Ok(_) => panic!("expected reset-required error"),
     };
-    assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(
-        error.verification_rule(),
-        Some("E_TRUST_STORE_RESET_REQUIRED")
-    );
+    assert_eq!(error.kind(), crate::ErrorKind::Parse);
+    assert_eq!(error.recovery(), Some("E_TRUST_STORE_RESET_REQUIRED"));
     assert_eq!(fs::read_to_string(&secret_path).unwrap(), encrypted);
 }
 
@@ -416,7 +424,7 @@ fn test_execute_reviewed_rewrap_artifacts_rejects_unreviewed_output_member_set_n
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -432,6 +440,12 @@ fn test_execute_reviewed_rewrap_artifacts_rejects_unreviewed_output_member_set_n
         .error_message
         .contains("member set has not been reviewed"));
     assert_eq!(fs::read_to_string(&secret_path).unwrap(), encrypted);
+}
+
+/// Bind the workspace the way a command does, so a promotion acts through the
+/// descriptor rather than resolving the path a second time.
+fn open_workspace(workspace: &std::path::Path) -> OpenDir {
+    open_dir_nofollow(workspace, DirectoryScope::Generic).unwrap()
 }
 
 #[test]
@@ -453,7 +467,7 @@ fn test_promote_accepted_incoming_members_moves_accepted_members_to_active() {
 
     let bob = find_incoming_candidate(&workspace_dir, BOB_MEMBER_HANDLE);
 
-    promote_accepted_incoming_members(&workspace_dir, &[bob]).unwrap();
+    promote_accepted_incoming_members(&open_workspace(&workspace_dir), &[bob]).unwrap();
 
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
@@ -486,7 +500,7 @@ fn test_promote_accepted_incoming_members_replaces_existing_active_member_on_rot
 
     let alice = find_incoming_candidate(&workspace_dir, ALICE_MEMBER_HANDLE);
 
-    promote_accepted_incoming_members(&workspace_dir, &[alice]).unwrap();
+    promote_accepted_incoming_members(&open_workspace(&workspace_dir), &[alice]).unwrap();
 
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let incoming_members = load_incoming_member_files(&workspace_dir).unwrap();
@@ -550,7 +564,7 @@ fn test_execute_confirmed_rewrap_batch_auto_accepts_self_only_output_after_self_
 
     let outcome = execute_confirmed_rewrap_batch(
         build_review_session(&request, &plan, &expected_post_promotion_members, &[]),
-        execution,
+        &execution,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(true),
         |candidates, _context_label| Ok(candidates.to_vec()),
@@ -591,18 +605,21 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         .find(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
     let plan = RewrapBatchPlan {
-        workspace_root: workspace_dir.clone(),
         pre_promotion_trust: CommandTrustSnapshot::<RewrapInputPolicy>::load(
             &options,
-            &workspace_dir,
-            &execution.member_handle,
-            Some(derive_self_sig_x(execution.key_ctx.inner().signing_key())),
+            &execution,
+            execution
+                .key_ctx
+                .inner()
+                .local_keystore_access()
+                .expect("local keystore"),
         )
         .unwrap()
         .trust_context()
         .clone(),
         incoming_report: None,
-        artifact_paths: vec![invalid_file.clone()],
+        artifacts: vec![ArtifactRef::open_from_path(&invalid_file).unwrap()],
+        discovery_warnings: Vec::new(),
     };
     let request = RewrapBatchRequest {
         options,
@@ -626,7 +643,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
             &expected_post_promotion_members,
             &approvals,
         ),
-        execution,
+        &execution,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(true),
         |candidates, _context_label| Ok(candidates.to_vec()),
@@ -645,13 +662,10 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         .iter()
         .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    let loaded = load_trust_store(&trust_path, temp_dir.path())
+    let loaded = load_test_trust_store(&request.options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .unwrap();
-    let verified = verify_trust_store(&loaded.document, &temp_dir.path().join("keys")).unwrap();
-    assert!(verified
-        .document()
+    assert!(loaded
         .protected
         .known_keys
         .iter()
@@ -659,7 +673,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
 }
 
 #[test]
-fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_update() {
+fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_promoting_members() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let bob_active = workspace_dir
@@ -685,7 +699,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
         .iter()
         .find(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
-    let plan = build_empty_plan(&options, &execution, &workspace_dir);
+    let plan = build_empty_plan(&options, &execution);
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
@@ -708,7 +722,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
             &expected_post_promotion_members,
             &approvals,
         ),
-        execution,
+        &execution,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(true),
         |candidates, _context_label| Ok(candidates.to_vec()),
@@ -721,9 +735,12 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_trust_
     assert!(load_active_member_files(&workspace_dir)
         .unwrap()
         .iter()
+        .all(|member| member.protected.subject_handle != BOB_MEMBER_HANDLE));
+    assert!(load_incoming_member_files(&workspace_dir)
+        .unwrap()
+        .iter()
         .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    assert!(load_trust_store(&trust_path, temp_dir.path())
+    assert!(load_test_trust_store(&request.options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .is_none());
 }
@@ -757,7 +774,8 @@ fn test_promote_accepted_incoming_members_rejects_incoming_file_mismatch_after_r
     )
     .unwrap();
 
-    let result = promote_accepted_incoming_members(&workspace_dir, &[bob_candidate]);
+    let result =
+        promote_accepted_incoming_members(&open_workspace(&workspace_dir), &[bob_candidate]);
 
     assert!(result.is_err());
     assert!(result
@@ -815,7 +833,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_fixed_post_promotion_members() {
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -872,7 +890,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_current_artifact_content_at_execu
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -891,7 +909,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_current_artifact_content_at_execu
 }
 
 #[test]
-fn test_execute_reviewed_rewrap_artifacts_uses_captured_content_after_live_path_changes() {
+fn test_execute_reviewed_rewrap_artifacts_refuses_content_changed_during_review() {
     let _guard = strict_key_checking_guard();
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
@@ -922,7 +940,7 @@ fn test_execute_reviewed_rewrap_artifacts_uses_captured_content_after_live_path_
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| {
@@ -937,10 +955,15 @@ fn test_execute_reviewed_rewrap_artifacts_uses_captured_content_after_live_path_
     .unwrap();
 
     assert_eq!(prompt_count, 1);
-    assert_eq!(outcome.processed_files.len(), 1);
-    let rewritten = fs::read_to_string(&secret_path).unwrap();
-    assert_ne!(rewritten, "tampered-after-capture");
-    assert!(rewritten.contains(ALICE_MEMBER_HANDLE));
+    assert!(outcome.processed_files.is_empty());
+    assert_eq!(outcome.failed_files.len(), 1);
+    assert!(outcome.failed_files[0]
+        .error_message
+        .contains("changed since review"));
+    assert_eq!(
+        fs::read_to_string(&secret_path).unwrap(),
+        "tampered-after-capture"
+    );
 }
 
 #[test]
@@ -990,7 +1013,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_signer_approval_before_next_a
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| {
@@ -1005,12 +1028,10 @@ fn test_execute_reviewed_rewrap_artifacts_persists_signer_approval_before_next_a
 
     assert_eq!(prompt_count, 1);
     assert_eq!(outcome.processed_files.len(), 2);
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    let loaded = load_trust_store(&trust_path, temp_dir.path())
+    let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .unwrap();
     assert!(loaded
-        .document
         .protected
         .known_keys
         .iter()
@@ -1054,7 +1075,7 @@ fn test_execute_reviewed_rewrap_artifacts_persists_recipient_approval_before_rew
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |_candidate, _context_label| Ok(true),
@@ -1069,12 +1090,10 @@ fn test_execute_reviewed_rewrap_artifacts_persists_recipient_approval_before_rew
 
     assert_eq!(recipient_prompt_count, 1);
     assert_eq!(outcome.processed_files.len(), 1);
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    let loaded = load_trust_store(&trust_path, temp_dir.path())
+    let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .unwrap();
     assert!(loaded
-        .document
         .protected
         .known_keys
         .iter()
@@ -1128,7 +1147,7 @@ fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejectio
     let outcome = execute_reviewed_rewrap_artifacts(
         &request,
         &plan,
-        execution,
+        &execution,
         &fixed_members,
         &post_promotion_trust,
         &mut |candidate, _context_label| Ok(candidate.member_handle.as_str() != BOB_MEMBER_HANDLE),
@@ -1206,7 +1225,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
             &expected_post_promotion_members,
             &approvals,
         ),
-        execution,
+        &execution,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| {
             non_member_prompts += 1;
@@ -1246,7 +1265,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mi
 
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let plan = build_empty_plan(&options, &execution, &workspace_dir);
+    let plan = build_empty_plan(&options, &execution);
     let request = RewrapBatchRequest {
         options,
         rotate_key: false,
@@ -1266,7 +1285,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_actual_post_promotion_snapshot_mi
 
     let result = execute_confirmed_rewrap_batch(
         build_review_session(&request, &plan, &expected_post_promotion_members, &[]),
-        execution,
+        &execution,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(true),
         |candidates, _context_label| Ok(candidates.to_vec()),
@@ -1317,7 +1336,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_invalid_post_promotion_recipient_
 
     let result = execute_confirmed_rewrap_batch(
         build_review_session(&request, &plan, &expected_post_promotion_members, &[]),
-        execution,
+        &execution,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(true),
         |candidates, _context_label| Ok(candidates.to_vec()),

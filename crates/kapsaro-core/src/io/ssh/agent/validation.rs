@@ -22,6 +22,9 @@ impl AgentIdentity {
         &self.key_blob
     }
 
+    // The comment is part of every identity the agent reports and is what the
+    // agent protocol tests assert on. It stays compiled in production builds so
+    // the parsed identity record can be read in full when diagnosing an agent.
     #[allow(dead_code)]
     pub fn comment(&self) -> &str {
         &self.comment

@@ -3,14 +3,11 @@
 
 //! Secret-bearing value types with zeroization on drop.
 
-use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fmt;
+use std::str::Utf8Error;
 
 use zeroize::{Zeroize, Zeroizing};
-
-/// Environment variables containing secret values.
-pub type SecretEnvironmentMap = BTreeMap<String, SecretString>;
 
 /// Fixed-size secret bytes that must be cleared from memory on drop.
 pub struct SecretArray<const N: usize>(Zeroizing<[u8; N]>);
@@ -27,14 +24,22 @@ impl<const N: usize> SecretArray<N> {
     }
 
     /// Explicitly expose the secret bytes.
+    ///
+    /// Crate code works on the fixed-size array instead, so only the
+    /// `cli-test-support` test harness reaches this accessor.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn expose_secret(&self) -> &[u8] {
         self.0.as_ref()
     }
 
+    /// Length of the wrapped buffer, checked by the `cli-test-support` harness.
+    /// `is_empty` accompanies it to satisfy clippy's `len_without_is_empty`.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn len(&self) -> usize {
         N
     }
 
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn is_empty(&self) -> bool {
         N == 0
     }
@@ -167,17 +172,53 @@ impl Drop for SecretString {
     }
 }
 
+/// Error returned when secret bytes fail UTF-8 validation.
+///
+/// Carries only the position information from `std::str::Utf8Error`, never
+/// the plaintext bytes, so it is safe to log or format with `Debug`/`Display`.
+#[derive(Debug, Clone, Copy)]
+pub struct SecretUtf8Error(Utf8Error);
+
+impl fmt::Display for SecretUtf8Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "secret bytes are not valid UTF-8: {}", self.0)
+    }
+}
+
+impl std::error::Error for SecretUtf8Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+impl From<Utf8Error> for SecretUtf8Error {
+    fn from(err: Utf8Error) -> Self {
+        Self(err)
+    }
+}
+
 impl TryFrom<SecretBytes> for SecretString {
-    type Error = std::string::FromUtf8Error;
+    type Error = SecretUtf8Error;
 
     fn try_from(value: SecretBytes) -> Result<Self, Self::Error> {
         let mut bytes = value.into_zeroizing_vec();
-        String::from_utf8(std::mem::take(&mut *bytes)).map(Self::new)
+        let raw = std::mem::take(&mut *bytes);
+        match String::from_utf8(raw) {
+            Ok(text) => Ok(Self::new(text)),
+            Err(err) => {
+                // Reclaim the invalid bytes to zeroize them: `FromUtf8Error` would
+                // otherwise hold the plaintext until it is dropped unzeroized.
+                let utf8_error = err.utf8_error();
+                let mut invalid_bytes = err.into_bytes();
+                invalid_bytes.zeroize();
+                Err(SecretUtf8Error::from(utf8_error))
+            }
+        }
     }
 }
 
 impl TryFrom<Zeroizing<Vec<u8>>> for SecretString {
-    type Error = std::string::FromUtf8Error;
+    type Error = SecretUtf8Error;
 
     fn try_from(value: Zeroizing<Vec<u8>>) -> Result<Self, Self::Error> {
         SecretBytes::from_zeroizing(value).try_into()

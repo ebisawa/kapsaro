@@ -88,7 +88,6 @@ fn test_verify_file_document_rejects_wrap_count_over_limit() {
 #[test]
 fn test_verify_kv_document_rejects_wrap_count_over_limit() {
     let doc = KvEncDocument::new(
-        ":KAPSARO_KV 1\n".to_string(),
         Vec::new(),
         KvHeader {
             sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),
@@ -161,7 +160,6 @@ fn test_verify_file_document_rejects_duplicate_wrap_rh() {
 #[test]
 fn test_verify_kv_document_rejects_duplicate_wrap_rh() {
     let doc = KvEncDocument::new(
-        ":KAPSARO_KV 1\n".to_string(),
         Vec::new(),
         KvHeader {
             sid: Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap(),

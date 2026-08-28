@@ -1,10 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Resolves output paths and writes encrypted/decrypted file content for CLI commands.
+//! Falls back to stdout when no path is given, and prints a relative-path notice unless quiet.
+
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use kapsaro_core::cli_api::presentation::fs::{save_bytes, save_text};
+use kapsaro_core::cli_api::presentation::fs::{save_bytes_restricted, save_text};
 use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
 use kapsaro_core::{Error, Result};
 
@@ -64,6 +67,8 @@ pub(crate) fn save_encrypted_output(
 ) -> Result<()> {
     match output_path {
         Some(path) => {
+            // Encrypted artifacts are meant to be shared (committed, sent to
+            // teammates), so this writes with unrestricted permissions.
             save_text(path, content)?;
             print_output_notice("Encrypted to", path, quiet);
         }
@@ -79,7 +84,9 @@ pub(crate) fn save_decrypted_output(
 ) -> Result<()> {
     match output_path {
         Some(path) => {
-            save_bytes(path, plaintext_bytes)?;
+            // Decrypted plaintext is secret material, so this restricts
+            // permissions to the owner (0600) unlike the encrypted output path.
+            save_bytes_restricted(path, plaintext_bytes)?;
             print_output_notice("Decrypted to", path, quiet);
         }
         None => {

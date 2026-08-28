@@ -1,66 +1,70 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Helper functions for keystore operations
+//! Helper functions for keystore operations.
+//! Resolves typed key and member identifiers through an anchored keystore capability.
 
-use crate::io::keystore::active::load_active_kid;
-use crate::io::keystore::member::select_most_recent_kid;
-use crate::io::keystore::storage::list_kids;
-use crate::support::kid::format_kid_display_lossy;
-use crate::support::kid::resolve_unique_kid;
+use crate::io::keystore::access::KeystoreAccess;
+use crate::model::identity::{Kid, MemberHandle};
+use crate::support::kid::{format_kid_display_lossy, resolve_unique_kid};
 use crate::{Error, ErrorKind, Result};
-use std::path::Path;
 
-pub fn resolve_member_kid_query(
-    keystore_root: &Path,
-    member_handle: &str,
+pub(crate) fn resolve_member_kid_query(
+    access: &KeystoreAccess,
+    member_handle: &MemberHandle,
     kid_query: &str,
-) -> Result<String> {
-    let kids = list_kids(keystore_root, member_handle)?;
-    resolve_unique_kid(kids.iter().map(String::as_str), kid_query).map_err(|error| {
-        if error.kind() == ErrorKind::NotFound {
-            return Error::build_not_found_error(format!(
-                "Specified kid '{}' not found for member '{}'",
-                format_kid_display_lossy(kid_query),
-                member_handle
-            ));
-        }
-        error
-    })
+) -> Result<Kid> {
+    access
+        .resolve_kid(member_handle, Some(kid_query))
+        .map_err(|error| {
+            if error.kind() == ErrorKind::NotFound {
+                return Error::build_not_found_error(format!(
+                    "Specified kid '{}' not found for member '{}'",
+                    format_kid_display_lossy(kid_query),
+                    member_handle
+                ));
+            }
+            error
+        })
 }
 
-/// Resolves the kid to use for a given member_handle
+/// Find the member that owns a kid by scanning every member in the keystore.
 ///
-/// Resolution order:
-/// 1. If `kid_override` is provided, use it
-/// 2. If an active kid is set, use it
-/// 3. Otherwise, use the latest (most recent) kid
+/// Key directory names use the canonical `kid`, so at most one member matches.
 ///
-/// # Arguments
-/// * `keystore_root` - Path to the keystore root directory
-/// * `member_handle` - The member handle to resolve the kid for
-/// * `kid_override` - Optional explicit kid to use (bypasses active/latest selection)
-///
-/// # Returns
-/// The resolved kid as a String
-///
-/// # Errors
-/// - `Error::NotFound` if no keys found for the member_handle
-/// - `Error::NotFound` if kid_override is provided but doesn't exist
-pub fn resolve_kid(
-    keystore_root: &Path,
-    member_handle: &str,
-    kid_override: Option<&str>,
-) -> Result<String> {
-    if let Some(kid) = kid_override {
-        return resolve_member_kid_query(keystore_root, member_handle, kid);
-    }
-
-    if let Some(active_kid) = load_active_kid(member_handle, keystore_root)? {
-        return Ok(active_kid);
-    }
-
-    select_most_recent_kid(keystore_root, member_handle)
+/// Each member is enumerated under its own shared lock. Reading a member
+/// directory that a key pair is being written into would otherwise observe the
+/// staging directory that write has not yet renamed into place, and the
+/// fail-closed namespace check turns that half-finished state into a refusal of
+/// the whole lookup.
+pub(crate) fn find_member_by_kid(access: &KeystoreAccess, kid: &str) -> Result<MemberHandle> {
+    let member_handles = access.list_members()?;
+    let candidates = member_handles
+        .iter()
+        .map(|member_handle| {
+            access
+                .list_kids(member_handle)
+                .map(|kids| (member_handle, kids))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let candidate_kids = candidates
+        .iter()
+        .flat_map(|(_, kids)| kids.iter().map(Kid::as_str))
+        .collect::<Vec<_>>();
+    let resolved_kid = resolve_unique_kid(candidate_kids, kid)?;
+    candidates
+        .into_iter()
+        .find(|(_, kids)| {
+            kids.iter()
+                .any(|candidate| candidate.as_str() == resolved_kid)
+        })
+        .map(|(member_handle, _)| member_handle.clone())
+        .ok_or_else(|| {
+            Error::build_not_found_error(format!(
+                "kid '{}' not found in keystore",
+                format_kid_display_lossy(kid)
+            ))
+        })
 }
 
 #[cfg(test)]

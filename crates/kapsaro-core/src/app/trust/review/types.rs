@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Plan structs bundling trust outcomes and labels for read and write trust review.
+//! Groups the outcome, context labels, and eligibility flags a review call needs into one value.
+
 use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome};
 
 #[derive(Debug, Clone, Copy)]

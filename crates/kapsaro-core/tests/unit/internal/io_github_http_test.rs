@@ -7,7 +7,6 @@ use super::{
     fetch_github_user_by_login, parse_github_keys, parse_github_user_response, GitHubKeyRecord,
 };
 use crate::model::public_key::GithubAccount;
-use crate::Error;
 use reqwest::ResponseBuilderExt;
 
 fn response(status: u16, body: &'static str) -> reqwest::Response {
@@ -153,7 +152,7 @@ async fn test_parse_github_user_response_non_success_error() {
     .unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert!(
         error
             .format_user_message()
@@ -182,7 +181,7 @@ async fn test_parse_github_user_response_invalid_json_error() {
     .unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert!(
         error
             .format_user_message()
@@ -214,7 +213,7 @@ async fn test_parse_github_keys_response_non_success_error() {
         .unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert!(
         error.format_user_message().contains("404 Not Found"),
         "unexpected: {}",
@@ -229,7 +228,7 @@ async fn test_parse_github_keys_response_invalid_json_error() {
         .unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert!(
         error
             .format_user_message()

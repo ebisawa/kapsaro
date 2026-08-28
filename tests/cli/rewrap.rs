@@ -15,7 +15,6 @@ use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
-use temp_env::with_vars;
 
 #[path = "rewrap/membership.rs"]
 mod membership;

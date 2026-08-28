@@ -1,34 +1,37 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+//! Member handle and GitHub user resolution for commands.
+//! Applies the CLI, environment and config precedence before prompting.
 
+use crate::app::context::options::CommonCommandOptions;
+use crate::config::resolution::member_handle::MemberHandleResolver;
+use crate::error::MEMBER_HANDLE_REQUIRED_RECOVERY;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::{Error, Result};
 
 pub fn resolve_member_handle_input(
     member_handle: Option<String>,
-    base_dir: Option<&Path>,
+    options: &CommonCommandOptions,
 ) -> Result<Option<String>> {
-    crate::config::resolution::member_handle::resolve_member_handle_with_fallback(
-        member_handle,
-        base_dir,
-    )
-}
-
-pub fn require_member_handle_input(
-    member_handle: Option<String>,
-    base_dir: Option<&Path>,
-    include_prompt_hint: bool,
-) -> Result<String> {
-    resolve_member_handle_input(member_handle, base_dir)?
-        .ok_or_else(|| build_missing_member_handle_error(include_prompt_hint))
+    let keystore = options
+        .fixed_home()?
+        .map(KeystoreAccess::open_optional_from_anchored_home)
+        .transpose()?
+        .flatten();
+    MemberHandleResolver::fixed(options.global_config()?, keystore.as_ref())
+        .resolve(member_handle)
+        .map(|resolved| resolved.map(crate::model::identity::MemberHandle::into_string))
 }
 
 pub fn resolve_github_user_input(
     github_user: Option<String>,
-    base_dir: Option<&Path>,
+    options: &CommonCommandOptions,
 ) -> Result<Option<String>> {
-    crate::config::resolution::github_user::resolve_github_user(github_user, base_dir)
+    crate::config::resolution::github_user::resolve_github_user_with_config(
+        github_user,
+        options.global_config()?,
+    )
 }
 
 pub fn build_missing_member_handle_error(include_prompt_hint: bool) -> Error {
@@ -45,6 +48,7 @@ pub fn build_missing_member_handle_error(include_prompt_hint: bool) -> Error {
          1. Specify a member handle with --member-handle <handle>\n\
          2. Configure a default member handle explicitly{prompt_hint}"
     ))
+    .with_recovery(MEMBER_HANDLE_REQUIRED_RECOVERY)
 }
 
 #[cfg(test)]

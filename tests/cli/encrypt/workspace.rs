@@ -3,6 +3,8 @@
 
 //! Workspace-related encryption tests
 
+#[cfg(unix)]
+use crate::cli::common::{assert_member_set_review_success, kapsaro_std_cmd};
 use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
@@ -10,10 +12,17 @@ use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace,
     setup_trust_store_for_workspace, update_active_private_key_expires_at,
 };
+#[cfg(unix)]
+use console::strip_ansi_codes;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
 use kapsaro_test_support::fixture::setup_test_workspace;
 use kapsaro_test_support::keygen_helpers::keygen_test;
 use std::fs;
+
+/// Warning the CLI prints when a recipient public key is close to expiry.
+#[cfg(unix)]
+const RECIPIENT_EXPIRY_WARNING: &str =
+    "Warning: Recipient public key for 'bob@example.com' expires in";
 
 #[cfg(unix)]
 use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
@@ -90,7 +99,8 @@ fn test_encrypt_rejects_filename_content_mismatch() {
 
 #[cfg(unix)]
 #[test]
-fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
+fn test_encrypt_warns_about_insecure_trust_store_permissions() {
+    use crate::test_utils::member_handle;
     use std::os::unix::fs::PermissionsExt;
 
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
@@ -102,23 +112,48 @@ fn test_encrypt_surfaces_insecure_trust_store_warning_on_stderr() {
         &key_ctx,
     );
 
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
+    let trust_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let input_path = workspace_dir.join("warn.txt");
-    fs::write(&input_path, b"warning check").unwrap();
+    fs::write(&input_path, b"permission check").unwrap();
     let output_path = workspace_dir.join("warn.txt.encrypted");
-    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
 
-    let output = encrypt_file_with_member_set_review(
-        &workspace_dir,
-        temp_dir.path(),
-        &ssh_key,
-        &input_path,
-        &output_path,
-        ALICE_MEMBER_HANDLE,
+    let output = cmd()
+        .arg("encrypt")
+        .arg(&input_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env(
+            "KAPSARO_SSH_IDENTITY",
+            temp_dir.path().join(".ssh").join("test_ed25519"),
+        )
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "encrypt must complete despite an insecure trust store: {stderr}"
     );
-    assert!(output.contains("Insecure permissions"), "{output}");
+    assert!(
+        stderr.contains("Insecure permissions 0644"),
+        "missing warning: {stderr}"
+    );
+    assert!(
+        stderr.contains("(expected 0600)") && stderr.contains("chmod 0600"),
+        "warning must name the required permissions and the fix: {stderr}"
+    );
+    assert!(
+        output_path.exists(),
+        "encrypt must still produce its output file"
+    );
 }
 
 #[test]
@@ -154,8 +189,24 @@ fn test_encrypt_surfaces_private_key_expiry_warning_on_stderr() {
     assert!(!output.contains("\n         Expires at: "), "{output}");
 }
 
+#[cfg(unix)]
 #[test]
 fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
+    let (temp_dir, workspace_dir) = setup_workspace_with_expiring_recipient_key();
+    let mut command =
+        build_expiring_recipient_encrypt_command(&temp_dir, &workspace_dir, "recipient-expiry");
+
+    let output = assert_member_set_review_success(&mut command);
+
+    assert!(output.contains(RECIPIENT_EXPIRY_WARNING), "{output}");
+    assert!(output.contains(". Expires at: "), "{output}");
+    assert!(!output.contains("\n         Expires at: "), "{output}");
+}
+
+/// Builds a workspace whose recipient key for Bob is close to expiry, with the
+/// resulting member set already approved so encryption needs no review prompt.
+#[cfg(unix)]
+fn setup_workspace_with_expiring_recipient_key() -> (tempfile::TempDir, std::path::PathBuf) {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let expires_at = build_expiring_soon_timestamp(15);
     update_active_private_key_expires_at(temp_dir.path(), BOB_MEMBER_HANDLE, &expires_at);
@@ -169,23 +220,74 @@ fn test_encrypt_surfaces_recipient_key_expiry_warning_on_stderr() {
         &key_ctx,
     );
 
-    let input_path = workspace_dir.join("recipient-expiry.txt");
-    fs::write(&input_path, b"warning check").unwrap();
-    let output_path = workspace_dir.join("recipient-expiry.txt.encrypted");
-    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
+    (temp_dir, workspace_dir)
+}
 
-    let output = encrypt_file_with_member_set_review(
-        &workspace_dir,
-        temp_dir.path(),
-        &ssh_key,
-        &input_path,
-        &output_path,
-        ALICE_MEMBER_HANDLE,
+/// Builds the encrypt command used by the recipient key expiry warning tests.
+#[cfg(unix)]
+fn build_expiring_recipient_encrypt_command(
+    temp_dir: &tempfile::TempDir,
+    workspace_dir: &std::path::Path,
+    stem: &str,
+) -> std::process::Command {
+    let input_path = workspace_dir.join(format!("{stem}.txt"));
+    fs::write(&input_path, b"warning check").unwrap();
+
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("encrypt")
+        .arg(&input_path)
+        .arg("--out")
+        .arg(workspace_dir.join(format!("{stem}.txt.encrypted")))
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir)
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env(
+            "KAPSARO_SSH_IDENTITY",
+            temp_dir.path().join(".ssh").join("test_ed25519"),
+        );
+    command
+}
+
+#[cfg(unix)]
+#[test]
+fn test_encrypt_colors_recipient_key_expiry_warning_when_forced() {
+    let (temp_dir, workspace_dir) = setup_workspace_with_expiring_recipient_key();
+    let mut command =
+        build_expiring_recipient_encrypt_command(&temp_dir, &workspace_dir, "colored-expiry");
+    command.env("CLICOLOR_FORCE", "1");
+
+    let output = assert_member_set_review_success(&mut command);
+
+    assert!(
+        output.contains(&format!("\u{1b}[33m{}", RECIPIENT_EXPIRY_WARNING)),
+        "expected ANSI-colored expiry warning, got: {output}"
     );
     assert!(
-        output.contains("Warning: Recipient public key for 'bob@example.com' expires in"),
-        "{output}"
+        strip_ansi_codes(&output).contains(RECIPIENT_EXPIRY_WARNING),
+        "expected warning text to remain intact after stripping ANSI, got: {output}"
     );
-    assert!(output.contains(". Expires at: "), "{output}");
-    assert!(!output.contains("\n         Expires at: "), "{output}");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_encrypt_prints_expiry_warning_before_output_notice() {
+    let (temp_dir, workspace_dir) = setup_workspace_with_expiring_recipient_key();
+    let mut command =
+        build_expiring_recipient_encrypt_command(&temp_dir, &workspace_dir, "ordered-expiry");
+
+    let output = assert_member_set_review_success(&mut command);
+
+    let warning_position = output
+        .find(RECIPIENT_EXPIRY_WARNING)
+        .unwrap_or_else(|| panic!("expected expiry warning, got: {output}"));
+    let notice_position = output
+        .find("Encrypted to")
+        .unwrap_or_else(|| panic!("expected output notice, got: {output}"));
+    assert!(
+        warning_position < notice_position,
+        "expected the expiry warning before the output notice, got: {output}"
+    );
 }

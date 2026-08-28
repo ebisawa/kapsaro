@@ -63,6 +63,18 @@ pub fn run_command_with_pty(
     prompt: &str,
     input: &[u8],
 ) -> PtyCommandResult {
+    run_command_with_pty_script_at_prompt(command, prompt, || {}, input, &[])
+}
+
+/// Runs a PTY command with a hook at the first prompt and further scripted prompts.
+#[cfg(unix)]
+pub fn run_command_with_pty_script_at_prompt(
+    command: &mut StdCommand,
+    first_prompt: &str,
+    at_first_prompt: impl FnOnce(),
+    first_input: &[u8],
+    remaining_prompts: &[(&str, &[u8])],
+) -> PtyCommandResult {
     let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
     set_nonblocking(&master).expect("PTY master must support non-blocking reads");
 
@@ -83,12 +95,28 @@ pub fn run_command_with_pty(
         &mut child,
         &mut master,
         &mut transcript,
-        prompt,
+        first_prompt,
         Duration::from_secs(10),
     );
+    at_first_prompt();
+    thread::sleep(Duration::from_millis(25));
     master
-        .write_all(input)
+        .write_all(first_input)
         .expect("PTY input write must succeed");
+
+    for (prompt, input) in remaining_prompts {
+        wait_for_prompt(
+            &mut child,
+            &mut master,
+            &mut transcript,
+            prompt,
+            Duration::from_secs(10),
+        );
+        thread::sleep(Duration::from_millis(25));
+        master
+            .write_all(input)
+            .expect("PTY input write must succeed");
+    }
 
     let status = wait_for_exit(
         &mut child,

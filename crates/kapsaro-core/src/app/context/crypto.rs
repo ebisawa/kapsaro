@@ -1,35 +1,60 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Crypto context construction for command execution.
+//! Loads the local key from the keystore or from the environment key.
+
 use std::path::PathBuf;
 
 use tracing::debug;
 
+#[cfg(test)]
+use crate::feature::context::crypto::load_crypto_context_from_keystore;
 use crate::feature::context::crypto::{
-    build_signing_key, load_crypto_context_from_keystore, CryptoContext,
+    build_signing_key, load_crypto_context_from_keystore_with_selected_kid, CryptoContext,
 };
 use crate::feature::context::expiry::LocalKeyPairExpiry;
-use crate::io::config::paths::get_base_dir;
-use crate::io::keystore::paths::get_keystore_root_from_base;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::io::keystore::public_key_source::WorkspacePublicKeySource;
 use crate::io::ssh::backend::SignatureBackend;
-use crate::model::identity::Kid;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::Result;
 
-pub fn load_crypto_context(
-    member_handle: &str,
+#[cfg(test)]
+pub(crate) fn load_crypto_context_with_access(
+    access: KeystoreAccess,
+    member_handle: MemberHandle,
     backend: Box<dyn SignatureBackend>,
     ssh_pubkey: String,
     explicit_kid: Option<&str>,
-    keystore_root: Option<&PathBuf>,
     workspace_path: Option<PathBuf>,
 ) -> Result<CryptoContext> {
-    log_crypto_context_load(member_handle, explicit_kid);
-    let keystore_root = resolve_keystore_root(keystore_root)?;
+    log_crypto_context_load(member_handle.as_str(), explicit_kid);
     load_crypto_context_from_keystore(
-        keystore_root,
+        access,
         member_handle,
         explicit_kid,
+        backend,
+        ssh_pubkey,
+        workspace_path,
+    )
+}
+
+pub(crate) fn load_crypto_context_with_selected_kid(
+    access: KeystoreAccess,
+    member_handle: MemberHandle,
+    backend: Box<dyn SignatureBackend>,
+    ssh_pubkey: String,
+    selected_kid: Kid,
+    selected_kid_override: bool,
+    workspace_path: Option<PathBuf>,
+) -> Result<CryptoContext> {
+    log_crypto_context_load(member_handle.as_str(), Some(selected_kid.as_str()));
+    load_crypto_context_from_keystore_with_selected_kid(
+        access,
+        member_handle,
+        selected_kid,
+        selected_kid_override,
         backend,
         ssh_pubkey,
         workspace_path,
@@ -58,16 +83,6 @@ fn log_crypto_context_load(member_handle: &str, explicit_kid: Option<&str>) {
         member_handle,
         explicit_kid.unwrap_or("(none)")
     );
-}
-
-fn resolve_keystore_root(keystore_root: Option<&PathBuf>) -> Result<PathBuf> {
-    match keystore_root {
-        Some(path) => Ok(path.clone()),
-        None => {
-            let base_dir = get_base_dir()?;
-            Ok(get_keystore_root_from_base(&base_dir))
-        }
-    }
 }
 
 #[cfg(test)]

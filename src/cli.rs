@@ -52,6 +52,8 @@ use unset::UnsetArgs;
 use clap::{Parser, Subcommand};
 
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
+use crate::cli::common::output::text::print_local_state_diagnostics;
+use kapsaro_core::api::diagnostics::take_local_state_warnings;
 use kapsaro_core::cli_api::app::trust::CommandCapability;
 use kapsaro_core::Error;
 use tracing::debug;
@@ -138,7 +140,11 @@ pub(crate) fn run(cli: Cli) -> Result<i32, Error> {
     debug!("[CLI] command={}", capability.label());
     ensure_env_mode_command_allowed(capability)?;
 
-    cli.command.run()
+    // Reported whether the command succeeded or not: a permission the operator
+    // should look at is worth naming even when something else went wrong.
+    let result = cli.command.run();
+    print_local_state_diagnostics(&take_local_state_warnings());
+    result
 }
 
 impl Commands {

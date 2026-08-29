@@ -5,10 +5,14 @@
 
 use crate::feature::trust::recipient_sets::compute_recipient_set_hash;
 use crate::feature::trust::signature::sign_trust_store;
+use crate::feature::trust::signer_keys::{document_signer_kid, SignerKeySnapshot};
 use crate::feature::trust::verification::verify_trust_store;
 use crate::format::schema::validator::load_embedded_trust_validator;
+use crate::io::keystore::access::KeystoreAccess;
+use crate::model::identity::MemberHandle;
 use crate::model::trust_store::{
-    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
+    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreDocument,
+    TrustStoreProtected,
 };
 use crate::model::wire::format::LOCAL_TRUST_V1;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
@@ -351,7 +355,8 @@ fn test_verify_trust_store_rejects_semantically_invalid_timestamp() {
     };
     let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
 
-    let result = verify_trust_store(&doc, &home.path().join("keys"));
+    let signer_keys = capture_signer_keys(&home, &doc);
+    let result = verify_trust_store(&doc, &signer_keys);
 
     assert!(result.is_err());
 }
@@ -373,11 +378,12 @@ fn test_verify_trust_store_rejects_duplicate_known_key_kid() {
     };
     let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
 
-    let result = verify_trust_store(&doc, &home.path().join("keys"));
+    let signer_keys = capture_signer_keys(&home, &doc);
+    let result = verify_trust_store(&doc, &signer_keys);
 
     let error = result.expect_err("duplicate kid must fail");
     assert_eq!(error.kind(), kapsaro_core::ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("E_TRUST_DUPLICATE_KID"));
+    assert_eq!(error.rule(), Some("E_TRUST_DUPLICATE_KID"));
 }
 
 #[test]
@@ -398,12 +404,47 @@ fn test_verify_trust_store_rejects_duplicate_recipient_set_sid() {
     };
     let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
 
-    let result = verify_trust_store(&doc, &home.path().join("keys"));
+    let signer_keys = capture_signer_keys(&home, &doc);
+    let result = verify_trust_store(&doc, &signer_keys);
 
     let error = result.expect_err("duplicate recipient set sid must fail");
     assert_eq!(error.kind(), kapsaro_core::ErrorKind::Verify);
-    assert_eq!(
-        error.verification_rule(),
-        Some("E_RECIPIENT_SET_DUPLICATE_SID")
-    );
+    assert_eq!(error.rule(), Some("E_RECIPIENT_SET_DUPLICATE_SID"));
+}
+
+/// The keys a commit verifies with belong to one member. A document naming
+/// another owner has to be rejected outright: verifying it against these keys
+/// would treat one member's signature as authority over another's approvals.
+#[test]
+fn test_verify_trust_store_rejects_a_document_owned_by_another_member() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let protected = TrustStoreProtected {
+        format: LOCAL_TRUST_V1.to_string(),
+        owner_handle: ALICE_MEMBER_HANDLE.to_string(),
+        created_at: "2026-03-29T12:34:56Z".to_string(),
+        updated_at: "2026-03-29T12:34:56Z".to_string(),
+        known_keys: Vec::new(),
+        recipient_sets: Vec::new(),
+    };
+    let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
+    let keystore = KeystoreAccess::open(home.path().join("keys")).unwrap();
+    let other_owner = MemberHandle::try_from("bob@example.com").unwrap();
+    let signer_keys =
+        SignerKeySnapshot::capture(&keystore, &other_owner, document_signer_kid(&doc).as_ref())
+            .unwrap();
+
+    let error = verify_trust_store(&doc, &signer_keys)
+        .expect_err("a document owned by another member must fail verification");
+
+    assert_eq!(error.kind(), kapsaro_core::ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("E_TRUST_OWNER_MISMATCH"));
+}
+
+/// Read the key the document names, the way a trust store transaction does
+/// before it takes the trust directory's lock.
+fn capture_signer_keys(home: &tempfile::TempDir, doc: &TrustStoreDocument) -> SignerKeySnapshot {
+    let keystore = KeystoreAccess::open(home.path().join("keys")).unwrap();
+    let owner = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
+    SignerKeySnapshot::capture(&keystore, &owner, document_signer_kid(doc).as_ref()).unwrap()
 }

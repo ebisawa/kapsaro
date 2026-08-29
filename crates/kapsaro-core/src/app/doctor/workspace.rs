@@ -1,15 +1,23 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Doctor checks for workspace resolution and directory structure.
+//! Confirms the workspace path, its required subdirectories, and whether it sits inside a git checkout.
+
 use std::path::{Path, PathBuf};
 
 use crate::app::context::options::CommonCommandOptions;
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::resolution::workspace::{
     resolve_optional_workspace_from_sources, resolve_workspace_path_from_sources,
 };
 use crate::io::config::paths::get_global_config_path_from_base;
 use crate::io::keystore::resolver::KeystoreResolver;
 use crate::io::workspace::detection::WorkspaceRoot;
+use crate::io::workspace::members::{ACTIVE_DIR_NAME, INCOMING_DIR_NAME, MEMBERS_DIR_NAME};
+use crate::io::workspace::setup::SECRETS_DIR_NAME;
+use crate::support::fs::anchor::AnchoredDir;
+use crate::support::fs::relative::DirectoryScope;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
@@ -19,6 +27,10 @@ use crate::support::fs::policy::is_real_dir;
 
 pub struct DoctorWorkspaceState {
     pub workspace_root: Option<WorkspaceRoot>,
+    /// The workspace root bound to a descriptor, present once the structure
+    /// holds and the root opened. Workspace-scoped checks read through it so
+    /// they answer from the tree this run started in.
+    pub(crate) workspace_dir: Option<AnchoredDir>,
     pub structure_ok: bool,
     pub checks: Vec<DoctorCheck>,
 }
@@ -29,6 +41,19 @@ impl DoctorWorkspaceState {
             .as_ref()
             .map(|workspace| format_path_relative_to_cwd(&workspace.root_path))
             .unwrap_or_else(|| "(unresolved)".to_string())
+    }
+
+    /// The workspace the scoped checks may run against, once it resolved, held
+    /// the required directories, and opened.
+    ///
+    /// Every one of those checks reads through this descriptor, so the report
+    /// they build describes one tree even if the workspace path is repointed
+    /// while the diagnosis runs.
+    pub(crate) fn scoped_workspace(&self) -> Option<&AnchoredDir> {
+        if !self.structure_ok {
+            return None;
+        }
+        self.workspace_dir.as_ref()
     }
 }
 
@@ -45,22 +70,60 @@ pub fn check_workspace(options: &CommonCommandOptions) -> Result<DoctorWorkspace
     let resolved = resolve_doctor_workspace(options, &base_dir)?;
     let Some((workspace_root, source)) = resolved else {
         checks.push(check_unresolved_workspace());
-        return Ok(build_workspace_state(None, false, checks));
+        return Ok(build_workspace_state(None, None, false, checks));
     };
 
     checks.push(check_resolved_workspace(&workspace_root, source));
-    let structure_ok = workspace_structure_ok(&workspace_root.root_path);
+    Ok(inspect_resolved_workspace(workspace_root, checks))
+}
+
+/// Judge the structure of a workspace that resolved, then bind it to the
+/// descriptor the workspace-scoped checks read through.
+fn inspect_resolved_workspace(
+    workspace_root: WorkspaceRoot,
+    mut checks: Vec<DoctorCheck>,
+) -> DoctorWorkspaceState {
+    let structure = inspect_workspace_structure(&workspace_root.root_path);
     checks.push(check_workspace_structure(
         &workspace_root.root_path,
-        structure_ok,
+        &structure,
     ));
     checks.extend(check_gitless_workspace(&workspace_root.root_path));
+    if !structure.holds() {
+        return build_workspace_state(Some(workspace_root), None, false, checks);
+    }
 
-    Ok(build_workspace_state(
-        Some(workspace_root),
-        structure_ok,
-        checks,
-    ))
+    let (workspace_dir, open_check) = bind_doctor_workspace(&workspace_root.root_path);
+    checks.extend(open_check);
+    let structure_ok = workspace_dir.is_some();
+    build_workspace_state(Some(workspace_root), workspace_dir, structure_ok, checks)
+}
+
+/// Open the workspace root the later checks address their reads to.
+///
+/// A root that resolved and holds the required directories is expected to open,
+/// so a failure here is reported as a finding of its own and the checks that
+/// need the descriptor are left out rather than answered from a path resolved a
+/// second time.
+fn bind_doctor_workspace(workspace_root: &Path) -> (Option<AnchoredDir>, Option<DoctorCheck>) {
+    match AnchoredDir::open(
+        workspace_root.to_path_buf(),
+        DirectoryScope::Generic,
+        "workspace root",
+    ) {
+        Ok(opened) => (Some(opened), None),
+        Err(error) => (
+            None,
+            Some(DoctorCheck::fail_with_reason_and_next_action(
+                "workspace.open",
+                DoctorCategory::Workspace,
+                DoctorSubject::Path(format_path_relative_to_cwd(workspace_root)),
+                "Workspace root could not be opened",
+                error.format_user_message(),
+                "make the workspace root readable, then run the diagnosis again",
+            )),
+        ),
+    }
 }
 
 fn build_workspace_paths_check(
@@ -115,11 +178,13 @@ fn check_gitless_workspace(workspace_root: &Path) -> Vec<DoctorCheck> {
 
 fn build_workspace_state(
     workspace_root: Option<WorkspaceRoot>,
+    workspace_dir: Option<AnchoredDir>,
     structure_ok: bool,
     checks: Vec<DoctorCheck>,
 ) -> DoctorWorkspaceState {
     DoctorWorkspaceState {
         workspace_root,
+        workspace_dir,
         structure_ok,
         checks,
     }
@@ -129,21 +194,20 @@ fn resolve_doctor_workspace(
     options: &CommonCommandOptions,
     base_dir: &Path,
 ) -> Result<Option<(WorkspaceRoot, &'static str)>> {
+    let config = GlobalConfigSnapshot::for_base_dir(Some(base_dir));
     if let Some(path_resolution) =
-        resolve_workspace_path_from_sources(options.workspace.clone(), Some(base_dir))?
+        resolve_workspace_path_from_sources(options.workspace.clone(), &config)?
     {
         let workspace = canonicalize_doctor_workspace(path_resolution.path)?;
         return Ok(Some((workspace, path_resolution.source.as_str())));
     }
 
-    resolve_optional_workspace_from_sources(options.workspace.clone(), Some(base_dir)).map(
-        |resolution| {
-            resolution.map(|workspace| {
-                let source = workspace.source.as_str();
-                (workspace.root, source)
-            })
-        },
-    )
+    resolve_optional_workspace_from_sources(options.workspace.clone(), &config).map(|resolution| {
+        resolution.map(|workspace| {
+            let source = workspace.source.as_str();
+            (workspace.root, source)
+        })
+    })
 }
 
 fn canonicalize_doctor_workspace(path: PathBuf) -> Result<WorkspaceRoot> {
@@ -157,19 +221,48 @@ fn canonicalize_doctor_workspace(path: PathBuf) -> Result<WorkspaceRoot> {
     Ok(WorkspaceRoot { root_path })
 }
 
-fn workspace_structure_ok(workspace_root: &Path) -> bool {
-    let required = required_workspace_dirs(workspace_root);
-    required.iter().all(|path| is_real_dir(path))
+/// What the required directories look like, keeping absence apart from an
+/// inspection that could not answer.
+struct WorkspaceStructure {
+    missing: Vec<String>,
+    uninspectable: Vec<String>,
 }
 
-fn check_workspace_structure(workspace_root: &Path, structure_ok: bool) -> DoctorCheck {
-    let required = required_workspace_dirs(workspace_root);
-    let missing = required
-        .iter()
-        .filter(|path| !is_real_dir(path))
-        .map(|path| format_path_relative_to_cwd(path))
-        .collect::<Vec<_>>();
-    if structure_ok {
+impl WorkspaceStructure {
+    fn holds(&self) -> bool {
+        self.missing.is_empty() && self.uninspectable.is_empty()
+    }
+}
+
+/// The required directories that are not there, and the ones that could not be
+/// looked at.
+///
+/// An inspection that could not answer is kept apart from a missing directory,
+/// because telling the operator to run init would not repair a directory
+/// kapsaro is simply not allowed to read. Neither one ends the diagnosis: a
+/// failure that escaped here would take every later check down with it.
+fn inspect_workspace_structure(workspace_root: &Path) -> WorkspaceStructure {
+    let mut missing = Vec::new();
+    let mut uninspectable = Vec::new();
+    for path in required_workspace_dirs(workspace_root) {
+        match is_real_dir(&path) {
+            Ok(true) => {}
+            Ok(false) => missing.push(format_path_relative_to_cwd(&path)),
+            Err(error) => uninspectable.push(format!(
+                "{} ({})",
+                format_path_relative_to_cwd(&path),
+                error.format_user_message()
+            )),
+        }
+    }
+    WorkspaceStructure {
+        missing,
+        uninspectable,
+    }
+}
+
+fn check_workspace_structure(workspace_root: &Path, structure: &WorkspaceStructure) -> DoctorCheck {
+    if structure.holds() {
         return DoctorCheck::ok(
             "workspace.structure",
             DoctorCategory::Workspace,
@@ -177,21 +270,33 @@ fn check_workspace_structure(workspace_root: &Path, structure_ok: bool) -> Docto
             "Workspace has members/active, members/incoming, and secrets",
         );
     }
+    if !structure.uninspectable.is_empty() {
+        return DoctorCheck::fail_with_reason_and_next_action(
+            "workspace.structure",
+            DoctorCategory::Workspace,
+            DoctorSubject::Path(format_path_relative_to_cwd(workspace_root)),
+            "Workspace directories could not be inspected",
+            format!("uninspectable: {}", structure.uninspectable.join(", ")),
+            "make the workspace directories readable, then run the diagnosis again",
+        );
+    }
     DoctorCheck::fail_with_reason_and_next_action(
         "workspace.structure",
         DoctorCategory::Workspace,
         DoctorSubject::Path(format_path_relative_to_cwd(workspace_root)),
         "Workspace is missing required directories",
-        format!("missing: {}", missing.join(", ")),
+        format!("missing: {}", structure.missing.join(", ")),
         "run kapsaro init or repair the workspace",
     )
 }
 
 fn required_workspace_dirs(workspace_root: &Path) -> [PathBuf; 3] {
     [
-        workspace_root.join("members/active"),
-        workspace_root.join("members/incoming"),
-        workspace_root.join("secrets"),
+        workspace_root.join(MEMBERS_DIR_NAME).join(ACTIVE_DIR_NAME),
+        workspace_root
+            .join(MEMBERS_DIR_NAME)
+            .join(INCOMING_DIR_NAME),
+        workspace_root.join(SECRETS_DIR_NAME),
     ]
 }
 

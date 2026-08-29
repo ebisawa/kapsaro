@@ -17,6 +17,7 @@ use ed25519_dalek::SigningKey;
 use uuid::Uuid;
 
 use crate::test_utils::keygen_helpers::build_dummy_public_key;
+use zeroize::Zeroizing;
 
 fn build_test_file_enc_document_protected() -> FileEncDocumentProtected {
     let sid = Uuid::parse_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
@@ -71,7 +72,7 @@ fn test_build_canonical_bytes_file_deterministic() {
 fn test_sign_file_document_returns_valid_structure() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
-    let content_key = MasterKey::new([7u8; 32]);
+    let content_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
 
     let doc = build_test_file_enc_document_protected();
     let mac_key = derive_mac_key(&doc, &content_key);
@@ -97,7 +98,7 @@ fn test_verify_file_enc_signature_accepts_valid_signature() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
-    let content_key = MasterKey::new([7u8; 32]);
+    let content_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
 
     let doc = build_test_file_enc_document_protected();
     let mac_key = derive_mac_key(&doc, &content_key);
@@ -118,7 +119,7 @@ fn test_verify_file_enc_signature_rejects_tampered_document() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
-    let content_key = MasterKey::new([7u8; 32]);
+    let content_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
 
     let doc = build_test_file_enc_document_protected();
     let mac_key = derive_mac_key(&doc, &content_key);
@@ -149,7 +150,7 @@ fn test_verify_file_enc_signature_rejects_tampered_signature_kid() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
     let vk = sk.verifying_key();
-    let content_key = MasterKey::new([7u8; 32]);
+    let content_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
 
     let doc = build_test_file_enc_document_protected();
     let mac_key = derive_mac_key(&doc, &content_key);
@@ -177,7 +178,7 @@ fn test_verify_file_enc_signature_rejects_tampered_signature_kid() {
 fn test_sign_file_document_deterministic() {
     let seed = [42u8; 32];
     let sk = SigningKey::from_bytes(&seed);
-    let content_key = MasterKey::new([7u8; 32]);
+    let content_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
 
     let doc = build_test_file_enc_document_protected();
     let mac_key = derive_mac_key(&doc, &content_key);

@@ -99,7 +99,7 @@ fn test_recipients_derived_from_wrap() {
         },
     };
 
-    let recipients = doc.recipients();
+    let recipients = doc.protected.recipients();
     assert_eq!(recipients.len(), 2);
     assert_eq!(recipients[0], "alice@example.com");
     assert_eq!(recipients[1], "bob@example.com");

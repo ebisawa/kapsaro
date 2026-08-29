@@ -11,4 +11,5 @@ pub mod ed25519_backend;
 pub mod fixture;
 pub mod guards;
 pub mod keygen_helpers;
+pub mod privilege;
 pub mod workspace_state;

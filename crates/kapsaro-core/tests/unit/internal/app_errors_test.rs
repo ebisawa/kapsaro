@@ -4,8 +4,7 @@
 //! Unit tests for app/errors.rs helpers.
 
 use crate::app::errors::{
-    build_default_kv_file_not_found_error, build_invalid_trust_store_error,
-    build_kv_key_not_found_error, serialize_to_json_value,
+    build_default_kv_file_not_found_error, build_kv_key_not_found_error, serialize_to_json_value,
 };
 use crate::{Error, ErrorKind};
 use serde::{Serialize, Serializer};
@@ -92,17 +91,4 @@ fn test_build_default_kv_file_not_found_error_includes_path_and_hint() {
         .contains("Default kv file not found"));
     assert!(err.format_user_message().contains("default.kvenc"));
     assert!(err.format_user_message().contains("'kapsaro set'"));
-}
-
-#[test]
-fn test_build_invalid_trust_store_error_uses_reset_rule() {
-    let inner = Error::build_parse_error("bad JSON");
-    let err = build_invalid_trust_store_error(Path::new("/tmp/.kapsaro/trust_store.json"), inner);
-    assert_eq!(err.kind(), ErrorKind::Verify);
-    assert_eq!(
-        err.verification_rule(),
-        Some("E_TRUST_STORE_RESET_REQUIRED")
-    );
-    assert!(err.format_user_message().contains("trust_store.json"));
-    assert!(err.format_user_message().contains("bad JSON"));
 }

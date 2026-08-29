@@ -9,13 +9,7 @@ pub(crate) fn build_test_command_options(
     home: &Path,
     workspace: Option<&Path>,
 ) -> CommonCommandOptions {
-    CommonCommandOptions {
-        home: Some(home.to_path_buf()),
-        identity: None,
-        verbose: false,
-        workspace: workspace.map(Path::to_path_buf),
-        ssh_signing_method: None,
-        allow_expired_key: false,
-        allow_non_member: false,
-    }
+    CommonCommandOptions::new()
+        .with_home(Some(home.to_path_buf()))
+        .with_workspace(workspace.map(Path::to_path_buf))
 }

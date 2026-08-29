@@ -73,18 +73,18 @@ pub fn parse_trust_store_str(content: &str, source_name: &str) -> Result<TrustSt
     )
 }
 
-pub fn parse_kv_head_token(token: &str) -> Result<KvHeader> {
-    parse_kv_head_token_with_source(token, "HEAD token")
-}
-
+/// Parse a WRAP token that is not attached to a named document.
+///
+/// Document parsing names its source so a failure points at the file; the
+/// builder rebuilds a wrap from a token it already holds and has no file to
+/// name, so it parses through this form.
 pub fn parse_kv_wrap_token(token: &str) -> Result<KvWrap> {
     parse_kv_wrap_token_with_source(token, "WRAP token")
 }
 
-pub fn parse_kv_entry_token(token: &str) -> Result<KvEntryValue> {
-    parse_kv_entry_token_with_source(token, "KV entry token")
-}
-
+/// Crate code parses signature tokens through the document-scoped variant,
+/// so only the `cli-test-support` test harness calls this bare form.
+#[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
 pub fn parse_kv_signature_token(token: &str) -> Result<ArtifactSignature> {
     parse_kv_signature_token_with_source(token, "SIG token")
 }

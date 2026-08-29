@@ -2,49 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::test_utils::EnvGuard;
+use crate::config::resolution::global::GlobalConfigSnapshot;
+use crate::test_utils::{local_state_temp_dir, with_temp_cwd, write_local_state_file, EnvGuard};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use serial_test::serial;
 
 #[test]
 fn returns_none_when_no_workspace_in_config() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "HOME"]);
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = local_state_temp_dir();
     let config_path = tmp.path().join("config.toml");
-    fs::write(&config_path, "member_handle = \"alice\"\n").unwrap();
+    write_local_state_file(&config_path, "member_handle = \"alice\"\n");
     std::env::set_var("KAPSARO_HOME", tmp.path());
 
-    let result = resolve_workspace_from_config().unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(None);
+    let result = resolve_workspace_from_config_base(&config).unwrap();
     assert!(result.is_none());
 }
 
 #[test]
 fn returns_path_when_workspace_in_config() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "HOME"]);
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = local_state_temp_dir();
     let config_path = tmp.path().join("config.toml");
-    fs::write(
+    write_local_state_file(
         &config_path,
         "workspace = \"/tmp/test-workspace/.kapsaro\"\n",
-    )
-    .unwrap();
+    );
     std::env::set_var("KAPSARO_HOME", tmp.path());
 
-    let result = resolve_workspace_from_config().unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(None);
+    let result = resolve_workspace_from_config_base(&config).unwrap();
     assert_eq!(result, Some(PathBuf::from("/tmp/test-workspace/.kapsaro")));
 }
 
 #[test]
 fn expands_tilde_in_workspace_path() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "HOME"]);
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = local_state_temp_dir();
     let config_path = tmp.path().join("config.toml");
-    fs::write(&config_path, "workspace = \"~/projects/.kapsaro\"\n").unwrap();
+    write_local_state_file(&config_path, "workspace = \"~/projects/.kapsaro\"\n");
     std::env::set_var("KAPSARO_HOME", tmp.path());
 
-    let result = resolve_workspace_from_config().unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(None);
+    let result = resolve_workspace_from_config_base(&config).unwrap();
     let home = std::env::var("HOME").unwrap();
     assert_eq!(
         result,
@@ -61,21 +62,18 @@ fn cli_workspace_takes_priority_over_env_and_config() {
     let cli_workspace = build_workspace(cli_dir.path());
     let env_workspace = build_workspace(env_dir.path());
     let config_workspace = build_workspace(config_workspace_dir.path());
-    let config_dir = tempfile::tempdir().unwrap();
-    fs::write(
-        config_dir.path().join("config.toml"),
+    let config_dir = local_state_temp_dir();
+    write_local_state_file(
+        &config_dir.path().join("config.toml"),
         format!("workspace = \"{}\"\n", config_workspace.display()),
-    )
-    .unwrap();
+    );
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::set_var("KAPSARO_WORKSPACE", &env_workspace);
 
-    let resolution = resolve_optional_workspace_from_sources(
-        Some(cli_workspace.clone()),
-        Some(config_dir.path()),
-    )
-    .unwrap()
-    .unwrap();
+    let config = GlobalConfigSnapshot::for_base_dir(Some(config_dir.path()));
+    let resolution = resolve_optional_workspace_from_sources(Some(cli_workspace.clone()), &config)
+        .unwrap()
+        .unwrap();
     assert_eq!(resolution.root.root_path, cli_workspace);
     assert_eq!(resolution.source, WorkspaceSource::CommandLine);
 }
@@ -87,16 +85,16 @@ fn env_workspace_takes_priority_over_config() {
     let config_workspace_dir = tempfile::tempdir().unwrap();
     let env_workspace = build_workspace(env_dir.path());
     let config_workspace = build_workspace(config_workspace_dir.path());
-    let config_dir = tempfile::tempdir().unwrap();
-    fs::write(
-        config_dir.path().join("config.toml"),
+    let config_dir = local_state_temp_dir();
+    write_local_state_file(
+        &config_dir.path().join("config.toml"),
         format!("workspace = \"{}\"\n", config_workspace.display()),
-    )
-    .unwrap();
+    );
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::set_var("KAPSARO_WORKSPACE", &env_workspace);
 
-    let resolution = resolve_optional_workspace_from_sources(None, Some(config_dir.path()))
+    let config = GlobalConfigSnapshot::for_base_dir(Some(config_dir.path()));
+    let resolution = resolve_optional_workspace_from_sources(None, &config)
         .unwrap()
         .unwrap();
     assert_eq!(resolution.root.root_path, env_workspace);
@@ -104,35 +102,33 @@ fn env_workspace_takes_priority_over_config() {
 }
 
 #[test]
-#[serial]
 fn config_workspace_takes_priority_over_auto_detect() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
     let config_workspace_dir = tempfile::tempdir().unwrap();
     let config_workspace = build_workspace(config_workspace_dir.path());
     let auto_workspace_dir = tempfile::tempdir().unwrap();
     let auto_workspace = build_workspace(auto_workspace_dir.path());
-    let config_dir = tempfile::tempdir().unwrap();
-    fs::write(
-        config_dir.path().join("config.toml"),
+    let config_dir = local_state_temp_dir();
+    write_local_state_file(
+        &config_dir.path().join("config.toml"),
         format!("workspace = \"{}\"\n", config_workspace.display()),
-    )
-    .unwrap();
-
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(auto_workspace_dir.path()).unwrap();
+    );
     std::env::set_var("KAPSARO_HOME", config_dir.path());
     std::env::remove_var("KAPSARO_WORKSPACE");
-    let resolution = resolve_optional_workspace_from_sources(None, Some(config_dir.path()))
-        .unwrap()
-        .unwrap();
+
+    let config = GlobalConfigSnapshot::for_base_dir(Some(config_dir.path()));
+    let resolution = with_temp_cwd(auto_workspace_dir.path(), || {
+        resolve_optional_workspace_from_sources(None, &config)
+            .unwrap()
+            .unwrap()
+    });
+
     assert_eq!(resolution.root.root_path, config_workspace);
     assert_ne!(resolution.root.root_path, auto_workspace);
     assert_eq!(resolution.source, WorkspaceSource::GlobalConfig);
-    std::env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
-#[serial]
 fn workspace_local_config_is_ignored_by_auto_detect() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
     let current_dir = tempfile::tempdir().unwrap();
@@ -144,38 +140,19 @@ fn workspace_local_config_is_ignored_by_auto_detect() {
         format!("workspace = \"{}\"\n", other_workspace.display()),
     )
     .unwrap();
-    let empty_home = tempfile::tempdir().unwrap();
-
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(current_dir.path()).unwrap();
+    let empty_home = local_state_temp_dir();
     std::env::set_var("KAPSARO_HOME", empty_home.path());
     std::env::remove_var("KAPSARO_WORKSPACE");
-    let resolution = resolve_optional_workspace_from_sources(None, Some(empty_home.path()))
-        .unwrap()
-        .unwrap();
+
+    let config = GlobalConfigSnapshot::for_base_dir(Some(empty_home.path()));
+    let resolution = with_temp_cwd(current_dir.path(), || {
+        resolve_optional_workspace_from_sources(None, &config)
+            .unwrap()
+            .unwrap()
+    });
+
     assert_eq!(resolution.root.root_path, current_workspace);
     assert_eq!(resolution.source, WorkspaceSource::AutoDetect);
-    std::env::set_current_dir(original_dir).unwrap();
-}
-
-#[test]
-#[serial]
-fn auto_detect_failure_adds_workspace_resolution_guidance() {
-    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
-    let current_dir = tempfile::tempdir().unwrap();
-    let empty_home = tempfile::tempdir().unwrap();
-
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(current_dir.path()).unwrap();
-    std::env::set_var("KAPSARO_HOME", empty_home.path());
-    std::env::remove_var("KAPSARO_WORKSPACE");
-    let error = resolve_workspace_from_sources(None, Some(empty_home.path())).unwrap_err();
-    let message = error.to_string();
-    assert!(
-        message.contains("--workspace") && message.contains("KAPSARO_WORKSPACE"),
-        "auto-detect errors should add app/config-level guidance: {message}"
-    );
-    std::env::set_current_dir(original_dir).unwrap();
 }
 
 fn build_workspace(root: &Path) -> PathBuf {

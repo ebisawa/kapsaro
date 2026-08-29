@@ -4,7 +4,7 @@
 //! Unit tests for config value types.
 
 use crate::config::types::ConfigKey;
-use crate::io::config::paths::get_global_config_path;
+use crate::io::config::paths::get_base_dir;
 use crate::test_utils::EnvGuard;
 use std::path::PathBuf;
 
@@ -12,8 +12,8 @@ use std::path::PathBuf;
 fn test_config_xdg_path_resolution() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "HOME"]);
     std::env::set_var("KAPSARO_HOME", "/tmp/test-config");
-    let path = get_global_config_path().unwrap();
-    assert_eq!(path, PathBuf::from("/tmp/test-config/config.toml"));
+    let base_dir = get_base_dir().unwrap();
+    assert_eq!(base_dir, PathBuf::from("/tmp/test-config"));
 }
 
 #[test]
@@ -21,11 +21,8 @@ fn test_config_home_fallback() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "HOME"]);
     std::env::remove_var("KAPSARO_HOME");
     std::env::set_var("HOME", "/home/testuser");
-    let path = get_global_config_path().unwrap();
-    assert_eq!(
-        path,
-        PathBuf::from("/home/testuser/.config/kapsaro/config.toml")
-    );
+    let base_dir = get_base_dir().unwrap();
+    assert_eq!(base_dir, PathBuf::from("/home/testuser/.config/kapsaro"));
 }
 
 #[test]

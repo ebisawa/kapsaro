@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Coordinates the inspect file use case for CLI-facing callers.
-// Keeps public command DTOs and compatibility re-exports at the module root.
+//! Coordinates the inspect file use case for CLI-facing callers.
+//! Keeps the public command DTOs at the module root.
 
 use std::path::Path;
 
@@ -17,7 +17,7 @@ use crate::Result;
 mod collection;
 mod json;
 
-pub use json::{FileEncInspectJsonOutput, InspectJsonOutput, KvEncInspectJsonOutput};
+pub use json::InspectJsonOutput;
 
 use collection::{build_online_output, build_signature_report, load_inspect_content};
 use json::build_inspect_json_output;
@@ -97,7 +97,10 @@ pub fn execute_inspect_file_command(input_path: &Path) -> Result<InspectCommand>
     })
 }
 
-pub use collection::build_online_verification_section;
+// Production calls this from `collection` while assembling the inspect output;
+// the re-export lets the verification tests exercise the section directly.
+#[cfg(test)]
+pub(crate) use collection::build_online_verification_section;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_inspect_verification_test.rs"]

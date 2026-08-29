@@ -189,22 +189,79 @@ pub(crate) fn print_private_key_export_stdout_summary(member_handle: &str, kid: 
 }
 
 fn format_key_info_lines(key_info: &KeyInfoView<'_>, verbose: bool) -> Vec<String> {
+    match key_info {
+        KeyInfoView::Complete {
+            kid,
+            member_handle,
+            created_at,
+            expires_at,
+            active,
+            format,
+        } => format_complete_key_info_lines(
+            kid,
+            member_handle,
+            *created_at,
+            expires_at,
+            *active,
+            format,
+            verbose,
+        ),
+        KeyInfoView::Incomplete {
+            kid,
+            member_handle,
+            active,
+            missing_document,
+        } => {
+            format_incomplete_key_info_lines(kid, member_handle, *active, missing_document, verbose)
+        }
+    }
+}
+
+fn format_complete_key_info_lines(
+    kid: &str,
+    member_handle: &str,
+    created_at: Option<&str>,
+    expires_at: &str,
+    active: bool,
+    format: &str,
+    verbose: bool,
+) -> Vec<String> {
     let mut lines = Vec::new();
-    let active_marker = if key_info.active { " (ACTIVE)" } else { "" };
-    let kid_display = layout::format_kid_display_text(key_info.kid, KidDisplayFallback::Raw);
+    let active_marker = if active { " (ACTIVE)" } else { "" };
+    let kid_display = layout::format_kid_display_text(kid, KidDisplayFallback::Raw);
     lines.extend(format_info_field_lines(
         "Kid",
         &format!("{}{}", kid_display, active_marker),
     ));
     if verbose {
-        lines.extend(format_info_field_lines("Format", key_info.format));
-        lines.extend(format_info_field_lines(
-            "Member Handle",
-            key_info.member_handle,
-        ));
-        lines.extend(format_info_field_lines("Created", key_info.created_at));
+        lines.extend(format_info_field_lines("Format", format));
+        lines.extend(format_info_field_lines("Member Handle", member_handle));
+        if let Some(created_at) = created_at {
+            lines.extend(format_info_field_lines("Created", created_at));
+        }
     }
-    lines.extend(format_info_field_lines("Expires", key_info.expires_at));
+    lines.extend(format_info_field_lines("Expires", expires_at));
+    lines.push(String::new());
+    lines
+}
+
+fn format_incomplete_key_info_lines(
+    kid: &str,
+    member_handle: &str,
+    active: bool,
+    missing_document: &str,
+    verbose: bool,
+) -> Vec<String> {
+    let active_marker = if active { " (ACTIVE)" } else { "" };
+    let kid_display = layout::format_kid_display_text(kid, KidDisplayFallback::Raw);
+    let mut lines = format_info_field_lines("Kid", &format!("{kid_display}{active_marker}"));
+    if verbose {
+        lines.extend(format_info_field_lines("Member Handle", member_handle));
+    }
+    lines.extend(format_info_field_lines(
+        "Status",
+        &format!("Incomplete (missing {missing_document})"),
+    ));
     lines.push(String::new());
     lines
 }

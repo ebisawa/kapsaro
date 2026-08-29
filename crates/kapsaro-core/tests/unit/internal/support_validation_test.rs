@@ -5,6 +5,7 @@
 //!
 //! Tests for validation utilities (edge cases).
 
+use crate::support::limits::{MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH, MAX_MEMBER_HANDLE_LENGTH};
 use crate::support::validation::validate_kv_file_basename;
 use kapsaro_core::cli_api::presentation::validation::{
     validate_github_login, validate_member_handle,
@@ -26,14 +27,37 @@ fn test_validate_member_handle_empty() {
 
 #[test]
 fn test_validate_member_handle_too_long() {
-    let long_id = "a".repeat(255);
+    let long_id = "a".repeat(MAX_MEMBER_HANDLE_LENGTH + 1);
     assert!(validate_member_handle(&long_id).is_err());
 }
 
 #[test]
 fn test_validate_member_handle_max_length() {
-    let max_id = "a".repeat(254);
+    let max_id = "a".repeat(MAX_MEMBER_HANDLE_LENGTH);
     assert!(validate_member_handle(&max_id).is_ok());
+}
+
+/// A member handle names its own `<handle>.json`, so the longest accepted one
+/// has to survive an actual atomic write. The build already checks that the
+/// limit fits the name budget, but only a real write covers what the filesystem
+/// accepts.
+#[cfg(unix)]
+#[test]
+fn test_longest_member_handle_can_be_written_as_a_trust_store_file() {
+    use crate::support::fs::lock::lock_test_support::with_locked_workspace_dir;
+    use crate::support::fs::relative::save_text_restricted_at;
+
+    let handle = "a".repeat(MAX_MEMBER_HANDLE_LENGTH);
+    assert!(validate_member_handle(&handle).is_ok());
+    let file_name = format!("{handle}.json");
+    let temp = crate::test_utils::local_state_temp_dir();
+
+    with_locked_workspace_dir(temp.path(), |dir| {
+        save_text_restricted_at(dir, &file_name, "{}")
+    })
+    .expect("the longest accepted handle must be writable as its own document");
+
+    assert!(temp.path().join(&file_name).is_file());
 }
 
 #[test]
@@ -132,4 +156,14 @@ fn test_validate_kv_file_basename_rejects_non_printable_ascii() {
     assert!(validate_kv_file_basename("日本語").is_err());
     assert!(validate_kv_file_basename("tab\there").is_err());
     assert!(validate_kv_file_basename("bell\x07").is_err());
+}
+
+/// A KV basename names its own `<name>.kvenc`, so the longest accepted one must
+/// still fit what an atomic write can target.
+#[test]
+fn test_validate_kv_file_basename_max_length_fits_an_atomic_write_target_name() {
+    let max_name = "a".repeat(MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH - ".kvenc".len());
+
+    assert!(validate_kv_file_basename(&max_name).is_ok());
+    assert!(validate_kv_file_basename(&format!("{max_name}a")).is_err());
 }

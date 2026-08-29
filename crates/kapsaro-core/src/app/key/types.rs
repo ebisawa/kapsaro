@@ -22,14 +22,36 @@ pub struct KeyGenerationResult {
     pub github_verification: OnlineVerificationStatus,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingKeyDocument {
+    PublicJson,
+}
+
+impl MissingKeyDocument {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PublicJson => "public.json",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct KeyInfo {
-    pub kid: String,
-    pub member_handle: String,
-    pub created_at: String,
-    pub expires_at: String,
-    pub active: bool,
-    pub format: String,
+pub enum KeyInfo {
+    Complete {
+        kid: String,
+        member_handle: String,
+        /// Absent when the stored public key omits the optional `created_at`.
+        created_at: Option<String>,
+        expires_at: String,
+        active: bool,
+        format: String,
+    },
+    Incomplete {
+        kid: String,
+        member_handle: String,
+        active: bool,
+        missing_document: MissingKeyDocument,
+    },
 }
 
 pub struct KeyListResult {
@@ -37,15 +59,26 @@ pub struct KeyListResult {
     pub total_keys: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct KeyActivateResult {
     pub member_handle: String,
     pub kid: String,
+    /// Key the stored local trust store signature names, when there is a store.
+    /// A value other than `kid` means the store still depends on that key.
+    pub trust_store_signer_kid: Option<String>,
+    /// Why the stored local trust store could not be read, when it could not.
+    pub trust_store_warning: Option<String>,
 }
 
+#[derive(Debug, Clone)]
 pub struct KeyRemoveResult {
     pub member_handle: String,
     pub kid: String,
     pub was_active: bool,
+    /// Key that took over the local trust store signature before the removal.
+    pub resigned_trust_store_kid: Option<String>,
+    /// What the removal cost the local trust store, when it cost anything.
+    pub trust_store_warning: Option<String>,
 }
 
 pub struct KeyExportResult {

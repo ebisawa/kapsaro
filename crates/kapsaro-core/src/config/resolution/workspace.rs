@@ -5,6 +5,7 @@
 //!
 //! The full resolution order is CLI, environment, global config, auto-detect.
 
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::types::ConfigKey;
 use crate::io::workspace::detection::{
     resolve_optional_workspace, resolve_workspace, WorkspaceRoot,
@@ -13,7 +14,7 @@ use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
-use super::common::{expand_tilde, load_field_from_global_config};
+use super::common::expand_tilde;
 
 const ENV_WORKSPACE: &str = "KAPSARO_WORKSPACE";
 
@@ -50,23 +51,9 @@ pub(crate) struct WorkspacePathResolution {
 
 pub(crate) fn resolve_optional_workspace_from_sources(
     workspace_opt: Option<PathBuf>,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Option<WorkspaceResolution>> {
-    resolve_optional_workspace_from_sources_with_base_resolver(workspace_opt, || {
-        Ok(base_dir.map(Path::to_path_buf))
-    })
-}
-
-pub(crate) fn resolve_optional_workspace_from_sources_with_base_resolver<F>(
-    workspace_opt: Option<PathBuf>,
-    resolve_base_dir: F,
-) -> Result<Option<WorkspaceResolution>>
-where
-    F: FnOnce() -> Result<Option<PathBuf>>,
-{
-    if let Some(path_resolution) =
-        resolve_workspace_path_from_sources_with_base_resolver(workspace_opt, resolve_base_dir)?
-    {
+    if let Some(path_resolution) = resolve_workspace_path_from_sources(workspace_opt, config)? {
         return resolve_workspace_from_path(path_resolution.path, path_resolution.source).map(Some);
     }
 
@@ -78,30 +65,10 @@ where
     })
 }
 
-pub(crate) fn resolve_workspace_from_sources(
-    workspace_opt: Option<PathBuf>,
-    base_dir: Option<&Path>,
-) -> Result<WorkspaceResolution> {
-    resolve_optional_workspace_from_sources(workspace_opt, base_dir)?
-        .ok_or_else(build_workspace_required_error)
-}
-
 pub(crate) fn resolve_workspace_path_from_sources(
     workspace_opt: Option<PathBuf>,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Option<WorkspacePathResolution>> {
-    resolve_workspace_path_from_sources_with_base_resolver(workspace_opt, || {
-        Ok(base_dir.map(Path::to_path_buf))
-    })
-}
-
-fn resolve_workspace_path_from_sources_with_base_resolver<F>(
-    workspace_opt: Option<PathBuf>,
-    resolve_base_dir: F,
-) -> Result<Option<WorkspacePathResolution>>
-where
-    F: FnOnce() -> Result<Option<PathBuf>>,
-{
     if let Some(path) = workspace_opt {
         return Ok(Some(WorkspacePathResolution {
             path,
@@ -116,8 +83,7 @@ where
         }));
     }
 
-    let base_dir = resolve_base_dir()?;
-    if let Some(path) = resolve_workspace_from_config_base(base_dir.as_deref())? {
+    if let Some(path) = resolve_workspace_from_config_base(config)? {
         return Ok(Some(WorkspacePathResolution {
             path,
             source: WorkspaceSource::GlobalConfig,
@@ -127,20 +93,14 @@ where
     Ok(None)
 }
 
-pub(crate) fn resolve_workspace_from_config() -> Result<Option<PathBuf>> {
-    resolve_workspace_from_config_base(None)
-}
-
 /// Resolve workspace path from global config.toml.
 ///
-/// Reads the `workspace` key from the selected base directory config. Returns
-/// `None` if not configured. Tilde (`~`) in the path is expanded to the HOME
-/// directory.
+/// Reads the `workspace` key from the command's configuration. Returns `None`
+/// if not configured. Tilde (`~`) in the path is expanded to the HOME directory.
 pub(crate) fn resolve_workspace_from_config_base(
-    base_dir: Option<&std::path::Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Option<PathBuf>> {
-    let value = load_field_from_global_config(ConfigKey::Workspace.canonical_name(), base_dir)?;
-    match value {
+    match config.get(ConfigKey::Workspace.canonical_name())? {
         Some(path_str) => {
             let expanded = expand_tilde(&path_str)?;
             Ok(Some(expanded))
@@ -185,13 +145,6 @@ fn build_workspace_source_error(source: WorkspaceSource, path: &Path, error: Err
         )),
         WorkspaceSource::AutoDetect => error,
     }
-}
-
-fn build_workspace_required_error() -> Error {
-    Error::build_config_error(
-        "Workspace is required. Specify it with --workspace, KAPSARO_WORKSPACE, or config.toml workspace"
-            .to_string(),
-    )
 }
 
 #[cfg(test)]

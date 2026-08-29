@@ -4,33 +4,30 @@
 //! Unit tests for kv-enc v1 encryption/decryption operations.
 
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::kv::decrypt::decrypt_kv_document;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::decrypt::decrypt_kv_document_with_context;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::kv::mutate::{
-    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
+    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
 };
 use crate::feature::kv::types::KvInputEntry;
 use crate::format::content::KvEncContent;
 use crate::format::kv::document::parse_kv_document;
-use crate::format::kv::dotenv::{build_dotenv_string, parse_dotenv};
-use crate::format::kv::enc::canonical::parse_kv_wrap;
-use crate::format::schema::document::{parse_kv_head_token, parse_kv_wrap_token};
+use crate::format::kv::dotenv::parse_dotenv;
+use crate::format::schema::document::{parse_kv_head_token_with_source, parse_kv_wrap_token};
 use crate::format::token::TokenCodec;
-use crate::io::workspace::members::{list_active_member_handles, load_member_files};
+use crate::io::workspace::members::test_support::{list_active_member_handles, load_member_files};
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
-use crate::test_utils::keygen_helpers::{
-    build_test_private_key, build_verified_private_key, build_verified_recipient_keys,
-};
+use crate::test_utils::keygen_helpers::{build_test_private_key, build_verified_recipient_keys};
 use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use ed25519_dalek::SigningKey;
 
 fn create_secret_home() -> tempfile::TempDir {
     let temp = tempfile::TempDir::new().unwrap();
-    crate::support::fs::ensure_dir_restricted(temp.path()).unwrap();
+    crate::test_utils::create_local_state_dir(temp.path());
     temp
 }
 
@@ -39,28 +36,48 @@ fn generate_ed25519_keypair(seed: [u8; 32]) -> SigningKey {
     SigningKey::from_bytes(&seed)
 }
 
+/// The key material one member needs to reach a keystore-backed crypto context.
+struct TestMemberKeys<'a> {
+    member_handle: &'a str,
+    private_key: &'a crate::model::private_key::PrivateKeyPlaintext,
+    public_key: &'a PublicKey,
+    ssh_private_key_path: &'a std::path::Path,
+    ssh_public_key: &'a str,
+}
+
 /// Helper function to decrypt kv-enc content for tests (creates Verified wrapper)
+///
+/// The member's key pair is installed into a throwaway keystore first, so decryption
+/// selects the local key the same way the commands do.
 fn decrypt_kv_document_for_test(
     encrypted: &str,
-    member_handle: &str,
-    kid: &str,
-    private: &crate::model::private_key::PrivateKeyPlaintext,
     signer_kid: &str,
+    member: TestMemberKeys<'_>,
 ) -> std::collections::HashMap<String, String> {
+    let home = create_secret_home();
+    let key_ctx = setup_crypto_ctx_for_test(
+        member.member_handle,
+        &member.public_key.protected.kid,
+        &home.path().join("keys"),
+        member.private_key,
+        member.public_key,
+        member.ssh_private_key_path,
+        member.ssh_public_key,
+    );
+
     let doc = parse_kv_document(encrypted).unwrap();
-    let proof = SignatureVerificationProof::new(
-        member_handle.to_string(),
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
+        member.member_handle.to_string(),
         signer_kid.to_string(),
+        member.public_key.clone(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
     );
     let verified_doc = VerifiedKvEncDocument::new(doc, proof);
-    // Wrap private key in Decrypted for API
-    let decrypted_key = build_verified_private_key(private, member_handle, kid, "SHA256:test");
-    let kv_map_zeroizing =
-        decrypt_kv_document(&verified_doc, member_handle, kid, &decrypted_key).unwrap();
     // Convert Zeroizing<Vec<u8>> to String at the boundary
-    kv_map_zeroizing
+    decrypt_kv_document_with_context(&verified_doc, member.member_handle, &key_ctx)
+        .unwrap()
+        .value
         .into_iter()
         .map(|(k, v)| (k, String::from_utf8(v.to_vec()).unwrap()))
         .collect()
@@ -74,7 +91,7 @@ fn encrypt_kv_document_for_parse_test(input: &str) -> String {
     let members = vec![public.clone()];
     let verified_members = build_verified_recipient_keys(&members);
     let kv_map = parse_dotenv(input).unwrap();
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -83,6 +100,8 @@ fn encrypt_kv_document_for_parse_test(input: &str) -> String {
             signer_pub: public,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -122,7 +141,7 @@ fn test_encrypt_and_decrypt_kv() {
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let kv_map = parse_dotenv(input).unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -131,6 +150,8 @@ fn test_encrypt_and_decrypt_kv() {
             signer_pub: public1.clone(),
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 
@@ -144,30 +165,45 @@ fn test_encrypt_and_decrypt_kv() {
     // Decrypt with alice's key
     let decrypted_map1 = decrypt_kv_document_for_test(
         &encrypted,
-        ALICE_MEMBER_HANDLE,
-        &public1.protected.kid,
-        &private1,
         signer_kid,
+        TestMemberKeys {
+            member_handle: ALICE_MEMBER_HANDLE,
+            private_key: &private1,
+            public_key: &public1,
+            ssh_private_key_path: &ssh_priv,
+            ssh_public_key: &ssh_pub_content,
+        },
     );
-    let decrypted1 = build_dotenv_string(&decrypted_map1);
-    // Keys are sorted alphabetically in output
+    assert_eq!(decrypted_map1.len(), 2);
     assert_eq!(
-        decrypted1,
-        "API_KEY=secret123\nDATABASE_URL=postgres://localhost\n"
+        decrypted_map1.get("API_KEY").map(String::as_str),
+        Some("secret123")
+    );
+    assert_eq!(
+        decrypted_map1.get("DATABASE_URL").map(String::as_str),
+        Some("postgres://localhost")
     );
 
     // Decrypt with bob's key
     let decrypted_map2 = decrypt_kv_document_for_test(
         &encrypted,
-        BOB_MEMBER_HANDLE,
-        &public2.protected.kid,
-        &private2,
         signer_kid,
+        TestMemberKeys {
+            member_handle: BOB_MEMBER_HANDLE,
+            private_key: &private2,
+            public_key: &public2,
+            ssh_private_key_path: &ssh_priv,
+            ssh_public_key: &ssh_pub_content,
+        },
     );
-    let decrypted2 = build_dotenv_string(&decrypted_map2);
+    assert_eq!(decrypted_map2.len(), 2);
     assert_eq!(
-        decrypted2,
-        "API_KEY=secret123\nDATABASE_URL=postgres://localhost\n"
+        decrypted_map2.get("API_KEY").map(String::as_str),
+        Some("secret123")
+    );
+    assert_eq!(
+        decrypted_map2.get("DATABASE_URL").map(String::as_str),
+        Some("postgres://localhost")
     );
 }
 
@@ -219,7 +255,7 @@ fn test_encrypt_empty_input() {
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let kv_map = parse_dotenv(input).unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -228,6 +264,8 @@ fn test_encrypt_empty_input() {
             signer_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 
@@ -251,7 +289,6 @@ fn test_encrypt_with_comments_and_blank_lines() {
     let ssh_temp = tempfile::TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (private, public) = keygen_test(TEST_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
-    let test_kid = public.protected.kid.clone();
 
     let input = r#"# This is a comment
 DATABASE_URL=postgres://localhost
@@ -266,7 +303,7 @@ API_KEY=secret123
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let kv_map = parse_dotenv(input).unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -275,6 +312,8 @@ API_KEY=secret123
             signer_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 
@@ -286,18 +325,25 @@ API_KEY=secret123
     // Decrypt
     let decrypted_map = decrypt_kv_document_for_test(
         &encrypted,
-        TEST_MEMBER_HANDLE,
-        &test_kid,
-        &private,
         signer_kid,
+        TestMemberKeys {
+            member_handle: TEST_MEMBER_HANDLE,
+            private_key: &private,
+            public_key: &members[0],
+            ssh_private_key_path: &ssh_priv,
+            ssh_public_key: &ssh_pub_content,
+        },
     );
-    let decrypted = build_dotenv_string(&decrypted_map);
-
-    // Should only contain the two KEY=VALUE lines
-    let lines: Vec<&str> = decrypted.lines().filter(|l| !l.is_empty()).collect();
-    assert_eq!(lines.len(), 2);
-    assert!(decrypted.contains("DATABASE_URL=postgres://localhost"));
-    assert!(decrypted.contains("API_KEY=secret123"));
+    // Should only carry the two KEY=VALUE entries
+    assert_eq!(decrypted_map.len(), 2);
+    assert_eq!(
+        decrypted_map.get("DATABASE_URL").map(String::as_str),
+        Some("postgres://localhost")
+    );
+    assert_eq!(
+        decrypted_map.get("API_KEY").map(String::as_str),
+        Some("secret123")
+    );
 }
 
 #[test]
@@ -308,7 +354,6 @@ fn test_large_value_in_kv_enc() {
     let ssh_temp = tempfile::TempDir::new().unwrap();
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
     let (private, public) = keygen_test(TEST_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
-    let test_kid = public.protected.kid.clone();
 
     // Create input with a large value
     let large_value = "A".repeat(500);
@@ -320,7 +365,7 @@ fn test_large_value_in_kv_enc() {
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let kv_map = parse_dotenv(&input).unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -329,19 +374,28 @@ fn test_large_value_in_kv_enc() {
             signer_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 
     // Decrypt and verify correctness
     let decrypted_map = decrypt_kv_document_for_test(
         &encrypted,
-        TEST_MEMBER_HANDLE,
-        &test_kid,
-        &private,
         signer_kid,
+        TestMemberKeys {
+            member_handle: TEST_MEMBER_HANDLE,
+            private_key: &private,
+            public_key: &members[0],
+            ssh_private_key_path: &ssh_priv,
+            ssh_public_key: &ssh_pub_content,
+        },
     );
-    let decrypted = build_dotenv_string(&decrypted_map);
-    assert_eq!(decrypted, format!("LARGE_KEY={}\n", large_value));
+    assert_eq!(decrypted_map.len(), 1);
+    assert_eq!(
+        decrypted_map.get("LARGE_KEY").map(String::as_str),
+        Some(large_value.as_str())
+    );
 }
 
 #[test]
@@ -361,13 +415,13 @@ fn test_wrap_line_with_many_recipients() {
 
     let members: Vec<PublicKey> = keys.iter().map(|(_, pub_key)| pub_key.clone()).collect();
     let verified_members = build_verified_recipient_keys(&members);
-    let (private, _) = &keys[0]; // Use the first user's private key
+    let (private, user_public_key) = &keys[0]; // Use the first user's key pair
 
     let input = "KEY=value\n";
     let signer_kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
     let kv_map = parse_dotenv(input).unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -376,6 +430,8 @@ fn test_wrap_line_with_many_recipients() {
             signer_pub: members[0].clone(),
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 
@@ -403,19 +459,24 @@ fn test_wrap_line_with_many_recipients() {
         .find(|w| w.recipient_handle == "user0@example.com")
         .map(|w| w.kid.as_str())
         .expect("Should find wrap for user0@example.com");
+    assert_eq!(user_kid, user_public_key.protected.kid);
     let decrypted_map = decrypt_kv_document_for_test(
         &encrypted,
-        "user0@example.com",
-        user_kid,
-        private,
         signer_kid,
+        TestMemberKeys {
+            member_handle: "user0@example.com",
+            private_key: private,
+            public_key: user_public_key,
+            ssh_private_key_path: &ssh_priv,
+            ssh_public_key: &ssh_pub_content,
+        },
     );
-    let decrypted = build_dotenv_string(&decrypted_map);
-    assert_eq!(decrypted, "KEY=value\n");
+    assert_eq!(decrypted_map.len(), 1);
+    assert_eq!(decrypted_map.get("KEY").map(String::as_str), Some("value"));
 }
 
 // ============================================================
-// set_kv_entry: 効率化テスト（sid・created_at・WRAP トークン不変）
+// set_kv_entry: reuse tests (sid, created_at and WRAP tokens stay unchanged)
 // ============================================================
 
 fn signing_key_from_private(
@@ -435,25 +496,23 @@ fn setup_crypto_ctx_for_test(
     ssh_priv: &std::path::Path,
     ssh_pub_content: &str,
 ) -> crate::feature::context::crypto::CryptoContext {
-    crate::support::fs::ensure_dir_restricted(keystore_root).unwrap();
+    crate::test_utils::create_local_state_dir(keystore_root);
     let workspace_path = Some(keystore_root.parent().unwrap().join("workspace"));
     let encrypted_private =
         build_test_private_key(private_key, member_handle, kid, ssh_priv, ssh_pub_content).unwrap();
     let member_dir = keystore_root.join(member_handle);
-    crate::support::fs::ensure_dir_restricted(&member_dir).unwrap();
+    crate::test_utils::create_local_state_dir(&member_dir);
     let key_dir = keystore_root.join(member_handle).join(kid);
-    crate::support::fs::ensure_dir_restricted(&key_dir).unwrap();
-    crate::support::fs::atomic::save_json_restricted(
-        &key_dir.join("private.json"),
-        &encrypted_private,
-    )
-    .unwrap();
+    crate::test_utils::create_local_state_dir(&key_dir);
+    let private_key_path = key_dir.join("private.json");
+    crate::support::fs::atomic::save_json(&private_key_path, &encrypted_private).unwrap();
+    crate::test_utils::restrict_local_state_file(&private_key_path);
     crate::test_utils::save_public_key(keystore_root, member_handle, kid, public_key).unwrap();
     let backend = crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(ssh_priv).unwrap();
 
     crate::feature::context::crypto::load_crypto_context_from_keystore(
-        keystore_root.to_path_buf(),
-        member_handle,
+        crate::io::keystore::access::KeystoreAccess::open(keystore_root).unwrap(),
+        crate::model::identity::MemberHandle::try_from(member_handle).unwrap(),
         Some(kid),
         Box::new(backend),
         ssh_pub_content.to_string(),
@@ -493,7 +552,7 @@ fn encrypt_initial_kv_doc(
         kv_map.insert(k.to_string(), v.to_string());
     }
 
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -502,6 +561,8 @@ fn encrypt_initial_kv_doc(
             signer_pub: public_key.clone(),
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -522,7 +583,7 @@ fn kv_head_field(content: &str, field: &str) -> String {
         .unwrap()
         .strip_prefix(":HEAD ")
         .unwrap();
-    let head: KvHeader = parse_kv_head_token(token).unwrap();
+    let head: KvHeader = parse_kv_head_token_with_source(token, "HEAD token").unwrap();
     match field {
         "sid" => head.sid.to_string(),
         "created_at" => head.created_at,
@@ -536,7 +597,7 @@ fn set_kv_entry(
     entries: &[(String, String)],
     workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
-) -> kapsaro_core::Result<KvSetResult> {
+) -> kapsaro_core::Result<KvEncContent> {
     let recipients = build_recipient_snapshot(workspace_root)?;
     let entries = entries
         .iter()
@@ -609,12 +670,12 @@ fn test_set_existing_file_preserves_sid() {
 
     assert_eq!(
         sid_before,
-        kv_head_field(result.encrypted.as_str(), "sid"),
+        kv_head_field(result.as_str(), "sid"),
         "sid must be preserved"
     );
     assert_eq!(
         created_at_before,
-        kv_head_field(result.encrypted.as_str(), "created_at"),
+        kv_head_field(result.as_str(), "created_at"),
         "created_at must be preserved"
     );
 }
@@ -653,7 +714,7 @@ fn test_set_existing_file_uses_current_recipients_in_wrap() {
     let workspace_dir = temp.path().join("workspace");
     let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
 
-    let (_, _, wrap) = parse_kv_wrap(result.encrypted.as_str()).unwrap();
+    let wrap = parse_kv_document(result.as_str()).unwrap().wrap;
     let recipients = wrap
         .wrap
         .iter()
@@ -701,21 +762,21 @@ fn test_set_existing_file_preserves_other_entry_tokens() {
 
     assert_eq!(
         key1_token_before,
-        kv_entry_token(result.encrypted.as_str(), "KEY1").unwrap(),
+        kv_entry_token(result.as_str(), "KEY1").unwrap(),
         "KEY1 token must be unchanged"
     );
     assert_eq!(
         key2_token_before,
-        kv_entry_token(result.encrypted.as_str(), "KEY2").unwrap(),
+        kv_entry_token(result.as_str(), "KEY2").unwrap(),
         "KEY2 token must be unchanged"
     );
 }
 
 // ============================================================
-// unset_kv_entry: 効率化テスト
+// unset_kv_entry: reuse tests
 // ============================================================
 
-/// unset テスト用の共通セットアップ
+/// Shared setup for the unset tests.
 fn setup_unset_test_ctx(
     entries: &[(&str, &str)],
 ) -> (
@@ -785,7 +846,7 @@ fn test_unset_uses_current_recipients_in_wrap() {
     let initial = KvEncContent::new_unchecked(initial);
     let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
 
-    let (_, _, wrap) = parse_kv_wrap(&result).unwrap();
+    let wrap = parse_kv_document(&result).unwrap().wrap;
     let recipients = wrap
         .wrap
         .iter()

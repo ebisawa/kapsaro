@@ -1,36 +1,15 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Reviews a signer trust outcome, routing known-key approvals and non-member
+//! acceptances through confirmation callbacks and rejecting non-members where ineligible.
+
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{SignerTrustOutcome, TrustApprovalCandidate};
 use crate::{Error, Result};
 
 use super::error::{build_non_member_rejection_error, build_trust_approval_rejection_error};
-#[cfg(test)]
-use super::online_verification::verify_trust_candidate_online;
 use super::online_verification::{review_candidate_for_confirmation, InteractiveTrustReviewKind};
-
-#[cfg(test)]
-pub fn review_signer_trust_with_confirmation<ConfirmKnown, ConfirmNonMember>(
-    outcome: &SignerTrustOutcome,
-    context_label: &str,
-    approval_subject: &str,
-    confirm_known: ConfirmKnown,
-    confirm_non_member: ConfirmNonMember,
-) -> Result<Vec<ApprovedKnownKey>>
-where
-    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
-    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
-{
-    review_signer_trust_with_confirmation_verifier(
-        outcome,
-        context_label,
-        approval_subject,
-        verify_trust_candidate_online,
-        confirm_known,
-        confirm_non_member,
-    )
-}
 
 pub fn review_signer_trust_with_confirmation_verifier<
     VerifyOnline,

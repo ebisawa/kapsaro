@@ -1,14 +1,15 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use super::online_verification::verify_trust_candidate_online;
 use super::{
     enforce_read_trust_member_eligibility, execute_read_with_signer_trust,
     review_recipient_trust_with_confirmation, review_recipient_trust_with_confirmation_verifier,
     review_rewrap_input_trust_requirements_with_confirmation,
     review_rewrap_input_trust_requirements_with_confirmation_verifier,
-    review_signer_trust_with_confirmation, review_signer_trust_with_confirmation_verifier,
-    review_write_recipient_trust, ReadSignerTrustReviewPlan, SignerTrustLabels,
-    TrustExecutionContext, WriteRecipientTrustReviewPlan,
+    review_signer_trust_with_confirmation_verifier, review_write_recipient_trust,
+    ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext, TrustReviewContext,
+    WriteRecipientTrustReviewPlan,
 };
 use crate::app::rewrap::types::RewrapInputTrustRequirement;
 use crate::app::trust::approval::ApprovedKnownKey;
@@ -128,9 +129,11 @@ fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review()
     let mut reviewed_count = 0usize;
 
     execute_read_with_signer_trust(
-        TrustExecutionContext {
-            options: &options,
-            execution: &execution_context,
+        TrustReviewContext {
+            trust: TrustExecutionContext {
+                options: &options,
+                execution: &execution_context,
+            },
             warnings: &[],
         },
         ReadSignerTrustReviewPlan {
@@ -168,9 +171,11 @@ fn test_review_write_recipient_trust_reuses_signer_key_approval_for_recipient() 
     let mut recipient_prompt_count = 0usize;
 
     review_write_recipient_trust(
-        TrustExecutionContext {
-            options: &options,
-            execution: &execution_context,
+        TrustReviewContext {
+            trust: TrustExecutionContext {
+                options: &options,
+                execution: &execution_context,
+            },
             warnings: &[],
         },
         WriteRecipientTrustReviewPlan {
@@ -218,9 +223,11 @@ fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_accep
     let mut executed = false;
 
     execute_read_with_signer_trust(
-        TrustExecutionContext {
-            options: &options,
-            execution: &execution_context,
+        TrustReviewContext {
+            trust: TrustExecutionContext {
+                options: &options,
+                execution: &execution_context,
+            },
             warnings: &[],
         },
         ReadSignerTrustReviewPlan {
@@ -275,9 +282,11 @@ fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_me
     let mut executed = false;
 
     let result = execute_read_with_signer_trust(
-        TrustExecutionContext {
-            options: &options,
-            execution: &execution_context,
+        TrustReviewContext {
+            trust: TrustExecutionContext {
+                options: &options,
+                execution: &execution_context,
+            },
             warnings: &[],
         },
         ReadSignerTrustReviewPlan {
@@ -310,10 +319,11 @@ fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_me
 fn test_review_signer_trust_with_confirmation_accepts_known_key_approval() {
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
 
-    let approvals = review_signer_trust_with_confirmation(
+    let approvals = review_signer_trust_with_confirmation_verifier(
         &SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
         "decrypt signer",
         "signer",
+        verify_trust_candidate_online,
         |_candidate, _context_label| Ok(true),
         |_candidate, _context_label, _recipients| Ok(false),
     )
@@ -378,13 +388,14 @@ fn test_review_signer_trust_with_confirmation_rejects_tofu_when_online_verificat
 fn test_review_signer_trust_with_confirmation_rejects_non_member_acceptance() {
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
 
-    let result = review_signer_trust_with_confirmation(
+    let result = review_signer_trust_with_confirmation_verifier(
         &SignerTrustOutcome::NeedsNonMemberAcceptance {
             candidate: candidate.clone(),
             current_recipients: vec!["alice@example.com".to_string()],
         },
         "decrypt signer",
         "signer",
+        verify_trust_candidate_online,
         |_candidate, _context_label| Ok(false),
         |_candidate, _context_label, _recipients| Ok(false),
     );

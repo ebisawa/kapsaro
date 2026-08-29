@@ -14,7 +14,10 @@ pub struct TrustStoreVerificationProof {
 
 impl TrustStoreVerificationProof {
     /// Create a new TrustStoreVerificationProof.
-    pub fn new(owner_handle: String) -> Self {
+    ///
+    /// Kept out of the crate's external surface: a proof states that the trust
+    /// store verification ran, so it is minted where that check happens.
+    pub(crate) fn new(owner_handle: String) -> Self {
         Self { owner_handle }
     }
 }
@@ -35,18 +38,16 @@ pub struct VerifiedTrustStore {
 
 impl VerifiedTrustStore {
     /// Create a new VerifiedTrustStore wrapper.
-    pub fn new(document: TrustStoreDocument, proof: TrustStoreVerificationProof) -> Self {
+    ///
+    /// Kept out of the crate's external surface: a document becomes verified
+    /// where the checks listed above actually ran, not wherever one is held.
+    pub(crate) fn new(document: TrustStoreDocument, proof: TrustStoreVerificationProof) -> Self {
         Self { document, proof }
     }
 
     /// Get a reference to the verified document.
     pub fn document(&self) -> &TrustStoreDocument {
         &self.document
-    }
-
-    /// Get a reference to the verification proof.
-    pub fn proof(&self) -> &TrustStoreVerificationProof {
-        &self.proof
     }
 
     /// Extract the inner document and proof (consumes self).

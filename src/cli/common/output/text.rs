@@ -4,6 +4,7 @@
 //! Text output helpers for CLI commands.
 
 use console::Style;
+use kapsaro_core::api::diagnostics::{DiagnosticBatch, DiagnosticCompleteness};
 
 pub(crate) mod doctor;
 pub(crate) mod inspect;
@@ -40,6 +41,31 @@ pub(crate) fn print_warnings(warnings: &[String]) {
     for warning in warnings {
         print_warning(warning);
     }
+}
+
+/// Print every local state finding, then say what the batch left out.
+pub(crate) fn print_local_state_diagnostics(batch: &DiagnosticBatch) {
+    for diagnostic in batch.diagnostics() {
+        print_warning(diagnostic.reason());
+    }
+    if let DiagnosticCompleteness::Truncated(truncation) = batch.completeness() {
+        print_warning(&format_truncation_notice(
+            truncation.dropped_at_least(),
+            truncation.retained_limit(),
+        ));
+    }
+}
+
+/// Name how much of the finding the batch could not carry.
+///
+/// A report that stops at the retention limit would otherwise read as the whole
+/// of it, so the operator is told to repair what is named and run again.
+fn format_truncation_notice(dropped_at_least: usize, retained_limit: usize) -> String {
+    format!(
+        "at least {dropped_at_least} further local state warnings were not reported because at \
+         most {retained_limit} are kept; repair the entries named above and run the command again \
+         to see the rest"
+    )
 }
 
 fn format_warning_text(message: &str) -> String {

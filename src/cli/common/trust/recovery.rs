@@ -12,70 +12,215 @@ use crate::cli::common::output::text::print_warning;
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
+use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
+use kapsaro_core::cli_api::app::trust::list::TrustListCommand;
 use kapsaro_core::cli_api::app::trust::recovery::{
-    build_trust_store_reset_plan, execute_trust_store_reset, requires_trust_store_reset,
-    TrustStoreResetPlan,
+    build_trust_store_reset_plan_from_execution, build_trust_store_reset_plan_from_list_command,
+    classify_trust_store_reset, execute_trust_store_reset,
+    observe_trust_store_recovery_from_execution, observe_trust_store_recovery_from_list_command,
+    TrustStoreRecoveryToken, TrustStoreResetCause, TrustStoreResetLoss, TrustStoreResetPlan,
 };
 use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
 use kapsaro_core::cli_api::presentation::tty;
 use kapsaro_core::{Error, Result};
 
-pub(crate) fn run_with_trust_store_reset_recovery<T, ResolveOwner, Run>(
-    options: &CommonCommandOptions,
-    resolve_owner_handle: ResolveOwner,
-    mut run: Run,
+/// Run an operation and, on a recoverable trust store failure, let the operator
+/// confirm the reset before running once more.
+///
+/// Both the failing run and the reset act through `execution`, so the store the
+/// run read is the store the reset deletes. The store is observed before the
+/// run so the reset can be bound to the document that run started from, rather
+/// than to whatever stands under the name once the failure has been reported.
+pub(crate) fn run_with_execution_trust_store_reset_recovery<T, Run>(
+    execution: &ExecutionContext,
+    run: Run,
 ) -> Result<T>
 where
-    ResolveOwner: Fn() -> Result<String>,
     Run: FnMut() -> Result<T>,
+{
+    let mut token = Some(observe_trust_store_recovery_from_execution(execution));
+    run_with_trust_store_reset_retry(run, |error| {
+        recover_invalid_trust_store_from_execution(
+            execution,
+            take_recovery_token(&mut token)?,
+            error,
+        )
+    })
+}
+
+pub(crate) fn run_with_trust_list_reset_recovery<T, Run>(
+    command: &TrustListCommand,
+    run: Run,
+) -> Result<T>
+where
+    Run: FnMut() -> Result<T>,
+{
+    let mut token = Some(observe_trust_store_recovery_from_list_command(command));
+    run_with_trust_store_reset_retry(run, |error| {
+        recover_invalid_trust_store_from_list_command(
+            command,
+            take_recovery_token(&mut token)?,
+            error,
+        )
+    })
+}
+
+pub(crate) fn run_with_execution_trust_store_reset_without_retry<T, Run>(
+    execution: &ExecutionContext,
+    run: Run,
+) -> Result<TrustStoreResetOutcome<T>>
+where
+    Run: FnMut() -> Result<T>,
+{
+    let mut token = Some(observe_trust_store_recovery_from_execution(execution));
+    run_with_trust_store_reset_without_retry(run, |error| {
+        recover_invalid_trust_store_from_execution(
+            execution,
+            take_recovery_token(&mut token)?,
+            error,
+        )
+    })
+}
+
+/// Hand the one observation over to the one reset it can be spent on.
+///
+/// A command offers at most one reset, so the observation is taken out rather
+/// than reused: a second offer would be bound to a store that the first reset
+/// already deleted.
+fn take_recovery_token(
+    token: &mut Option<TrustStoreRecoveryToken>,
+) -> Result<TrustStoreRecoveryToken> {
+    token.take().ok_or_else(|| {
+        Error::build_invalid_operation_error(
+            "Local trust store reset was already offered for this command".to_string(),
+        )
+    })
+}
+
+pub(crate) enum TrustStoreResetOutcome<T> {
+    Completed(T),
+    ResetToEmpty,
+}
+
+fn run_with_trust_store_reset_retry<T, Run, Recover>(
+    mut run: Run,
+    mut recover: Recover,
+) -> Result<T>
+where
+    Run: FnMut() -> Result<T>,
+    Recover: FnMut(Error) -> Result<()>,
 {
     let mut attempted_reset = false;
     loop {
         match run() {
             Ok(value) => return Ok(value),
-            Err(error) if !attempted_reset && requires_trust_store_reset(&error) => {
-                let owner_handle = resolve_owner_handle()?;
-                recover_invalid_trust_store(options, &owner_handle, error)?;
-                attempted_reset = true;
-            }
+            Err(error) if !attempted_reset => match classify_trust_store_reset(&error) {
+                Some(_) => {
+                    recover(error)?;
+                    attempted_reset = true;
+                }
+                None => return Err(error),
+            },
             Err(error) => return Err(error),
         }
     }
 }
 
-fn recover_invalid_trust_store(
-    options: &CommonCommandOptions,
-    owner_handle: &str,
+/// Run once, and on a trust-store recovery error let the operator confirm the
+/// reset. Recovery deletes the store, so the reviewed state the operation was
+/// bound to is gone: the caller reports an empty result instead of retrying.
+fn run_with_trust_store_reset_without_retry<T, Run, Recover>(
+    mut run: Run,
+    mut recover: Recover,
+) -> Result<TrustStoreResetOutcome<T>>
+where
+    Run: FnMut() -> Result<T>,
+    Recover: FnMut(Error) -> Result<()>,
+{
+    match run() {
+        Ok(value) => Ok(TrustStoreResetOutcome::Completed(value)),
+        Err(error) => match classify_trust_store_reset(&error) {
+            Some(_) => recover(error).map(|()| TrustStoreResetOutcome::ResetToEmpty),
+            None => Err(error),
+        },
+    }
+}
+
+fn recover_invalid_trust_store_from_list_command(
+    command: &TrustListCommand,
+    token: TrustStoreRecoveryToken,
     error: Error,
 ) -> Result<()> {
-    let plan = build_trust_store_reset_plan(options, owner_handle, error, tty::is_interactive())?;
+    let plan = build_trust_store_reset_plan_from_list_command(
+        command,
+        token,
+        error,
+        tty::is_interactive(),
+    )?;
+    recover_prepared_trust_store(&plan, confirm_trust_store_reset)
+}
+
+fn recover_invalid_trust_store_from_execution(
+    execution: &ExecutionContext,
+    token: TrustStoreRecoveryToken,
+    error: Error,
+) -> Result<()> {
+    let plan = build_trust_store_reset_plan_from_execution(
+        execution,
+        token,
+        error,
+        tty::is_interactive(),
+    )?;
     recover_prepared_trust_store(&plan, confirm_trust_store_reset)
 }
 
 fn recover_prepared_trust_store(
     plan: &TrustStoreResetPlan,
-    confirm: impl FnOnce(&std::path::Path) -> Result<bool>,
+    confirm: impl FnOnce(&TrustStoreResetPlan) -> Result<bool>,
 ) -> Result<()> {
-    print_warning(&plan.warning_message);
-    if !confirm(&plan.path)? {
+    print_warning(plan.warning_message());
+    if !confirm(plan)? {
         return Err(Error::build_invalid_operation_error(
             "Local trust store reset was declined".to_string(),
         ));
     }
 
     let outcome = execute_trust_store_reset(plan)?;
-    eprintln!(
-        "Deleted local trust store '{}'. Continuing with an empty trust cache.",
-        format_path_relative_to_cwd(&outcome.path)
-    );
+    let path = format_path_relative_to_cwd(&outcome.path);
+    if outcome.deleted {
+        eprintln!("Deleted local trust store '{path}'. Continuing with an empty trust cache.");
+    } else {
+        eprintln!(
+            "Local trust store '{path}' was already gone. Continuing with an empty trust cache."
+        );
+    }
     Ok(())
 }
 
+/// The question one plan asks, with everything the plan knows about the cost.
+fn build_plan_reset_prompt(plan: &TrustStoreResetPlan) -> String {
+    let recovery_hint = plan.recovery_hint();
+    trust_store_reset_prompt(
+        plan.path(),
+        plan.cause(),
+        plan.loss(),
+        recovery_hint.as_deref(),
+    )
+}
+
+fn confirm_trust_store_reset(plan: &TrustStoreResetPlan) -> Result<bool> {
+    prompt_yes_no(&build_plan_reset_prompt(plan), false)
+}
+
+/// Run the trust store reset flow, answering its prompt from a reader.
+///
+/// The warning, the decline path and the reset itself stay in
+/// `recover_prepared_trust_store`; only the confirmation is swapped, because
+/// the production prompt needs a terminal.
 #[cfg(test)]
 pub(crate) fn recover_invalid_trust_store_with_reader<R>(
-    options: &CommonCommandOptions,
-    owner_handle: &str,
+    command: &TrustListCommand,
+    token: TrustStoreRecoveryToken,
     error: Error,
     reader: R,
     is_interactive: bool,
@@ -83,27 +228,73 @@ pub(crate) fn recover_invalid_trust_store_with_reader<R>(
 where
     R: BufRead,
 {
-    let plan = build_trust_store_reset_plan(options, owner_handle, error, is_interactive)?;
-    recover_prepared_trust_store(&plan, |path| {
-        confirm_trust_store_reset_with_reader(path, reader)
+    let plan =
+        build_trust_store_reset_plan_from_list_command(command, token, error, is_interactive)?;
+    recover_prepared_trust_store(&plan, |plan| {
+        prompt_yes_no_with_reader(&build_plan_reset_prompt(plan), false, reader)
     })
 }
 
+/// Ask for the deletion, saying first what it costs and how to avoid it.
+///
+/// The recovery route was printed with the warning, several lines above the
+/// question. Restating it here puts it in front of the operator at the moment
+/// they answer, which is when it decides what they answer.
+fn trust_store_reset_prompt(
+    path: &std::path::Path,
+    cause: TrustStoreResetCause,
+    loss: Option<TrustStoreResetLoss>,
+    recovery_hint: Option<&str>,
+) -> String {
+    [
+        describe_reset_loss(loss),
+        recovery_hint.map(str::to_string),
+        Some(trust_store_reset_question(path, cause)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+fn trust_store_reset_question(path: &std::path::Path, cause: TrustStoreResetCause) -> String {
+    match cause {
+        TrustStoreResetCause::InvalidDocument => format!(
+            "Delete invalid local trust store '{}' and continue with an empty trust cache?",
+            format_path_relative_to_cwd(path)
+        ),
+        TrustStoreResetCause::MissingSignerKey => format!(
+            "Delete local trust store '{}' because its signer key is unavailable and continue with an empty trust cache?",
+            format_path_relative_to_cwd(path)
+        ),
+    }
+}
+
+/// State how many approvals the deletion discards.
+///
+/// Content that would not load names no number, so the operator is asked the
+/// plain question rather than told a figure nothing stands behind.
+fn describe_reset_loss(loss: Option<TrustStoreResetLoss>) -> Option<String> {
+    let loss = loss?;
+    Some(format!(
+        "This discards {} and {}.",
+        count_label(loss.known_keys, "approved key", "approved keys"),
+        count_label(
+            loss.recipient_sets,
+            "approved recipient set",
+            "approved recipient sets"
+        ),
+    ))
+}
+
+fn count_label(count: usize, singular: &str, plural: &str) -> String {
+    if count == 1 {
+        format!("{count} {singular}")
+    } else {
+        format!("{count} {plural}")
+    }
+}
+
 #[cfg(test)]
-fn confirm_trust_store_reset_with_reader<R>(path: &std::path::Path, reader: R) -> Result<bool>
-where
-    R: BufRead,
-{
-    prompt_yes_no_with_reader(&trust_store_reset_prompt(path), false, reader)
-}
-
-fn confirm_trust_store_reset(path: &std::path::Path) -> Result<bool> {
-    prompt_yes_no(&trust_store_reset_prompt(path), false)
-}
-
-fn trust_store_reset_prompt(path: &std::path::Path) -> String {
-    format!(
-        "Delete invalid local trust store '{}' and continue with an empty trust cache?",
-        format_path_relative_to_cwd(path)
-    )
-}
+#[path = "../../../../tests/unit/internal/cli_common_trust_reset_retry_test.rs"]
+mod tests;

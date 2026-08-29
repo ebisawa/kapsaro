@@ -3,7 +3,8 @@
 
 use crate::feature::trust::recipient_sets::{
     compute_recipient_set_hash, judge_recipient_set, purge_recipient_sets, remove_recipient_set,
-    ArtifactRecipientSet, RecipientSetJudgment,
+    upsert_recipient_set, validate_recipient_set_record, ArtifactRecipientSet,
+    RecipientSetJudgment,
 };
 use crate::model::common::WrapItem;
 use crate::model::trust_store::{RecipientSetApprovalVia, RecipientSetRecord};
@@ -13,9 +14,14 @@ use uuid::Uuid;
 
 const KID_ALICE: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 const KID_BOB: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";
+/// The same key id as `KID_ALICE`, spelled the way it is shown to an operator.
+/// A stored document never carries this form.
+const KID_ALICE_DISPLAY_FORM: &str = "kad1-aaaa-1111-bbbb-2222-cccc-3333-dddd";
 const RECIPIENT_SET_HASH_GOLDEN: &str = "nvfYrpcB97NnFjmvsw15HHsRL70a7RE7p3mg4NvK3Vk";
 const SID_OLD: &str = "00000000-0000-4000-8000-000000000201";
 const SID_NEW: &str = "00000000-0000-4000-8000-000000000202";
+/// Approval timestamp later than the one a stored record carries.
+const LATER_APPROVED_AT: &str = "2026-07-01T00:00:00Z";
 
 #[test]
 fn test_from_wrap_items_captures_sorted_recipient_handle_hints() {
@@ -82,6 +88,82 @@ fn test_into_record_persists_recipient_handle_hints() {
 }
 
 #[test]
+fn test_reapproving_the_same_recipient_set_later_moves_the_approval() {
+    let sid = Uuid::parse_str(SID_OLD).unwrap();
+    let mut records = vec![recipient_set_record(sid, &[KID_ALICE], None)];
+
+    let changed = upsert_recipient_set(
+        &mut records,
+        ArtifactRecipientSet::new(sid, vec![KID_ALICE.to_string()]).unwrap(),
+        LATER_APPROVED_AT.to_string(),
+    );
+
+    assert!(changed);
+    assert_eq!(records[0].approved_at, LATER_APPROVED_AT);
+}
+
+#[test]
+fn test_reapproving_a_recipient_set_at_the_stored_time_leaves_the_record() {
+    let sid = Uuid::parse_str(SID_OLD).unwrap();
+    let stored = recipient_set_record(sid, &[KID_ALICE], None);
+    let approved_at = stored.approved_at.clone();
+    let mut records = vec![stored];
+
+    let changed = upsert_recipient_set(
+        &mut records,
+        ArtifactRecipientSet::new(sid, vec![KID_ALICE.to_string()]).unwrap(),
+        approved_at.clone(),
+    );
+
+    assert!(!changed);
+    assert_eq!(records[0].approved_at, approved_at);
+}
+
+#[test]
+fn test_approving_changed_recipient_kids_updates_the_record() {
+    let sid = Uuid::parse_str(SID_OLD).unwrap();
+    let mut records = vec![recipient_set_record(sid, &[KID_ALICE], None)];
+
+    let changed = upsert_recipient_set(
+        &mut records,
+        ArtifactRecipientSet::new(sid, vec![KID_ALICE.to_string(), KID_BOB.to_string()]).unwrap(),
+        LATER_APPROVED_AT.to_string(),
+    );
+
+    assert!(changed);
+    assert_eq!(
+        records[0].recipient_kids,
+        vec![KID_ALICE.to_string(), KID_BOB.to_string()]
+    );
+    assert_eq!(records[0].approved_at, LATER_APPROVED_AT);
+}
+
+#[test]
+fn test_approving_changed_recipient_handle_hints_updates_the_record() {
+    let sid = Uuid::parse_str(SID_OLD).unwrap();
+    let mut records = vec![recipient_set_record(
+        sid,
+        &[KID_ALICE],
+        Some("alice-old@example.com"),
+    )];
+
+    let changed = upsert_recipient_set(
+        &mut records,
+        ArtifactRecipientSet::from_wrap_items(
+            sid,
+            &[wrap_item("alice-new@example.com", KID_ALICE)],
+        )
+        .unwrap(),
+        LATER_APPROVED_AT.to_string(),
+    );
+
+    assert!(changed);
+    let hints = records[0].recipient_handle_hints.as_ref().unwrap();
+    assert_eq!(hints[0].recipient_handle, "alice-new@example.com");
+    assert_eq!(records[0].approved_at, LATER_APPROVED_AT);
+}
+
+#[test]
 fn test_remove_recipient_set_removes_requested_sid_only() {
     let mut records = build_default_recipient_sets();
 
@@ -100,6 +182,44 @@ fn test_purge_recipient_sets_removes_only_old_records() {
 
     assert_eq!(record_sids(&removed), vec![SID_OLD]);
     assert_eq!(record_sids(&records), vec![SID_NEW]);
+}
+
+/// The set hash is computed over the stored kid strings, so a record holding a
+/// display form would be approving a set no artifact can produce. It is refused
+/// rather than rewritten into the canonical form the operator never approved.
+#[test]
+fn test_stored_record_holding_a_display_form_kid_is_rejected() {
+    let record = recipient_set_record(
+        Uuid::parse_str(SID_OLD).unwrap(),
+        &[KID_ALICE_DISPLAY_FORM],
+        None,
+    );
+
+    let error = validate_recipient_set_record(&record)
+        .expect_err("a stored recipient set must carry canonical kids");
+
+    assert!(
+        error.format_user_message().contains("canonical"),
+        "got: {}",
+        error.format_user_message()
+    );
+}
+
+/// The same for the kids an artifact's wrap names, which the record is built
+/// from and hashed over.
+#[test]
+fn test_wrap_item_holding_a_display_form_kid_is_rejected() {
+    let error = ArtifactRecipientSet::from_wrap_items(
+        Uuid::nil(),
+        &[wrap_item("alice@example.com", KID_ALICE_DISPLAY_FORM)],
+    )
+    .expect_err("a stored wrap must carry canonical kids");
+
+    assert!(
+        error.format_user_message().contains("canonical"),
+        "got: {}",
+        error.format_user_message()
+    );
 }
 
 fn build_default_recipient_sets() -> Vec<RecipientSetRecord> {

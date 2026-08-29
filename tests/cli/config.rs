@@ -164,15 +164,50 @@ fn test_config_set_creates_home_dir_if_missing() {
     );
 }
 
+/// Pointing the local state root at another volume through a symlink is a
+/// supported setup, so the config lands in the directory the link resolves to.
 #[cfg(unix)]
 #[test]
-fn test_config_set_rejects_symlinked_lock_file() {
+fn test_config_set_writes_through_a_home_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let base_dir = TempDir::new().unwrap();
+    let real_home = base_dir.path().join("real-home");
+    let selected_home = base_dir.path().join("selected-home");
+    fs::create_dir(&real_home).unwrap();
+    symlink(&real_home, &selected_home).unwrap();
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("member_handle")
+        .arg("test@example.com")
+        .env("KAPSARO_HOME", &selected_home)
+        .assert()
+        .success();
+
+    cmd()
+        .arg("config")
+        .arg("list")
+        .env("KAPSARO_HOME", &selected_home)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("test@example.com"));
+
+    assert!(real_home.join("config.toml").is_file());
+}
+
+/// The config file is written through the home descriptor, so the config.toml
+/// entry itself must be a regular file.
+#[cfg(unix)]
+#[test]
+fn test_config_set_rejects_symlinked_config_file() {
     use std::os::unix::fs::symlink;
 
     let home_dir = TempDir::new().unwrap();
-    let victim = home_dir.path().join("victim.txt");
-    fs::write(&victim, "original").unwrap();
-    symlink(&victim, home_dir.path().join(".config.toml.lock")).unwrap();
+    let victim = home_dir.path().join("victim.toml");
+    fs::write(&victim, "member_handle = \"victim@example.com\"\n").unwrap();
+    symlink(&victim, home_dir.path().join("config.toml")).unwrap();
 
     cmd()
         .arg("config")
@@ -182,9 +217,12 @@ fn test_config_set_rejects_symlinked_lock_file() {
         .env("KAPSARO_HOME", home_dir.path())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("symlink"));
+        .stderr(predicate::str::contains("non-regular file"));
 
-    assert_eq!(fs::read_to_string(&victim).unwrap(), "original");
+    assert_eq!(
+        fs::read_to_string(&victim).unwrap(),
+        "member_handle = \"victim@example.com\"\n"
+    );
 }
 
 // ============================================================================

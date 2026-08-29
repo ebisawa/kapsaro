@@ -3,13 +3,13 @@
 
 use std::fs;
 
-use crate::app::context::ssh::resolve_ssh_context_by_active_key;
+use crate::app::context::ssh::resolve_ssh_context_for_member_key;
 use crate::app_test_utils::build_test_command_options;
 use crate::test_utils::EnvGuard;
 use tempfile::TempDir;
 
 #[test]
-fn test_resolve_ssh_context_by_active_key_honors_member_handle_option() {
+fn test_resolve_ssh_context_for_member_key_honors_member_handle_option() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
     let stale_home = TempDir::new().unwrap();
     let stale_home_path = stale_home.path().to_path_buf();
@@ -27,16 +27,19 @@ fn test_resolve_ssh_context_by_active_key_honors_member_handle_option() {
 
     let options = build_test_command_options(base_dir.path(), None);
 
-    // With explicit member handle, we should not get the "multiple member handles found" config error.
-    // It will still fail later because no active key exists for that member, which is expected.
-    let err =
-        match resolve_ssh_context_by_active_key(&options, Some("alice@example.com".to_string())) {
-            Ok(_) => panic!("expected error"),
-            Err(e) => e,
-        };
+    // With an explicit member handle, key resolution reaches that member even
+    // though another member directory exists beside it.
+    let err = match resolve_ssh_context_for_member_key(
+        &options,
+        Some("alice@example.com".to_string()),
+        None,
+    ) {
+        Ok(_) => panic!("expected error"),
+        Err(e) => e,
+    };
     let msg = format!("{err}");
     assert!(
-        msg.contains("No active key for member"),
+        msg.contains("No keys found for member"),
         "unexpected error: {msg}"
     );
 }

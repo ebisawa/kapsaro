@@ -16,12 +16,10 @@
 //!     └── active           (plaintext file containing active kid)
 //! ```
 
-pub mod active;
+pub mod access;
 pub mod helpers;
 pub mod member;
 pub mod paths;
 pub mod public_key_source;
-pub mod public_keys;
 pub mod resolver;
 pub mod signer;
-pub mod storage;

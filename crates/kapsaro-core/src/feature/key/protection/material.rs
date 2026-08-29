@@ -36,21 +36,21 @@ pub(super) struct FreshPrivateKeyProtectionMaterial {
 
 impl FreshPrivateKeyProtectionMaterial {
     pub(super) fn generate() -> Result<Self> {
-        Self::new(
+        Ok(Self::new(
             PrivateKeyIkmSalt::new(fill_random_array::<32>()?),
             HkdfSalt::new(fill_random_array::<32>()?),
-        )
+        ))
     }
 
-    fn new(ikm_salt: PrivateKeyIkmSalt, hkdf_salt: HkdfSalt) -> Result<Self> {
+    fn new(ikm_salt: PrivateKeyIkmSalt, hkdf_salt: HkdfSalt) -> Self {
         let ikm_salt_b64 = encode_base64url_nopad(ikm_salt.as_bytes());
         let hkdf_salt_b64 = encode_base64url_nopad(hkdf_salt.as_bytes());
-        Ok(Self {
+        Self {
             ikm_salt,
             hkdf_salt,
             ikm_salt_b64,
             hkdf_salt_b64,
-        })
+        }
     }
 
     pub(super) fn ikm_salt_b64(&self) -> &str {
@@ -178,3 +178,7 @@ pub(super) fn decrypt_private_key_plaintext(
     serde_json::from_slice(plaintext_json.as_bytes())
         .map_err(|_| Error::build_crypto_error("Failed to deserialize plaintext".to_string()))
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/feature_key_protection_material_test.rs"]
+mod feature_key_protection_material_test;

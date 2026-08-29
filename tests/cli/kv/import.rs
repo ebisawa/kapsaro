@@ -125,7 +125,7 @@ fn test_import_with_json_output() {
 
 #[cfg(unix)]
 #[test]
-fn test_import_rejects_symlink_input_file() {
+fn test_import_reads_symlinked_input_file() {
     use std::os::unix::fs::symlink;
 
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
@@ -142,6 +142,6 @@ fn test_import_rejects_symlink_input_file() {
         .env("KAPSARO_HOME", home_dir.path())
         .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("symlink"));
+        .success()
+        .stderr(predicate::str::contains("Imported 1 entries"));
 }

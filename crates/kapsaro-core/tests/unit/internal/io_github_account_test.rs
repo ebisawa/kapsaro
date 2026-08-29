@@ -27,7 +27,7 @@ impl GitHubAccountLookupApi for FakeGitHubAccountLookupApi {
                 Ok(account) => Ok(account.clone()),
                 Err(error) if error.kind() == ErrorKind::Verify => {
                     Err(Error::build_verification_error(
-                        error.verification_rule().expect("verification rule"),
+                        error.rule().expect("verification rule"),
                         error.format_user_message(),
                     ))
                 }
@@ -94,7 +94,7 @@ async fn test_resolve_github_account_by_login_propagates_api_error() {
 
     let error = result.expect_err("expected verify error");
     assert_eq!(error.kind(), ErrorKind::Verify);
-    assert_eq!(error.verification_rule(), Some("V-GITHUB-API"));
+    assert_eq!(error.rule(), Some("V-GITHUB-API"));
     assert_eq!(error.format_user_message(), "lookup failed");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }

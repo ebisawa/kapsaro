@@ -25,7 +25,7 @@ pub struct RewrapReviewSession {
 }
 
 pub fn build_rewrap_review_session<ConfirmPromotions, ConfirmRecipients>(
-    input: &RewrapBatchCommandInput,
+    input: &RewrapBatchCommandInput<'_>,
     confirm_promotions: &mut ConfirmPromotions,
     confirm_recipients: ConfirmRecipients,
 ) -> Result<RewrapReviewSession>
@@ -37,7 +37,7 @@ where
     let request = build_rewrap_batch_request(input);
     let plan = super::plan::build_rewrap_batch_plan(
         &request.options,
-        &input.execution,
+        input.execution,
         &input.explicit_targets,
     )?;
     let accepted_promotions = collect_accepted_promotions(&plan, confirm_promotions)?;
@@ -51,17 +51,21 @@ where
         &plan.pre_promotion_trust,
         &trust_plan.post_promotion_members,
     )?;
+    // What the artifact search skipped is reported alongside the trust review,
+    // so the operator sees it before deciding to go ahead.
+    let mut review_warnings = plan.discovery_warnings.clone();
+    review_warnings.extend(trust_plan.warnings);
     Ok(RewrapReviewSession {
         request,
         plan,
         expected_post_promotion_members: trust_plan.post_promotion_members,
         post_promotion_trust,
         approvals,
-        review_warnings: trust_plan.warnings,
+        review_warnings,
     })
 }
 
-fn build_rewrap_batch_request(input: &RewrapBatchCommandInput) -> RewrapBatchRequest {
+fn build_rewrap_batch_request(input: &RewrapBatchCommandInput<'_>) -> RewrapBatchRequest {
     RewrapBatchRequest {
         options: input.options.clone(),
         rotate_key: input.rotate_key,

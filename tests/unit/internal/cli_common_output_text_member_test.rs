@@ -61,7 +61,7 @@ fn test_format_member_list_lines_renders_dashed_kids() {
 #[test]
 fn test_format_member_list_lines_keeps_long_handles_inline() {
     let document = json!({});
-    let long_handle = format!("{}@example.com", "a".repeat(120));
+    let long_handle = format!("{}@example.com", "a".repeat(116));
     let view = MemberListView {
         active: vec![MemberListEntryView {
             member_handle: &long_handle,

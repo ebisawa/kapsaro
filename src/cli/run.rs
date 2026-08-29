@@ -15,21 +15,16 @@ use clap::Args;
 use std::collections::BTreeMap;
 use std::process::{Command, Stdio};
 
-use crate::cli::common::command::{
-    ensure_reviewed_artifact_unchanged, resolve_options_with_allow_expired_key,
-    run_read_command_with_recovery, ReadCommandContext, ReadCommandLabels,
-};
+use crate::cli::common::command::{resolve_options_with_allow_expired_key, ReadCommandLabels};
+use crate::cli::common::kv_read::KvReadSession;
+use crate::cli::common::output::text::print_local_state_diagnostics;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOptions,
 };
-use kapsaro_core::api::kv::{KvEncArtifact, KvReadOperation};
+use kapsaro_core::api::diagnostics::take_local_state_warnings;
+use kapsaro_core::api::kv::KvReadOperation;
 use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::api::trust::TrustDecision;
-use kapsaro_core::cli_api::app::context::execution::{
-    resolve_read_execution, resolve_read_trust_evaluator,
-};
-use kapsaro_core::cli_api::app::kv::query::{evaluate_kv_read_trust_plan, resolve_kv_read_path};
-use kapsaro_core::cli_api::app::trust::evaluate_kv_after_cli_review;
+use kapsaro_core::cli_api::app::kv::query::evaluate_kv_read_trust_plan;
 use kapsaro_core::cli_api::app::trust::RunPolicy;
 use kapsaro_core::cli_api::presentation::process::remove_parent_kapsaro_env_vars;
 use kapsaro_core::{Error, Result};
@@ -60,55 +55,27 @@ pub(crate) fn run(args: RunArgs) -> Result<i32> {
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    let artifact_path = resolve_kv_read_path(&options, args.store.name.as_deref())?;
-    let artifact = KvEncArtifact::load(&artifact_path)?;
-    let verified = artifact.verify(options.operation_options())?;
-    let exit_code = run_read_command_with_recovery(
-        &options,
+    let session = KvReadSession::open(
+        options,
+        args.store.name.as_deref(),
         args.member.member_handle.clone(),
+    )?;
+    session.read(
         ReadCommandLabels {
             context: "run signer",
             subject: "run",
-            workspace_purpose: "kv access",
             allow_non_member: false,
         },
-        |ssh_ctx| {
-            let execution =
-                resolve_read_execution(&options, args.member.member_handle.clone(), None, ssh_ctx)?;
-            let trust = evaluate_kv_read_trust_plan::<RunPolicy>(&options, &execution, &verified)?;
-            Ok(ReadCommandContext::new(execution, trust))
-        },
-        |context| {
-            let current_artifact = KvEncArtifact::load(&artifact_path)?;
-            ensure_reviewed_artifact_unchanged(
-                artifact.as_str(),
-                current_artifact.as_str(),
-                "KV run authorization",
-            )?;
-            let current = current_artifact.verify(options.operation_options())?;
-            let evaluator = resolve_read_trust_evaluator(&options, &context.execution)?;
+        "KV run authorization",
+        evaluate_kv_read_trust_plan::<RunPolicy>,
+        |review| {
             debug!("[KV] env command: decrypt values");
-            let env_vars = match evaluate_kv_after_cli_review(
-                &evaluator,
-                &verified,
-                &current,
-                &context.execution.key_ctx,
-                KvReadOperation::Environment,
-                context.signer_outcome(),
-                options.operation_options(),
-            )? {
-                TrustDecision::Trusted(trusted) => trusted.decrypt_environment()?,
-                TrustDecision::ReviewRequired(_) => {
-                    return Err(Error::build_verification_error(
-                        "E_TRUST_REVIEW_REQUIRED".to_string(),
-                        "Trust state changed while reviewing the KV artifact".to_string(),
-                    ));
-                }
-            };
+            let env_vars = review
+                .authorize(KvReadOperation::Environment)?
+                .decrypt_environment()?;
             execute_child_command(&args.command, &env_vars)
         },
-    )?;
-    Ok(exit_code)
+    )
 }
 
 pub(crate) fn execute_child_command(
@@ -130,6 +97,10 @@ pub(crate) fn execute_child_command(
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     configure_child_environment(&mut command, env_vars);
+    // Drain and show local state warnings before blocking on the child: `status()`
+    // does not return until the child exits, and an unhandled Ctrl-C would drop
+    // the warnings recorded during key loading before the deferred drain in cli.rs runs.
+    print_local_state_diagnostics(&take_local_state_warnings());
     let status = command.status().map_err(|error| {
         Error::build_io_error_with_source(
             format!("Failed to execute command '{}': {}", program, error),

@@ -5,11 +5,10 @@
 
 use crate::{Error, Result};
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::types::ConfigKey;
-use crate::io::config::paths::get_global_config_path_from_base;
-use crate::io::config::store::load_config_file;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StringSourceResolution {
@@ -17,20 +16,6 @@ pub(super) enum StringSourceResolution {
     Env,
     GlobalConfig,
     Default,
-}
-
-/// Load a config field from global config (KAPSARO_HOME/config.toml)
-pub(crate) fn load_field_from_global_config(
-    field_name: &str,
-    base_dir: Option<&Path>,
-) -> Result<Option<String>> {
-    let base_dir = match base_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => crate::io::config::paths::get_base_dir()?,
-    };
-    let config_path = get_global_config_path_from_base(&base_dir);
-    let config = load_config_file(&config_path, &base_dir)?;
-    Ok(config.get(field_name).cloned())
 }
 
 /// Expand tilde (~) in path to HOME directory
@@ -69,8 +54,22 @@ pub(super) fn resolve_string_with_source(
     cli_value: Option<String>,
     env_var_name: Option<&str>,
     config_key: &str,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
     default: Option<String>,
+) -> Result<Option<(String, StringSourceResolution)>> {
+    resolve_string_from_sources(cli_value, env_var_name, default, || config.get(config_key))
+}
+
+/// Single definition of the CLI > env > config > default priority order.
+///
+/// The configured value arrives through a closure so it is fetched only once the
+/// higher-priority sources came up empty, and so a caller that reads its setting
+/// some other way still states the order here rather than restating it.
+pub(super) fn resolve_string_from_sources(
+    cli_value: Option<String>,
+    env_var_name: Option<&str>,
+    default: Option<String>,
+    load_config_value: impl FnOnce() -> Result<Option<String>>,
 ) -> Result<Option<(String, StringSourceResolution)>> {
     // Priority 1: CLI value
     if let Some(value) = cli_value {
@@ -85,7 +84,7 @@ pub(super) fn resolve_string_with_source(
     }
 
     // Priority 3: Global config
-    if let Some(value) = load_field_from_global_config(config_key, base_dir)? {
+    if let Some(value) = load_config_value()? {
         return Ok(Some((value, StringSourceResolution::GlobalConfig)));
     }
 
@@ -97,11 +96,11 @@ pub(super) fn resolve_string_with_priority(
     cli_value: Option<String>,
     env_var_name: Option<&str>,
     config_key: &str,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
     default: Option<String>,
 ) -> Result<Option<String>> {
     Ok(
-        resolve_string_with_source(cli_value, env_var_name, config_key, base_dir, default)?
+        resolve_string_with_source(cli_value, env_var_name, config_key, config, default)?
             .map(|(value, _)| value),
     )
 }
@@ -123,10 +122,10 @@ pub(super) fn resolve_string_required(
     cli_value: Option<String>,
     env_var_name: Option<&str>,
     config_key: &str,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
     default: String,
 ) -> Result<String> {
-    resolve_string_with_priority(cli_value, env_var_name, config_key, base_dir, Some(default))?
+    resolve_string_with_priority(cli_value, env_var_name, config_key, config, Some(default))?
         .ok_or_else(|| {
             Error::build_config_error(format!(
                 "Required config value '{}' could not be resolved",
@@ -138,15 +137,9 @@ pub(super) fn resolve_string_required(
 fn resolve_command_path(
     config_key: &str,
     default_command: &str,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<String> {
-    resolve_string_required(
-        None,
-        None,
-        config_key,
-        base_dir,
-        default_command.to_string(),
-    )
+    resolve_string_required(None, None, config_key, config, default_command.to_string())
 }
 
 /// Resolve SSH command path (ssh-keygen or ssh-add) from config
@@ -154,11 +147,11 @@ fn resolve_command_path(
 /// Priority order:
 /// 1. Global config
 /// 2. Default value
-pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String> {
+pub(crate) fn resolve_ssh_keygen_path(config: &GlobalConfigSnapshot) -> Result<String> {
     resolve_command_path(
         ConfigKey::SshKeygenCommand.canonical_name(),
         "ssh-keygen",
-        base_dir,
+        config,
     )
 }
 
@@ -167,12 +160,8 @@ pub(crate) fn resolve_ssh_keygen_path(base_dir: Option<&Path>) -> Result<String>
 /// Priority order:
 /// 1. Global config
 /// 2. Default value
-pub(crate) fn resolve_ssh_add_path(base_dir: Option<&Path>) -> Result<String> {
-    resolve_command_path(
-        ConfigKey::SshAddCommand.canonical_name(),
-        "ssh-add",
-        base_dir,
-    )
+pub(crate) fn resolve_ssh_add_path(config: &GlobalConfigSnapshot) -> Result<String> {
+    resolve_command_path(ConfigKey::SshAddCommand.canonical_name(), "ssh-add", config)
 }
 
 #[cfg(test)]

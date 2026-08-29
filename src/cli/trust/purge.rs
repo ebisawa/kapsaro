@@ -3,23 +3,23 @@
 
 //! trust purge CLI handler.
 
-use std::collections::BTreeSet;
-
-use crate::cli::common::command::{
-    resolve_options, resolve_trust_store_owner_member, resolve_write_execution_input,
+use crate::cli::common::command::{resolve_options, resolve_write_execution_input};
+use crate::cli::common::output::text::trust::{
+    print_purge_cancelled, print_recipient_set_purge_reset_to_empty,
+    print_trust_purge_reset_to_empty,
 };
-use crate::cli::common::output::text::trust::print_purge_cancelled;
 use crate::cli::common::output::trust::{
     print_recipient_set_purge_outcome, print_recipient_set_purge_preview,
     print_trust_purge_outcome, print_trust_purge_preview,
 };
 use crate::cli::common::prompt::confirm_destructive_action_or_cancel;
-use crate::cli::common::trust::run_with_trust_store_reset_recovery;
+use crate::cli::common::trust::{
+    run_with_execution_trust_store_reset_without_retry, TrustStoreResetOutcome,
+};
 use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::trust::management::{
     execute_purge, execute_recipient_set_purge, list_purge_candidates,
-    list_recipient_set_purge_candidates,
+    list_recipient_set_purge_candidates, ReviewedPurgeCandidates,
 };
 use kapsaro_core::Error;
 use time::OffsetDateTime;
@@ -32,6 +32,7 @@ pub(crate) fn run_keys(args: PurgeArgs) -> Result<(), Error> {
         list_purge_candidates,
         print_trust_purge_preview,
         execute_purge,
+        print_trust_purge_reset_to_empty,
         print_trust_purge_outcome,
     )
 }
@@ -42,48 +43,53 @@ pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
         list_recipient_set_purge_candidates,
         print_recipient_set_purge_preview,
         execute_recipient_set_purge,
+        print_recipient_set_purge_reset_to_empty,
         print_recipient_set_purge_outcome,
     )
 }
 
-fn run_purge_flow<Candidates, Outcome, List, Preview, Execute, Print>(
+/// Shared shape of a purge variant: how its entries are listed, previewed,
+/// removed and reported. Taking the four steps as parameters lets both known
+/// keys and recipient sets share this flow without a marker type per variant.
+fn run_purge_flow<Item, Outcome>(
     args: PurgeArgs,
-    list_candidates: List,
-    print_preview: Preview,
-    execute: Execute,
-    print_outcome: Print,
-) -> Result<(), Error>
-where
-    List: Fn(&CommonCommandOptions, &str, OffsetDateTime) -> Result<Candidates, Error>,
-    Preview: Fn(&Candidates, &mut BTreeSet<String>) -> bool,
-    Execute: Fn(&CommonCommandOptions, &ExecutionContext, OffsetDateTime) -> Result<Outcome, Error>,
-    Print: Fn(&Outcome, &mut BTreeSet<String>),
-{
-    let older_than_timestamp = parse_duration_to_threshold(&args.older_than)?;
+    list: impl Fn(&ExecutionContext, OffsetDateTime) -> Result<ReviewedPurgeCandidates<Item>, Error>,
+    // Shows the candidates and reports whether the flow should continue.
+    preview: impl Fn(&ReviewedPurgeCandidates<Item>) -> bool,
+    execute: impl Fn(&ExecutionContext, &ReviewedPurgeCandidates<Item>) -> Result<Outcome, Error>,
+    // Reports that a trust store reset left nothing to purge.
+    //
+    // A purge count is the wrong thing to print here: the store was discarded
+    // whole, so "0 removed" reads as "nothing happened" when in fact every
+    // approval is gone.
+    report_reset_to_empty: impl Fn(),
+    report: impl Fn(&Outcome),
+) -> Result<(), Error> {
+    let older_than = parse_duration_to_threshold(&args.older_than)?;
     let options = resolve_options(&args.common);
-    let member_handle = args.member.member_handle.clone();
-    let execution = resolve_write_execution_input(&options, member_handle.clone())?;
-    let candidates = run_with_trust_store_reset_recovery(
-        &options,
-        || resolve_trust_store_owner_member(&options, member_handle.clone()),
-        || list_candidates(&options, &execution.member_handle, older_than_timestamp),
-    )?;
-    let mut shown_warnings = BTreeSet::new();
-    if !print_preview(&candidates, &mut shown_warnings) {
+    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
+
+    let listed = run_with_execution_trust_store_reset_without_retry(&execution, || {
+        list(&execution, older_than)
+    })?;
+    let candidates = match listed {
+        TrustStoreResetOutcome::Completed(candidates) => candidates,
+        TrustStoreResetOutcome::ResetToEmpty => {
+            report_reset_to_empty();
+            return Ok(());
+        }
+    };
+    if !preview(&candidates) {
         return Ok(());
     }
-
     if !confirm_purge_when_needed(args.force.force)? {
         print_purge_cancelled();
         return Ok(());
     }
 
-    let result = run_with_trust_store_reset_recovery(
-        &options,
-        || resolve_trust_store_owner_member(&options, member_handle.clone()),
-        || execute(&options, &execution, older_than_timestamp),
-    )?;
-    print_outcome(&result, &mut shown_warnings);
+    // The write-back is bound to the candidates that were just shown, so it
+    // reports a store that moved as a conflict and never asks to delete one.
+    report(&execute(&execution, &candidates)?);
     Ok(())
 }
 

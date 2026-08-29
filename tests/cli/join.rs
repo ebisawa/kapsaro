@@ -5,7 +5,9 @@
 //!
 //! Tests the join command that joins an existing workspace without creating it.
 
-use crate::cli::common::{assert_stderr_order, cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    assert_stderr_order, cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE,
+};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
@@ -25,7 +27,7 @@ fn load_member_kid(path: &std::path::Path) -> String {
 #[test]
 fn test_join_existing_workspace() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let missing_key_message = format!(
         "No local key found for '{}'. Generating a new key...",
@@ -89,7 +91,7 @@ fn test_join_existing_workspace() {
 #[test]
 fn test_join_force_overwrites_existing_member() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure
@@ -130,7 +132,7 @@ fn test_join_force_overwrites_existing_member() {
 #[test]
 fn test_join_existing_key_ignores_github_user_input() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
@@ -171,7 +173,7 @@ fn test_join_existing_key_ignores_github_user_input() {
 /// Test: join fails when workspace does not exist
 #[test]
 fn test_join_nonexistent_workspace_fails() {
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     cmd()
@@ -190,7 +192,7 @@ fn test_join_nonexistent_workspace_fails() {
 #[test]
 fn test_join_incomplete_workspace_fails() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // workspace_dir exists but has no members/ or secrets/ subdirectories
@@ -220,8 +222,8 @@ fn test_join_incomplete_workspace_fails() {
 #[test]
 fn test_init_then_join_different_member() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir_alice = TempDir::new().unwrap();
-    let home_dir_bob = TempDir::new().unwrap();
+    let home_dir_alice = make_secret_home();
+    let home_dir_bob = make_secret_home();
     let (_ssh_temp_alice, ssh_priv_alice, _pub_alice, _) = generate_temp_ssh_keypair();
     let (_ssh_temp_bob, ssh_priv_bob, _pub_bob, _) = generate_temp_ssh_keypair();
 
@@ -271,7 +273,7 @@ fn test_init_then_join_different_member() {
 #[test]
 fn test_join_stages_new_generation_for_existing_active_member() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (_ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     cmd()

@@ -14,25 +14,27 @@ mod signer;
 mod types;
 
 pub use artifact_recipient::{
-    review_artifact_content_recipient_set_output, review_artifact_output_recipient_set,
-    ArtifactContentReviewInput, ArtifactOutputRecipientSetReviewInput,
+    review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
 };
-pub use execution::TrustExecutionContext;
 pub use execution::{
     execute_read_with_signer_trust, review_artifact_recipient_set_output,
-    review_write_recipient_trust, ArtifactRecipientSetReviewInput,
+    review_write_recipient_trust, ArtifactRecipientSetReviewInput, TrustExecutionContext,
+    TrustReviewContext,
 };
-pub use persistence::save_approved_known_key_warnings;
+pub use persistence::save_approved_known_key_documents;
 pub use recipient::review_recipient_trust_with_confirmation;
+// Production injects the online verifier through `execution`; the verifier
+// forms are re-exported so the review tests can supply a stub instead.
 #[cfg(test)]
 pub use recipient::review_recipient_trust_with_confirmation_verifier;
 pub use rewrap::review_rewrap_input_trust_requirements_with_confirmation;
 #[cfg(test)]
 pub use rewrap::review_rewrap_input_trust_requirements_with_confirmation_verifier;
+// Both entry points are reached through `execution` in production; the direct
+// re-export is what lets the review tests call them without that orchestration.
 #[cfg(test)]
 pub use signer::{
-    enforce_read_trust_member_eligibility, review_signer_trust_with_confirmation,
-    review_signer_trust_with_confirmation_verifier,
+    enforce_read_trust_member_eligibility, review_signer_trust_with_confirmation_verifier,
 };
 pub use types::{ReadSignerTrustReviewPlan, SignerTrustLabels, WriteRecipientTrustReviewPlan};
 

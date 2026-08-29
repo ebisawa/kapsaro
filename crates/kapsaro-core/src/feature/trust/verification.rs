@@ -4,14 +4,16 @@
 //! Trust Store document verification.
 
 use crate::crypto::sign::verify_detached_bytes;
+use crate::error::TRUST_SIGNER_KEY_MISSING_RECOVERY;
 use crate::feature::trust::recipient_sets::validate_recipient_set_record;
+use crate::feature::trust::signer_keys::{build_signer_key_recovery_hint, SignerKeySnapshot};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
 };
 use crate::format::schema::validator::load_embedded_trust_validator;
 use crate::format::signature::{decode_ed25519_signature, verify_signature_algorithm};
 use crate::format::trust_store::build_trust_store_signature_bytes;
-use crate::io::keystore::storage::load_public_key;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
 use crate::model::trust_store::{TrustStoreDocument, TrustStoreSignature};
 use crate::model::trust_store_verified::{TrustStoreVerificationProof, VerifiedTrustStore};
@@ -27,8 +29,10 @@ use time::OffsetDateTime;
 /// Verify a Trust Store document and return a verified wrapper.
 ///
 /// Checks the trust store signature, signer key, owner, and known key integrity.
+/// The signer key comes from a snapshot taken beforehand rather than from the
+/// keystore, so verification holds no lock of its own.
 /// 1. JSON Schema validity
-/// 2. signer public key is loaded from local keystore by owner_handle + kid
+/// 2. signer public key is taken from the snapshot by owner_handle + kid
 /// 3. format == LOCAL_TRUST_V1
 /// 4. signer public key is a valid PublicKey
 /// 5. Cryptographic signature verification
@@ -37,23 +41,29 @@ use time::OffsetDateTime;
 /// 8. known_keys[] kid uniqueness
 /// 9. recipient_sets[] integrity
 /// 10. Timestamp format validation (RFC 3339 UTC 'Z')
-pub fn verify_trust_store(
+pub(crate) fn verify_trust_store(
     doc: &TrustStoreDocument,
-    keystore_root: &Path,
+    signer_keys: &SignerKeySnapshot,
 ) -> Result<VerifiedTrustStore> {
     validate_schema(doc)?;
     validate_format(doc)?;
-    let signer_public_key = load_signer_public_key(doc, keystore_root)?;
+    let signer_public_key = resolve_signer_public_key(doc, signer_keys)?;
     let verified_signer_public_key = validate_signer_public_key(&signer_public_key)?;
     validate_signature(doc, verified_signer_public_key.verifying_key())?;
     validate_kid_match(doc, &signer_public_key)?;
     validate_owner_match(doc, &signer_public_key)?;
-    validate_known_keys_uniqueness(doc)?;
-    validate_recipient_sets(doc)?;
-    validate_timestamps(doc)?;
+    validate_signer_independent_content(doc)?;
 
     let proof = TrustStoreVerificationProof::new(doc.protected.owner_handle.clone());
     Ok(VerifiedTrustStore::new(doc.clone(), proof))
+}
+
+/// Validate the parts of a Trust Store document that do not depend on the signer
+/// key: known key uniqueness, recipient sets and timestamps.
+fn validate_signer_independent_content(doc: &TrustStoreDocument) -> Result<()> {
+    validate_known_keys_uniqueness(doc)?;
+    validate_recipient_sets(doc)?;
+    validate_timestamps(doc)
 }
 
 fn validate_schema(doc: &TrustStoreDocument) -> Result<()> {
@@ -83,12 +93,56 @@ fn validate_format(doc: &TrustStoreDocument) -> Result<()> {
     Ok(())
 }
 
-fn load_signer_public_key(doc: &TrustStoreDocument, keystore_root: &Path) -> Result<PublicKey> {
-    load_public_key(
-        keystore_root,
-        &doc.protected.owner_handle,
-        &doc.signature.kid,
+/// Take the signer's public half out of the snapshot the caller captured.
+///
+/// The snapshot holds one member's key, so a document naming another owner is
+/// rejected here rather than silently verified against a key that never
+/// belonged to it.
+fn resolve_signer_public_key(
+    doc: &TrustStoreDocument,
+    signer_keys: &SignerKeySnapshot,
+) -> Result<PublicKey> {
+    let owner = MemberHandle::try_from(doc.protected.owner_handle.clone())?;
+    if &owner != signer_keys.owner() {
+        return Err(build_snapshot_owner_mismatch_error(
+            &owner,
+            signer_keys.owner(),
+        ));
+    }
+    let kid = Kid::from_canonical(doc.signature.kid.clone())?;
+    signer_keys
+        .find(&kid)
+        .cloned()
+        .ok_or_else(|| build_missing_signer_key_error(signer_keys.keystore_root(), &owner, &kid))
+}
+
+fn build_snapshot_owner_mismatch_error(owner: &MemberHandle, expected: &MemberHandle) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_OWNER_MISMATCH".to_string(),
+        format!(
+            "protected.owner_handle '{}' != signer key owner '{}'",
+            owner, expected
+        ),
     )
+}
+
+/// Report a signer key the keystore no longer holds, recovery first.
+///
+/// Nothing about the stored document was refused here: the key it names is
+/// simply not in the keystore, which is the same shape of condition as a
+/// keystore that is not there at all and is reported the same way. Verification
+/// only needs the signer's public half, so restoring the exported public key is
+/// enough to get the stored approvals back; the operator is shown that route
+/// before anything proposes discarding them.
+fn build_missing_signer_key_error(keystore_root: &Path, owner: &MemberHandle, kid: &Kid) -> Error {
+    Error::build_invalid_operation_error(format!(
+        "Trust store signer key '{}' for member '{}' is unavailable, so the stored approvals \
+         cannot be verified. {}",
+        kid,
+        owner,
+        build_signer_key_recovery_hint(keystore_root, owner, kid)
+    ))
+    .with_recovery(TRUST_SIGNER_KEY_MISSING_RECOVERY)
 }
 
 fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedSigningPublicKey> {

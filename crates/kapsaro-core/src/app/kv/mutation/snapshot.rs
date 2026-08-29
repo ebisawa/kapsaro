@@ -4,33 +4,31 @@
 //! Review-time snapshots for KV mutations.
 //! Tracks the active member set and target file state used by later execution.
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::review::{ensure_workspace_members_match_snapshot, ReviewedTextFile};
-use crate::app::trust::store::load_optional_trust_store_for_member;
+use crate::app::context::execution::ExecutionContext;
+use crate::app::context::review::{
+    ensure_workspace_members_match_snapshot, ReviewedTextFile, ReviewedTrustStore,
+};
 use crate::app::trust::{TrustContext, WorkspaceMemberSnapshot};
 use crate::feature::kv::mutate::KvRecipientSnapshot;
 use crate::format::content::{EncContent, KvEncContent};
-use crate::model::trust_store::TrustStoreProtected;
 use crate::support::fs::relative::DirectoryFd;
-use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::{Error, Result};
 
-use super::super::session::{load_existing_content, KvFileTarget};
+use super::super::session::{capture_reviewed_target, reviewed_kv_content, KvFileTarget};
 
-pub(super) struct MutationReviewSnapshot {
+pub(super) struct MutationReviewSnapshot<'a> {
+    execution: &'a ExecutionContext,
     target: KvFileTarget,
     file: ReviewedKvFileState,
     file_snapshot: ReviewedTextFile,
     members: WorkspaceMemberSnapshot,
     recipients: KvRecipientSnapshot,
-    trust_store: MutationTrustStoreSnapshot,
+    trust_store: ReviewedTrustStore<'a>,
 }
 
-pub(super) struct MutationTrustStoreSnapshot {
-    options: CommonCommandOptions,
-    owner_handle: String,
-    protected: Option<TrustStoreProtected>,
-}
+/// What a KV mutation says when the store it reviewed no longer matches.
+pub(super) const KV_TRUST_STORE_CHANGED_MESSAGE: &str =
+    "KV trust store changed since review and must be reviewed again.";
 
 enum ReviewedKvFileState {
     Missing,
@@ -38,10 +36,10 @@ enum ReviewedKvFileState {
 }
 
 impl ReviewedKvFileState {
-    fn load(target: &KvFileTarget, allow_missing: bool) -> Result<Self> {
-        match load_existing_content(target, allow_missing)? {
-            Some(content) => Ok(Self::Existing(content)),
-            None => Ok(Self::Missing),
+    fn from_capture(target: &KvFileTarget, reviewed: &ReviewedTextFile) -> Self {
+        match reviewed_kv_content(target, reviewed) {
+            Some(content) => Self::Existing(content),
+            None => Self::Missing,
         }
     }
 
@@ -53,26 +51,20 @@ impl ReviewedKvFileState {
     }
 }
 
-impl MutationReviewSnapshot {
+impl<'a> MutationReviewSnapshot<'a> {
     pub(super) fn build(
         target: KvFileTarget,
         workspace_members: WorkspaceMemberSnapshot,
-        options: &CommonCommandOptions,
-        owner_handle: &str,
+        execution: &'a ExecutionContext,
         trust_context: &TrustContext,
         allow_missing: bool,
     ) -> Result<Self> {
         let recipients = build_recipient_snapshot(&workspace_members);
-        let file = ReviewedKvFileState::load(&target, allow_missing)?;
-        let trust_store = MutationTrustStoreSnapshot::load(options, owner_handle, trust_context)?;
-        let file_snapshot = ReviewedTextFile::from_optional_content(
-            &target.file_path,
-            file.as_content()
-                .map(|content| content.as_str().to_string()),
-            "KV file",
-            resolve_encrypted_artifact_read_limit(&target.file_path),
-        );
+        let file_snapshot = capture_reviewed_target(execution, &target, allow_missing)?;
+        let file = ReviewedKvFileState::from_capture(&target, &file_snapshot);
+        let trust_store = load_reviewed_trust_store(execution, trust_context)?;
         Ok(Self {
+            execution,
             target,
             file,
             file_snapshot,
@@ -88,21 +80,18 @@ impl MutationReviewSnapshot {
         self.ensure_trust_store_current()
     }
 
-    pub(super) fn ensure_current_at<D>(&self, dir: &D) -> Result<()>
-    where
-        D: DirectoryFd,
-    {
-        self.ensure_members_match()?;
-        self.file_snapshot.ensure_current_at(dir)?;
-        self.trust_store.ensure_current()
-    }
-
+    /// Confirm the secrets document below `dir` is still the reviewed entry.
+    ///
+    /// The identity is checked as well as the bytes: this guards a document of
+    /// secrets that is about to be rewritten, and a name repointed at another
+    /// file with the same contents would otherwise pass.
     pub(super) fn ensure_target_current_at<D>(&self, dir: &D) -> Result<()>
     where
         D: DirectoryFd,
     {
         self.ensure_members_match()?;
-        self.file_snapshot.ensure_current_at(dir)
+        self.file_snapshot
+            .ensure_identity_and_content_current_at(dir)
     }
 
     pub(super) fn existing_content(&self) -> Option<&KvEncContent> {
@@ -123,7 +112,10 @@ impl MutationReviewSnapshot {
                 "KV active members changed since review and must be reviewed again.".to_string(),
             ));
         }
-        if self.file_snapshot != current.file_snapshot {
+        if !self
+            .file_snapshot
+            .matches_reviewed_state(&current.file_snapshot)?
+        {
             return Err(Error::build_invalid_operation_error(
                 "KV file changed since review and must be reviewed again.".to_string(),
             ));
@@ -146,9 +138,15 @@ impl MutationReviewSnapshot {
         self.trust_store.ensure_current()
     }
 
+    /// Confirm the workspace still holds the member set the review was built on.
+    ///
+    /// The members are read through the workspace descriptor this command fixed,
+    /// the same one the write lands under, so a workspace repointed while the
+    /// operator was deciding cannot answer the authorization question from a
+    /// tree the review never saw.
     fn ensure_members_match(&self) -> Result<()> {
         ensure_workspace_members_match_snapshot(
-            &self.target.workspace_root.root_path,
+            self.execution.fixed_workspace_directory()?,
             &self.members,
             "KV active members changed since review and must be reviewed again.",
         )
@@ -159,62 +157,14 @@ impl MutationReviewSnapshot {
     }
 }
 
-impl MutationTrustStoreSnapshot {
-    pub(super) fn from_protected(
-        options: &CommonCommandOptions,
-        owner_handle: &str,
-        protected: Option<TrustStoreProtected>,
-    ) -> Self {
-        Self {
-            options: options.clone(),
-            owner_handle: owner_handle.to_string(),
-            protected,
-        }
-    }
-
-    fn load(
-        options: &CommonCommandOptions,
-        owner_handle: &str,
-        trust_context: &TrustContext,
-    ) -> Result<Self> {
-        let (_, state) = load_optional_trust_store_for_member(options, owner_handle)?;
-        let protected = state.map(|state| state.protected);
-        ensure_trust_context_matches(&protected, trust_context)?;
-        Ok(Self {
-            options: options.clone(),
-            owner_handle: owner_handle.to_string(),
-            protected,
-        })
-    }
-
-    pub(super) fn ensure_current(&self) -> Result<()> {
-        let (_, state) = load_optional_trust_store_for_member(&self.options, &self.owner_handle)?;
-        let current = state.map(|state| state.protected);
-        if current == self.protected {
-            return Ok(());
-        }
-        Err(build_trust_store_changed_error())
-    }
-}
-
-fn ensure_trust_context_matches(
-    protected: &Option<TrustStoreProtected>,
+/// A KV mutation verifies the trust store it reviews, so a run without a local
+/// keystore is reported here rather than passing as an empty store.
+fn load_reviewed_trust_store<'a>(
+    execution: &'a ExecutionContext,
     trust_context: &TrustContext,
-) -> Result<()> {
-    let (known_keys, recipient_sets) = protected
-        .as_ref()
-        .map(|state| (&state.known_keys[..], &state.recipient_sets[..]))
-        .unwrap_or_default();
-    if known_keys == trust_context.known_keys && recipient_sets == trust_context.recipient_sets {
-        return Ok(());
-    }
-    Err(build_trust_store_changed_error())
-}
-
-fn build_trust_store_changed_error() -> Error {
-    Error::build_invalid_operation_error(
-        "KV trust store changed since review and must be reviewed again.".to_string(),
-    )
+) -> Result<ReviewedTrustStore<'a>> {
+    execution.require_local_keystore_access("KV mutation")?;
+    ReviewedTrustStore::load(execution, trust_context, KV_TRUST_STORE_CHANGED_MESSAGE)
 }
 
 fn build_recipient_snapshot(workspace_members: &WorkspaceMemberSnapshot) -> KvRecipientSnapshot {

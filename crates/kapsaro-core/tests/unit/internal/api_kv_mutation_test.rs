@@ -5,17 +5,21 @@
 //! Ensures operation binding and exact active-member recipient authorization.
 
 use super::{KvEncArtifact, KvInputEntry, KvMutationOperation};
-use crate::api::key::{KeyContext, LocalKeyStore};
+use crate::api::key::{KeyContext, LocalKeyStore, MemberHandle};
 use crate::api::operation::OperationOptions;
 use crate::api::secret::SecretString;
 use crate::api::trust::{
-    CurrentMemberSnapshot, LocalTrustStore, TrustApproval, TrustDecision, TrustPolicyEvaluator,
-    TrustReviewKind,
+    ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, TrustApproval, TrustDecision,
+    TrustPolicyEvaluator, TrustReviewKind,
 };
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
 const BOB_MEMBER_HANDLE: &str = "bob@example.com";
+
+fn member_handle(value: &str) -> MemberHandle {
+    MemberHandle::try_from(value).expect("valid member handle")
+}
 
 #[test]
 fn test_authorized_kv_set_mutation_binds_operation() {
@@ -25,8 +29,9 @@ fn test_authorized_kv_set_mutation_binds_operation() {
         ALICE_MEMBER_HANDLE,
         None,
     ));
-    let recipients = LocalKeyStore::new(temp_dir.path().join("keys"))
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+    let recipients = LocalKeyStore::open(temp_dir.path().join("keys"))
+        .expect("open keystore")
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     let artifact = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
@@ -77,12 +82,15 @@ fn test_evaluate_kv_mutation_requires_output_recipient_reviews() {
         ALICE_MEMBER_HANDLE,
         None,
     ));
-    let key_store = LocalKeyStore::new(temp_dir.path().join("keys"));
+    let key_store = LocalKeyStore::open(temp_dir.path().join("keys")).expect("open keystore");
     let input_recipients = key_store
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     let output_recipients = key_store
-        .load_recipient_keys([BOB_MEMBER_HANDLE, ALICE_MEMBER_HANDLE])
+        .load_recipient_keys([
+            member_handle(BOB_MEMBER_HANDLE),
+            member_handle(ALICE_MEMBER_HANDLE),
+        ])
         .unwrap();
     let artifact = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
@@ -136,12 +144,15 @@ fn test_evaluate_kv_mutation_accepts_approved_output_recipient_set_and_persists_
         ALICE_MEMBER_HANDLE,
         None,
     ));
-    let key_store = LocalKeyStore::new(temp_dir.path().join("keys"));
+    let key_store = LocalKeyStore::open(temp_dir.path().join("keys")).expect("open keystore");
     let input_recipients = key_store
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     let output_recipients = key_store
-        .load_recipient_keys([BOB_MEMBER_HANDLE, ALICE_MEMBER_HANDLE])
+        .load_recipient_keys([
+            member_handle(BOB_MEMBER_HANDLE),
+            member_handle(ALICE_MEMBER_HANDLE),
+        ])
         .unwrap();
     let artifact = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
@@ -171,8 +182,15 @@ fn test_evaluate_kv_mutation_accepts_approved_output_recipient_set_and_persists_
         .map(TrustApproval::from_request)
         .collect::<crate::Result<Vec<_>>>()
         .unwrap();
-    let trust_store = LocalTrustStore::new(temp_dir.path(), ALICE_MEMBER_HANDLE.to_string());
-    trust_store.apply_approvals(approvals, &key_ctx).unwrap();
+    let trust_store = LocalTrustStore::open(temp_dir.path(), member_handle(ALICE_MEMBER_HANDLE))
+        .expect("open trust store");
+    trust_store
+        .apply_approvals_with_conflict_handling(
+            approvals,
+            &key_ctx,
+            ApprovalConflictHandling::merge(),
+        )
+        .unwrap();
     let store = trust_store
         .load_verified(&key_store)
         .unwrap()
@@ -209,12 +227,15 @@ fn test_evaluate_kv_mutation_requires_review_for_changed_output_recipient_set() 
         ALICE_MEMBER_HANDLE,
         None,
     ));
-    let key_store = LocalKeyStore::new(temp_dir.path().join("keys"));
+    let key_store = LocalKeyStore::open(temp_dir.path().join("keys")).expect("open keystore");
     let input_recipients = key_store
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     let output_recipients = key_store
-        .load_recipient_keys([ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE])
+        .load_recipient_keys([
+            member_handle(ALICE_MEMBER_HANDLE),
+            member_handle(BOB_MEMBER_HANDLE),
+        ])
         .unwrap();
     let artifact = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
@@ -250,8 +271,15 @@ fn test_evaluate_kv_mutation_requires_review_for_changed_output_recipient_set() 
         verified.recipient_set_subject().unwrap().sid(),
         vec![input_recipients.keys()[0].document().protected.kid.clone()],
     ));
-    let trust_store = LocalTrustStore::new(temp_dir.path(), ALICE_MEMBER_HANDLE.to_string());
-    trust_store.apply_approvals(approvals, &key_ctx).unwrap();
+    let trust_store = LocalTrustStore::open(temp_dir.path(), member_handle(ALICE_MEMBER_HANDLE))
+        .expect("open trust store");
+    trust_store
+        .apply_approvals_with_conflict_handling(
+            approvals,
+            &key_ctx,
+            ApprovalConflictHandling::merge(),
+        )
+        .unwrap();
     let store = trust_store
         .load_verified(&key_store)
         .unwrap()
@@ -287,9 +315,9 @@ fn test_evaluate_kv_mutation_rejects_store_owner_before_recipient_lookup() {
     ));
     let bob_ctx =
         KeyContext::from_inner(setup_member_key_context(&temp_dir, BOB_MEMBER_HANDLE, None));
-    let key_store = LocalKeyStore::new(temp_dir.path().join("keys"));
+    let key_store = LocalKeyStore::open(temp_dir.path().join("keys")).expect("open keystore");
     let recipients = key_store
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     let artifact = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
@@ -301,8 +329,22 @@ fn test_evaluate_kv_mutation_rejects_store_owner_before_recipient_lookup() {
     )
     .unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let trust_store = LocalTrustStore::new(temp_dir.path(), BOB_MEMBER_HANDLE.to_string());
-    trust_store.apply_approvals(Vec::new(), &bob_ctx).unwrap();
+    let trust_store = LocalTrustStore::open(temp_dir.path(), member_handle(BOB_MEMBER_HANDLE))
+        .expect("open trust store");
+    let alice_kid = key_store
+        .list_kids(&member_handle(ALICE_MEMBER_HANDLE))
+        .expect("list alice kids")
+        .into_iter()
+        .next()
+        .expect("alice kid must exist")
+        .into_string();
+    trust_store
+        .apply_approvals_with_conflict_handling(
+            vec![TrustApproval::known_key(ALICE_MEMBER_HANDLE, alice_kid)],
+            &bob_ctx,
+            ApprovalConflictHandling::merge(),
+        )
+        .unwrap();
     let store = trust_store
         .load_verified(&key_store)
         .unwrap()
@@ -338,8 +380,9 @@ fn test_evaluate_kv_mutation_output_recipient_subset_error() {
         ALICE_MEMBER_HANDLE,
         None,
     ));
-    let recipients = LocalKeyStore::new(temp_dir.path().join("keys"))
-        .load_recipient_keys([ALICE_MEMBER_HANDLE])
+    let recipients = LocalKeyStore::open(temp_dir.path().join("keys"))
+        .expect("open keystore")
+        .load_recipient_keys([member_handle(ALICE_MEMBER_HANDLE)])
         .unwrap();
     let artifact = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
@@ -365,5 +408,5 @@ fn test_evaluate_kv_mutation_output_recipient_subset_error() {
         Ok(_) => panic!("output recipients must include every active member"),
     };
 
-    assert_eq!(error.verification_rule(), Some("E_TRUST_REJECTED"));
+    assert_eq!(error.rule(), Some("E_TRUST_REJECTED"));
 }

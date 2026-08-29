@@ -11,16 +11,16 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    ensure_workspace_required, resolve_options, resolve_trust_store_owner_member,
+    ensure_workspace_required, resolve_options, resolve_write_execution_input,
     run_write_command_with_trust, WriteCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
-use crate::cli::common::output::text::print_warnings;
-use crate::cli::common::ssh::resolve_ssh_context_optional;
 use crate::cli::common::trust::{
-    confirm_recipient_set_approval, run_with_trust_store_reset_recovery,
+    confirm_recipient_set_approval, run_with_execution_trust_store_reset_recovery,
 };
 use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
+use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::file::encrypt::{
     execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
 };
@@ -66,39 +66,36 @@ pub(crate) fn run(args: EncryptArgs) -> Result<()> {
     )?;
     let options = resolve_options(&args.common);
     ensure_workspace_required(&options, "encrypt")?;
-    let (encrypted, approval_warnings) = run_with_trust_store_reset_recovery(
-        &options,
-        || resolve_trust_store_owner_member(&options, args.member.member_handle.clone()),
-        || {
-            let ssh_ctx =
-                resolve_ssh_context_optional(&options, args.member.member_handle.clone())?;
-            let command = resolve_encrypt_file_command(
-                &options,
-                args.member.member_handle.clone(),
-                input_bytes.clone(),
-                ssh_ctx,
-            )?;
-            run_write_command_with_trust(
-                &options,
-                &command,
-                WriteCommandLabels {
-                    signer_context: None,
-                    recipient_context: "encrypt recipients",
-                },
-                || {
-                    execute_encrypt_file_command_with_recipient_set_confirmation(
-                        &options,
-                        &command,
-                        confirm_recipient_set_approval,
-                    )
-                },
-            )
-        },
-    )?;
+    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
+    let encrypted = encrypt_under_trust_review(&options, &execution, &input_bytes)?;
 
-    print_warnings(&approval_warnings);
     save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet.quiet)?;
     Ok(())
+}
+
+fn encrypt_under_trust_review(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    input_bytes: &[u8],
+) -> Result<String> {
+    run_with_execution_trust_store_reset_recovery(execution, || {
+        let command = resolve_encrypt_file_command(options, execution, input_bytes.to_vec())?;
+        run_write_command_with_trust(
+            options,
+            &command,
+            WriteCommandLabels {
+                signer_context: None,
+                recipient_context: "encrypt recipients",
+            },
+            || {
+                execute_encrypt_file_command_with_recipient_set_confirmation(
+                    options,
+                    &command,
+                    confirm_recipient_set_approval,
+                )
+            },
+        )
+    })
 }
 
 fn resolve_encrypt_input_bytes(input_path: Option<&PathBuf>, from_stdin: bool) -> Result<Vec<u8>> {

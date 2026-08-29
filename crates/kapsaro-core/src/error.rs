@@ -6,6 +6,49 @@
 use std::error::Error as StdError;
 use std::fmt;
 
+// Recovery codes. Each names what would let the operator get past a failure,
+// and each is independent of what the failure was: a path that cannot be
+// trusted is repaired the same way whether reading it parsed badly or never
+// got that far. They travel on `Error::recovery`, never as a rule.
+pub(crate) const LOCAL_STATE_PATH_UNSAFE_RECOVERY: &str = "E_LOCAL_STATE_PATH_UNSAFE";
+
+/// A stored private key that group or other can reach, refused rather than
+/// read. Kept apart from the permission warning and from the unsafe path: the
+/// warning says an entry should be repaired and lets the command finish, and an
+/// unsafe path is about what stands where local state belongs. This one is the
+/// single case where local state permissions stop a read, and the repair for it
+/// is one `chmod`.
+pub(crate) const LOCAL_STATE_PRIVATE_KEY_EXPOSED_RECOVERY: &str =
+    "E_LOCAL_STATE_PRIVATE_KEY_EXPOSED";
+pub(crate) const TRUST_SIGNER_KEY_MISSING_RECOVERY: &str = "E_TRUST_SIGNER_KEY_MISSING";
+pub(crate) const LOCAL_KEYSTORE_MISSING_RECOVERY: &str = "E_LOCAL_KEYSTORE_MISSING";
+pub(crate) const TRUST_STORE_RESET_REQUIRED_RECOVERY: &str = "E_TRUST_STORE_RESET_REQUIRED";
+
+/// A key that still signs the local trust store and cannot be replaced as its
+/// signer, so removing it would leave the stored approvals unverifiable.
+pub(crate) const TRUST_SIGNER_KEY_IN_USE_RECOVERY: &str = "E_TRUST_SIGNER_KEY_IN_USE";
+pub(crate) const MEMBER_HANDLE_REQUIRED_RECOVERY: &str = "E_MEMBER_HANDLE_REQUIRED";
+
+// Codes carried in a serde error message, which cannot hold our own error type.
+pub(crate) const MEMBER_HANDLE_INVALID_RULE: &str = "E_MEMBER_HANDLE_INVALID";
+pub(crate) const KID_INVALID_RULE: &str = "E_KID_INVALID";
+
+// Diagnostic codes. Reported on a check the diagnostic command emits, never on
+// an `Error`.
+pub(crate) const LOCAL_STATE_PERMISSIONS_RULE: &str = "W_LOCAL_STATE_PERMISSIONS";
+
+/// An ancestor of local state owned by neither the operator nor the machine
+/// administrator. Reported by the diagnostic command only.
+pub(crate) const LOCAL_STATE_ANCESTOR_OWNER_RULE: &str = "W_LOCAL_STATE_ANCESTOR_OWNER";
+
+/// A directory whose locks do not exclude every writer that can reach it.
+/// Reported by the diagnostic command only.
+pub(crate) const LOCK_EXCLUSION_RULE: &str = "W_LOCK_EXCLUSION";
+
+/// An entry an interrupted write staged and never published. Reported by the
+/// diagnostic command only; the commands that read the directory refuse it.
+pub(crate) const LOCAL_STATE_WRITE_RESIDUE_RULE: &str = "W_LOCAL_STATE_WRITE_RESIDUE";
+
 type BoxedSource = Box<dyn StdError + Send + Sync>;
 
 /// Stable error category exposed to embedding applications.
@@ -23,7 +66,36 @@ pub enum ErrorKind {
     InvalidOperation,
 }
 
+impl ErrorKind {
+    /// Whether the failure is a statement about the loaded content itself.
+    ///
+    /// Parsing, schema validation, and signature verification all read the
+    /// stored bytes, so a failure of theirs proves the content is unusable. An
+    /// I/O failure or an unsafe path says nothing about the content, so it
+    /// keeps travelling as itself.
+    ///
+    /// `InvalidArgument` belongs here for the same reason: the identity values
+    /// a stored document carries are parsed back into their types on the way
+    /// out, so a handle or a kid that fails validation is a corrupt document
+    /// rather than a bad call. Judge this alongside [`Error::kind`] at the call
+    /// site when the argument could have come from the caller instead.
+    pub(crate) fn is_content_failure(self) -> bool {
+        matches!(
+            self,
+            Self::Schema | Self::Crypto | Self::Verify | Self::Parse | Self::InvalidArgument
+        )
+    }
+}
+
 /// The main error type for kapsaro operations.
+///
+/// An error answers three questions that do not follow from one another, and
+/// each has its own accessor: what went wrong ([`Error::kind`]), which rule the
+/// check was made against ([`Error::rule`]), and what would let the operator
+/// get past it ([`Error::recovery`]). The last one is orthogonal to the first:
+/// a path that cannot be trusted is repaired the same way whether reading it
+/// parsed badly or never got that far, so attaching a recovery route never
+/// costs the caller the category the failure came in as.
 ///
 /// The representation is intentionally opaque. Match on [`ErrorKind`] through
 /// [`Error::kind`] and use the provided accessors instead of depending on
@@ -31,6 +103,7 @@ pub enum ErrorKind {
 #[derive(Debug)]
 pub struct Error {
     repr: ErrorRepr,
+    recovery: Option<&'static str>,
 }
 
 #[derive(Debug)]
@@ -76,6 +149,19 @@ enum ErrorRepr {
 /// A convenient Result type alias using [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Turn "it is not there" into absence, leaving every other failure alone.
+///
+/// Only the not-found category becomes `None`: collapsing an unsafe path or an
+/// I/O failure into absence would let a caller carry on as though it had looked
+/// and found nothing.
+pub(crate) fn absent_as_none<T>(opened: Result<T>) -> Result<Option<T>> {
+    match opened {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 impl Error {
     /// Return the stable category for this error.
     pub fn kind(&self) -> ErrorKind {
@@ -93,12 +179,53 @@ impl Error {
         }
     }
 
-    /// Return the verification rule for verification errors.
-    pub fn verification_rule(&self) -> Option<&str> {
+    /// The validation rule this error was refused under, if there was one.
+    ///
+    /// Only a verification failure names a rule: the rule says which check the
+    /// input was held against, which is a question only verification asks. What
+    /// would repair the failure is a separate axis and is read from
+    /// [`Error::recovery`] instead, so a rule and a recovery code never have to
+    /// be told apart by their name.
+    pub fn rule(&self) -> Option<&str> {
         match &self.repr {
             ErrorRepr::Verify { rule, .. } => Some(rule),
             _ => None,
         }
+    }
+
+    /// The stable code naming what would let the operator get past this error.
+    ///
+    /// Independent of [`Error::kind`]: any category of failure may have a known
+    /// route out of it, and attaching one never changes what the failure was.
+    pub fn recovery(&self) -> Option<&'static str> {
+        self.recovery
+    }
+
+    /// Name the route out of this failure, keeping everything else about it.
+    pub(crate) fn with_recovery(mut self, code: &'static str) -> Self {
+        self.recovery = Some(code);
+        self
+    }
+
+    /// Restate this failure with a fuller message, keeping everything else.
+    ///
+    /// The category, the rule, the recovery route, and the source all decide
+    /// how a failure is handled further up, so only the message grows.
+    pub(crate) fn with_message(mut self, message: impl Into<String>) -> Self {
+        let slot = match &mut self.repr {
+            ErrorRepr::Schema { message, .. }
+            | ErrorRepr::Crypto { message, .. }
+            | ErrorRepr::Ssh { message, .. }
+            | ErrorRepr::Verify { message, .. }
+            | ErrorRepr::Io { message, .. }
+            | ErrorRepr::Parse { message, .. }
+            | ErrorRepr::Config { message }
+            | ErrorRepr::NotFound { message }
+            | ErrorRepr::InvalidArgument { message }
+            | ErrorRepr::InvalidOperation { message } => message,
+        };
+        *slot = message.into();
+        self
     }
 
     /// Build a JSON Schema validation error.
@@ -178,6 +305,28 @@ impl Error {
         Self::from_repr(ErrorRepr::InvalidOperation {
             message: message.into(),
         })
+    }
+
+    /// Refuse local state that is not what the layout expects: an entry of the
+    /// wrong file type, a name that cannot be stored, an unpublished staging
+    /// entry, or a path that cannot be tied to the object it was checked as.
+    pub(crate) fn build_local_state_path_unsafe_error(message: impl Into<String>) -> Self {
+        Self::build_invalid_operation_error(message).with_recovery(LOCAL_STATE_PATH_UNSAFE_RECOVERY)
+    }
+
+    /// Refuse a stored private key another account can reach.
+    ///
+    /// The entry is exactly what the layout expects, so this is not an unsafe
+    /// path; what stops the read is its mode or its owner. Naming that on its
+    /// own lets a caller offer the `chmod` that repairs it without having to
+    /// re-inspect the file to find out which condition it met.
+    pub(crate) fn build_local_state_private_key_exposed_error(message: impl Into<String>) -> Self {
+        Self::build_invalid_operation_error(message)
+            .with_recovery(LOCAL_STATE_PRIVATE_KEY_EXPOSED_RECOVERY)
+    }
+
+    pub(crate) fn build_local_keystore_missing_error(message: impl Into<String>) -> Self {
+        Self::build_invalid_operation_error(message).with_recovery(LOCAL_KEYSTORE_MISSING_RECOVERY)
     }
 
     /// Build a cryptographic error.
@@ -270,7 +419,10 @@ impl Error {
     }
 
     fn from_repr(repr: ErrorRepr) -> Self {
-        Self { repr }
+        Self {
+            repr,
+            recovery: None,
+        }
     }
 
     fn source_ref(&self) -> Option<&(dyn StdError + 'static)> {
@@ -302,7 +454,9 @@ impl fmt::Display for Error {
             }
             ErrorRepr::Io { message, .. } => write!(formatter, "I/O error: {message}"),
             ErrorRepr::Parse { message, .. } => write!(formatter, "Parse error: {message}"),
-            ErrorRepr::Config { message } => write!(formatter, "Configuration error: {message}"),
+            ErrorRepr::Config { message } => {
+                write!(formatter, "Configuration error: {message}")
+            }
             ErrorRepr::NotFound { message } => write!(formatter, "Not found: {message}"),
             ErrorRepr::InvalidArgument { message } => {
                 write!(formatter, "Invalid argument: {message}")

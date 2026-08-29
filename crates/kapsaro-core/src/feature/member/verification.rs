@@ -7,7 +7,7 @@ use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, MEMBER_VERIFICATION_INPUT_CONTEXT,
     WORKSPACE_MEMBER_FILE_CONTEXT,
 };
-use crate::io::verify_online::{VerificationResult, VerificationStatus};
+use crate::io::verify_online::VerificationResult;
 use crate::model::public_key::PublicKey;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -110,27 +110,6 @@ pub fn derive_member_handle_from_path(member_file: &Path) -> String {
         .and_then(OsStr::to_str)
         .map(str::to_string)
         .unwrap_or_else(|| format_path_relative_to_cwd(member_file))
-}
-
-/// Classify verification results into verified, failed, and not_configured.
-pub fn build_verification_result_groups(
-    results: &[VerificationResult],
-) -> (
-    Vec<&VerificationResult>,
-    Vec<&VerificationResult>,
-    Vec<&VerificationResult>,
-) {
-    let mut verified = Vec::new();
-    let mut failed = Vec::new();
-    let mut not_configured = Vec::new();
-    for result in results {
-        match result.status {
-            VerificationStatus::Verified => verified.push(result),
-            VerificationStatus::Failed => failed.push(result),
-            VerificationStatus::NotConfigured => not_configured.push(result),
-        }
-    }
-    (verified, failed, not_configured)
 }
 
 fn build_verified_member_subject_from_public_key(

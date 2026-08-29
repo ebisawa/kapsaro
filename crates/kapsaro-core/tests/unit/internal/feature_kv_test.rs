@@ -5,20 +5,21 @@
 //!
 //! Tests for KV operations (get/set/unset/list).
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::kv::decrypt::decrypt_kv_single_entry;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::decrypt::decrypt_kv_single_entry_with_context;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::kv::mutate::{
-    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult,
+    set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
 };
 use crate::feature::kv::types::KvInputEntry;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
-use crate::format::kv::enc::canonical::parse_kv_wrap;
+use crate::format::kv::document::parse_kv_document;
+use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::{list_kids, load_public_key};
-use crate::io::workspace::members::{list_active_member_handles, load_member_files};
+use crate::io::workspace::members::test_support::{list_active_member_handles, load_member_files};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{
@@ -48,7 +49,15 @@ fn build_test_kv_enc_content(
         signer_kid: kid,
         signer_pub,
     };
-    encrypt_kv_document(kv_map, &verified_members, &signing, TokenCodec::JsonJcs).unwrap()
+    encrypt_kv_map_with_wrap_mutation(
+        kv_map,
+        &verified_members,
+        &signing,
+        TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
+    )
+    .unwrap()
 }
 
 fn list_kv_keys(content: &KvEncContent) -> kapsaro_core::Result<Vec<String>> {
@@ -72,13 +81,7 @@ fn decrypt_kv_value(
     key: &str,
 ) -> kapsaro_core::Result<String> {
     let verified = verify_kv_content(content)?;
-    let value = decrypt_kv_single_entry(
-        &verified,
-        member_handle,
-        key_ctx.kid(),
-        key_ctx.private_key(),
-        key,
-    )?;
+    let value = decrypt_kv_single_entry_with_context(&verified, member_handle, key_ctx, key)?.value;
     String::from_utf8(value.to_vec()).map_err(|e| {
         kapsaro_core::Error::build_parse_error_with_source(
             format!("Invalid UTF-8 in decrypted value: {}", e),
@@ -105,7 +108,7 @@ fn set_kv_entry(
     entries: &[(String, String)],
     workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
-) -> kapsaro_core::Result<KvSetResult> {
+) -> kapsaro_core::Result<KvEncContent> {
     let recipients = build_recipient_snapshot(workspace_root)?;
     let entries = entries
         .iter()
@@ -234,8 +237,12 @@ fn test_set_kv_entry_new_file() {
     .unwrap();
 
     // Verify result
-    assert!(result.encrypted.as_str().contains("DATABASE_URL"));
-    assert_eq!(result.recipients, vec![ALICE_MEMBER_HANDLE.to_string()]);
+    assert!(result.as_str().contains("DATABASE_URL"));
+    let wrap = parse_kv_document(result.as_str()).unwrap().wrap;
+    assert_eq!(
+        extract_recipients_from_wrap(&wrap),
+        vec![ALICE_MEMBER_HANDLE.to_string()]
+    );
 }
 
 #[test]
@@ -265,8 +272,8 @@ fn test_set_kv_entry_existing_file() {
     let result = set_kv_entry(Some(&existing_content), &entries, &workspace_dir, &ctx).unwrap();
 
     // Verify result contains both keys
-    assert!(result.encrypted.as_str().contains("DATABASE_URL"));
-    assert!(result.encrypted.as_str().contains("API_KEY"));
+    assert!(result.as_str().contains("DATABASE_URL"));
+    assert!(result.as_str().contains("API_KEY"));
 }
 
 #[test]
@@ -348,10 +355,14 @@ fn test_set_kv_entry_multiple_entries_new_file() {
     ];
     let result = set_kv_entry(None, &entries, &workspace_dir, &ctx).unwrap();
 
-    assert!(result.encrypted.as_str().contains("DATABASE_URL"));
-    assert!(result.encrypted.as_str().contains("API_KEY"));
-    assert!(result.encrypted.as_str().contains("APP_SECRET"));
-    assert_eq!(result.recipients, vec![ALICE_MEMBER_HANDLE.to_string()]);
+    assert!(result.as_str().contains("DATABASE_URL"));
+    assert!(result.as_str().contains("API_KEY"));
+    assert!(result.as_str().contains("APP_SECRET"));
+    let wrap = parse_kv_document(result.as_str()).unwrap().wrap;
+    assert_eq!(
+        extract_recipients_from_wrap(&wrap),
+        vec![ALICE_MEMBER_HANDLE.to_string()]
+    );
 }
 
 #[test]
@@ -379,9 +390,9 @@ fn test_set_kv_entry_multiple_entries_existing_file() {
     let result = set_kv_entry(Some(&existing_content), &new_entries, &workspace_dir, &ctx).unwrap();
 
     // Verify result contains both existing and new keys
-    assert!(result.encrypted.as_str().contains("EXISTING_KEY"));
-    assert!(result.encrypted.as_str().contains("NEW_KEY_1"));
-    assert!(result.encrypted.as_str().contains("NEW_KEY_2"));
+    assert!(result.as_str().contains("EXISTING_KEY"));
+    assert!(result.as_str().contains("NEW_KEY_1"));
+    assert!(result.as_str().contains("NEW_KEY_2"));
 }
 
 #[test]
@@ -410,7 +421,7 @@ fn test_set_kv_entry_existing_file_uses_current_workspace_recipients() {
     )
     .unwrap();
 
-    let (_, _, wrap) = parse_kv_wrap(result.encrypted.as_str()).unwrap();
+    let wrap = parse_kv_document(result.as_str()).unwrap().wrap;
     let mut recipient_handles = wrap
         .wrap
         .iter()
@@ -447,7 +458,7 @@ fn test_unset_kv_entry_existing_file_uses_current_workspace_recipients() {
     let result =
         unset_kv_entry_with_recipients(&existing_content, "API_KEY", &recipients, &ctx).unwrap();
 
-    let (_, _, wrap) = parse_kv_wrap(&result).unwrap();
+    let wrap = parse_kv_document(&result).unwrap().wrap;
     let mut recipient_handles = wrap
         .wrap
         .iter()
@@ -487,7 +498,7 @@ fn test_set_kv_entry_new_file_uses_recipients_snapshot_not_pub_key_source() {
     )
     .unwrap();
 
-    let (_, _, wrap) = parse_kv_wrap(result.encrypted.as_str()).unwrap();
+    let wrap = parse_kv_document(result.as_str()).unwrap().wrap;
     let mut recipient_handles = wrap
         .wrap
         .iter()

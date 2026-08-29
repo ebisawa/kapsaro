@@ -8,6 +8,8 @@ mod execution;
 mod plan;
 mod snapshot;
 
+// Counter and hooks below are the test seams defined in `execution`; they are
+// re-exported so the mutation tests can observe and interrupt the write window.
 #[cfg(test)]
 pub(crate) use execution::{authorized_mutation_count, reset_authorized_mutation_count};
 pub use execution::{

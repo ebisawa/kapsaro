@@ -4,7 +4,7 @@
 //! Builder for unsigned KV document wire-format drafts.
 //! Converts parsed kv-enc lines into token-preserving draft state.
 
-use crate::format::schema::document::{parse_kv_entry_token, parse_kv_wrap_token};
+use crate::format::schema::document::parse_kv_wrap_token;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
@@ -33,6 +33,9 @@ impl KvDocumentBuilder {
     }
 
     /// Build from a validated KV-enc document.
+    ///
+    /// * `wrap` - if `Some`, the WRAP line is stored as `Decoded`; if `None`,
+    ///   the WRAP token is decoded from the raw line and stored as `Raw`.
     pub fn from_document(
         head: KvHeader,
         wrap: Option<KvWrap>,
@@ -53,38 +56,6 @@ impl KvDocumentBuilder {
         Ok(Self {
             head,
             wrap: wrap_source,
-            entries,
-            token_codec,
-        })
-    }
-
-    /// Build from parsed KV-enc lines.
-    ///
-    /// * `wrap` - if `Some`, the WRAP line is stored as `Decoded`; if `None`,
-    ///   the WRAP token is decoded from the raw line and stored as `Raw`.
-    pub fn from_lines(
-        head: KvHeader,
-        wrap: Option<KvWrap>,
-        lines: &[KvEncLine],
-        token_codec: TokenCodec,
-    ) -> Result<Self> {
-        let mut entries = Vec::new();
-
-        for line in lines {
-            if let KvEncLine::KV { key, token } = line {
-                entries.push(KvDocumentEntry::Preserved {
-                    key: key.clone(),
-                    token: token.clone(),
-                    value: parse_kv_entry_token(token)?,
-                });
-            }
-        }
-
-        let wrap = Self::wrap_source_from_lines(wrap.as_ref(), lines)?;
-
-        Ok(Self {
-            head,
-            wrap,
             entries,
             token_codec,
         })

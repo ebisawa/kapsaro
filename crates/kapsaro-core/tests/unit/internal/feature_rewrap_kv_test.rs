@@ -3,16 +3,16 @@
 
 //! Unit tests for feature/rewrap/kv module (KV document rewrap operations).
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::format::content::{EncContent, KvEncContent};
 use crate::format::kv::document::parse_kv_document;
 use crate::format::kv::dotenv::parse_dotenv;
-use crate::format::schema::document::{parse_kv_entry_token, parse_kv_wrap_token};
+use crate::format::schema::document::{parse_kv_entry_token_with_source, parse_kv_wrap_token};
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::KvWrap;
 use crate::model::kv_enc::line::KvEncLine;
@@ -101,7 +101,7 @@ fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) 
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
     let members = build_verified_recipient_keys(std::slice::from_ref(&public_key));
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &members,
         &SigningContext {
@@ -110,6 +110,8 @@ fn encrypt_kv_for_alice(temp_dir: &TempDir, kid: &str, key_ctx: &CryptoContext) 
             signer_pub: public_key.clone(),
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -126,7 +128,7 @@ fn encrypt_kv_for_alice_and_bob(
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_kid).unwrap();
     let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\n").unwrap();
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &members,
         &SigningContext {
@@ -135,6 +137,8 @@ fn encrypt_kv_for_alice_and_bob(
             signer_pub: alice_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -171,7 +175,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    crate::io::keystore::storage::save_key_pair_atomic(
+    crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,
@@ -410,7 +414,8 @@ fn extract_disclosed_flags(content: &str) -> Vec<(String, bool)> {
         .iter()
         .filter_map(|line| {
             if let KvEncLine::KV { key, token } = line {
-                let entry: KvEntryValue = parse_kv_entry_token(token).unwrap();
+                let entry: KvEntryValue =
+                    parse_kv_entry_token_with_source(token, "KV entry token").unwrap();
                 Some((key.clone(), entry.disclosed))
             } else {
                 None
@@ -540,7 +545,7 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, &bob_kid).unwrap();
     let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &members,
         &SigningContext {
@@ -549,6 +554,8 @@ fn test_rewrap_kv_remove_then_rotate_preserves_disclosed_true() {
             signer_pub: alice_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 
@@ -587,7 +594,7 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
     let bob_pub = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, &bob_kid).unwrap();
     let members = build_verified_recipient_keys(&[alice_pub.clone(), bob_pub]);
     let kv_map = parse_dotenv("DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n").unwrap();
-    let encrypted = encrypt_kv_document(
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &members,
         &SigningContext {
@@ -596,6 +603,8 @@ fn test_rewrap_kv_clear_disclosure_history_resets_disclosed_flags() {
             signer_pub: alice_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
 

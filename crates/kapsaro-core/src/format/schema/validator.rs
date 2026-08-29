@@ -4,13 +4,10 @@
 //! JSON Schema validator.
 
 use crate::model::wire::format::{FILE_ENC_V1, PRIVATE_KEY_V1, PUBLIC_KEY_V1};
-use crate::support::fs::load_text;
-use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use jsonschema::error::ValidationErrorKind;
 use jsonschema::ValidationError;
 use serde_json::Value;
-use std::path::Path;
 use std::sync::LazyLock;
 
 const MAX_SCHEMA_ERROR_REASONS: usize = 5;
@@ -100,16 +97,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn for_target(target: SchemaTarget) -> Result<Self> {
-        let schema_json = target.load_schema_from_paths()?;
-        let resources = load_schema_resources_from_paths()?;
-        Self::from_schema_with_resources(schema_json, &resources)
-    }
-
-    pub fn from_schema(schema_json: Value) -> Result<Self> {
-        Self::from_schema_with_resources(schema_json, &[])
-    }
-
     pub fn from_schema_with_resources(
         schema_json: Value,
         resources: &[(String, Value)],
@@ -124,10 +111,6 @@ impl Validator {
             })?;
 
         Ok(Self { schema: compiled })
-    }
-
-    pub fn load_schema_from_paths(filename: &str) -> Result<Value> {
-        load_schema_file(filename)
     }
 
     pub fn validate_public_key(&self, doc: &Value) -> Result<()> {
@@ -249,15 +232,6 @@ fn parse_embedded_schema_resources() -> std::result::Result<Vec<(String, Value)>
         .collect()
 }
 
-fn load_schema_resources_from_paths() -> Result<Vec<(String, Value)>> {
-    SCHEMA_RESOURCE_CONTENTS
-        .iter()
-        .map(|resource| {
-            load_schema_file(resource.uri).map(|schema| (resource.uri.to_string(), schema))
-        })
-        .collect()
-}
-
 fn build_registry(resources: &[(String, Value)]) -> Result<jsonschema::Registry<'_>> {
     let mut registry = jsonschema::Registry::new();
     for (uri, schema) in resources {
@@ -271,30 +245,6 @@ fn build_registry(resources: &[(String, Value)]) -> Result<jsonschema::Registry<
     registry.prepare().map_err(|e| {
         Error::build_schema_error_with_source(
             format!("Failed to prepare schema registry: {}", e),
-            e,
-        )
-    })
-}
-
-fn load_schema_file(filename: &str) -> Result<Value> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("schemas")
-        .join(filename);
-    if !path.exists() {
-        return Err(Error::build_not_found_error(format!(
-            "Schema file not found: {}",
-            filename
-        )));
-    }
-
-    let content = load_text(&path)?;
-    serde_json::from_str(&content).map_err(|e| {
-        Error::build_parse_error_with_source(
-            format!(
-                "Failed to parse schema file {}: {}",
-                format_path_relative_to_cwd(&path),
-                e
-            ),
             e,
         )
     })
@@ -333,13 +283,6 @@ impl SchemaTarget {
             Self::KvHead | Self::KvWrap | Self::KvEntry => None,
             Self::ArtifactSignature => Some(ARTIFACT_SIGNATURE_SCHEMA),
             Self::LocalTrust => Some(LOCAL_TRUST_SCHEMA),
-        }
-    }
-
-    fn load_schema_from_paths(self) -> Result<Value> {
-        match self {
-            Self::KvHead | Self::KvWrap | Self::KvEntry => Ok(self.wrapper_schema()),
-            _ => load_schema_file(self.filename()),
         }
     }
 

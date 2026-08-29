@@ -6,7 +6,7 @@
 use super::loader::load_verified_private_key_from_keystore;
 use super::{CryptoContext, DecryptionKeyInfo, DecryptionKeyResolution};
 use crate::feature::envelope::wrap_set::WrapSet;
-use crate::model::identity::Kid;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
 use crate::{Error, ErrorKind, Result};
 use tracing::debug;
@@ -17,132 +17,178 @@ impl CryptoContext {
         wrap_set: &WrapSet,
         member_handle: &str,
     ) -> Result<DecryptionKeyResolution<'a>> {
-        let wrap_kids = wrap_set.self_wrap_kids(member_handle);
-        let candidates =
-            build_candidate_kids(&wrap_kids, self.selected_kid_override.as_ref(), &self.kid);
+        let keystore_member_handle = MemberHandle::try_from(member_handle)?;
+        let wrap_kid = wrap_set.self_wrap_kid(member_handle);
+        let candidate = select_candidate_kid(wrap_kid, self.selected_kid_override.as_ref());
         debug!(
             "[CRYPTO] local decryption key: select member_handle={}, explicit_kid={}, wrap_kid_count={}, candidate_count={}",
             member_handle,
             self.selected_kid_override.is_some(),
-            wrap_kids.len(),
-            candidates.len()
+            usize::from(wrap_kid.is_some()),
+            usize::from(candidate.is_some())
         );
 
-        for kid in &candidates {
+        if let Some(kid) = &candidate {
             if kid == &self.kid {
-                debug!(
-                    "[CRYPTO] local decryption key: selected active key (kid: {})",
-                    format_kid_half_display_lossy(kid.as_str())
-                );
-                return Ok(DecryptionKeyResolution::Active {
-                    private_key: &self.private_key,
-                    info: DecryptionKeyInfo {
-                        kid: kid.to_string(),
-                        expires_at: self.local_key_expiry.primary_expires_at().to_string(),
-                        used_fallback: false,
-                        key_identity: self.local_key_identity.clone(),
-                        key_expiry: self.local_key_expiry.clone(),
-                    },
-                });
+                return Ok(self.active_decryption_key(kid));
             }
 
-            let Some(local_key_access) = self.local_key_access.as_ref() else {
-                debug!(
-                    "[CRYPTO] local decryption key: fallback unavailable (kid: {})",
-                    format_kid_half_display_lossy(kid.as_str())
-                );
-                continue;
-            };
-            debug!(
-                "[CRYPTO] local decryption key: try fallback key (kid: {})",
-                format_kid_half_display_lossy(kid.as_str())
-            );
-
-            match load_verified_private_key_from_keystore(
-                &local_key_access.keystore_root,
-                member_handle,
-                kid.as_str(),
-                local_key_access.ssh_backend.as_ref(),
-                &local_key_access.ssh_pubkey,
-            ) {
-                Ok(loaded) => {
-                    debug!(
-                        "[CRYPTO] local decryption key: selected fallback key (kid: {})",
-                        format_kid_half_display_lossy(kid.as_str())
-                    );
-                    return Ok(DecryptionKeyResolution::Fallback {
-                        private_key: Box::new(loaded.private_key),
-                        info: DecryptionKeyInfo {
-                            kid: kid.to_string(),
-                            expires_at: loaded.key_expiry.primary_expires_at().to_string(),
-                            used_fallback: true,
-                            key_identity: loaded.key_identity,
-                            key_expiry: loaded.key_expiry,
-                        },
-                    });
-                }
-                Err(error) if error.kind() == ErrorKind::NotFound => {
-                    debug!(
-                        "[CRYPTO] local decryption key: fallback key not found (kid: {})",
-                        format_kid_half_display_lossy(kid.as_str())
-                    );
-                    continue;
-                }
-                Err(error) => return Err(error),
+            if let Some(resolution) = self.load_fallback_key(&keystore_member_handle, kid)? {
+                return Ok(resolution);
             }
         }
 
-        Err(build_missing_wrap_error(
+        Err(build_missing_decryption_key_error(
             member_handle,
             self.selected_kid_override.as_ref(),
-            &candidates,
+            candidate.as_ref(),
+            classify_missing_decryption_key(wrap_kid, candidate.as_ref()),
         ))
     }
-}
 
-fn build_candidate_kids(
-    wrap_kids: &[Kid],
-    explicit_kid: Option<&Kid>,
-    active_kid: &Kid,
-) -> Vec<Kid> {
-    if let Some(kid) = explicit_kid {
-        return vec![kid.clone()];
-    }
-
-    let mut candidates = Vec::new();
-    if wrap_kids.iter().any(|kid| kid == active_kid) {
-        candidates.push(active_kid.clone());
-    }
-    for kid in wrap_kids {
-        if candidates.contains(kid) {
-            continue;
+    /// The key this context already holds, when the search settled on its id.
+    fn active_decryption_key(&self, kid: &Kid) -> DecryptionKeyResolution<'_> {
+        debug!(
+            "[CRYPTO] local decryption key: selected active key (kid: {})",
+            format_kid_half_display_lossy(kid.as_str())
+        );
+        DecryptionKeyResolution::Active {
+            private_key: &self.private_key,
+            info: DecryptionKeyInfo {
+                kid: kid.to_string(),
+                expires_at: self.local_key_expiry.primary_expires_at().to_string(),
+                used_fallback: false,
+                key_identity: self.local_key_identity.clone(),
+                key_expiry: self.local_key_expiry.clone(),
+            },
         }
-        candidates.push(kid.clone());
     }
-    candidates
+
+    /// Open the keystore copy of a key that is not the active one.
+    ///
+    /// `None` means the caller has to report the key as unavailable: either no
+    /// keystore is reachable, or the keystore holds nothing under this key id.
+    fn load_fallback_key(
+        &self,
+        keystore_member_handle: &MemberHandle,
+        kid: &Kid,
+    ) -> Result<Option<DecryptionKeyResolution<'_>>> {
+        let Some(local_key_access) = self.local_key_access.as_ref() else {
+            debug!(
+                "[CRYPTO] local decryption key: fallback unavailable (kid: {})",
+                format_kid_half_display_lossy(kid.as_str())
+            );
+            return Ok(None);
+        };
+        debug!(
+            "[CRYPTO] local decryption key: try fallback key (kid: {})",
+            format_kid_half_display_lossy(kid.as_str())
+        );
+
+        match load_verified_private_key_from_keystore(
+            &local_key_access.keystore_access,
+            keystore_member_handle,
+            kid,
+            local_key_access.ssh_backend.as_ref(),
+            &local_key_access.ssh_pubkey,
+        ) {
+            Ok(loaded) => {
+                debug!(
+                    "[CRYPTO] local decryption key: selected fallback key (kid: {})",
+                    format_kid_half_display_lossy(kid.as_str())
+                );
+                Ok(Some(DecryptionKeyResolution::Fallback {
+                    private_key: Box::new(loaded.private_key),
+                    info: DecryptionKeyInfo {
+                        kid: kid.to_string(),
+                        expires_at: loaded.key_expiry.primary_expires_at().to_string(),
+                        used_fallback: true,
+                        key_identity: loaded.key_identity,
+                        key_expiry: loaded.key_expiry,
+                    },
+                }))
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                debug!(
+                    "[CRYPTO] local decryption key: fallback key not found (kid: {})",
+                    format_kid_half_display_lossy(kid.as_str())
+                );
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
 }
 
-fn build_missing_wrap_error(
+/// The one key id worth opening, which an explicit selection overrides.
+fn select_candidate_kid(wrap_kid: Option<&Kid>, explicit_kid: Option<&Kid>) -> Option<Kid> {
+    explicit_kid.or(wrap_kid).cloned()
+}
+
+/// Which half of the pair a decryption needs was the one that was missing.
+///
+/// The two are repaired in different places, so a report that does not tell
+/// them apart sends the operator to the wrong one.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MissingDecryptionKey {
+    /// Nothing in the artifact is wrapped to the key id that was searched for.
+    Wrap,
+    /// The artifact holds a wrap for that key id, and the keystore holds no key
+    /// under it.
+    LocalKey,
+}
+
+/// Say which of the two was missing, from what the search had to work with.
+///
+/// The searched key id is the wrap's own only when no explicit selection
+/// overrode it, and that is the single case where a wrap for it is known to
+/// exist. An explicit selection naming another key, or a search with no wrap to
+/// go on, has no wrap behind it whatever the keystore holds.
+fn classify_missing_decryption_key(
+    wrap_kid: Option<&Kid>,
+    searched_kid: Option<&Kid>,
+) -> MissingDecryptionKey {
+    match (wrap_kid, searched_kid) {
+        (Some(wrap_kid), Some(searched_kid)) if wrap_kid == searched_kid => {
+            MissingDecryptionKey::LocalKey
+        }
+        _ => MissingDecryptionKey::Wrap,
+    }
+}
+
+/// Report the key that could not be selected as what was actually missing.
+///
+/// A key id the artifact wraps to but the keystore no longer holds is the shape
+/// a rotation leaves behind once the old key is removed. Reporting it as a
+/// missing wrap would send the operator to the artifact's recipients, which are
+/// intact, instead of to the key.
+fn build_missing_decryption_key_error(
     member_handle: &str,
     explicit_kid: Option<&Kid>,
-    searched_kids: &[Kid],
+    searched_kid: Option<&Kid>,
+    missing: MissingDecryptionKey,
 ) -> Error {
-    match explicit_kid {
-        Some(kid) => Error::build_crypto_error(format!(
+    let searched = searched_kid
+        .map(|kid| format_kid_display_lossy(kid.as_str()))
+        .unwrap_or_default();
+    let message = match (missing, explicit_kid) {
+        (MissingDecryptionKey::LocalKey, _) => format!(
+            "Wrap found for kid '{}', but no local key with that kid is in the keystore \
+             (member: {})",
+            searched, member_handle
+        ),
+        (MissingDecryptionKey::Wrap, Some(_)) => format!(
             "No wrap found for kid '{}' (member: {})",
-            format_kid_display_lossy(kid.as_str()),
-            member_handle
-        )),
-        None => {
-            let searched = searched_kids
-                .iter()
-                .map(|kid| format_kid_display_lossy(kid.as_str()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            Error::build_crypto_error(format!(
-                "No wrap found for any local kid [{}] (member: {})",
-                searched, member_handle
-            ))
-        }
-    }
+            searched, member_handle
+        ),
+        (MissingDecryptionKey::Wrap, None) => format!(
+            "No wrap found for any local kid [{}] (member: {})",
+            searched, member_handle
+        ),
+    };
+    Error::build_crypto_error(message)
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/unit/internal/feature_context_crypto_decryption_key_test.rs"]
+mod feature_context_crypto_decryption_key_test;

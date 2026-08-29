@@ -1,0 +1,9 @@
+disallowed-methods = [
+    { path = "ed25519_dalek::Verifier::verify", reason = "use VerifyingKey::verify_strict via crypto::sign; the Verifier trait accepts small-order keys and non-canonical signatures, so a valid signature would no longer imply a private key holder" },
+    { path = "ed25519_dalek::SigningKey::verify", reason = "use VerifyingKey::verify_strict via crypto::sign; this inherent method is the permissive form as well, so a valid signature would no longer imply a private key holder" },
+    { path = "ed25519_dalek::hazmat::raw_verify", reason = "use VerifyingKey::verify_strict via crypto::sign; this skips the strictness checks entirely, so a valid signature would no longer imply a private key holder" },
+    # `batch` is off, so this path does not resolve today; allow-invalid keeps the
+    # entry standing without a warning until enabling the feature makes it bite.
+    { path = "ed25519_dalek::verify_batch", allow-invalid = true, reason = "use VerifyingKey::verify_strict via crypto::sign; batch verification accepts small-order keys and non-canonical signatures, so a valid signature would no longer imply a private key holder" },
+    { path = "std::env::set_current_dir", reason = "use with_temp_cwd from kapsaro-test-support; a raw call takes no CWD_LOCK, so it races every test that does hold it, and it leaves the working directory pointing at a deleted temporary directory when the test panics" },
+]

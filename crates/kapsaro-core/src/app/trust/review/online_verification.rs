@@ -1,6 +1,10 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Runs GitHub-binding online verification on a single trust candidate.
+//! Skips candidates with no binding configured or already verified, and
+//! turns an unresolved result into an error unless non-member acceptance allows it.
+
 use crate::app::member::verification::verify_member_public_keys;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::support::runtime::block_on_result;

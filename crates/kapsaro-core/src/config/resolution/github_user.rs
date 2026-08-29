@@ -10,9 +10,11 @@
 
 use crate::support::validation;
 use crate::Result;
+#[cfg(test)]
 use std::path::Path;
 
 use super::common::resolve_string_with_priority;
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::types::ConfigKey;
 
 /// Resolve github_user based on priority order
@@ -24,15 +26,23 @@ use crate::config::types::ConfigKey;
 /// 3. Global config (`KAPSARO_HOME/config.toml`)
 ///
 /// Returns `None` if no source provides a value.
+#[cfg(test)]
 pub(crate) fn resolve_github_user(
     cli_value: Option<String>,
     base_dir: Option<&Path>,
+) -> Result<Option<String>> {
+    resolve_github_user_with_config(cli_value, &GlobalConfigSnapshot::for_base_dir(base_dir))
+}
+
+pub(crate) fn resolve_github_user_with_config(
+    cli_value: Option<String>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Option<String>> {
     let github_user = resolve_string_with_priority(
         cli_value,
         Some("KAPSARO_GITHUB_USER"),
         ConfigKey::GithubUser.canonical_name(),
-        base_dir,
+        config,
         None,
     )?;
     if let Some(login) = github_user.as_deref() {

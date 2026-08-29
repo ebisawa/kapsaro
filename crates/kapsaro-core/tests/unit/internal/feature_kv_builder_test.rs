@@ -2,16 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::KvDocumentBuilder;
-use crate::format::codec::base64_public::encode_base64url_nopad;
-use crate::format::kv::document::{KvDocumentEntry, WrapSource};
-use crate::format::schema::document::parse_kv_entry_token;
+use crate::format::kv::document::draft::{KvDocumentEntry, WrapSource};
+use crate::format::kv::document::KvDocumentDraft;
+use crate::format::schema::document::parse_kv_entry_token_with_source;
 use crate::format::token::TokenCodec;
 use crate::model::common::WrapItem;
+use crate::model::kv_enc::document::{KvEncDocument, KvEncEntry, KvFileSignature};
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvFileAlgorithm, KvHeader, KvWrap};
 use crate::model::kv_enc::line::{KvEncLine, KvEncVersion};
+use crate::model::signature::KeyPossessionProof;
+use crate::model::wire::algorithm;
+use crate::test_utils::keygen_helpers::build_dummy_public_key;
 use std::collections::HashMap;
 use uuid::Uuid;
+
+const SAMPLE_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
 fn sample_head() -> KvHeader {
     KvHeader {
@@ -28,7 +34,7 @@ fn sample_wrap() -> KvWrap {
     KvWrap {
         wrap: vec![WrapItem {
             recipient_handle: "alice@example.com".to_string(),
-            kid: "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string(),
+            kid: SAMPLE_KID.to_string(),
             alg: "hpke-32-1-3".to_string(),
             enc: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             ct: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
@@ -51,6 +57,56 @@ fn sample_entry_value(_key: &str, disclosed: bool) -> KvEntryValue {
 
 fn encode_entry(val: &KvEntryValue) -> String {
     TokenCodec::encode(TokenCodec::JsonJcs, val).unwrap()
+}
+
+fn entry_keys(doc: &KvDocumentDraft) -> Vec<&str> {
+    doc.entries.iter().map(|entry| entry.key()).collect()
+}
+
+fn kv_line(key: &str, value: &KvEntryValue) -> KvEncLine {
+    KvEncLine::KV {
+        key: key.to_string(),
+        token: encode_entry(value),
+    }
+}
+
+fn sample_signature() -> KvFileSignature {
+    KvFileSignature {
+        alg: algorithm::SIGNATURE_ED25519.to_string(),
+        kid: SAMPLE_KID.to_string(),
+        signer_pub: build_dummy_public_key(SAMPLE_KID),
+        mac: KeyPossessionProof::parse("hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            .unwrap(),
+        sig: String::new(),
+    }
+}
+
+/// Assemble the parsed document a case hands to the builder.
+///
+/// The builder reads the entries a parse already decoded, so each case states
+/// its lines together with the entry values those lines carry.
+fn sample_document(lines: Vec<KvEncLine>, entries: &[(&str, KvEntryValue)]) -> KvEncDocument {
+    let wrap_token = lines
+        .iter()
+        .find_map(|line| match line {
+            KvEncLine::Wrap { token } => Some(token.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let doc_entries = entries
+        .iter()
+        .map(|(key, value)| KvEncEntry::new(key.to_string(), encode_entry(value), value.clone()))
+        .collect();
+
+    KvEncDocument::new(
+        lines,
+        sample_head(),
+        sample_wrap(),
+        wrap_token,
+        doc_entries,
+        String::new(),
+        sample_signature(),
+    )
 }
 
 #[test]
@@ -108,7 +164,7 @@ fn test_builder_new_creates_decoded_wrap() {
 }
 
 #[test]
-fn test_builder_from_lines_with_some_wrap() {
+fn test_builder_from_document_with_some_wrap() {
     let wrap = sample_wrap();
     let wrap_tok = encode_wrap_token(&wrap);
     let entry = sample_entry_value("A", false);
@@ -120,15 +176,13 @@ fn test_builder_from_lines_with_some_wrap() {
             token: "ht".to_string(),
         },
         KvEncLine::Wrap { token: wrap_tok },
-        KvEncLine::KV {
-            key: "A".to_string(),
-            token: encode_entry(&entry),
-        },
+        kv_line("A", &entry),
     ];
-    let b = KvDocumentBuilder::from_lines(
+    let document = sample_document(lines, &[("A", entry.clone())]);
+    let b = KvDocumentBuilder::from_document(
         sample_head(),
         Some(wrap.clone()),
-        &lines,
+        &document,
         TokenCodec::JsonJcs,
     )
     .unwrap();
@@ -139,7 +193,7 @@ fn test_builder_from_lines_with_some_wrap() {
 }
 
 #[test]
-fn test_builder_from_lines_with_none_wrap_decodes_raw() {
+fn test_builder_from_document_with_none_wrap_decodes_raw() {
     let wrap = sample_wrap();
     let wrap_tok = encode_wrap_token(&wrap);
     let entry = sample_entry_value("B", false);
@@ -153,13 +207,11 @@ fn test_builder_from_lines_with_none_wrap_decodes_raw() {
         KvEncLine::Wrap {
             token: wrap_tok.clone(),
         },
-        KvEncLine::KV {
-            key: "B".to_string(),
-            token: encode_entry(&entry),
-        },
+        kv_line("B", &entry),
     ];
-    let b =
-        KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs).unwrap();
+    let document = sample_document(lines, &[("B", entry.clone())]);
+    let b = KvDocumentBuilder::from_document(sample_head(), None, &document, TokenCodec::JsonJcs)
+        .unwrap();
     let doc = b.build();
     assert!(doc.wrap.token().is_some());
     assert_eq!(doc.entries.len(), 1);
@@ -183,7 +235,7 @@ fn test_unsigned_doc_entry_keys() {
             ("B".to_string(), "tb".to_string()),
         ])
         .build();
-    assert_eq!(doc.entry_keys(), vec!["A", "B"]);
+    assert_eq!(entry_keys(&doc), vec!["A", "B"]);
 }
 
 #[test]
@@ -191,8 +243,8 @@ fn test_unsigned_doc_has_entry() {
     let doc = KvDocumentBuilder::new(sample_head(), sample_wrap(), TokenCodec::JsonJcs)
         .with_entries(vec![("K".to_string(), "t".to_string())])
         .build();
-    assert!(doc.has_entry("K"));
-    assert!(!doc.has_entry("X"));
+    assert!(entry_keys(&doc).contains(&"K"));
+    assert!(!entry_keys(&doc).contains(&"X"));
 }
 
 #[test]
@@ -226,7 +278,7 @@ fn test_unsigned_doc_unset_entry() {
         ])
         .build();
     doc.unset_entry("A");
-    assert_eq!(doc.entry_keys(), vec!["B"]);
+    assert_eq!(entry_keys(&doc), vec!["B"]);
 }
 
 #[test]
@@ -251,9 +303,11 @@ fn test_unsigned_doc_wrap_mut_promotes() {
             token: wrap_tok.clone(),
         },
     ];
-    let mut doc = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs)
-        .unwrap()
-        .build();
+    let document = sample_document(lines, &[]);
+    let mut doc =
+        KvDocumentBuilder::from_document(sample_head(), None, &document, TokenCodec::JsonJcs)
+            .unwrap()
+            .build();
 
     assert!(doc.wrap.token().is_some());
     let _w = doc.wrap_mut();
@@ -295,7 +349,8 @@ fn test_serialize_unsigned_raw_wrap_passthrough() {
             token: wrap_tok.clone(),
         },
     ];
-    let doc = KvDocumentBuilder::from_lines(sample_head(), None, &lines, TokenCodec::JsonJcs)
+    let document = sample_document(lines, &[]);
+    let doc = KvDocumentBuilder::from_document(sample_head(), None, &document, TokenCodec::JsonJcs)
         .unwrap()
         .build();
 
@@ -330,10 +385,11 @@ fn test_clear_disclosed_flags_clears_disclosed_true() {
         },
     ];
 
-    let mut doc = KvDocumentBuilder::from_lines(
+    let document = sample_document(lines, &[("A", val_a.clone()), ("B", val_b.clone())]);
+    let mut doc = KvDocumentBuilder::from_document(
         sample_head(),
         Some(sample_wrap()),
-        &lines,
+        &document,
         TokenCodec::JsonJcs,
     )
     .unwrap()
@@ -342,7 +398,8 @@ fn test_clear_disclosed_flags_clears_disclosed_true() {
     doc.clear_disclosed_flags().unwrap();
 
     assert!(matches!(&doc.entries[0], KvDocumentEntry::Encoded { .. }));
-    let decoded_a: KvEntryValue = parse_kv_entry_token(doc.entries[0].token()).unwrap();
+    let decoded_a: KvEntryValue =
+        parse_kv_entry_token_with_source(doc.entries[0].token(), "KV entry token").unwrap();
     assert!(!decoded_a.disclosed);
 
     assert!(matches!(&doc.entries[1], KvDocumentEntry::Preserved { .. }));
@@ -369,10 +426,11 @@ fn test_clear_disclosed_flags_noop_when_all_false() {
         },
     ];
 
-    let mut doc = KvDocumentBuilder::from_lines(
+    let document = sample_document(lines, &[("X", val.clone())]);
+    let mut doc = KvDocumentBuilder::from_document(
         sample_head(),
         Some(sample_wrap()),
-        &lines,
+        &document,
         TokenCodec::JsonJcs,
     )
     .unwrap()

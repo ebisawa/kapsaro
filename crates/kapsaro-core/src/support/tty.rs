@@ -22,6 +22,9 @@ pub fn is_interactive() -> bool {
 ///
 /// Pass `Some(false)` to force non-interactive mode, or `None` to
 /// restore the default stdin-based detection.
+///
+/// Only the `cli-test-support` test harness sets this override.
+#[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
 pub fn set_interactive_override(value: Option<bool>) {
     INTERACTIVE_OVERRIDE.with(|cell| cell.set(value));
 }

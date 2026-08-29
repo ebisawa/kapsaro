@@ -23,10 +23,10 @@
     },
     "member_handle": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]{0,253}$",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$",
       "minLength": 1,
-      "maxLength": 254,
-      "description": "member_handle (must start with alphanumeric; allowed: .@_+-; 1..254 chars)"
+      "maxLength": 128,
+      "description": "member_handle (must start with alphanumeric; allowed: .@_+-; 1..128 chars, bounded to stay within what an atomic write can target as <handle>.json)"
     },
     "b64url": {
       "type": "string",

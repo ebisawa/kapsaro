@@ -10,23 +10,27 @@ use crate::app::rewrap::trust::build_rewrap_trust;
 use crate::app::rewrap::types::IncomingVerificationCategory;
 use crate::app::trust::approval::save_known_key_approvals;
 use crate::app::trust::RecipientTrustOutcome;
-use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
+use crate::app_test_utils::{
+    build_test_signing_command_options, load_test_trust_store, resolve_test_write_execution,
+};
+use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
+use crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
 use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
 use crate::feature::key::ssh_binding::SshBindingContext;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::io::keystore::active::set_active_kid;
-use crate::io::keystore::storage::save_key_pair_atomic;
 use crate::io::ssh::backend::ssh_keygen::SshKeygenBackend;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
-use crate::io::trust::paths::get_trust_store_file_path;
-use crate::io::trust::store::load_trust_store;
 use crate::io::verify_online::VerifiedGithubIdentity;
-use crate::io::workspace::members::load_member_file_from_path;
+use crate::io::workspace::members::{
+    load_member_file_from_path, promote_snapshotted_incoming_members_at,
+    set_post_member_document_read_hook, IncomingMemberPromotionSnapshot,
+};
 use crate::model::public_key::GithubAccount;
 use crate::model::ssh::SshDeterminismStatus;
+use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope};
 use crate::support::time::format_timestamp_rfc3339;
 // (intentionally unused in this file)
 use crate::test_utils::{
@@ -96,6 +100,63 @@ fn save_github_bound_public_key_to_workspace_incoming(
     .unwrap();
     set_active_kid(member_handle, &result.kid, &keystore_root).unwrap();
     save_active_public_key_to_workspace_incoming(home, workspace_dir, member_handle).unwrap();
+}
+
+/// The bytes a promotion carries are the bytes that were verified.
+///
+/// The incoming document is replaced the moment its read returns, which is the
+/// window a second read for the stored bytes would have opened. The index still
+/// holds what it verified, so the promotion compares that against the entry on
+/// disk and refuses it instead of writing a key nobody looked at into active/.
+#[test]
+fn test_load_incoming_index_keeps_the_document_it_verified() {
+    let _guard = strict_key_checking_guard();
+    let (_temp_dir, workspace_dir) =
+        setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let members_dir = workspace_dir.join("members");
+    let bob_incoming = members_dir
+        .join("incoming")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"));
+    fs::rename(
+        members_dir
+            .join("active")
+            .join(format!("{BOB_MEMBER_HANDLE}.json")),
+        &bob_incoming,
+    )
+    .unwrap();
+    let reviewed_content = fs::read_to_string(&bob_incoming).unwrap();
+    let substituted = fs::read_to_string(
+        members_dir
+            .join("active")
+            .join(format!("{ALICE_MEMBER_HANDLE}.json")),
+    )
+    .unwrap();
+
+    let replaced = bob_incoming.clone();
+    set_post_member_document_read_hook(move || fs::write(&replaced, &substituted).unwrap());
+
+    let workspace = open_dir_nofollow(&workspace_dir, DirectoryScope::Generic).unwrap();
+    let index = super::load_incoming_index(&workspace).unwrap();
+    let indexed = index.get(BOB_MEMBER_HANDLE).expect("bob must be indexed");
+
+    assert_eq!(indexed.source_content, reviewed_content);
+    assert_eq!(
+        indexed.public_key.protected.subject_handle,
+        BOB_MEMBER_HANDLE
+    );
+
+    let promotion = IncomingMemberPromotionSnapshot {
+        member_handle: BOB_MEMBER_HANDLE.to_string(),
+        kid: indexed.public_key.protected.kid.clone(),
+        source_content: indexed.source_content.clone(),
+        destination: indexed.destination.clone(),
+    };
+    let error = promote_snapshotted_incoming_members_at(&workspace, &[promotion]).unwrap_err();
+
+    assert!(
+        error.to_string().contains("changed since review"),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]
@@ -194,7 +255,7 @@ fn test_build_rewrap_trust_treats_accepted_promotions_as_already_reviewed() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    plan.artifact_paths.clear();
+    plan.artifacts.clear();
     let review_plan = build_promotion_review_plan(
         plan.incoming_report.as_ref().unwrap(),
         &[],
@@ -225,7 +286,7 @@ fn test_build_rewrap_trust_uses_existing_trust_snapshot() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    plan.artifact_paths.clear();
+    plan.artifacts.clear();
     plan.pre_promotion_trust.is_interactive = false;
 
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
@@ -269,7 +330,7 @@ fn test_build_rewrap_trust_includes_recipient_key_expiry_warning() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    plan.artifact_paths.clear();
+    plan.artifacts.clear();
 
     let trust_plan = build_rewrap_trust(&plan, &[]).unwrap();
 
@@ -309,7 +370,7 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    plan.artifact_paths.clear();
+    plan.artifacts.clear();
     let review_plan = build_promotion_review_plan(
         plan.incoming_report.as_ref().unwrap(),
         &[],
@@ -334,12 +395,11 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         &trust_plan.accepted_promotion_candidates,
     )
     .unwrap();
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    let loaded = load_trust_store(&trust_path, temp_dir.path())
+    let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .unwrap();
-    let stored = serde_json::to_value(&loaded.document).unwrap();
-    let known_keys = stored["protected"]["known_keys"].as_array().unwrap();
+    let stored = serde_json::to_value(&loaded.protected).unwrap();
+    let known_keys = stored["known_keys"].as_array().unwrap();
     let bob_entry = known_keys
         .iter()
         .find(|entry| entry["subject_handle"] == serde_json::json!(BOB_MEMBER_HANDLE))
@@ -392,7 +452,7 @@ fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
-    plan.artifact_paths.clear();
+    plan.artifacts.clear();
     let review_plan = build_promotion_review_plan(
         plan.incoming_report.as_ref().unwrap(),
         &plan.pre_promotion_trust.known_keys,
@@ -443,9 +503,9 @@ fn test_build_rewrap_batch_plan_uses_only_explicit_targets_when_specified() {
     )
     .unwrap();
 
-    assert_eq!(plan.artifact_paths.len(), 1);
-    assert!(plan.artifact_paths.contains(&external_secret_path));
-    assert!(!plan.artifact_paths.contains(&workspace_secret_path));
+    assert_eq!(plan.artifacts.len(), 1);
+    assert_eq!(plan.artifacts[0].path(), external_secret_path);
+    assert_ne!(plan.artifacts[0].path(), workspace_secret_path);
 }
 
 #[test]
@@ -464,6 +524,31 @@ fn test_build_rewrap_batch_plan_accepts_explicit_targets_when_workspace_secrets_
     )
     .unwrap();
 
-    assert_eq!(plan.artifact_paths.len(), 1);
-    assert_eq!(plan.artifact_paths[0], external_secret_path);
+    assert_eq!(plan.artifacts.len(), 1);
+    assert_eq!(plan.artifacts[0].path(), external_secret_path);
+}
+
+/// Two spellings of one entry are one target: the second would otherwise rewrap
+/// what the first already replaced, and its review would be of bytes that are
+/// no longer there.
+#[test]
+fn test_build_rewrap_batch_plan_folds_two_spellings_of_one_target_into_one() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
+    let secret_path = temp_dir.path().join("external").join("ca.pem.encrypted");
+    fs::create_dir_all(secret_path.parent().unwrap()).unwrap();
+    fs::write(&secret_path, "external-artifact").unwrap();
+    let indirect_path = temp_dir
+        .path()
+        .join("external")
+        .join(".")
+        .join("ca.pem.encrypted");
+
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let plan = build_rewrap_batch_plan(&options, &execution, &[secret_path.clone(), indirect_path])
+        .unwrap();
+
+    assert_eq!(plan.artifacts.len(), 1);
+    assert_eq!(plan.artifacts[0].path(), secret_path);
 }

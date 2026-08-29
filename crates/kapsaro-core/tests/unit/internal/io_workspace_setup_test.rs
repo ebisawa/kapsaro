@@ -1,12 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::io::keystore::active::load_active_kid;
-use crate::io::keystore::storage::load_public_key;
+use crate::cli_api::test_support::storage::keystore::active::load_active_kid;
+use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
+use crate::io::workspace::members::{save_member_content, MemberStatus};
 use crate::io::workspace::setup::{
-    check_workspace_has_active_members, ensure_workspace_structure, save_member_document,
-    validate_workspace_exists,
+    check_workspace_has_active_members, ensure_workspace_structure, validate_workspace_exists,
 };
+use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope};
 use crate::test_utils::setup_test_keystore_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use std::fs;
@@ -74,24 +75,36 @@ fn test_check_workspace_has_active_members_detects_json_member_file() {
     assert!(has_active_members);
 }
 
+/// The member store writes into the very tree this setup builds, so a document
+/// saved right after it lands in the active directory the structure created.
 #[test]
-fn test_save_member_document_writes_public_key_json() {
+fn test_member_document_lands_in_the_structure_setup_created() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
     let kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .expect("Expected active kid");
     let public_key = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, &kid).unwrap();
-    let member_file = temp_dir
-        .path()
-        .join("workspace")
+    // A workspace of this test's own: the keystore fixture builds one beside the
+    // keys and installs the member into it, which would make this a replacement
+    // rather than the first write into a structure setup just created.
+    let workspace_path = temp_dir.path().join("workspace-under-test");
+    ensure_workspace_structure(&workspace_path).unwrap();
+    let workspace = open_dir_nofollow(&workspace_path, DirectoryScope::Generic).unwrap();
+
+    save_member_content(
+        &workspace,
+        MemberStatus::Active,
+        ALICE_MEMBER_HANDLE,
+        &serde_json::to_string_pretty(&public_key).unwrap(),
+        false,
+    )
+    .unwrap();
+
+    let member_file = workspace_path
         .join("members")
         .join("active")
         .join(format!("{ALICE_MEMBER_HANDLE}.json"));
-    std::fs::create_dir_all(member_file.parent().unwrap()).unwrap();
-
-    save_member_document(&member_file, &public_key).unwrap();
-
     let saved: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&member_file).unwrap()).unwrap();
     assert_eq!(

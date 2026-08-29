@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::kem::{derive_public_key_from_secret, X25519PublicKey, X25519SecretKey};
-use crate::feature::decrypt::file::decrypt_file_document;
+use crate::feature::context::crypto::decode_kem_secret_key;
+use crate::feature::decrypt::file::decrypt_file_payload;
+use crate::feature::envelope::binding::build_file_wrap_info;
+use crate::feature::envelope::key_possession::verify_file_key_possession;
+use crate::feature::envelope::unwrap::unwrap_master_key;
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
@@ -17,6 +22,11 @@ pub(super) fn b64url(data: &[u8]) -> String {
     encode_base64url_nopad(data)
 }
 
+/// Decrypt a document that was wrapped to a seeded X25519 key.
+///
+/// No keystore holds these keys, so no crypto context can be built for them. The
+/// wrap is located and opened here, and everything after the unwrap is the same
+/// sequence the context-aware path runs.
 pub(super) fn decrypt_file_document_for_test(
     file_enc_doc: &crate::model::file_enc::FileEncDocument,
     member_handle: &str,
@@ -24,15 +34,35 @@ pub(super) fn decrypt_file_document_for_test(
     private_key: &PrivateKeyPlaintext,
     signer_kid: &str,
 ) -> zeroize::Zeroizing<Vec<u8>> {
-    let proof = SignatureVerificationProof::new(
+    let proof = SignatureVerificationProof::new_with_signer_public_key(
         member_handle.to_string(),
         signer_kid.to_string(),
+        file_enc_doc.signature.signer_pub.clone(),
         VerifyingKeySource::SignerPubEmbedded,
         Vec::new(),
     );
     let verified_doc = VerifiedFileEncDocument::new(file_enc_doc.clone(), proof);
     let decrypted_key = build_verified_private_key(private_key, member_handle, kid, "SHA256:test");
-    decrypt_file_document(&verified_doc, member_handle, kid, &decrypted_key).unwrap()
+    let kem_secret_key = decode_kem_secret_key(&decrypted_key).unwrap();
+
+    let protected = &verified_doc.document().protected;
+    let wrap_set = WrapSet::parse(&protected.wrap, "Document").unwrap();
+    let master_key = unwrap_master_key(
+        wrap_set.find_by_kid_for_member(kid, member_handle).unwrap(),
+        &protected.sid,
+        &kem_secret_key,
+        build_file_wrap_info,
+        "decrypt_file_document_for_test",
+    )
+    .unwrap();
+
+    let possession = verify_file_key_possession(&verified_doc, master_key).unwrap();
+    decrypt_file_payload(
+        possession.document(),
+        possession.content_key(),
+        "decrypt_file_document_for_test",
+    )
+    .unwrap()
 }
 
 pub(super) fn generate_x25519_keypair(seed: [u8; 32]) -> (X25519SecretKey, X25519PublicKey) {

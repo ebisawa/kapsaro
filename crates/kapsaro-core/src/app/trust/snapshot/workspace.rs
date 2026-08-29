@@ -5,13 +5,13 @@
 //! Verifies active recipient keys and keeps the reviewed active-member index.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings_excluding_local_key;
 use crate::feature::trust::judgment::build_active_members_by_kid;
-use crate::io::workspace::members::load_active_member_files;
+use crate::io::workspace::members::load_active_member_files_at;
 use crate::model::public_key::{PublicKey, VerifiedRecipientKey};
+use crate::support::fs::relative::DirectoryFd;
 use crate::Result;
 use tracing::debug;
 
@@ -24,8 +24,23 @@ pub struct WorkspaceMemberSnapshot {
 }
 
 impl WorkspaceMemberSnapshot {
-    pub fn load(workspace_path: &Path) -> Result<Self> {
-        let active_members = load_active_member_files(workspace_path)?;
+    /// Load the active members held under one workspace descriptor.
+    ///
+    /// A command that fixed its workspace reads the member set through that
+    /// descriptor rather than through the configured path: resolving the path
+    /// again would let a workspace repointed mid-command decide who counts as a
+    /// member from another tree. Every reader here is such a command, so there
+    /// is no path-addressed way in.
+    pub(crate) fn load_at<D>(workspace: &D) -> Result<Self>
+    where
+        D: DirectoryFd,
+    {
+        Self::from_required_members(load_active_member_files_at(workspace)?)
+    }
+
+    /// A workspace with no active member authorizes nobody, so a write plan
+    /// built on one would have no recipient to name.
+    fn from_required_members(active_members: Vec<PublicKey>) -> Result<Self> {
         if active_members.is_empty() {
             return Err(crate::Error::build_not_found_error(
                 "No active members found in workspace".to_string(),

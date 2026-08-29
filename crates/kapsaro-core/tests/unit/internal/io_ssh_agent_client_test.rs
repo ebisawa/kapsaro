@@ -92,8 +92,8 @@ fn packet(body: &[u8]) -> Vec<u8> {
 fn identities_response() -> Vec<u8> {
     let mut body = vec![12];
     body.extend_from_slice(&1u32.to_be_bytes());
-    body.extend_from_slice(&encode_ssh_string(b"key-blob"));
-    body.extend_from_slice(&encode_ssh_string(b"test-key"));
+    body.extend_from_slice(&encode_ssh_string(b"key-blob").unwrap());
+    body.extend_from_slice(&encode_ssh_string(b"test-key").unwrap());
     packet(&body)
 }
 

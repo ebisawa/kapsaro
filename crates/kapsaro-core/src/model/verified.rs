@@ -20,8 +20,12 @@ pub struct DecryptionProof {
     pub(crate) ssh_fpr: Option<String>,
 }
 
+// The constructor and the handle/fingerprint accessors below are only reached by
+// the first-party test harness through the `cli-test-support` allow-list. Crate
+// code reads the fields directly, so allow dead_code when that feature is off.
 impl DecryptionProof {
     /// Create a new DecryptionProof.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn new(member_handle: String, kid: String, ssh_fpr: Option<String>) -> Self {
         Self {
             member_handle,
@@ -31,6 +35,7 @@ impl DecryptionProof {
     }
 
     /// Get the member handle.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn member_handle(&self) -> &str {
         &self.member_handle
     }
@@ -41,6 +46,7 @@ impl DecryptionProof {
     }
 
     /// Get the SSH fingerprint used for decryption.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn ssh_fpr(&self) -> Option<&str> {
         self.ssh_fpr.as_deref()
     }
@@ -122,21 +128,5 @@ impl VerifiedPrivateKey {
     /// Get a reference to the decryption proof
     pub fn proof(&self) -> &DecryptionProof {
         &self.proof
-    }
-
-    /// Extract the inner document and proof (consumes self)
-    pub fn into_inner(self) -> (PrivateKeyPlaintext, DecryptionProof) {
-        (self.document, self.proof)
-    }
-
-    /// Map the inner document while preserving decryption status
-    pub fn map<F>(self, f: F) -> VerifiedPrivateKey
-    where
-        F: FnOnce(PrivateKeyPlaintext) -> PrivateKeyPlaintext,
-    {
-        VerifiedPrivateKey {
-            document: f(self.document),
-            proof: self.proof,
-        }
     }
 }

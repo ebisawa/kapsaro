@@ -66,7 +66,7 @@ pub fn resolve_workspace_creation_path(workspace_opt: Option<PathBuf>) -> Result
     }
 
     let current_workspace = current_dir.join(".kapsaro");
-    if is_real_dir(&current_workspace) {
+    if is_real_dir(&current_workspace)? {
         return current_workspace.canonicalize().map_err(|e| {
             Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)
         });

@@ -5,19 +5,10 @@
 
 use super::verification::verify_member_public_key_file;
 use crate::format::schema::document::parse_public_key_str;
-use crate::model::public_key::PublicKey;
 use crate::Result;
 
-#[derive(Debug, Clone)]
-pub struct MemberAddition {
-    pub member_handle: String,
-    pub public_key: PublicKey,
-}
-
-pub fn build_member_addition_from_content(
-    content: &str,
-    source_name: &str,
-) -> Result<MemberAddition> {
+/// Validate the incoming PublicKey content and return the member handle it belongs to.
+pub fn build_member_addition_from_content(content: &str, source_name: &str) -> Result<String> {
     let public_key = parse_public_key_str(content, source_name)?;
     let verified = verify_member_public_key_file(
         &public_key,
@@ -25,10 +16,7 @@ pub fn build_member_addition_from_content(
         source_name,
     )?;
 
-    Ok(MemberAddition {
-        member_handle: verified.member_handle,
-        public_key,
-    })
+    Ok(verified.member_handle)
 }
 
 #[cfg(test)]

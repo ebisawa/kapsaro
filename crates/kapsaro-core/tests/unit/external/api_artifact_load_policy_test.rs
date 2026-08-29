@@ -28,7 +28,7 @@ fn file_artifact_load_rejects_over_file_enc_read_limit() {
     let message = error.format_user_message();
 
     assert!(message.contains("file-enc artifact exceeds maximum size limit"));
-    assert!(message.contains(&(MAX_JSON_DOCUMENT_READ_SIZE + 1).to_string()));
+    assert!(message.contains(&MAX_JSON_DOCUMENT_READ_SIZE.to_string()));
     assert!(message.contains(&source_label(&path)));
 }
 
@@ -42,7 +42,7 @@ fn kv_artifact_load_rejects_over_kv_read_limit() {
     let message = error.format_user_message();
 
     assert!(message.contains("kv-enc artifact exceeds maximum size limit"));
-    assert!(message.contains(&(MAX_KV_ENC_FILE_SIZE + 1).to_string()));
+    assert!(message.contains(&MAX_KV_ENC_FILE_SIZE.to_string()));
     assert!(message.contains(&source_label(&path)));
 }
 

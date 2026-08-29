@@ -3,15 +3,14 @@
 
 //! Interactive identity and registration prompts for CLI commands.
 
-use dialoguer::{Input, Select};
-use std::io::IsTerminal;
-use std::path::Path;
-
 use crate::cli::common::prompt::prompt_yes_no;
+use dialoguer::{Input, Select};
 use kapsaro_core::cli_api::app::context::identity::resolve_github_user_input;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::context::ssh::SshKeyCandidateView;
 use kapsaro_core::cli_api::presentation::validation;
 use kapsaro_core::{Error, Result};
+use std::io::IsTerminal;
 
 pub(crate) fn confirm_member_overwrite(member_handle: &str) -> Result<bool> {
     prompt_yes_no(
@@ -112,12 +111,12 @@ pub(crate) fn prompt_github_user() -> Result<Option<String>> {
 pub(crate) fn resolve_key_generation_github_user(
     needs_new_key: bool,
     github_user: Option<String>,
-    base_dir: Option<&Path>,
+    options: &CommonCommandOptions,
 ) -> Result<Option<String>> {
     resolve_key_generation_github_user_with_prompt(
         needs_new_key,
         github_user,
-        base_dir,
+        options,
         is_prompt_available(),
         prompt_github_user,
     )
@@ -126,7 +125,7 @@ pub(crate) fn resolve_key_generation_github_user(
 pub(crate) fn resolve_key_generation_github_user_with_prompt<F>(
     needs_new_key: bool,
     github_user: Option<String>,
-    base_dir: Option<&Path>,
+    options: &CommonCommandOptions,
     prompt_available: bool,
     prompt: F,
 ) -> Result<Option<String>>
@@ -137,7 +136,7 @@ where
         return Ok(None);
     }
 
-    match resolve_github_user_input(github_user, base_dir)? {
+    match resolve_github_user_input(github_user, options)? {
         Some(github_user) => Ok(Some(github_user)),
         None if prompt_available => validate_prompt_github_user(prompt()?),
         None => Ok(None),

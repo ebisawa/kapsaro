@@ -49,6 +49,22 @@ fn test_user_message_invalid_argument() {
 }
 
 #[test]
+fn test_invalid_operation_without_rule_preserves_public_contract() {
+    let error = Error::build_invalid_operation_error("operation is unavailable");
+
+    assert_eq!(error.kind(), ErrorKind::InvalidOperation);
+    assert_eq!(error.rule(), None);
+}
+
+#[test]
+fn test_verification_error_rule_preserves_public_contract() {
+    let error = Error::build_verification_error("V-TEST", "verification failed");
+
+    assert_eq!(error.kind(), ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("V-TEST"));
+}
+
+#[test]
 fn test_from_crypto_error_preserves_source() {
     let crypto_err = CryptoError::build_operation_failed_error_with_source(
         "decryption failed",

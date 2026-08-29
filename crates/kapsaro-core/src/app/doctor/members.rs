@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Doctor checks for active and incoming member files in the workspace.
+//! Validates each member file, its key expiry and GitHub binding, and checks kid uniqueness across members.
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -12,49 +15,53 @@ use crate::feature::member::verification::{
 };
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::{VerificationResult, VerificationStatus};
-use crate::io::workspace::detection::WorkspaceRoot;
 use crate::io::workspace::members::{
-    list_active_member_paths, list_incoming_member_paths, load_member_file_from_path,
+    open_member_documents_at, MemberDocuments, MemberStatus, MEMBERS_DIR_NAME,
 };
+use crate::model::public_key::PublicKey;
+use crate::support::fs::anchor::AnchoredDir;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject};
 
-pub fn check_members(workspace: &WorkspaceRoot) -> Result<Vec<DoctorCheck>> {
-    let mut checks = Vec::new();
-    checks.extend(check_active_members(&workspace.root_path)?);
-    checks.extend(check_incoming_members(&workspace.root_path)?);
-    checks.push(check_kid_uniqueness(&workspace.root_path)?);
+/// Diagnose the member documents the workspace holds.
+///
+/// Both status directories are listed through the descriptor this run bound to,
+/// and every document is read relative to the directory its listing came from,
+/// so the whole report describes one workspace even if the path that reached it
+/// is repointed while the diagnosis runs.
+pub fn check_members(workspace: &AnchoredDir) -> Result<Vec<DoctorCheck>> {
+    let active = open_member_documents_at(workspace, MemberStatus::Active)?;
+    let incoming = open_member_documents_at(workspace, MemberStatus::Incoming)?;
+
+    let mut checks = check_active_members(&active);
+    checks.extend(check_incoming_members(&incoming));
+    checks.push(check_kid_uniqueness(&active, &incoming));
     Ok(checks)
 }
 
-fn check_active_members(workspace_root: &Path) -> Result<Vec<DoctorCheck>> {
-    let paths = list_active_member_paths(workspace_root)?;
-    let mut checks = Vec::new();
-    if paths.is_empty() {
-        checks.push(check_missing_active_members(workspace_root));
-        return Ok(checks);
+fn check_active_members(documents: &MemberDocuments) -> Vec<DoctorCheck> {
+    if documents.names().is_empty() {
+        return vec![check_missing_active_members(documents.dir_path())];
     }
 
-    checks.push(check_present_active_members(paths.len()));
-    extend_member_path_checks(
+    let mut checks = vec![check_present_active_members(documents.names().len())];
+    extend_member_document_checks(
         &mut checks,
-        &paths,
+        documents,
         "members.active.file",
         DoctorCategory::MembersActive,
     );
-    Ok(checks)
+    checks
 }
 
-fn check_missing_active_members(workspace_root: &Path) -> DoctorCheck {
+fn check_missing_active_members(active_dir: &Path) -> DoctorCheck {
     DoctorCheck::fail(
         "members.active.present",
         DoctorCategory::MembersActive,
-        DoctorSubject::Path(format_path_relative_to_cwd(
-            &workspace_root.join("members/active"),
-        )),
+        DoctorSubject::Path(format_path_relative_to_cwd(active_dir)),
         "No active members found",
     )
     .with_next_action("run kapsaro init or restore members/active")
@@ -69,31 +76,26 @@ fn check_present_active_members(count: usize) -> DoctorCheck {
     )
 }
 
-fn check_incoming_members(workspace_root: &Path) -> Result<Vec<DoctorCheck>> {
-    let paths = list_incoming_member_paths(workspace_root)?;
-    let mut checks = Vec::new();
-    if paths.is_empty() {
-        checks.push(check_empty_incoming_members(workspace_root));
-        return Ok(checks);
+fn check_incoming_members(documents: &MemberDocuments) -> Vec<DoctorCheck> {
+    if documents.names().is_empty() {
+        return vec![check_empty_incoming_members(documents.dir_path())];
     }
 
-    checks.push(check_pending_incoming_members(paths.len()));
-    extend_member_path_checks(
+    let mut checks = vec![check_pending_incoming_members(documents.names().len())];
+    extend_member_document_checks(
         &mut checks,
-        &paths,
+        documents,
         "members.incoming.file",
         DoctorCategory::MembersIncoming,
     );
-    Ok(checks)
+    checks
 }
 
-fn check_empty_incoming_members(workspace_root: &Path) -> DoctorCheck {
+fn check_empty_incoming_members(incoming_dir: &Path) -> DoctorCheck {
     DoctorCheck::ok(
         "members.incoming.empty",
         DoctorCategory::MembersIncoming,
-        DoctorSubject::Path(format_path_relative_to_cwd(
-            &workspace_root.join("members/incoming"),
-        )),
+        DoctorSubject::Path(format_path_relative_to_cwd(incoming_dir)),
         "No incoming members",
     )
 }
@@ -108,66 +110,73 @@ fn check_pending_incoming_members(count: usize) -> DoctorCheck {
     )
 }
 
-fn extend_member_path_checks(
+fn extend_member_document_checks(
     checks: &mut Vec<DoctorCheck>,
-    paths: &[PathBuf],
+    documents: &MemberDocuments,
     id: &'static str,
     category: DoctorCategory,
 ) {
-    for path in paths {
-        checks.extend(verify_member_path(id, category, path));
+    for name in documents.names() {
+        checks.extend(verify_member_document(id, category, documents, name));
     }
 }
 
-fn verify_member_path(id: &'static str, category: DoctorCategory, path: &Path) -> Vec<DoctorCheck> {
-    let member_handle = derive_member_handle_from_path(path);
-    let public_key = match load_member_file_for_doctor(id, category, path, &member_handle) {
-        MemberFileCheck::Loaded(public_key) => public_key,
-        MemberFileCheck::Finding(check) => return vec![check],
+fn verify_member_document(
+    id: &'static str,
+    category: DoctorCategory,
+    documents: &MemberDocuments,
+    name: &str,
+) -> Vec<DoctorCheck> {
+    let path = documents.document_path(name);
+    let member_handle = derive_member_handle_from_path(&path);
+    let public_key = match documents.load(name) {
+        Ok(public_key) => public_key,
+        Err(error) => {
+            return vec![build_unloadable_member_check(
+                id,
+                category,
+                &path,
+                &member_handle,
+                error.format_user_message(),
+            )]
+        }
     };
 
     match verify_member_public_key_file(
         &public_key,
         Some(&member_handle),
-        &format_path_relative_to_cwd(path),
+        &format_path_relative_to_cwd(&path),
     ) {
-        Ok(verified) => build_verified_member_path_checks(id, category, path, verified),
+        Ok(verified) => build_verified_member_checks(id, category, &path, verified),
         Err(error) => vec![check_failed_member_verification(
             id,
             category,
-            path,
+            &path,
             error.format_user_message(),
         )],
     }
 }
 
-enum MemberFileCheck {
-    Loaded(Box<crate::model::public_key::PublicKey>),
-    Finding(DoctorCheck),
-}
-
-fn load_member_file_for_doctor(
+fn build_unloadable_member_check(
     id: &'static str,
     category: DoctorCategory,
     path: &Path,
     member_handle: &str,
-) -> MemberFileCheck {
-    match load_member_file_from_path(path) {
-        Ok(public_key) => MemberFileCheck::Loaded(Box::new(public_key)),
-        Err(error) => MemberFileCheck::Finding(DoctorCheck::fail(
-            id,
-            category,
-            DoctorSubject::Member(member_handle.to_string()),
-            format!(
-                "{} failed validation: {}",
-                format_path_relative_to_cwd(path),
-                error.format_user_message()
-            ),
-        )),
-    }
+    reason: &str,
+) -> DoctorCheck {
+    DoctorCheck::fail(
+        id,
+        category,
+        DoctorSubject::Member(member_handle.to_string()),
+        format!(
+            "{} failed validation: {}",
+            format_path_relative_to_cwd(path),
+            reason
+        ),
+    )
 }
 
-fn build_verified_member_path_checks(
+fn build_verified_member_checks(
     id: &'static str,
     category: DoctorCategory,
     path: &Path,
@@ -179,7 +188,12 @@ fn build_verified_member_path_checks(
         DoctorSubject::Member(verified.member_handle.clone()),
         format!("{} is valid", format_path_relative_to_cwd(path)),
     )];
-    checks.push(check_member_expiry(category, &verified.member_handle, path));
+    checks.push(check_member_expiry(
+        category,
+        &verified.member_handle,
+        path,
+        &verified.public_key,
+    ));
     checks.push(check_github_verification(
         category,
         &verified.member_handle,
@@ -207,7 +221,7 @@ fn check_failed_member_verification(
 fn check_github_verification(
     category: DoctorCategory,
     member_handle: &str,
-    public_key: &crate::model::public_key::PublicKey,
+    public_key: &PublicKey,
 ) -> DoctorCheck {
     if !has_github_binding(public_key) {
         return check_missing_github_binding(category, member_handle);
@@ -226,7 +240,7 @@ fn check_github_verification(
     }
 }
 
-fn has_github_binding(public_key: &crate::model::public_key::PublicKey) -> bool {
+fn has_github_binding(public_key: &PublicKey) -> bool {
     public_key
         .protected
         .binding_claims
@@ -275,10 +289,16 @@ fn check_github_result(
     }
 }
 
-fn check_member_expiry(category: DoctorCategory, member_handle: &str, path: &Path) -> DoctorCheck {
-    let result = load_member_file_from_path(path).and_then(|public_key| {
-        check_key_expiry(&public_key.protected.expires_at, OffsetDateTime::now_utc())
-    });
+/// Judge the expiry on the document the validation above already read, so the
+/// finding describes the same document rather than whatever a second read of
+/// the name would reach.
+fn check_member_expiry(
+    category: DoctorCategory,
+    member_handle: &str,
+    path: &Path,
+    public_key: &PublicKey,
+) -> DoctorCheck {
+    let result = check_key_expiry(&public_key.protected.expires_at, OffsetDateTime::now_utc());
     build_member_expiry_check(category, member_handle, path, result)
 }
 
@@ -350,26 +370,29 @@ fn build_expired_member_check(
     )
 }
 
-fn check_kid_uniqueness(workspace_root: &Path) -> Result<DoctorCheck> {
+/// A document that will not load is left to the per-document checks above,
+/// which report it under its own member: a kid that cannot be read conflicts
+/// with nothing, and naming it twice would say the same failure twice.
+fn check_kid_uniqueness(active: &MemberDocuments, incoming: &MemberDocuments) -> DoctorCheck {
     let mut seen: BTreeMap<String, PathBuf> = BTreeMap::new();
-    for path in list_active_member_paths(workspace_root)?
-        .into_iter()
-        .chain(list_incoming_member_paths(workspace_root)?)
-    {
-        let Ok(public_key) = load_member_file_from_path(&path) else {
-            continue;
-        };
-        let kid = public_key.protected.kid.clone();
-        if let Some(previous) = seen.insert(kid.clone(), path.clone()) {
-            return Ok(check_duplicate_kid(kid, &previous, &path));
+    for documents in [active, incoming] {
+        for name in documents.names() {
+            let Ok(public_key) = documents.load(name) else {
+                continue;
+            };
+            let path = documents.document_path(name);
+            let kid = public_key.protected.kid;
+            if let Some(previous) = seen.insert(kid.clone(), path.clone()) {
+                return check_duplicate_kid(kid, &previous, &path);
+            }
         }
     }
-    Ok(DoctorCheck::ok(
+    DoctorCheck::ok(
         "members.kid_unique",
         DoctorCategory::MembersActive,
-        DoctorSubject::General("members".to_string()),
+        DoctorSubject::General(MEMBERS_DIR_NAME.to_string()),
         "Active and incoming member kids are unique",
-    ))
+    )
 }
 
 fn check_duplicate_kid(kid: String, previous: &Path, path: &Path) -> DoctorCheck {

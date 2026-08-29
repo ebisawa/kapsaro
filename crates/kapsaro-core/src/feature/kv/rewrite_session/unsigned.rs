@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Draft, sign, and master-key-unwrap steps shared by KV rewrite sessions.
+//! Bridges a verified document to a fresh unsigned draft and back to a signed one.
+
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::build_signing_context;
 use crate::feature::context::crypto::CryptoContext;

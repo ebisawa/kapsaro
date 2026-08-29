@@ -6,15 +6,18 @@
 use clap::Args;
 
 use crate::cli::common::command::{
-    resolve_options_with_allow_expired_key, run_kv_write_command_with_recovery, WriteCommandLabels,
+    resolve_kv_write_execution_input, resolve_options_with_allow_expired_key,
+    run_kv_write_command_with_recovery, WriteCommandLabels,
 };
 use crate::cli::common::output::kv::print_kv_import_result;
-use crate::cli::common::output::text::print_warnings;
 use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOutputOptions,
 };
+use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::kv::mutation::import_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::cli_api::app::kv::types::KvWriteOutcome;
 use kapsaro_core::cli_api::app::trust::ImportPolicy;
 use kapsaro_core::cli_api::presentation::fs::load_text_with_limit;
 use kapsaro_core::cli_api::presentation::limits::MAX_KV_ENC_FILE_SIZE;
@@ -49,10 +52,29 @@ pub(crate) fn run(args: ImportArgs) -> Result<()> {
         &args.common,
         args.allow_expired_key.allow_expired_key,
     )?;
-    let (outcome, entry_count) = run_kv_write_command_with_recovery::<ImportPolicy, _, _>(
-        &options,
-        args.member.member_handle.clone(),
-        args.store.name.as_deref(),
+    let execution = resolve_kv_write_execution_input(&options, args.member.member_handle.clone())?;
+    let (outcome, entry_count) =
+        import_entries(&options, &execution, args.store.name.as_deref(), &content)?;
+
+    print_kv_import_result(
+        outcome.message.as_deref(),
+        entry_count,
+        args.store.name.as_deref().unwrap_or("default"),
+        args.common.json.json,
+        args.common.quiet.quiet,
+    )
+}
+
+fn import_entries(
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    store_name: Option<&str>,
+    content: &str,
+) -> Result<(KvWriteOutcome, usize)> {
+    run_kv_write_command_with_recovery::<ImportPolicy, _, _>(
+        options,
+        execution,
+        store_name,
         true,
         WriteCommandLabels {
             signer_context: Some(("import input signer", "input signer")),
@@ -61,19 +83,10 @@ pub(crate) fn run(args: ImportArgs) -> Result<()> {
         |_, trust_plan| {
             import_kv_command_with_recipient_set_confirmation(
                 trust_plan,
-                &content,
+                content,
                 None,
                 confirm_recipient_set_approval,
             )
         },
-    )?;
-
-    print_warnings(&outcome.warnings);
-    print_kv_import_result(
-        outcome.message.as_deref(),
-        entry_count,
-        args.store.name.as_deref().unwrap_or("default"),
-        args.common.json.json,
-        args.common.quiet.quiet,
     )
 }

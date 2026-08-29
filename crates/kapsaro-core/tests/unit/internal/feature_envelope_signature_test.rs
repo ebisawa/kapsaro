@@ -17,6 +17,7 @@ use crate::model::public_key::{Attestation, IdentityKeys, JwkOkpPublicKey, Publi
 use crate::model::signature::ArtifactSignature;
 use crate::model::wire::algorithm;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 fn build_dummy_public_key(kid: &str) -> PublicKey {
     PublicKey {
@@ -60,7 +61,7 @@ fn build_test_signing_context<'a>(signing_key: &'a SigningKey, kid: &'a str) -> 
 #[test]
 fn test_append_kv_signature_produces_sig_line() {
     let signing_key = SigningKey::from_bytes(&[11u8; 32]);
-    let master_key = MasterKey::new([7u8; 32]);
+    let master_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
     let sid = Uuid::new_v4();
     let mac_key = KvKeySchedule::extract(&master_key, &sid)
         .unwrap()
@@ -82,7 +83,7 @@ fn test_append_kv_signature_produces_sig_line() {
 #[test]
 fn test_append_kv_signature_preserves_unsigned_content() {
     let signing_key = SigningKey::from_bytes(&[13u8; 32]);
-    let master_key = MasterKey::new([7u8; 32]);
+    let master_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
     let sid = Uuid::new_v4();
     let mac_key = KvKeySchedule::extract(&master_key, &sid)
         .unwrap()
@@ -103,7 +104,7 @@ fn test_append_kv_signature_preserves_unsigned_content() {
 fn test_verify_kv_signature_rejects_tampered_signature_kid() {
     let signing_key = SigningKey::from_bytes(&[17u8; 32]);
     let verifying_key = signing_key.verifying_key();
-    let master_key = MasterKey::new([7u8; 32]);
+    let master_key = MasterKey::from_zeroizing(Zeroizing::new([7u8; 32]));
     let sid = Uuid::new_v4();
     let mac_key = KvKeySchedule::extract(&master_key, &sid)
         .unwrap()
@@ -148,7 +149,6 @@ fn build_test_kv_document(
     signature: ArtifactSignature,
 ) -> KvEncDocument {
     KvEncDocument::new(
-        unsigned.to_string(),
         KvEncParser::new(unsigned).parse_all().unwrap(),
         KvHeader {
             sid,

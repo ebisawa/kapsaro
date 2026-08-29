@@ -20,8 +20,8 @@ fn build_identities_packet(identity_count: u32) -> Vec<u8> {
 }
 
 fn append_identity(packet: &mut Vec<u8>, key_blob: &[u8], comment: &[u8]) {
-    packet.extend_from_slice(&encode_ssh_string(key_blob));
-    packet.extend_from_slice(&encode_ssh_string(comment));
+    packet.extend_from_slice(&encode_ssh_string(key_blob).unwrap());
+    packet.extend_from_slice(&encode_ssh_string(comment).unwrap());
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_parse_identities_response_with_key_blob_comment() {
 fn test_build_sign_request_with_key_blob_payload() {
     let key_blob = decode_ssh_public_key_blob(TEST_AGENT_PUBLIC_KEY).unwrap();
 
-    let request = build_sign_request(&key_blob, b"payload");
+    let request = build_sign_request(&key_blob, b"payload").unwrap();
 
     assert_eq!(request[0], 13);
     assert!(request
@@ -115,10 +115,10 @@ fn test_build_sign_request_with_key_blob_payload() {
 fn test_parse_sign_response_extracts_ed25519_signature() {
     let signature = [7u8; 64];
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    signature_blob.extend_from_slice(&encode_ssh_string(&signature).unwrap());
     let mut packet = vec![14];
-    packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+    packet.extend_from_slice(&encode_ssh_string(&signature_blob).unwrap());
 
     let parsed = parse_sign_response(&packet).unwrap();
 
@@ -162,8 +162,8 @@ fn test_parse_identities_response_rejects_invalid_utf8_comment() {
     let key_blob = decode_ssh_public_key_blob(TEST_AGENT_PUBLIC_KEY).unwrap();
     let mut packet = vec![12];
     packet.extend_from_slice(&1u32.to_be_bytes());
-    packet.extend_from_slice(&encode_ssh_string(&key_blob));
-    packet.extend_from_slice(&encode_ssh_string(&[0xff]));
+    packet.extend_from_slice(&encode_ssh_string(&key_blob).unwrap());
+    packet.extend_from_slice(&encode_ssh_string(&[0xff]).unwrap());
 
     let error = parse_identities_response(&packet).unwrap_err();
 
@@ -181,10 +181,10 @@ fn test_parse_sign_response_rejects_agent_failure() {
 fn test_parse_sign_response_rejects_unsupported_signature_algorithm() {
     let signature = [7u8; 64];
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&encode_ssh_string(b"rsa-sha2-512"));
-    signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"rsa-sha2-512").unwrap());
+    signature_blob.extend_from_slice(&encode_ssh_string(&signature).unwrap());
     let mut packet = vec![14];
-    packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+    packet.extend_from_slice(&encode_ssh_string(&signature_blob).unwrap());
 
     let error = parse_sign_response(&packet).unwrap_err();
 
@@ -197,10 +197,10 @@ fn test_parse_sign_response_rejects_unsupported_signature_algorithm() {
 fn test_parse_sign_response_rejects_invalid_signature_length() {
     let signature = [7u8; 63];
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    signature_blob.extend_from_slice(&encode_ssh_string(&signature).unwrap());
     let mut packet = vec![14];
-    packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+    packet.extend_from_slice(&encode_ssh_string(&signature_blob).unwrap());
 
     let error = parse_sign_response(&packet).unwrap_err();
 
@@ -211,11 +211,11 @@ fn test_parse_sign_response_rejects_invalid_signature_length() {
 fn test_parse_sign_response_rejects_signature_blob_trailing_data() {
     let signature = [7u8; 64];
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    signature_blob.extend_from_slice(&encode_ssh_string(&signature));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    signature_blob.extend_from_slice(&encode_ssh_string(&signature).unwrap());
     signature_blob.push(1);
     let mut packet = vec![14];
-    packet.extend_from_slice(&encode_ssh_string(&signature_blob));
+    packet.extend_from_slice(&encode_ssh_string(&signature_blob).unwrap());
 
     let error = parse_sign_response(&packet).unwrap_err();
 

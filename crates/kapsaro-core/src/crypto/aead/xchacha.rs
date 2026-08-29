@@ -19,9 +19,6 @@ use chacha20poly1305::{
 };
 use zeroize::Zeroizing;
 
-/// Nonce size for XChaCha20-Poly1305 (24 bytes)
-pub const NONCE_SIZE: usize = 24;
-
 /// Encrypt plaintext with XChaCha20-Poly1305 (low-level API with explicit nonce)
 ///
 /// # Arguments

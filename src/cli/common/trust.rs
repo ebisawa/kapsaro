@@ -19,9 +19,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 mod recovery;
 
+// Reset confirmation reads from the terminal in production; the reader form is
+// re-exported so the retry tests can answer the prompt.
 #[cfg(test)]
 pub(crate) use recovery::recover_invalid_trust_store_with_reader;
-pub(crate) use recovery::run_with_trust_store_reset_recovery;
+pub(crate) use recovery::{
+    run_with_execution_trust_store_reset_recovery,
+    run_with_execution_trust_store_reset_without_retry, run_with_trust_list_reset_recovery,
+    TrustStoreResetOutcome,
+};
 
 pub(crate) fn confirm_signer_key_approval(
     candidate: &TrustApprovalCandidate,

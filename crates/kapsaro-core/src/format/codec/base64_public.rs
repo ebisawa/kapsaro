@@ -21,15 +21,11 @@ use super::{
 };
 
 pub fn encode_base64url_nopad(data: &[u8]) -> String {
-    encode_public(data, URL_SAFE_ALPHABET, false)
-}
-
-pub fn encode_base64_standard(data: &[u8]) -> String {
-    encode_public(data, STANDARD_ALPHABET, true)
+    encode_public(data, URL_SAFE_ALPHABET)
 }
 
 pub fn encode_base64_standard_nopad(data: &[u8]) -> String {
-    encode_public(data, STANDARD_ALPHABET, false)
+    encode_public(data, STANDARD_ALPHABET)
 }
 
 pub fn decode_base64url_nopad(data: &str, field_name: &str) -> Result<Vec<u8>> {

@@ -36,7 +36,6 @@ struct PublicKeySelfSignatureVerification {
     verifying_key: VerifyingKey,
 }
 
-const DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT: &str = "public key";
 pub(crate) const KEYSTORE_SIBLING_PUBLIC_KEY_CONTEXT: &str = "keystore sibling public.json";
 pub(crate) const EMBEDDED_SIGNER_PUB_CONTEXT: &str = "embedded signer_pub";
 pub(crate) const WORKSPACE_ACTIVE_MEMBER_RECIPIENT_CONTEXT: &str =
@@ -78,19 +77,6 @@ fn verify_public_key_self_signature_context(
     })
 }
 
-/// Verify PublicKey document (self-signature and attestation) and return VerifiedPublicKeyAttested
-///
-/// # Arguments
-/// * `public_key` - PublicKey document to verify
-///
-/// # Returns
-/// `VerifiedPublicKeyAttested` if verification succeeds, error otherwise
-pub fn verify_public_key_with_attestation(
-    public_key: &PublicKey,
-) -> Result<VerifiedPublicKeyAttested> {
-    verify_public_key_with_attestation_context(public_key, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
-}
-
 pub fn verify_public_key_with_attestation_context(
     public_key: &PublicKey,
     context: &str,
@@ -121,12 +107,8 @@ fn verify_signing_public_key_context(
         &public_key.protected.attestation.sig,
     )?;
 
-    let proof = AttestationProof {
-        method: public_key.protected.attestation.method.clone(),
-        ssh_pub: public_key.protected.attestation.pub_.clone(),
-        verified_at: None,
-    };
-    let attested_statement = AttestedKeyStatement::new(public_key.protected.keys.clone(), proof);
+    let attested_statement =
+        AttestedKeyStatement::new(public_key.protected.keys.clone(), AttestationProof::new());
 
     let attested =
         VerifiedPublicKeyAttested::new(public_key.clone(), verified.proof, attested_statement);
@@ -135,12 +117,6 @@ fn verify_signing_public_key_context(
         attested,
         verified.verifying_key,
     ))
-}
-
-pub fn verify_public_key_for_verification(
-    public_key: &PublicKey,
-) -> Result<VerifiedPublicKeyForVerification> {
-    verify_public_key_for_verification_context(public_key, DEFAULT_PUBLIC_KEY_VERIFY_CONTEXT)
 }
 
 pub fn verify_public_key_for_verification_context(

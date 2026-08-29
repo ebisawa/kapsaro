@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use kapsaro_core::api::file::{FileEncArtifact, FileReadOperation};
-use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore};
+use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, MemberHandle};
 use kapsaro_core::api::kv::{KvEncArtifact, KvReadOperation};
 use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
@@ -19,16 +19,6 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
-
-const FIXTURE_FILES: &[&str] = &[
-    "expected.json",
-    "file_enc.json",
-    "id_ed25519",
-    "id_ed25519.pub",
-    "kv_enc.kvenc",
-    "private.json",
-    "public.json",
-];
 
 /// Bridges the recorded SSH key into the facade signing trait.
 struct GoldenSshBackend {
@@ -47,14 +37,6 @@ impl SshSignatureBackend for GoldenSshBackend {
         self.inner
             .sign_sshsig(namespace, ssh_pubkey, message)
             .map(|signature| SshRawSignature::new(*signature.as_bytes()))
-    }
-}
-
-#[test]
-fn test_golden_fixture_files_are_present() {
-    for name in FIXTURE_FILES {
-        let path = fixture_dir().join(name);
-        assert!(path.is_file(), "missing golden fixture file: {name}");
     }
 }
 
@@ -126,9 +108,9 @@ fn test_golden_key_context_resolves_the_recorded_kid() {
     let key_ctx = load_golden_key_context(&staged);
     let expected = load_expected();
 
-    assert_eq!(key_ctx.kid(), expected_str(&expected, "kid"));
+    assert_eq!(key_ctx.kid().as_str(), expected_str(&expected, "kid"));
     assert_eq!(
-        key_ctx.member_handle(),
+        key_ctx.member_handle().as_str(),
         expected_str(&expected, "member_handle")
     );
 }
@@ -230,9 +212,11 @@ fn load_golden_key_context(staged: &TempDir) -> KeyContext {
         inner: Ed25519DirectBackend::new(&staged.path().join("ssh").join("id_ed25519")).unwrap(),
     };
 
-    LocalKeyStore::new(staged.path().join("keys"))
+    LocalKeyStore::open(staged.path().join("keys"))
+        .expect("open staged keystore")
         .load_key_context(KeyContextOptions::new(
-            expected_str(&expected, "member_handle"),
+            MemberHandle::try_from(expected_str(&expected, "member_handle"))
+                .expect("valid member handle"),
             Box::new(backend),
             ssh_pubkey,
         ))

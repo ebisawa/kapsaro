@@ -5,6 +5,7 @@
 
 use super::resolution::{build_not_found_error, resolve_signing_method, resolve_ssh_commands};
 use super::SshSigningParams;
+use crate::config::resolution::global::GlobalConfigSnapshot;
 use crate::config::resolution::ssh_key::{
     resolve_ssh_key_candidate, resolve_ssh_key_descriptor, SshKeySource,
 };
@@ -19,35 +20,38 @@ use crate::Result;
 
 pub(super) fn resolve_ssh_key_candidates(
     params: &SshSigningParams,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Vec<SshKeyCandidate>> {
-    let base_dir = params.base_dir.as_deref();
-    let signing_method = resolve_signing_method(params, base_dir)?;
-    let commands = resolve_ssh_commands(base_dir)?;
+    let signing_method = resolve_signing_method(params, config)?;
+    let commands = resolve_ssh_commands(config)?;
     let ssh_keygen = DefaultSshKeygen::new(commands.ssh_keygen_path);
     let ssh_add = DefaultSshAdd::new(commands.ssh_add_path);
 
     match signing_method {
-        SshSigningMethod::SshKeygen => resolve_file_candidates(params, &ssh_keygen),
-        SshSigningMethod::SshAgent => resolve_agent_candidates(params, &ssh_keygen, &ssh_add),
+        SshSigningMethod::SshKeygen => resolve_file_candidates(params, config, &ssh_keygen),
+        SshSigningMethod::SshAgent => {
+            resolve_agent_candidates(params, config, &ssh_keygen, &ssh_add)
+        }
     }
 }
 
 fn resolve_file_candidates(
     params: &SshSigningParams,
+    config: &GlobalConfigSnapshot,
     ssh_keygen: &DefaultSshKeygen,
 ) -> Result<Vec<SshKeyCandidate>> {
-    let descriptor =
-        resolve_ssh_key_descriptor(params.ssh_key.clone(), params.base_dir.as_deref())?;
+    let descriptor = resolve_ssh_key_descriptor(params.ssh_key.clone(), config)?;
     let candidate = load_ssh_key_candidate_from_file(ssh_keygen, &descriptor)?;
     Ok(vec![candidate])
 }
 
 fn resolve_agent_candidates(
     params: &SshSigningParams,
+    config: &GlobalConfigSnapshot,
     ssh_keygen: &DefaultSshKeygen,
     ssh_add: &DefaultSshAdd,
 ) -> Result<Vec<SshKeyCandidate>> {
-    let resolved = resolve_ssh_key_candidate(params.ssh_key.clone(), params.base_dir.as_deref())?;
+    let resolved = resolve_ssh_key_candidate(params.ssh_key.clone(), config)?;
     let is_explicit = resolved.source != SshKeySource::Default;
 
     if !is_explicit {

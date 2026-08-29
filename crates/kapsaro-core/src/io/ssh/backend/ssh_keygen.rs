@@ -50,8 +50,7 @@ impl SignatureBackend for SshKeygenBackend {
         ssh_pubkey: &str,
         message: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let key_path = self.key_descriptor.as_path();
         self.ssh_keygen
-            .sign(key_path, namespace, ssh_pubkey, message)
+            .sign(&self.key_descriptor, namespace, ssh_pubkey, message)
     }
 }

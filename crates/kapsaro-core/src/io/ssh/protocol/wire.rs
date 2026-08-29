@@ -8,6 +8,9 @@
 use crate::io::ssh::SshError;
 use crate::Result;
 
+/// Bytes the big-endian length field occupies ahead of the payload.
+const LENGTH_PREFIX_SIZE: usize = 4;
+
 /// Encode data as SSH_STRING: uint32be(length) + bytes
 ///
 /// # SSH Protocol Format
@@ -18,21 +21,36 @@ use crate::Result;
 ///   byte[n]   data (where n = length)
 /// ```
 ///
+/// # Errors
+///
+/// - `Error::Ssh` - The payload is longer than the length field can state
+///
 /// # Examples
 ///
 /// ```ignore
 /// use kapsaro_core::io::ssh::protocol::wire::encode_ssh_string;
-/// let encoded = encode_ssh_string(b"test");
+/// let encoded = encode_ssh_string(b"test").unwrap();
 /// assert_eq!(encoded, vec![0, 0, 0, 4, b't', b'e', b's', b't']);
 /// ```
-pub fn encode_ssh_string(data: &[u8]) -> Vec<u8> {
-    let len = data.len() as u32;
+pub fn encode_ssh_string(data: &[u8]) -> Result<Vec<u8>> {
+    let len = u32::try_from(data.len()).map_err(|_| {
+        SshError::build_operation_failed_error(format!(
+            "SSH_STRING payload of {} bytes exceeds the {} bytes the length field can state",
+            data.len(),
+            u32::MAX
+        ))
+    })?;
     let mut result = len.to_be_bytes().to_vec();
     result.extend_from_slice(data);
-    result
+    Ok(result)
 }
 
 /// Decode SSH_STRING from bytes, returning (data, remaining_bytes)
+///
+/// The length field spans the whole `u32` range, and adding the prefix to it
+/// overflows a 32-bit `usize`. The sum is taken with an overflow check, so a
+/// declared length no address space can hold is reported instead of wrapping
+/// past the bounds check below it.
 ///
 /// # Errors
 ///
@@ -42,13 +60,13 @@ pub fn encode_ssh_string(data: &[u8]) -> Vec<u8> {
 ///
 /// ```ignore
 /// use kapsaro_core::io::ssh::protocol::wire::{decode_ssh_string, encode_ssh_string};
-/// let encoded = encode_ssh_string(b"hello");
+/// let encoded = encode_ssh_string(b"hello").unwrap();
 /// let (decoded, rest): (&[u8], &[u8]) = decode_ssh_string(&encoded).unwrap();
 /// assert_eq!(decoded, b"hello");
 /// assert_eq!(rest.len(), 0);
 /// ```
 pub fn decode_ssh_string(data: &[u8]) -> Result<(&[u8], &[u8])> {
-    if data.len() < 4 {
+    if data.len() < LENGTH_PREFIX_SIZE {
         return Err(SshError::build_operation_failed_error(
             "Insufficient data for SSH_STRING length field",
         )
@@ -56,17 +74,23 @@ pub fn decode_ssh_string(data: &[u8]) -> Result<(&[u8], &[u8])> {
     }
 
     let len = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) as usize;
+    let end = len.checked_add(LENGTH_PREFIX_SIZE).ok_or_else(|| {
+        SshError::build_operation_failed_error(format!(
+            "SSH_STRING declares {} bytes, more than this platform can address",
+            len
+        ))
+    })?;
 
-    if data.len() < 4 + len {
+    if data.len() < end {
         return Err(SshError::build_operation_failed_error(format!(
             "Expected {} bytes for SSH_STRING, got {}",
-            4 + len,
+            end,
             data.len()
         ))
         .into());
     }
 
-    Ok((&data[4..4 + len], &data[4 + len..]))
+    Ok((&data[LENGTH_PREFIX_SIZE..end], &data[end..]))
 }
 
 #[cfg(test)]

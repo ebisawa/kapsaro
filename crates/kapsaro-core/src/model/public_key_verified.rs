@@ -3,60 +3,48 @@
 
 //! Verified wrappers for public-key-related domain models.
 
-use super::public_key::{BindingClaims, IdentityKeys, PublicKey};
-use super::verification::{BindingVerificationProof, ExpiryProof, SelfSignatureProof};
+use super::public_key::{IdentityKeys, PublicKey};
+use super::verification::{ExpiryProof, SelfSignatureProof};
 use ed25519_dalek::VerifyingKey;
 
-/// Binding claims that have been verified online (e.g. via member verify).
-#[derive(Debug, Clone)]
-pub struct VerifiedBindingClaims {
-    /// The verified binding claims
-    pub claims: BindingClaims,
-    /// Proof of online verification
-    pub proof: BindingVerificationProof,
-}
-
-impl VerifiedBindingClaims {
-    /// Create a new VerifiedBindingClaims.
-    pub fn new(claims: BindingClaims, proof: BindingVerificationProof) -> Self {
-        Self { claims, proof }
-    }
-
-    /// Get a reference to the verified claims.
-    pub fn claims(&self) -> &BindingClaims {
-        &self.claims
-    }
-
-    /// Get a reference to the verification proof.
-    pub fn proof(&self) -> &BindingVerificationProof {
-        &self.proof
-    }
-}
-
 /// Proof of SSH attestation verification.
+///
+/// A marker: the attestation check leaves nothing a caller reads back, so the
+/// proof carries only the fact that it ran.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AttestationProof {
-    /// Attestation method (e.g., "ssh-sign")
-    pub method: String,
-    /// SSH public key used for attestation (from attestation.pub)
-    pub ssh_pub: String,
-    /// Optional verification timestamp (RFC 3339)
-    #[allow(dead_code)]
-    pub verified_at: Option<String>,
+pub struct AttestationProof(
+    // Never read: the private field is what keeps the proof unconstructible
+    // outside the crate, which is the whole of what it states.
+    #[allow(dead_code)] (),
+);
+
+impl AttestationProof {
+    /// Create a new AttestationProof.
+    ///
+    /// Kept out of the crate's external surface: the proof states that the
+    /// attestation check ran, so it is minted where that check happens.
+    pub(crate) fn new() -> Self {
+        Self(())
+    }
 }
 
 /// Public key statement verified to have a valid SSH attestation.
 #[derive(Debug, Clone)]
 pub struct AttestedKeyStatement {
-    /// Public keys covered by the attested statement.
-    pub keys: IdentityKeys,
-    /// Proof of attestation verification
-    pub proof: AttestationProof,
+    // Never read: carrying the attested keys together with their proof is what
+    // makes this statement unconstructible without an attestation check.
+    #[allow(dead_code)]
+    keys: IdentityKeys,
+    #[allow(dead_code)]
+    proof: AttestationProof,
 }
 
 impl AttestedKeyStatement {
     /// Create a new AttestedKeyStatement.
-    pub fn new(keys: IdentityKeys, proof: AttestationProof) -> Self {
+    ///
+    /// Kept out of the crate's external surface: a statement becomes attested
+    /// where the attestation check ran, not wherever the keys are held.
+    pub(crate) fn new(keys: IdentityKeys, proof: AttestationProof) -> Self {
         Self { keys, proof }
     }
 }
@@ -64,16 +52,21 @@ impl AttestedKeyStatement {
 /// PublicKey verified for both self-signature and attestation.
 #[derive(Debug, Clone)]
 pub struct VerifiedPublicKeyAttested {
-    /// The verified document
-    pub document: PublicKey,
-    /// Proof of self-signature verification
-    pub self_signature_proof: SelfSignatureProof,
-    /// Attestation-verified key statement.
-    pub statement: AttestedKeyStatement,
+    document: PublicKey,
+    // Never read: holding both proofs is what makes this type unconstructible
+    // without a self-signature check and an attestation check, which is the
+    // guarantee the type exists for.
+    #[allow(dead_code)]
+    self_signature_proof: SelfSignatureProof,
+    #[allow(dead_code)]
+    statement: AttestedKeyStatement,
 }
 impl VerifiedPublicKeyAttested {
     /// Create a new VerifiedPublicKeyAttested.
-    pub fn new(
+    ///
+    /// Kept out of the crate's external surface: a document becomes verified
+    /// where the self-signature and attestation checks ran.
+    pub(crate) fn new(
         document: PublicKey,
         self_signature_proof: SelfSignatureProof,
         statement: AttestedKeyStatement,
@@ -89,11 +82,6 @@ impl VerifiedPublicKeyAttested {
     pub fn document(&self) -> &PublicKey {
         &self.document
     }
-
-    /// Get a reference to the attestation-verified key statement.
-    pub fn statement(&self) -> &AttestedKeyStatement {
-        &self.statement
-    }
 }
 
 /// PublicKey verified for signature verification use.
@@ -105,7 +93,10 @@ pub struct VerifiedSigningPublicKey {
 
 impl VerifiedSigningPublicKey {
     /// Construct from an attested key and its verified Ed25519 key material.
-    pub fn new(attested: VerifiedPublicKeyAttested, verifying_key: VerifyingKey) -> Self {
+    ///
+    /// Kept out of the crate's external surface: the key material is the one
+    /// the self-signature check verified with.
+    pub(crate) fn new(attested: VerifiedPublicKeyAttested, verifying_key: VerifyingKey) -> Self {
         Self {
             attested,
             verifying_key,
@@ -115,11 +106,6 @@ impl VerifiedSigningPublicKey {
     /// Get a reference to the verified document.
     pub fn document(&self) -> &PublicKey {
         self.attested.document()
-    }
-
-    /// Get a reference to the attestation-verified key statement.
-    pub fn statement(&self) -> &AttestedKeyStatement {
-        self.attested.statement()
     }
 
     /// Get a reference to the attested key wrapper.
@@ -141,13 +127,18 @@ impl VerifiedSigningPublicKey {
 #[derive(Debug, Clone)]
 pub struct VerifiedRecipientKey {
     verified: VerifiedPublicKeyAttested,
+    // Never read: holding the proof is what makes this type unconstructible
+    // without an expiry check, which is the guarantee the type exists for.
     #[allow(dead_code)]
     expiry_proof: ExpiryProof,
 }
 
 impl VerifiedRecipientKey {
     /// Construct from a verified-and-attested key plus expiry proof.
-    pub fn new(verified: VerifiedPublicKeyAttested, expiry_proof: ExpiryProof) -> Self {
+    ///
+    /// Kept out of the crate's external surface: a key becomes a recipient
+    /// where the expiry check ran.
+    pub(crate) fn new(verified: VerifiedPublicKeyAttested, expiry_proof: ExpiryProof) -> Self {
         Self {
             verified,
             expiry_proof,
@@ -157,11 +148,6 @@ impl VerifiedRecipientKey {
     /// Get a reference to the verified document.
     pub fn document(&self) -> &PublicKey {
         self.verified.document()
-    }
-
-    /// Get a reference to the attestation-verified key statement.
-    pub fn statement(&self) -> &AttestedKeyStatement {
-        self.verified.statement()
     }
 
     pub fn attested(&self) -> &VerifiedPublicKeyAttested {

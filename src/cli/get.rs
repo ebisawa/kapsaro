@@ -5,23 +5,20 @@
 
 use clap::Args;
 
-use crate::cli::common::command::{
-    ensure_reviewed_artifact_unchanged, resolve_options_with_read_trust_allowances,
-    run_read_command_with_recovery, ReadCommandContext, ReadCommandLabels,
-};
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use crate::cli::common::command::{resolve_options_with_read_trust_allowances, ReadCommandLabels};
+use crate::cli::common::kv_read::{KvReadReview, KvReadSession};
 use crate::cli::common::output::kv::{print_kv_read_result, KvReadResult};
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, KvStoreNameOption, MemberHandleOption,
     SigningOutputOptions,
 };
-use kapsaro_core::api::kv::{KvEncArtifact, KvReadOperation};
-use kapsaro_core::api::trust::TrustDecision;
-use kapsaro_core::cli_api::app::context::execution::{
-    resolve_read_execution, resolve_read_trust_evaluator,
-};
+use kapsaro_core::api::kv::KvReadOperation;
+use kapsaro_core::api::secret::SecretString;
 use kapsaro_core::cli_api::app::errors::build_kv_key_not_found_error;
-use kapsaro_core::cli_api::app::kv::query::{evaluate_kv_read_trust_plan, resolve_kv_read_path};
-use kapsaro_core::cli_api::app::trust::evaluate_kv_after_cli_review;
+use kapsaro_core::cli_api::app::kv::query::evaluate_kv_read_trust_plan;
 use kapsaro_core::cli_api::app::trust::GetPolicy;
 use kapsaro_core::{Error, Result};
 
@@ -57,75 +54,20 @@ pub(crate) struct GetArgs {
 
 pub(crate) fn run(args: GetArgs) -> Result<()> {
     let read_mode = resolve_get_read_mode(args.all, args.key.as_deref())?;
-    let options = resolve_options_with_read_trust_allowances(
-        &args.common,
-        args.allow_expired_key.allow_expired_key,
-        args.allow_non_member.allow_non_member,
-    )?;
-    let artifact_path = resolve_kv_read_path(&options, args.store.name.as_deref())?;
-    let artifact = KvEncArtifact::load(&artifact_path)?;
-    let verified = artifact.verify(options.operation_options())?;
-    let operation = match &read_mode {
-        KvReadMode::All => KvReadOperation::Entries,
-        KvReadMode::Single(key) => KvReadOperation::Entry((*key).to_string()),
-    };
-    let kv_map = run_read_command_with_recovery(
-        &options,
-        args.member.member_handle.clone(),
+    let session = open_get_session(&args)?;
+    let kv_map = session.read(
         ReadCommandLabels {
             context: "get signer",
             subject: "signer",
-            workspace_purpose: "kv access",
-            allow_non_member: options.allow_non_member,
+            allow_non_member: session.allow_non_member(),
         },
-        |ssh_ctx| {
-            let execution =
-                resolve_read_execution(&options, args.member.member_handle.clone(), None, ssh_ctx)?;
-            let trust = evaluate_kv_read_trust_plan::<GetPolicy>(&options, &execution, &verified)?;
-            Ok(ReadCommandContext::new(execution, trust))
-        },
-        |context| {
-            let current_artifact = KvEncArtifact::load(&artifact_path)?;
-            ensure_reviewed_artifact_unchanged(
-                artifact.as_str(),
-                current_artifact.as_str(),
-                "KV get authorization",
-            )?;
-            let current = current_artifact.verify(options.operation_options())?;
-            let evaluator = resolve_read_trust_evaluator(&options, &context.execution)?;
-            let values = match evaluate_kv_after_cli_review(
-                &evaluator,
-                &verified,
-                &current,
-                &context.execution.key_ctx,
-                operation.clone(),
-                context.signer_outcome(),
-                options.operation_options(),
-            )? {
-                TrustDecision::Trusted(trusted) => match &read_mode {
-                    KvReadMode::All => trusted.decrypt_entries()?,
-                    KvReadMode::Single(key) => {
-                        let value = trusted.decrypt_entry().map_err(|error| {
-                            build_kv_key_not_found_error(error, &artifact_path, key)
-                        })?;
-                        std::collections::BTreeMap::from([((*key).to_string(), value)])
-                    }
-                },
-                TrustDecision::ReviewRequired(_) => return Err(trust_state_changed_error()),
-            };
-            let disclosed = match evaluate_kv_after_cli_review(
-                &evaluator,
-                &verified,
-                &current,
-                &context.execution.key_ctx,
-                KvReadOperation::List,
-                context.signer_outcome(),
-                options.operation_options(),
-            )? {
-                TrustDecision::Trusted(trusted) => trusted.list_entry_keys()?,
-                TrustDecision::ReviewRequired(_) => return Err(trust_state_changed_error()),
-            };
-            Ok(KvReadResult { values, disclosed })
+        "KV get authorization",
+        evaluate_kv_read_trust_plan::<GetPolicy>,
+        |review| {
+            Ok(KvReadResult {
+                values: decrypt_requested_values(review, read_mode, session.artifact_path())?,
+                disclosed: review.authorize(KvReadOperation::List)?.list_entry_keys()?,
+            })
         },
     )?;
 
@@ -137,17 +79,42 @@ pub(crate) fn run(args: GetArgs) -> Result<()> {
     )
 }
 
+fn open_get_session(args: &GetArgs) -> Result<KvReadSession> {
+    let options = resolve_options_with_read_trust_allowances(
+        &args.common,
+        args.allow_expired_key.allow_expired_key,
+        args.allow_non_member.allow_non_member,
+    )?;
+    KvReadSession::open(
+        options,
+        args.store.name.as_deref(),
+        args.member.member_handle.clone(),
+    )
+}
+
+fn decrypt_requested_values(
+    review: &KvReadReview<'_>,
+    read_mode: KvReadMode<'_>,
+    artifact_path: &Path,
+) -> Result<BTreeMap<String, SecretString>> {
+    match read_mode {
+        KvReadMode::All => review
+            .authorize(KvReadOperation::Entries)?
+            .decrypt_entries(),
+        KvReadMode::Single(key) => {
+            let value = review
+                .authorize(KvReadOperation::Entry(key.to_string()))?
+                .decrypt_entry()
+                .map_err(|error| build_kv_key_not_found_error(error, artifact_path, key))?;
+            Ok(BTreeMap::from([(key.to_string(), value)]))
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum KvReadMode<'a> {
     All,
     Single(&'a str),
-}
-
-fn trust_state_changed_error() -> Error {
-    Error::build_verification_error(
-        "E_TRUST_REVIEW_REQUIRED".to_string(),
-        "Trust state changed while reviewing the KV artifact".to_string(),
-    )
 }
 
 fn resolve_get_read_mode(all: bool, key: Option<&str>) -> Result<KvReadMode<'_>> {

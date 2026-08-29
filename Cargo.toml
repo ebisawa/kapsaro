@@ -27,6 +27,7 @@ unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
+disallowed_methods = "deny"
 
 [lints]
 workspace = true
@@ -70,18 +71,11 @@ tempfile = "3"
 # Serial test execution
 serial_test = "3"
 
-# Environment variable manipulation for tests
-temp-env = "0.3"
-ed25519-dalek = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [[test]]
 name = "cli_integration"
 path = "tests/cli_integration.rs"
-
-[[test]]
-name = "unit"
-path = "tests/unit.rs"
 
 [profile.release]
 lto = "fat"

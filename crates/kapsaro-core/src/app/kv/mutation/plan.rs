@@ -10,7 +10,6 @@ use crate::app::context::execution::{
     evaluate_selected_decryption_key_expiry, ExecutionContext, SelectedDecryptionKeyExpiry,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::context::ssh::SshSigningContextResolution;
 use crate::app::trust::enforcement::enforce_write_input_artifact_recipients;
 use crate::app::trust::{
     evaluate_signer_trust_with_proof, push_signature_verification_warnings, CommandCapability,
@@ -27,20 +26,20 @@ use crate::{Error, Result};
 use super::super::session::KvCommandSession;
 use super::snapshot::MutationReviewSnapshot;
 
-pub struct MutationWriteTrustPlan<P> {
+pub struct MutationWriteTrustPlan<'a, P> {
     pub(super) options: CommonCommandOptions,
-    pub execution: ExecutionContext,
+    pub execution: &'a ExecutionContext,
     pub signer_trust: Option<SignerTrustOutcome>,
     pub recipient_trust: RecipientTrustOutcome,
     pub(crate) trust_context: TrustContext,
     pub warnings: Vec<String>,
-    pub(super) review: MutationReviewSnapshot,
+    pub(super) review: MutationReviewSnapshot<'a>,
     command_warnings: Vec<String>,
     allow_missing: bool,
     _policy: PhantomData<P>,
 }
 
-impl<P> MutationWriteTrustPlan<P> {
+impl<P> MutationWriteTrustPlan<'_, P> {
     /// Ensure the reviewed artifact, members, and trust store still match.
     pub fn ensure_current_after_confirmation(&self) -> Result<()> {
         self.review.ensure_current()
@@ -53,27 +52,26 @@ struct ExistingSignerTrustEvaluation {
     warnings: Vec<String>,
 }
 
-struct MutationWriteReviewContext<P>
+struct MutationWriteReviewContext<'a, P>
 where
     P: WriteTrustPolicy,
 {
     recipient_review: WriteRecipientTrustPlan<P>,
-    review: MutationReviewSnapshot,
+    review: MutationReviewSnapshot<'a>,
     signer_trust: Option<SignerTrustOutcome>,
     warnings: Vec<String>,
 }
 
-pub fn resolve_mutation_write_plan<P>(
+pub fn resolve_mutation_write_plan<'a, P>(
     options: &CommonCommandOptions,
-    member_handle: Option<String>,
+    execution: &'a ExecutionContext,
     file_name: Option<&str>,
     allow_missing: bool,
-    ssh_ctx: Option<SshSigningContextResolution>,
-) -> Result<MutationWriteTrustPlan<P>>
+) -> Result<MutationWriteTrustPlan<'a, P>>
 where
     P: WriteTrustPolicy,
 {
-    let command = KvCommandSession::resolve_write(options, member_handle, file_name, ssh_ctx)?;
+    let command = KvCommandSession::bind_write(execution, file_name)?;
     let operation_options = options.operation_options();
     let context = resolve_mutation_write_review_context::<P>(
         options,
@@ -90,8 +88,8 @@ where
 }
 
 pub fn reevaluate_mutation_write_plan_after_review<P>(
-    plan: MutationWriteTrustPlan<P>,
-) -> Result<MutationWriteTrustPlan<P>>
+    plan: MutationWriteTrustPlan<'_, P>,
+) -> Result<MutationWriteTrustPlan<'_, P>>
 where
     P: WriteTrustPolicy,
 {
@@ -116,22 +114,21 @@ where
     ))
 }
 
-fn resolve_mutation_write_review_context<P>(
+fn resolve_mutation_write_review_context<'a, P>(
     options: &CommonCommandOptions,
-    command: &KvCommandSession,
+    command: &KvCommandSession<'a>,
     operation_options: crate::api::operation::OperationOptions,
     allow_missing: bool,
-) -> Result<MutationWriteReviewContext<P>>
+) -> Result<MutationWriteReviewContext<'a, P>>
 where
     P: WriteTrustPolicy,
 {
     let recipient_review = resolve_mutation_recipient_review::<P>(options, command)?;
-    let review =
-        build_mutation_review_snapshot(options, command, &recipient_review, allow_missing)?;
+    let review = build_mutation_review_snapshot(command, &recipient_review, allow_missing)?;
     let existing_signer = evaluate_existing_signer_trust(
         review.existing_content(),
         recipient_review.trust_context(),
-        &command.execution,
+        command.execution,
         operation_options.allow_expired_key(),
         P::CAPABILITY,
     )?;
@@ -149,12 +146,12 @@ where
     })
 }
 
-fn build_mutation_write_trust_plan<P>(
+fn build_mutation_write_trust_plan<'a, P>(
     options: &CommonCommandOptions,
-    command: KvCommandSession,
-    context: MutationWriteReviewContext<P>,
+    command: KvCommandSession<'a>,
+    context: MutationWriteReviewContext<'a, P>,
     allow_missing: bool,
-) -> MutationWriteTrustPlan<P>
+) -> MutationWriteTrustPlan<'a, P>
 where
     P: WriteTrustPolicy,
 {
@@ -172,7 +169,9 @@ where
     }
 }
 
-fn ensure_reevaluated_trust_is_accepted<P>(context: &MutationWriteReviewContext<P>) -> Result<()>
+fn ensure_reevaluated_trust_is_accepted<P>(
+    context: &MutationWriteReviewContext<'_, P>,
+) -> Result<()>
 where
     P: WriteTrustPolicy,
 {
@@ -204,35 +203,29 @@ fn resolve_mutation_recipient_review<P>(
 where
     P: WriteTrustPolicy,
 {
+    let keystore = command
+        .execution
+        .require_local_keystore_access("KV mutation")?;
     WriteRecipientTrustPlan::<P>::load(
         options,
-        &command.target.workspace_root.root_path,
-        &command.execution.member_handle,
-        Some(
-            command
-                .execution
-                .key_ctx
-                .inner()
-                .self_signature_public_key_x(),
-        ),
+        command.execution,
         Some(command.execution.key_ctx.inner().local_key_identity()),
+        keystore,
     )
 }
 
-fn build_mutation_review_snapshot<P>(
-    options: &CommonCommandOptions,
-    command: &KvCommandSession,
+fn build_mutation_review_snapshot<'a, P>(
+    command: &KvCommandSession<'a>,
     recipient_review: &WriteRecipientTrustPlan<P>,
     allow_missing: bool,
-) -> Result<MutationReviewSnapshot>
+) -> Result<MutationReviewSnapshot<'a>>
 where
     P: WriteTrustPolicy,
 {
     MutationReviewSnapshot::build(
         command.target.clone(),
         recipient_review.workspace_members().clone(),
-        options,
-        &command.execution.member_handle,
+        command.execution,
         recipient_review.trust_context(),
         allow_missing,
     )

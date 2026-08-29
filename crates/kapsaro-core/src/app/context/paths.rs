@@ -1,31 +1,30 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
+//! Resolution of the directories a command works against.
+//! Turns common options into a base directory, keystore root, and workspace.
+
+use std::path::PathBuf;
 
 use crate::app::context::options::CommonCommandOptions;
-use crate::config::resolution::workspace::{
-    resolve_optional_workspace_from_sources,
-    resolve_optional_workspace_from_sources_with_base_resolver,
-};
+use crate::config::resolution::global::GlobalConfigSnapshot;
+use crate::config::resolution::workspace::resolve_optional_workspace_from_sources;
 use crate::io::workspace::detection::WorkspaceRoot;
+use crate::support::fs::anchor::AnchoredDir;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use tracing::debug;
 
 /// Resolve the workspace if one is explicitly configured or auto-detectable.
 pub fn load_optional_workspace(options: &CommonCommandOptions) -> Result<Option<WorkspaceRoot>> {
-    resolve_optional_workspace_from_sources_with_base_resolver(options.workspace.clone(), || {
-        options.resolve_base_dir().map(Some)
-    })
-    .map(|resolution| resolution.map(|workspace| workspace.root))
+    load_optional_workspace_with_config(options, options.global_config()?)
 }
 
-fn load_optional_workspace_with_base(
+fn load_optional_workspace_with_config(
     options: &CommonCommandOptions,
-    base_dir: Option<&Path>,
+    config: &GlobalConfigSnapshot,
 ) -> Result<Option<WorkspaceRoot>> {
-    resolve_optional_workspace_from_sources(options.workspace.clone(), base_dir)
+    resolve_optional_workspace_from_sources(options.workspace.clone(), config)
         .map(|resolution| resolution.map(|workspace| workspace.root))
 }
 
@@ -50,20 +49,42 @@ pub struct CommandPathResolution {
     pub base_dir: PathBuf,
     pub keystore_root: PathBuf,
     pub workspace_root: Option<WorkspaceRoot>,
+    /// Local state root every later step of this command works through.
+    ///
+    /// The configuration, the keystore and the trust store all live under one
+    /// root, so the root the options fixed is taken over here and handed down.
+    /// Each of them resolving the same path again would let a root repointed
+    /// mid-command answer one question from one tree and the next from another.
+    home: Option<AnchoredDir>,
+    /// Configuration every later step of this command resolves settings from.
+    ///
+    /// The workspace, the member handle and the whole SSH signing environment
+    /// are all configured in one file, so it is read once through the fixed
+    /// root and handed down rather than opened again by each of them.
+    pub(crate) global_config: GlobalConfigSnapshot,
 }
 
 impl CommandPathResolution {
     pub fn load(options: &CommonCommandOptions) -> Result<Self> {
         let base_dir = options.resolve_base_dir()?;
         let keystore_root = options.resolve_keystore_root()?;
-        let workspace_root = load_optional_workspace_with_base(options, Some(&base_dir))?;
+        let home = options.fixed_home()?.cloned();
+        let global_config = options.global_config()?.clone();
+        let workspace_root = load_optional_workspace_with_config(options, &global_config)?;
         let paths = Self {
             base_dir,
             keystore_root,
             workspace_root,
+            home,
+            global_config,
         };
         log_path_resolution(&paths);
         Ok(paths)
+    }
+
+    /// The local state root this command fixed, when there is one.
+    pub(crate) fn home(&self) -> Option<&AnchoredDir> {
+        self.home.as_ref()
     }
 
     pub fn require_workspace(options: &CommonCommandOptions, purpose: &str) -> Result<Self> {
@@ -96,3 +117,7 @@ fn log_path_resolution(paths: &CommandPathResolution) {
         workspace
     );
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/app_context_paths_test.rs"]
+mod app_context_paths_test;

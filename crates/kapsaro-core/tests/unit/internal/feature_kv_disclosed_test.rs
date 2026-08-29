@@ -3,20 +3,20 @@
 
 //! Unit tests for disclosed-flag behavior in feature/kv.
 
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::kv::mutate::{
-    set_kv_entry_with_recipients, KvRecipientSnapshot, KvSetResult, KvWriteContext,
+    set_kv_entry_with_recipients, KvRecipientSnapshot, KvWriteContext,
 };
 use crate::feature::kv::types::KvInputEntry;
 use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::format::content::{EncContent, KvEncContent};
 use crate::format::kv::document::parse_kv_document;
-use crate::format::schema::document::parse_kv_entry_token;
+use crate::format::schema::document::parse_kv_entry_token_with_source;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::{list_kids, load_public_key};
-use crate::io::workspace::members::{list_active_member_handles, load_member_files};
+use crate::io::workspace::members::test_support::{list_active_member_handles, load_member_files};
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::line::KvEncLine;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
@@ -54,7 +54,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    crate::io::keystore::storage::save_key_pair_atomic(
+    crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,
@@ -87,7 +87,8 @@ fn extract_disclosed_flags(content: &str) -> Vec<(String, bool)> {
         .iter()
         .filter_map(|line| match line {
             KvEncLine::KV { key, token } => {
-                let entry: KvEntryValue = parse_kv_entry_token(token).unwrap();
+                let entry: KvEntryValue =
+                    parse_kv_entry_token_with_source(token, "KV entry token").unwrap();
                 Some((key.clone(), entry.disclosed))
             }
             _ => None,
@@ -117,7 +118,7 @@ fn encrypt_two_member_document(
         ("KEY2".to_string(), "value2".to_string()),
     ]);
 
-    encrypt_kv_document(
+    encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &members,
         &SigningContext {
@@ -126,6 +127,8 @@ fn encrypt_two_member_document(
             signer_pub: alice_pub.clone(),
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap()
 }
@@ -181,7 +184,7 @@ fn set_kv_entry(
     entries: &[(String, String)],
     workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
-) -> kapsaro_core::Result<KvSetResult> {
+) -> kapsaro_core::Result<KvEncContent> {
     let recipients = build_recipient_snapshot(workspace_root)?;
     let entries = entries
         .iter()
@@ -213,7 +216,7 @@ fn test_set_kv_entry_resets_disclosed_after_recipient_removal() {
     )
     .unwrap();
 
-    let flags_after_set = extract_disclosed_flags(result.encrypted.as_str());
+    let flags_after_set = extract_disclosed_flags(result.as_str());
     assert_eq!(flags_after_set.len(), 2);
     for (key, disclosed) in &flags_after_set {
         match key.as_str() {
@@ -241,7 +244,7 @@ fn test_set_kv_entry_new_entry_has_disclosed_false() {
     )
     .unwrap();
 
-    let flags_after_set = extract_disclosed_flags(result.encrypted.as_str());
+    let flags_after_set = extract_disclosed_flags(result.as_str());
     assert_eq!(flags_after_set.len(), 3);
     for (key, disclosed) in &flags_after_set {
         match key.as_str() {

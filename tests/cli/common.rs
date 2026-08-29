@@ -7,6 +7,7 @@
 pub mod artifact;
 pub mod execution;
 pub mod review;
+pub mod trust_store;
 pub mod workspace;
 
 pub use artifact::{assert_stderr_order, tamper_kv_signature};
@@ -14,6 +15,7 @@ pub use execution::cmd;
 #[cfg(unix)]
 pub use execution::{
     kapsaro_bin, kapsaro_std_cmd, run_command_with_pty, run_command_with_pty_script,
+    run_command_with_pty_script_at_prompt,
 };
 pub use kapsaro_test_support::constants::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
@@ -24,6 +26,7 @@ pub use review::{
     encrypt_stdin_with_member_set_review, import_file_with_member_set_review,
     set_stdin_with_member_set_review, set_value_with_member_set_review,
 };
+pub use trust_store::save_trust_store_signed_by_active_key;
 #[cfg(unix)]
 pub use workspace::{append_common_command_args, setup_workspace_with_kv_entries};
 pub use workspace::{

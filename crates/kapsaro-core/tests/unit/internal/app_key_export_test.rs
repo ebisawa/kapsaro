@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::key::manage::export_key_command;
-use crate::io::keystore::active::load_active_kid;
+use crate::cli_api::test_support::storage::keystore::active::load_active_kid;
 use crate::model::public_key::PublicKey;
 use crate::model::wire::format::PUBLIC_KEY_V1;
 use crate::support::kid::format_kid_display;
@@ -17,15 +17,7 @@ use crate::test_utils::{setup_test_keystore_from_fixtures, EnvGuard, ALICE_MEMBE
 const EXPORT_ENV_VARS: &[&str] = &["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE", "KAPSARO_WORKSPACE"];
 
 fn build_options(home: &Path) -> CommonCommandOptions {
-    CommonCommandOptions {
-        home: Some(home.to_path_buf()),
-        identity: None,
-        verbose: false,
-        workspace: None,
-        ssh_signing_method: None,
-        allow_expired_key: false,
-        allow_non_member: false,
-    }
+    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
 }
 
 fn active_kid(home: &Path) -> String {

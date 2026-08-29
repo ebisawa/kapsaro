@@ -12,11 +12,9 @@ use crate::model::ssh::SshDeterminismStatus;
 pub struct KeyGenerationResult {
     pub member_handle: String,
     pub kid: String,
-    pub created_at: String,
     pub expires_at: String,
     pub private_key: PrivateKey,
     pub public_key: PublicKey,
     pub ssh_fingerprint: String,
-    pub ssh_public_key: String,
     pub ssh_determinism: SshDeterminismStatus,
 }

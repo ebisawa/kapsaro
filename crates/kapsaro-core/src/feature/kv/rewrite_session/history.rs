@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Disclosure and removed-recipient history helpers for a KV rewrite.
+//! Detects entries already disclosed and folds a departing wrap's removed-recipient history into the new one.
+
 use crate::feature::disclosure::{add_to_removed_history, merge_removed_history};
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::kv_enc::header::KvWrap;

@@ -210,7 +210,7 @@ fn test_format_recipient_set_review_lines_keeps_diff_readable_without_color() {
 #[test]
 fn test_format_recipient_set_review_lines_keeps_long_handles_inline() {
     let current_kid = "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string();
-    let long_handle = format!("{}@example.com", "a".repeat(120));
+    let long_handle = format!("{}@example.com", "a".repeat(116));
     let current = ArtifactRecipientSet::from_wrap_items(
         Uuid::nil(),
         &[wrap_item(&long_handle, &current_kid)],

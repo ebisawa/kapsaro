@@ -25,7 +25,9 @@ use crate::feature::kv::types::KvInputEntry as InternalKvInputEntry;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
+use crate::support::fs::relative::{load_text_with_limit_at, DirectoryFd};
 use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
 
 use super::key::{KeyContext, RecipientKeys};
@@ -95,8 +97,10 @@ struct KvFacadeWriteInput<'a> {
     ctx: KvWriteContext<'a>,
 }
 
+const KV_ENC_READ_SUBJECT: &str = "kv-enc artifact";
+
 const KV_ENC_LOAD_POLICY: ArtifactLoadPolicy =
-    ArtifactLoadPolicy::new(MAX_KV_ENC_FILE_SIZE, "kv-enc artifact");
+    ArtifactLoadPolicy::new(MAX_KV_ENC_FILE_SIZE, KV_ENC_READ_SUBJECT);
 
 impl KvEncArtifact {
     /// Parse kv-enc text after format detection.
@@ -107,6 +111,22 @@ impl KvEncArtifact {
     /// Load kv-enc text from a path.
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self> {
         ArtifactText::load(path, KV_ENC_LOAD_POLICY).map(Self::from_text)
+    }
+
+    /// Load kv-enc text from a directory capability, addressed by name.
+    ///
+    /// A command that already bound the directory holding the artifact reads it
+    /// through that descriptor, so the document it acts on comes from the tree
+    /// it started in even if the path that reached it is repointed meanwhile.
+    pub(crate) fn load_at<D>(dir: &D, name: &str) -> Result<Self>
+    where
+        D: DirectoryFd,
+    {
+        let content =
+            load_text_with_limit_at(dir, name, MAX_KV_ENC_FILE_SIZE, KV_ENC_READ_SUBJECT)?;
+        let source_name = format_path_relative_to_cwd(&dir.path().join(name));
+        KvEncContent::detect_with_source(content, source_name)
+            .map(|content| Self::from_text(ArtifactText::from_content(content)))
     }
 
     /// Load kv-enc text from a bounded UTF-8 reader.
@@ -156,11 +176,9 @@ impl KvEncArtifact {
         key_ctx: &KeyContext,
     ) -> Result<Self> {
         let input = build_kv_write_input(recipients, key_ctx);
-        let result =
+        let encrypted =
             set_kv_entry_with_recipients(existing, entries, &input.recipients, &input.ctx)?;
-        Ok(Self::from_text(ArtifactText::from_content(
-            result.encrypted,
-        )))
+        Ok(Self::from_text(ArtifactText::from_content(encrypted)))
     }
 
     fn from_text(text: ArtifactText<KvEncContent>) -> Self {

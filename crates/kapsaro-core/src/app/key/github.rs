@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! GitHub account resolution and preflight binding checks for key generation.
+//! Confirms an SSH public key is already registered under the claimed account before proceeding.
+
 use crate::app::verification::OnlineVerificationStatus;
 use crate::io::github::account::resolve_github_account_by_login;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;

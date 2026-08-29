@@ -1,9 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Rewrap execution after the operator has reviewed the plan.
+//! Rewrites each artifact and persists the approvals the review produced.
+
 use crate::app::context::execution::ExecutionContext;
-use crate::app::trust::review::{save_approved_known_key_warnings, TrustExecutionContext};
+use crate::app::trust::review::{save_approved_known_key_documents, TrustExecutionContext};
 use crate::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
+use crate::support::fs::relative::DirectoryFd;
 use crate::Result;
 
 use super::artifact::{execute_rewrap_artifacts, RewrapArtifactExecutionContext};
@@ -17,7 +21,6 @@ use crate::app::trust::TrustContext;
 struct ConfirmedRewrapContext {
     promoted_member_handles: Vec<String>,
     post_promotion_members: VerifiedPostPromotionRecipients,
-    approval_warnings: Vec<String>,
 }
 
 pub fn execute_confirmed_rewrap_batch<
@@ -27,7 +30,7 @@ pub fn execute_confirmed_rewrap_batch<
     ConfirmRecipientSet,
 >(
     review_session: RewrapReviewSession,
-    execution: ExecutionContext,
+    execution: &ExecutionContext,
     mut confirm_known: ConfirmKnown,
     mut confirm_non_member: ConfirmNonMember,
     mut confirm_recipients: ConfirmRecipients,
@@ -40,7 +43,7 @@ where
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    let confirmed = resolve_confirmed_rewrap_context(&review_session, &execution)?;
+    let confirmed = resolve_confirmed_rewrap_context(&review_session, execution)?;
     let outcome = execute_confirmed_artifact_rewrites(
         &review_session,
         execution,
@@ -53,14 +56,26 @@ where
     Ok(build_confirmed_rewrap_outcome(outcome, confirmed))
 }
 
+/// Promote the accepted members and record the approvals the review produced.
+///
+/// The signing key is checked first, before anything is written. Saving the
+/// approvals needs that key, so a key that has expired stops the whole step
+/// rather than leaving the promotions behind with nothing recorded.
 fn resolve_confirmed_rewrap_context(
     review_session: &RewrapReviewSession,
     execution: &ExecutionContext,
 ) -> Result<ConfirmedRewrapContext> {
+    execution
+        .key_ctx
+        .inner()
+        .enforce_signing_key_not_expired()?;
+    let workspace = execution.fixed_workspace_directory()?;
+    let promoted_member_handles = execute_accepted_member_promotions(review_session, workspace)?;
+    let post_promotion_members = load_actual_post_promotion_members(review_session, workspace)?;
+    save_rewrap_approvals(review_session, execution)?;
     Ok(ConfirmedRewrapContext {
-        promoted_member_handles: execute_accepted_member_promotions(review_session)?,
-        post_promotion_members: load_actual_post_promotion_members(review_session)?,
-        approval_warnings: save_rewrap_approval_warnings(review_session, execution)?,
+        promoted_member_handles,
+        post_promotion_members,
     })
 }
 
@@ -71,7 +86,7 @@ fn execute_confirmed_artifact_rewrites<
     ConfirmRecipientSet,
 >(
     review_session: &RewrapReviewSession,
-    execution: ExecutionContext,
+    execution: &ExecutionContext,
     post_promotion_members: &VerifiedPostPromotionRecipients,
     confirm_known: &mut ConfirmKnown,
     confirm_non_member: &mut ConfirmNonMember,
@@ -98,35 +113,34 @@ where
     )
 }
 
-fn execute_accepted_member_promotions(review_session: &RewrapReviewSession) -> Result<Vec<String>> {
-    promote_accepted_incoming_members(
-        &review_session.plan.workspace_root,
-        &review_session.request.accepted_promotions,
-    )
-}
-
-fn load_actual_post_promotion_members(
+fn execute_accepted_member_promotions<D>(
     review_session: &RewrapReviewSession,
-) -> Result<VerifiedPostPromotionRecipients> {
-    load_verified_post_promotion_members(
-        &review_session.plan.workspace_root,
-        &review_session.expected_post_promotion_members,
-    )
+    workspace: &D,
+) -> Result<Vec<String>>
+where
+    D: DirectoryFd,
+{
+    promote_accepted_incoming_members(workspace, &review_session.request.accepted_promotions)
 }
 
-fn save_rewrap_approval_warnings(
+fn load_actual_post_promotion_members<D>(
+    review_session: &RewrapReviewSession,
+    workspace: &D,
+) -> Result<VerifiedPostPromotionRecipients>
+where
+    D: DirectoryFd,
+{
+    load_verified_post_promotion_members(workspace, &review_session.expected_post_promotion_members)
+}
+
+fn save_rewrap_approvals(
     review_session: &RewrapReviewSession,
     execution: &ExecutionContext,
-) -> Result<Vec<String>> {
-    execution
-        .key_ctx
-        .inner()
-        .enforce_signing_key_not_expired()?;
-    save_approved_known_key_warnings(
+) -> Result<()> {
+    save_approved_known_key_documents(
         TrustExecutionContext {
             options: &review_session.request.options,
             execution,
-            warnings: &[],
         },
         &review_session.approvals,
     )
@@ -136,10 +150,7 @@ fn build_confirmed_rewrap_outcome(
     mut outcome: RewrapBatchOutcome,
     confirmed: ConfirmedRewrapContext,
 ) -> RewrapBatchOutcome {
-    let mut approval_warnings = confirmed.approval_warnings;
     outcome.promoted_member_handles = confirmed.promoted_member_handles;
-    approval_warnings.extend(outcome.warnings);
-    outcome.warnings = approval_warnings;
     outcome
 }
 
@@ -153,7 +164,7 @@ pub fn execute_reviewed_rewrap_artifacts<
 >(
     request: &RewrapBatchRequest,
     plan: &RewrapBatchPlan,
-    execution: ExecutionContext,
+    execution: &ExecutionContext,
     post_promotion_members: &VerifiedPostPromotionRecipients,
     post_promotion_trust: &TrustContext,
     confirm_known: &mut ConfirmKnown,
@@ -175,7 +186,7 @@ where
     let ctx = RewrapArtifactExecutionContext::new(
         request,
         plan,
-        &execution,
+        execution,
         post_promotion_members,
         post_promotion_trust,
     );

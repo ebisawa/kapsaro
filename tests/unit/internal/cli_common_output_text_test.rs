@@ -3,7 +3,7 @@
 
 use serial_test::serial;
 
-use crate::cli::common::output::text::format_warning_line;
+use crate::cli::common::output::text::{format_truncation_notice, format_warning_line};
 use crate::cli::stderr_color_guard::StderrColorGuard;
 
 #[test]
@@ -39,6 +39,19 @@ fn test_format_warning_line_keeps_long_warning_inline() {
     assert_eq!(
         rendered,
         "Warning: Recipient kid is not active in this workspace. Run kapsaro rewrap before writing this artifact."
+    );
+}
+
+/// A report the sink had to cut short says how much of it is missing, so the
+/// operator repairs what is named and runs the command again for the rest.
+#[test]
+fn test_format_truncation_notice_names_the_findings_left_out() {
+    let rendered = format_truncation_notice(6, 64);
+
+    assert_eq!(
+        rendered,
+        "at least 6 further local state warnings were not reported because at most 64 are kept; \
+         repair the entries named above and run the command again to see the rest"
     );
 }
 

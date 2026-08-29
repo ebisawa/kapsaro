@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! In-memory shape of a kv-enc document.
+//! Holds the header, the wrapped keys, and one entry per stored key.
+
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::header::{KvHeader, KvWrap};
 use crate::model::kv_enc::line::KvEncLine;
@@ -35,7 +38,6 @@ impl KvEncEntry {
 
 #[derive(Debug, Clone)]
 pub struct KvEncDocument {
-    pub original_content: String,
     pub lines: Vec<KvEncLine>,
     pub head: KvHeader,
     pub wrap: KvWrap,
@@ -46,9 +48,7 @@ pub struct KvEncDocument {
 }
 
 impl KvEncDocument {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        original_content: String,
         lines: Vec<KvEncLine>,
         head: KvHeader,
         wrap: KvWrap,
@@ -58,7 +58,6 @@ impl KvEncDocument {
         signature: KvFileSignature,
     ) -> Self {
         Self {
-            original_content,
             lines,
             head,
             wrap,
@@ -72,10 +71,6 @@ impl KvEncDocument {
     /// Return the `:WRAP` token the document was parsed from.
     pub fn wrap_token(&self) -> &str {
         &self.wrap_token
-    }
-
-    pub fn content(&self) -> &str {
-        &self.original_content
     }
 
     pub fn lines(&self) -> &[KvEncLine] {

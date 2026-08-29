@@ -64,7 +64,7 @@ fn test_hpke_enc_length() {
 #[test]
 fn test_hpke_different_aad_error() {
     use crate::crypto::kem::{open_base, seal_base};
-    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use crate::crypto::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -75,15 +75,13 @@ fn test_hpke_different_aad_error() {
     let plaintext = Plaintext::from(b"secret" as &[u8]);
 
     let (enc, ciphertext) = seal_base(&pk, &info, &aad1, &plaintext).unwrap();
-    let enc_obj = Enc::from(enc.into_bytes());
-    let ct_obj = Ciphertext::from(ciphertext.into_bytes());
-    assert!(open_base(&sk, &enc_obj, &info, &aad2, &ct_obj).is_err());
+    assert!(open_base(&sk, &enc, &info, &aad2, &ciphertext).is_err());
 }
 
 #[test]
 fn test_hpke_wrong_recipient_key_error() {
     use crate::crypto::kem::{open_base, seal_base};
-    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use crate::crypto::types::data::{Aad, Info, Plaintext};
 
     let (_, alice_pk) = generate_x25519_keypair([1u8; 32]);
     let (bob_sk, _) = generate_x25519_keypair([2u8; 32]);
@@ -93,9 +91,7 @@ fn test_hpke_wrong_recipient_key_error() {
     let plaintext = Plaintext::from(b"secret" as &[u8]);
 
     let (enc, ciphertext) = seal_base(&alice_pk, &info, &aad, &plaintext).unwrap();
-    let enc_obj = Enc::from(enc.into_bytes());
-    let ct_obj = Ciphertext::from(ciphertext.into_bytes());
-    assert!(open_base(&bob_sk, &enc_obj, &info, &aad, &ct_obj).is_err());
+    assert!(open_base(&bob_sk, &enc, &info, &aad, &ciphertext).is_err());
 }
 
 #[test]
@@ -117,7 +113,7 @@ fn test_hpke_ciphertext_length() {
 #[test]
 fn test_hpke_empty_plaintext() {
     use crate::crypto::kem::{open_base, seal_base};
-    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use crate::crypto::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -127,9 +123,7 @@ fn test_hpke_empty_plaintext() {
     let plaintext = Plaintext::from(b"" as &[u8]);
 
     let (enc, ciphertext) = seal_base(&pk, &info, &aad, &plaintext).unwrap();
-    let enc_obj = Enc::from(enc.into_bytes());
-    let ct_obj = Ciphertext::from(ciphertext.into_bytes());
-    let decrypted = open_base(&sk, &enc_obj, &info, &aad, &ct_obj).unwrap();
+    let decrypted = open_base(&sk, &enc, &info, &aad, &ciphertext).unwrap();
     assert!(decrypted.as_bytes().is_empty());
 }
 
@@ -159,16 +153,6 @@ fn test_plaintext_debug_redacts_contents() {
 }
 
 #[test]
-fn test_plaintext_to_zeroizing_vec_clones_contents() {
-    use crate::crypto::types::data::Plaintext;
-
-    let plaintext = Plaintext::from(b"super-secret-token" as &[u8]);
-    let bytes = plaintext.to_zeroizing_vec();
-
-    assert_eq!(bytes.as_slice(), plaintext.as_bytes());
-}
-
-#[test]
 fn test_plaintext_take_zeroizing_vec_moves_contents() {
     use crate::crypto::types::data::Plaintext;
 
@@ -182,7 +166,7 @@ fn test_plaintext_take_zeroizing_vec_moves_contents() {
 #[test]
 fn test_hpke_open_error_message_sanitized() {
     use crate::crypto::kem::{open_base, seal_base};
-    use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
+    use crate::crypto::types::data::{Aad, Info, Plaintext};
 
     let member_seed = [42u8; 32];
     let (sk, pk) = generate_x25519_keypair(member_seed);
@@ -193,10 +177,8 @@ fn test_hpke_open_error_message_sanitized() {
     let plaintext = Plaintext::from(b"secret" as &[u8]);
 
     let (enc, ciphertext) = seal_base(&pk, &info1, &aad, &plaintext).unwrap();
-    let enc_obj = Enc::from(enc.into_bytes());
-    let ct_obj = Ciphertext::from(ciphertext.into_bytes());
 
-    let err = open_base(&sk, &enc_obj, &info2, &aad, &ct_obj).unwrap_err();
+    let err = open_base(&sk, &enc, &info2, &aad, &ciphertext).unwrap_err();
     assert_eq!(
         err.to_string(),
         "Cryptographic error: HPKE open failed (wrong key/info/AAD or tampered data)"

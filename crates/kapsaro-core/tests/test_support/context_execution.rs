@@ -10,9 +10,6 @@ use crate::test_utils::setup_member_key_context;
 use kapsaro_core::api::key::KeyContext;
 use kapsaro_core::cli_api::app::context::execution::{resolve_write_execution, ExecutionContext};
 use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::context::ssh::{
-    resolve_ssh_context_by_active_key, SshSigningContextResolution,
-};
 
 use super::context_paths::build_test_workspace_root;
 
@@ -21,24 +18,18 @@ pub(crate) fn build_test_execution_context(
     member_handle: &str,
     workspace: Option<&Path>,
 ) -> ExecutionContext {
-    ExecutionContext {
-        member_handle: test_member_handle(member_handle),
-        key_ctx: KeyContext::from_inner(setup_member_key_context(home, member_handle, None)),
-        workspace_root: workspace.map(build_test_workspace_root),
-    }
+    ExecutionContext::from_test_parts(
+        test_member_handle(member_handle),
+        KeyContext::from_inner(setup_member_key_context(home, member_handle, None)),
+        workspace.map(build_test_workspace_root),
+        Some(home.path().to_path_buf()),
+    )
+    .unwrap()
 }
 
 pub(crate) fn resolve_test_write_execution(
     options: &CommonCommandOptions,
     member_handle: &str,
 ) -> ExecutionContext {
-    let ssh_ctx = Some(resolve_test_ssh_context(options, member_handle));
-    resolve_write_execution(options, Some(member_handle.to_string()), ssh_ctx).unwrap()
-}
-
-pub(crate) fn resolve_test_ssh_context(
-    options: &CommonCommandOptions,
-    member_handle: &str,
-) -> SshSigningContextResolution {
-    resolve_ssh_context_by_active_key(options, Some(member_handle.to_string())).unwrap()
+    resolve_write_execution(options, Some(member_handle.to_string())).unwrap()
 }

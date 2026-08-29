@@ -3,7 +3,7 @@
 
 //! Integration tests for `key new` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
 #[cfg(unix)]
 use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script};
 use crate::cli::key::find_kid_in_member_dir;
@@ -11,11 +11,68 @@ use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKey;
 use kapsaro_core::cli_api::test_support::domain::wire::format;
 use predicates::prelude::*;
 use std::fs;
-use tempfile::TempDir;
+
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+
+/// Pointing the local state root at another volume through a symlink is a
+/// supported setup, so the keystore is created behind the link.
+#[cfg(unix)]
+#[test]
+fn test_key_new_writes_through_an_explicit_home_symlink() {
+    let temp_dir = make_secret_home();
+    let outside = temp_dir.path().join("outside");
+    let home = temp_dir.path().join("home");
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    fs::create_dir(&outside).unwrap();
+    symlink(&outside, &home).unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--home")
+        .arg(&home)
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("-i")
+        .arg(&ssh_priv)
+        .env_remove("KAPSARO_GITHUB_USER")
+        .assert()
+        .success();
+
+    assert!(outside.join("keys").join(TEST_MEMBER_HANDLE).is_dir());
+    drop(ssh_temp);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_key_new_writes_through_an_environment_home_symlink() {
+    let temp_dir = make_secret_home();
+    let outside = temp_dir.path().join("outside");
+    let home = temp_dir.path().join("home");
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    fs::create_dir(&outside).unwrap();
+    symlink(&outside, &home).unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("-i")
+        .arg(&ssh_priv)
+        .env("KAPSARO_HOME", &home)
+        .env_remove("KAPSARO_GITHUB_USER")
+        .assert()
+        .success();
+
+    assert!(outside.join("keys").join(TEST_MEMBER_HANDLE).is_dir());
+    drop(ssh_temp);
+}
 
 #[test]
 fn test_key_new_requires_member_handle_before_ssh_resolution() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
 
     cmd()
         .arg("key")
@@ -38,7 +95,7 @@ fn test_key_new_requires_member_handle_before_ssh_resolution() {
 #[cfg(unix)]
 #[test]
 fn test_key_new_prompts_for_member_handle_when_unconfigured() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let mut command = kapsaro_std_cmd();
@@ -88,7 +145,7 @@ fn test_key_new_prompts_for_member_handle_when_unconfigured() {
 
 #[test]
 fn test_key_new_generates_private_key() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -161,7 +218,7 @@ fn test_key_new_generates_private_key() {
 
 #[test]
 fn test_key_new_expires_at_option() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -209,7 +266,7 @@ fn test_key_new_expires_at_option() {
 
 #[test]
 fn test_key_new_valid_for_1y() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -260,7 +317,7 @@ fn test_key_new_valid_for_1y() {
 
 #[test]
 fn test_key_new_valid_for_6m() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -311,7 +368,7 @@ fn test_key_new_valid_for_6m() {
 
 #[test]
 fn test_key_new_valid_for_30d() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -362,7 +419,7 @@ fn test_key_new_valid_for_30d() {
 
 #[test]
 fn test_key_new_no_activate_option() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -401,7 +458,7 @@ fn test_key_new_no_activate_option() {
 
 #[test]
 fn test_key_new_default_activate() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;

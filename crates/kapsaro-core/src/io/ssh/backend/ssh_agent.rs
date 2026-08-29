@@ -32,7 +32,7 @@ impl SignatureBackend for SshAgentBackend {
         ssh_pubkey: &str,
         message: &[u8],
     ) -> Result<Ed25519RawSignature> {
-        let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace);
+        let sshsig_signed_data = sshsig::build_sshsig_signed_data(message, namespace)?;
 
         self.agent_signer.sign(ssh_pubkey, &sshsig_signed_data)
     }

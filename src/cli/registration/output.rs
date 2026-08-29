@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Registration command output.
+//! Renders what registration created for the operator.
+
 use crate::cli::common::output::text::key::{
     print_existing_key_summary, print_generated_key_summary, print_key_generation_binding_info,
 };
@@ -45,7 +48,7 @@ pub(super) fn print_missing_key_notice(member_handle: &str) {
 fn print_existing_member_message(outcome: &RegistrationOutcome) {
     eprintln!("Already a member of this workspace.");
     let kid_display = format_kid_display(&outcome.key_result.kid)
-        .unwrap_or_else(|_| outcome.key_result.kid.clone());
+        .unwrap_or_else(|_| outcome.key_result.kid.as_str().to_string());
     eprintln!(
         "Current key: {} (active, expires {})",
         kid_display,

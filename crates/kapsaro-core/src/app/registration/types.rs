@@ -1,8 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Types describing one member registration from plan to outcome.
+//! Carries validated member and key identity rather than raw strings.
+
 use std::path::PathBuf;
 
+use crate::app::key::generate::KeyGenerationHome;
+use crate::io::keystore::access::KeystoreAccess;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::ssh::SshDeterminismStatus;
 
 pub use crate::app::verification::OnlineVerificationStatus;
@@ -21,15 +27,61 @@ pub enum RegistrationMode {
     Join,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RegistrationKeyPlan {
-    UseExisting { kid: String, expires_at: String },
-    GenerateNew,
+#[derive(Debug, Clone)]
+pub struct RegistrationKeyPlan {
+    resolution: RegistrationKeyPlanResolution,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum RegistrationKeyPlanResolution {
+    UseExisting {
+        kid: Kid,
+        expires_at: String,
+        keystore: KeystoreAccess,
+    },
+    GenerateNew {
+        home: KeyGenerationHome,
+    },
 }
 
 impl RegistrationKeyPlan {
+    pub(crate) fn use_existing(kid: Kid, expires_at: String, keystore: KeystoreAccess) -> Self {
+        Self {
+            resolution: RegistrationKeyPlanResolution::UseExisting {
+                kid,
+                expires_at,
+                keystore,
+            },
+        }
+    }
+
+    pub(crate) fn generate_new(home: KeyGenerationHome) -> Self {
+        Self {
+            resolution: RegistrationKeyPlanResolution::GenerateNew { home },
+        }
+    }
+
     pub fn needs_new_key(&self) -> bool {
-        matches!(self, Self::GenerateNew)
+        matches!(
+            self.resolution,
+            RegistrationKeyPlanResolution::GenerateNew { .. }
+        )
+    }
+
+    /// Read the kid a plan resolved to reuse.
+    ///
+    /// Production consumes the plan through `into_resolution`, so this
+    /// accessor exists for the tests that assert which kid was chosen.
+    #[cfg(test)]
+    pub(crate) fn existing_kid(&self) -> Option<&Kid> {
+        match &self.resolution {
+            RegistrationKeyPlanResolution::UseExisting { kid, .. } => Some(kid),
+            RegistrationKeyPlanResolution::GenerateNew { .. } => None,
+        }
+    }
+
+    pub(crate) fn into_resolution(self) -> RegistrationKeyPlanResolution {
+        self.resolution
     }
 }
 
@@ -57,6 +109,15 @@ impl From<crate::io::workspace::members::MemberStatus> for RegistrationTarget {
     }
 }
 
+impl From<RegistrationTarget> for crate::io::workspace::members::MemberStatus {
+    fn from(value: RegistrationTarget) -> Self {
+        match value {
+            RegistrationTarget::Active => Self::Active,
+            RegistrationTarget::Incoming => Self::Incoming,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveMembershipState {
     None,
@@ -66,19 +127,19 @@ pub enum ActiveMembershipState {
 
 #[derive(Debug, Clone)]
 pub struct MemberSetupResult {
-    pub member_handle: String,
+    pub member_handle: MemberHandle,
     pub key_result: MemberKeySetupResult,
 }
 
 impl MemberSetupResult {
-    pub fn kid(&self) -> &str {
+    pub fn kid(&self) -> &Kid {
         &self.key_result.kid
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct MemberKeySetupResult {
-    pub kid: String,
+    pub kid: Kid,
     pub created: bool,
     pub expires_at: String,
     pub ssh_fingerprint: Option<String>,
@@ -90,12 +151,12 @@ pub struct MemberKeySetupResult {
 pub struct RegistrationCommand {
     pub mode: RegistrationMode,
     pub workspace_path: PathBuf,
-    pub keystore_root: PathBuf,
     pub setup: MemberSetupResult,
     pub target: RegistrationTarget,
     pub is_new_workspace: bool,
     pub conflict_exists: bool,
     pub active_membership: ActiveMembershipState,
+    pub(crate) keystore: KeystoreAccess,
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +165,7 @@ pub struct RegistrationOutcome {
     pub workspace_path: PathBuf,
     pub target: RegistrationTarget,
     pub is_new_workspace: bool,
-    pub member_handle: String,
+    pub member_handle: MemberHandle,
     pub key_result: MemberKeySetupResult,
     pub result: RegistrationResult,
 }

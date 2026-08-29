@@ -3,7 +3,7 @@
 
 use crate::app::doctor::types::DoctorStatus;
 use crate::app::doctor::{execute_doctor_command, DoctorRequest};
-use crate::test_utils::EnvGuard;
+use crate::test_utils::{local_state_temp_dir, write_local_state_file, EnvGuard};
 use std::fs;
 use tempfile::TempDir;
 
@@ -76,13 +76,12 @@ fn test_doctor_reports_env_workspace_structure_failure() {
 fn test_doctor_reports_config_workspace_structure_failure() {
     let _guard = EnvGuard::new(&["KAPSARO_WORKSPACE"]);
     let workspace = TempDir::new().unwrap();
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     fs::create_dir_all(workspace.path().join("members/active")).unwrap();
-    fs::write(
-        home.path().join("config.toml"),
+    write_local_state_file(
+        &home.path().join("config.toml"),
         format!("workspace = \"{}\"\n", workspace.path().display()),
-    )
-    .unwrap();
+    );
     std::env::remove_var("KAPSARO_WORKSPACE");
 
     let report = execute_doctor_command(DoctorRequest {

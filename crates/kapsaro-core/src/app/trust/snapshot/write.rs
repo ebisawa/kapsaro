@@ -5,14 +5,15 @@
 //! Enforces write policy and recipient trust using an immutable workspace snapshot.
 
 use std::marker::PhantomData;
-use std::path::Path;
 
+use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::enforcement::enforce_recipients_trust;
 use crate::app::trust::evaluation::enforce_policy_strict_key_checking;
 use crate::app::trust::policy::{TrustPolicy, WriteTrustPolicy};
 use crate::app::trust::RecipientTrustOutcome;
 use crate::feature::context::crypto::LocalKeyIdentity;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::Result;
 
 use super::context::{load_trust_context, TrustContext};
@@ -29,27 +30,32 @@ impl<P> CommandTrustSnapshot<P>
 where
     P: TrustPolicy,
 {
+    /// Read the member set through the workspace descriptor this command fixed.
+    ///
+    /// The write and the trust decision have to be about one tree, so the
+    /// members are read from the descriptor the execution bound to rather than
+    /// from the configured path resolved a second time.
     pub fn load(
         options: &CommonCommandOptions,
-        workspace_path: &Path,
-        self_member_handle: &str,
-        self_sig_x: Option<[u8; 32]>,
+        execution: &ExecutionContext,
+        keystore: &KeystoreAccess,
     ) -> Result<Self> {
-        let workspace_members = WorkspaceMemberSnapshot::load(workspace_path)?;
-        Self::from_workspace_members(options, workspace_members, self_member_handle, self_sig_x)
+        let workspace_members =
+            WorkspaceMemberSnapshot::load_at(execution.fixed_workspace_directory()?)?;
+        Self::from_workspace_members(options, execution, workspace_members, keystore)
     }
 
     pub fn from_workspace_members(
         options: &CommonCommandOptions,
+        execution: &ExecutionContext,
         workspace_members: WorkspaceMemberSnapshot,
-        self_member_handle: &str,
-        self_sig_x: Option<[u8; 32]>,
+        keystore: &KeystoreAccess,
     ) -> Result<Self> {
         let trust_ctx = load_trust_context(
             options,
+            execution,
             workspace_members.active_members_by_kid().clone(),
-            self_member_handle,
-            self_sig_x,
+            keystore,
         )?;
         enforce_policy_strict_key_checking::<P>(trust_ctx.strict_key_checking)?;
         Ok(Self {
@@ -80,27 +86,18 @@ where
 {
     pub fn load(
         options: &CommonCommandOptions,
-        workspace_path: &Path,
-        self_member_handle: &str,
-        self_sig_x: Option<[u8; 32]>,
+        execution: &ExecutionContext,
         local_key_identity: Option<&LocalKeyIdentity>,
+        keystore: &KeystoreAccess,
     ) -> Result<Self> {
-        let trust_snapshot = CommandTrustSnapshot::<P>::load(
-            options,
-            workspace_path,
-            self_member_handle,
-            self_sig_x,
-        )?;
+        let trust_snapshot = CommandTrustSnapshot::<P>::load(options, execution, keystore)?;
         let recipient_trust = enforce_recipients_trust(
             trust_snapshot.trust_context(),
             trust_snapshot.workspace_members().active_members(),
         )?;
-        let mut warnings = trust_snapshot.trust_context().permission_warnings.clone();
-        warnings.extend(
-            trust_snapshot
-                .workspace_members()
-                .recipient_expiry_warnings_excluding_local_key(local_key_identity)?,
-        );
+        let warnings = trust_snapshot
+            .workspace_members()
+            .recipient_expiry_warnings_excluding_local_key(local_key_identity)?;
         Ok(Self {
             trust_snapshot,
             recipient_trust,

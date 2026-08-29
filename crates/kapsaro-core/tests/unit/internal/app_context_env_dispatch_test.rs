@@ -8,9 +8,12 @@
 //! workspace / env var requirements.
 
 use crate::app::context::execution::{resolve_read_execution, ExecutionContext};
-use crate::app::context::member::{resolve_key_owner, resolve_required_member};
+use crate::app::context::member::{
+    resolve_key_owner_with_access, resolve_required_member_with_optional_access,
+};
 use crate::app::context::paths::CommandPathResolution;
 use crate::app_test_utils::build_test_command_options;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::test_utils::{setup_test_keystore, EnvGuard};
 use tempfile::TempDir;
 
@@ -46,7 +49,7 @@ fn test_resolve_read_execution_requires_workspace_in_env_mode() {
     std::env::set_var(ENV_PRIVATE_KEY, "dummy");
     std::env::set_var(ENV_KEY_PASSWORD, "dummy");
 
-    let err = expect_err(resolve_read_execution(&options, None, None, None));
+    let err = expect_err(resolve_read_execution(&options, None, None));
     assert!(
         err.contains("not a valid workspace"),
         "Expected workspace validation error, got: {}",
@@ -55,7 +58,7 @@ fn test_resolve_read_execution_requires_workspace_in_env_mode() {
 }
 
 #[test]
-fn test_resolve_read_execution_without_env_var_fails() {
+fn test_load_from_env_without_env_var_fails() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD, ENV_WORKSPACE, ENV_HOME]);
     std::env::remove_var(ENV_PRIVATE_KEY);
     std::env::remove_var(ENV_KEY_PASSWORD);
@@ -69,7 +72,10 @@ fn test_resolve_read_execution_without_env_var_fails() {
 
     let options = build_test_command_options(home.path(), Some(workspace.path()));
 
-    let err = expect_err(resolve_read_execution(&options, None, None, None));
+    // The env branch is taken from the mode, so reaching this state through
+    // `resolve_read_execution` is not possible; the loader itself is what has to
+    // name the missing variable.
+    let err = expect_err(ExecutionContext::load_from_env(&options));
     assert!(
         err.contains("not set"),
         "Expected 'not set' error for missing KAPSARO_PRIVATE_KEY, got: {}",
@@ -86,14 +92,13 @@ fn test_resolve_read_execution_rejects_member_handle_in_env_mode() {
 
     let options = build_test_command_options(home.path(), None);
 
-    // Provide member handle with ssh_ctx=None to trigger the error path.
+    // Environment key mode takes the branch, so a member handle is rejected.
     std::env::set_var(ENV_PRIVATE_KEY, "dummy");
     std::env::set_var(ENV_KEY_PASSWORD, "dummy");
 
     let err = expect_err(resolve_read_execution(
         &options,
         Some("alice@example.com".to_string()),
-        None,
         None,
     ));
     assert!(
@@ -112,7 +117,7 @@ fn test_resolve_read_execution_rejects_kid_in_env_mode() {
 
     let options = build_test_command_options(home.path(), None);
 
-    // Provide explicit_kid with ssh_ctx=None to trigger the error path.
+    // Environment key mode takes the branch, so an explicit kid is rejected.
     std::env::set_var(ENV_PRIVATE_KEY, "dummy");
     std::env::set_var(ENV_KEY_PASSWORD, "dummy");
 
@@ -120,7 +125,6 @@ fn test_resolve_read_execution_rejects_kid_in_env_mode() {
         &options,
         None,
         Some("01HTEST00000000000000ALICE"),
-        None,
     ));
     assert!(
         err.contains("--kid cannot be used"),
@@ -151,20 +155,22 @@ fn test_resolved_command_paths_loads_base_dir_and_keystore_root() {
 
 #[test]
 fn test_resolve_required_member_uses_config_resolution_member_handle() {
-    let home = TempDir::new().unwrap();
-    let workspace = TempDir::new().unwrap();
-    ensure_workspace_dirs(workspace.path());
-    std::fs::create_dir_all(home.path()).unwrap();
-    std::fs::write(
-        home.path().join("config.toml"),
+    let home = crate::test_utils::local_state_temp_dir();
+    crate::test_utils::write_local_state_file(
+        &home.path().join("config.toml"),
         "member_handle = 'alice@example.com'\n",
+    );
+    let opened_home = crate::support::fs::anchor::AnchoredDir::open(
+        home.path(),
+        crate::support::fs::relative::DirectoryScope::LocalState,
+        "test local state root",
     )
     .unwrap();
-    let options = build_test_command_options(home.path(), Some(workspace.path()));
 
-    let resolved = resolve_required_member(&options, None).unwrap();
+    let resolved =
+        resolve_required_member_with_optional_access(Some(&opened_home), None, None).unwrap();
 
-    assert_eq!(resolved, "alice@example.com");
+    assert_eq!(resolved.as_str(), "alice@example.com");
 }
 
 #[test]
@@ -178,9 +184,12 @@ fn test_resolve_key_owner_uses_kid_lookup_when_member_handle_missing() {
     .unwrap()
     .unwrap();
 
-    let resolved = resolve_key_owner(&options, None, &key_ctx).unwrap();
+    let paths = CommandPathResolution::load(&options).unwrap();
+    let access = KeystoreAccess::open_from_home(&paths.base_dir).unwrap();
 
-    assert_eq!(resolved, "alice@example.com");
+    let resolved = resolve_key_owner_with_access(&access, None, &key_ctx).unwrap();
+
+    assert_eq!(resolved.as_str(), "alice@example.com");
 }
 
 #[test]
@@ -194,7 +203,30 @@ fn test_resolve_key_owner_uses_kid_prefix_lookup_when_member_handle_missing() {
     .unwrap()
     .unwrap();
 
-    let resolved = resolve_key_owner(&options, None, &key_ctx[..4]).unwrap();
+    let paths = CommandPathResolution::load(&options).unwrap();
+    let access = KeystoreAccess::open_from_home(&paths.base_dir).unwrap();
 
-    assert_eq!(resolved, "alice@example.com");
+    let resolved = resolve_key_owner_with_access(&access, None, &key_ctx[..4]).unwrap();
+
+    assert_eq!(resolved.as_str(), "alice@example.com");
+}
+
+/// A handle the caller named is the owner it names, whichever key the kid
+/// stands for. The keystore search is the fallback for a command that named no
+/// handle, so a kid no key answers to never has to resolve here.
+#[test]
+fn test_resolve_key_owner_keeps_an_explicitly_named_member_handle() {
+    let home = setup_test_keystore("alice@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let paths = CommandPathResolution::load(&options).unwrap();
+    let access = KeystoreAccess::open_from_home(&paths.base_dir).unwrap();
+
+    let resolved = resolve_key_owner_with_access(
+        &access,
+        Some("alice@example.com".to_string()),
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+    )
+    .unwrap();
+
+    assert_eq!(resolved.as_str(), "alice@example.com");
 }

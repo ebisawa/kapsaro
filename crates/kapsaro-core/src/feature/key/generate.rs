@@ -74,12 +74,10 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     Ok(KeyGenerationResult {
         member_handle,
         kid: derived_kid,
-        created_at,
         expires_at,
         private_key,
         public_key,
         ssh_fingerprint: ssh_binding.fingerprint,
-        ssh_public_key: ssh_binding.public_key,
         ssh_determinism: ssh_binding.determinism,
     })
 }

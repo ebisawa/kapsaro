@@ -11,7 +11,7 @@ use crate::Result;
 /// Decode a token's raw bytes.
 /// Returns (bytes, codec).
 pub fn decode_token_bytes(token: &str) -> Result<(Vec<u8>, TokenCodec)> {
-    // CBOR tokens were supported in earlier versions but are removed in the current spec.
+    // CBOR tokens were supported in earlier versions and are no longer accepted.
     if token.starts_with("cb:") || token.starts_with("cz:") {
         return Err(FormatError::build_parse_error(
             "CBOR tokens are not supported (use JSON/JCS tokens)",

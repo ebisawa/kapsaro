@@ -4,7 +4,9 @@
 //! SSH-related identifiers and constants.
 
 pub const KEY_TYPE_ED25519: &str = "ssh-ed25519";
-pub const SSHSIG_ARMOR_BEGIN: &str = "-----BEGIN SSH SIGNATURE-----";
+/// `ssh-keygen -t` argument, used only by the `cli-test-support` harness
+/// when it materializes SSH key fixtures.
+#[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
 pub const KEYGEN_TYPE_ED25519: &str = "ed25519";
 pub const ATTESTATION_NAMESPACE: &str = "kapsaro-attestation";
 pub const KEY_PROTECTION_NAMESPACE: &str = "kapsaro-key-protection";

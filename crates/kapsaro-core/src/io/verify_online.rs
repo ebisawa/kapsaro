@@ -86,6 +86,10 @@ pub struct VerificationResult {
 
 impl VerificationResult {
     /// Create a result for when verification is not configured / skipped.
+    ///
+    /// Only the GitHub path reports this outcome in production, so it is built
+    /// alongside it and for the tests that construct a result directly.
+    #[cfg(any(feature = "online", test))]
     pub(crate) fn not_configured(
         member_handle: &str,
         message: &str,
@@ -122,6 +126,10 @@ impl VerificationResult {
     }
 
     /// Create a successful verification result.
+    ///
+    /// Only the GitHub path can verify an identity in production, so it is built
+    /// alongside it and for the tests that construct a result directly.
+    #[cfg(any(feature = "online", test))]
     pub(crate) fn verified(
         member_handle: &str,
         message: String,

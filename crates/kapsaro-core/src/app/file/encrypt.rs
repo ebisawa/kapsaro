@@ -1,63 +1,96 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::context::execution::{
-    build_write_execution_warnings, resolve_write_execution, ExecutionContext,
-};
+//! File encryption use case.
+//! Resolves recipients and workspace paths, then encrypts and signs one file.
+
+use crate::app::context::execution::{build_write_execution_warnings, ExecutionContext};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::build_workspace_not_found_error;
-use crate::app::context::ssh::SshSigningContextResolution;
+use crate::app::context::review::{ensure_workspace_members_match_snapshot, ReviewedTrustStore};
 use crate::app::trust::review::{
     review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
 };
 use crate::app::trust::{
     ArtifactRecipientTrustOutcome, CommandCapability, EncryptPolicy, RecipientTrustOutcome,
-    TrustContext, WriteRecipientTrustPlan,
+    TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
 };
 use crate::feature::context::crypto::build_signing_context;
 use crate::feature::encrypt::encrypt_file_content;
-#[cfg(test)]
-use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::{EncContent, FileEncContent};
 use crate::io::workspace::detection::WorkspaceRoot;
-use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
 
-pub struct EncryptFileCommand {
-    pub execution: ExecutionContext,
+/// What an encrypt says when the member set it was authorized against moved.
+const ENCRYPT_MEMBERS_CHANGED_MESSAGE: &str =
+    "Encrypt active members changed since review and must be reviewed again.";
+
+/// What an encrypt says when the trust store it was authorized against moved.
+const ENCRYPT_TRUST_STORE_CHANGED_MESSAGE: &str =
+    "Encrypt trust store changed since review and must be reviewed again.";
+
+pub struct EncryptFileCommand<'a> {
+    pub execution: &'a ExecutionContext,
     pub warnings: Vec<String>,
     input_bytes: Vec<u8>,
-    member_handles: Vec<String>,
-    verified_keys: Vec<VerifiedRecipientKey>,
+    members: WorkspaceMemberSnapshot,
+    trust_store: ReviewedTrustStore<'a>,
     pub recipient_trust: RecipientTrustOutcome,
     trust_context: TrustContext,
 }
 
-pub fn resolve_encrypt_file_command(
+impl EncryptFileCommand<'_> {
+    /// Confirm the authorization this command was granted still holds.
+    ///
+    /// The operator decided against one member set and one trust store, and both
+    /// are read again from the trees this command fixed rather than from the
+    /// paths naming them. What the encryption writes is a new file, so there is
+    /// no reviewed target to compare: the member set and the trust store are the
+    /// whole of what the decision rested on.
+    pub fn ensure_current_after_confirmation(&self) -> Result<()> {
+        ensure_workspace_members_match_snapshot(
+            self.execution.fixed_workspace_directory()?,
+            &self.members,
+            ENCRYPT_MEMBERS_CHANGED_MESSAGE,
+        )?;
+        self.trust_store.ensure_current()
+    }
+}
+
+/// Resolve one file encryption against the identity the command already fixed.
+pub fn resolve_encrypt_file_command<'a>(
     options: &CommonCommandOptions,
-    member_handle: Option<String>,
+    execution: &'a ExecutionContext,
     input_bytes: Vec<u8>,
-    ssh_ctx: Option<SshSigningContextResolution>,
-) -> Result<EncryptFileCommand> {
-    let execution = resolve_encrypt_execution(options, member_handle, ssh_ctx)?;
-    let workspace_root = require_encrypt_workspace(&execution)?;
+) -> Result<EncryptFileCommand<'a>> {
+    execution
+        .key_ctx
+        .inner()
+        .enforce_signing_key_not_expired()?;
+    // Encrypt names its own missing-workspace failure. The member set itself is
+    // read through the workspace descriptor the execution fixed.
+    require_encrypt_workspace(execution)?;
+    let keystore = execution.require_local_keystore_access("Encrypt")?;
     let trust_plan = WriteRecipientTrustPlan::<EncryptPolicy>::load(
         options,
-        &workspace_root.root_path,
-        &execution.member_handle,
-        Some(execution.key_ctx.inner().self_signature_public_key_x()),
+        execution,
         Some(execution.key_ctx.inner().local_key_identity()),
+        keystore,
     )?;
-    let workspace_members = trust_plan.workspace_members();
-    let mut warnings = build_write_execution_warnings(&execution)?;
+    let trust_store = ReviewedTrustStore::load(
+        execution,
+        trust_plan.trust_context(),
+        ENCRYPT_TRUST_STORE_CHANGED_MESSAGE,
+    )?;
+    let mut warnings = build_write_execution_warnings(execution)?;
     warnings.extend(trust_plan.warnings().iter().cloned());
 
     Ok(EncryptFileCommand {
         execution,
         warnings,
         input_bytes,
-        member_handles: workspace_members.member_handles().to_vec(),
-        verified_keys: workspace_members.verified_recipients().to_vec(),
+        members: trust_plan.workspace_members().clone(),
+        trust_store,
         recipient_trust: trust_plan.recipient_trust().clone(),
         trust_context: trust_plan.trust_context().clone(),
     })
@@ -67,8 +100,8 @@ pub fn execute_encrypt_file_command(command: &EncryptFileCommand) -> Result<Stri
     let signing = build_signing_context(command.execution.key_ctx.inner())?;
     encrypt_file_content(
         &command.input_bytes,
-        &command.member_handles,
-        &command.verified_keys,
+        command.members.member_handles(),
+        command.members.verified_recipients(),
         &signing,
     )
 }
@@ -77,51 +110,24 @@ pub fn execute_encrypt_file_command_with_recipient_set_confirmation<ConfirmRecip
     options: &CommonCommandOptions,
     command: &EncryptFileCommand,
     confirm_recipient_set: ConfirmRecipientSet,
-) -> Result<(String, Vec<String>)>
+) -> Result<String>
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
     let encrypted = execute_encrypt_file_command(command)?;
     let content = EncContent::FileEnc(FileEncContent::new_unchecked(encrypted.clone()));
-    let mut warnings = Vec::new();
     review_artifact_output_recipient_set(
         ArtifactOutputRecipientSetReviewInput {
             options,
-            execution: &command.execution,
+            execution: command.execution,
             trust_ctx: &command.trust_context,
             content: &content,
             capability: CommandCapability::Encrypt,
             context_label: "encrypt output member set",
         },
-        &mut warnings,
         confirm_recipient_set,
     )?;
-    Ok((encrypted, warnings))
-}
-
-#[cfg(test)]
-pub fn evaluate_encrypt_output_recipient_set(
-    command: &EncryptFileCommand,
-    recipient_set: &ArtifactRecipientSet,
-) -> Result<ArtifactRecipientTrustOutcome> {
-    crate::app::trust::evaluate_output_recipient_set_trust(
-        &command.trust_context,
-        recipient_set,
-        CommandCapability::Encrypt,
-    )
-}
-
-fn resolve_encrypt_execution(
-    options: &CommonCommandOptions,
-    member_handle: Option<String>,
-    ssh_ctx: Option<SshSigningContextResolution>,
-) -> Result<ExecutionContext> {
-    let execution = resolve_write_execution(options, member_handle, ssh_ctx)?;
-    execution
-        .key_ctx
-        .inner()
-        .enforce_signing_key_not_expired()?;
-    Ok(execution)
+    Ok(encrypted)
 }
 
 fn require_encrypt_workspace(execution: &ExecutionContext) -> Result<WorkspaceRoot> {

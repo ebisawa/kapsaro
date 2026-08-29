@@ -9,17 +9,20 @@ use std::path::PathBuf;
 
 use crate::cli::common::command::{
     ensure_reviewed_artifact_unchanged, resolve_options_with_read_trust_allowances,
-    run_read_command_with_recovery, ReadCommandContext, ReadCommandLabels,
+    resolve_read_execution_input, run_read_command_with_recovery, ReadCommandContext,
+    ReadCommandLabels,
 };
 use crate::cli::common::output::file::{resolve_decrypted_output_path, save_decrypted_output};
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOptions,
 };
-use kapsaro_core::api::file::FileEncArtifact;
-use kapsaro_core::api::trust::TrustDecision;
+use kapsaro_core::api::file::{FileEncArtifact, VerifiedFileEncArtifact};
+use kapsaro_core::api::secret::SecretBytes;
+use kapsaro_core::api::trust::{TrustDecision, TrustPolicyEvaluator};
 use kapsaro_core::cli_api::app::context::execution::{
-    resolve_read_execution, resolve_read_trust_evaluator,
+    resolve_read_trust_evaluator, ExecutionContext,
 };
+use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
 use kapsaro_core::cli_api::app::file::decrypt::evaluate_decrypt_file_trust_plan;
 use kapsaro_core::cli_api::app::trust::evaluate_file_after_cli_review;
 use kapsaro_core::{Error, Result};
@@ -68,48 +71,22 @@ pub(crate) struct DecryptArgs {
 // ============================================================================
 
 pub(crate) fn run(args: DecryptArgs) -> Result<()> {
-    let artifact = load_decrypt_artifact(args.input.as_ref(), args.stdin)?;
-    let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
     let options = resolve_options_with_read_trust_allowances(
         &args.common,
         args.allow_expired_key.allow_expired_key,
         args.allow_non_member.allow_non_member,
     )?;
-    let verified = artifact.verify(options.operation_options())?;
-    let plaintext_bytes = run_read_command_with_recovery(
+    let execution = resolve_read_execution_input(
         &options,
         args.member.member_handle.clone(),
-        ReadCommandLabels {
-            context: "decrypt signer",
-            subject: "signer",
-            workspace_purpose: "decrypt",
-            allow_non_member: options.allow_non_member,
-        },
-        |ssh_ctx| {
-            let execution = resolve_read_execution(
-                &options,
-                args.member.member_handle.clone(),
-                args.kid.as_deref(),
-                ssh_ctx,
-            )?;
-            let trust = evaluate_decrypt_file_trust_plan(&options, &execution, &verified)?;
-            Ok(ReadCommandContext::new(execution, trust))
-        },
-        |context| {
-            let evaluator = resolve_read_trust_evaluator(&options, &context.execution)?;
-            if args.stdin {
-                return decrypt_after_review(&evaluator, &verified, &verified, context, &options);
-            }
-            let current_artifact = load_decrypt_artifact(args.input.as_ref(), false)?;
-            ensure_reviewed_artifact_unchanged(
-                artifact.as_str(),
-                current_artifact.as_str(),
-                "decrypt authorization",
-            )?;
-            let current = current_artifact.verify(options.operation_options())?;
-            decrypt_after_review(&evaluator, &verified, &current, context, &options)
-        },
+        args.kid.as_deref(),
+        "decrypt",
     )?;
+    let artifact = load_decrypt_artifact(args.input.as_ref(), args.stdin)?;
+    let output_path = resolve_decrypted_output_path(args.out.as_ref(), args.stdout)?;
+    let verified = artifact.verify(options.operation_options())?;
+    let plaintext_bytes =
+        decrypt_under_trust_review(&args, &options, &execution, &artifact, &verified)?;
 
     save_decrypted_output(
         output_path.as_deref(),
@@ -119,13 +96,58 @@ pub(crate) fn run(args: DecryptArgs) -> Result<()> {
     Ok(())
 }
 
+fn decrypt_under_trust_review(
+    args: &DecryptArgs,
+    options: &CommonCommandOptions,
+    execution: &ExecutionContext,
+    artifact: &FileEncArtifact,
+    verified: &VerifiedFileEncArtifact,
+) -> Result<SecretBytes> {
+    run_read_command_with_recovery(
+        options,
+        execution,
+        ReadCommandLabels {
+            context: "decrypt signer",
+            subject: "signer",
+            allow_non_member: options.allow_non_member,
+        },
+        |execution| {
+            let trust = evaluate_decrypt_file_trust_plan(options, execution, verified)?;
+            Ok(ReadCommandContext::new(execution, trust))
+        },
+        |context| decrypt_reviewed_artifact(args, options, artifact, verified, context),
+    )
+}
+
+/// Decrypt the artifact the trust review ran against, re-reading it unless it came from stdin.
+fn decrypt_reviewed_artifact(
+    args: &DecryptArgs,
+    options: &CommonCommandOptions,
+    artifact: &FileEncArtifact,
+    verified: &VerifiedFileEncArtifact,
+    context: &ReadCommandContext<'_>,
+) -> Result<SecretBytes> {
+    let evaluator = resolve_read_trust_evaluator(context.execution)?;
+    if args.stdin {
+        return decrypt_after_review(&evaluator, verified, verified, context, options);
+    }
+    let current_artifact = load_decrypt_artifact(args.input.as_ref(), false)?;
+    ensure_reviewed_artifact_unchanged(
+        artifact.as_str(),
+        current_artifact.as_str(),
+        "decrypt authorization",
+    )?;
+    let current = current_artifact.verify(options.operation_options())?;
+    decrypt_after_review(&evaluator, verified, &current, context, options)
+}
+
 fn decrypt_after_review(
-    evaluator: &kapsaro_core::api::trust::TrustPolicyEvaluator,
-    reviewed: &kapsaro_core::api::file::VerifiedFileEncArtifact,
-    current: &kapsaro_core::api::file::VerifiedFileEncArtifact,
+    evaluator: &TrustPolicyEvaluator,
+    reviewed: &VerifiedFileEncArtifact,
+    current: &VerifiedFileEncArtifact,
     context: &ReadCommandContext,
-    options: &kapsaro_core::cli_api::app::context::options::CommonCommandOptions,
-) -> Result<kapsaro_core::api::secret::SecretBytes> {
+    options: &CommonCommandOptions,
+) -> Result<SecretBytes> {
     match evaluate_file_after_cli_review(
         evaluator,
         reviewed,

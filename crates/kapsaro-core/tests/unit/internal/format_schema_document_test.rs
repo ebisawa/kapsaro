@@ -3,8 +3,8 @@
 
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::schema::document::{
-    parse_file_enc_str, parse_kv_entry_token, parse_kv_head_token, parse_kv_signature_token,
-    parse_kv_wrap_token, parse_public_key_str, parse_trust_store_str,
+    parse_file_enc_str, parse_kv_entry_token_with_source, parse_kv_head_token_with_source,
+    parse_kv_signature_token, parse_kv_wrap_token, parse_public_key_str, parse_trust_store_str,
 };
 use crate::format::token::TokenCodec;
 use crate::model::common::WrapItem;
@@ -338,9 +338,15 @@ fn test_parse_kv_tokens_with_schema() {
     let entry_token = TokenCodec::encode(TokenCodec::JsonJcs, &entry).unwrap();
     let signature_token = TokenCodec::encode(TokenCodec::JsonJcs, &signature).unwrap();
 
-    assert_eq!(parse_kv_head_token(&head_token).unwrap(), head);
+    assert_eq!(
+        parse_kv_head_token_with_source(&head_token, "HEAD token").unwrap(),
+        head
+    );
     assert_eq!(parse_kv_wrap_token(&wrap_token).unwrap(), wrap);
-    assert_eq!(parse_kv_entry_token(&entry_token).unwrap(), entry);
+    assert_eq!(
+        parse_kv_entry_token_with_source(&entry_token, "KV entry token").unwrap(),
+        entry
+    );
     assert_eq!(
         parse_kv_signature_token(&signature_token).unwrap(),
         signature
@@ -357,7 +363,7 @@ fn test_parse_kv_entry_token_rejects_duplicate_member() {
     }"#;
     let entry_token = encode_base64url_nopad(raw_entry);
 
-    let result = parse_kv_entry_token(&entry_token);
+    let result = parse_kv_entry_token_with_source(&entry_token, "KV entry token");
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -375,7 +381,7 @@ fn test_parse_kv_entry_token_rejects_non_canonical_ct_base64url() {
     };
     let entry_token = TokenCodec::encode(TokenCodec::JsonJcs, &entry).unwrap();
 
-    let result = parse_kv_entry_token(&entry_token);
+    let result = parse_kv_entry_token_with_source(&entry_token, "KV entry token");
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -393,7 +399,7 @@ fn test_parse_kv_head_token_requires_aead_algorithm() {
     });
     let head_token = TokenCodec::encode(TokenCodec::JsonJcs, &head).unwrap();
 
-    let err = parse_kv_head_token(&head_token).unwrap_err();
+    let err = parse_kv_head_token_with_source(&head_token, "HEAD token").unwrap_err();
 
     assert!(err.to_string().contains("Invalid kapsaro document"));
 }
@@ -408,7 +414,7 @@ fn test_parse_kv_head_token_rejects_unsupported_aead_algorithm() {
     });
     let head_token = TokenCodec::encode(TokenCodec::JsonJcs, &head).unwrap();
 
-    let err = parse_kv_head_token(&head_token).unwrap_err();
+    let err = parse_kv_head_token_with_source(&head_token, "HEAD token").unwrap_err();
 
     assert!(err.to_string().contains("Invalid kapsaro document"));
 }

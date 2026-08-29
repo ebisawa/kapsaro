@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Shared clap option groups for the CLI commands.
+//! Converts parsed flags into the common options the core API takes.
+
 use clap::Args;
 use std::path::PathBuf;
 
@@ -94,7 +97,7 @@ pub(crate) struct KvStoreNameOption {
 
 #[derive(Debug, Clone, Args, Default)]
 pub(crate) struct ForceOption {
-    /// Force operation without confirmation
+    /// Proceed past the confirmation or safety check that would stop the command
     #[arg(long, short = 'f')]
     pub(crate) force: bool,
 }
@@ -117,6 +120,19 @@ pub(crate) struct AllowNonMemberOption {
 pub(crate) struct LocalOptions {
     #[command(flatten)]
     pub(crate) home: HomeOption,
+}
+
+/// Local-state options for a command that may have to sign as a side effect.
+///
+/// No workspace option: these commands act on the local keystore alone, and the
+/// signing identity is only resolved when the command actually needs to sign.
+#[derive(Debug, Clone, Args, Default)]
+pub(crate) struct LocalSigningOptions {
+    #[command(flatten)]
+    pub(crate) home: HomeOption,
+
+    #[command(flatten)]
+    pub(crate) ssh: SshSigningOptions,
 }
 
 #[derive(Debug, Clone, Args, Default)]
@@ -304,6 +320,14 @@ impl ToCommonOptions for LocalOptions {
     }
 }
 
+impl ToCommonOptions for LocalSigningOptions {
+    fn to_common_options(&self) -> CommonOptions {
+        let mut common = build_common_options(&self.home, None, None);
+        self.ssh.apply_to(&mut common);
+        common
+    }
+}
+
 impl ToCommonOptions for LocalOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
         build_common_options(&self.home, None, Some(&self.verbose))
@@ -348,14 +372,11 @@ impl ToCommonOptions for SigningQuietOutputOptions {
 
 impl From<&CommonOptions> for CommonCommandOptions {
     fn from(value: &CommonOptions) -> Self {
-        Self {
-            home: value.home.clone(),
-            identity: value.identity.clone(),
-            verbose: value.verbose,
-            workspace: value.workspace.clone(),
-            ssh_signing_method: value.ssh_signing_method(),
-            allow_expired_key: false,
-            allow_non_member: false,
-        }
+        Self::new()
+            .with_home(value.home.clone())
+            .with_identity(value.identity.clone())
+            .with_verbose(value.verbose)
+            .with_workspace(value.workspace.clone())
+            .with_ssh_signing_method(value.ssh_signing_method())
     }
 }

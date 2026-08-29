@@ -3,7 +3,7 @@
 
 //! Integration tests for `init` command.
 
-use crate::cli::common::generate_temp_ssh_keypair;
+use crate::cli::common::{generate_temp_ssh_keypair, make_secret_home};
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -20,7 +20,7 @@ mod workspace;
 
 fn setup_init_env() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = TempDir::new().unwrap();
+    let home_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
 }

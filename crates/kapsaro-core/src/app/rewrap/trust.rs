@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Trust evaluation for a rewrap batch.
+//! Resolves recipient trust across the membership the rewrap will produce.
+
 use std::collections::BTreeMap;
 
 use crate::app::trust::approval::ApprovedKnownKey;
@@ -38,11 +41,8 @@ pub fn build_rewrap_trust(
         &post_promotion_members,
         &accepted_known_keys,
     )?;
-    let mut warnings = trust_ctx.permission_warnings.clone();
-    warnings.extend(recipient_expiry_warnings);
-
     Ok(RewrapTrustPlan {
-        warnings,
+        warnings: recipient_expiry_warnings,
         recipient_trust,
         accepted_promotion_candidates,
         post_promotion_members,

@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Matches a trust identity against the workspace's currently active members.
+//! Indexes active members by kid so a signer or recipient can be flagged as missing or handle-mismatched.
+
 use std::collections::BTreeMap;
 
 use crate::model::identity::MemberHandle;

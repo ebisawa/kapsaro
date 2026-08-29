@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Walks per-file rewrap trust requirements and resolves signer and recipient
+//! approvals through caller-supplied confirmation callbacks, deduping known keys already approved.
+
 use crate::app::rewrap::types::RewrapInputTrustRequirement;
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};

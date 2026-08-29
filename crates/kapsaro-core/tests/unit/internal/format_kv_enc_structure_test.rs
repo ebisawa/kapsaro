@@ -5,7 +5,7 @@
 //!
 //! Tests for strict structure validation (line order, counts, KEY format, duplicates)
 
-use crate::format::kv::document::validate_kv_file_structure;
+use super::structure::validate_kv_file_structure;
 use crate::format::kv::enc::parser::KvEncParser;
 
 #[test]

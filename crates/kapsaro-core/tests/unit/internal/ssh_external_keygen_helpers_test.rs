@@ -7,12 +7,11 @@
 //! helpers can be exercised without invoking the real `ssh-keygen` binary.
 
 use super::{build_derive_public_key_args, build_sign_args, check_sign_output, parse_sign_stdout};
-use crate::format::codec::base64_public::encode_base64_standard;
+use crate::format::codec::codec_base64_fixtures::encode_base64_standard;
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
 use crate::test_utils::process_output::{build_process_output, failed_code};
-use crate::Error;
 
 const TEST_SSH_PUBKEY: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
@@ -21,7 +20,7 @@ const OTHER_SSH_PUBKEY: &str =
 
 fn append_publickey(blob: &mut Vec<u8>, ssh_pubkey: &str) {
     let publickey = decode_ssh_public_key_blob(ssh_pubkey).unwrap();
-    blob.extend_from_slice(&encode_ssh_string(&publickey));
+    blob.extend_from_slice(&encode_ssh_string(&publickey).unwrap());
 }
 
 // --------------------------------------------------------------------
@@ -49,7 +48,11 @@ fn test_check_sign_output_failure_private_key_hint() {
     let message = err.format_user_message();
     assert!(message.contains("ssh-keygen -Y sign failed"));
     assert!(message.contains("permission denied"));
-    assert!(message.contains("Ensure the private key file is accessible"));
+    // Signing from a private key file runs without the agent, so the hint names
+    // the file itself, its passphrase, and the .pub file that reaches the agent.
+    assert!(message.contains("Check that the private key file is readable"));
+    assert!(message.contains("passphrase"));
+    assert!(message.contains("pass the matching .pub file to sign through ssh-agent"));
 }
 
 #[test]
@@ -62,7 +65,7 @@ fn test_check_sign_output_failure_public_key_hint() {
     assert!(message.contains("ssh-add -l"));
     assert!(message.contains("corresponding private key must be loaded in ssh-agent"));
     // Public-key hint is mutually exclusive with the private-key hint.
-    assert!(!message.contains("Ensure the private key file is accessible"));
+    assert!(!message.contains("Check that the private key file is readable"));
 }
 
 #[test]
@@ -89,14 +92,14 @@ fn test_parse_sign_stdout_extracts_ed25519_signature() {
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
     append_publickey(&mut sshsig_blob, TEST_SSH_PUBKEY);
-    sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
-    sshsig_blob.extend_from_slice(&encode_ssh_string(b""));
-    sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256"));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()).unwrap());
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"").unwrap());
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256").unwrap());
 
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig));
-    sshsig_blob.extend_from_slice(&encode_ssh_string(&signature_blob));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig).unwrap());
+    sshsig_blob.extend_from_slice(&encode_ssh_string(&signature_blob).unwrap());
 
     let armored = format!(
         "-----BEGIN SSH SIGNATURE-----\n{}\n-----END SSH SIGNATURE-----\n",
@@ -119,14 +122,14 @@ fn test_parse_sign_stdout_rejects_publickey_mismatch() {
     sshsig_blob.extend_from_slice(b"SSHSIG");
     sshsig_blob.extend_from_slice(&1u32.to_be_bytes());
     append_publickey(&mut sshsig_blob, OTHER_SSH_PUBKEY);
-    sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()));
-    sshsig_blob.extend_from_slice(&encode_ssh_string(b""));
-    sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256"));
+    sshsig_blob.extend_from_slice(&encode_ssh_string(KEY_PROTECTION_NAMESPACE.as_bytes()).unwrap());
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"").unwrap());
+    sshsig_blob.extend_from_slice(&encode_ssh_string(b"sha256").unwrap());
 
     let mut signature_blob = Vec::new();
-    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519"));
-    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig));
-    sshsig_blob.extend_from_slice(&encode_ssh_string(&signature_blob));
+    signature_blob.extend_from_slice(&encode_ssh_string(b"ssh-ed25519").unwrap());
+    signature_blob.extend_from_slice(&encode_ssh_string(&raw_sig).unwrap());
+    sshsig_blob.extend_from_slice(&encode_ssh_string(&signature_blob).unwrap());
 
     let armored = format!(
         "-----BEGIN SSH SIGNATURE-----\n{}\n-----END SSH SIGNATURE-----\n",

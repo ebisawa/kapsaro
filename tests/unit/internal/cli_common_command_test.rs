@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::env;
-use std::fs;
 
 use crate::app_test_utils::build_test_command_options;
 use crate::cli::common::command::{
@@ -10,12 +9,12 @@ use crate::cli::common::command::{
     resolve_options_with_read_trust_allowances, resolve_required_member_handle_with_prompt,
 };
 use crate::cli::options::CommonOptions;
-use crate::test_utils::EnvGuard;
+use crate::test_utils::{local_state_temp_dir, write_local_state_file, EnvGuard};
 use tempfile::TempDir;
 
 fn save_global_config(temp_home: &TempDir, lines: &[&str]) {
     let config_path = temp_home.path().join("config.toml");
-    fs::write(config_path, lines.join("\n")).unwrap();
+    write_local_state_file(&config_path, lines.join("\n"));
 }
 
 #[test]
@@ -32,7 +31,7 @@ fn test_reviewed_artifact_comparison_rejects_tampered_content_before_verificatio
     )
     .unwrap_err();
 
-    assert_eq!(error.verification_rule(), Some("E_TRUST_TARGET_CHANGED"));
+    assert_eq!(error.rule(), Some("E_TRUST_TARGET_CHANGED"));
     assert!(error
         .format_user_message()
         .contains("run the command again"));
@@ -41,7 +40,7 @@ fn test_reviewed_artifact_comparison_rejects_tampered_content_before_verificatio
 #[test]
 fn test_resolve_required_member_handle_with_prompt_uses_config_without_prompt() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", home.path());
     save_global_config(&home, &["member_handle = \"config-member\""]);
     let options = build_test_command_options(home.path(), None);
@@ -61,7 +60,7 @@ fn test_resolve_required_member_handle_with_prompt_uses_config_without_prompt() 
 #[test]
 fn test_resolve_required_member_handle_with_prompt_uses_prompt_when_enabled() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
 
@@ -80,7 +79,7 @@ fn test_resolve_required_member_handle_with_prompt_uses_prompt_when_enabled() {
 #[test]
 fn test_resolve_required_member_handle_with_prompt_errors_when_prompt_disabled() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
 
@@ -100,7 +99,7 @@ fn test_resolve_required_member_handle_with_prompt_errors_when_prompt_disabled()
 #[test]
 fn test_resolve_required_member_handle_with_prompt_errors_with_hint_when_prompt_unavailable() {
     let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", home.path());
     let options = build_test_command_options(home.path(), None);
 
@@ -124,7 +123,7 @@ fn test_resolve_options_with_allow_expired_key_ignores_allow_non_member_config()
         "KAPSARO_ALLOW_EXPIRED_KEY",
         "KAPSARO_ALLOW_NON_MEMBER",
     ]);
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", home.path());
     env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
     let options = common_options(home.path());
@@ -142,7 +141,7 @@ fn test_resolve_options_with_read_trust_allowances_rejects_invalid_allow_non_mem
         "KAPSARO_ALLOW_EXPIRED_KEY",
         "KAPSARO_ALLOW_NON_MEMBER",
     ]);
-    let home = TempDir::new().unwrap();
+    let home = local_state_temp_dir();
     env::set_var("KAPSARO_HOME", home.path());
     env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
     let options = common_options(home.path());

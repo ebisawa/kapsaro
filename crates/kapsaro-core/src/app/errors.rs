@@ -45,15 +45,3 @@ pub fn build_default_kv_file_not_found_error(file_path: &Path) -> Error {
         format_path_relative_to_cwd(file_path)
     ))
 }
-
-/// Wrap any local trust store load/verification failure into a reset-required error.
-pub fn build_invalid_trust_store_error(path: &Path, error: Error) -> Error {
-    Error::build_verification_error(
-        "E_TRUST_STORE_RESET_REQUIRED".to_string(),
-        format!(
-            "Local trust store '{}' is invalid and must be reset: {}",
-            format_path_relative_to_cwd(path),
-            error.format_user_message()
-        ),
-    )
-}

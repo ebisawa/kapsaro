@@ -11,6 +11,7 @@ use kapsaro_core::Error;
 mod list;
 mod purge;
 mod remove;
+mod resign;
 
 #[derive(Args)]
 #[command(disable_help_subcommand = true)]
@@ -24,6 +25,7 @@ impl TrustArgs {
         match &self.command {
             TrustCommands::Keys(args) => args.debug_enabled(),
             TrustCommands::Recipients(args) => args.debug_enabled(),
+            TrustCommands::Resign(args) => args.common.debug.debug,
         }
     }
 }
@@ -35,6 +37,9 @@ pub(crate) enum TrustCommands {
 
     /// Manage approved artifact recipient sets in local trust store
     Recipients(RecipientsArgs),
+
+    /// Re-sign the local trust store with the active key
+    Resign(ResignArgs),
 }
 
 #[derive(Args)]
@@ -134,6 +139,16 @@ pub(crate) struct PurgeArgs {
 }
 
 #[derive(Args)]
+pub(crate) struct ResignArgs {
+    /// Common options shared across commands
+    #[command(flatten)]
+    pub common: SigningOptions,
+
+    #[command(flatten)]
+    pub member: MemberHandleOption,
+}
+
+#[derive(Args)]
 pub(crate) struct RecipientRemoveArgs {
     /// Common options shared across commands
     #[command(flatten)]
@@ -150,6 +165,7 @@ pub(crate) fn run(args: TrustArgs) -> Result<(), Error> {
     match args.command {
         TrustCommands::Keys(args) => run_keys(args),
         TrustCommands::Recipients(args) => run_recipients(args),
+        TrustCommands::Resign(args) => resign::run(args),
     }
 }
 

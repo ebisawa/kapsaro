@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Matches a trust identity against the stored and additionally supplied known keys.
+//! Flags a kid bound to a different member handle than previously recorded as an integrity anomaly.
+
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::model::identity::MemberHandle;
 use crate::model::trust_store::KnownKey;

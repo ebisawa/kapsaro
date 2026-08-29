@@ -23,9 +23,9 @@ use self::promotion::PromotionReviewView;
 use self::types::RewrapBatchOutcome;
 use crate::app::context::options::CommonCommandOptions;
 
-pub struct RewrapBatchCommandInput {
+pub struct RewrapBatchCommandInput<'a> {
     pub options: CommonCommandOptions,
-    pub execution: ExecutionContext,
+    pub execution: &'a ExecutionContext,
     pub rotate_key: bool,
     pub clear_disclosure_history: bool,
     pub explicit_targets: Vec<PathBuf>,
@@ -39,7 +39,7 @@ pub fn execute_rewrap_batch_command<
     ConfirmRecipients,
     ConfirmRecipientSet,
 >(
-    input: RewrapBatchCommandInput,
+    input: RewrapBatchCommandInput<'_>,
     mut emit_warnings: EmitWarnings,
     mut confirm_promotions: ConfirmPromotions,
     confirm_known: ConfirmKnown,
@@ -57,7 +57,7 @@ where
     ConfirmRecipientSet:
         FnMut(&crate::app::trust::ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    emit_warnings(&build_write_execution_warnings(&input.execution)?);
+    emit_warnings(&build_write_execution_warnings(input.execution)?);
     let review_session = session::build_rewrap_review_session(
         &input,
         &mut confirm_promotions,

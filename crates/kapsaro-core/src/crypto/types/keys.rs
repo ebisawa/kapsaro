@@ -6,16 +6,11 @@
 use zeroize::Zeroizing;
 
 macro_rules! define_zeroizing_key_type {
-    ($(#[$meta:meta])* $name:ident, $type_name:literal) => {
+    ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
         pub struct $name(Zeroizing<[u8; 32]>);
 
         impl $name {
-            /// Create a new key from 32 bytes.
-            pub fn new(bytes: [u8; 32]) -> Self {
-                Self(Zeroizing::new(bytes))
-            }
-
             /// Create a new key from zeroizing bytes without an extra copy.
             pub fn from_zeroizing(bytes: Zeroizing<[u8; 32]>) -> Self {
                 Self(bytes)
@@ -26,8 +21,6 @@ macro_rules! define_zeroizing_key_type {
                 &self.0
             }
         }
-
-        impl_fixed_size_type!($name, 32, $type_name, zeroizing);
     };
 }
 
@@ -35,24 +28,23 @@ define_zeroizing_key_type!(
     /// XChaCha20-Poly1305 encryption key (32 bytes).
     ///
     /// This key is wrapped in Zeroizing for secure memory clearing.
-    XChaChaKey,
-    "XChaCha key"
+    XChaChaKey
 );
+
+impl_fixed_size_type!(XChaChaKey, 32, "XChaCha key", zeroizing);
 
 define_zeroizing_key_type!(
     /// Master key for file-level encryption (32 bytes).
     ///
     /// This key is wrapped in Zeroizing for secure memory clearing.
-    MasterKey,
-    "master key"
+    MasterKey
 );
 
 define_zeroizing_key_type!(
     /// Content Encryption Key (32 bytes).
     ///
     /// This key is wrapped in Zeroizing for secure memory clearing.
-    Cek,
-    "CEK"
+    Cek
 );
 
 define_zeroizing_key_type!(
@@ -60,6 +52,5 @@ define_zeroizing_key_type!(
     ///
     /// This key is derived from an artifact master key and is kept distinct from
     /// payload encryption keys at the type boundary.
-    MacKey,
-    "MAC key"
+    MacKey
 );

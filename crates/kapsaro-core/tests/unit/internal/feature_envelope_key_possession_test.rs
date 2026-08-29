@@ -14,6 +14,7 @@ use crate::model::wire::{
     algorithm,
     context::{MAC_DOMAIN_KEY_POSSESSION_V1, SIG_DOMAIN_ARTIFACT_SIGNATURE_V1},
 };
+use zeroize::Zeroizing;
 
 const SIGNER_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 const OTHER_SIGNER_KID: &str = "4Z8N6K1W3Q7RT5YH9M2PC4XV8D1B6FJA";
@@ -86,7 +87,7 @@ fn artifact_signature_input_binds_signature_header_values() {
 
 #[test]
 fn key_possession_proof_binds_signer_kid() {
-    let mac_key = MacKey::new([7u8; 32]);
+    let mac_key = MacKey::from_zeroizing(Zeroizing::new([7u8; 32]));
     let body_bytes = ArtifactBodyBytes::from_bytes(br#"{"format":"kapsaro:format:file-enc@1"}"#);
 
     let proof = build_key_possession_proof("file", &body_bytes, &mac_key, SIGNER_KID).unwrap();
@@ -99,7 +100,7 @@ fn key_possession_proof_binds_signer_kid() {
 
 #[test]
 fn key_possession_verification_rejects_signer_kid_mismatch() {
-    let mac_key = MacKey::new([9u8; 32]);
+    let mac_key = MacKey::from_zeroizing(Zeroizing::new([9u8; 32]));
     let body_bytes = ArtifactBodyBytes::from_bytes(br#"{"format":"kapsaro:format:file-enc@1"}"#);
     let proof = build_key_possession_proof("file", &body_bytes, &mac_key, SIGNER_KID).unwrap();
 

@@ -5,13 +5,11 @@
 //!
 //! Provides functions to:
 //! - Build canonical byte representation for signature verification
-//! - Parse and extract HEAD and WRAP data from kv-enc content
+//! - Extract the HEAD and WRAP tokens from parsed kv-enc lines
 
-use super::parser::KvEncParser;
 use crate::format::kv::HEADER_LINE_PREFIX;
-use crate::format::schema::document::{parse_kv_head_token, parse_kv_wrap_token};
 use crate::format::FormatError;
-use crate::model::kv_enc::header::{KvHeader, KvWrap};
+use crate::model::kv_enc::header::KvWrap;
 use crate::model::kv_enc::line::KvEncLine;
 use crate::Result;
 
@@ -85,26 +83,6 @@ pub fn extract_kv_header_tokens(lines: &[KvEncLine]) -> Result<(String, String)>
         .ok_or_else(|| FormatError::build_parse_error("WRAP line not found in kv-enc v1"))?;
 
     Ok((head_token, wrap_token))
-}
-
-/// Parse kv-enc content and extract the HEAD and WRAP data
-///
-/// # Arguments
-/// * `content` - kv-enc format content string
-///
-/// # Returns
-/// Tuple of (parsed lines, HEAD data, WRAP data)
-pub fn parse_kv_wrap(content: &str) -> Result<(Vec<KvEncLine>, KvHeader, KvWrap)> {
-    let parser = KvEncParser::new(content);
-    let lines = parser.parse_all()?;
-
-    let (head_token, wrap_token) = extract_kv_header_tokens(&lines)?;
-
-    // Decode tokens
-    let head_data = parse_kv_head_token(&head_token)?;
-    let wrap_data = parse_kv_wrap_token(&wrap_token)?;
-
-    Ok((lines, head_data, wrap_data))
 }
 
 /// Extract recipient list from KvWrap

@@ -7,11 +7,11 @@ use std::path::Path;
 
 use super::{evaluate_member_removal, remove_member};
 use crate::app_test_utils::build_test_signing_command_options;
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::feature::kv::encrypt::encrypt_kv_document;
+use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::format::token::TokenCodec;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::io::workspace::members::load_active_member_files;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
@@ -95,7 +95,7 @@ fn save_kv_artifact(
     let (key_ctx, signer_kid, _recipients, verified_members, signer_pub) =
         build_verified_members(temp_dir, recipient_handles);
     let kv_map = HashMap::from([(String::from("API_KEY"), String::from("secret-value"))]);
-    let content = encrypt_kv_document(
+    let content = encrypt_kv_map_with_wrap_mutation(
         &kv_map,
         &verified_members,
         &SigningContext {
@@ -104,6 +104,8 @@ fn save_kv_artifact(
             signer_pub,
         },
         TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
     )
     .unwrap();
     fs::write(workspace_dir.join("secrets").join(artifact_name), content).unwrap();
@@ -193,7 +195,8 @@ fn test_remove_member_deletes_active_member_file() {
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = remove_member(&options, BOB_MEMBER_HANDLE).unwrap();
+    let review = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = remove_member(&review).unwrap();
 
     assert_eq!(result.member_handle, BOB_MEMBER_HANDLE);
     let active_member_handles = load_active_member_files(&workspace_dir)

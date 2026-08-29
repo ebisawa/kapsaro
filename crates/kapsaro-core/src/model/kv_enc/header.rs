@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Decoded shape of a kv-enc document's HEAD and WRAP tokens.
+//! KvHeader carries the document identity and algorithm; KvWrap carries the recipient wrap items and removed-recipient history.
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

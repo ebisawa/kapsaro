@@ -19,7 +19,7 @@ const EXPIRY_WARNING_DAYS: i64 = 30;
 /// relevant key loading flow.
 ///
 /// This type does **not** mean the key is currently valid (not expired). Expiry policy must be
-/// applied separately via functions like `enforce_key_not_expired_for_signing`.
+/// applied separately via `LocalKeyPairExpiry` or `enforce_expired_key_usage`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedExpiresAt(String);
 
@@ -154,45 +154,6 @@ pub fn check_key_expiry(expires_at: &str, now: OffsetDateTime) -> Result<KeyExpi
     Ok(KeyExpiryStatus::Valid)
 }
 
-/// Enforce that a key is not expired for write operations (encrypt/sign).
-///
-/// Returns `Err` if the key has expired.
-pub fn enforce_key_not_expired_for_signing(expires_at: &VerifiedExpiresAt) -> Result<()> {
-    match check_key_expiry(expires_at.as_str(), OffsetDateTime::now_utc())? {
-        KeyExpiryStatus::Valid => Ok(()),
-        KeyExpiryStatus::ExpiringSoon { .. } => Ok(()),
-        KeyExpiryStatus::Expired { expires_at } => Err(Error::build_verification_error(
-            "key-expiry".to_string(),
-            format!(
-                "Private key has expired.\n\
-                 Expires at: {}\n\
-                 Action: Rotate the key before encryption or signing.",
-                expires_at
-            ),
-        )),
-    }
-}
-
-/// Build a warning message if the key is expired or expiring soon.
-///
-/// For read operations (decrypt/verify) that allow expired keys with a warning.
-pub fn build_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Result<Option<String>> {
-    match check_key_expiry(expires_at.as_str(), OffsetDateTime::now_utc())? {
-        KeyExpiryStatus::Valid => Ok(None),
-        KeyExpiryStatus::ExpiringSoon {
-            expires_at,
-            days_remaining,
-        } => Ok(Some(format_expiring_key_warning(
-            "Private key",
-            days_remaining,
-            &expires_at,
-        ))),
-        KeyExpiryStatus::Expired { expires_at } => {
-            Ok(Some(format_expired_key_warning("Private key", &expires_at)))
-        }
-    }
-}
-
 /// Enforce explicit allowance before using an expired key operationally.
 pub(crate) fn enforce_expired_key_usage(
     expires_at: &str,
@@ -235,21 +196,6 @@ fn enforce_selected_status_usage(
                 sanitize_display_field(&expires_at)
             ),
         )),
-    }
-}
-
-/// Build a warning message for write operations when the signing key expires soon.
-pub fn build_signing_key_expiry_warning(expires_at: &VerifiedExpiresAt) -> Result<Option<String>> {
-    match check_key_expiry(expires_at.as_str(), OffsetDateTime::now_utc())? {
-        KeyExpiryStatus::Valid | KeyExpiryStatus::Expired { .. } => Ok(None),
-        KeyExpiryStatus::ExpiringSoon {
-            expires_at,
-            days_remaining,
-        } => Ok(Some(format_expiring_key_warning(
-            "Private key",
-            days_remaining,
-            &expires_at,
-        ))),
     }
 }
 

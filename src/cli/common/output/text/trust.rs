@@ -73,9 +73,68 @@ pub(crate) fn print_trust_remove_summary(kid: &str, member_handle: &str) {
     layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
 }
 
+/// Report that the local trust store signature moved to another key.
+pub(crate) fn print_trust_store_resigned(signer_kid: &str) {
+    let kid_display = layout::format_kid_display_text(signer_kid, KidDisplayFallback::Sanitized);
+    let value = format!("Re-signed local trust store with kid '{kid_display}'");
+    layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
+}
+
+/// Report that the local trust store is still signed by a key other than the
+/// one just activated, so that key has to stay in the keystore until it is
+/// re-signed.
+pub(crate) fn print_trust_store_signer_notice(signer_kid: &str, member_handle: &str) {
+    let kid_display = layout::format_kid_display_text(signer_kid, KidDisplayFallback::Sanitized);
+    let value = format!(
+        "Local trust store is still signed by kid '{kid_display}'. \
+         Run 'kapsaro trust resign --member-handle {member_handle}' to move the signature to the \
+         active key."
+    );
+    layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
+}
+
+/// Report the outcome of an explicit `trust resign` run.
+pub(crate) fn print_trust_resign_summary(
+    owner_handle: &str,
+    previous_signer_kid: &str,
+    signer_kid: &str,
+    resigned: bool,
+) {
+    let value = if resigned {
+        format!(
+            "Re-signed local trust store for '{}': {} -> {}",
+            owner_handle,
+            layout::format_kid_display_text(previous_signer_kid, KidDisplayFallback::Sanitized),
+            layout::format_kid_display_text(signer_kid, KidDisplayFallback::Sanitized)
+        )
+    } else {
+        format!(
+            "Local trust store for '{}' is already signed by kid '{}'",
+            owner_handle,
+            layout::format_kid_display_text(signer_kid, KidDisplayFallback::Sanitized)
+        )
+    };
+    layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
+}
+
 pub(crate) fn print_recipient_set_remove_summary(sid: &str) {
     let value = format!("Removed recipient set '{sid}' from trust store");
     layout::print_lines(layout::format_value_lines("", &value), LineTarget::Stderr);
+}
+
+/// Report that the reset already took the entry the operator asked to remove.
+///
+/// Running the removal again against the empty store the reset left behind
+/// would report the entry as missing, which reads as a failed command when what
+/// the operator asked for has in fact happened.
+pub(crate) fn print_key_removed_by_reset() {
+    let value = "Trust store was reset, so there was no approved key left to remove";
+    layout::print_lines(layout::format_value_lines("", value), LineTarget::Stderr);
+}
+
+pub(crate) fn print_recipient_set_removed_by_reset() {
+    let value = "Trust store was reset, so there was no recipient set left to remove";
+    layout::print_lines(layout::format_value_lines("", value), LineTarget::Stderr);
 }
 
 pub(crate) fn print_no_entries_to_purge() {
@@ -137,6 +196,18 @@ pub(crate) fn print_trust_purge_summary(count: usize) {
 
 pub(crate) fn print_recipient_set_purge_summary(count: usize) {
     eprintln!("Purged {} recipient set(s)", count);
+}
+
+pub(crate) fn print_trust_purge_resigned() {
+    eprintln!("The trust store signature was moved to the current signing key");
+}
+
+pub(crate) fn print_trust_purge_reset_to_empty() {
+    eprintln!("Trust store was reset, so there were no known keys left to purge");
+}
+
+pub(crate) fn print_recipient_set_purge_reset_to_empty() {
+    eprintln!("Trust store was reset, so there were no recipient sets left to purge");
 }
 
 #[cfg(test)]

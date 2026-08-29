@@ -25,12 +25,12 @@ pub(super) fn build_request_identities() -> Vec<u8> {
     vec![SSH_AGENTC_REQUEST_IDENTITIES]
 }
 
-pub(super) fn build_sign_request(public_key_blob: &[u8], message: &[u8]) -> Vec<u8> {
+pub(super) fn build_sign_request(public_key_blob: &[u8], message: &[u8]) -> Result<Vec<u8>> {
     let mut body = vec![SSH_AGENTC_SIGN_REQUEST];
-    body.extend_from_slice(&encode_ssh_string(public_key_blob));
-    body.extend_from_slice(&encode_ssh_string(message));
+    body.extend_from_slice(&encode_ssh_string(public_key_blob)?);
+    body.extend_from_slice(&encode_ssh_string(message)?);
     body.extend_from_slice(&0u32.to_be_bytes());
-    body
+    Ok(body)
 }
 
 pub(super) fn parse_identities_response(packet: &[u8]) -> Result<Vec<AgentIdentity>> {

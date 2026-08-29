@@ -117,7 +117,7 @@ fn test_env_key_wrong_password_error() {
 }
 
 #[test]
-fn test_load_crypto_context_from_env_does_not_require_workspace_member_file() {
+fn test_load_crypto_context_from_env_succeeds_without_a_workspace_member_file() {
     let _guard = EnvGuard::new(&[ENV_PRIVATE_KEY, ENV_KEY_PASSWORD]);
     let password = "strong-test-password-42";
     let (exported, _plaintext, public_key) =

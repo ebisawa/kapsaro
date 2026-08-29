@@ -20,7 +20,7 @@ use kapsaro_core::cli_api::test_support::storage::keystore::storage::load_privat
 use kapsaro_test_support::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 const TEST_PASSWORD: &str = "cli-integration-test-password-42";
@@ -83,8 +83,12 @@ fn setup_env_key_workspace() -> (TempDir, TempDir, TempDir, PathBuf, String) {
 /// Note: `--workspace` is a subcommand option, so it must be added
 /// after the subcommand arg by the caller.
 fn env_key_cmd(home: &TempDir, exported_key: &str, password: &str) -> assert_cmd::Command {
+    env_key_cmd_at(home.path(), exported_key, password)
+}
+
+fn env_key_cmd_at(home: &Path, exported_key: &str, password: &str) -> assert_cmd::Command {
     let mut c = cmd();
-    c.env("KAPSARO_HOME", home.path())
+    c.env("KAPSARO_HOME", home)
         .env("KAPSARO_PRIVATE_KEY", exported_key)
         .env("KAPSARO_KEY_PASSWORD", password);
     // Remove SSH_AUTH_SOCK to ensure env key mode is used
@@ -121,6 +125,99 @@ fn test_env_key_get_roundtrip() {
         .assert()
         .success()
         .stdout(predicate::str::contains("postgres://localhost/testdb"));
+}
+
+#[test]
+fn test_env_key_get_with_strict_no_leaves_a_missing_home_absent() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DATABASE_URL",
+        "postgres://localhost/no-home",
+        None,
+        None,
+    );
+    let missing_home = home_dir.path().join("missing-home");
+
+    env_key_cmd_at(&missing_home, &exported_key, TEST_PASSWORD)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .arg("get")
+        .arg("DATABASE_URL")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("postgres://localhost/no-home"));
+
+    assert!(!missing_home.exists());
+}
+
+/// Env key mode reads its local state through a symlinked root like any other
+/// command, so the value stored under the link target comes back.
+#[cfg(unix)]
+#[test]
+fn test_env_key_get_reads_through_a_home_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DATABASE_URL",
+        "postgres://localhost/linked-home",
+        None,
+        None,
+    );
+    let links = TempDir::new().unwrap();
+    let linked_home = links.path().join("linked-home");
+    symlink(home_dir.path(), &linked_home).unwrap();
+
+    env_key_cmd_at(&linked_home, &exported_key, TEST_PASSWORD)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .arg("get")
+        .arg("DATABASE_URL")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("postgres://localhost/linked-home"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_env_key_get_with_strict_no_rejects_existing_invalid_trust_store() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "DATABASE_URL",
+        "postgres://localhost/invalid-trust",
+        None,
+        None,
+    );
+    let isolated_home = home_dir.path().join("isolated-home");
+    let trust_dir = isolated_home.join("trust");
+    fs::create_dir_all(&trust_dir).unwrap();
+    fs::set_permissions(&isolated_home, fs::Permissions::from_mode(0o700)).unwrap();
+    fs::set_permissions(&trust_dir, fs::Permissions::from_mode(0o700)).unwrap();
+    let trust_path = trust_dir.join(format!("{TEST_MEMBER_HANDLE}.json"));
+    fs::write(&trust_path, "{invalid-json").unwrap();
+    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o600)).unwrap();
+
+    env_key_cmd_at(&isolated_home, &exported_key, TEST_PASSWORD)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .arg("get")
+        .arg("DATABASE_URL")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .assert()
+        .failure();
 }
 
 #[test]

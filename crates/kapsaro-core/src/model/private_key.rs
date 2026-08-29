@@ -80,6 +80,9 @@ impl PrivateKeyAlgorithm {
     }
 
     /// AEAD algorithm identifier (common to all variants)
+    /// Only the `cli-test-support` test harness reads this back; crate code
+    /// writes the identifier and validates it through the schema.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn aead(&self) -> &str {
         match self {
             Self::SshSig { aead, .. } | Self::Argon2id { aead, .. } => aead,
@@ -165,6 +168,9 @@ impl std::fmt::Debug for IdentityKeysPrivate {
 
 impl PrivateKey {
     /// Create a new PrivateKey with the given parameters
+    /// Crate code builds the document through the encryption feature, so only
+    /// the `cli-test-support` test harness calls this constructor.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn new(protected: PrivateKeyProtected, encrypted: PrivateKeyEncData) -> Self {
         Self {
             protected,

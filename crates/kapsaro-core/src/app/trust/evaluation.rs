@@ -61,18 +61,10 @@ fn resolve_read_trust_context_for_policy<P>(
 where
     P: ReadTrustPolicy,
 {
-    let workspace = execution.workspace_root.as_ref().ok_or_else(|| {
-        crate::Error::build_invalid_operation_error(format!(
-            "Workspace is required for {} trust evaluation",
-            P::CAPABILITY.label()
-        ))
-    })?;
     load_read_trust_context(
         options,
-        &workspace.root_path,
-        &execution.member_handle,
-        Some(execution.key_ctx.inner().self_signature_public_key_x()),
-        Some(execution.key_ctx.inner().local_key_identity()),
+        execution,
+        &format!("{} trust evaluation", P::CAPABILITY.label()),
     )
 }
 
@@ -204,9 +196,4 @@ fn describe_artifact_recipient_outcome(outcome: &ArtifactRecipientTrustOutcome) 
         }
         ArtifactRecipientTrustOutcome::NeedsManualApproval(_) => "needs-manual-approval",
     }
-}
-
-pub fn derive_self_sig_x(signing_key: &ed25519_dalek::SigningKey) -> [u8; 32] {
-    let verifying_key: ed25519_dalek::VerifyingKey = signing_key.into();
-    verifying_key.to_bytes()
 }

@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Decoded shape of a single kv-enc entry token: nonce, ciphertext, and disclosure flag.
+//! The disclosed flag is omitted from serialization when false to keep undisclosed entries compact.
+
 use serde::{Deserialize, Serialize};
 
 fn is_false(value: &bool) -> bool {

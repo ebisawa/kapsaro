@@ -48,7 +48,7 @@ fn test_encrypt_file_basic() {
         crate::model::wire::format::FILE_ENC_V1
     );
     assert_eq!(
-        file_enc_doc.recipients(),
+        file_enc_doc.protected.recipients(),
         vec![ALICE_MEMBER_HANDLE.to_string()]
     );
 
@@ -123,7 +123,7 @@ fn test_encrypt_file_multiple_recipients() {
     )
     .unwrap();
 
-    let recipients = file_enc_doc.recipients();
+    let recipients = file_enc_doc.protected.recipients();
     assert_eq!(recipients.len(), 2);
     assert!(recipients.contains(&ALICE_MEMBER_HANDLE.to_string()));
     assert!(recipients.contains(&BOB_MEMBER_HANDLE.to_string()));
@@ -232,7 +232,10 @@ fn test_encrypt_file_deterministic_structure() {
         parsed1["protected"]["payload"]["protected"]["alg"]["aead"],
         parsed2["protected"]["payload"]["protected"]["alg"]["aead"]
     );
-    assert_eq!(result1.recipients(), result2.recipients());
+    assert_eq!(
+        result1.protected.recipients(),
+        result2.protected.recipients()
+    );
 }
 
 #[test]

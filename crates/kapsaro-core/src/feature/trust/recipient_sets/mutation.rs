@@ -13,21 +13,30 @@ use crate::{Error, Result};
 
 use super::record::ArtifactRecipientSet;
 
+/// Approve one recipient set and report whether that moved the records.
+///
+/// `approved_at` takes part in the comparison like every other field, so an
+/// approval of the same recipients at a later time is a change: the stored
+/// timestamp names the approval that is current rather than the first one.
+///
+/// The record the sid names is replaced whole rather than merged into, so
+/// nothing of the stored approval survives this call. Whether replacing it is
+/// safe is settled by what the caller binds the write to.
 pub fn upsert_recipient_set(
     records: &mut Vec<RecipientSetRecord>,
     current: ArtifactRecipientSet,
     approved_at: String,
 ) -> bool {
     let sid = current.sid_string();
-    let new_record = current.into_record(approved_at);
+    let candidate = current.into_record(approved_at);
     if let Some(record) = records.iter_mut().find(|record| record.sid == sid) {
-        if *record == new_record {
+        if *record == candidate {
             return false;
         }
-        *record = new_record;
+        *record = candidate;
         return true;
     }
-    records.push(new_record);
+    records.push(candidate);
     true
 }
 

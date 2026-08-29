@@ -136,10 +136,7 @@ fn test_review_candidate_for_confirmation_requires_online_verification_for_known
     .unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(
-        error.verification_rule(),
-        Some("E_TRUST_ONLINE_VERIFY_REQUIRED")
-    );
+    assert_eq!(error.rule(), Some("E_TRUST_ONLINE_VERIFY_REQUIRED"));
     assert!(
         error.format_user_message().contains("not found"),
         "unexpected: {}",
@@ -154,10 +151,7 @@ fn test_verify_trust_candidate_online_missing_public_key_error() {
     let error = verify_trust_candidate_online(&candidate).unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(
-        error.verification_rule(),
-        Some("E_TRUST_REVIEW_SOURCE_MISSING")
-    );
+    assert_eq!(error.rule(), Some("E_TRUST_REVIEW_SOURCE_MISSING"));
     assert!(
         error
             .format_user_message()
@@ -214,10 +208,7 @@ fn test_verify_trust_candidate_online_rejects_member_handle_mismatch() {
     let error = verify_trust_candidate_online(&candidate).unwrap_err();
 
     assert_eq!(error.kind(), crate::ErrorKind::Verify);
-    assert_eq!(
-        error.verification_rule(),
-        Some("E_TRUST_ONLINE_VERIFY_MISMATCH")
-    );
+    assert_eq!(error.rule(), Some("E_TRUST_ONLINE_VERIFY_MISMATCH"));
     assert!(
         error
             .format_user_message()

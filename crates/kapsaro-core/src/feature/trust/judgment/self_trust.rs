@@ -1,23 +1,32 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::io::keystore::paths::get_public_key_file_path_from_root;
-use crate::io::keystore::storage::load_public_key;
-use crate::model::identity::MemberHandle;
-use crate::model::public_key::PublicKey;
-use crate::Result;
-use std::path::PathBuf;
+//! Self-trust identification.
+//! Recognises the operator's own keys so they are never queued for review.
+
+use subtle::{Choice, ConstantTimeEq};
+
+use crate::feature::context::crypto::{LocalKeyIdentity, PublicKeyMatch};
+use crate::io::keystore::access::KeystoreAccess;
+use crate::model::identity::{Kid, MemberHandle};
+use crate::{ErrorKind, Result};
 
 use super::identity::{IntoMemberHandle, TrustIdentity};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 pub struct SelfTrustSet {
     member_handle: Option<MemberHandle>,
     sig_xs: Vec<[u8; 32]>,
-    keystore_root: Option<PathBuf>,
+    keystore: Option<KeystoreAccess>,
 }
 
 impl SelfTrustSet {
+    /// Build a self-trust set from inputs known to be valid.
+    ///
+    /// Production always goes through `try_new` or the keystore-backed form
+    /// because its inputs come off the wire; the panicking form keeps the
+    /// tests that spell a literal handle readable.
+    #[cfg(test)]
     pub fn new<M, I>(member_handle: M, sig_xs: I) -> Self
     where
         M: IntoMemberHandle,
@@ -34,30 +43,43 @@ impl SelfTrustSet {
         let mut set = Self {
             member_handle: Some(member_handle.into_member_handle()?),
             sig_xs: Vec::new(),
-            keystore_root: None,
+            keystore: None,
         };
         set.extend_sig_xs(sig_xs);
         Ok(set)
     }
 
-    pub fn try_new_with_keystore<M, I>(
+    pub(crate) fn try_new_with_keystore<M, I>(
         member_handle: M,
         sig_xs: I,
-        keystore_root: PathBuf,
+        keystore: KeystoreAccess,
     ) -> Result<Self>
     where
         M: IntoMemberHandle,
         I: IntoIterator<Item = [u8; 32]>,
     {
         let mut set = Self::try_new(member_handle, sig_xs)?;
-        set.keystore_root = Some(keystore_root);
+        set.keystore = Some(keystore);
         Ok(set)
     }
 
     pub fn insert_sig_x(&mut self, sig_x: [u8; 32]) {
-        if !self.sig_xs.contains(&sig_x) {
+        if !self.contains_sig_x(&sig_x) {
             self.sig_xs.push(sig_x);
         }
+    }
+
+    /// Report whether one of the held keys is this Ed25519 public key.
+    ///
+    /// Every candidate is folded in before the answer is read, so neither the
+    /// match itself nor the position it was found at is timed.
+    fn contains_sig_x(&self, sig_x: &[u8; 32]) -> bool {
+        self.sig_xs
+            .iter()
+            .fold(Choice::from(0u8), |found, known| {
+                found | known.as_slice().ct_eq(sig_x.as_slice())
+            })
+            .into()
     }
 
     pub fn extend_sig_xs<I>(&mut self, sig_xs: I)
@@ -76,7 +98,7 @@ impl SelfTrustSet {
         if identity.member_handle_value() != member_handle {
             return Ok(false);
         }
-        if self.sig_xs.contains(identity.sig_x()) {
+        if self.contains_sig_x(identity.sig_x()) {
             return Ok(true);
         }
 
@@ -91,46 +113,35 @@ impl SelfTrustSet {
         let Some(member_handle) = self.member_handle.as_ref() else {
             return Ok(false);
         };
-        let Some(keystore_root) = self.keystore_root.as_ref() else {
+        let Some(keystore) = self.keystore.as_ref() else {
             return Ok(false);
         };
+        let kid = Kid::try_from(identity.kid())?;
+        let public_key = match keystore.load_public_key(member_handle, &kid) {
+            Ok(public_key) => public_key,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error),
+        };
 
-        let public_key_path = get_public_key_file_path_from_root(
-            keystore_root,
-            member_handle.as_str(),
-            identity.kid(),
-        );
-        if !public_key_path.exists() {
-            return Ok(false);
+        // The stored key is read out of the directory the handle and kid name,
+        // so a document disagreeing with either is local state that contradicts
+        // itself, not a key belonging to someone else.
+        let expected = LocalKeyIdentity::new(member_handle.clone(), kid, *identity.sig_x());
+        match expected.check_public_key(&public_key)? {
+            PublicKeyMatch::Matches => Ok(true),
+            PublicKeyMatch::SignaturePublicKeyMismatch => Ok(false),
+            PublicKeyMatch::MemberHandleMismatch => Err(crate::Error::build_config_error(format!(
+                "Local self key member_handle mismatch for kid '{}': expected '{}', got '{}'",
+                identity.kid(),
+                member_handle,
+                public_key.protected.subject_handle
+            ))),
+            PublicKeyMatch::KidMismatch => Err(crate::Error::build_config_error(format!(
+                "Local self key kid mismatch for member '{}': expected '{}', got '{}'",
+                member_handle,
+                identity.kid(),
+                public_key.protected.kid
+            ))),
         }
-
-        let public_key = load_public_key(keystore_root, member_handle.as_str(), identity.kid())?;
-        validate_keystore_identity(member_handle, identity, &public_key)?;
-        let resolved = TrustIdentity::from_public_key(&public_key)?;
-        Ok(resolved.sig_x() == identity.sig_x())
     }
-}
-
-fn validate_keystore_identity(
-    member_handle: &MemberHandle,
-    identity: &TrustIdentity,
-    public_key: &PublicKey,
-) -> Result<()> {
-    if public_key.protected.subject_handle != member_handle.as_str() {
-        return Err(crate::Error::build_config_error(format!(
-            "Local self key member_handle mismatch for kid '{}': expected '{}', got '{}'",
-            identity.kid(),
-            member_handle,
-            public_key.protected.subject_handle
-        )));
-    }
-    if public_key.protected.kid != identity.kid() {
-        return Err(crate::Error::build_config_error(format!(
-            "Local self key kid mismatch for member '{}': expected '{}', got '{}'",
-            member_handle,
-            identity.kid(),
-            public_key.protected.kid
-        )));
-    }
-    Ok(())
 }

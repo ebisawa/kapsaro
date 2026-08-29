@@ -4,7 +4,7 @@
 use super::*;
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace,
-    setup_trust_store_for_workspace, update_active_private_key_expires_at,
+    setup_trust_store_for_workspace, update_active_private_key_expires_at, EnvGuard,
 };
 use console::strip_ansi_codes;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
@@ -22,13 +22,9 @@ fn test_rewrap_requires_workspace() {
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
     let invalid_workspace = temp_dir.path().join("workspace-does-not-exist");
-    let output = with_vars(
-        [(
-            "KAPSARO_WORKSPACE",
-            Some(invalid_workspace.to_str().expect("invalid path as str")),
-        )],
-        || run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]),
-    );
+    let _guard = EnvGuard::new(&["KAPSARO_WORKSPACE"]);
+    std::env::set_var("KAPSARO_WORKSPACE", &invalid_workspace);
+    let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
 
     assert!(!output.status.success(), "Should fail without workspace");
 }
@@ -111,7 +107,8 @@ fn test_rewrap_quiet_keeps_failed_file_details_on_stderr() {
 
 #[cfg(unix)]
 #[test]
-fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
+fn test_rewrap_warns_about_insecure_trust_store_permissions() {
+    use crate::test_utils::member_handle;
     use std::os::unix::fs::PermissionsExt;
 
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
@@ -122,9 +119,6 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
         ALICE_MEMBER_HANDLE,
         &key_ctx,
     );
-
-    let trust_path = get_trust_store_file_path(temp_dir.path(), ALICE_MEMBER_HANDLE);
-    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let mut common_opts = default_common_options();
     common_opts.home = Some(temp_dir.path().to_path_buf());
@@ -140,18 +134,25 @@ fn test_rewrap_surfaces_insecure_trust_store_warning_on_stderr() {
         &[("KEY", "value")],
     );
 
-    let ssh_key = temp_dir.path().join(".ssh").join("test_ed25519");
-    cmd()
-        .arg("rewrap")
-        .arg("--workspace")
-        .arg(&workspace_dir)
-        .arg("--member-handle")
-        .arg(ALICE_MEMBER_HANDLE)
-        .env("KAPSARO_HOME", temp_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_key)
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Insecure permissions"));
+    let trust_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "rewrap must complete despite an insecure trust store: {stderr}"
+    );
+    assert!(
+        stderr.contains("Insecure permissions 0644"),
+        "missing warning: {stderr}"
+    );
+    assert!(
+        stderr.contains("(expected 0600)") && stderr.contains("chmod 0600"),
+        "warning must name the required permissions and the fix: {stderr}"
+    );
 }
 
 #[test]

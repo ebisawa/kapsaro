@@ -1,6 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Read-only queries over workspace member files, both active and incoming.
+//! Verifies each member document and collects per-entry warnings instead of failing the whole listing.
+
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
 use crate::feature::member::verification::{

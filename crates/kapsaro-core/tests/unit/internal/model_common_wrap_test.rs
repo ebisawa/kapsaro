@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::feature::envelope::wrap_set::{WrapAlgorithm, WrapSet};
+use crate::feature::envelope::wrap_set::WrapSet;
 use crate::model::common::WrapItem;
 use crate::model::wire::algorithm;
 
@@ -27,13 +27,7 @@ fn test_wrap_set_parse_validates_domain_fields() {
     let wrap_set = WrapSet::parse(&[wrap_item(ALICE, ALICE_KID)], "Document").unwrap();
     let item = wrap_set.find_by_kid_for_member(ALICE_KID, ALICE).unwrap();
 
-    assert_eq!(item.recipient_handle().as_str(), ALICE);
     assert_eq!(item.kid().as_str(), ALICE_KID);
-    assert_eq!(item.alg(), WrapAlgorithm::Hpke32_1_3);
-    assert_eq!(
-        item.alg().as_str(),
-        algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305
-    );
     assert_eq!(item.enc().as_bytes().len(), 32);
     assert_eq!(item.ciphertext().as_bytes().len(), 48);
 }
@@ -134,15 +128,13 @@ fn test_wrap_set_find_by_kid_for_member_rejects_recipient_mismatch() {
 }
 
 #[test]
-fn test_wrap_set_self_wrap_kids_preserves_order_and_dedupes() {
+fn test_wrap_set_self_wrap_kid_names_the_entry_addressed_to_the_member() {
     let wrap_set = WrapSet::parse(
         &[wrap_item(ALICE, ALICE_KID), wrap_item(BOB, BOB_KID)],
         "Document",
     )
     .unwrap();
 
-    let kids = wrap_set.self_wrap_kids(ALICE);
-
-    assert_eq!(kids.len(), 1);
-    assert_eq!(kids[0].as_str(), ALICE_KID);
+    assert_eq!(wrap_set.self_wrap_kid(ALICE).unwrap().as_str(), ALICE_KID);
+    assert_eq!(wrap_set.self_wrap_kid(BOB).unwrap().as_str(), BOB_KID);
 }

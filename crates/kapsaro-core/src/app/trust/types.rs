@@ -8,15 +8,3 @@ pub struct RemovedKnownKey {
     pub member_handle: String,
     pub kid: String,
 }
-
-#[derive(Debug)]
-pub struct TrustMutationResult<T> {
-    pub value: T,
-    pub warnings: Vec<String>,
-}
-
-impl<T> TrustMutationResult<T> {
-    pub fn new(value: T, warnings: Vec<String>) -> Self {
-        Self { value, warnings }
-    }
-}

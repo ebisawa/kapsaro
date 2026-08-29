@@ -17,9 +17,32 @@ pub mod primitives {
 pub mod operations {
     pub mod context {
         pub mod crypto {
-            pub use crate::feature::context::crypto::{
-                load_crypto_context_from_keystore, CryptoContext,
-            };
+            use std::path::PathBuf;
+
+            use crate::io::keystore::access::KeystoreAccess;
+            use crate::io::ssh::backend::SignatureBackend;
+            use crate::model::identity::MemberHandle;
+            use crate::Result;
+
+            pub use crate::feature::context::crypto::CryptoContext;
+
+            pub fn load_crypto_context_from_keystore(
+                keystore_root: PathBuf,
+                member_handle: &str,
+                explicit_kid: Option<&str>,
+                ssh_backend: Box<dyn SignatureBackend>,
+                ssh_pubkey: String,
+                workspace_path: Option<PathBuf>,
+            ) -> Result<CryptoContext> {
+                crate::feature::context::crypto::load_crypto_context_from_keystore(
+                    KeystoreAccess::open(keystore_root)?,
+                    MemberHandle::try_from(member_handle)?,
+                    explicit_kid,
+                    ssh_backend,
+                    ssh_pubkey,
+                    workspace_path,
+                )
+            }
         }
     }
     pub mod key {
@@ -56,7 +79,9 @@ pub mod operations {
 
             use crate::feature::member::add::build_member_addition_from_content;
             use crate::io::workspace::members::{save_member_content, MemberStatus};
+            use crate::support::fs::anchor::AnchoredDir;
             use crate::support::fs::load_text_with_limit;
+            use crate::support::fs::relative::DirectoryScope;
             use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
             use crate::support::path::format_path_relative_to_cwd;
             use crate::Result;
@@ -69,17 +94,22 @@ pub mod operations {
                 let content =
                     load_text_with_limit(file_path, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
                 let source_name = format_path_relative_to_cwd(file_path);
-                let addition = build_member_addition_from_content(&content, &source_name)?;
+                let member_handle = build_member_addition_from_content(&content, &source_name)?;
+                let workspace = AnchoredDir::open(
+                    workspace_path.to_path_buf(),
+                    DirectoryScope::Generic,
+                    "workspace root",
+                )?;
 
                 save_member_content(
-                    workspace_path,
+                    &workspace,
                     MemberStatus::Incoming,
-                    &addition.member_handle,
+                    &member_handle,
                     &content,
                     force,
                 )?;
 
-                Ok(addition.member_handle)
+                Ok(member_handle)
             }
         }
         pub mod verification {
@@ -124,18 +154,134 @@ pub mod storage {
     }
     pub mod keystore {
         pub mod active {
-            pub use crate::io::keystore::active::{load_active_kid, set_active_kid};
+            use std::path::Path;
+
+            use crate::io::keystore::access::KeystoreAccess;
+            use crate::model::identity::{Kid, MemberHandle};
+            use crate::Result;
+
+            pub fn load_active_kid(
+                member_handle: &str,
+                keystore_root: &Path,
+            ) -> Result<Option<String>> {
+                let access = KeystoreAccess::open(keystore_root)?;
+                let member_handle = MemberHandle::try_from(member_handle)?;
+                access
+                    .load_active_kid(&member_handle)
+                    .map(|kid| kid.map(Kid::into_string))
+            }
+
+            pub fn set_active_kid(
+                member_handle: &str,
+                kid: &str,
+                keystore_root: &Path,
+            ) -> Result<()> {
+                let access = KeystoreAccess::create(keystore_root)?;
+                access.set_active_kid_unchecked(
+                    &MemberHandle::try_from(member_handle)?,
+                    &Kid::try_from(kid)?,
+                )
+            }
         }
         pub mod member {
-            pub use crate::io::keystore::member::find_active_key_document;
+            use std::path::Path;
+
+            use crate::io::keystore::access::KeystoreAccess;
+            use crate::model::identity::MemberHandle;
+            use crate::model::public_key::PublicKey;
+            use crate::{ErrorKind, Result};
+
+            pub struct ActiveKeyFixture {
+                pub kid: String,
+                pub public_key: PublicKey,
+            }
+
+            pub fn find_active_key_document(
+                member_handle: &str,
+                keystore_root: &Path,
+            ) -> Result<Option<ActiveKeyFixture>> {
+                let access = KeystoreAccess::open(keystore_root)?;
+                let member_handle = MemberHandle::try_from(member_handle)?;
+                crate::io::keystore::member::find_active_key_document(&access, &member_handle).map(
+                    |document| {
+                        document.map(|document| ActiveKeyFixture {
+                            kid: document.kid.into_string(),
+                            public_key: document.public_key,
+                        })
+                    },
+                )
+            }
+
+            pub fn load_single_member_handle_from_keystore(
+                keystore_root: &Path,
+            ) -> Result<Option<String>> {
+                let access = match KeystoreAccess::open(keystore_root) {
+                    Ok(access) => access,
+                    Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+                    Err(error) => return Err(error),
+                };
+                crate::io::keystore::member::load_single_member_handle_from_keystore(&access)
+                    .map(|member| member.map(MemberHandle::into_string))
+            }
         }
         pub mod paths {
             pub use crate::io::keystore::paths::get_keystore_root_from_base;
         }
         pub mod storage {
-            pub use crate::io::keystore::storage::{
-                list_kids, load_private_key, save_key_pair_atomic,
-            };
+            use std::path::Path;
+
+            use crate::io::keystore::access::KeystoreAccess;
+            use crate::model::identity::{Kid, MemberHandle};
+            use crate::model::private_key::PrivateKey;
+            use crate::model::public_key::PublicKey;
+            use crate::Result;
+
+            pub fn list_kids(keystore_root: &Path, member_handle: &str) -> Result<Vec<String>> {
+                let access = KeystoreAccess::open(keystore_root)?;
+                access
+                    .list_kids(&MemberHandle::try_from(member_handle)?)
+                    .map(|kids| kids.into_iter().map(Kid::into_string).collect())
+            }
+
+            pub fn load_private_key(
+                keystore_root: &Path,
+                member_handle: &str,
+                kid: &str,
+            ) -> Result<PrivateKey> {
+                let access = KeystoreAccess::open(keystore_root)?;
+                access.load_private_key(
+                    &MemberHandle::try_from(member_handle)?,
+                    &Kid::try_from(kid)?,
+                )
+            }
+
+            pub fn load_public_key(
+                keystore_root: &Path,
+                member_handle: &str,
+                kid: &str,
+            ) -> Result<PublicKey> {
+                let access = KeystoreAccess::open(keystore_root)?;
+                access.load_public_key(
+                    &MemberHandle::try_from(member_handle)?,
+                    &Kid::try_from(kid)?,
+                )
+            }
+
+            pub fn save_key_pair_atomic(
+                keystore_root: &Path,
+                member_handle: &str,
+                kid: &str,
+                private_key: &PrivateKey,
+                public_key: &PublicKey,
+            ) -> Result<()> {
+                let access = KeystoreAccess::create(keystore_root)?;
+                access.save_key_pair_atomic(
+                    &MemberHandle::try_from(member_handle)?,
+                    &Kid::try_from(kid)?,
+                    private_key,
+                    public_key,
+                )
+            }
         }
     }
     pub mod ssh {
@@ -186,7 +332,38 @@ pub mod storage {
             pub use crate::io::trust::paths::get_trust_store_file_path;
         }
         pub mod store {
-            pub use crate::io::trust::store::save_trust_store;
+            use std::path::Path;
+
+            use crate::io::trust::paths::TRUST_DIR_NAME;
+            use crate::io::trust::store::save_trust_store_at;
+            use crate::model::trust_store::TrustStoreDocument;
+            use crate::support::fs::anchor::AnchoredDir;
+            use crate::support::fs::lock;
+            use crate::support::fs::relative::{ensure_child_dir_restricted_at, DirectoryScope};
+            use crate::{Error, Result};
+
+            pub fn save_trust_store(path: &Path, document: &TrustStoreDocument) -> Result<()> {
+                let trust_path = path.parent().ok_or_else(invalid_trust_store_path)?;
+                let base_path = trust_path.parent().ok_or_else(invalid_trust_store_path)?;
+                if trust_path.file_name().and_then(|name| name.to_str()) != Some(TRUST_DIR_NAME) {
+                    return Err(invalid_trust_store_path());
+                }
+                let base = AnchoredDir::create(
+                    base_path,
+                    DirectoryScope::LocalState,
+                    "test local state root",
+                )?;
+                let trust_dir = ensure_child_dir_restricted_at(&base, TRUST_DIR_NAME)?;
+                lock::with_exclusive_locked_directory(&trust_dir, |locked_trust_dir| {
+                    save_trust_store_at(&base, locked_trust_dir, path, document)
+                })
+            }
+
+            fn invalid_trust_store_path() -> Error {
+                Error::build_invalid_argument_error(
+                    "Trust store test path must be <base>/trust/<owner>.json".to_string(),
+                )
+            }
         }
     }
     pub mod verify_online {
@@ -223,9 +400,29 @@ pub mod domain {
     }
     pub mod public_key {
         pub use crate::model::public_key::{
-            Attestation, AttestationProof, AttestedKeyStatement, IdentityKeys, JwkOkpPublicKey,
-            PublicKey, PublicKeyProtected, VerifiedPublicKeyAttested, VerifiedRecipientKey,
+            Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
+            VerifiedRecipientKey,
         };
+
+        use crate::model::public_key::{
+            AttestationProof, AttestedKeyStatement, VerifiedPublicKeyAttested,
+        };
+        use crate::model::verification::{ExpiryProof, SelfSignatureProof};
+
+        /// Wrap a public key as a recipient without running the checks.
+        ///
+        /// The verified wrappers are minted where their checks run, so tests
+        /// that start from an already-trusted key get one from here instead of
+        /// assembling the proofs themselves.
+        pub fn build_unverified_recipient_key(public_key: PublicKey) -> VerifiedRecipientKey {
+            let statement = AttestedKeyStatement::new(
+                public_key.protected.keys.clone(),
+                AttestationProof::new(),
+            );
+            let attested =
+                VerifiedPublicKeyAttested::new(public_key, SelfSignatureProof::new(), statement);
+            VerifiedRecipientKey::new(attested, ExpiryProof::new())
+        }
     }
     pub mod signature {
         pub use crate::model::signature::KeyPossessionProof;
@@ -238,9 +435,6 @@ pub mod domain {
             KnownKey, KnownKeyApprovalVia, RecipientHandleHint, RecipientSetApprovalVia,
             RecipientSetRecord, TrustStoreProtected,
         };
-    }
-    pub mod verification {
-        pub use crate::model::verification::{ExpiryProof, SelfSignatureProof};
     }
     pub mod verified {
         pub use crate::model::verified::{DecryptionProof, VerifiedPrivateKey};
@@ -260,6 +454,36 @@ pub mod domain {
     }
 }
 pub mod helpers {
+    /// Build the failures a CLI recovery flow branches on.
+    ///
+    /// A recovery route is attached inside the crate, so a test outside it
+    /// cannot stand one up through the public builders. These name the same
+    /// conditions the real read paths report, and they name them the way those
+    /// paths do: the category the failure came in as, plus the route out of it.
+    pub mod recovery {
+        use crate::error::{
+            LOCAL_KEYSTORE_MISSING_RECOVERY, TRUST_SIGNER_KEY_MISSING_RECOVERY,
+            TRUST_STORE_RESET_REQUIRED_RECOVERY,
+        };
+        use crate::Error;
+
+        /// A stored trust store whose bytes would not parse.
+        pub fn build_unparsable_trust_store_error(message: impl Into<String>) -> Error {
+            Error::build_parse_error(message).with_recovery(TRUST_STORE_RESET_REQUIRED_RECOVERY)
+        }
+
+        /// A trust store whose signer key the keystore no longer holds.
+        pub fn build_missing_trust_signer_key_error(message: impl Into<String>) -> Error {
+            Error::build_invalid_operation_error(message)
+                .with_recovery(TRUST_SIGNER_KEY_MISSING_RECOVERY)
+        }
+
+        /// A local keystore that is not there to verify anything against.
+        pub fn build_local_keystore_missing_error(message: impl Into<String>) -> Error {
+            Error::build_invalid_operation_error(message)
+                .with_recovery(LOCAL_KEYSTORE_MISSING_RECOVERY)
+        }
+    }
     pub mod codec {
         pub mod base64_public {
             pub use crate::format::codec::base64_public::{

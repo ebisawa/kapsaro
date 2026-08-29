@@ -6,24 +6,25 @@
 //! Tests rotate, add-recipient, and remove-recipient via the app-level
 //! rewrap API since `file_op` is `pub(crate)`.
 
+use crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
+use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
-use crate::feature::decrypt::file::decrypt_file_document;
+use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::envelope::key_schedule::FileKeySchedule;
 use crate::feature::envelope::signature::sign_file_document;
 use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::feature::verify::file::verify_file_document;
 use crate::format::content::{EncContent, FileEncContent};
-use crate::io::keystore::storage::save_key_pair_atomic;
-use crate::io::keystore::storage::{list_kids, load_public_key};
 use crate::model::file_enc::FileEncDocument;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE};
 use std::fs;
 use tempfile::TempDir;
+use zeroize::Zeroizing;
 
 // ============================================================================
 // Helper functions
@@ -159,7 +160,7 @@ fn resign_with_invalid_key_possession(
 ) -> FileEncDocument {
     let keystore_root = temp_dir.path().join("keys");
     let signer_pub = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, kid).unwrap();
-    let wrong_content_key = MasterKey::new([0xA5; 32]);
+    let wrong_content_key = MasterKey::from_zeroizing(Zeroizing::new([0xA5; 32]));
     let wrong_mac_key = FileKeySchedule::extract(&wrong_content_key, &document.protected.sid)
         .unwrap()
         .derive_mac_key()
@@ -264,10 +265,10 @@ fn test_rotate_file_key_preserves_decryptability() {
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
     let verified = verify_file_document(&rewrapped_doc).unwrap();
     let decrypted =
-        decrypt_file_document(&verified, ALICE_MEMBER_HANDLE, kid, key_ctx.private_key()).unwrap();
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_HANDLE, &key_ctx).unwrap();
 
     assert_eq!(
-        decrypted.as_slice(),
+        decrypted.value.as_slice(),
         b"secret-file-content",
         "decrypted content must match original after key rotation"
     );
@@ -321,7 +322,7 @@ fn test_rewrap_file_rejects_invalid_key_possession_without_rotation() {
         .expect("tampered proof fixture must keep a valid Ed25519 signature");
 
     assert!(
-        decrypt_file_document(&verified, ALICE_MEMBER_HANDLE, kid, key_ctx.private_key(),).is_err(),
+        decrypt_file_document_with_context(&verified, ALICE_MEMBER_HANDLE, &key_ctx).is_err(),
         "fixture must be rejected by normal decrypt"
     );
 
@@ -486,15 +487,10 @@ fn test_replace_file_recipient_wraps_added_member_with_rotated_key() {
     let rewrapped_doc: FileEncDocument = serde_json::from_str(&rewrapped_json).unwrap();
     let verified = verify_file_document(&rewrapped_doc).unwrap();
 
-    let decrypted = decrypt_file_document(
-        &verified,
-        CAROL_MEMBER_HANDLE,
-        &carol_kid,
-        carol_ctx.private_key(),
-    )
-    .unwrap();
+    let decrypted =
+        decrypt_file_document_with_context(&verified, CAROL_MEMBER_HANDLE, &carol_ctx).unwrap();
 
-    assert_eq!(decrypted.as_slice(), b"secret-file-content");
+    assert_eq!(decrypted.value.as_slice(), b"secret-file-content");
     assert!(rewrapped_doc
         .protected
         .wrap

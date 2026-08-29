@@ -106,11 +106,6 @@ impl FileEncDocument {
     pub fn extract_protected_for_signing(&self) -> &FileEncDocumentProtected {
         &self.protected
     }
-
-    /// Derives the list of recipients from wrap items
-    pub fn recipients(&self) -> Vec<String> {
-        self.protected.recipients()
-    }
 }
 
 /// A FileEncDocument that has been verified to have a valid signature

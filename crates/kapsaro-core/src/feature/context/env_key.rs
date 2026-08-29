@@ -14,6 +14,7 @@ use crate::format::schema::document::parse_private_key_bytes;
 use crate::model::identity::MemberHandle;
 use crate::model::private_key::{PrivateKey, PrivateKeyAlgorithm};
 use crate::model::verified::VerifiedPrivateKey;
+use crate::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256;
 use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::secret::{SecretBytes, SecretString};
 use crate::{Error, Result};
@@ -115,8 +116,8 @@ fn parse_password_protected_private_key(json_bytes: &[u8]) -> Result<PrivateKey>
     match &private_key.protected.alg {
         PrivateKeyAlgorithm::Argon2id { .. } => Ok(private_key),
         _ => Err(Error::build_config_error(format!(
-            "{} must contain a password-protected key (argon2id-m64t3p4-hkdf-sha256)",
-            ENV_PRIVATE_KEY
+            "{} must contain a password-protected key ({})",
+            ENV_PRIVATE_KEY, PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256
         ))),
     }
 }

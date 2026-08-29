@@ -2,18 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fs;
 
-use crate::app::trust::list::{list_known_keys, list_recipient_sets};
+use crate::app::trust::list::{
+    list_known_keys_command, list_recipient_sets_command, resolve_trust_list_command,
+};
+use crate::app::trust::recovery::{
+    build_trust_store_reset_plan_from_list_command, observe_trust_store_recovery_from_list_command,
+};
 use crate::app_test_utils::build_test_command_options;
+use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::feature::trust::recipient_sets::compute_recipient_set_hash;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::io::trust::paths::get_trust_store_file_path;
-use crate::io::trust::store::save_trust_store;
 use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
 use crate::model::wire::format::LOCAL_TRUST_V1;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use crate::test_utils::{
+    create_local_state_dir, local_state_temp_dir, member_handle, setup_member_key_context,
+    setup_test_keystore_from_fixtures, write_local_state_file, EnvGuard,
+};
+use serial_test::serial;
+use std::env;
 use tempfile::TempDir;
 
 const KID_BOB: &str = "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0";
@@ -72,8 +83,30 @@ fn save_signed_trust_store_with_recipient_sets(
         recipient_sets,
     };
     let document = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
-    let path = get_trust_store_file_path(home.path(), ALICE_MEMBER_HANDLE);
+    let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
     save_trust_store(&path, &document).unwrap();
+}
+
+fn install_member_fixture(home: &TempDir, member_handle: &str) {
+    let source_home = setup_test_keystore_from_fixtures(member_handle);
+    fs::rename(
+        source_home.path().join("keys").join(member_handle),
+        home.path().join("keys").join(member_handle),
+    )
+    .unwrap();
+}
+
+fn save_member_config(home: &TempDir, member_handle: &str) {
+    write_local_state_file(
+        &home.path().join("config.toml"),
+        format!("member_handle = \"{member_handle}\"\n"),
+    );
+}
+
+fn save_invalid_trust_store(home: &TempDir, owner: &str) {
+    let path = get_trust_store_file_path(home.path(), &member_handle(owner));
+    create_local_state_dir(path.parent().unwrap());
+    write_local_state_file(&path, "invalid");
 }
 
 #[test]
@@ -82,7 +115,9 @@ fn test_list_known_keys_succeeds_without_ssh_signing_method() {
     save_signed_trust_store(&home);
 
     let options = build_test_command_options(home.path(), None);
-    let result = list_known_keys(&options, ALICE_MEMBER_HANDLE).unwrap();
+    let command =
+        resolve_trust_list_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let result = list_known_keys_command(&command).unwrap();
 
     assert_eq!(result.items.len(), 2);
     assert_eq!(result.items[0].kid, KID_BOB);
@@ -94,10 +129,11 @@ fn test_list_recipient_sets_returns_empty_when_store_is_missing() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
 
-    let result = list_recipient_sets(&options, ALICE_MEMBER_HANDLE).unwrap();
+    let command =
+        resolve_trust_list_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let result = list_recipient_sets_command(&command).unwrap();
 
     assert!(result.items.is_empty());
-    assert!(result.warnings.is_empty());
 }
 
 #[test]
@@ -112,7 +148,9 @@ fn test_list_recipient_sets_preserves_signed_store_fields() {
     save_signed_trust_store_with_recipient_sets(&home, vec![recipient_set]);
     let options = build_test_command_options(home.path(), None);
 
-    let result = list_recipient_sets(&options, ALICE_MEMBER_HANDLE).unwrap();
+    let command =
+        resolve_trust_list_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let result = list_recipient_sets_command(&command).unwrap();
 
     assert_eq!(result.items.len(), 1);
     assert_eq!(result.items[0].sid, SID_ENV_FILE);
@@ -121,4 +159,141 @@ fn test_list_recipient_sets_preserves_signed_store_fields() {
         result.items[0].recipient_kids,
         vec![KID_BOB.to_string(), KID_CHARLIE.to_string()]
     );
+}
+
+#[test]
+#[serial]
+fn test_trust_list_with_explicit_owner_keeps_missing_home_absent() {
+    let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
+    env::remove_var("KAPSARO_MEMBER_HANDLE");
+    let parent = local_state_temp_dir();
+    let missing_home = parent.path().join("missing-home");
+    let options = build_test_command_options(&missing_home, None);
+
+    let command =
+        resolve_trust_list_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let keys = list_known_keys_command(&command).unwrap();
+    let recipients = list_recipient_sets_command(&command).unwrap();
+
+    assert!(keys.items.is_empty());
+    assert!(recipients.items.is_empty());
+    assert!(!missing_home.exists());
+}
+
+#[test]
+#[serial]
+fn test_trust_list_with_environment_owner_keeps_missing_home_absent() {
+    let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
+    env::set_var("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE);
+    let parent = local_state_temp_dir();
+    let missing_home = parent.path().join("missing-home");
+    let options = build_test_command_options(&missing_home, None);
+
+    let command = resolve_trust_list_command(&options, None).unwrap();
+    let keys = list_known_keys_command(&command).unwrap();
+    let recipients = list_recipient_sets_command(&command).unwrap();
+
+    assert!(keys.items.is_empty());
+    assert!(recipients.items.is_empty());
+    assert!(!missing_home.exists());
+}
+
+#[test]
+#[serial]
+fn test_trust_list_missing_home_requires_owner() {
+    let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
+    env::remove_var("KAPSARO_MEMBER_HANDLE");
+    let parent = local_state_temp_dir();
+    let missing_home = parent.path().join("missing-home");
+    let options = build_test_command_options(&missing_home, None);
+
+    let error = resolve_trust_list_command(&options, None).unwrap_err();
+
+    assert_eq!(error.kind(), crate::ErrorKind::Config);
+    assert_eq!(error.recovery(), Some("E_MEMBER_HANDLE_REQUIRED"));
+    assert!(error
+        .format_user_message()
+        .contains("member handle is required"));
+    assert!(!missing_home.exists());
+}
+
+#[test]
+fn test_trust_list_with_document_and_missing_keystore_preserves_document() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+    fs::remove_dir_all(home.path().join("keys")).unwrap();
+    let options = build_test_command_options(home.path(), None);
+
+    let command =
+        resolve_trust_list_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let token = observe_trust_store_recovery_from_list_command(&command);
+    let error = list_known_keys_command(&command).unwrap_err();
+
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert_eq!(error.recovery(), Some("E_LOCAL_KEYSTORE_MISSING"));
+    let plan_error = build_trust_store_reset_plan_from_list_command(&command, token, error, true)
+        .expect_err("missing local keystore must not create a reset plan");
+
+    assert_eq!(plan_error.recovery(), Some("E_LOCAL_KEYSTORE_MISSING"));
+    assert!(get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE)).exists());
+}
+
+#[test]
+#[serial]
+fn test_trust_list_command_keeps_owner_after_config_change() {
+    let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_member_fixture(&home, "bob@example.com");
+    let recipient_set = build_recipient_set(
+        SID_ENV_FILE,
+        &[KID_BOB, KID_CHARLIE],
+        "2026-03-29T12:42:00Z",
+    );
+    save_signed_trust_store_with_recipient_sets(&home, vec![recipient_set]);
+    save_invalid_trust_store(&home, "bob@example.com");
+    save_member_config(&home, ALICE_MEMBER_HANDLE);
+    let options = build_test_command_options(home.path(), None);
+    let command = resolve_trust_list_command(&options, None).unwrap();
+    save_member_config(&home, "bob@example.com");
+
+    let keys = list_known_keys_command(&command).unwrap();
+    let recipients = list_recipient_sets_command(&command).unwrap();
+
+    assert_eq!(keys.items.len(), 2);
+    assert_eq!(recipients.items.len(), 1);
+    let replacement_command = resolve_trust_list_command(&options, None).unwrap();
+    assert!(list_known_keys_command(&replacement_command).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+#[serial]
+fn test_trust_list_command_keeps_home_and_fallback_after_path_swap() {
+    let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let replacement_home = setup_test_keystore_from_fixtures("bob@example.com");
+    let recipient_set = build_recipient_set(
+        SID_ENV_FILE,
+        &[KID_BOB, KID_CHARLIE],
+        "2026-03-29T12:42:00Z",
+    );
+    save_signed_trust_store_with_recipient_sets(&home, vec![recipient_set]);
+    save_invalid_trust_store(&replacement_home, "bob@example.com");
+    let options = build_test_command_options(home.path(), None);
+    let command = resolve_trust_list_command(&options, None).unwrap();
+    let opened_home = home.path().with_extension("opened");
+    fs::rename(home.path(), &opened_home).unwrap();
+    fs::rename(replacement_home.path(), home.path()).unwrap();
+
+    let keys = list_known_keys_command(&command).unwrap();
+    let recipients = list_recipient_sets_command(&command).unwrap();
+
+    assert_eq!(keys.items.len(), 2);
+    assert_eq!(recipients.items.len(), 1);
+    let replacement_command = resolve_trust_list_command(&options, None).unwrap();
+    assert!(list_known_keys_command(&replacement_command).is_err());
+    drop(replacement_command);
+    drop(command);
+    fs::rename(home.path(), replacement_home.path()).unwrap();
+    fs::rename(opened_home, home.path()).unwrap();
 }

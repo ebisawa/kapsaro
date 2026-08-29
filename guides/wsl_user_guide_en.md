@@ -42,11 +42,9 @@ Save the public key of the SSH key you want to sign with, the one held in 1Passw
 
 ## Where to place the workspace
 
-Keep the workspace and `KAPSARO_HOME` on the WSL2 filesystem, under your Linux home directory rather than under `/mnt/c`.
+Place the workspace and `KAPSARO_HOME` on the WSL2 filesystem, under your Linux home directory rather than under `/mnt/c`.
 
-Paths under `/mnt/c` are Windows volumes surfaced through a translation layer. That layer reports permissions that do not correspond to real POSIX modes, so the owner-only checks kapsaro performs on the keystore and the local trust store cannot tell a protected file from a world-readable one. The security design treats those permissions as an operational responsibility, and on `/mnt/c` there is nothing for it to rely on.
-
-Run `kapsaro doctor` after moving a workspace; it reports the permission chain it can verify.
+kapsaro delegates the protection of local files to the operating system's access control. Paths under `/mnt/c` are Windows volumes surfaced through a translation layer, and operation on the Windows filesystem is not supported.
 
 ## References
 

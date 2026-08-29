@@ -5,8 +5,7 @@
 //! Covers explicit paths, auto-detection, and environment overrides.
 
 use crate::io::workspace::detection::{detect_workspace_root, resolve_workspace};
-use crate::test_utils::EnvGuard;
-use serial_test::serial;
+use crate::test_utils::{with_temp_cwd, EnvGuard};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -64,7 +63,7 @@ fn test_detect_workspace_without_git_uses_current_dot_kapsaro() {
 }
 
 #[test]
-fn test_detect_workspace_without_git_does_not_search_parent() {
+fn test_detect_workspace_without_git_stops_at_the_current_directory() {
     let temp = TempDir::new().unwrap();
     let root_path = temp.path().canonicalize().unwrap();
     let workspace_root = root_path.join(".kapsaro");
@@ -166,24 +165,19 @@ fn test_resolve_workspace_with_explicit_option() {
 }
 
 #[test]
-#[serial]
 fn test_resolve_workspace_ignores_environment_variable() {
     let _guard = EnvGuard::new(&["KAPSARO_WORKSPACE"]);
-    let original_dir = env::current_dir().unwrap();
     let current = TempDir::new().unwrap();
     let env_workspace = TempDir::new().unwrap();
     let (_repo_root, env_path) = build_workspace(&env_workspace);
     env::set_var("KAPSARO_WORKSPACE", &env_path);
-    env::set_current_dir(current.path()).unwrap();
 
-    let result = resolve_workspace(None);
+    let result = with_temp_cwd(current.path(), || resolve_workspace(None));
+
     assert!(result.is_err());
-
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
-#[serial]
 fn test_resolve_workspace_fallback_to_search() {
     let _guard = EnvGuard::new(&["KAPSARO_WORKSPACE"]);
 
@@ -194,21 +188,15 @@ fn test_resolve_workspace_fallback_to_search() {
     let sub_dir = repo_root.join("subdir");
     fs::create_dir(&sub_dir).unwrap();
 
-    // No option, no env var, should search from current directory
-    // We need to change directory for this test
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(&sub_dir).unwrap();
-
     // Ensure no environment variable is set
     env::remove_var("KAPSARO_WORKSPACE");
 
-    let result = resolve_workspace(None);
+    // No option, no env var, should search from current directory
+    let result = with_temp_cwd(&sub_dir, || resolve_workspace(None));
+
     assert!(result.is_ok());
     let workspace = result.unwrap();
     assert_eq!(workspace.root_path, workspace_root);
-
-    // Restore original directory
-    env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]

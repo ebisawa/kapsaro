@@ -5,9 +5,11 @@
 
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
+use subtle::ConstantTimeEq;
 
-use crate::feature::context::expiry::{LocalKeyPairExpiry, VerifiedExpiresAt};
+use crate::feature::context::expiry::LocalKeyPairExpiry;
 use crate::format::codec::base64_public::decode_base64url_nopad_array;
+use crate::io::keystore::access::KeystoreAccess;
 use crate::io::keystore::public_key_source::PublicKeySource;
 use crate::io::ssh::backend::SignatureBackend;
 use crate::model::identity::{Kid, MemberHandle};
@@ -21,15 +23,15 @@ mod loader;
 mod signing;
 
 pub use kem::decode_kem_secret_key;
-pub use loader::{
-    build_local_key_access, build_verified_private_key_from_password,
-    load_crypto_context_from_keystore,
+pub use loader::build_verified_private_key_from_password;
+pub(crate) use loader::{
+    build_signing_key, load_crypto_context_from_keystore,
+    load_crypto_context_from_keystore_with_selected_kid,
 };
-pub(crate) use loader::{build_signing_key, load_verified_private_key_from_keystore};
 pub use signing::{build_signing_context, SigningContext, VerifiedSigningContext};
 
 pub struct LocalKeyAccess {
-    keystore_root: PathBuf,
+    keystore_access: KeystoreAccess,
     ssh_pubkey: String,
     ssh_backend: Box<dyn SignatureBackend>,
 }
@@ -39,6 +41,9 @@ pub struct CryptoContext {
     member_handle: MemberHandle,
     kid: Kid,
     pub(crate) pub_key_source: Box<dyn PublicKeySource>,
+    // Never read by crate code: it is surfaced only through `workspace_path()`,
+    // which the `cli-test-support` test harness uses to locate the workspace.
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     workspace_path: Option<PathBuf>,
     private_key: VerifiedPrivateKey,
     signing_key: SigningKey,
@@ -53,6 +58,18 @@ pub(crate) struct LocalKeyIdentity {
     member_handle: MemberHandle,
     kid: Kid,
     sig_x: [u8; 32],
+}
+
+/// How a stored public key stands against the identity of a local key.
+///
+/// The mismatches are kept apart so callers that report them can say which of
+/// the three parts disagreed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PublicKeyMatch {
+    Matches,
+    MemberHandleMismatch,
+    KidMismatch,
+    SignaturePublicKeyMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,12 +105,12 @@ pub(crate) enum DecryptionKeyResolution<'a> {
 
 impl LocalKeyAccess {
     fn new(
-        keystore_root: PathBuf,
+        keystore_access: KeystoreAccess,
         ssh_pubkey: String,
         ssh_backend: Box<dyn SignatureBackend>,
     ) -> Self {
         Self {
-            keystore_root,
+            keystore_access,
             ssh_pubkey,
             ssh_backend,
         }
@@ -109,16 +126,27 @@ impl LocalKeyIdentity {
         }
     }
 
-    pub(crate) fn matches_public_key(&self, public_key: &PublicKey) -> Result<bool> {
+    /// Compare a stored public key against this identity, naming what differs.
+    ///
+    /// The Ed25519 public key is compared in constant time; the member handle
+    /// and key id are labels the document carries in the clear.
+    pub(crate) fn check_public_key(&self, public_key: &PublicKey) -> Result<PublicKeyMatch> {
         if public_key.protected.subject_handle != self.member_handle.as_str() {
-            return Ok(false);
+            return Ok(PublicKeyMatch::MemberHandleMismatch);
         }
         if public_key.protected.kid != self.kid.as_str() {
-            return Ok(false);
+            return Ok(PublicKeyMatch::KidMismatch);
         }
-        let public_sig_x =
+        let public_sig_x: [u8; 32] =
             decode_base64url_nopad_array(&public_key.protected.keys.sig.x, "Ed25519 public key")?;
-        Ok(public_sig_x == self.sig_x)
+        if !bool::from(public_sig_x.as_slice().ct_eq(self.sig_x.as_slice())) {
+            return Ok(PublicKeyMatch::SignaturePublicKeyMismatch);
+        }
+        Ok(PublicKeyMatch::Matches)
+    }
+
+    pub(crate) fn matches_public_key(&self, public_key: &PublicKey) -> Result<bool> {
+        Ok(self.check_public_key(public_key)? == PublicKeyMatch::Matches)
     }
 
     pub(crate) fn from_public_key(public_key: &PublicKey) -> Result<Self> {
@@ -126,7 +154,7 @@ impl LocalKeyIdentity {
             decode_base64url_nopad_array(&public_key.protected.keys.sig.x, "Ed25519 public key")?;
         Ok(Self::new(
             MemberHandle::try_from(public_key.protected.subject_handle.clone())?,
-            Kid::try_from(public_key.protected.kid.clone())?,
+            Kid::from_canonical(public_key.protected.kid.clone())?,
             sig_x,
         ))
     }
@@ -195,6 +223,7 @@ impl CryptoContext {
         self.kid.as_str()
     }
 
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn private_key(&self) -> &VerifiedPrivateKey {
         &self.private_key
     }
@@ -203,6 +232,7 @@ impl CryptoContext {
         &self.signing_key
     }
 
+    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
     pub fn workspace_path(&self) -> Option<&Path> {
         self.workspace_path.as_deref()
     }
@@ -211,12 +241,12 @@ impl CryptoContext {
         self.local_key_expiry.primary_expires_at()
     }
 
-    pub fn load_signer_public_key(&self) -> Result<PublicKey> {
-        self.pub_key_source.load_public_key(self.member_handle())
-    }
-
     pub(crate) fn member_handle_id(&self) -> &MemberHandle {
         &self.member_handle
+    }
+
+    pub(crate) fn kid_id(&self) -> &Kid {
+        &self.kid
     }
 
     pub(crate) fn self_signature_public_key_x(&self) -> [u8; 32] {
@@ -235,10 +265,10 @@ impl CryptoContext {
         self.local_key_expiry.build_signing_warning()
     }
 
-    pub(crate) fn local_keystore_root(&self) -> Option<&Path> {
+    pub(crate) fn local_keystore_access(&self) -> Option<&KeystoreAccess> {
         self.local_key_access
             .as_ref()
-            .map(|access| access.keystore_root.as_path())
+            .map(|access| &access.keystore_access)
     }
 }
 

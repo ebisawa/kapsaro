@@ -3,15 +3,19 @@
 
 //! Integration tests for `key activate` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, TEST_MEMBER_HANDLE};
+use crate::cli::common::{
+    cmd, generate_temp_ssh_keypair, make_secret_home, save_trust_store_signed_by_active_key,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+};
+use crate::cli::key::install_secondary_member_fixture;
 use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use std::fs;
-use tempfile::TempDir;
 
 #[test]
 fn test_key_activate_explicit_kid() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -73,7 +77,7 @@ fn test_key_activate_explicit_kid() {
 
 #[test]
 fn test_key_activate_latest() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -126,7 +130,7 @@ fn test_key_activate_latest() {
 
 #[test]
 fn test_key_activate_accepts_display_kid() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = make_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -177,4 +181,54 @@ fn test_key_activate_accepts_display_kid() {
     assert_eq!(active_kid, Some(target));
 
     drop(ssh_temp);
+}
+
+/// Activation never signs, so it reports rather than fixes a trust store that
+/// still leans on the key being replaced.
+#[test]
+fn test_key_activate_reports_a_trust_store_signed_by_another_key() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
+    let signer_kid =
+        save_trust_store_signed_by_active_key(&home, ALICE_MEMBER_HANDLE, Vec::new(), Vec::new());
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--no-activate")
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .arg("--home")
+        .arg(home.path())
+        .env("KAPSARO_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
+        .assert()
+        .success();
+    let member_dir = home.path().join("keys").join(ALICE_MEMBER_HANDLE);
+    let rotated_kid = fs::read_dir(&member_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_str().unwrap().to_string())
+        .find(|kid| kid != &signer_kid)
+        .expect("a second key must exist");
+
+    let assert = cmd()
+        .arg("key")
+        .arg("activate")
+        .arg(&rotated_kid)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .arg("--home")
+        .arg(home.path())
+        .env("KAPSARO_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
+        .assert()
+        .success();
+
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        stderr.contains("Local trust store is still signed by kid")
+            && stderr.contains("kapsaro trust resign --member-handle alice@example.com",),
+        "activation must point at the command that moves the signature, got: {stderr}"
+    );
 }

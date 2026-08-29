@@ -3,7 +3,7 @@
 
 //! Shared runner for external SSH commands.
 
-use super::build_ssh_child_env;
+use super::{build_ssh_child_env, remove_ssh_agent_socket_from_child};
 use crate::io::process::set_child_env_os;
 use crate::io::ssh::agent::socket::resolve_agent_socket_path;
 use crate::io::ssh::SshError;
@@ -16,6 +16,7 @@ use std::string::FromUtf8Error;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum AgentSocketPolicy {
+    Disabled,
     Optional,
     Required,
 }
@@ -26,6 +27,17 @@ pub(super) struct SshCommandRunner {
 }
 
 impl SshCommandRunner {
+    /// Runner for a command that signs or reads with a key file alone.
+    ///
+    /// The agent socket is neither resolved nor inherited, so the operator's
+    /// agent is left untouched by work it has no part in.
+    pub(super) fn without_agent(program: impl Into<String>) -> Self {
+        Self {
+            program: program.into(),
+            agent_socket_policy: AgentSocketPolicy::Disabled,
+        }
+    }
+
     pub(super) fn optional_agent(program: impl Into<String>) -> Self {
         Self {
             program: program.into(),
@@ -92,18 +104,28 @@ impl SshCommandRunner {
         })
     }
 
+    /// Build the child command with the agent socket this policy allows.
+    ///
+    /// The policy is read once: a disabled agent both contributes no socket and
+    /// strips the inherited one, so deciding twice could leave the two halves
+    /// disagreeing and let the operator's agent through.
     fn command(&self) -> Result<Command> {
         let mut command = Command::new(&self.program);
-        let agent_socket = self.agent_socket()?;
-        set_child_env_os(&mut command, &build_ssh_child_env(agent_socket.as_deref()));
-        Ok(command)
-    }
-
-    fn agent_socket(&self) -> Result<Option<std::path::PathBuf>> {
         match self.agent_socket_policy {
-            AgentSocketPolicy::Optional => Ok(resolve_agent_socket_path().ok()),
-            AgentSocketPolicy::Required => resolve_agent_socket_path().map(Some),
+            AgentSocketPolicy::Disabled => {
+                set_child_env_os(&mut command, &build_ssh_child_env(None));
+                remove_ssh_agent_socket_from_child(&mut command);
+            }
+            AgentSocketPolicy::Optional => {
+                let agent_socket = resolve_agent_socket_path().ok();
+                set_child_env_os(&mut command, &build_ssh_child_env(agent_socket.as_deref()));
+            }
+            AgentSocketPolicy::Required => {
+                let agent_socket = resolve_agent_socket_path()?;
+                set_child_env_os(&mut command, &build_ssh_child_env(Some(&agent_socket)));
+            }
         }
+        Ok(command)
     }
 }
 

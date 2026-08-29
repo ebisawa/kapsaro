@@ -1,10 +1,16 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use kapsaro_core::api::diagnostics::{
+    DiagnosticBatch, DiagnosticCode, DiagnosticCompleteness, DiagnosticTruncation,
+    LocalStateDiagnostic,
+};
 use kapsaro_core::api::file::{
     FileEncArtifact, FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
 };
-use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, RecipientKeys};
+use kapsaro_core::api::key::{
+    KeyContext, KeyContextOptions, Kid, LocalKeyStore, MemberHandle, RecipientKeys,
+};
 use kapsaro_core::api::kv::{
     AuthorizedKvMutation, KvDisclosedEntry, KvEncArtifact, KvInputEntry, KvMutationOperation,
     KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact,
@@ -16,13 +22,29 @@ use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::secret::{SecretBytes, SecretString};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
 use kapsaro_core::api::trust::{
-    CurrentMemberSnapshot, LocalTrustStore, RecipientSetSubject, TrustApproval, TrustDecision,
-    TrustPolicyEvaluator, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
-    VerifiedLocalTrustStoreLoadResult,
+    ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, RecipientSetSubject,
+    TrustApproval, TrustDecision, TrustPolicyEvaluator, TrustRecipientHandleHint, TrustReviewKind,
+    TrustReviewRequest, VerifiedLocalTrustStore, VerifiedLocalTrustStoreLoadResult,
 };
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::error::Error as StdError;
 use zeroize::Zeroizing;
+
+/// Temporary directory usable as a local state root.
+///
+/// Local state refuses a path any other user can write, and `tempdir` applies
+/// the process umask, so a bare temporary directory is group-writable wherever
+/// the developer runs with a 002 umask.
+fn local_state_tempdir() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("tempdir");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("restrict local state tempdir");
+    }
+    dir
+}
 
 struct StubSshBackend;
 
@@ -39,14 +61,16 @@ impl SshSignatureBackend for StubSshBackend {
 
 #[test]
 fn api_exposes_use_case_modules() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let key_store = LocalKeyStore::new(temp.path().join("keys"));
-    let trust_store = LocalTrustStore::new(temp.path(), "alice@example.com".to_string());
+    let temp = local_state_tempdir();
+    let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
+    let key_store = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let trust_store = LocalTrustStore::open(temp.path(), member_handle).expect("open trust store");
     let _signature = kapsaro_core::api::ssh::SshRawSignature::new([3u8; 64]);
     let _secret = kapsaro_core::api::secret::SecretString::new("secret".to_string());
     let _bytes = kapsaro_core::api::secret::SecretBytes::new(vec![1, 2, 3]);
     let _options = kapsaro_core::api::operation::OperationOptions::default();
     let _online = kapsaro_core::api::online::GitHubOnlineVerifier::new();
+    let _warnings = kapsaro_core::api::diagnostics::take_local_state_warnings();
 
     assert_eq!(key_store.root(), temp.path().join("keys").as_path());
     assert_eq!(
@@ -56,20 +80,46 @@ fn api_exposes_use_case_modules() {
 }
 
 #[test]
+fn test_local_state_facade_debug_names_only_the_facade() {
+    let temp = local_state_tempdir();
+    let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
+    let key_store = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let trust_store = LocalTrustStore::open(temp.path(), member_handle).expect("open trust store");
+
+    assert_eq!(format!("{key_store:?}"), "LocalKeyStore { .. }");
+    assert_eq!(format!("{trust_store:?}"), "LocalTrustStore { .. }");
+}
+
+#[test]
 fn key_context_options_group_runtime_inputs() {
+    let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
     let _options = KeyContextOptions::new(
-        "alice@example.com",
+        member_handle,
         Box::new(StubSshBackend),
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA".to_string(),
     )
-    .with_kid("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+    .with_kid(Kid::try_from("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("valid kid"))
     .with_workspace_path(std::path::PathBuf::from("/tmp/workspace"));
 
     let _load_key_context = LocalKeyStore::load_key_context;
 }
 
 #[test]
+fn test_member_handle_deserialization_path_like_value_error() {
+    for value in ["", "../outside", "/tmp/outside", "alice/bob", r"alice\bob"] {
+        let serialized = serde_json::to_string(value).expect("serialize test value");
+        let error = serde_json::from_str::<MemberHandle>(&serialized)
+            .expect_err("path-like member handle must be rejected");
+        assert!(error.to_string().contains("member_handle"));
+    }
+}
+
+#[test]
 fn trust_store_exposes_verified_opaque_load_names() {
+    let _open: fn(std::path::PathBuf, MemberHandle) -> Result<LocalTrustStore> =
+        LocalTrustStore::open;
+    let _create: fn(std::path::PathBuf, MemberHandle) -> Result<LocalTrustStore> =
+        LocalTrustStore::create;
     let _load_verified = LocalTrustStore::load_verified;
 
     assert!(std::any::type_name::<TrustApproval>().contains("TrustApproval"));
@@ -77,9 +127,10 @@ fn trust_store_exposes_verified_opaque_load_names() {
 
 #[test]
 fn missing_trust_store_loads_as_none() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let key_store = LocalKeyStore::new(temp.path().join("keys"));
-    let trust_store = LocalTrustStore::new(temp.path(), "alice@example.com".to_string());
+    let temp = local_state_tempdir();
+    let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
+    let key_store = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let trust_store = LocalTrustStore::open(temp.path(), member_handle).expect("open trust store");
 
     assert!(trust_store
         .load_verified(&key_store)
@@ -244,24 +295,28 @@ fn test_kv_artifact_io_methods_pinned() {
 
 #[test]
 fn test_local_key_store_methods_pinned() {
-    // Pin list_members/list_kids/load_active_kid/set_active_kid/load_recipient_keys.
-    let _list_members: fn(&LocalKeyStore) -> Result<Vec<String>> = LocalKeyStore::list_members;
-    let _list_kids: fn(&LocalKeyStore, &str) -> Result<Vec<String>> = LocalKeyStore::list_kids;
-    let _load_active_kid: fn(&LocalKeyStore, &str) -> Result<Option<String>> =
+    // Pin construction and member-handle-bound method shapes.
+    let _open: fn(std::path::PathBuf) -> Result<LocalKeyStore> = LocalKeyStore::open;
+    let _create: fn(std::path::PathBuf) -> Result<LocalKeyStore> = LocalKeyStore::create;
+    let _list_members: fn(&LocalKeyStore) -> Result<Vec<MemberHandle>> =
+        LocalKeyStore::list_members;
+    let _list_kids: fn(&LocalKeyStore, &MemberHandle) -> Result<Vec<Kid>> =
+        LocalKeyStore::list_kids;
+    let _load_active_kid: fn(&LocalKeyStore, &MemberHandle) -> Result<Option<Kid>> =
         LocalKeyStore::load_active_kid;
-    let _set_active_kid: fn(&LocalKeyStore, &str, &str) -> Result<()> =
+    let _set_active_kid: fn(&LocalKeyStore, &MemberHandle, &Kid) -> Result<()> =
         LocalKeyStore::set_active_kid;
     // load_recipient_keys is generic; call the monomorphised version via a concrete iterator.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let ks = LocalKeyStore::new(temp.path().join("keys"));
-    let _ = ks.load_recipient_keys(std::iter::empty::<String>());
+    let temp = local_state_tempdir();
+    let ks = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let _ = ks.load_recipient_keys(std::iter::empty::<MemberHandle>());
 }
 
 #[test]
 fn test_key_context_public_accessors_pinned() {
     // Pin member_handle/kid/expires_at method shapes on KeyContext.
-    let _member_handle: fn(&KeyContext) -> &str = KeyContext::member_handle;
-    let _kid: fn(&KeyContext) -> &str = KeyContext::kid;
+    let _member_handle: fn(&KeyContext) -> &MemberHandle = KeyContext::member_handle;
+    let _kid: fn(&KeyContext) -> &Kid = KeyContext::kid;
     let _expires_at: fn(&KeyContext) -> &str = KeyContext::expires_at;
 }
 
@@ -279,11 +334,11 @@ fn test_online_verification_types_pinned() {
     let _verify_keystore_member: fn(
         &GitHubOnlineVerifier,
         &LocalKeyStore,
-        &str,
-        Option<&str>,
+        &MemberHandle,
+        Option<&Kid>,
     ) -> Result<OnlineVerificationResult> = GitHubOnlineVerifier::verify_keystore_member;
     // Pin OnlineVerificationResult accessors.
-    let _member_handle: fn(&OnlineVerificationResult) -> &str =
+    let _member_handle: fn(&OnlineVerificationResult) -> &MemberHandle =
         OnlineVerificationResult::member_handle;
     let _status: fn(&OnlineVerificationResult) -> OnlineVerificationStatus =
         OnlineVerificationResult::status;
@@ -315,6 +370,97 @@ fn test_operation_options_methods_pinned() {
 }
 
 #[test]
+fn test_diagnostics_take_local_state_warnings_pinned() {
+    // Pin the take_local_state_warnings method shape.
+    let _take_local_state_warnings: fn() -> DiagnosticBatch =
+        kapsaro_core::api::diagnostics::take_local_state_warnings;
+    let _code: fn(&LocalStateDiagnostic) -> DiagnosticCode = LocalStateDiagnostic::code;
+    let _path: fn(&LocalStateDiagnostic) -> &std::path::Path = LocalStateDiagnostic::path;
+    let _reason: fn(&LocalStateDiagnostic) -> &str = LocalStateDiagnostic::reason;
+    let _diagnostics: fn(&DiagnosticBatch) -> &[LocalStateDiagnostic] =
+        DiagnosticBatch::diagnostics;
+    let _into_diagnostics: fn(DiagnosticBatch) -> Vec<LocalStateDiagnostic> =
+        DiagnosticBatch::into_diagnostics;
+    let _dropped_at_least: fn(DiagnosticTruncation) -> usize =
+        DiagnosticTruncation::dropped_at_least;
+    let _retained_limit: fn(DiagnosticTruncation) -> usize = DiagnosticTruncation::retained_limit;
+
+    assert_eq!(
+        DiagnosticCode::LocalStatePermissions.as_str(),
+        "W_LOCAL_STATE_PERMISSIONS"
+    );
+}
+
+/// A batch taken from a sink nothing wrote to carries no findings and says so.
+#[test]
+fn test_diagnostics_empty_batch_is_complete() {
+    let batch = kapsaro_core::api::diagnostics::take_local_state_warnings();
+
+    assert!(batch.diagnostics().is_empty());
+    assert_eq!(batch.completeness(), DiagnosticCompleteness::Complete);
+}
+
+/// A keystore whose members are all reachable by other users produces one
+/// finding per member, so a wide enough tree passes the bound on what one batch
+/// holds. The batch has to say how much it left behind: a capped list that read
+/// as the whole of the finding would tell the operator to repair 64 entries and
+/// leave the rest of the tree open.
+#[cfg(unix)]
+#[test]
+fn test_diagnostics_batch_past_the_bound_reports_what_it_left_behind() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Members to install. The batch holds 64, so this leaves a known remainder.
+    const MEMBER_COUNT: usize = 70;
+    const RETAINED_LIMIT: usize = 64;
+
+    let temp = local_state_tempdir();
+    let keystore_root = temp.path().join("keys");
+    let key_store = LocalKeyStore::create(&keystore_root).expect("create keystore");
+    let member_handles = (0..MEMBER_COUNT)
+        .map(|index| {
+            let handle = MemberHandle::try_from(format!("member{index:03}@example.com"))
+                .expect("valid member handle");
+            let member_dir = keystore_root.join(handle.as_str());
+            std::fs::create_dir(&member_dir).expect("create member directory");
+            let active = member_dir.join("active");
+            std::fs::write(&active, "0123456789ABCDEF0123456789ABCDEF").expect("write active kid");
+            std::fs::set_permissions(&active, std::fs::Permissions::from_mode(0o600))
+                .expect("restrict active marker");
+            // The member directory is the single finding this member produces.
+            std::fs::set_permissions(&member_dir, std::fs::Permissions::from_mode(0o755))
+                .expect("open up member directory");
+            handle
+        })
+        .collect::<Vec<_>>();
+    // Reading the members is what records the findings; drop anything the
+    // keystore creation itself left in the sink first.
+    let _ = kapsaro_core::api::diagnostics::take_local_state_warnings();
+    for member_handle in &member_handles {
+        key_store
+            .load_active_kid(member_handle)
+            .expect("read the active marker of an open member directory");
+    }
+
+    let batch = kapsaro_core::api::diagnostics::take_local_state_warnings();
+
+    assert_eq!(batch.diagnostics().len(), RETAINED_LIMIT);
+    assert!(batch
+        .diagnostics()
+        .iter()
+        .all(|diagnostic| diagnostic.code() == DiagnosticCode::LocalStatePermissions));
+    let DiagnosticCompleteness::Truncated(truncation) = batch.completeness() else {
+        panic!("a batch that could not hold every finding must say so");
+    };
+    assert_eq!(truncation.retained_limit(), RETAINED_LIMIT);
+    assert_eq!(
+        truncation.dropped_at_least(),
+        MEMBER_COUNT - RETAINED_LIMIT,
+        "the batch must account for every member it could not carry"
+    );
+}
+
+#[test]
 fn test_secret_bytes_into_zeroizing_vec_pinned() {
     let bytes = SecretBytes::new(vec![10, 20, 30]);
     let zv: Zeroizing<Vec<u8>> = bytes.into_zeroizing_vec();
@@ -330,9 +476,18 @@ fn test_ssh_raw_signature_debug_impl_pinned() {
 
 #[test]
 fn test_trust_store_apply_approvals_pinned() {
-    // Pin apply_approvals method shape on LocalTrustStore.
-    let _apply_approvals: fn(&LocalTrustStore, Vec<TrustApproval>, &KeyContext) -> Result<()> =
-        LocalTrustStore::apply_approvals;
+    // Pin apply_approvals_with_conflict_handling method shape on LocalTrustStore.
+    let _apply_approvals_with_conflict_handling: fn(
+        &LocalTrustStore,
+        Vec<TrustApproval>,
+        &KeyContext,
+        ApprovalConflictHandling,
+    ) -> Result<()> = LocalTrustStore::apply_approvals_with_conflict_handling;
+    let _merge: fn() -> ApprovalConflictHandling = ApprovalConflictHandling::merge;
+    let _surface: fn(&VerifiedLocalTrustStoreLoadResult) -> ApprovalConflictHandling =
+        ApprovalConflictHandling::surface;
+    let _surface_absent: fn() -> ApprovalConflictHandling =
+        ApprovalConflictHandling::surface_absent;
 }
 
 #[test]
@@ -356,7 +511,8 @@ fn test_trust_review_request_accessors_pinned() {
     let _sid_fn: fn(&TrustReviewRequest) -> Option<&str> = TrustReviewRequest::sid;
     let _recipient_kids_fn: fn(&TrustReviewRequest) -> &[String] =
         TrustReviewRequest::recipient_kids;
-    let _recipient_handle_hints_fn = TrustReviewRequest::recipient_handle_hints;
+    let _recipient_handle_hints_fn: fn(&TrustReviewRequest) -> &[TrustRecipientHandleHint] =
+        TrustReviewRequest::recipient_handle_hints;
 }
 
 #[test]
@@ -389,17 +545,34 @@ fn test_verified_local_trust_store_load_result_pinned() {
     // Pin VerifiedLocalTrustStoreLoadResult type and its two public methods.
     assert!(std::any::type_name::<VerifiedLocalTrustStoreLoadResult>()
         .contains("VerifiedLocalTrustStoreLoadResult"));
-    let _permission_warnings: fn(&VerifiedLocalTrustStoreLoadResult) -> &[String] =
-        VerifiedLocalTrustStoreLoadResult::permission_warnings;
     let _into_store: fn(VerifiedLocalTrustStoreLoadResult) -> VerifiedLocalTrustStore =
         VerifiedLocalTrustStoreLoadResult::into_store;
 }
 
+/// The rule and the recovery route are separate axes and are pinned as such: a
+/// failure names the check it was refused under, the route out of it, or both,
+/// and reading one never depends on the other being absent.
+#[test]
+fn test_error_rule_and_recovery_accessors_pinned() {
+    let _rule: fn(&Error) -> Option<&str> = Error::rule;
+    let _recovery: fn(&Error) -> Option<&'static str> = Error::recovery;
+
+    // A verification failure names its rule and no recovery route.
+    let verification = Error::build_verification_error("V-TOFU", "msg");
+    assert_eq!(verification.rule(), Some("V-TOFU"));
+    assert_eq!(verification.recovery(), None);
+
+    // Every other category names no rule at all.
+    assert_eq!(Error::build_parse_error("msg").rule(), None);
+    assert_eq!(Error::build_config_error("msg").rule(), None);
+    assert_eq!(Error::build_invalid_operation_error("msg").rule(), None);
+}
+
 #[test]
 fn test_error_builder_methods_pinned() {
-    // verification_rule accessor.
+    // rule accessor.
     let ve = Error::build_verification_error("RULE", "msg");
-    assert_eq!(ve.verification_rule(), Some("RULE"));
+    assert_eq!(ve.rule(), Some("RULE"));
     // All builder functions.
     let _e1 = Error::build_schema_error("schema problem");
     assert_eq!(_e1.kind(), ErrorKind::Schema);

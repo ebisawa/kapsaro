@@ -1,10 +1,15 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+//! Data types passed between rewrap planning, trust review, and execution.
+//! Carries no behavior of its own; each type models one stage of the batch flow.
+
+use crate::app::artifact::ArtifactRef;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustContext};
 use crate::io::verify_online::VerifiedGithubIdentity;
+use crate::io::workspace::members::PromotionDestinationState;
 use crate::model::public_key::PublicKey;
 use crate::model::public_key_verified::VerifiedRecipientKey;
 use std::path::PathBuf;
@@ -12,10 +17,13 @@ use std::path::PathBuf;
 /// Command inputs for a batch rewrap command before CLI confirmation.
 #[derive(Debug, Clone)]
 pub struct RewrapBatchPlan {
-    pub workspace_root: PathBuf,
     pub pre_promotion_trust: TrustContext,
     pub incoming_report: Option<IncomingVerificationReport>,
-    pub artifact_paths: Vec<PathBuf>,
+    /// The artifacts to rewrite, each bound to the directory it was found under.
+    pub artifacts: Vec<ArtifactRef>,
+    /// Secrets entries the search skipped, so the operator learns which
+    /// artifacts this run is not going to touch.
+    pub discovery_warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,8 +64,12 @@ pub struct IncomingVerificationItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IncomingPromotionCandidate {
     pub review: IncomingVerificationItem,
-    pub source_path: PathBuf,
     pub source_content: String,
+    /// What `members/active/<handle>.json` held when this candidate was read.
+    ///
+    /// Promotion replaces that document, so the state it was reviewed against
+    /// travels with the candidate and is confirmed again before the write.
+    pub destination: PromotionDestinationState,
     pub public_key: PublicKey,
 }
 

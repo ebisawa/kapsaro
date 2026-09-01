@@ -15,11 +15,10 @@ use crate::{Error, Result};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-/// The signer key one document named, observed under a single shared lock.
+/// The signer key one published document named, observed in a single read.
 ///
 /// Verification needs the signer's public half and nothing else, so taking it
-/// once lets the trust directory's exclusive lock be acquired afterwards
-/// without the member lock still being held.
+/// once lets the trust directory's exclusive lock be acquired afterwards.
 ///
 /// Only the named key is read. Every other key the member holds is irrelevant
 /// to this signature, and a stale key whose document no longer parses would

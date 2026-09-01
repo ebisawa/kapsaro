@@ -33,9 +33,8 @@ const MAX_RESIDUE_ENTRIES: usize = 1024;
 
 /// Report every entry an unfinished write staged and never published.
 ///
-/// The entry blocks every later command that reads the directory holding it, so
-/// the diagnosis names it before an operator meets it as a refusal partway
-/// through an unrelated command.
+/// Normal readers ignore internal staging names, so Doctor owns reporting the
+/// residue and the recovery action.
 pub(super) fn check_local_state_write_residue(home: &LocalStateHome) -> Vec<DoctorCheck> {
     let Some(root) = home.opened() else {
         // The root is already reported as unopened by the permission checks,
@@ -108,9 +107,8 @@ fn build_residue_check(path: &Path) -> DoctorCheck {
         "Local state holds an entry an unfinished write staged",
         append_repair_command(
             &format!(
-                "{} was staged by a write that never published it, and every later command that \
-                 reads the directory holding it refuses to run until it is gone; it may hold the \
-                 only copy of what that write was saving. A write that is still running stages \
+                "{} was staged by a write that never published it and may hold the only copy of \
+                 what that write was saving. A write that is still running stages \
                  under a name of this shape too, so check that no other kapsaro command is \
                  running against this local state root before removing it",
                 format_finding_path(path)

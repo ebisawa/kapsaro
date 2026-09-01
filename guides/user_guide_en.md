@@ -566,7 +566,6 @@ Run it before or after work such as:
 - Local trust store approvals for active members
 - Permissions and ownership under `<KAPSARO_HOME>`
 - Ownership of directories above your local state (information only)
-- Whether a directory lock on your local state and workspace actually excludes another writer
 - Leftovers a write that was interrupted left behind under `<KAPSARO_HOME>`
 - Encrypted artifacts under `.kapsaro/secrets/`
 - CI environment-key readiness when `KAPSARO_PRIVATE_KEY` is set

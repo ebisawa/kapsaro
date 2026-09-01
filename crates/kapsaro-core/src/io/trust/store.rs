@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Trust store file I/O with atomic writes and permission enforcement.
-//! Validates the complete trust namespace under a typed directory lock.
+//! Reads published trust snapshots and commits mutations atomically.
 
 use crate::error::{LOCAL_STATE_PATH_UNSAFE_RECOVERY, TRUST_STORE_RESET_REQUIRED_RECOVERY};
 use crate::format::schema::document::parse_trust_store_str;
@@ -10,12 +10,10 @@ use crate::io::document_store;
 use crate::io::trust::paths::get_trust_store_owner_handle;
 use crate::model::identity::MemberHandle;
 use crate::model::trust_store::TrustStoreDocument;
-use crate::support::fs::lock::{self, LockTargetDirectory};
-use crate::support::fs::lock::{ExclusiveLockedDir, ReadLockedDirectory};
+use crate::support::fs::lock::{self, ExclusiveLockedDir, LockTargetDirectory};
 use crate::support::fs::permission::{collect_open_permission_violations, report_violations};
 use crate::support::fs::relative::{
-    is_write_staging_name, list_child_entries_at, write_staging_residue_error, ChildType,
-    DirectoryFd,
+    is_write_staging_name, list_child_entries_at, ChildType, DirectoryFd,
 };
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::{format_finding_path, format_path_relative_to_cwd};
@@ -51,7 +49,7 @@ impl fmt::Debug for TrustStoreLoadResult {
     }
 }
 
-/// Presence and exact serialized bytes observed under a trust-directory read lock.
+/// Presence and exact serialized bytes observed in one published trust snapshot.
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum TrustStoreSnapshot {
     Missing,
@@ -80,18 +78,16 @@ impl TrustStoreSnapshot {
     }
 }
 
-pub(crate) fn load_trust_store_with_shared_lock<D>(
+pub(crate) fn load_trust_store_snapshot<D>(
     base: &dyn DirectoryFd,
     trust_dir: &D,
     path: &Path,
 ) -> Result<Option<TrustStoreLoadResult>>
 where
-    D: DirectoryFd + LockTargetDirectory,
+    D: DirectoryFd,
 {
-    lock::with_shared_locked_directory(trust_dir, |locked_trust_dir| {
-        let permission_chain: [&dyn DirectoryFd; 2] = [base, locked_trust_dir];
-        load_trust_store_at(locked_trust_dir, path, &permission_chain)
-    })
+    let permission_chain: [&dyn DirectoryFd; 2] = [base, trust_dir];
+    load_trust_store_at(trust_dir, path, &permission_chain)
 }
 
 pub(crate) fn load_trust_store_at<D>(
@@ -100,7 +96,7 @@ pub(crate) fn load_trust_store_at<D>(
     permission_chain: &[&dyn DirectoryFd],
 ) -> Result<Option<TrustStoreLoadResult>>
 where
-    D: ReadLockedDirectory,
+    D: DirectoryFd,
 {
     validate_trust_directory(dir)?;
     let Some(loaded) = document_store::load_optional_with_raw_at(
@@ -164,7 +160,7 @@ where
 {
     for (name, child_type) in list_child_entries_at(dir)? {
         if is_write_staging_name(&name) {
-            return Err(write_staging_residue_error(dir, &name));
+            continue;
         }
         if is_safe_trust_directory_entry(&name, child_type) {
             continue;

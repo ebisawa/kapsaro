@@ -13,8 +13,8 @@ use super::{
     read_directory_entry_error, regular_file_exists_at, remove_empty_child_dir_if_exists_at,
     remove_file_at, remove_file_if_exists_at, rename_child_noreplace_unsynced_at, save_text_at,
     save_text_restricted_at, scan_child_entries_at, scan_one_child, vanish_next_scanned_child,
-    write_staging_residue_error, ChildDirectoryCreationStep, ChildName, ChildType, DirectoryFd,
-    DirectoryScope, RemovedEntry, ScanBudget,
+    ChildDirectoryCreationStep, ChildName, ChildType, DirectoryFd, DirectoryScope, RemovedEntry,
+    ScanBudget,
 };
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::lock::lock_test_support::with_locked_workspace_dir;
@@ -22,7 +22,6 @@ use crate::support::fs::lock::with_exclusive_locked_directory;
 #[cfg(unix)]
 use crate::support::fs::test_umask::{isolated_umask_test, with_restrictive_umask};
 use crate::support::limits::MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH;
-use crate::support::path::format_path_relative_to_cwd;
 use crate::support::warning::LocalStateWarningGuard;
 #[cfg(unix)]
 use crate::test_utils::permission_denial_can_be_staged;
@@ -1214,29 +1213,6 @@ fn test_write_staging_names_are_recognised_by_shape() {
     assert!(!is_write_staging_name(".tmp-backup"));
     assert!(!is_write_staging_name(".DS_Store"));
     assert!(!is_write_staging_name(&format!("config.toml.tmp.{uuid}")));
-}
-
-/// A leftover blocks its directory until an operator clears it, so the report
-/// names the entry and the command that removes it.
-#[test]
-fn test_write_staging_residue_error_names_the_recovery_command() {
-    let dir = TempDir::new().unwrap();
-    let anchored =
-        AnchoredDir::open(dir.path(), DirectoryScope::LocalState, "test directory").unwrap();
-    let name = ".tmp-3f2504e0-4f89-41d3-9a0c-0305e82c3301";
-    let displayed = format_path_relative_to_cwd(&anchored.path().join(name));
-
-    let error = write_staging_residue_error(&anchored, name);
-
-    let message = error.format_user_message();
-    assert!(
-        message.contains("staged by an unfinished write"),
-        "{message}"
-    );
-    assert!(
-        message.contains(&format!("run: rm -r -- '{displayed}'")),
-        "{message}"
-    );
 }
 
 /// A read that fails to decode must not carry the file into the error.

@@ -113,22 +113,10 @@ fn extend_workspace_scoped_checks(
     workspace_dir: &AnchoredDir,
     local_state: &local_state::LocalStateDiagnostics,
 ) -> Result<()> {
-    extend_workspace_locking_checks(report, workspace_dir);
     extend_member_checks(report, workspace_dir)?;
     extend_trust_store_checks(report, options, workspace_dir, local_state)?;
     extend_artifact_checks(report, workspace_dir)?;
     Ok(())
-}
-
-/// What a lock on the workspace root excludes.
-///
-/// A workspace whose structure never resolved is not measured, and says so by
-/// carrying no check of its own. The local state root is measured on every run,
-/// so an operator is told what locking is worth on their storage either way.
-fn extend_workspace_locking_checks(report: &mut DoctorReport, workspace_dir: &AnchoredDir) {
-    let checks = local_state::locking::check_workspace_locking(workspace_dir);
-    log_doctor_count("workspace_locking", checks.len());
-    report.extend(checks);
 }
 
 fn extend_member_checks(report: &mut DoctorReport, workspace_dir: &AnchoredDir) -> Result<()> {

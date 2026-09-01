@@ -4,7 +4,7 @@
 //! Active key state tests for the anchored keystore capability.
 //! Covers canonical normalization and fail-closed reads of the active file.
 
-use super::{parse_created_at, select_preferred_kid, set_kid_resolved_hook};
+use super::{parse_created_at, select_preferred_kid};
 use crate::app_test_utils::{
     add_generated_key, build_test_private_key_document, build_test_public_key_document,
     TEST_KEY_CREATED_AT, TEST_KEY_EXPIRES_AT, TEST_KEY_SIGNATURE,
@@ -121,91 +121,6 @@ fn test_set_active_kid_writes_canonical_typed_value() {
     assert_eq!(
         active.as_ref().map(Kid::as_str),
         Some("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")
-    );
-}
-
-/// Whether an exclusive lock on `dir` cannot be taken right now.
-///
-/// Directory locks contend within one process exactly as they do across
-/// processes, so this reports the same contention a competing rotation meets.
-///
-/// The lock is taken on a descriptor of this probe's own rather than through
-/// the crate's locking helper: that helper refuses a directory this thread
-/// already holds, and what is being asked here is whether an outside holder
-/// would be turned away.
-#[cfg(unix)]
-fn exclusive_lock_is_contended(dir: &std::path::Path) -> bool {
-    use rustix::fs::{FlockOperation, OFlags};
-
-    let file = rustix::fs::open(
-        dir,
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-        rustix::fs::Mode::empty(),
-    )
-    .unwrap();
-    rustix::fs::flock(&file, FlockOperation::NonBlockingLockExclusive).is_err()
-}
-
-/// Naming the member's key and reading that key's public half happen under one
-/// lock, so a rotation cannot land between them.
-#[cfg(unix)]
-#[test]
-fn test_resolve_public_key_holds_the_member_lock_across_both_steps() {
-    let temp = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let keystore_root = temp.path().join("keys");
-    let member_handle = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
-    let member_dir = keystore_root.join(ALICE_MEMBER_HANDLE);
-    let hook_ran = std::rc::Rc::new(std::cell::Cell::new(false));
-    let hook_ran_inner = hook_ran.clone();
-    set_kid_resolved_hook(move || {
-        hook_ran_inner.set(true);
-        assert!(
-            exclusive_lock_is_contended(&member_dir),
-            "the member directory was unlocked between resolving the kid and reading its public key"
-        );
-    });
-
-    let access = KeystoreAccess::open(&keystore_root).unwrap();
-    let (kid, public_key) = access.resolve_public_key(&member_handle, None).unwrap();
-
-    assert_eq!(public_key.protected.kid, kid.as_str());
-    assert_eq!(public_key.protected.subject_handle, ALICE_MEMBER_HANDLE);
-    assert!(
-        hook_ran.get(),
-        "the kid-resolved hook must run so the lock window it checks is actually exercised"
-    );
-}
-
-/// Naming the member's key and reading both halves of it happen under one lock,
-/// so an activation landing mid-command cannot leave the resolved key id naming
-/// a different key than the documents that came back with it.
-#[cfg(unix)]
-#[test]
-fn test_resolve_key_pair_holds_the_member_lock_across_both_steps() {
-    use crate::io::keystore::access::set_key_directory_open_hook;
-
-    let temp = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let keystore_root = temp.path().join("keys");
-    let member_handle = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
-    let member_dir = keystore_root.join(ALICE_MEMBER_HANDLE);
-    let hook_ran = std::rc::Rc::new(std::cell::Cell::new(false));
-    let hook_ran_inner = hook_ran.clone();
-    set_key_directory_open_hook(move || {
-        hook_ran_inner.set(true);
-        assert!(
-            exclusive_lock_is_contended(&member_dir),
-            "the member directory was unlocked between resolving the kid and reading the key pair"
-        );
-    });
-
-    let access = KeystoreAccess::open(&keystore_root).unwrap();
-    let (kid, private_key, public_key) = access.resolve_key_pair(&member_handle, None).unwrap();
-
-    assert_eq!(private_key.protected.kid, kid.as_str());
-    assert_eq!(public_key.protected.kid, kid.as_str());
-    assert!(
-        hook_ran.get(),
-        "the key-directory-open hook must run so the lock window it checks is actually exercised"
     );
 }
 

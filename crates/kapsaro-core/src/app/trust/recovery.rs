@@ -22,9 +22,7 @@ use crate::io::trust::store::{load_trust_store_at, validate_trust_directory};
 use crate::model::identity::MemberHandle;
 use crate::model::trust_store::TrustStoreProtected;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::lock::{
-    with_exclusive_locked_directory, with_shared_locked_directory, ReadLockedDirectory,
-};
+use crate::support::fs::lock::with_exclusive_locked_directory;
 use crate::support::fs::relative::{DirectoryFd, OpenDir};
 use crate::support::fs::snapshot::{
     ensure_regular_file_matches_snapshot_at, load_optional_regular_file_snapshot_at,
@@ -144,10 +142,8 @@ fn observe_trust_store_document(
     let Some(trust_dir) = trust_dir else {
         return Ok(None);
     };
-    with_shared_locked_directory(trust_dir, |locked_trust_dir| {
-        validate_trust_directory(locked_trust_dir)?;
-        load_optional_regular_file_snapshot_at(locked_trust_dir, file_name)
-    })
+    validate_trust_directory(trust_dir)?;
+    load_optional_regular_file_snapshot_at(trust_dir, file_name)
 }
 
 pub fn build_trust_store_reset_plan_from_list_command(
@@ -230,19 +226,17 @@ fn resolve_reset_target(
             loss: None,
         });
     };
-    with_shared_locked_directory(trust_dir, |locked_trust_dir| {
-        validate_trust_directory(locked_trust_dir)?;
-        let snapshot = ensure_regular_file_matches_snapshot_at(
-            locked_trust_dir,
-            file_name,
-            observed.as_ref(),
-            &describe_trust_store(path),
-        )
-        .map_err(|error| map_reset_target_failure_to_conflict(error, path))?;
-        Ok(ResetTarget {
-            loss: count_stored_approvals(base, locked_trust_dir, path),
-            snapshot,
-        })
+    validate_trust_directory(trust_dir)?;
+    let snapshot = ensure_regular_file_matches_snapshot_at(
+        trust_dir,
+        file_name,
+        observed.as_ref(),
+        &describe_trust_store(path),
+    )
+    .map_err(|error| map_reset_target_failure_to_conflict(error, path))?;
+    Ok(ResetTarget {
+        loss: count_stored_approvals(base, trust_dir, path),
+        snapshot,
     })
 }
 
@@ -308,7 +302,7 @@ fn count_stored_approvals<D>(
     path: &Path,
 ) -> Option<TrustStoreResetLoss>
 where
-    D: ReadLockedDirectory,
+    D: DirectoryFd,
 {
     let permission_chain: [&dyn DirectoryFd; 2] = [base, locked_trust_dir];
     let loaded = load_trust_store_at(locked_trust_dir, path, &permission_chain).ok()??;

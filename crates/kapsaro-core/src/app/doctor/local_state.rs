@@ -4,7 +4,6 @@
 //! Local keystore and trust store diagnostics for the doctor command.
 //! Opens local state once and reuses that capability across every check.
 
-pub(super) mod locking;
 mod permissions;
 mod staging;
 
@@ -133,7 +132,6 @@ fn collect_home_scoped_checks(base_dir: &Path, home: &LocalStateHome) -> Vec<Doc
     checks.extend(permissions::check_local_state_ancestor_owner(
         base_dir, &ancestry,
     ));
-    checks.extend(locking::check_local_state_locking(base_dir, home));
     checks.extend(staging::check_local_state_write_residue(home));
     checks
 }

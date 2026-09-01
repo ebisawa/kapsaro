@@ -18,7 +18,7 @@ use crate::test_utils::{
 };
 use crate::{Error, ErrorKind, Result};
 use std::fs;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Barrier};
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -390,17 +390,17 @@ fn test_keystore_access_key_activation_warns_about_insecure_key_directory_permis
 }
 
 #[test]
-fn test_keystore_access_public_key_load_waits_for_key_pair_publication() {
-    assert_key_reader_waits_for_publication(KeyReadOperation::Public);
+fn test_keystore_access_public_key_load_does_not_wait_for_key_pair_publication() {
+    assert_key_reader_uses_canonical_publication(KeyReadOperation::Public);
 }
 
 #[test]
-fn test_keystore_access_private_key_load_waits_for_key_pair_publication() {
-    assert_key_reader_waits_for_publication(KeyReadOperation::Private);
+fn test_keystore_access_private_key_load_does_not_wait_for_key_pair_publication() {
+    assert_key_reader_uses_canonical_publication(KeyReadOperation::Private);
 }
 
 #[test]
-fn test_keystore_access_list_kids_waits_for_key_pair_publication() {
+fn test_keystore_access_list_kids_ignores_key_pair_staging() {
     let fixture = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let source = KeystoreAccess::open(fixture.path().join("keys")).unwrap();
     let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
@@ -426,24 +426,63 @@ fn test_keystore_access_list_kids_waits_for_key_pair_publication() {
     });
     staged_rx.recv_timeout(Duration::from_secs(2)).unwrap();
 
-    let reader_member = member.clone();
-    let (reader_thread, listed_rx) = spawn_started_reader(move || reader.list_kids(&reader_member));
-    assert!(listed_rx.recv_timeout(Duration::from_millis(100)).is_err());
+    assert!(reader.list_kids(&member).unwrap().is_empty());
 
     publish_tx.send(()).unwrap();
     writer_thread.join().unwrap().unwrap();
-    assert_eq!(
-        listed_rx
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .unwrap(),
-        vec![kid]
-    );
-    reader_thread.join().unwrap();
+    assert_eq!(reader.list_kids(&member).unwrap(), vec![kid]);
 }
 
 #[test]
-fn test_keystore_access_list_kids_waits_for_active_publication() {
+fn test_concurrent_same_kid_publication_keeps_one_complete_pair() {
+    let fixture = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    let source = KeystoreAccess::open(fixture.path().join("keys")).unwrap();
+    let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
+    let kid = source.load_active_kid(&member).unwrap().unwrap();
+    let private_key = source.load_private_key(&member, &kid).unwrap();
+    let public_key = source.load_public_key(&member, &kid).unwrap();
+    let target = local_state_temp_dir();
+    #[cfg(unix)]
+    set_owner_only(&target);
+    let keys_root = target.path().join("keys");
+    KeystoreAccess::create(&keys_root).unwrap();
+    let barrier = Arc::new(Barrier::new(3));
+    let mut workers = Vec::new();
+
+    for _ in 0..2 {
+        let access = KeystoreAccess::open(&keys_root).unwrap();
+        let member = member.clone();
+        let kid = kid.clone();
+        let private_key = private_key.clone();
+        let public_key = public_key.clone();
+        let barrier = barrier.clone();
+        workers.push(std::thread::spawn(move || {
+            set_key_pair_staged_hook(move || {
+                barrier.wait();
+            });
+            access.save_key_pair_atomic(&member, &kid, &private_key, &public_key)
+        }));
+    }
+
+    barrier.wait();
+    let outcomes: Vec<_> = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect();
+    assert_eq!(outcomes.iter().filter(|outcome| outcome.is_ok()).count(), 1);
+    assert_eq!(
+        outcomes.iter().filter(|outcome| outcome.is_err()).count(),
+        1
+    );
+
+    let reader = KeystoreAccess::open(&keys_root).unwrap();
+    let (loaded_private, loaded_public) = reader.load_key_pair(&member, &kid).unwrap();
+    assert_eq!(loaded_private.protected.kid, kid.as_str());
+    assert_eq!(loaded_public.protected.kid, kid.as_str());
+}
+
+#[test]
+fn test_keystore_access_list_kids_ignores_active_marker_staging() {
     let temp = local_state_temp_dir();
     let root = temp.path().join("keys");
     let writer = KeystoreAccess::create(&root).unwrap();
@@ -463,24 +502,15 @@ fn test_keystore_access_list_kids_waits_for_active_publication() {
     });
     staged_rx.recv_timeout(Duration::from_secs(2)).unwrap();
 
-    let reader_member = member.clone();
-    let (reader_thread, listed_rx) = spawn_started_reader(move || reader.list_kids(&reader_member));
-    assert!(listed_rx.recv_timeout(Duration::from_millis(100)).is_err());
+    assert!(reader.list_kids(&member).unwrap().is_empty());
 
     publish_tx.send(()).unwrap();
     writer_thread.join().unwrap().unwrap();
-    assert_eq!(
-        listed_rx
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .unwrap(),
-        Vec::<Kid>::new()
-    );
-    reader_thread.join().unwrap();
+    assert_eq!(reader.list_kids(&member).unwrap(), Vec::<Kid>::new());
 }
 
 #[test]
-fn test_keystore_access_active_load_waits_for_active_publication() {
+fn test_keystore_access_active_load_reads_old_marker_during_publication() {
     let temp = local_state_temp_dir();
     let root = temp.path().join("keys");
     let writer = KeystoreAccess::create(&root).unwrap();
@@ -501,21 +531,14 @@ fn test_keystore_access_active_load_waits_for_active_publication() {
     });
     staged_rx.recv_timeout(Duration::from_secs(2)).unwrap();
 
-    let reader_member = member.clone();
-    let (reader_thread, loaded_rx) =
-        spawn_started_reader(move || reader.load_active_kid(&reader_member));
-    assert!(loaded_rx.recv_timeout(Duration::from_millis(100)).is_err());
+    assert_eq!(reader.load_active_kid(&member).unwrap(), Some(old_kid));
 
     publish_tx.send(()).unwrap();
     writer_thread.join().unwrap().unwrap();
     assert_eq!(
-        loaded_rx
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .unwrap(),
+        reader.load_active_kid(&member).unwrap(),
         Some(Kid::try_from("00000000000000000000000000000001").unwrap())
     );
-    reader_thread.join().unwrap();
 }
 
 #[test]
@@ -658,11 +681,9 @@ fn test_keystore_access_mutation_ignores_unrelated_entry_left_at_unlock() {
     assert!(stale.exists());
 }
 
-/// A namespace that turns unsafe while the write is in flight is reported for
-/// what it is: the document is already on disk, so the message says so rather
-/// than reading as a failed write.
+/// Internal staging names do not turn a completed canonical write into failure.
 #[test]
-fn test_keystore_access_mutation_reports_a_namespace_that_became_unsafe_after_the_write() {
+fn test_keystore_access_mutation_ignores_staging_residue_after_the_write() {
     let temp = local_state_temp_dir();
     let root = temp.path().join("keys");
     let access = KeystoreAccess::create(&root).unwrap();
@@ -670,17 +691,14 @@ fn test_keystore_access_mutation_reports_a_namespace_that_became_unsafe_after_th
     let kid = Kid::try_from("00000000000000000000000000000000").unwrap();
     let residue = root.join(member.as_str()).join(STAGING_DIR_NAME);
 
-    let error = access
+    access
         .set_active_kid_with_staging_hook(&member, &kid, || fs::create_dir(&residue).unwrap())
-        .unwrap_err();
-
-    assert_local_state_path_unsafe(&error);
-    let message = error.format_user_message();
-    assert!(message.contains("was written, but"), "{message}");
+        .unwrap();
     assert_eq!(
         fs::read_to_string(root.join(member.as_str()).join("active")).unwrap(),
         format!("{}\n", kid.as_str())
     );
+    assert!(residue.is_dir());
 }
 
 /// The failure the caller asked about is the write's own. A namespace that also
@@ -1064,19 +1082,16 @@ fn test_keystore_access_rejects_active_named_directory_in_member_directory() {
     assert!(active_path.is_dir());
 }
 
-/// An entry named like an unpublished staging write inside a member directory is
-/// the trace of an interrupted write, so the namespace is refused.
+/// An internal staging directory is not a canonical key entry.
 #[test]
-fn test_keystore_access_rejects_leftover_staging_entry_in_member_directory() {
+fn test_keystore_access_ignores_leftover_staging_entry_in_member_directory() {
     let temp = local_state_temp_dir();
     let root = temp.path().join("keys");
     let access = KeystoreAccess::create(&root).unwrap();
     let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
     create_local_state_dir(&root.join(member.as_str()).join(STAGING_DIR_NAME));
 
-    let error = access.list_kids(&member).unwrap_err();
-
-    assert_local_state_path_unsafe(&error);
+    assert!(access.list_kids(&member).unwrap().is_empty());
 }
 
 /// A key document name taken by a directory or a symlink shadows the document
@@ -1174,26 +1189,7 @@ impl KeyReadOperation {
     }
 }
 
-/// Run `read` on its own thread, returning once that thread has begun.
-///
-/// A caller that then watches the read stay unanswered is watching it wait on
-/// the keystore lock, rather than on the thread being scheduled at all.
-fn spawn_started_reader<T, F>(read: F) -> (std::thread::JoinHandle<()>, mpsc::Receiver<T>)
-where
-    F: FnOnce() -> T + Send + 'static,
-    T: Send + 'static,
-{
-    let (started_tx, started_rx) = mpsc::channel();
-    let (result_tx, result_rx) = mpsc::channel();
-    let handle = std::thread::spawn(move || {
-        started_tx.send(()).unwrap();
-        result_tx.send(read()).unwrap();
-    });
-    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-    (handle, result_rx)
-}
-
-fn assert_key_reader_waits_for_publication(operation: KeyReadOperation) {
+fn assert_key_reader_uses_canonical_publication(operation: KeyReadOperation) {
     let fixture = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let source = KeystoreAccess::open(fixture.path().join("keys")).unwrap();
     let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
@@ -1220,15 +1216,12 @@ fn assert_key_reader_waits_for_publication(operation: KeyReadOperation) {
     });
     staged_rx.recv_timeout(Duration::from_secs(2)).unwrap();
 
-    let (reader_thread, loaded_rx) =
-        spawn_started_reader(move || operation.load(&reader, &member, &kid));
-    assert!(loaded_rx.recv_timeout(Duration::from_millis(100)).is_err());
+    let error = operation.load(&reader, &member, &kid).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NotFound);
 
     publish_tx.send(()).unwrap();
     writer_thread.join().unwrap().unwrap();
-    let loaded = loaded_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-    assert_eq!(loaded.unwrap(), expected);
-    reader_thread.join().unwrap();
+    assert_eq!(operation.load(&reader, &member, &kid).unwrap(), expected);
 }
 
 fn member_dir_has_temp_entry(access: &KeystoreAccess, member: &MemberHandle) -> bool {
@@ -1510,10 +1503,9 @@ fn find_staging_directory(member_dir: &std::path::Path) -> std::path::PathBuf {
         .expect("a key pair write stages into a temporary directory")
 }
 
-/// A key directory holding an entry named like an unpublished staging write is
-/// the trace of an interrupted write, so its documents are not handed out.
+/// An internal staging file is not one of the canonical key documents.
 #[test]
-fn test_keystore_access_rejects_leftover_staging_entry_in_key_directory() {
+fn test_keystore_access_ignores_leftover_staging_entry_in_key_directory() {
     let fixture = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let access = KeystoreAccess::open(fixture.path().join("keys")).unwrap();
     let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
@@ -1525,7 +1517,6 @@ fn test_keystore_access_rejects_leftover_staging_entry_in_key_directory() {
     )
     .unwrap();
 
-    let error = access.load_public_key(&member, &kid).unwrap_err();
-
-    assert_local_state_path_unsafe(&error);
+    let public_key = access.load_public_key(&member, &kid).unwrap();
+    assert_eq!(public_key.protected.kid, kid.as_str());
 }

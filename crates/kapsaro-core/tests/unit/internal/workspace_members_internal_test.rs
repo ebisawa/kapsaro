@@ -393,7 +393,9 @@ fn test_member_removal_takes_the_lock_on_the_members_root() {
     let error = with_locked_workspace_dir(&members_dir, |_| reviewed.remove()).unwrap_err();
 
     assert!(
-        error.to_string().contains("twice on one thread"),
+        error
+            .to_string()
+            .contains("nested directory locks are not allowed"),
         "removal did not lock members/: {error}"
     );
     assert!(active_dir.join("alice.json").exists());

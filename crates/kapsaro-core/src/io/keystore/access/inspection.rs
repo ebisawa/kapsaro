@@ -8,8 +8,7 @@ use super::{
     ensure_keystore_entry_safe, read_keystore_child_directories, KeystoreAccess, KeystoreLevel,
 };
 use crate::model::identity::{Kid, MemberHandle};
-use crate::support::fs::lock::{with_shared_locked_directory, ReadLockedDirectory};
-use crate::support::fs::relative::{list_child_entries_at, ChildType};
+use crate::support::fs::relative::{list_child_entries_at, ChildType, DirectoryFd};
 use crate::Result;
 
 #[cfg(test)]
@@ -46,9 +45,7 @@ impl KeystoreAccess {
         let Some(member_dir) = self.open_member(member)? else {
             return Ok(Vec::new());
         };
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            list_kids_locked(locked_member_dir)
-        })
+        list_kids_in_verified_namespace(&member_dir)
     }
 }
 
@@ -73,9 +70,9 @@ fn is_ignored_root_entry(name: &str, child_type: ChildType) -> bool {
     }
 }
 
-pub(super) fn list_kids_locked<D>(member_dir: &D) -> Result<Vec<Kid>>
+pub(super) fn list_kids_in_verified_namespace<D>(member_dir: &D) -> Result<Vec<Kid>>
 where
-    D: ReadLockedDirectory,
+    D: DirectoryFd,
 {
     Ok(
         read_keystore_child_directories(member_dir, KeystoreLevel::Member)?

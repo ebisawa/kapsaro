@@ -14,7 +14,6 @@ use kapsaro_core::cli_api::app::member::approval::{
     evaluate_members_for_approval, save_member_approvals,
 };
 use kapsaro_core::cli_api::app::member::verification::verify_members;
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 use kapsaro_core::cli_api::presentation::tty;
 use kapsaro_core::Error;
 
@@ -38,21 +37,19 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
     let options = resolve_options(&args.common);
     let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
     run_with_execution_trust_store_reset_recovery(&execution, || {
-        let evaluation = evaluate_members_for_approval(&execution, &args.member_handles)?;
-        let mut results = evaluation.results;
-
-        if results.is_empty() {
-            return print_member_approval_results(args.common.json.json, &results);
+        let mut evaluation = evaluate_members_for_approval(&execution, &args.member_handles)?;
+        if evaluation.results.is_empty() {
+            return print_member_approval_results(args.common.json.json, &evaluation.results);
         }
 
-        review_approval_candidates(&mut results)?;
+        review_approval_candidates(&mut evaluation.results)?;
 
-        let has_new_approvals = results.iter().any(|r| r.approved);
+        let has_new_approvals = evaluation.results.iter().any(|r| r.approved);
         if has_new_approvals {
-            save_member_approvals(&options, &results, &execution)?;
+            save_member_approvals(&options, &evaluation, &execution)?;
         }
 
-        print_member_approval_results(args.common.json.json, &results)
+        print_member_approval_results(args.common.json.json, &evaluation.results)
     })
 }
 
@@ -70,8 +67,7 @@ fn review_approval_candidates(
     }
 
     for result in results.iter_mut().filter(|r| r.review_required) {
-        let candidate = TrustApprovalCandidate::from(&*result);
-        result.approved = confirm_member_key_approval(&candidate, "member verify")?;
+        result.approved = confirm_member_key_approval(result, "member verify")?;
     }
 
     Ok(())

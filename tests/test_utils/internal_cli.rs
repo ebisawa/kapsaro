@@ -4,7 +4,7 @@
 //! Minimal helpers for CLI internal unit tests.
 //! These helpers avoid pulling the full integration-test fixture module into the library test target.
 
-use kapsaro_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
+use kapsaro_core::cli_api::test_support::domain::identity::MemberHandle;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
@@ -39,10 +39,6 @@ pub(crate) fn write_local_state_file(path: &Path, contents: impl AsRef<[u8]>) {
 
 pub(crate) fn member_handle(value: impl Into<String>) -> MemberHandle {
     MemberHandle::try_from(value.into()).expect("test member_handle must be valid")
-}
-
-pub(crate) fn kid(value: impl Into<String>) -> Kid {
-    Kid::try_from(value.into()).expect("test kid must be valid")
 }
 
 static ENV_MUTEX: Mutex<()> = Mutex::new(());

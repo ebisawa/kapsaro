@@ -8,12 +8,12 @@ use std::marker::PhantomData;
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::enforcement::enforce_recipients_trust;
 use crate::app::trust::evaluation::enforce_policy_strict_key_checking;
 use crate::app::trust::policy::{TrustPolicy, WriteTrustPolicy};
-use crate::app::trust::RecipientTrustOutcome;
+use crate::app::trust::{recipient_outcome_from_decision, RecipientTrustOutcome};
 use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::io::keystore::access::KeystoreAccess;
+use crate::service::trust::TrustPolicyEvaluator;
 use crate::Result;
 
 use super::context::{load_trust_context, TrustContext};
@@ -22,6 +22,7 @@ use super::workspace::WorkspaceMemberSnapshot;
 #[derive(Debug, Clone)]
 pub struct CommandTrustSnapshot<P> {
     trust_ctx: TrustContext,
+    evaluator: TrustPolicyEvaluator,
     workspace_members: WorkspaceMemberSnapshot,
     _policy: PhantomData<P>,
 }
@@ -51,15 +52,16 @@ where
         workspace_members: WorkspaceMemberSnapshot,
         keystore: &KeystoreAccess,
     ) -> Result<Self> {
-        let trust_ctx = load_trust_context(
+        let loaded = load_trust_context(
             options,
             execution,
             workspace_members.active_members_by_kid().clone(),
             keystore,
         )?;
-        enforce_policy_strict_key_checking::<P>(trust_ctx.strict_key_checking)?;
+        enforce_policy_strict_key_checking::<P>(loaded.trust_ctx.strict_key_checking)?;
         Ok(Self {
-            trust_ctx,
+            trust_ctx: loaded.trust_ctx,
+            evaluator: loaded.evaluator,
             workspace_members,
             _policy: PhantomData,
         })
@@ -71,6 +73,10 @@ where
 
     pub fn workspace_members(&self) -> &WorkspaceMemberSnapshot {
         &self.workspace_members
+    }
+
+    pub(crate) fn evaluator(&self) -> &TrustPolicyEvaluator {
+        &self.evaluator
     }
 }
 
@@ -91,9 +97,14 @@ where
         keystore: &KeystoreAccess,
     ) -> Result<Self> {
         let trust_snapshot = CommandTrustSnapshot::<P>::load(options, execution, keystore)?;
-        let recipient_trust = enforce_recipients_trust(
-            trust_snapshot.trust_context(),
+        let decision = trust_snapshot.evaluator().preflight_output_recipient_keys(
             trust_snapshot.workspace_members().active_members(),
+            &trust_snapshot.trust_context().self_trust,
+            &[],
+        )?;
+        let recipient_trust = recipient_outcome_from_decision(
+            decision,
+            trust_snapshot.trust_context().is_interactive,
         )?;
         let warnings = trust_snapshot
             .workspace_members()

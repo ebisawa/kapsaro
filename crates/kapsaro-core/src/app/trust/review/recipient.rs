@@ -79,5 +79,8 @@ where
             "Trust approval rejected for one or more recipients".to_string(),
         ));
     }
-    Ok(approved.iter().map(ApprovedKnownKey::from).collect())
+    approved
+        .iter()
+        .map(ApprovedKnownKey::from_candidate)
+        .collect()
 }

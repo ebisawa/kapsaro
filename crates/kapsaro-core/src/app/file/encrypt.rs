@@ -12,8 +12,8 @@ use crate::app::trust::review::{
     review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
 };
 use crate::app::trust::{
-    ArtifactRecipientTrustOutcome, CommandCapability, EncryptPolicy, RecipientTrustOutcome,
-    TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
+    ArtifactRecipientTrustOutcome, EncryptPolicy, RecipientTrustOutcome, TrustContext,
+    WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
 };
 use crate::feature::context::crypto::build_signing_context;
 use crate::feature::encrypt::encrypt_file_content;
@@ -122,7 +122,6 @@ where
             execution: command.execution,
             trust_ctx: &command.trust_context,
             content: &content,
-            capability: CommandCapability::Encrypt,
             context_label: "encrypt output member set",
         },
         confirm_recipient_set,

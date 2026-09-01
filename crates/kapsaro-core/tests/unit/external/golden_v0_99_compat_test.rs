@@ -13,7 +13,9 @@ use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, Membe
 use kapsaro_core::api::kv::{KvEncArtifact, KvReadOperation};
 use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
-use kapsaro_core::api::trust::{CurrentMemberSnapshot, TrustDecision, TrustPolicyEvaluator};
+use kapsaro_core::api::trust::{
+    CurrentMemberSnapshot, ReadTrustExceptions, TrustDecision, TrustPolicyEvaluator,
+};
 use kapsaro_core::Result;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -56,6 +58,7 @@ fn test_golden_file_enc_verifies_and_decrypts() {
             &key_ctx,
             FileReadOperation::Decrypt,
             OperationOptions::default(),
+            ReadTrustExceptions::none(),
         )
         .unwrap()
     else {
@@ -85,6 +88,7 @@ fn test_golden_kv_enc_verifies_and_decrypts() {
             &key_ctx,
             KvReadOperation::Entries,
             OperationOptions::default(),
+            ReadTrustExceptions::none(),
         )
         .unwrap()
     else {

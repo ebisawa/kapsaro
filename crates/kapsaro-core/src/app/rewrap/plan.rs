@@ -8,8 +8,7 @@ use crate::app::artifact::{list_workspace_encrypted_artifacts_at, ArtifactRef};
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::require_workspace;
-use crate::app::trust::load_read_trust_context;
-use crate::app::trust::TrustApprovalCandidateBuilder;
+use crate::app::trust::{CommandTrustSnapshot, RewrapInputPolicy, TrustApprovalCandidateBuilder};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
 };
@@ -38,16 +37,19 @@ pub fn build_rewrap_batch_plan(
     let workspace = require_workspace(options, "rewrap")?;
     ensure_workspace_member_kid_uniqueness(&workspace.root_path)?;
     let workspace_dir = execution.fixed_workspace_directory()?;
+    let keystore = execution.require_local_keystore_access("rewrap")?;
+    let trust_snapshot =
+        CommandTrustSnapshot::<RewrapInputPolicy>::load(options, execution, keystore)?;
     let incoming_index = load_incoming_index(workspace_dir)?;
     let targets = collect_rewrap_targets(workspace_dir, explicit_targets)?;
-    let pre_promotion_trust = load_read_trust_context(options, execution, "rewrap")?.trust_ctx;
     let incoming_report = build_incoming_report(&incoming_index)?;
     if targets.artifacts.is_empty() {
         return Err(build_no_rewrap_target_error(&targets.warnings));
     }
 
     Ok(RewrapBatchPlan {
-        pre_promotion_trust,
+        pre_promotion_trust: trust_snapshot.trust_context().clone(),
+        pre_promotion_evaluator: trust_snapshot.evaluator().clone(),
         incoming_report,
         artifacts: targets.artifacts,
         discovery_warnings: targets.warnings,
@@ -157,7 +159,7 @@ fn build_incoming_candidate(snapshot: &IncomingSnapshot) -> Result<IncomingPromo
         &snapshot.public_key,
         WORKSPACE_INCOMING_MEMBER_CONTEXT,
     ) {
-        Ok(_) => build_pending_review(snapshot),
+        Ok(verified) => build_pending_review(snapshot, &verified.verified_public_key)?,
         Err(error) => IncomingVerificationItem {
             member_handle: snapshot.public_key.protected.subject_handle.clone(),
             kid: snapshot.public_key.protected.kid.clone(),
@@ -168,6 +170,7 @@ fn build_incoming_candidate(snapshot: &IncomingSnapshot) -> Result<IncomingPromo
             ),
             fingerprint: None,
             verified_github: None,
+            verified_service_evidence: None,
             github_binding_configured: github_binding_configured(&snapshot.public_key),
             attestor_pub: None,
         },
@@ -181,20 +184,25 @@ fn build_incoming_candidate(snapshot: &IncomingSnapshot) -> Result<IncomingPromo
     })
 }
 
-fn build_pending_review(snapshot: &IncomingSnapshot) -> IncomingVerificationItem {
-    let candidate = TrustApprovalCandidateBuilder::from_public_key(&snapshot.public_key).build();
-    let (category, message) = build_pending_review_category(candidate.github_binding_configured);
+fn build_pending_review(
+    snapshot: &IncomingSnapshot,
+    verified: &crate::model::public_key::VerifiedSigningPublicKey,
+) -> Result<IncomingVerificationItem> {
+    let candidate =
+        TrustApprovalCandidateBuilder::from_verified_signing_public_key(verified)?.build();
+    let (category, message) = build_pending_review_category(candidate.github_binding_configured());
 
-    IncomingVerificationItem {
+    Ok(IncomingVerificationItem {
         member_handle: snapshot.public_key.protected.subject_handle.clone(),
         kid: snapshot.public_key.protected.kid.clone(),
         category,
         message,
-        fingerprint: candidate.fingerprint,
+        fingerprint: candidate.fingerprint().map(str::to_string),
         verified_github: None,
-        github_binding_configured: candidate.github_binding_configured,
-        attestor_pub: candidate.attestor_pub,
-    }
+        verified_service_evidence: None,
+        github_binding_configured: candidate.github_binding_configured(),
+        attestor_pub: Some(candidate.attestor_pub().to_string()),
+    })
 }
 
 fn github_binding_configured(public_key: &PublicKey) -> bool {

@@ -9,7 +9,7 @@ use crate::model::public_key::PublicKey;
 use crate::model::ssh::SshDeterminismStatus;
 use crate::support::secret::SecretString;
 
-pub use crate::app::verification::OnlineVerificationStatus;
+pub use crate::service::online::OnlineVerificationStatus;
 
 #[derive(Debug, Clone)]
 pub struct KeyGenerationResult {

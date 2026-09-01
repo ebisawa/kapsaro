@@ -4,11 +4,13 @@
 //! Tests for the local state warning sink.
 //! Cover deduplication, the retention cap and what one take carries away.
 
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::thread;
 
 use crate::support::warning::{
-    record_local_state_warning, LocalStateWarning, LocalStateWarningBatch, LocalStateWarningCode,
+    record_local_state_warning, restore_local_state_warnings, LocalStateWarning,
+    LocalStateWarningBatch, LocalStateWarningCapture, LocalStateWarningCode,
     LocalStateWarningGuard, MAX_LOCAL_STATE_WARNINGS,
 };
 
@@ -220,4 +222,126 @@ fn test_take_recovers_exactly_the_warnings_recorded_on_the_same_thread() {
         reasons(&main_batch),
         vec!["Insecure permissions on the main thread"]
     );
+}
+
+/// Completing a scoped operation returns only its warnings and restores the
+/// caller's warnings without consuming them.
+#[test]
+fn test_capture_finish_returns_operation_warnings_and_restores_existing_warnings() {
+    let guard = LocalStateWarningGuard::new();
+    record_local_state_warning(permission_warning("Existing warning"));
+
+    let capture = LocalStateWarningCapture::new();
+    record_local_state_warning(permission_warning("Operation warning"));
+    let operation_batch = capture.finish();
+
+    assert_eq!(reasons(&operation_batch), vec!["Operation warning"]);
+    assert_eq!(reasons(&guard.take()), vec!["Existing warning"]);
+}
+
+/// A service-owned warning batch can be returned to the command sink without
+/// losing the lower bound for findings that did not fit in the batch.
+#[test]
+fn test_restore_batch_preserves_warnings_and_truncation() {
+    let guard = LocalStateWarningGuard::new();
+    record_local_state_warning(permission_warning("Existing warning"));
+
+    restore_local_state_warnings(LocalStateWarningBatch {
+        warnings: vec![permission_warning("Operation warning")],
+        dropped: 3,
+    });
+
+    let restored = guard.take();
+    assert_eq!(
+        reasons(&restored),
+        vec!["Existing warning", "Operation warning"]
+    );
+    assert_eq!(restored.dropped, 3);
+}
+
+/// Abandoning a scoped operation keeps its warnings available to the caller,
+/// while preserving the sink's ordering and deduplication contract.
+#[test]
+fn test_capture_drop_merges_operation_warnings_into_existing_sink() {
+    let guard = LocalStateWarningGuard::new();
+    record_local_state_warning(permission_warning("Existing warning"));
+
+    {
+        let _capture = LocalStateWarningCapture::new();
+        record_local_state_warning(permission_warning("Existing warning"));
+        record_local_state_warning(permission_warning("Operation warning"));
+    }
+
+    assert_eq!(
+        reasons(&guard.take()),
+        vec!["Existing warning", "Operation warning"]
+    );
+}
+
+/// A panic follows the same recovery path as an ordinary early return, so no
+/// warning recorded before unwinding disappears with the capture guard.
+#[test]
+fn test_capture_panic_merges_operation_warnings_into_existing_sink() {
+    let guard = LocalStateWarningGuard::new();
+    record_local_state_warning(permission_warning("Existing warning"));
+
+    let panic_result = catch_unwind(AssertUnwindSafe(|| {
+        let _capture = LocalStateWarningCapture::new();
+        record_local_state_warning(permission_warning("Operation warning"));
+        panic!("operation failed");
+    }));
+
+    assert!(panic_result.is_err());
+    assert_eq!(
+        reasons(&guard.take()),
+        vec!["Existing warning", "Operation warning"]
+    );
+}
+
+/// Nested captures restore the immediately enclosing sink. A completed inner
+/// operation is returned separately, while a dropped one rejoins its parent.
+#[test]
+fn test_nested_captures_restore_and_merge_with_the_immediate_parent() {
+    let guard = LocalStateWarningGuard::new();
+    record_local_state_warning(permission_warning("Existing warning"));
+
+    let outer = LocalStateWarningCapture::new();
+    record_local_state_warning(permission_warning("Outer warning"));
+    let inner = LocalStateWarningCapture::new();
+    record_local_state_warning(permission_warning("Completed inner warning"));
+    let inner_batch = inner.finish();
+    {
+        let _inner = LocalStateWarningCapture::new();
+        record_local_state_warning(permission_warning("Dropped inner warning"));
+    }
+    let outer_batch = outer.finish();
+
+    assert_eq!(reasons(&inner_batch), vec!["Completed inner warning"]);
+    assert_eq!(
+        reasons(&outer_batch),
+        vec!["Outer warning", "Dropped inner warning"]
+    );
+    assert_eq!(reasons(&guard.take()), vec!["Existing warning"]);
+}
+
+/// Merging an abandoned capture uses the same bounded sink as direct records,
+/// including the distinct-warning count beyond the retention cap.
+#[test]
+fn test_capture_drop_merges_with_the_existing_sink_cap() {
+    let guard = LocalStateWarningGuard::new();
+    for index in 0..MAX_LOCAL_STATE_WARNINGS - 1 {
+        record_local_state_warning(permission_warning(&format!("Existing {index}")));
+    }
+
+    {
+        let _capture = LocalStateWarningCapture::new();
+        for index in 0..4 {
+            record_local_state_warning(permission_warning(&format!("Operation {index}")));
+        }
+    }
+    let batch = guard.take();
+
+    assert_eq!(batch.warnings.len(), MAX_LOCAL_STATE_WARNINGS);
+    assert_eq!(batch.warnings.last().unwrap().reason(), "Operation 0");
+    assert_eq!(batch.dropped, 3);
 }

@@ -26,10 +26,33 @@ fn test_member_handle_serde_roundtrip() {
     assert_eq!(decoded, member_handle);
 }
 
+const CANONICAL_KID: &str = "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N";
+
 #[test]
-fn test_kid_try_from_normalizes_display_form() {
-    let kid = Kid::try_from("rdkj-8yhm-ppjh-w7qc-3446-gpnx-hnrt-x61n").unwrap();
-    assert_eq!(kid.as_str(), "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N");
+fn test_kid_constructors_accept_canonical_form_without_rewriting() {
+    let from_new = Kid::new(CANONICAL_KID).unwrap();
+    let from_try_from = Kid::try_from(CANONICAL_KID).unwrap();
+
+    assert_eq!(from_new.as_str(), CANONICAL_KID);
+    assert_eq!(from_try_from.as_str(), CANONICAL_KID);
+}
+
+#[test]
+fn test_kid_constructors_require_canonical_form() {
+    for value in [
+        "RDKJ-8YHM-PPJH-W7QC-3446-GPNX-HNRT-X61N",
+        "rdkj8yhmppjhw7qc3446gpnxhnrtx61n",
+        "RDKJ8YHM",
+    ] {
+        let new_error = Kid::new(value).unwrap_err();
+        let try_from_error = Kid::try_from(value).unwrap_err();
+
+        assert!(new_error.to_string().contains("canonical"), "{new_error}");
+        assert!(
+            try_from_error.to_string().contains("canonical"),
+            "{try_from_error}"
+        );
+    }
 }
 
 #[test]
@@ -40,7 +63,7 @@ fn test_kid_try_from_invalid_error() {
 
 #[test]
 fn test_kid_serde_roundtrip() {
-    let kid = Kid::try_from("RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N").unwrap();
+    let kid = Kid::try_from(CANONICAL_KID).unwrap();
     let encoded = serde_json::to_string(&kid).unwrap();
     let decoded: Kid = serde_json::from_str(&encoded).unwrap();
 
@@ -56,10 +79,16 @@ fn test_kid_deserialization_invalid_error() {
 
 #[test]
 fn test_kid_deserialization_requires_canonical_form() {
-    let error =
-        serde_json::from_str::<Kid>(r#""rdkj-8yhm-ppjh-w7qc-3446-gpnx-hnrt-x61n""#).unwrap_err();
+    for value in [
+        "RDKJ-8YHM-PPJH-W7QC-3446-GPNX-HNRT-X61N",
+        "rdkj8yhmppjhw7qc3446gpnxhnrtx61n",
+        "RDKJ8YHM",
+    ] {
+        let encoded = serde_json::to_string(value).unwrap();
+        let error = serde_json::from_str::<Kid>(&encoded).unwrap_err();
 
-    assert!(error.to_string().contains("canonical"), "{error}");
+        assert!(error.to_string().contains("canonical"), "{error}");
+    }
 }
 
 #[test]
@@ -77,16 +106,4 @@ fn test_member_handle_deserialization_error_carries_its_rule_code() {
         error.to_string().contains("E_MEMBER_HANDLE_INVALID"),
         "{error}"
     );
-}
-
-#[test]
-fn test_kid_from_canonical_rejects_display_form_accepted_by_operator_input() {
-    let display = "rdkj-8yhm-ppjh-w7qc-3446-gpnx-hnrt-x61n";
-
-    let normalized = Kid::try_from(display).unwrap();
-    let stored = Kid::from_canonical(display);
-
-    assert_eq!(normalized.as_str(), "RDKJ8YHMPPJHW7QC3446GPNXHNRTX61N");
-    assert!(stored.is_err());
-    assert!(Kid::from_canonical(normalized.as_str()).is_ok());
 }

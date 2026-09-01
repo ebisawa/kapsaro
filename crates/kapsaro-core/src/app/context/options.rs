@@ -7,13 +7,13 @@
 use std::cell::OnceCell;
 use std::path::PathBuf;
 
-use crate::api::operation::OperationOptions;
 use crate::config::resolution::allow_expired_key::resolve_allow_expired_key;
 use crate::config::resolution::allow_non_member::resolve_allow_non_member;
 use crate::config::resolution::global::{create_home, open_optional_home, GlobalConfigSnapshot};
 use crate::config::types::SshSigningMethod;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::resolver::KeystoreResolver;
+use crate::service::operation::OperationOptions;
 use crate::support::fs::anchor::AnchoredDir;
 use crate::{Error, Result};
 

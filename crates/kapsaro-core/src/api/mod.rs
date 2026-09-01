@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Stable facade APIs for external applications.
-
-mod artifact_text;
+//! Each module explicitly re-exports an allow-list from the internal service layer.
 
 pub mod diagnostics;
 pub mod file;

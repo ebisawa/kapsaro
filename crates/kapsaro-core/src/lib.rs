@@ -42,6 +42,10 @@
 //! ```compile_fail
 //! use kapsaro_core::support;
 //! ```
+//!
+//! ```compile_fail
+//! use kapsaro_core::service;
+//! ```
 
 #[cfg(not(unix))]
 compile_error!("kapsaro-core currently supports Unix targets only.");
@@ -60,6 +64,7 @@ pub(crate) mod feature;
 pub(crate) mod format;
 pub(crate) mod io;
 pub(crate) mod model;
+mod service;
 pub(crate) mod support;
 
 pub use error::{Error, ErrorKind, Result};

@@ -16,14 +16,7 @@ use crate::app::trust::approval::ApprovedKnownKey;
 use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};
 use crate::app_test_utils::{build_test_command_options, build_test_execution_context};
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::io::verify_online::VerifiedGithubIdentity;
-use crate::model::public_key::{
-    Attestation, BindingClaims, GithubAccount, IdentityKeys, JwkOkpPublicKey, PublicKey,
-    PublicKeyParts,
-};
-use crate::test_utils::{
-    kid as test_kid, member_handle as test_member_handle, setup_test_keystore_from_fixtures,
-};
+use crate::test_utils::setup_test_keystore_from_fixtures;
 use std::path::PathBuf;
 
 fn build_candidate(member_handle: &str, kid: &str) -> TrustApprovalCandidate {
@@ -35,81 +28,34 @@ fn build_candidate_with_binding(
     kid: &str,
     github_binding_configured: bool,
 ) -> TrustApprovalCandidate {
-    TrustApprovalCandidate {
-        member_handle: test_member_handle(member_handle),
-        kid: test_kid(kid),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: Some(build_public_key(
-            member_handle,
-            kid,
-            github_binding_configured,
-        )),
-        requires_out_of_band_verification: true,
-    }
-}
-
-fn build_public_key(member_handle: &str, kid: &str, github_binding_configured: bool) -> PublicKey {
-    let binding_claims = github_binding_configured.then(|| BindingClaims {
-        github_account: Some(GithubAccount {
-            id: 42,
-            login: "octocat".to_string(),
-        }),
-    });
-
-    PublicKey::new(PublicKeyParts {
-        subject_handle: member_handle.to_string(),
-        kid: kid.to_string(),
-        keys: IdentityKeys {
-            kem: JwkOkpPublicKey {
-                kty: "OKP".to_string(),
-                crv: "X25519".to_string(),
-                x: "kem-x".to_string(),
-            },
-            sig: JwkOkpPublicKey {
-                kty: "OKP".to_string(),
-                crv: "Ed25519".to_string(),
-                x: "sig-x".to_string(),
-            },
-        },
-        binding_claims,
-        attestation: Attestation {
-            method: "ssh".to_string(),
-            pub_: "ssh-ed25519 AAAA test".to_string(),
-            sig: "sig".to_string(),
-        },
-        expires_at: "2030-01-01T00:00:00Z".to_string(),
-        created_at: None,
-        signature: "signature".to_string(),
-    })
+    TrustApprovalCandidate::for_test(member_handle, kid, github_binding_configured)
 }
 
 fn build_verified_candidate(candidate: &TrustApprovalCandidate) -> TrustApprovalCandidate {
-    let verified_github =
-        VerifiedGithubIdentity::new(42, "octocat".to_string(), "SHA256:test".to_string(), 100);
-    let mut reviewed = candidate.clone();
-    reviewed.github_id = Some(verified_github.id);
-    reviewed.github_login = Some(verified_github.login.clone());
-    reviewed.verified_github = Some(verified_github);
-    reviewed.online_verification_attempted = true;
-    reviewed.online_verification_message = Some("verified".to_string());
-    reviewed
+    let evidence = crate::service::online::VerifiedGitHubEvidence::for_test(
+        candidate.service_candidate(),
+        42,
+        "octocat",
+        "SHA256:test",
+        100,
+    );
+    crate::app::trust::TrustApprovalCandidateBuilder::from_known_key_candidate(
+        candidate.service_candidate(),
+    )
+    .with_verified_service_evidence(evidence)
+    .with_online_verification_context(true, Some("verified".to_string()))
+    .build()
 }
 
 fn build_failed_online_candidate(
     candidate: &TrustApprovalCandidate,
     message: &str,
 ) -> TrustApprovalCandidate {
-    let mut reviewed = candidate.clone();
-    reviewed.online_verification_attempted = true;
-    reviewed.online_verification_message = Some(message.to_string());
-    reviewed
+    crate::app::trust::TrustApprovalCandidateBuilder::from_known_key_candidate(
+        candidate.service_candidate(),
+    )
+    .with_online_verification_context(true, Some(message.to_string()))
+    .build()
 }
 
 fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_handle: &str, kid: &str) {
@@ -247,8 +193,8 @@ fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_accep
         },
         |candidates, _context_label| {
             reviewed_recipient = Some((
-                candidates[0].member_handle.clone(),
-                candidates[0].kid.clone(),
+                candidates[0].member_handle().clone(),
+                candidates[0].kid().clone(),
             ));
             Ok(candidates.to_vec())
         },
@@ -262,7 +208,7 @@ fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_accep
     assert!(accepted_non_member);
     assert_eq!(
         reviewed_recipient,
-        Some((recipient.member_handle.clone(), recipient.kid.clone()))
+        Some((recipient.member_handle().clone(), recipient.kid().clone()))
     );
     assert!(executed);
 }
@@ -330,7 +276,11 @@ fn test_review_signer_trust_with_confirmation_accepts_known_key_approval() {
     .unwrap();
 
     assert_eq!(approvals.len(), 1);
-    assert_manual_review_approval(&approvals[0], &candidate.member_handle, &candidate.kid);
+    assert_manual_review_approval(
+        &approvals[0],
+        candidate.member_handle().as_str(),
+        candidate.kid().as_str(),
+    );
 }
 
 #[test]
@@ -345,7 +295,10 @@ fn test_review_signer_trust_with_confirmation_populates_verified_github_for_tofu
         "signer",
         |_candidate| Ok(build_verified_candidate(&candidate)),
         |candidate, _context_label| {
-            prompted_github = Some((candidate.github_id, candidate.github_login.clone()));
+            prompted_github = Some((
+                candidate.github_id(),
+                candidate.github_login().map(str::to_string),
+            ));
             Ok(true)
         },
         |_candidate, _context_label, _recipients| Ok(false),
@@ -406,8 +359,10 @@ fn test_review_signer_trust_with_confirmation_rejects_non_member_acceptance() {
         .contains("Non-member acceptance rejected"));
     assert!(error
         .format_user_message()
-        .contains(candidate.member_handle.as_str()));
-    assert!(error.format_user_message().contains(candidate.kid.as_str()));
+        .contains(candidate.member_handle().as_str()));
+    assert!(error
+        .format_user_message()
+        .contains(candidate.kid().as_str()));
 }
 
 #[test]
@@ -434,7 +389,7 @@ fn test_review_signer_trust_with_confirmation_allows_non_member_after_failed_onl
         },
         |_candidate, _context_label| Ok(false),
         |candidate, _context_label, _recipients| {
-            warned_message = candidate.online_verification_message.clone();
+            warned_message = candidate.online_verification_message().map(str::to_string);
             Ok(true)
         },
     )
@@ -478,7 +433,10 @@ fn test_review_recipient_trust_with_confirmation_populates_verified_github_for_t
         "encrypt recipients",
         |candidate| Ok(build_verified_candidate(candidate)),
         |candidates: &[TrustApprovalCandidate], _context_label| {
-            prompted_github = Some((candidates[0].github_id, candidates[0].github_login.clone()));
+            prompted_github = Some((
+                candidates[0].github_id(),
+                candidates[0].github_login().map(str::to_string),
+            ));
             Ok(candidates.to_vec())
         },
     )
@@ -504,8 +462,16 @@ fn test_review_recipient_trust_with_confirmation_collects_all_approved_candidate
     .unwrap();
 
     assert_eq!(approvals.len(), 2);
-    assert_manual_review_approval(&approvals[0], &alice.member_handle, &alice.kid);
-    assert_manual_review_approval(&approvals[1], &bob.member_handle, &bob.kid);
+    assert_manual_review_approval(
+        &approvals[0],
+        alice.member_handle().as_str(),
+        alice.kid().as_str(),
+    );
+    assert_manual_review_approval(
+        &approvals[1],
+        bob.member_handle().as_str(),
+        bob.kid().as_str(),
+    );
 }
 
 #[test]
@@ -578,7 +544,7 @@ fn test_review_rewrap_input_trust_requirements_with_confirmation_allows_non_memb
         },
         |_candidate, _context_label| Ok(true),
         |candidate, _context_label, _recipients| {
-            warned = candidate.online_verification_message.clone();
+            warned = candidate.online_verification_message().map(str::to_string);
             Ok(true)
         },
         |_candidates, _context_label| Ok(Vec::new()),
@@ -620,7 +586,11 @@ fn test_review_rewrap_input_trust_requirements_with_confirmation_dedupes_known_k
     .unwrap();
 
     assert_eq!(approvals.len(), 1);
-    assert_manual_review_approval(&approvals[0], &candidate.member_handle, &candidate.kid);
+    assert_manual_review_approval(
+        &approvals[0],
+        candidate.member_handle().as_str(),
+        candidate.kid().as_str(),
+    );
     assert_eq!(prompt_count, 1);
 }
 
@@ -642,6 +612,8 @@ fn test_enforce_read_trust_member_eligibility_rejects_run_policy() {
         .contains("not eligible for run trust approval"));
     assert!(error
         .format_user_message()
-        .contains(candidate.member_handle.as_str()));
-    assert!(error.format_user_message().contains(candidate.kid.as_str()));
+        .contains(candidate.member_handle().as_str()));
+    assert!(error
+        .format_user_message()
+        .contains(candidate.kid().as_str()));
 }

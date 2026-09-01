@@ -11,7 +11,7 @@ kapsaro は、オフライン優先（offline-first）の暗号ファイル共�
 本リポジトリは cargo workspace で構成されています。
 
 - ルート crate `kapsaro` (bin) — `src/cli/`, `src/main.rs`。CLI バイナリのみ
-- `crates/kapsaro-core` (lib) — domain ロジック全て（`app/`, `feature/`, `crypto/`, `format/`, `model/`, `io/`, `config/`, `support/` と公開 API `api/`）
+- `crates/kapsaro-core` (lib) — domain ロジック全て（`app/`, `service/`, `feature/`, `crypto/`, `format/`, `model/`, `io/`, `config/`, `support/` と公開 API `api/`）
 - `crates/kapsaro-test-support` (lib) — workspace 内テストで共有する fixture と環境制御 helper
 
 ### kapsaro-core の API 境界
@@ -22,7 +22,7 @@ kapsaro は、オフライン優先（offline-first）の暗号ファイル共�
   - `cli_api::app` — CLI ユースケースの入口
   - `cli_api::presentation` — CLI 表示の補助
   - `cli_api::test_support` — test harness 専用の補助
-- `app` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` — crate-private の実装モジュール
+- `app` / `service` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` — crate-private の実装モジュール
 
 ### Feature flags
 
@@ -73,18 +73,21 @@ cargo llvm-cov clean --workspace               # 計測データを掃除（前�
 ### レイヤー構造と依存方向
 
 ```
-cli -> api
-cli -> cli_api -> app -> feature
-app -> io | format | model | config | api
+cli -> api -> service
+cli -> cli_api -> app -> service
+app -> feature | io | format | model | config
+service -> feature | io | format | model | config | support
 feature -> crypto | format | model | io | config
 format -> crypto | model | support
 crypto -> model | support
 config -> io | support
 ```
 
-- `cli` (ルート crate) は標準 `api` または `cli_api` の allow-list を使い、`feature` / `io` に直接依存しない
+- `cli` (ルート crate) は標準 `api` または `cli_api` の allow-list を使い、`service` / `feature` / `io` に直接依存しない
+- `api` は `service` の標準操作と型から外部公開する項目だけを明示的に再公開し、実装本体を持たない
+- `service` は `app` / `api` / `cli_api` / `cli` に依存しない
 - `feature` は `cli` / `app` に依存しない
-- `app` は `cli` に依存しない
+- `app` は `cli` / `api` に依存しない
 - `io` は `feature` / `app` / `cli` に依存しない
 - `format` は `feature` に依存しない
 - `crypto` は `app` / `cli` / `feature` / `io` に依存しない
@@ -94,7 +97,8 @@ config -> io | support
 ### レイヤー責務
 
 - **`cli/`**（ルート crate） — presentation 層。clap 引数定義、対話入力（dialoguer）、stdout/stderr 出力、標準 `api` と `cli_api` の request/result を CLI 表現に変換。`common/` に共有オプション・出力・コンテキスト構築。`io::*` / `feature::*` への直接アクセス禁止
-- **`app/`** — ユースケースオーケストレーション層。コマンド単位の処理順序定義、workspace/config/keystore/member 解決、複数 feature/io 呼び出しの束ね込み、CLI が描画しやすい結果 DTO の返却。`println!` / `dialoguer` 禁止
+- **`app/`** — first-party CLI のユースケースオーケストレーション層。CLI 引数、環境変数、設定、既定値から実行対象と方針を一度だけ解決し、コマンド単位の処理順序、review 前後の reload、retry、recovery を管理する。標準規則は `service` に委ね、`api` は参照しない。`println!` / `dialoguer` 禁止
+- **`service/`** — 標準公開 API の実装層。caller が明示した入力と検証済み capability を受け取り、artifact、key、KV、trust、online verification、diagnostics の再利用可能な規則を実行する。入力の再解決、環境変数・設定優先順位・workspace 自動検出、TTY、CLI DTO を扱わず、`app` / `api` / `cli_api` / `cli` に依存しない
 - **`feature/`** — ドメイン処理本体。CLI の存在を知らず、再利用可能な機能を提供
   - `envelope/` — artifact key schedule、HPKE wrap/unwrap、key-possession proof、エントリ暗号化
   - `kv/` — KV ドキュメント操作（builder, encrypt, decrypt, mutate, rewrite）
@@ -120,8 +124,7 @@ config -> io | support
   - `process.rs` — 子プロセスへ継承する環境変数の分離 helper
   - `document_store.rs` — ドキュメント永続化
 - **`support/`** — ユーティリティ（表示、時刻、ファイルシステム操作、secret、limits、path、runtime、kid、validation、tty、warning、shell、post_write）
-- **`api/`**（kapsaro-core 公開） — 外部アプリケーション、first-party CLI、および `app` 層が共有する公開型層。`LocalTrustStore` や `TrustPolicyEvaluator` のような実装本体もここに置かれており、`app` 配下の一部モジュールは `feature` / `io` の代わりに `api::{file,kv,key,trust,operation}` を直接参照する
-  - `diagnostics.rs` — ローカル状態の警告を呼び出し側が取り出すための入口
+- **`api/`**（kapsaro-core 公開） — 外部アプリケーションと first-party CLI 向けの allow-list facade。`service` の型と操作から外部公開する項目だけを用途別 module で明示的に再公開し、実装、変換、fallback、CLI 固有処理、glob 再公開を持たない
 
 ### 暗号化フロー
 

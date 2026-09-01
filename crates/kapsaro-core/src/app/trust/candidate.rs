@@ -1,28 +1,137 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared trust approval candidate construction.
+//! Presents a service-verified trust candidate to interactive callers.
+//! Identity is always projected from the retained service capability.
 
-use crate::io::ssh::protocol::build_sha256_fingerprint;
-use crate::io::verify_online::{VerificationResult, VerifiedGithubIdentity};
+use crate::io::verify_online::VerificationResult;
 use crate::model::identity::{Kid, MemberHandle};
-use crate::model::public_key::PublicKey;
+use crate::model::public_key::VerifiedSigningPublicKey;
+use crate::service::online::VerifiedGitHubEvidence;
+use crate::service::trust::KnownKeyReviewCandidate;
 
 /// Review material for a manual trust decision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustApprovalCandidate {
-    pub member_handle: MemberHandle,
-    pub kid: Kid,
-    pub fingerprint: Option<String>,
-    pub github_id: Option<u64>,
-    pub github_login: Option<String>,
-    pub attestor_pub: Option<String>,
-    pub verified_github: Option<VerifiedGithubIdentity>,
-    pub github_binding_configured: bool,
-    pub online_verification_attempted: bool,
-    pub online_verification_message: Option<String>,
-    pub public_key: Option<PublicKey>,
+    service_candidate: KnownKeyReviewCandidate,
+    verified_service_evidence: Option<VerifiedGitHubEvidence>,
+    online_verification_attempted: bool,
+    online_verification_message: Option<String>,
     pub requires_out_of_band_verification: bool,
+}
+
+impl TrustApprovalCandidate {
+    #[cfg(any(test, feature = "cli-test-support"))]
+    pub fn for_test(member_handle: &str, kid: &str, github_binding_configured: bool) -> Self {
+        TrustApprovalCandidateBuilder::from_known_key_candidate(
+            &KnownKeyReviewCandidate::for_test_with_github_binding(
+                member_handle,
+                kid,
+                "ssh-ed25519 AAAA test",
+                github_binding_configured,
+            ),
+        )
+        .build()
+    }
+
+    #[cfg(any(test, feature = "cli-test-support"))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn for_test_review(
+        member_handle: &str,
+        kid: &str,
+        fingerprint: Option<String>,
+        github_binding_configured: bool,
+        verified_github: Option<(u64, String, String, i64)>,
+        online_verification_attempted: bool,
+        online_verification_message: Option<String>,
+        requires_out_of_band_verification: bool,
+    ) -> Self {
+        let github_account_id = verified_github
+            .as_ref()
+            .map(|(id, ..)| *id)
+            .or_else(|| github_binding_configured.then_some(42));
+        let service_candidate = KnownKeyReviewCandidate::for_test_with_github_account_id(
+            member_handle,
+            kid,
+            "ssh-ed25519 AAAA test",
+            github_account_id,
+            fingerprint,
+        );
+        let evidence = verified_github.map(|(id, login, fingerprint, matched_key_id)| {
+            VerifiedGitHubEvidence::for_test(
+                &service_candidate,
+                id,
+                login,
+                fingerprint,
+                matched_key_id,
+            )
+        });
+        let mut candidate =
+            TrustApprovalCandidateBuilder::from_known_key_candidate(&service_candidate)
+                .with_optional_verified_service_evidence(evidence)
+                .with_online_verification_context(
+                    online_verification_attempted,
+                    online_verification_message,
+                )
+                .build();
+        candidate.requires_out_of_band_verification = requires_out_of_band_verification;
+        candidate
+    }
+
+    pub fn member_handle(&self) -> &MemberHandle {
+        self.service_candidate.subject_handle()
+    }
+
+    pub fn kid(&self) -> &Kid {
+        self.service_candidate.kid()
+    }
+
+    pub fn fingerprint(&self) -> Option<&str> {
+        self.verified_service_evidence
+            .as_ref()
+            .map(VerifiedGitHubEvidence::fingerprint)
+            .or_else(|| self.service_candidate.fingerprint())
+    }
+
+    pub fn github_id(&self) -> Option<u64> {
+        self.verified_service_evidence
+            .as_ref()
+            .map(|evidence| evidence.account().id())
+    }
+
+    pub fn github_login(&self) -> Option<&str> {
+        self.verified_service_evidence
+            .as_ref()
+            .map(|evidence| evidence.account().login())
+    }
+
+    pub fn attestor_pub(&self) -> &str {
+        self.service_candidate.ssh_attestor_public_key()
+    }
+
+    pub fn github_binding_configured(&self) -> bool {
+        self.service_candidate.has_github_binding()
+    }
+
+    pub fn is_github_verified(&self) -> bool {
+        self.verified_service_evidence.is_some()
+    }
+
+    pub fn online_verification_attempted(&self) -> bool {
+        self.online_verification_attempted
+    }
+
+    pub fn online_verification_message(&self) -> Option<&str> {
+        self.online_verification_message.as_deref()
+    }
+
+    pub(crate) fn service_candidate(&self) -> &KnownKeyReviewCandidate {
+        &self.service_candidate
+    }
+
+    pub(crate) fn verified_service_evidence(&self) -> Option<&VerifiedGitHubEvidence> {
+        self.verified_service_evidence.as_ref()
+    }
 }
 
 pub struct TrustApprovalCandidateBuilder {
@@ -30,82 +139,44 @@ pub struct TrustApprovalCandidateBuilder {
 }
 
 impl TrustApprovalCandidateBuilder {
-    pub fn new(member_handle: &str, kid: &str) -> Self {
+    pub(crate) fn from_verified_signing_public_key(
+        public_key: &VerifiedSigningPublicKey,
+    ) -> Result<Self, crate::Error> {
+        let candidate = KnownKeyReviewCandidate::from_verified_signing_public_key(public_key)?;
+        Ok(Self::from_known_key_candidate(&candidate))
+    }
+
+    pub(crate) fn from_known_key_candidate(candidate: &KnownKeyReviewCandidate) -> Self {
         Self {
             candidate: TrustApprovalCandidate {
-                member_handle: MemberHandle::try_from(member_handle.to_string())
-                    .expect("trust approval candidate member_handle must be valid"),
-                kid: Kid::try_from(kid.to_string())
-                    .expect("trust approval candidate kid must be valid"),
-                fingerprint: None,
-                github_id: None,
-                github_login: None,
-                attestor_pub: None,
-                verified_github: None,
-                github_binding_configured: false,
+                service_candidate: candidate.clone(),
+                verified_service_evidence: None,
                 online_verification_attempted: false,
                 online_verification_message: None,
-                public_key: None,
                 requires_out_of_band_verification: true,
             },
         }
     }
 
-    pub fn from_public_key(public_key: &PublicKey) -> Self {
-        Self::new(
-            &public_key.protected.subject_handle,
-            &public_key.protected.kid,
-        )
-        .with_fingerprint(build_attestation_fingerprint(public_key))
-        .with_attestor_pub(Some(public_key.protected.attestation.pub_.clone()))
-        .with_github_binding_configured(github_binding_configured(public_key))
-        .with_public_key(Some(public_key.clone()))
-    }
-
-    pub fn with_fingerprint(mut self, fingerprint: Option<String>) -> Self {
-        self.candidate.fingerprint = fingerprint;
-        self
-    }
-
-    pub fn with_attestor_pub(mut self, attestor_pub: Option<String>) -> Self {
-        self.candidate.attestor_pub = attestor_pub;
-        self
-    }
-
-    pub fn with_github_binding_configured(mut self, configured: bool) -> Self {
-        self.candidate.github_binding_configured = configured;
-        self
-    }
-
-    pub fn with_verified_github(mut self, verified_github: Option<VerifiedGithubIdentity>) -> Self {
-        let (github_id, github_login) = derive_github_review_fields(verified_github.as_ref());
-        self.candidate.verified_github = verified_github;
-        self.candidate.github_id = github_id;
-        self.candidate.github_login = github_login;
-        self
-    }
-
-    pub fn with_github_review_fields(
+    pub(crate) fn with_verified_service_evidence(
         mut self,
-        github_id: Option<u64>,
-        github_login: Option<String>,
+        evidence: VerifiedGitHubEvidence,
     ) -> Self {
-        self.candidate.github_id = github_id;
-        self.candidate.github_login = github_login;
+        self.candidate.verified_service_evidence = Some(evidence);
         self
     }
 
-    pub fn with_public_key(mut self, public_key: Option<PublicKey>) -> Self {
-        self.candidate.public_key = public_key;
-        self
+    pub(crate) fn with_optional_verified_service_evidence(
+        self,
+        evidence: Option<VerifiedGitHubEvidence>,
+    ) -> Self {
+        match evidence {
+            Some(evidence) => self.with_verified_service_evidence(evidence),
+            None => self,
+        }
     }
 
     pub fn with_verification_result(mut self, result: &VerificationResult) -> Self {
-        self.candidate.fingerprint = result
-            .fingerprint
-            .clone()
-            .or_else(|| self.candidate.fingerprint.clone());
-        self = self.with_verified_github(result.verified_github.clone());
         self.candidate.online_verification_attempted = true;
         self.candidate.online_verification_message = Some(result.message.clone());
         self
@@ -123,28 +194,6 @@ impl TrustApprovalCandidateBuilder {
 
     pub fn build(self) -> TrustApprovalCandidate {
         self.candidate
-    }
-}
-
-fn build_attestation_fingerprint(public_key: &PublicKey) -> Option<String> {
-    build_sha256_fingerprint(&public_key.protected.attestation.pub_).ok()
-}
-
-fn github_binding_configured(public_key: &PublicKey) -> bool {
-    public_key
-        .protected
-        .binding_claims
-        .as_ref()
-        .and_then(|claims| claims.github_account.as_ref())
-        .is_some()
-}
-
-fn derive_github_review_fields(
-    verified_github: Option<&VerifiedGithubIdentity>,
-) -> (Option<u64>, Option<String>) {
-    match verified_github {
-        Some(account) => (Some(account.id), Some(account.login.clone())),
-        None => (None, None),
     }
 }
 

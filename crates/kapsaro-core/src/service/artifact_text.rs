@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared artifact text handling for public facade types.
+//! Shared artifact text handling for standard service operations.
 //!
 //! Keeps parse/load/save mechanics private while facade modules own domain operations.
 

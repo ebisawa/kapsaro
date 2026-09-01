@@ -6,7 +6,7 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::{ArtifactRecipientTrustOutcome, CommandCapability, TrustContext};
+use crate::app::trust::{ArtifactRecipientTrustOutcome, TrustContext};
 use crate::feature::artifact::artifact_recipient_evidence;
 use crate::format::content::EncContent;
 use crate::Result;
@@ -18,7 +18,6 @@ use super::execution::{
 struct ArtifactContentReviewInput<'a> {
     trust_ctx: &'a TrustContext,
     content: &'a EncContent,
-    capability: CommandCapability,
     context_label: &'a str,
 }
 
@@ -27,7 +26,6 @@ pub struct ArtifactOutputRecipientSetReviewInput<'a> {
     pub execution: &'a ExecutionContext,
     pub trust_ctx: &'a TrustContext,
     pub content: &'a EncContent,
-    pub capability: CommandCapability,
     pub context_label: &'a str,
 }
 
@@ -46,7 +44,6 @@ where
         ArtifactContentReviewInput {
             trust_ctx: review.trust_ctx,
             content: review.content,
-            capability: review.capability,
             context_label: review.context_label,
         },
         confirm_recipient_set,
@@ -67,7 +64,6 @@ where
         ArtifactRecipientSetReviewInput {
             trust_ctx: review.trust_ctx,
             recipient_set: &evidence.recipient_set,
-            capability: review.capability,
             context_label: review.context_label,
         },
         confirm_recipient_set,

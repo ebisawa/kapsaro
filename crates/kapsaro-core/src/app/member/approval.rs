@@ -10,13 +10,18 @@ use crate::app::trust::approval::{save_known_key_approvals, ApprovedKnownKey};
 use crate::app::trust::store::{load_execution_trust_store, trust_store_or_empty};
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::context::expiry::{check_key_expiry, KeyExpiryStatus};
+use crate::feature::member::verification::{
+    append_verification_warnings, build_offline_verification_failure, has_github_claim,
+    verify_member_public_key,
+};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::io::verify_online::{VerificationResult, VerificationStatus, VerifiedGithubIdentity};
 use crate::io::workspace::members::load_active_member_files_at;
-use crate::model::identity::MemberHandle;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
+use std::collections::BTreeMap;
 use tracing::debug;
 
 const APPROVAL_SUBJECT: &str = "member verify --approve";
@@ -24,6 +29,7 @@ const APPROVAL_SUBJECT: &str = "member verify --approve";
 #[derive(Debug)]
 pub struct MemberApprovalEvaluation {
     pub results: Vec<MemberApprovalResult>,
+    approvals: BTreeMap<Kid, ApprovedKnownKey>,
 }
 
 #[derive(Debug)]
@@ -41,6 +47,60 @@ pub struct MemberApprovalResult {
     pub github_binding_configured: bool,
     pub attestor_pub: Option<String>,
     pub verified_github: Option<VerifiedGithubIdentity>,
+}
+
+#[cfg(test)]
+impl MemberApprovalEvaluation {
+    pub(crate) fn for_test(
+        results: Vec<MemberApprovalResult>,
+        active_members: &[PublicKey],
+    ) -> Result<Self> {
+        let mut approvals = BTreeMap::new();
+        for result in results.iter().filter(|result| result.approved) {
+            let public_key = find_member_public_key(active_members, &result.member_handle)
+                .ok_or_else(|| Error::build_not_found_error("test member missing".to_string()))?;
+            let candidate = build_test_candidate(public_key, result)?;
+            let approval = ApprovedKnownKey::from_candidate(&candidate)?;
+            approvals.insert(approval.kid().clone(), approval);
+        }
+        Ok(Self { results, approvals })
+    }
+}
+
+#[cfg(test)]
+fn build_test_candidate(
+    public_key: &PublicKey,
+    result: &MemberApprovalResult,
+) -> Result<TrustApprovalCandidate> {
+    let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
+        public_key,
+        crate::feature::verify::public_key::WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
+    )?;
+    let Some(github) = result.verified_github.as_ref() else {
+        return TrustApprovalCandidateBuilder::from_verified_signing_public_key(
+            &verified.verified_public_key,
+        )
+        .map(TrustApprovalCandidateBuilder::build);
+    };
+    let candidate = crate::service::trust::KnownKeyReviewCandidate::for_test_with_github_account_id(
+        &public_key.protected.subject_handle,
+        &public_key.protected.kid,
+        &public_key.protected.attestation.pub_,
+        Some(github.id),
+        result.fingerprint.clone(),
+    );
+    let evidence = crate::service::online::VerifiedGitHubEvidence::for_test(
+        &candidate,
+        github.id,
+        github.login.clone(),
+        github.fingerprint.clone(),
+        github.matched_key_id,
+    );
+    Ok(
+        TrustApprovalCandidateBuilder::from_known_key_candidate(&candidate)
+            .with_verified_service_evidence(evidence)
+            .build(),
+    )
 }
 
 /// Evaluate members for approval (does NOT write trust store).
@@ -68,11 +128,19 @@ pub fn evaluate_members_for_approval(
     let loaded = load_execution_trust_store(execution)?;
     let known_keys = trust_store_or_empty(&owner, loaded)?.protected.known_keys;
 
-    let results = verification_results
+    let evaluated = verification_results
         .iter()
         .map(|vr| evaluate_candidate_with_snapshot(vr, &active_members, &known_keys))
         .collect::<Result<Vec<_>>>()?;
-    Ok(MemberApprovalEvaluation { results })
+    let mut approvals = BTreeMap::new();
+    let mut results = Vec::with_capacity(evaluated.len());
+    for (result, approval) in evaluated {
+        if let Some(approval) = approval {
+            approvals.insert(approval.kid().clone(), approval);
+        }
+        results.push(result);
+    }
+    Ok(MemberApprovalEvaluation { results, approvals })
 }
 
 /// Verify the public keys of the members this approval run targets.
@@ -81,15 +149,69 @@ fn verify_approval_targets(
     member_handles: &[String],
     owner: &MemberHandle,
 ) -> Result<Vec<VerificationResult>> {
+    verify_approval_targets_with_verifier(active_members, member_handles, owner, |public_key| {
+        let mut results = block_on_result(super::verification::verify_member_public_keys(
+            std::slice::from_ref(public_key),
+        ))?;
+        results.pop().ok_or_else(|| {
+            Error::build_invalid_operation_error(
+                "GitHub verification returned no member result".to_string(),
+            )
+        })
+    })
+}
+
+fn verify_approval_targets_with_verifier<VerifyOnline>(
+    active_members: &[PublicKey],
+    member_handles: &[String],
+    owner: &MemberHandle,
+    mut verify_online: VerifyOnline,
+) -> Result<Vec<VerificationResult>>
+where
+    VerifyOnline: FnMut(&PublicKey) -> Result<VerificationResult>,
+{
     let approval_targets = select_approval_targets(active_members, member_handles, owner.as_str())?;
     debug!(
         "[MEMBER] approve: verify candidate public keys active_count={}, target_count={}",
         active_members.len(),
         approval_targets.len()
     );
-    block_on_result(super::verification::verify_member_public_keys(
-        &approval_targets,
-    ))
+    approval_targets
+        .iter()
+        .map(|public_key| {
+            if has_github_claim(public_key) {
+                verify_online(public_key)
+            } else {
+                Ok(verify_unbound_approval_target(public_key))
+            }
+        })
+        .collect()
+}
+
+fn verify_unbound_approval_target(public_key: &PublicKey) -> VerificationResult {
+    let subject = match verify_member_public_key(public_key) {
+        Ok(subject) => subject,
+        Err(error) => {
+            return build_offline_verification_failure(
+                &public_key.protected.subject_handle,
+                error,
+                false,
+            )
+        }
+    };
+    let fingerprint = crate::io::ssh::protocol::build_sha256_fingerprint(
+        &subject.public_key.protected.attestation.pub_,
+    )
+    .ok();
+    append_verification_warnings(
+        VerificationResult::not_configured(
+            &subject.member_handle,
+            "No binding_claims.github_account configured",
+            fingerprint,
+            false,
+        ),
+        &subject.warnings,
+    )
 }
 
 /// Persist approved members to the trust store.
@@ -97,10 +219,10 @@ fn verify_approval_targets(
 /// Called after the user has reviewed `evaluate_members_for_approval` results.
 pub fn save_member_approvals(
     options: &CommonCommandOptions,
-    results: &[MemberApprovalResult],
+    evaluation: &MemberApprovalEvaluation,
     execution: &ExecutionContext,
 ) -> Result<usize> {
-    let approvals = collect_persistable_approvals(results);
+    let approvals = collect_persistable_approvals(evaluation)?;
     if approvals.is_empty() {
         return Ok(0);
     }
@@ -151,25 +273,49 @@ fn evaluate_candidate_with_snapshot(
     vr: &crate::io::verify_online::VerificationResult,
     active_members: &[crate::model::public_key::PublicKey],
     known_keys: &[crate::model::trust_store::KnownKey],
-) -> Result<MemberApprovalResult> {
+) -> Result<(MemberApprovalResult, Option<ApprovedKnownKey>)> {
     let member_pk = find_member_public_key(active_members, &vr.member_handle);
 
     let Some(pk) = member_pk else {
-        return Ok(build_missing_active_member_approval_result(vr));
+        return Ok((build_missing_active_member_approval_result(vr), None));
     };
-    let candidate = TrustApprovalCandidateBuilder::from_public_key(pk)
+    let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
+        pk,
+        crate::feature::verify::public_key::WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
+    )?;
+    let builder = TrustApprovalCandidateBuilder::from_verified_signing_public_key(
+        &verified.verified_public_key,
+    )?
+    .with_verification_result(vr);
+    let service_candidate = builder.build().service_candidate().clone();
+    let verified_service_evidence = (vr.status == VerificationStatus::Verified)
+        .then(|| {
+            crate::service::online::VerifiedGitHubEvidence::from_result(
+                &service_candidate,
+                vr.clone(),
+            )
+        })
+        .transpose()?;
+    let candidate = TrustApprovalCandidateBuilder::from_known_key_candidate(&service_candidate)
         .with_verification_result(vr)
+        .with_optional_verified_service_evidence(verified_service_evidence)
         .build();
 
     enforce_candidate_public_key_active(&pk.protected.expires_at)?;
 
     if !evaluate_candidate_online_verification(vr, &candidate) {
-        return Ok(build_member_approval_result(
-            vr, &candidate, false, false, false,
+        return Ok((
+            build_member_approval_result(vr, &candidate, false, false, false),
+            None,
         ));
     }
 
-    evaluate_candidate_known_key_state(vr, &candidate, known_keys)
+    let result = evaluate_candidate_known_key_state(vr, &candidate, known_keys)?;
+    let approval = result
+        .review_required
+        .then(|| ApprovedKnownKey::from_candidate(&candidate))
+        .transpose()?;
+    Ok((result, approval))
 }
 
 fn enforce_candidate_public_key_active(expires_at: &str) -> Result<()> {
@@ -193,7 +339,7 @@ fn evaluate_candidate_online_verification(
 ) -> bool {
     // Manual review is only allowed when GitHub binding is absent.
     vr.status != VerificationStatus::Failed
-        && (!candidate.github_binding_configured || vr.status == VerificationStatus::Verified)
+        && (!candidate.github_binding_configured() || vr.status == VerificationStatus::Verified)
 }
 
 fn evaluate_candidate_known_key_state(
@@ -201,7 +347,7 @@ fn evaluate_candidate_known_key_state(
     candidate: &TrustApprovalCandidate,
     known_keys: &[crate::model::trust_store::KnownKey],
 ) -> Result<MemberApprovalResult> {
-    let known_key_state = match judge_known_key(known_keys, &candidate.kid, &vr.member_handle) {
+    let known_key_state = match judge_known_key(known_keys, candidate.kid(), &vr.member_handle) {
         Ok(state) => state,
         Err(e) => {
             return Ok(build_member_approval_result_with_message(
@@ -293,51 +439,43 @@ fn build_member_approval_result_with_message(
     message: String,
 ) -> MemberApprovalResult {
     MemberApprovalResult {
-        member_handle: candidate.member_handle.to_string(),
-        kid: candidate.kid.to_string(),
+        member_handle: candidate.member_handle().to_string(),
+        kid: candidate.kid().to_string(),
         verified,
         approved: false,
         review_required,
         already_known,
         message,
-        fingerprint: candidate.fingerprint.clone(),
-        github_id: candidate.github_id,
-        github_login: candidate.github_login.clone(),
-        github_binding_configured: candidate.github_binding_configured,
-        attestor_pub: candidate.attestor_pub.clone(),
-        verified_github: candidate.verified_github.clone(),
+        fingerprint: candidate.fingerprint().map(str::to_string),
+        github_id: candidate.github_id(),
+        github_login: candidate.github_login().map(str::to_string),
+        github_binding_configured: candidate.github_binding_configured(),
+        attestor_pub: Some(candidate.attestor_pub().to_string()),
+        verified_github: candidate.verified_service_evidence().map(|evidence| {
+            VerifiedGithubIdentity::new(
+                evidence.account().id(),
+                evidence.account().login().to_string(),
+                evidence.fingerprint().to_string(),
+                evidence.matched_key_id(),
+            )
+        }),
     }
 }
 
-fn collect_persistable_approvals(results: &[MemberApprovalResult]) -> Vec<ApprovedKnownKey> {
-    results
+fn collect_persistable_approvals(
+    evaluation: &MemberApprovalEvaluation,
+) -> Result<Vec<ApprovedKnownKey>> {
+    evaluation
+        .results
         .iter()
         .filter(|result| result.approved)
-        .map(build_approved_known_key)
+        .map(|result| {
+            let kid = Kid::new(result.kid.clone())?;
+            evaluation.approvals.get(&kid).cloned().ok_or_else(|| {
+                Error::build_invalid_operation_error(
+                    "Approved member result has no verified approval capability".to_string(),
+                )
+            })
+        })
         .collect()
-}
-
-fn build_approved_known_key(result: &MemberApprovalResult) -> ApprovedKnownKey {
-    ApprovedKnownKey::from_review(
-        &result.member_handle,
-        &result.kid,
-        result.attestor_pub.clone(),
-        result.verified_github.as_ref(),
-    )
-}
-
-impl From<&MemberApprovalResult> for TrustApprovalCandidate {
-    fn from(result: &MemberApprovalResult) -> Self {
-        TrustApprovalCandidateBuilder::new(&result.member_handle, &result.kid)
-            .with_fingerprint(result.fingerprint.clone())
-            .with_attestor_pub(result.attestor_pub.clone())
-            .with_verified_github(result.verified_github.clone())
-            .with_github_review_fields(result.github_id, result.github_login.clone())
-            .with_github_binding_configured(result.github_binding_configured)
-            .with_online_verification_context(
-                result.github_binding_configured,
-                Some(result.message.clone()),
-            )
-            .build()
-    }
 }

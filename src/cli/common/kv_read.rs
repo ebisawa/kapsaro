@@ -15,7 +15,7 @@ use kapsaro_core::api::kv::{
     KvEncArtifact, KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact,
 };
 use kapsaro_core::api::operation::OperationOptions;
-use kapsaro_core::api::trust::{TrustDecision, TrustPolicyEvaluator};
+use kapsaro_core::api::trust::{KnownKeyReview, TrustDecision, TrustPolicyEvaluator};
 use kapsaro_core::cli_api::app::context::execution::{
     resolve_read_trust_evaluator, ExecutionContext,
 };
@@ -46,6 +46,7 @@ pub(crate) struct KvReadReview<'a> {
     current: VerifiedKvEncArtifact,
     key_ctx: &'a KeyContext,
     signer_outcome: &'a SignerTrustOutcome,
+    known_key_review: KnownKeyReview,
     options: OperationOptions,
 }
 
@@ -129,6 +130,7 @@ impl KvReadSession {
             current: current_artifact.verify(self.options.operation_options())?,
             key_ctx: &context.execution.key_ctx,
             signer_outcome: context.signer_outcome(),
+            known_key_review: context.known_key_review(),
             options: self.options.operation_options(),
         })
     }
@@ -143,6 +145,7 @@ impl KvReadReview<'_> {
             self.key_ctx,
             operation,
             self.signer_outcome,
+            self.known_key_review,
             self.options,
         )? {
             TrustDecision::Trusted(trusted) => Ok(trusted),

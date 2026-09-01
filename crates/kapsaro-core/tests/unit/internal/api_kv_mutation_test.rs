@@ -9,8 +9,9 @@ use crate::api::key::{KeyContext, LocalKeyStore, MemberHandle};
 use crate::api::operation::OperationOptions;
 use crate::api::secret::SecretString;
 use crate::api::trust::{
-    ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, TrustApproval, TrustDecision,
-    TrustPolicyEvaluator, TrustReviewKind,
+    ApprovalConflictHandling, CurrentMemberSnapshot, KnownKeyApprovalEvidence, LocalTrustStore,
+    TrustApproval, TrustDecision, TrustPolicyEvaluator, TrustRecipientHandleHint, TrustReviewKind,
+    TrustReviewRequest,
 };
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
 
@@ -19,6 +20,24 @@ const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 
 fn member_handle(value: &str) -> MemberHandle {
     MemberHandle::try_from(value).expect("valid member handle")
+}
+
+fn approval_from_request(request: &TrustReviewRequest) -> crate::Result<TrustApproval> {
+    match request.kind() {
+        TrustReviewKind::KnownKey => TrustApproval::known_key(
+            request
+                .known_key_candidate()
+                .expect("known-key review carries its verified candidate"),
+            KnownKeyApprovalEvidence::none(),
+        ),
+        TrustReviewKind::RecipientSet | TrustReviewKind::ChangedRecipientSet => {
+            TrustApproval::recipient_set(
+                request.sid().expect("recipient review carries sid"),
+                request.recipient_kids().to_vec(),
+                request.recipient_handle_hints().to_vec(),
+            )
+        }
+    }
 }
 
 #[test]
@@ -132,7 +151,53 @@ fn test_evaluate_kv_mutation_requires_output_recipient_reviews() {
     assert!(recipient_request
         .recipient_handle_hints()
         .iter()
-        .any(|hint| hint.recipient_handle() == BOB_MEMBER_HANDLE));
+        .any(|hint| hint.recipient_handle().as_str() == BOB_MEMBER_HANDLE));
+
+    let missing_hint = recipient_request.recipient_handle_hints()[1..].to_vec();
+    assert!(TrustApproval::recipient_set(
+        recipient_request
+            .sid()
+            .expect("recipient review carries sid"),
+        recipient_request.recipient_kids().to_vec(),
+        missing_hint,
+    )
+    .is_err());
+
+    let duplicate_hint = vec![
+        recipient_request.recipient_handle_hints()[0].clone(),
+        recipient_request.recipient_handle_hints()[0].clone(),
+    ];
+    assert!(TrustApproval::recipient_set(
+        recipient_request
+            .sid()
+            .expect("recipient review carries sid"),
+        recipient_request.recipient_kids().to_vec(),
+        duplicate_hint,
+    )
+    .is_err());
+
+    let extra_hint = recipient_request.recipient_handle_hints().to_vec();
+    assert!(TrustApproval::recipient_set(
+        recipient_request
+            .sid()
+            .expect("recipient review carries sid"),
+        recipient_request.recipient_kids()[..1].to_vec(),
+        extra_hint,
+    )
+    .is_err());
+
+    let outsider_hint = vec![
+        recipient_request.recipient_handle_hints()[0].clone(),
+        TrustRecipientHandleHint::for_test("KCD3AAAA1111BBBB2222CCCC3333DDDD", "carol@example.com"),
+    ];
+    assert!(TrustApproval::recipient_set(
+        recipient_request
+            .sid()
+            .expect("recipient review carries sid"),
+        recipient_request.recipient_kids().to_vec(),
+        outsider_hint,
+    )
+    .is_err());
 }
 
 #[test]
@@ -179,7 +244,7 @@ fn test_evaluate_kv_mutation_accepts_approved_output_recipient_set_and_persists_
     };
     let approvals = requests
         .iter()
-        .map(TrustApproval::from_request)
+        .map(approval_from_request)
         .collect::<crate::Result<Vec<_>>>()
         .unwrap();
     let trust_store = LocalTrustStore::open(temp_dir.path(), member_handle(ALICE_MEMBER_HANDLE))
@@ -264,10 +329,10 @@ fn test_evaluate_kv_mutation_requires_review_for_changed_output_recipient_set() 
     let mut approvals = initial_requests
         .iter()
         .filter(|request| request.kind() == TrustReviewKind::KnownKey)
-        .map(TrustApproval::from_request)
+        .map(approval_from_request)
         .collect::<crate::Result<Vec<_>>>()
         .unwrap();
-    approvals.push(TrustApproval::recipient_set(
+    approvals.push(TrustApproval::recipient_set_for_test(
         verified.recipient_set_subject().unwrap().sid(),
         vec![input_recipients.keys()[0].document().protected.kid.clone()],
     ));
@@ -340,7 +405,10 @@ fn test_evaluate_kv_mutation_rejects_store_owner_before_recipient_lookup() {
         .into_string();
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(ALICE_MEMBER_HANDLE, alice_kid)],
+            vec![TrustApproval::known_key_for_test(
+                ALICE_MEMBER_HANDLE,
+                alice_kid,
+            )],
             &bob_ctx,
             ApprovalConflictHandling::merge(),
         )

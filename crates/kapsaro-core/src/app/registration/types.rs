@@ -11,7 +11,7 @@ use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::ssh::SshDeterminismStatus;
 
-pub use crate::app::verification::OnlineVerificationStatus;
+pub use crate::service::online::OnlineVerificationStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationResult {

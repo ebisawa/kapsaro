@@ -106,12 +106,12 @@ fn test_load_active_kid_rejects_oversized_file() {
 }
 
 #[test]
-fn test_set_active_kid_normalizes_display_form() {
+fn test_set_active_kid_writes_canonical_typed_value() {
     let temp = local_state_temp_dir();
     let keystore_root = temp.path();
     let access = KeystoreAccess::create(keystore_root).unwrap();
     let member_handle = MemberHandle::try_from("alice@example.com").unwrap();
-    let kid = Kid::try_from("7m2q-9d4r-1h8v-w6pk-t3xn-c5jy-2f9a-r8gd").unwrap();
+    let kid = Kid::try_from("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD").unwrap();
 
     access
         .set_active_kid_unchecked(&member_handle, &kid)
@@ -939,9 +939,7 @@ fn test_load_active_kid_requires_the_canonical_form() {
 
     assert_eq!(error.kind(), crate::ErrorKind::InvalidArgument);
     assert!(
-        error
-            .to_string()
-            .contains("kid must be stored in canonical form"),
+        error.to_string().contains("kid must be canonical"),
         "{error}"
     );
 }

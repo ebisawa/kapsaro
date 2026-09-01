@@ -9,7 +9,9 @@ use crate::api::key::{KeyContext, LocalKeyStore, MemberHandle};
 use crate::api::kv::{KvEncArtifact, KvInputEntry, KvReadOperation, VerifiedKvEncArtifact};
 use crate::api::operation::OperationOptions;
 use crate::api::secret::SecretString;
-use crate::api::trust::{CurrentMemberSnapshot, TrustDecision, TrustPolicyEvaluator};
+use crate::api::trust::{
+    CurrentMemberSnapshot, KnownKeyReview, TrustDecision, TrustPolicyEvaluator,
+};
 use crate::app::context::execution::resolve_read_trust_evaluator;
 use crate::app::trust::{SignerTrustOutcome, TrustApprovalCandidateBuilder};
 use crate::app_test_utils::build_test_execution_context;
@@ -44,6 +46,7 @@ fn test_strict_no_still_rejects_signer_removed_from_current_members() {
         &verified,
         &decrypt_ctx,
         &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Skipped,
         OperationOptions::default(),
     )
     .err()
@@ -81,6 +84,7 @@ fn test_read_evaluator_keeps_the_member_set_of_the_bound_workspace() {
         &verified,
         &decrypt_ctx,
         &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Skipped,
         OperationOptions::default(),
     )
     .err()
@@ -109,6 +113,7 @@ fn test_non_member_allowance_rejects_changed_artifact() {
         &current,
         &decrypt_ctx,
         &outcome,
+        KnownKeyReview::Required,
         OperationOptions::default(),
     )
     .err()
@@ -135,6 +140,7 @@ fn test_accepted_non_member_same_artifact_returns_mac_verified_trusted_value() {
         &verified,
         &decrypt_ctx,
         &non_member_outcome(&home, &signer_ctx),
+        KnownKeyReview::Required,
         OperationOptions::default(),
     )
     .unwrap();
@@ -160,6 +166,7 @@ fn test_normal_file_policy_rejects_changed_artifact() {
         &current,
         &key_ctx,
         &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Required,
         OperationOptions::default(),
     )
     .err()
@@ -182,6 +189,7 @@ fn test_normal_file_policy_accepts_same_artifact() {
         &verified,
         &key_ctx,
         &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Required,
         OperationOptions::default(),
     )
     .unwrap();
@@ -205,6 +213,7 @@ fn test_normal_kv_policy_rejects_changed_artifact() {
         &key_ctx,
         KvReadOperation::Entries,
         &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Required,
         OperationOptions::default(),
     )
     .err()
@@ -228,6 +237,32 @@ fn test_normal_kv_policy_accepts_same_artifact() {
         &key_ctx,
         KvReadOperation::Entries,
         &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Required,
+        OperationOptions::default(),
+    )
+    .unwrap();
+
+    assert!(matches!(decision, TrustDecision::Trusted(_)));
+}
+
+#[test]
+fn test_known_key_review_mode_is_not_reloaded_from_environment() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let decrypt_ctx = key_context(&home, ALICE_MEMBER_HANDLE);
+    let signer_ctx = key_context(&home, BOB_MEMBER_HANDLE);
+    let verified = file_artifact(&home, &signer_ctx, b"same");
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+
+    let decision = evaluate_file_after_cli_review(
+        &evaluator(&workspace),
+        &verified,
+        &verified,
+        &decrypt_ctx,
+        &SignerTrustOutcome::Accepted,
+        KnownKeyReview::Skipped,
         OperationOptions::default(),
     )
     .unwrap();
@@ -284,8 +319,17 @@ fn non_member_outcome(home: &tempfile::TempDir, signer_ctx: &KeyContext) -> Sign
     let key_store = home.path().join("keys");
     let kid = signer_ctx.kid();
     let public_key = load_public_key(&key_store, BOB_MEMBER_HANDLE, kid).unwrap();
+    let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
+        &public_key,
+        crate::feature::verify::public_key::WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
+    )
+    .unwrap();
     SignerTrustOutcome::NeedsNonMemberAcceptance {
-        candidate: TrustApprovalCandidateBuilder::from_public_key(&public_key).build(),
+        candidate: TrustApprovalCandidateBuilder::from_verified_signing_public_key(
+            &verified.verified_public_key,
+        )
+        .unwrap()
+        .build(),
         current_recipients: vec![ALICE_MEMBER_HANDLE.to_string()],
     }
 }

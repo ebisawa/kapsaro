@@ -16,15 +16,17 @@ use kapsaro_core::api::kv::{
     KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact,
 };
 use kapsaro_core::api::online::{
-    GitHubAccount, GitHubOnlineVerifier, OnlineVerificationResult, OnlineVerificationStatus,
+    GitHubAccount, GitHubOnlineVerifier, OnlineVerificationStatus, VerifiedGitHubEvidence,
 };
 use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::secret::{SecretBytes, SecretString};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
 use kapsaro_core::api::trust::{
-    ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, RecipientSetSubject,
-    TrustApproval, TrustDecision, TrustPolicyEvaluator, TrustRecipientHandleHint, TrustReviewKind,
-    TrustReviewRequest, VerifiedLocalTrustStore, VerifiedLocalTrustStoreLoadResult,
+    ApprovalConflictHandling, CurrentMemberSnapshot, KnownKeyApprovalEvidence, KnownKeyReview,
+    KnownKeyReviewCandidate, LocalTrustStore, ReadTrustExceptions, RecipientSetSubject,
+    TrustApproval, TrustApprovalOutcome, TrustDecision, TrustPolicyEvaluator,
+    TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
+    VerifiedLocalTrustStoreLoadResult,
 };
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::error::Error as StdError;
@@ -165,7 +167,7 @@ fn canonical_api_exposes_facade_helper_types() {
     );
     assert!(std::any::type_name::<TrustPolicyEvaluator>().contains("TrustPolicyEvaluator"));
     assert!(std::any::type_name::<GitHubAccount>().contains("GitHubAccount"));
-    assert!(std::any::type_name::<OnlineVerificationResult>().contains("OnlineVerificationResult"));
+    assert!(std::any::type_name::<VerifiedGitHubEvidence>().contains("VerifiedGitHubEvidence"));
     assert_eq!(
         OnlineVerificationStatus::Verified,
         OnlineVerificationStatus::Verified
@@ -331,26 +333,14 @@ fn test_online_verification_types_pinned() {
         &GitHubAccount,
         &str,
     ) -> Result<OnlineVerificationStatus> = GitHubOnlineVerifier::verify_ssh_key;
-    let _verify_keystore_member: fn(
+    let _verify_known_key_candidate: fn(
         &GitHubOnlineVerifier,
-        &LocalKeyStore,
-        &MemberHandle,
-        Option<&Kid>,
-    ) -> Result<OnlineVerificationResult> = GitHubOnlineVerifier::verify_keystore_member;
-    // Pin OnlineVerificationResult accessors.
-    let _member_handle: fn(&OnlineVerificationResult) -> &MemberHandle =
-        OnlineVerificationResult::member_handle;
-    let _status: fn(&OnlineVerificationResult) -> OnlineVerificationStatus =
-        OnlineVerificationResult::status;
-    let _message: fn(&OnlineVerificationResult) -> &str = OnlineVerificationResult::message;
-    let _fingerprint: fn(&OnlineVerificationResult) -> Option<&str> =
-        OnlineVerificationResult::fingerprint;
-    let _matched_key_id: fn(&OnlineVerificationResult) -> Option<i64> =
-        OnlineVerificationResult::matched_key_id;
-    let _github_claim_present: fn(&OnlineVerificationResult) -> bool =
-        OnlineVerificationResult::github_claim_present;
-    let _verified_account: fn(&OnlineVerificationResult) -> Option<&GitHubAccount> =
-        OnlineVerificationResult::verified_account;
+        &KnownKeyReviewCandidate,
+    ) -> Result<VerifiedGitHubEvidence> = GitHubOnlineVerifier::verify_known_key_candidate;
+    let _account: fn(&VerifiedGitHubEvidence) -> &GitHubAccount = VerifiedGitHubEvidence::account;
+    let _fingerprint: fn(&VerifiedGitHubEvidence) -> &str = VerifiedGitHubEvidence::fingerprint;
+    let _matched_key_id: fn(&VerifiedGitHubEvidence) -> i64 =
+        VerifiedGitHubEvidence::matched_key_id;
     // Pin NotConfigured and Failed variant names.
     let _not_configured = OnlineVerificationStatus::NotConfigured;
     let _failed = OnlineVerificationStatus::Failed;
@@ -482,7 +472,9 @@ fn test_trust_store_apply_approvals_pinned() {
         Vec<TrustApproval>,
         &KeyContext,
         ApprovalConflictHandling,
-    ) -> Result<()> = LocalTrustStore::apply_approvals_with_conflict_handling;
+    ) -> Result<TrustApprovalOutcome> = LocalTrustStore::apply_approvals_with_conflict_handling;
+    let _applied: fn(&TrustApprovalOutcome) -> usize = TrustApprovalOutcome::applied;
+    let _warnings: fn(&TrustApprovalOutcome) -> &DiagnosticBatch = TrustApprovalOutcome::warnings;
     let _merge: fn() -> ApprovalConflictHandling = ApprovalConflictHandling::merge;
     let _surface: fn(&VerifiedLocalTrustStoreLoadResult) -> ApprovalConflictHandling =
         ApprovalConflictHandling::surface;
@@ -491,26 +483,23 @@ fn test_trust_store_apply_approvals_pinned() {
 }
 
 #[test]
-fn test_trust_evaluator_evaluate_recipient_set_pinned() {
-    // Pin evaluate_recipient_set method shape on TrustPolicyEvaluator.
-    let _eval: fn(&TrustPolicyEvaluator, &RecipientSetSubject) -> Result<TrustDecision> =
-        TrustPolicyEvaluator::evaluate_recipient_set;
-}
-
-#[test]
 fn test_recipient_set_subject_accessors_pinned() {
     let _sid: fn(&RecipientSetSubject) -> uuid::Uuid = RecipientSetSubject::sid;
-    let _recipient_kids: fn(&RecipientSetSubject) -> &[String] =
-        RecipientSetSubject::recipient_kids;
+    let _recipient_kids: fn(&RecipientSetSubject) -> &[Kid] = RecipientSetSubject::recipient_kids;
 }
 
 #[test]
 fn test_trust_review_request_accessors_pinned() {
     // Pin review evidence accessors on TrustReviewRequest.
-    let _kid_fn: fn(&TrustReviewRequest) -> Option<&str> = TrustReviewRequest::kid;
-    let _sid_fn: fn(&TrustReviewRequest) -> Option<&str> = TrustReviewRequest::sid;
-    let _recipient_kids_fn: fn(&TrustReviewRequest) -> &[String] =
-        TrustReviewRequest::recipient_kids;
+    let _subject_handle_fn: fn(&TrustReviewRequest) -> Option<&MemberHandle> =
+        TrustReviewRequest::subject_handle;
+    let _kid_fn: fn(&TrustReviewRequest) -> Option<&Kid> = TrustReviewRequest::kid;
+    let _candidate_fn: fn(&TrustReviewRequest) -> Option<&KnownKeyReviewCandidate> =
+        TrustReviewRequest::known_key_candidate;
+    let _candidate_fingerprint: fn(&KnownKeyReviewCandidate) -> Option<&str> =
+        KnownKeyReviewCandidate::fingerprint;
+    let _sid_fn: fn(&TrustReviewRequest) -> Option<uuid::Uuid> = TrustReviewRequest::sid;
+    let _recipient_kids_fn: fn(&TrustReviewRequest) -> &[Kid] = TrustReviewRequest::recipient_kids;
     let _recipient_handle_hints_fn: fn(&TrustReviewRequest) -> &[TrustRecipientHandleHint] =
         TrustReviewRequest::recipient_handle_hints;
 }
@@ -528,16 +517,31 @@ fn test_trust_review_kind_variants_pinned() {
 
 #[test]
 fn test_trust_approval_constructors_and_from_request_pinned() {
-    // Pin known_key/recipient_set constructors.
-    let ka = TrustApproval::known_key("alice@example.com", "0123456789ABCDEFGHJKMNPQRSTVWXYZ");
-    let sid = uuid::Uuid::new_v4();
-    let ra = TrustApproval::recipient_set(sid, vec!["KID1".to_string()]);
+    let evidence =
+        KnownKeyApprovalEvidence::none().with_ssh_attestor_public_key("ssh-ed25519 AAAA");
     assert!(std::any::type_name::<TrustApproval>().contains("TrustApproval"));
-    drop(ka);
-    drop(ra);
-    // Pin from_request via known-key review path.
-    let _from_request: fn(&TrustReviewRequest) -> Result<TrustApproval> =
-        TrustApproval::from_request;
+    assert!(std::any::type_name::<KnownKeyReviewCandidate>().contains("KnownKeyReviewCandidate"));
+    drop(evidence);
+    let _known_key: fn(
+        &KnownKeyReviewCandidate,
+        KnownKeyApprovalEvidence,
+    ) -> Result<TrustApproval> = TrustApproval::known_key;
+    let _recipient_set: fn(
+        uuid::Uuid,
+        Vec<Kid>,
+        Vec<TrustRecipientHandleHint>,
+    ) -> Result<TrustApproval> = TrustApproval::recipient_set;
+}
+
+#[test]
+fn test_read_trust_exceptions_are_explicit_and_consumed() {
+    let exceptions = ReadTrustExceptions::none()
+        .with_known_key_review(KnownKeyReview::Skipped)
+        .accepting_non_member(
+            MemberHandle::new("alice@example.com").expect("valid member handle"),
+            Kid::new("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("canonical kid"),
+        );
+    assert!(format!("{exceptions:?}").contains("ReadTrustExceptions"));
 }
 
 #[test]

@@ -95,7 +95,6 @@ pub struct UnsetPolicy;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ImportPolicy;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RewrapInputPolicy;
 

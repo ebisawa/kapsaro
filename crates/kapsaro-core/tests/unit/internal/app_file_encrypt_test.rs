@@ -4,9 +4,7 @@
 use super::{execute_encrypt_file_command, resolve_encrypt_file_command};
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::trust::management::remove_known_key_command;
-use crate::app::trust::{
-    evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome, CommandCapability,
-};
+use crate::app::trust::{evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome};
 use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
 use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
 use crate::cli_api::test_support::storage::keystore::storage::list_kids;
@@ -38,10 +36,16 @@ fn test_encrypt_output_member_set_auto_accepts_self_only_non_interactive() {
         ArtifactRecipientSet::from_wrap_items(document.protected.sid, &document.protected.wrap)
             .unwrap();
 
+    let evaluator = crate::app::trust::snapshot::load_trust_policy_evaluator(
+        command.execution,
+        command.trust_context.active_members_by_kid.clone(),
+    )
+    .unwrap();
     let outcome = evaluate_output_recipient_set_trust(
+        &evaluator,
+        &command.execution.key_ctx,
         &command.trust_context,
         &recipient_set,
-        CommandCapability::Encrypt,
     )
     .unwrap();
 

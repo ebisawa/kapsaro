@@ -3,7 +3,6 @@
 
 use std::io::Cursor;
 
-use crate::test_utils::{kid as test_kid, member_handle as test_member_handle};
 use kapsaro_core::cli_api::app::rewrap::promotion::{
     PromotionReviewFailure, PromotionReviewPrompt, PromotionReviewView,
 };
@@ -18,20 +17,16 @@ fn build_prompt(member_handle: &str) -> PromotionReviewPrompt {
         _ => "KCD1AAAA1111BBBB2222CCCC3333DDDD",
     };
     PromotionReviewPrompt {
-        candidate: TrustApprovalCandidate {
-            member_handle: test_member_handle(member_handle),
-            kid: test_kid(kid),
-            fingerprint: Some("SHA256:abc".to_string()),
-            github_id: Some(12345),
-            github_login: Some(format!("{}-gh", member_handle)),
-            attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-            verified_github: None,
-            github_binding_configured: true,
-            online_verification_attempted: true,
-            online_verification_message: Some("verified".to_string()),
-            public_key: None,
-            requires_out_of_band_verification: true,
-        },
+        candidate: TrustApprovalCandidate::for_test_review(
+            member_handle,
+            kid,
+            Some("SHA256:abc".to_string()),
+            true,
+            None,
+            true,
+            Some("verified".to_string()),
+            true,
+        ),
     }
 }
 

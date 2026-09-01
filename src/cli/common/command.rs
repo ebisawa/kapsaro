@@ -79,6 +79,10 @@ impl<'a> ReadCommandContext<'a> {
     pub(crate) fn signer_outcome(&self) -> &SignerTrustOutcome {
         &self.trust.signer_outcome
     }
+
+    pub(crate) fn known_key_review(&self) -> kapsaro_core::api::trust::KnownKeyReview {
+        self.trust.known_key_review
+    }
 }
 
 pub(crate) fn ensure_reviewed_artifact_unchanged(

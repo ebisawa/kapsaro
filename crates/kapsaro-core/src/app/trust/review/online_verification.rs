@@ -5,9 +5,8 @@
 //! Skips candidates with no binding configured or already verified, and
 //! turns an unresolved result into an error unless non-member acceptance allows it.
 
-use crate::app::member::verification::verify_member_public_keys;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
-use crate::support::runtime::block_on_result;
+use crate::service::online::GitHubOnlineVerifier;
 use crate::{Error, Result};
 
 #[derive(Clone, Copy)]
@@ -24,12 +23,23 @@ pub(super) fn review_candidate_for_confirmation<VerifyOnline>(
 where
     VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
 {
-    if !candidate.github_binding_configured || candidate.verified_github.is_some() {
+    if !candidate.github_binding_configured() || candidate.is_github_verified() {
         return Ok(candidate.clone());
     }
 
-    let reviewed = verify_online(candidate)?;
-    if reviewed.verified_github.is_some() {
+    let reviewed = match verify_online(candidate) {
+        Ok(reviewed) => reviewed,
+        Err(error) if matches!(review_kind, InteractiveTrustReviewKind::NonMemberAcceptance) => {
+            TrustApprovalCandidateBuilder::from_known_key_candidate(candidate.service_candidate())
+                .with_online_verification_context(
+                    true,
+                    Some(error.format_user_message().to_string()),
+                )
+                .build()
+        }
+        Err(error) => return Err(error),
+    };
+    if reviewed.is_github_verified() {
         return Ok(reviewed);
     }
 
@@ -43,59 +53,21 @@ where
 pub(super) fn verify_trust_candidate_online(
     candidate: &TrustApprovalCandidate,
 ) -> Result<TrustApprovalCandidate> {
-    if !candidate.github_binding_configured || candidate.verified_github.is_some() {
+    if !candidate.github_binding_configured() || candidate.is_github_verified() {
         return Ok(candidate.clone());
     }
 
-    let public_key = candidate.public_key.as_ref().ok_or_else(|| {
-        Error::build_verification_error(
-            "E_TRUST_REVIEW_SOURCE_MISSING".to_string(),
-            format!(
-                "Missing public key required for online verification of '{}' ({})",
-                candidate.member_handle, candidate.kid
-            ),
-        )
-    })?;
-    let results = block_on_result(verify_member_public_keys(std::slice::from_ref(public_key)))?;
-    let result = results.into_iter().next().ok_or_else(|| {
-        Error::build_verification_error(
-            "E_TRUST_ONLINE_VERIFY_MISSING".to_string(),
-            format!(
-                "Online verification produced no result for '{}' ({})",
-                candidate.member_handle, candidate.kid
-            ),
-        )
-    })?;
-
-    if result.member_handle != candidate.member_handle.as_str() {
-        return Err(Error::build_verification_error(
-            "E_TRUST_ONLINE_VERIFY_MISMATCH".to_string(),
-            format!(
-                "Online verification result member_handle '{}' did not match candidate '{}'",
-                result.member_handle, candidate.member_handle
-            ),
-        ));
-    }
-
-    Ok(apply_online_verification_result(candidate, result))
-}
-
-fn apply_online_verification_result(
-    candidate: &TrustApprovalCandidate,
-    result: crate::io::verify_online::VerificationResult,
-) -> TrustApprovalCandidate {
-    TrustApprovalCandidateBuilder::new(candidate.member_handle.as_str(), candidate.kid.as_str())
-        .with_fingerprint(candidate.fingerprint.clone())
-        .with_attestor_pub(candidate.attestor_pub.clone())
-        .with_verified_github(candidate.verified_github.clone())
-        .with_github_binding_configured(candidate.github_binding_configured)
-        .with_public_key(candidate.public_key.clone())
-        .with_online_verification_context(
-            candidate.online_verification_attempted,
-            candidate.online_verification_message.clone(),
-        )
-        .with_verification_result(&result)
-        .build()
+    let service_candidate = candidate.service_candidate();
+    let evidence = GitHubOnlineVerifier::new().verify_known_key_candidate(service_candidate)?;
+    Ok(
+        TrustApprovalCandidateBuilder::from_known_key_candidate(service_candidate)
+            .with_online_verification_context(
+                true,
+                Some("GitHub verification succeeded".to_string()),
+            )
+            .with_verified_service_evidence(evidence)
+            .build(),
+    )
 }
 
 fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) -> Error {
@@ -103,11 +75,10 @@ fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) 
         "E_TRUST_ONLINE_VERIFY_REQUIRED".to_string(),
         format!(
             "Online verification required for trust approval of '{}' ({}): {}",
-            candidate.member_handle,
-            candidate.kid,
+            candidate.member_handle(),
+            candidate.kid(),
             candidate
-                .online_verification_message
-                .as_deref()
+                .online_verification_message()
                 .unwrap_or("online verification did not succeed")
         ),
     )

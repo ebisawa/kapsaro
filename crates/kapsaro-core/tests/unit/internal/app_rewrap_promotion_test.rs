@@ -18,13 +18,47 @@ use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
 
 use super::{build_promotion_review_plan, build_promotion_review_session_with_verifier};
 
-fn kid_for(member_handle: &str) -> &'static str {
+fn placeholder_kid_for(member_handle: &str) -> &'static str {
     match member_handle {
         "alice" => "KAD1AAAA1111BBBB2222CCCC3333DDDD",
         "bob" => "KBD1AAAA1111BBBB2222CCCC3333DDDD",
         "carol" => "KCD1AAAA1111BBBB2222CCCC3333DDDD",
         _ => "KDD1AAAA1111BBBB2222CCCC3333DDDD",
     }
+}
+
+fn public_key_for(member_handle: &str) -> PublicKey {
+    let mut public_key = PublicKey::new(PublicKeyParts {
+        subject_handle: member_handle.to_string(),
+        kid: placeholder_kid_for(member_handle).to_string(),
+        keys: IdentityKeys {
+            kem: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: "X25519".to_string(),
+                x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            },
+            sig: JwkOkpPublicKey {
+                kty: "OKP".to_string(),
+                crv: "Ed25519".to_string(),
+                x: encode_base64url_nopad(&[1u8; 32]),
+            },
+        },
+        binding_claims: None,
+        attestation: Attestation {
+            method: "ssh".to_string(),
+            pub_: "ssh-ed25519 AAAA test".to_string(),
+            sig: "sig".to_string(),
+        },
+        expires_at: "2030-01-01T00:00:00Z".to_string(),
+        created_at: None,
+        signature: "signature".to_string(),
+    });
+    crate::test_utils::refresh_public_key_kid(&mut public_key).unwrap();
+    public_key
+}
+
+fn kid_for(member_handle: &str) -> String {
+    public_key_for(member_handle).protected.kid
 }
 
 fn build_report(
@@ -71,13 +105,15 @@ fn build_candidate(
     github_binding_configured: bool,
     verified_github: Option<VerifiedGithubIdentity>,
 ) -> IncomingPromotionCandidate {
+    let public_key = public_key_for(member_handle);
     let review = IncomingVerificationItem {
         member_handle: member_handle.to_string(),
-        kid: kid_for(member_handle).to_string(),
+        kid: public_key.protected.kid.clone(),
         category,
         message: message.to_string(),
         fingerprint: Some("SHA256:abc".to_string()),
         verified_github,
+        verified_service_evidence: None,
         github_binding_configured,
         attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
     };
@@ -86,37 +122,33 @@ fn build_candidate(
         review,
         source_content: "{}".to_string(),
         destination: PromotionDestinationState::Missing,
-        public_key: PublicKey::new(PublicKeyParts {
-            subject_handle: member_handle.to_string(),
-            kid: kid_for(member_handle).to_string(),
-            keys: IdentityKeys {
-                kem: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: "X25519".to_string(),
-                    x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
-                },
-                sig: JwkOkpPublicKey {
-                    kty: "OKP".to_string(),
-                    crv: "Ed25519".to_string(),
-                    x: encode_base64url_nopad(&[1u8; 32]),
-                },
-            },
-            binding_claims: None,
-            attestation: Attestation {
-                method: "ssh".to_string(),
-                pub_: "ssh-ed25519 AAAA test".to_string(),
-                sig: "sig".to_string(),
-            },
-            expires_at: "2030-01-01T00:00:00Z".to_string(),
-            created_at: None,
-            signature: "signature".to_string(),
-        }),
+        public_key,
     }
+}
+
+fn build_fixture_candidate(
+    member_handle: &str,
+    category: IncomingVerificationCategory,
+    message: &str,
+    github_binding_configured: bool,
+) -> IncomingPromotionCandidate {
+    let public_key = crate::test_utils::load_fixture_public_key(member_handle);
+    let mut candidate = build_candidate(
+        member_handle,
+        category,
+        message,
+        github_binding_configured,
+        None,
+    );
+    candidate.review.kid = public_key.protected.kid.clone();
+    candidate.review.attestor_pub = Some(public_key.protected.attestation.pub_.clone());
+    candidate.public_key = public_key;
+    candidate
 }
 
 fn known_key(member_handle: &str) -> KnownKey {
     KnownKey {
-        kid: kid_for(member_handle).to_string(),
+        kid: kid_for(member_handle),
         subject_handle: member_handle.to_string(),
         approved_at: "2026-04-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
@@ -248,7 +280,7 @@ fn test_build_promotion_review_session_skips_online_verify_for_known_github_bind
 fn test_build_promotion_review_plan_detects_known_key_integrity_anomaly_before_prompt() {
     let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {
-        kid: kid_for("alice").to_string(),
+        kid: kid_for("alice"),
         subject_handle: "bob".to_string(),
         approved_at: "2026-04-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,
@@ -276,12 +308,11 @@ fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_
     let report = build_report(
         vec![],
         vec![],
-        vec![build_candidate(
-            "carol",
+        vec![build_fixture_candidate(
+            "bob@example.com",
             IncomingVerificationCategory::NotConfigured,
             "no github",
             false,
-            None,
         )],
     );
     let review_plan =
@@ -295,8 +326,11 @@ fn test_build_promotion_review_session_builds_prompt_view_without_online_verify_
     assert!(session.view().failed_candidates.is_empty());
     assert_eq!(session.view().prompt_candidates.len(), 1);
     assert_eq!(
-        session.view().prompt_candidates[0].candidate.member_handle,
-        "carol"
+        session.view().prompt_candidates[0]
+            .candidate
+            .member_handle()
+            .as_str(),
+        "bob@example.com"
     );
 }
 
@@ -319,16 +353,87 @@ fn test_build_promotion_review_session_moves_failed_online_verification_to_faile
 }
 
 #[test]
+fn test_build_promotion_review_session_keeps_later_prompt_after_verifier_error() {
+    let report = build_report(
+        vec![
+            build_fixture_candidate(
+                "alice@example.com",
+                IncomingVerificationCategory::BindingConfigured,
+                "pending online verification",
+                true,
+            ),
+            build_fixture_candidate(
+                "bob@example.com",
+                IncomingVerificationCategory::BindingConfigured,
+                "pending online verification",
+                true,
+            ),
+        ],
+        vec![],
+        vec![],
+    );
+    let review_plan =
+        build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), true).unwrap();
+
+    let session = build_promotion_review_session_with_verifier(&review_plan, |candidate| {
+        if candidate.review.member_handle == "alice@example.com" {
+            return Err(crate::Error::build_verification_error(
+                "V-GITHUB-API".to_string(),
+                "GitHub API unavailable".to_string(),
+            ));
+        }
+        let mut reviewed = candidate.clone();
+        reviewed.review.category = IncomingVerificationCategory::Verified;
+        reviewed.review.verified_github = Some(VerifiedGithubIdentity::new(
+            42,
+            "bob-current".to_string(),
+            "SHA256:abc".to_string(),
+            7,
+        ));
+        Ok(reviewed)
+    })
+    .unwrap();
+
+    assert_eq!(session.view().failed_candidates.len(), 1);
+    assert_eq!(
+        session.view().failed_candidates[0].member_handle,
+        "alice@example.com"
+    );
+    assert!(session.view().failed_candidates[0]
+        .message
+        .contains("GitHub API unavailable"));
+    assert_eq!(session.view().prompt_candidates.len(), 1);
+    assert_eq!(
+        session.view().prompt_candidates[0]
+            .candidate
+            .member_handle()
+            .as_str(),
+        "bob@example.com"
+    );
+    assert!(session
+        .into_accepted_candidates(&[
+            "alice@example.com".to_string(),
+            "bob@example.com".to_string(),
+        ])
+        .iter()
+        .all(|candidate| candidate.review.member_handle == "bob@example.com"));
+}
+
+#[test]
 fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_selection() {
     let report = build_report(
-        vec![binding_configured_result("alice")],
+        vec![build_fixture_candidate(
+            "alice@example.com",
+            IncomingVerificationCategory::BindingConfigured,
+            "pending online verification",
+            true,
+        )],
         vec![],
-        vec![build_candidate(
-            "carol",
+        vec![build_fixture_candidate(
+            "bob@example.com",
             IncomingVerificationCategory::NotConfigured,
             "no github",
             false,
-            None,
         )],
     );
     let review_plan =
@@ -349,13 +454,22 @@ fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_
     .unwrap();
 
     assert_eq!(session.view().prompt_candidates.len(), 2);
-    let accepted = session.into_accepted_candidates(&["alice".to_string(), "carol".to_string()]);
+    let accepted = session.into_accepted_candidates(&[
+        "alice@example.com".to_string(),
+        "bob@example.com".to_string(),
+    ]);
     let accepted_ids = accepted
         .into_iter()
         .map(|candidate| candidate.review.member_handle)
         .collect::<Vec<_>>();
 
-    assert_eq!(accepted_ids, vec!["alice".to_string(), "carol".to_string()]);
+    assert_eq!(
+        accepted_ids,
+        vec![
+            "alice@example.com".to_string(),
+            "bob@example.com".to_string()
+        ]
+    );
 }
 
 #[test]
@@ -403,7 +517,7 @@ fn test_build_promotion_review_plan_rejects_self_candidate_when_identity_mismatc
 fn test_build_promotion_review_plan_preserves_integrity_anomaly_for_self_candidate() {
     let report = build_report(vec![binding_configured_result("alice")], vec![], vec![]);
     let conflicting_known_key = KnownKey {
-        kid: kid_for("alice").to_string(),
+        kid: kid_for("alice"),
         subject_handle: "bob".to_string(),
         approved_at: "2026-04-01T00:00:00Z".to_string(),
         approved_via: KnownKeyApprovalVia::ManualReview,

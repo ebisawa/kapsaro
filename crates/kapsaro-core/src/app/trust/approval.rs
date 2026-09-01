@@ -5,104 +5,76 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::store::{
-    execute_trust_store_mutation_with_execution, execute_trust_store_mutation_with_preparation,
-    observe_execution_trust_store, TrustStoreWriteBinding,
-};
+use crate::app::trust::store::load_execution_verified_trust_store;
 use crate::app::trust::TrustApprovalCandidate;
-use crate::feature::trust::known_keys::add_known_key;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
-use crate::feature::trust::recipient_sets::{upsert_recipient_set, ArtifactRecipientSet};
-use crate::feature::trust::store_mutation::{TrustStoreMutation, TrustStoreMutationMode};
-use crate::feature::trust::transaction::ObservedTrustStore;
-use crate::io::verify_online::VerifiedGithubIdentity;
+use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::identity::{Kid, MemberHandle};
-use crate::model::trust_store::{
-    KnownKey, KnownKeyApprovalVia, KnownKeyEvidence, KnownKeyGithubAccount, TrustStoreProtected,
+use crate::service::diagnostics::restore_local_state_warnings;
+use crate::service::trust::{
+    ApprovalConflictHandling, KnownKeyApprovalEvidence, LocalTrustStore, TrustApproval,
+    TrustApprovalOutcome, VerifiedLocalTrustStoreLoadResult,
 };
-use crate::support::time::generate_current_timestamp;
-use crate::{Error, Result};
-use std::collections::BTreeMap;
+use crate::Result;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ApprovedKnownKey {
     member_handle: MemberHandle,
     kid: Kid,
-    github_id: Option<u64>,
-    github_login: Option<String>,
-    attestor_pub: Option<String>,
+    approval: TrustApproval,
 }
 
 impl ApprovedKnownKey {
-    pub fn from_review(
+    pub(crate) fn kid(&self) -> &Kid {
+        &self.kid
+    }
+
+    pub(crate) fn service_approval(&self) -> &TrustApproval {
+        &self.approval
+    }
+
+    pub(crate) fn from_candidate(candidate: &TrustApprovalCandidate) -> Result<Self> {
+        let service_candidate = candidate.service_candidate();
+        let mut evidence = KnownKeyApprovalEvidence::none()
+            .with_ssh_attestor_public_key(service_candidate.ssh_attestor_public_key());
+        if let Some(verified) = candidate.verified_service_evidence().cloned() {
+            evidence = evidence.with_verified_github_account(verified);
+        }
+        Ok(Self {
+            member_handle: service_candidate.subject_handle().clone(),
+            kid: service_candidate.kid().clone(),
+            approval: TrustApproval::known_key(service_candidate, evidence)?,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(
         member_handle: &str,
         kid: &str,
         attestor_pub: Option<String>,
-        verified_github: Option<&VerifiedGithubIdentity>,
+        verified_github: Option<&crate::io::verify_online::VerifiedGithubIdentity>,
     ) -> Self {
-        match verified_github {
-            Some(verified_github) => {
-                Self::verified_github(member_handle, kid, attestor_pub, verified_github)
-            }
-            None => Self::manual_review(member_handle, kid, attestor_pub),
-        }
-    }
-
-    fn manual_review(member_handle: &str, kid: &str, attestor_pub: Option<String>) -> Self {
-        Self {
-            member_handle: MemberHandle::try_from(member_handle)
-                .expect("approved member_handle must be valid"),
-            kid: Kid::try_from(kid).expect("approved kid must be valid"),
-            github_id: None,
-            github_login: None,
+        let member_handle = MemberHandle::new(member_handle).expect("valid test member handle");
+        let kid = Kid::new(kid).expect("canonical test kid");
+        let github = verified_github.map(|verified| {
+            (
+                verified.id,
+                verified.login.clone(),
+                verified.fingerprint.clone(),
+                verified.matched_key_id,
+            )
+        });
+        let approval = TrustApproval::known_key_with_evidence_for_test(
+            member_handle.as_str(),
+            kid.as_str(),
             attestor_pub,
-        }
-    }
-
-    fn verified_github(
-        member_handle: &str,
-        kid: &str,
-        attestor_pub: Option<String>,
-        verified_github: &VerifiedGithubIdentity,
-    ) -> Self {
+            github,
+        );
         Self {
-            member_handle: MemberHandle::try_from(member_handle)
-                .expect("approved member_handle must be valid"),
-            kid: Kid::try_from(kid).expect("approved kid must be valid"),
-            github_id: Some(verified_github.id),
-            github_login: Some(verified_github.login.clone()),
-            attestor_pub,
+            member_handle,
+            kid,
+            approval,
         }
-    }
-
-    fn to_known_key_with_approved_at(&self, approved_at: String) -> KnownKey {
-        KnownKey {
-            kid: self.kid.to_string(),
-            subject_handle: self.member_handle.to_string(),
-            approved_at,
-            approved_via: KnownKeyApprovalVia::ManualReview,
-            evidence: build_evidence(
-                self.github_id,
-                self.github_login.clone(),
-                self.attestor_pub.clone(),
-            ),
-            extra: BTreeMap::new(),
-        }
-    }
-
-    fn into_known_key(self) -> Result<KnownKey> {
-        Ok(self.to_known_key_with_approved_at(generate_current_timestamp()?))
-    }
-}
-
-impl From<&TrustApprovalCandidate> for ApprovedKnownKey {
-    fn from(candidate: &TrustApprovalCandidate) -> Self {
-        Self::from_review(
-            &candidate.member_handle,
-            &candidate.kid,
-            candidate.attestor_pub.clone(),
-            candidate.verified_github.as_ref(),
-        )
     }
 }
 
@@ -127,33 +99,22 @@ pub fn save_known_key_approvals(
         return Ok(0);
     }
 
-    execute_trust_store_mutation_with_execution(
-        options,
-        execution,
-        TrustStoreMutationMode::CreateIfMissing,
-        TrustStoreWriteBinding::MergedApproval,
-        |protected| {
-            let mut added = 0usize;
-
-            for approval in approvals {
-                let identity = KnownKeyIdentity::from(approval);
-                enforce_non_self_approval(&execution.member_handle, identity.member_handle())?;
-                let known_key = approval.clone().into_known_key()?;
-                if add_known_key(&mut protected.known_keys, known_key)? {
-                    added += 1;
-                }
-            }
-
-            Ok(TrustStoreMutation {
-                value: added,
-                changed: added > 0,
-            })
-        },
-    )
+    let _ = options;
+    let home = execution.fixed_local_state_home()?;
+    let trust_dir = execution.ensured_trust_directory()?;
+    let store = LocalTrustStore::open_from_anchored_base(home, execution.member_handle.clone());
+    store
+        .apply_approvals_with_conflict_handling_at(
+            trust_dir,
+            approvals
+                .iter()
+                .map(|approval| approval.approval.clone())
+                .collect(),
+            &execution.key_ctx,
+            ApprovalConflictHandling::merge(),
+        )
+        .map(complete_approval)
 }
-
-/// Mode one recipient-set approval is written with.
-const RECIPIENT_SET_APPROVAL_MODE: TrustStoreMutationMode = TrustStoreMutationMode::CreateIfMissing;
 
 /// Observe the trust store one recipient-set review will be decided against.
 ///
@@ -175,8 +136,9 @@ const RECIPIENT_SET_APPROVAL_MODE: TrustStoreMutationMode = TrustStoreMutationMo
 /// particular path to it rather than as a new case to guard against.
 pub(crate) fn observe_recipient_set_approval_store(
     execution: &ExecutionContext,
-) -> Result<ObservedTrustStore> {
-    observe_execution_trust_store(execution, RECIPIENT_SET_APPROVAL_MODE)
+) -> Result<Option<VerifiedLocalTrustStoreLoadResult>> {
+    execution.ensured_trust_directory()?;
+    load_execution_verified_trust_store(execution)
 }
 
 /// Store the recipient-set approval an operator just agreed to.
@@ -185,61 +147,30 @@ pub(crate) fn observe_recipient_set_approval_store(
 /// accepts nothing else.
 pub(crate) fn save_reviewed_recipient_set_approval(
     execution: &ExecutionContext,
-    observed: &ObservedTrustStore,
+    observed: Option<&VerifiedLocalTrustStoreLoadResult>,
     approval: ArtifactRecipientSet,
 ) -> Result<usize> {
-    execute_trust_store_mutation_with_preparation(
-        execution,
-        RECIPIENT_SET_APPROVAL_MODE,
-        observed.prepared(),
-        |protected| apply_recipient_set_approval(protected, approval),
-    )
-}
-
-/// Put the approved recipient set into the content the commit settled on.
-fn apply_recipient_set_approval(
-    protected: &mut TrustStoreProtected,
-    approval: ArtifactRecipientSet,
-) -> Result<TrustStoreMutation<usize>> {
-    let changed = upsert_recipient_set(
-        &mut protected.recipient_sets,
-        approval,
-        generate_current_timestamp()?,
+    let home = execution.fixed_local_state_home()?;
+    let trust_dir = execution.ensured_trust_directory()?;
+    let store = LocalTrustStore::open_from_anchored_base(home, execution.member_handle.clone());
+    let conflict = observed.map_or_else(
+        ApprovalConflictHandling::surface_absent,
+        ApprovalConflictHandling::surface,
     );
-    Ok(TrustStoreMutation {
-        value: usize::from(changed),
-        changed,
-    })
+    store
+        .apply_approvals_with_conflict_handling_at(
+            trust_dir,
+            vec![TrustApproval::recipient_set_from_artifact(&approval)?],
+            &execution.key_ctx,
+            conflict,
+        )
+        .map(complete_approval)
 }
 
-fn enforce_non_self_approval(owner_handle: &str, member_handle: &str) -> Result<()> {
-    if member_handle == owner_handle {
-        return Err(Error::build_invalid_operation_error(format!(
-            "Self member '{}' must not be stored in known_keys",
-            member_handle
-        )));
-    }
-    Ok(())
-}
-
-fn build_evidence(
-    github_id: Option<u64>,
-    github_login: Option<String>,
-    attestor_pub: Option<String>,
-) -> Option<KnownKeyEvidence> {
-    let github_account = github_id.map(|id| KnownKeyGithubAccount {
-        id,
-        login: github_login,
-    });
-
-    if github_account.is_none() && attestor_pub.is_none() {
-        return None;
-    }
-
-    Some(KnownKeyEvidence {
-        github_account,
-        ssh_attestor_pub: attestor_pub,
-    })
+fn complete_approval(outcome: TrustApprovalOutcome) -> usize {
+    let (applied, warnings) = outcome.into_parts();
+    restore_local_state_warnings(warnings);
+    applied
 }
 
 #[cfg(test)]

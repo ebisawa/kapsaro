@@ -13,17 +13,26 @@ const REVIEW_LABEL_WIDTH: usize = 19;
 
 pub(crate) fn format_candidate_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
     let kid_display =
-        format_kid_display(&candidate.kid).unwrap_or_else(|_| candidate.kid.to_string());
-    let mut lines = format_candidate_review_field_lines("member handle", &candidate.member_handle);
+        format_kid_display(candidate.kid()).unwrap_or_else(|_| candidate.kid().to_string());
+    let mut lines =
+        format_candidate_review_field_lines("member handle", candidate.member_handle().as_str());
     lines.extend(format_candidate_review_field_lines("key id", &kid_display));
     lines.extend(format_candidate_review_field_lines(
         "SSH fingerprint",
-        candidate.fingerprint.as_deref().unwrap_or("unknown"),
+        candidate.fingerprint().unwrap_or("unknown"),
     ));
     lines.extend(format_candidate_review_field_lines(
         "GitHub account",
         &format_github_account(candidate),
     ));
+    if candidate.github_binding_configured() && !candidate.is_github_verified() {
+        lines.extend(format_candidate_review_field_lines(
+            "verification detail",
+            candidate
+                .online_verification_message()
+                .unwrap_or("online verification was not completed"),
+        ));
+    }
     lines
 }
 
@@ -74,26 +83,28 @@ fn is_warning_line(line: &str) -> bool {
 }
 
 fn format_github_account(candidate: &TrustApprovalCandidate) -> String {
-    if candidate.verified_github.is_some() {
-        return format_verified_github_account(candidate);
-    }
-    if candidate.github_binding_configured {
-        return format!(
-            "not verified ({})",
-            candidate
-                .online_verification_message
-                .as_deref()
-                .unwrap_or("online verification was not completed")
-        );
-    }
-    "not configured".to_string()
+    format_github_verification(
+        candidate.github_id(),
+        candidate.github_login(),
+        candidate.github_binding_configured(),
+        candidate.is_github_verified(),
+    )
 }
 
-fn format_verified_github_account(candidate: &TrustApprovalCandidate) -> String {
-    let Some(id) = candidate.github_id else {
-        return "verified".to_string();
+pub(crate) fn format_github_verification(
+    id: Option<u64>,
+    login: Option<&str>,
+    binding_configured: bool,
+    verified: bool,
+) -> String {
+    let Some(id) = id.filter(|_| verified) else {
+        return if binding_configured {
+            "not verified".to_string()
+        } else {
+            "not configured".to_string()
+        };
     };
-    match &candidate.github_login {
+    match login {
         Some(login) => format!("{} (id: {}, verified)", login, id),
         None => format!("id: {} (verified)", id),
     }

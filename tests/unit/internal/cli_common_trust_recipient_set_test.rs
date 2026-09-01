@@ -6,7 +6,6 @@ use crate::cli::common::trust::{
     format_recipient_set_review_lines, format_signer_key_review_lines, recipient_set_review_prompt,
 };
 use crate::cli::stderr_color_guard::StderrColorGuard;
-use crate::test_utils::{kid as test_kid, member_handle};
 use console::strip_ansi_codes;
 use kapsaro_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
 use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
@@ -15,7 +14,6 @@ use kapsaro_core::cli_api::test_support::domain::trust_store::{
     RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord,
 };
 use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::ArtifactRecipientSet;
-use kapsaro_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
 use serial_test::serial;
 use uuid::Uuid;
 
@@ -64,12 +62,26 @@ fn test_format_non_member_signer_review_lines_warns_after_online_verification_fa
     assert!(rendered.contains(
         "Warning: GitHub online verification did not verify this signer: online verification failed"
     ));
-    assert!(rendered.contains("GitHub account     not verified (online verification failed)"));
+    assert!(rendered.contains("GitHub account     not verified"));
 }
 
 #[test]
 fn test_format_member_key_review_lines_uses_member_verify_copy() {
-    let candidate = candidate_with_verified_github();
+    let candidate = kapsaro_core::cli_api::app::member::approval::MemberApprovalResult {
+        member_handle: "bob@example.com".to_string(),
+        kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+        verified: true,
+        approved: false,
+        review_required: true,
+        already_known: false,
+        message: "verified".to_string(),
+        fingerprint: Some("SHA256:test".to_string()),
+        github_id: Some(42),
+        github_login: Some("octocat".to_string()),
+        github_binding_configured: true,
+        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
+        verified_github: None,
+    };
 
     let rendered = format_member_key_review_lines(&candidate).join("\n");
 
@@ -78,6 +90,7 @@ fn test_format_member_key_review_lines_uses_member_verify_copy() {
     assert!(rendered.contains("Approve only if this public key belongs to that member."));
     assert!(rendered.contains("member handle      bob@example.com"));
     assert!(rendered.contains("key id             KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
+    assert!(rendered.contains("GitHub account     octocat (id: 42, verified)"));
     assert!(!rendered.contains("artifact"));
     assert!(!rendered.contains("Context:"));
     assert!(!rendered.contains("member verify"));
@@ -246,40 +259,27 @@ fn wrap_item(recipient_handle: &str, kid: &str) -> WrapItem {
 }
 
 fn candidate_with_verified_github() -> TrustApprovalCandidate {
-    TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: test_kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: Some(42),
-        github_login: Some("octocat".to_string()),
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: Some(VerifiedGithubIdentity::new(
-            42,
-            "octocat".to_string(),
-            "SHA256:test".to_string(),
-            12345,
-        )),
-        github_binding_configured: true,
-        online_verification_attempted: true,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: false,
-    }
+    TrustApprovalCandidate::for_test_review(
+        "bob@example.com",
+        "KAD1AAAA1111BBBB2222CCCC3333DDDD",
+        Some("SHA256:test".to_string()),
+        true,
+        Some((42, "octocat".to_string(), "SHA256:test".to_string(), 12345)),
+        true,
+        None,
+        false,
+    )
 }
 
 fn candidate_with_failed_github_verification() -> TrustApprovalCandidate {
-    TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: test_kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: Some(42),
-        github_login: Some("octocat".to_string()),
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: true,
-        online_verification_message: Some("online verification failed".to_string()),
-        public_key: None,
-        requires_out_of_band_verification: true,
-    }
+    TrustApprovalCandidate::for_test_review(
+        "bob@example.com",
+        "KAD1AAAA1111BBBB2222CCCC3333DDDD",
+        Some("SHA256:test".to_string()),
+        true,
+        None,
+        true,
+        Some("online verification failed".to_string()),
+        true,
+    )
 }

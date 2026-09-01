@@ -11,6 +11,8 @@ pub mod trust_store;
 pub mod workspace;
 
 pub use artifact::{assert_stderr_order, tamper_kv_signature};
+#[cfg(unix)]
+pub use artifact::{setup_unapproved_file_read_fixture, setup_unapproved_kv_read_fixture};
 pub use execution::cmd;
 #[cfg(unix)]
 pub use execution::{

@@ -7,7 +7,6 @@ use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
 use kapsaro_core::cli_api::app::member::types::{
     MemberListResult, MemberShowResult, MemberVerificationResult,
 };
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 
 pub(crate) struct MemberListEntryView<'a> {
     pub(crate) member_handle: &'a str,
@@ -63,7 +62,6 @@ pub(crate) struct MemberApprovalItemView<'a> {
     pub(crate) github_id: Option<u64>,
     pub(crate) github_login: Option<&'a str>,
     pub(crate) github_binding_configured: bool,
-    pub(crate) review_candidate: TrustApprovalCandidate,
 }
 
 pub(crate) struct MemberApprovalResultsView<'a> {
@@ -153,7 +151,6 @@ pub(crate) fn build_member_approval_results_view(
                 github_id: result.github_id,
                 github_login: result.github_login.as_deref(),
                 github_binding_configured: result.github_binding_configured,
-                review_candidate: result.into(),
             })
             .collect(),
     }

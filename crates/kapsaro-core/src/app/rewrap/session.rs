@@ -108,6 +108,6 @@ where
         "rewrap recipients",
         confirm_recipients,
     )?;
-    approvals.extend(trust_plan.accepted_promotion_candidates.clone());
+    approvals.extend(trust_plan.new_promotion_approvals.clone());
     Ok(approvals)
 }

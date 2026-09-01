@@ -52,6 +52,13 @@ fn test_resolve_unique_kid_accepts_unique_prefix() {
 }
 
 #[test]
+fn test_resolve_unique_kid_accepts_lowercase_display_form() {
+    let resolved = resolve_unique_kid([CANONICAL_KID], &DISPLAY_KID.to_lowercase()).unwrap();
+
+    assert_eq!(resolved, CANONICAL_KID);
+}
+
+#[test]
 fn test_resolve_unique_kid_rejects_ambiguous_prefix() {
     let candidates = [
         "83KJ8YHMPPJHW7QC3446GPNXHNRTX61N",

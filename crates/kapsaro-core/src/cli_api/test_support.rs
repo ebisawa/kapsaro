@@ -423,6 +423,18 @@ pub mod domain {
                 VerifiedPublicKeyAttested::new(public_key, SelfSignatureProof::new(), statement);
             VerifiedRecipientKey::new(attested, ExpiryProof::new())
         }
+
+        /// Recompute a synthetic fixture's key identifier after protected fields change.
+        pub fn refresh_public_key_kid(public_key: &mut PublicKey) -> crate::Result<()> {
+            let mut protected_without_kid = serde_json::to_value(&public_key.protected)?;
+            protected_without_kid
+                .as_object_mut()
+                .expect("PublicKeyProtected serializes as an object")
+                .remove("kid");
+            public_key.protected.kid =
+                crate::format::kid::derive_public_key_kid(&protected_without_kid)?;
+            Ok(())
+        }
     }
     pub mod signature {
         pub use crate::model::signature::KeyPossessionProof;

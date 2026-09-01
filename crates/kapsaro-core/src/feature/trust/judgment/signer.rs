@@ -9,7 +9,7 @@ use crate::Result;
 
 use super::active_member::{ActiveMemberSnapshot, CurrentMemberMatch};
 use super::identity::TrustIdentity;
-use super::known_key::{AdditionalKnownKeyCache, KnownKeyCache, KnownKeyMatch};
+use super::known_key::{KnownKeyCache, KnownKeyMatch};
 use super::self_trust::SelfTrustSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,17 +39,6 @@ pub fn judge_signer_trust(
     signer: &TrustIdentity,
     active_members: &ActiveMemberSnapshot<'_>,
     known_keys: &KnownKeyCache<'_>,
-    self_trust: &SelfTrustSet,
-) -> Result<TrustJudgment> {
-    judge_signer_trust_with_match(signer, active_members, self_trust, |identity| {
-        known_keys.judge_identity_match(identity)
-    })
-}
-
-pub(crate) fn judge_signer_trust_with_additional(
-    signer: &TrustIdentity,
-    active_members: &ActiveMemberSnapshot<'_>,
-    known_keys: &AdditionalKnownKeyCache<'_>,
     self_trust: &SelfTrustSet,
 ) -> Result<TrustJudgment> {
     judge_signer_trust_with_match(signer, active_members, self_trust, |identity| {

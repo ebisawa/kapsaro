@@ -5,56 +5,74 @@
 
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::enforcement::{
-    build_signer_identity, enforce_artifact_recipient_set_trust, enforce_signer_trust,
-    evaluate_read_artifact_recipient_keys,
-};
-use crate::app::trust::outcome::ReadRecipientKeyTrust;
-use crate::app::trust::policy::{CommandCapability, ReadTrustPolicy, TrustPolicy};
+use crate::app::trust::policy::{ReadTrustPolicy, TrustPolicy};
 use crate::app::trust::snapshot::{load_read_trust_context, TrustContext};
-use crate::app::trust::{ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome};
-use crate::feature::context::crypto::LocalKeyIdentity;
-use crate::feature::trust::judgment::{
-    judge_signer_trust_with_additional, AdditionalKnownKeyCache,
+use crate::app::trust::{
+    ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome,
+    TrustApprovalCandidateBuilder,
 };
+use crate::feature::context::crypto::LocalKeyIdentity;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::verification::SignatureVerificationProof;
-use crate::support::kid::format_kid_half_display_lossy;
+use crate::service::key::KeyContext;
+use crate::service::trust::{
+    KnownKeyReview, ReadTrustReview, TrustDecision, TrustPolicyEvaluator, TrustReviewKind,
+    TrustReviewRequest,
+};
 use crate::support::warning::push_unique_warning;
 use crate::Result;
-use tracing::debug;
 
 pub struct ReadArtifactTrustPlan {
     pub signer_outcome: SignerTrustOutcome,
     pub recipient_outcome: RecipientTrustOutcome,
+    pub known_key_review: KnownKeyReview,
     pub warnings: Vec<String>,
 }
 
-pub fn evaluate_read_artifact_trust<P>(
-    options: &CommonCommandOptions,
-    execution: &ExecutionContext,
+pub(crate) fn build_read_artifact_trust_plan(
+    review: ReadTrustReview,
     proof: &SignatureVerificationProof,
-    current_recipient_set: &ArtifactRecipientSet,
-    current_recipients: &[String],
-) -> Result<ReadArtifactTrustPlan>
-where
-    P: ReadTrustPolicy,
-{
-    let loaded = resolve_read_trust_context_for_policy::<P>(options, execution)?;
-    let trust_ctx = &loaded.trust_ctx;
-    let signer_outcome =
-        evaluate_signer_trust_with_proof(trust_ctx, proof, P::CAPABILITY, current_recipients)?;
-    let recipient_trust = evaluate_read_artifact_recipient_keys(trust_ctx, current_recipient_set)?;
-    debug_read_artifact_trust::<P>(proof, current_recipient_set, &recipient_trust);
-    Ok(build_read_artifact_trust_plan(
+    known_key_review: KnownKeyReview,
+    is_interactive: bool,
+    mut warnings: Vec<String>,
+) -> Result<ReadArtifactTrustPlan> {
+    let signer_kid = proof
+        .signer_public_key
+        .as_ref()
+        .map(|key| key.protected.kid.as_str());
+    let signer_outcome = signer_outcome_from_review(&review, signer_kid, is_interactive)?;
+    for kid in review.unresolved_recipient_kids() {
+        push_unique_warning(&mut warnings, build_unresolved_recipient_warning(kid));
+    }
+    let requests = review.into_recipient_requests()?;
+    let recipient_outcome = recipient_outcome_from_requests(&requests, signer_kid, is_interactive)?;
+    Ok(ReadArtifactTrustPlan {
         signer_outcome,
-        recipient_trust.outcome,
-        loaded.warnings,
-        recipient_trust.warnings,
-    ))
+        recipient_outcome,
+        known_key_review,
+        warnings,
+    })
 }
 
-fn resolve_read_trust_context_for_policy<P>(
+fn build_unresolved_recipient_warning(kid: &crate::model::identity::Kid) -> String {
+    format!(
+        "Recipient kid is not active.\n\
+         Kid: {}\n\
+         Details: This may be historical metadata from a stale recipient.\n\
+         Action: Run kapsaro rewrap to synchronize current recipients.",
+        kid
+    )
+}
+
+pub(crate) fn known_key_review(trust_ctx: &TrustContext) -> KnownKeyReview {
+    if trust_ctx.strict_key_checking.is_disabled() {
+        KnownKeyReview::Skipped
+    } else {
+        KnownKeyReview::Required
+    }
+}
+
+pub(crate) fn resolve_read_trust_context_for_policy<P>(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
 ) -> Result<crate::app::trust::snapshot::ReadTrustContextLoadResult>
@@ -68,62 +86,138 @@ where
     )
 }
 
-fn debug_read_artifact_trust<P>(
-    proof: &SignatureVerificationProof,
-    current_recipient_set: &ArtifactRecipientSet,
-    recipient_trust: &ReadRecipientKeyTrust,
-) where
-    P: ReadTrustPolicy,
-{
-    debug!(
-        "[TRUST] read evaluation: capability={}, signer_kid={}, recipient_count={}, stale_recipient_warnings={}",
-        P::CAPABILITY.label(),
-        format_kid_half_display_lossy(&proof.kid),
-        current_recipient_set.recipient_kids().len(),
-        recipient_trust.warnings.len()
-    );
+fn signer_outcome_from_review(
+    review: &ReadTrustReview,
+    signer_kid: Option<&str>,
+    is_interactive: bool,
+) -> Result<SignerTrustOutcome> {
+    if let Some(non_member) = review.non_member_signer() {
+        let candidate =
+            TrustApprovalCandidateBuilder::from_known_key_candidate(non_member.candidate()).build();
+        enforce_interactive_review(is_interactive, non_member_review_error(&candidate))?;
+        return Ok(SignerTrustOutcome::NeedsNonMemberAcceptance {
+            candidate,
+            current_recipients: non_member
+                .recipient_handles()
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+        });
+    }
+    let signer_request = review.requests().iter().find(|request| {
+        request.kid().map(|kid| kid.as_str()) == signer_kid
+            && request.kind() == TrustReviewKind::KnownKey
+    });
+    let Some(request) = signer_request else {
+        return Ok(SignerTrustOutcome::Accepted);
+    };
+    let candidate = review_candidate(request)?;
+    enforce_interactive_review(is_interactive, unknown_signer_review_error(&candidate))?;
+    Ok(SignerTrustOutcome::NeedsKnownKeyApproval(candidate))
 }
 
-fn build_read_artifact_trust_plan(
-    signer_outcome: SignerTrustOutcome,
-    recipient_outcome: RecipientTrustOutcome,
-    mut warnings: Vec<String>,
-    recipient_warnings: Vec<String>,
-) -> ReadArtifactTrustPlan {
-    warnings.extend(recipient_warnings);
-    ReadArtifactTrustPlan {
-        signer_outcome,
-        recipient_outcome,
-        warnings,
+fn recipient_outcome_from_requests(
+    requests: &[TrustReviewRequest],
+    signer_kid: Option<&str>,
+    is_interactive: bool,
+) -> Result<RecipientTrustOutcome> {
+    let candidates = requests
+        .iter()
+        .filter(|request| {
+            request.kind() == TrustReviewKind::KnownKey
+                && request.kid().map(|kid| kid.as_str()) != signer_kid
+        })
+        .map(review_candidate)
+        .collect::<Result<Vec<_>>>()?;
+    if candidates.is_empty() {
+        Ok(RecipientTrustOutcome::Accepted)
+    } else {
+        enforce_interactive_review(
+            is_interactive,
+            unknown_recipient_candidate_error(&candidates),
+        )?;
+        Ok(RecipientTrustOutcome::NeedsManualApproval(candidates))
     }
 }
 
-pub fn evaluate_signer_trust_with_proof(
-    trust_ctx: &TrustContext,
-    proof: &SignatureVerificationProof,
-    capability: CommandCapability,
-    current_recipients: &[String],
-) -> Result<SignerTrustOutcome> {
-    let signer_public_key = proof.signer_public_key.as_ref().ok_or_else(|| {
-        crate::Error::build_verification_error(
-            "E_SIGNER_PUB_MISSING".to_string(),
-            "Required signer_pub is missing from verified proof".to_string(),
+pub(crate) fn recipient_outcome_from_decision<T>(
+    decision: TrustDecision<T>,
+    is_interactive: bool,
+) -> Result<RecipientTrustOutcome> {
+    match decision {
+        TrustDecision::Trusted(_) => Ok(RecipientTrustOutcome::Accepted),
+        TrustDecision::ReviewRequired(requests) if is_interactive => {
+            recipient_outcome_from_requests(&requests, None, is_interactive)
+        }
+        TrustDecision::ReviewRequired(requests) => Err(unknown_recipient_review_error(&requests)),
+    }
+}
+
+fn unknown_recipient_review_error(requests: &[TrustReviewRequest]) -> crate::Error {
+    let candidates = requests
+        .iter()
+        .filter_map(|request| review_candidate(request).ok())
+        .collect::<Vec<_>>();
+    unknown_recipient_candidate_error(&candidates)
+}
+
+fn unknown_recipient_candidate_error(
+    candidates: &[crate::app::trust::TrustApprovalCandidate],
+) -> crate::Error {
+    let recipients = candidates
+        .iter()
+        .map(|candidate| format!("'{}' ({})", candidate.kid(), candidate.member_handle()))
+        .collect::<Vec<_>>();
+    crate::Error::build_verification_error(
+        "E_TRUST_RECIPIENT_UNKNOWN".to_string(),
+        format!(
+            "Unknown recipient kid requires approval.\nRecipients: {}\nAction: Run kapsaro member verify --approve first.",
+            recipients.join(", ")
+        ),
+    )
+}
+
+fn unknown_signer_review_error(
+    candidate: &crate::app::trust::TrustApprovalCandidate,
+) -> crate::Error {
+    crate::Error::build_verification_error(
+        "E_TRUST_UNKNOWN_SIGNER".to_string(),
+        format!(
+            "Unknown signer kid '{}' (member: {}) in non-interactive mode",
+            candidate.kid(),
+            candidate.member_handle()
+        ),
+    )
+}
+
+fn non_member_review_error(candidate: &crate::app::trust::TrustApprovalCandidate) -> crate::Error {
+    crate::Error::build_verification_error(
+        "E_TRUST_NON_MEMBER".to_string(),
+        format!(
+            "Signer is not in active members.\nsigner: {}\nkid: {}\nNon-member acceptance requires an interactive terminal.",
+            candidate.member_handle(),
+            candidate.kid()
+        ),
+    )
+}
+
+fn enforce_interactive_review(is_interactive: bool, error: crate::Error) -> Result<()> {
+    if is_interactive {
+        Ok(())
+    } else {
+        Err(error)
+    }
+}
+
+fn review_candidate(
+    request: &TrustReviewRequest,
+) -> Result<crate::app::trust::TrustApprovalCandidate> {
+    let candidate = request.known_key_candidate().ok_or_else(|| {
+        crate::Error::build_invalid_operation_error(
+            "Known-key review request is missing its verified candidate".to_string(),
         )
     })?;
-    let signer_identity = build_signer_identity(signer_public_key)?;
-    let judgment = judge_signer_trust_with_additional(
-        &signer_identity,
-        &trust_ctx.active_member_snapshot(),
-        &AdditionalKnownKeyCache::new(&trust_ctx.known_keys, &[]),
-        &trust_ctx.self_trust,
-    )?;
-    enforce_signer_trust(
-        trust_ctx,
-        &judgment,
-        signer_public_key,
-        capability,
-        current_recipients,
-    )
+    Ok(TrustApprovalCandidateBuilder::from_known_key_candidate(candidate).build())
 }
 
 pub(crate) fn push_signature_verification_warnings(
@@ -142,18 +236,91 @@ pub(crate) fn push_signature_verification_warnings(
 }
 
 pub fn evaluate_output_recipient_set_trust(
+    evaluator: &TrustPolicyEvaluator,
+    key_ctx: &KeyContext,
     trust_ctx: &TrustContext,
     recipient_set: &ArtifactRecipientSet,
-    capability: CommandCapability,
 ) -> Result<ArtifactRecipientTrustOutcome> {
-    let outcome = enforce_artifact_recipient_set_trust(trust_ctx, recipient_set, capability)?;
-    debug!(
-        "[TRUST] output recipient set: capability={}, recipient_count={}, outcome={}",
-        capability.label(),
-        recipient_set.recipient_kids().len(),
-        describe_artifact_recipient_outcome(&outcome)
-    );
-    Ok(outcome)
+    let decision = evaluator.preflight_recipient_set(recipient_set, key_ctx)?;
+    artifact_recipient_outcome_from_decision(decision, trust_ctx, recipient_set)
+}
+
+pub(crate) fn signer_outcome_from_decision<T>(
+    decision: &TrustDecision<T>,
+    signer_kid: Option<&str>,
+    is_interactive: bool,
+) -> Result<SignerTrustOutcome> {
+    match decision {
+        TrustDecision::Trusted(_) => Ok(SignerTrustOutcome::Accepted),
+        TrustDecision::ReviewRequired(requests) => {
+            signer_outcome_from_requests(requests, signer_kid, is_interactive)
+        }
+    }
+}
+
+fn signer_outcome_from_requests(
+    requests: &[TrustReviewRequest],
+    signer_kid: Option<&str>,
+    is_interactive: bool,
+) -> Result<SignerTrustOutcome> {
+    let request = requests.iter().find(|request| {
+        request.kind() == TrustReviewKind::KnownKey
+            && request.kid().map(|kid| kid.as_str()) == signer_kid
+    });
+    let Some(candidate) = request.map(review_candidate).transpose()? else {
+        return Ok(SignerTrustOutcome::Accepted);
+    };
+    enforce_interactive_review(is_interactive, unknown_signer_review_error(&candidate))?;
+    Ok(SignerTrustOutcome::NeedsKnownKeyApproval(candidate))
+}
+
+pub(crate) fn artifact_recipient_outcome_from_decision<T>(
+    decision: TrustDecision<T>,
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+) -> Result<ArtifactRecipientTrustOutcome> {
+    let TrustDecision::ReviewRequired(requests) = decision else {
+        return Ok(ArtifactRecipientTrustOutcome::Accepted);
+    };
+    let Some(request) = requests.iter().find(|request| {
+        matches!(
+            request.kind(),
+            TrustReviewKind::RecipientSet | TrustReviewKind::ChangedRecipientSet
+        )
+    }) else {
+        return Ok(ArtifactRecipientTrustOutcome::Accepted);
+    };
+    if !trust_ctx.is_interactive {
+        let (rule, message) = match request.kind() {
+            TrustReviewKind::ChangedRecipientSet => (
+                "E_RECIPIENT_SET_CHANGED",
+                "This secret's member set changed since local review.\nAction: Run the command interactively to review it first.",
+            ),
+            _ => (
+                "E_RECIPIENT_TRUST_MISSING",
+                "This secret's member set has not been reviewed locally.\nAction: Run the command interactively to review it first.",
+            ),
+        };
+        return Err(crate::Error::build_verification_error(
+            rule.to_string(),
+            message.to_string(),
+        ));
+    }
+    let approved = (request.kind() == TrustReviewKind::ChangedRecipientSet)
+        .then(|| {
+            trust_ctx
+                .recipient_sets
+                .iter()
+                .find(|record| record.sid == current.sid().to_string())
+                .cloned()
+        })
+        .flatten();
+    Ok(ArtifactRecipientTrustOutcome::NeedsManualApproval(
+        Box::new(crate::app::trust::ArtifactRecipientSetReview::new(
+            current.clone(),
+            approved,
+        )),
+    ))
 }
 
 fn matches_local_signer_identity(
@@ -186,14 +353,4 @@ where
         )));
     }
     Ok(())
-}
-
-fn describe_artifact_recipient_outcome(outcome: &ArtifactRecipientTrustOutcome) -> &'static str {
-    match outcome {
-        ArtifactRecipientTrustOutcome::Accepted => "accepted",
-        ArtifactRecipientTrustOutcome::SkippedStrictKeyCheckingNo => {
-            "skipped-strict-key-checking-no"
-        }
-        ArtifactRecipientTrustOutcome::NeedsManualApproval(_) => "needs-manual-approval",
-    }
 }

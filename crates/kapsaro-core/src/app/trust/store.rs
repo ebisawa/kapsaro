@@ -4,7 +4,6 @@
 //! Trust store load and mutation entry points bound to a command's execution context.
 //! Resolves the capabilities one mutation writes through and hands them to the core.
 
-use crate::api::trust::{LocalTrustStore, VerifiedLocalTrustStoreLoadResult};
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::feature::context::crypto::{build_signing_context, VerifiedSigningContext};
@@ -22,6 +21,7 @@ use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::attach_trust_store_recovery;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::TrustStoreProtected;
+use crate::service::trust::{LocalTrustStore, VerifiedLocalTrustStoreLoadResult};
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{open_dir_identity, DirectoryFd, OpenDir};
 use crate::{Error, Result};
@@ -44,6 +44,7 @@ pub(crate) enum TrustStoreWriteBinding {
     /// different keys each keep their approval and the stored bytes are not
     /// bound. A write-back that replaces a record rather than adding one has no
     /// such ground and binds itself to the document it observed.
+    #[cfg(test)]
     MergedApproval,
 }
 
@@ -51,6 +52,7 @@ impl TrustStoreWriteBinding {
     fn gate(self) -> TrustStoreCommitGate {
         match self {
             Self::ObservedDocument => TrustStoreCommitGate::ReviewedContent,
+            #[cfg(test)]
             Self::MergedApproval => TrustStoreCommitGate::LatestContent,
         }
     }
@@ -110,14 +112,21 @@ impl ResolvedTrustMutation<'_> {
 pub(crate) fn load_execution_trust_store(
     execution: &ExecutionContext,
 ) -> Result<Option<TrustStoreState>> {
+    load_execution_verified_trust_store(execution)
+        .map(|loaded| loaded.map(VerifiedLocalTrustStoreLoadResult::into_state))
+}
+
+pub(crate) fn load_execution_verified_trust_store(
+    execution: &ExecutionContext,
+) -> Result<Option<VerifiedLocalTrustStoreLoadResult>> {
     let Some(home) = execution.optional_local_state_home() else {
         return Ok(None);
     };
     let trust_dir = execution.opened_trust_directory()?;
-    load_optional_trust_store(
+    load_verified_local_trust_store(
         home,
         trust_dir.map(Arc::as_ref),
-        &execution.member_handle,
+        execution.member_handle.clone(),
         execution.key_ctx.inner().local_keystore_access(),
     )
 }
@@ -492,20 +501,6 @@ where
         TrustStoreCommitGate::ReviewedContent,
         mutate,
     )
-}
-
-/// Commit one mutation against a trust store observed earlier.
-pub(crate) fn execute_trust_store_mutation_with_preparation<T, F>(
-    execution: &ExecutionContext,
-    mode: TrustStoreMutationMode,
-    prepared: &TrustStorePreparation,
-    mutate: F,
-) -> Result<T>
-where
-    F: FnOnce(&mut TrustStoreProtected) -> Result<TrustStoreMutation<T>>,
-{
-    commit_trust_store_mutation_with_preparation(execution, mode, prepared, mutate)
-        .map(|outcome| outcome.value)
 }
 
 /// Commit one mutation against a trust store observed earlier, also reporting

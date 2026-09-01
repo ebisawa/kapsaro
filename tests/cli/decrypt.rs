@@ -6,7 +6,8 @@
 //! Tests the decrypt command with CommonOptions, member_handle resolution, and file-enc format
 
 use crate::cli::common::{
-    cmd, encrypt_file_with_member_set_review, setup_workspace, TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, setup_unapproved_file_read_fixture, setup_workspace,
+    TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
 use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
@@ -68,6 +69,36 @@ fn test_decrypt_missing_input() {
         .stderr(predicate::str::contains(
             "required arguments were not provided",
         ));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_decrypt_unknown_signer_non_interactive_error() {
+    let fixture = setup_unapproved_file_read_fixture();
+    let output_path = fixture.home.path().join("must-not-exist.txt");
+
+    cmd()
+        .arg("decrypt")
+        .arg(&fixture.artifact_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "yes")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("MUST_NOT_BE_DECRYPTED").not())
+        .stderr(predicate::str::contains("Unknown signer kid"))
+        .stderr(predicate::str::contains(fixture.unapproved_member_handle))
+        .stderr(predicate::str::contains(&fixture.unapproved_kid))
+        .stderr(predicate::str::contains("Interactive confirmation requires a terminal").not());
+
+    assert!(!output_path.exists());
+    assert!(!fixture.trust_store_path.exists());
 }
 
 // ============================================================================

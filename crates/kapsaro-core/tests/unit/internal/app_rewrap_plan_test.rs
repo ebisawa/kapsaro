@@ -267,9 +267,9 @@ fn test_build_rewrap_trust_treats_accepted_promotions_as_already_reviewed() {
     let trust_plan = build_rewrap_trust(&plan, &review_plan.prompt_candidates).unwrap();
 
     assert_eq!(trust_plan.recipient_trust, RecipientTrustOutcome::Accepted);
-    assert_eq!(trust_plan.accepted_promotion_candidates.len(), 1);
+    assert_eq!(trust_plan.new_promotion_approvals.len(), 1);
     assert_eq!(
-        KnownKeyIdentity::from(&trust_plan.accepted_promotion_candidates[0]).member_handle(),
+        KnownKeyIdentity::from(&trust_plan.new_promotion_approvals[0]).member_handle(),
         BOB_MEMBER_HANDLE
     );
 }
@@ -348,11 +348,12 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         .join("members")
         .join("active")
         .join(format!("{}.json", BOB_MEMBER_HANDLE));
-    let bob_incoming = workspace_dir
-        .join("members")
-        .join("incoming")
-        .join(format!("{}.json", BOB_MEMBER_HANDLE));
-    fs::rename(&bob_active, &bob_incoming).unwrap();
+    fs::remove_file(&bob_active).unwrap();
+    save_github_bound_public_key_to_workspace_incoming(
+        temp_dir.path(),
+        &workspace_dir,
+        BOB_MEMBER_HANDLE,
+    );
     fs::write(
         workspace_dir.join("secrets").join("default.kvenc"),
         "VERSION kapsaro.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
@@ -387,14 +388,27 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         "SHA256:fp".to_string(),
         100,
     ));
-
-    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
-    save_known_key_approvals(
-        &options,
-        &execution,
-        &trust_plan.accepted_promotion_candidates,
+    let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
+        &candidate.public_key,
+        crate::feature::verify::public_key::WORKSPACE_INCOMING_MEMBER_CONTEXT,
     )
     .unwrap();
+    let service_candidate =
+        crate::service::trust::KnownKeyReviewCandidate::from_verified_signing_public_key(
+            &verified.verified_public_key,
+        )
+        .unwrap();
+    candidate.review.verified_service_evidence =
+        Some(crate::service::online::VerifiedGitHubEvidence::for_test(
+            &service_candidate,
+            42,
+            "current-login",
+            "SHA256:fp",
+            100,
+        ));
+
+    let trust_plan = build_rewrap_trust(&plan, &accepted).unwrap();
+    save_known_key_approvals(&options, &execution, &trust_plan.new_promotion_approvals).unwrap();
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .unwrap();
@@ -405,7 +419,7 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         .find(|entry| entry["subject_handle"] == serde_json::json!(BOB_MEMBER_HANDLE))
         .unwrap();
 
-    assert_eq!(trust_plan.accepted_promotion_candidates.len(), 1);
+    assert_eq!(trust_plan.new_promotion_approvals.len(), 1);
     assert_eq!(
         bob_entry["evidence"]["github_account"]["id"],
         serde_json::json!(42)
@@ -414,6 +428,69 @@ fn test_build_rewrap_trust_uses_reviewed_github_login_for_promotion_evidence() {
         bob_entry["evidence"]["github_account"]["login"],
         serde_json::json!("current-login")
     );
+}
+
+#[test]
+fn test_build_rewrap_trust_reuses_existing_github_key_without_new_approval() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let bob_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"));
+    fs::remove_file(&bob_active).unwrap();
+    save_github_bound_public_key_to_workspace_incoming(
+        temp_dir.path(),
+        &workspace_dir,
+        BOB_MEMBER_HANDLE,
+    );
+    let bob_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"));
+    fs::rename(&bob_incoming, &bob_active).unwrap();
+
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    fs::rename(&bob_active, &bob_incoming).unwrap();
+    fs::write(
+        workspace_dir.join("secrets").join("default.kvenc"),
+        "VERSION kapsaro.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
+    )
+    .unwrap();
+
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
+    plan.artifacts.clear();
+    let review_plan = build_promotion_review_plan(
+        plan.incoming_report.as_ref().unwrap(),
+        &plan.pre_promotion_trust.known_keys,
+        &plan.pre_promotion_trust.self_trust,
+        true,
+    )
+    .unwrap();
+
+    assert_eq!(review_plan.auto_accepted_candidates.len(), 1);
+    assert!(review_plan.prompt_candidates.is_empty());
+    assert!(review_plan.auto_accepted_candidates[0]
+        .review
+        .verified_service_evidence
+        .is_none());
+
+    let trust_plan = build_rewrap_trust(&plan, &review_plan.auto_accepted_candidates).unwrap();
+
+    assert_eq!(trust_plan.recipient_trust, RecipientTrustOutcome::Accepted);
+    assert!(trust_plan.new_promotion_approvals.is_empty());
+    assert!(trust_plan
+        .post_promotion_members
+        .iter()
+        .any(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE));
 }
 
 #[test]
@@ -466,7 +543,7 @@ fn test_build_rewrap_trust_replaces_self_rotation_without_persisting_self_known_
 
     assert_eq!(accepted.len(), 1);
     assert!(review_plan.prompt_candidates.is_empty());
-    assert!(trust_plan.accepted_promotion_candidates.is_empty());
+    assert!(trust_plan.new_promotion_approvals.is_empty());
     assert_eq!(trust_plan.post_promotion_members.len(), 1);
     assert_eq!(
         trust_plan.post_promotion_members[0]
@@ -526,6 +603,29 @@ fn test_build_rewrap_batch_plan_accepts_explicit_targets_when_workspace_secrets_
 
     assert_eq!(plan.artifacts.len(), 1);
     assert_eq!(plan.artifacts[0].path(), external_secret_path);
+}
+
+#[test]
+fn test_build_rewrap_batch_plan_rejects_strict_key_checking_no() {
+    let _guard = strict_key_checking_guard();
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
+    fs::write(
+        workspace_dir.join("secrets").join("default.kvenc"),
+        "VERSION kapsaro.kv-enc@3\nWRAP eyJ3cmFwIjpbXX0\n",
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+
+    let error = build_rewrap_batch_plan(&options, &execution, &[])
+        .expect_err("rewrap must reject relaxed key checking during planning");
+
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert_eq!(
+        error.format_user_message(),
+        "KAPSARO_STRICT_KEY_CHECKING=no is not allowed for rewrap"
+    );
 }
 
 /// Two spellings of one entry are one target: the second would otherwise rewrap

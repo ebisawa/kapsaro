@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/check-source-conventions.sh\"",
+            "timeout": 15,
+            "statusMessage": "Rust ソースの規約を確認中"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/check-repo-conventions.sh\"",
+            "timeout": 30,
+            "statusMessage": "テスト登録とドキュメント体裁を確認中"
+          }
+        ]
+      }
+    ]
+  }
+}

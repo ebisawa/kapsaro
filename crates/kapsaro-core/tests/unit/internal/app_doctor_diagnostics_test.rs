@@ -1086,20 +1086,7 @@ fn test_doctor_keeps_ignored_keystore_entry_names_apart() {
     );
 }
 
-/// Both roots a command writes are measured, so an operator reading one report
-/// learns what a lock is worth on each of them.
-#[test]
-fn test_doctor_measures_locking_on_both_roots() {
-    let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
-
-    let checks = run_workspace_doctor(&home, &workspace);
-
-    assert!(has_check(&checks, "local_state.locking", DoctorStatus::Ok));
-    assert!(has_check(&checks, "workspace.locking", DoctorStatus::Ok));
-}
-
-/// A staged entry blocks every later command that reads the directory holding
-/// it, so the diagnosis names it and the removal that unblocks it.
+/// Normal readers ignore staging names, so Doctor reports residue and recovery.
 #[test]
 fn test_doctor_reports_an_entry_an_unfinished_write_staged() {
     let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);

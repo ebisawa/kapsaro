@@ -752,7 +752,7 @@ fn test_apply_approvals_concurrent_writers_all_converge() {
 }
 
 #[test]
-fn test_load_verified_waits_for_live_trust_store_staging_entry() {
+fn test_load_verified_reads_published_snapshot_during_live_staging() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE]);
     let trust_store = build_trust_store(temp.path(), ALICE);
     let key_ctx = load_key_context(&temp, ALICE);
@@ -778,24 +778,20 @@ fn test_load_verified_waits_for_live_trust_store_staging_entry() {
         started_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("reader must reach load_verified");
-        assert!(
-            done_rx.recv_timeout(Duration::from_millis(300)).is_err(),
-            "load_verified must wait while the writer owns the trust directory"
-        );
+        assert!(done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("reader must not wait for a writer staging another snapshot")
+            .expect("reader must load the canonical trust store"));
         fs::remove_file(&staging_path).expect("publish trust store and remove staging entry");
         Ok::<_, kapsaro_core::Error>(worker)
     })
     .expect("hold trust store directory lock");
 
-    assert!(done_rx
-        .recv_timeout(Duration::from_secs(5))
-        .expect("reader must finish after writer unlocks")
-        .expect("reader must load the published trust store"));
     worker.join().expect("reader thread must not panic");
 }
 
 #[test]
-fn test_load_verified_reports_stale_trust_store_staging_entry() {
+fn test_load_verified_ignores_stale_trust_store_staging_entry() {
     let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE]);
     let key_store = LocalKeyStore::open(temp.path().join("keys")).expect("open keystore");
     let trust_store = build_trust_store(temp.path(), ALICE);
@@ -805,11 +801,11 @@ fn test_load_verified_reports_stale_trust_store_staging_entry() {
     let staging_path = get_trust_store_dir(temp.path()).join(&staging_name);
     fs::write(staging_path, "staging").expect("create stale staging entry");
 
-    let error = trust_store
+    let loaded = trust_store
         .load_verified(&key_store)
-        .expect_err("a staged entry an unfinished write left behind must be reported");
+        .expect("staging residue is not a canonical trust store");
 
-    assert!(error.format_user_message().contains(&staging_name));
+    assert!(loaded.is_some());
 }
 
 #[cfg(unix)]

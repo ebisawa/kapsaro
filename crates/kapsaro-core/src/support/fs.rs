@@ -7,7 +7,6 @@
 pub(crate) mod anchor;
 pub mod atomic;
 pub mod lock;
-pub(crate) mod mount;
 pub(crate) mod permission;
 pub(crate) mod policy;
 pub(crate) mod read;

@@ -13,9 +13,8 @@ use crate::feature::trust::store_mutation::{
 use crate::feature::trust::verification::verify_trust_store;
 use crate::io::keystore::access::KeystoreAccess;
 use crate::io::trust::store::{
-    attach_trust_store_recovery, build_trust_store_conflict_error,
-    load_trust_store_with_shared_lock, with_exclusive_trust_store_load, TrustStoreLoadResult,
-    TrustStoreSnapshot,
+    attach_trust_store_recovery, build_trust_store_conflict_error, load_trust_store_snapshot,
+    with_exclusive_trust_store_load, TrustStoreLoadResult, TrustStoreSnapshot,
 };
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{TrustStoreDocument, TrustStoreProtected};
@@ -73,9 +72,7 @@ pub(crate) fn resolve_owner_keystore<'a>(
 
 /// What one commit binds itself to: steps 1 and 3 of the transaction.
 ///
-/// The bytes and the signer key are taken under two separate shared locks,
-/// each released before the next is acquired, so the exclusive commit that
-/// follows holds neither of them.
+/// The published bytes and signer key are observed before the exclusive commit.
 ///
 /// The keystore the keys were read from travels along, because a merged write
 /// that finds the bytes moved has to read the key the new bytes name before it
@@ -119,8 +116,8 @@ pub(crate) enum TrustStoreCommitGate {
     ///
     /// The commit still only writes over content its own observation saw, but
     /// bytes that moved are observed again instead of being reported: the key
-    /// the new document names is read under the member lock, and the exclusive
-    /// lock is taken afresh. So a store another writer created, or re-signed
+    /// the new document names is read before the exclusive lock is taken afresh.
+    /// So a store another writer created, or re-signed
     /// with a rotated key, is merged into rather than costing this approval.
     LatestContent,
 }
@@ -128,8 +125,8 @@ pub(crate) enum TrustStoreCommitGate {
 impl TrustStorePreparation {
     /// Bind a commit to bytes observed earlier, with the keys read now.
     ///
-    /// Step 3 still runs here, so the commit verifies against keys read under a
-    /// member lock this call has already released.
+    /// Step 3 still runs here, so the commit verifies against keys read before
+    /// the trust mutation begins.
     ///
     /// `signer_kid` names the key the reviewed content was signed with. The
     /// gate accepts nothing but that content, so this is the only key the
@@ -149,10 +146,9 @@ impl TrustStorePreparation {
 
     /// Read the stored bytes, then the key their signature names.
     ///
-    /// The trust directory's shared lock is released before the keystore is
-    /// consulted, so neither lock is held while the other is taken. The
-    /// document read under that lock is handed back so a caller that also has
-    /// to verify it does not read it a second time.
+    /// The canonical trust document is read before the keystore is consulted.
+    /// The captured document is handed back so a caller that also has to verify
+    /// it does not read it a second time.
     fn observe<D>(
         base: &AnchoredDir,
         trust_dir: &D,
@@ -163,7 +159,7 @@ impl TrustStorePreparation {
     where
         D: DirectoryFd + LockTargetDirectory,
     {
-        let loaded = load_trust_store_with_shared_lock(base, trust_dir, path)?;
+        let loaded = load_trust_store_snapshot(base, trust_dir, path)?;
         let signer_kid = loaded
             .as_ref()
             .and_then(|loaded| document_signer_kid(&loaded.document));
@@ -295,10 +291,9 @@ const MERGED_OBSERVATION_LIMIT: usize = 8;
 ///
 /// The commit verifies with a key read before the trust lock was taken, so it
 /// can only accept content the observation it is bound to actually saw. Content
-/// another writer left behind is therefore observed again -- its bytes under
-/// the trust directory's shared lock, then the key its signature names under
-/// the member lock, each released before the next is taken -- and the exclusive
-/// lock is acquired afresh. That is what lets a store another writer created,
+/// another writer left behind is therefore observed again -- its published
+/// bytes, then the key its signature names -- before the exclusive lock is
+/// acquired afresh. That is what lets a store another writer created,
 /// or re-signed with a rotated key, be merged into rather than lost.
 ///
 /// A store that no longer reads back is not content that moved. Nothing this
@@ -334,8 +329,8 @@ where
 /// Whether an attempt that found the content moved has an attempt left for what
 /// observing it again would find.
 ///
-/// One observation costs the trust directory's shared lock, a trust store read
-/// and a keystore read, and no attempt follows the last one. Taking it would
+/// One observation costs a trust store read and a keystore read, and no attempt
+/// follows the last one. Taking it would
 /// spend all three on content nothing goes on to commit against, and a failure
 /// of that read would be reported in place of the conflict the run has already
 /// established.

@@ -259,7 +259,7 @@ fn resolve_ssh_context_for_fingerprint(
 ///
 /// The key is settled first — the one the caller named, or the member's active
 /// one when it named none — and the fingerprint is then read from that very key
-/// pair under one shared lock on the member. Choosing the SSH identity from the
+/// pair through one opened member directory. Choosing the SSH identity from the
 /// active key while the caller named another one would hand a key protected
 /// under one SSH identity to a context built for a different one, so a
 /// `decrypt --kid K1` against a member whose active key is protected elsewhere

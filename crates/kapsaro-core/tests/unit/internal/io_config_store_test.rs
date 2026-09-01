@@ -17,6 +17,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::sync::{Arc, Barrier};
 use tempfile::TempDir;
 
 fn open_home(path: &Path) -> AnchoredDir {
@@ -168,6 +169,57 @@ fn test_set_config_value_update_existing() {
 
     let config = load_config_file_from_anchored_home(&home).unwrap();
     assert_eq!(config.get("member_handle").unwrap(), "new@example.com");
+}
+
+#[test]
+fn test_config_update_does_not_acquire_a_directory_lock() {
+    let tmp = local_state_temp_dir();
+    let home = open_home(tmp.path());
+
+    crate::support::fs::lock::with_exclusive_locked_directory(&home, |_| {
+        set_config_value(&home, "member_handle", "alice@example.com")
+    })
+    .unwrap();
+
+    assert_eq!(
+        load_config_file_from_anchored_home(&home)
+            .unwrap()
+            .get("member_handle")
+            .map(String::as_str),
+        Some("alice@example.com")
+    );
+}
+
+#[test]
+fn test_concurrent_config_updates_leave_complete_toml() {
+    const WRITERS: usize = 8;
+    let tmp = local_state_temp_dir();
+    let root = tmp.path().to_path_buf();
+    let barrier = Arc::new(Barrier::new(WRITERS + 1));
+    let mut workers = Vec::new();
+
+    for index in 0..WRITERS {
+        let root = root.clone();
+        let barrier = barrier.clone();
+        workers.push(std::thread::spawn(move || {
+            let home = open_home(&root);
+            barrier.wait();
+            set_config_value(&home, "member_handle", &format!("writer-{index}"))
+        }));
+    }
+
+    barrier.wait();
+    for worker in workers {
+        worker.join().unwrap().unwrap();
+    }
+
+    let content = fs::read_to_string(root.join("config.toml")).unwrap();
+    let parsed: toml::Table = toml::from_str(&content).unwrap();
+    let value = parsed
+        .get("member_handle")
+        .and_then(toml::Value::as_str)
+        .unwrap();
+    assert!(value.starts_with("writer-"), "{content}");
 }
 
 #[cfg(unix)]

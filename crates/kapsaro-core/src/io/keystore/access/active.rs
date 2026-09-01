@@ -4,7 +4,7 @@
 //! Active key selection for one keystore member.
 //! Reads and publishes the `active` marker and resolves which key it names.
 
-use super::inspection::list_kids_locked;
+use super::inspection::list_kids_in_verified_namespace;
 use super::key_pair::{PrivateHalfCheck, StoredKeyPair};
 use super::{
     ensure_member_namespace_safe, finish_member_mutation, key_not_found, KeystoreAccess,
@@ -12,10 +12,7 @@ use super::{
 };
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
-use crate::support::fs::lock::{
-    with_exclusive_locked_directory, with_shared_locked_directory, ExclusiveLockedDir,
-    ReadLockedDirectory,
-};
+use crate::support::fs::lock::{with_exclusive_locked_directory, ExclusiveLockedDir};
 use crate::support::fs::permission::{collect_open_permission_violations, report_violations};
 use crate::support::fs::relative::{self, regular_file_exists_at, DirectoryFd};
 use crate::support::kid::resolve_unique_kid;
@@ -33,18 +30,14 @@ impl KeystoreAccess {
         let member_dir = self
             .open_member(member)?
             .ok_or_else(|| no_keys_found(member))?;
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            self.resolve_kid_locked(locked_member_dir, member, query)
-        })
+        self.resolve_kid_in_verified_namespace(&member_dir, member, query)
     }
 
-    /// Resolve which key `query` names and read that key's public half under a
-    /// single lock on the member directory.
+    /// Resolve which key `query` names and read its published public half.
     ///
-    /// Resolving and reading in two locked steps would let a rotation land
-    /// between them, so the key id handed back would name a key that is gone or
-    /// a directory that now holds a different key. Both answers come from one
-    /// locked view of the member instead.
+    /// Both operations stay bound to one opened member directory. A concurrent
+    /// removal may produce a retryable read failure, while a published key
+    /// directory is never replaced with different content.
     pub(crate) fn resolve_public_key(
         &self,
         member: &MemberHandle,
@@ -53,12 +46,9 @@ impl KeystoreAccess {
         let member_dir = self
             .open_member(member)?
             .ok_or_else(|| no_keys_found(member))?;
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            let kid = self.resolve_kid_locked(locked_member_dir, member, query)?;
-            run_kid_resolved_hook();
-            self.load_public_key_in_verified_namespace(locked_member_dir, member, &kid)
-                .map(|public_key| (kid, public_key))
-        })
+        let kid = self.resolve_kid_in_verified_namespace(&member_dir, member, query)?;
+        self.load_public_key_in_verified_namespace(&member_dir, member, &kid)
+            .map(|public_key| (kid, public_key))
     }
 
     /// Settle which key `query` names, inspecting the member namespace on the
@@ -67,33 +57,31 @@ impl KeystoreAccess {
     /// Every route out of here walks the member directory through the namespace
     /// check, so a caller may go on with the `*_in_verified_namespace` readers
     /// once this has answered.
-    pub(super) fn resolve_kid_locked<D>(
+    pub(super) fn resolve_kid_in_verified_namespace<D>(
         &self,
         member_dir: &D,
         member: &MemberHandle,
         query: Option<&str>,
     ) -> Result<Kid>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         if let Some(query) = query {
-            let kids = list_kids_locked(member_dir)?;
+            let kids = list_kids_in_verified_namespace(member_dir)?;
             let resolved = resolve_unique_kid(kids.iter().map(Kid::as_str), query)?;
             return Kid::try_from(resolved);
         }
-        if let Some(active) = self.load_active_kid_locked(member_dir)? {
+        if let Some(active) = self.load_active_kid_checked(member_dir)? {
             return Ok(active);
         }
-        self.select_most_recent_kid_locked(member_dir, member)
+        self.select_most_recent_kid(member_dir, member)
     }
 
     pub(crate) fn load_active_kid(&self, member: &MemberHandle) -> Result<Option<Kid>> {
         let Some(member_dir) = self.open_member(member)? else {
             return Ok(None);
         };
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            self.load_active_kid_locked(locked_member_dir)
-        })
+        self.load_active_kid_checked(&member_dir)
     }
 
     /// Point the active marker at one named key of `member`.
@@ -110,7 +98,7 @@ impl KeystoreAccess {
         })?;
         with_exclusive_locked_directory(&member_dir, |locked_member_dir| {
             ensure_member_namespace_safe(locked_member_dir)?;
-            let activability = self.inspect_key_activability_locked(
+            let activability = self.inspect_key_activability(
                 locked_member_dir,
                 member,
                 kid,
@@ -136,9 +124,8 @@ impl KeystoreAccess {
     /// Activate the newest unexpired key of `member` that both halves exist for.
     ///
     /// Choosing and publishing happen under one exclusive lock, so the key the
-    /// marker names is the key that was inspected. Choosing under a shared lock
-    /// and writing under a second one would let a removal or a rotation land in
-    /// between and leave the marker on a key that is no longer usable.
+    /// marker names is the key that was inspected. The whole selection and
+    /// publication stays inside the writer's exclusive transaction.
     pub(crate) fn activate_latest_valid_key(&self, member: &MemberHandle) -> Result<Kid> {
         let member_dir = self
             .open_member(member)?
@@ -160,7 +147,7 @@ impl KeystoreAccess {
     /// The newest unexpired key of `member` that both halves read back as.
     ///
     /// Ties on the creation timestamp, and keys stating no timestamp at all,
-    /// are settled by the shared ordering. A key whose documents cannot be read
+    /// are settled by the common ordering. A key whose documents cannot be read
     /// is passed over rather than failing the whole selection: this is the
     /// command the keystore names as the repair for a member left without an
     /// active key, so one unreadable key must not take that repair down with
@@ -198,13 +185,13 @@ impl KeystoreAccess {
         selection: KeySelection,
     ) -> Result<SelectableKeys>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let now = time::OffsetDateTime::now_utc();
         let mut selectable = SelectableKeys::default();
-        for kid in list_kids_locked(member_dir)? {
+        for kid in list_kids_in_verified_namespace(member_dir)? {
             selectable.stored += 1;
-            match self.inspect_key_activability_locked(member_dir, member, &kid, now, selection) {
+            match self.inspect_key_activability(member_dir, member, &kid, now, selection) {
                 KeyActivability::Activatable(created_at) => {
                     selectable.candidates.push((kid, created_at))
                 }
@@ -223,13 +210,12 @@ impl KeystoreAccess {
     /// Decide what one key of `member` is for the walk that is asking, and say
     /// what rules it out.
     ///
-    /// The member namespace is inspected by the caller before the lock section
-    /// walks any key.
+    /// The member namespace is inspected by the caller before it walks any key.
     ///
     /// A key that could not be read comes back carrying its own failure instead
     /// of ending the inspection, so a caller walking every key of a member
     /// decides for itself whether one unreadable key stops it.
-    fn inspect_key_activability_locked<D>(
+    fn inspect_key_activability<D>(
         &self,
         member_dir: &D,
         member: &MemberHandle,
@@ -238,9 +224,9 @@ impl KeystoreAccess {
         selection: KeySelection,
     ) -> KeyActivability
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
-        match self.read_key_activability_locked(member_dir, member, kid, now, selection) {
+        match self.read_key_activability(member_dir, member, kid, now, selection) {
             Ok(activability) => activability,
             Err(error) => KeyActivability::Unreadable(error),
         }
@@ -248,7 +234,7 @@ impl KeystoreAccess {
 
     /// Read the key's documents to the depth `selection` asks for and say what
     /// the key is at `now`.
-    fn read_key_activability_locked<D>(
+    fn read_key_activability<D>(
         &self,
         member_dir: &D,
         member: &MemberHandle,
@@ -257,7 +243,7 @@ impl KeystoreAccess {
         selection: KeySelection,
     ) -> Result<KeyActivability>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let stored =
             self.inspect_stored_key_pair(member_dir, member, kid, selection.private_half_check())?;
@@ -326,26 +312,25 @@ impl KeystoreAccess {
         })
     }
 
-    pub(super) fn load_active_kid_locked<D>(&self, member_dir: &D) -> Result<Option<Kid>>
+    pub(super) fn load_active_kid_checked<D>(&self, member_dir: &D) -> Result<Option<Kid>>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         ensure_member_namespace_safe(member_dir)?;
         self.load_active_kid_in_verified_namespace(member_dir)
     }
 
-    /// Read the active marker inside a member namespace already inspected under
-    /// the current lock.
+    /// Read the active marker inside a member namespace already inspected by the caller.
     ///
     /// Inspecting the namespace reads the whole member directory, so a caller
-    /// that has already done it under this lock enters here rather than paying
+    /// that has already done it enters here rather than paying
     /// for a second walk of the same entries.
     pub(super) fn load_active_kid_in_verified_namespace<D>(
         &self,
         member_dir: &D,
     ) -> Result<Option<Kid>>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         // The exposure belongs to the directory, not to the marker inside it,
         // so a member with no active key still has it reported.
@@ -385,9 +370,9 @@ impl KeystoreAccess {
     /// the document in it opens is the business of the read that opens it,
     /// which fails naming the key it was handed; deciding it here would let one
     /// key nobody is going to open take down the resolution for all of them.
-    fn select_most_recent_kid_locked<D>(&self, member_dir: &D, member: &MemberHandle) -> Result<Kid>
+    fn select_most_recent_kid<D>(&self, member_dir: &D, member: &MemberHandle) -> Result<Kid>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let SelectableKeys {
             candidates,
@@ -637,37 +622,6 @@ where
     relative::save_text_restricted_at(member_dir, STAGING_FILE, "staging")?;
     staging_hook();
     relative::remove_file_if_exists_at(member_dir, STAGING_FILE)
-}
-
-/// Test-only seam: runs while the member directory is locked, after the key id
-/// is resolved and before its public half is read, so a test can observe what
-/// the lock covers. Compiled out of production.
-#[cfg(test)]
-fn run_kid_resolved_hook() {
-    let hook = KID_RESOLVED_HOOK.with(|hook| hook.borrow_mut().take());
-    if let Some(hook) = hook {
-        hook();
-    }
-}
-
-#[cfg(not(test))]
-fn run_kid_resolved_hook() {}
-
-// Test-only seam: fires once the active kid is resolved but before the key is
-// read, which is the window a concurrent activation would land in.
-#[cfg(test)]
-thread_local! {
-    static KID_RESOLVED_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
-        const { std::cell::RefCell::new(None) };
-}
-
-/// Arm the kid resolution seam for the next public key resolution on this thread.
-#[cfg(test)]
-fn set_kid_resolved_hook<H>(hook: H)
-where
-    H: FnOnce() + 'static,
-{
-    KID_RESOLVED_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
 }
 
 /// The creation timestamp a public key states, if it states one.

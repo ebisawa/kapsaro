@@ -11,11 +11,9 @@ use crate::io::keystore::paths::KEYSTORE_DIR_NAME;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::lock::{ExclusiveLockedDir, ReadLockedDirectory};
 use crate::support::fs::relative::{
     ensure_child_dir_restricted_at, is_write_staging_name, list_child_entries_at,
-    open_optional_child_dir, write_staging_residue_error, ChildType, DirectoryFd, DirectoryScope,
-    OpenDir,
+    open_optional_child_dir, ChildType, DirectoryFd, DirectoryScope, OpenDir,
 };
 use crate::support::path::{format_finding_path, format_path_relative_to_cwd};
 use crate::support::post_write::{format_post_change_failure, CompletedChange};
@@ -201,11 +199,10 @@ impl KeystoreAccess {
     }
 }
 
-/// Open one key directory inside a member namespace already inspected under the
-/// current lock.
+/// Open one key directory inside a member namespace already inspected by the caller.
 ///
 /// Inspecting the namespace walks the whole member directory, so a caller that
-/// has already done it under this lock enters here instead of paying for a
+/// has already done it enters here instead of paying for a
 /// second walk that can report nothing new.
 pub(super) fn open_required_key_in_verified_namespace<D>(
     member_dir: &D,
@@ -213,7 +210,7 @@ pub(super) fn open_required_key_in_verified_namespace<D>(
     kid: &Kid,
 ) -> Result<OpenDir>
 where
-    D: ReadLockedDirectory,
+    D: DirectoryFd,
 {
     let key_dir = open_optional_child_dir(member_dir, kid.as_str())?
         .ok_or_else(|| key_not_found(member, kid))?;
@@ -337,6 +334,9 @@ fn keystore_child_directory_name<D>(
 where
     D: DirectoryFd,
 {
+    if is_write_staging_name(&name) {
+        return Ok(None);
+    }
     ensure_keystore_entry_safe(dir, level, &name, child_type)?;
     match child_type {
         ChildType::Directory => Ok(Some(name)),
@@ -344,10 +344,8 @@ where
     }
 }
 
-/// Fail-closed check of one keystore entry before the directory holding it is
-/// used. An entry left staged by an unfinished write, an entry of an unexpected
-/// type, and an entry shadowing a name the keystore stores itself are all
-/// rejected; anything else is left for the caller to skip.
+/// Fail-closed check of one canonical keystore entry before it is used.
+/// Internal staging names are ignored by normal readers and reported by Doctor.
 fn ensure_keystore_entry_safe<D>(
     dir: &D,
     level: KeystoreLevel,
@@ -358,7 +356,7 @@ where
     D: DirectoryFd,
 {
     if is_write_staging_name(name) {
-        return Err(write_staging_residue_error(dir, name));
+        return Ok(());
     }
     match level.stored_type(name) {
         Some(stored) if stored != child_type => Err(shadowing_entry(dir, name, child_type)),
@@ -369,7 +367,7 @@ where
 
 pub(super) fn ensure_member_namespace_safe<D>(member_dir: &D) -> Result<()>
 where
-    D: ReadLockedDirectory,
+    D: DirectoryFd,
 {
     read_keystore_child_directories(member_dir, KeystoreLevel::Member).map(|_| ())
 }
@@ -383,12 +381,15 @@ where
 /// which entry it landed on, so a removal is never reported as a write the
 /// operator can go looking for, and the entry named is the one that changed
 /// rather than the directory it sits in.
-pub(super) fn finish_member_mutation<T>(
-    member_dir: &ExclusiveLockedDir<'_>,
+pub(super) fn finish_member_mutation<T, D>(
+    member_dir: &D,
     changed_path: &Path,
     change: CompletedChange,
     mutation_result: Result<T>,
-) -> Result<T> {
+) -> Result<T>
+where
+    D: DirectoryFd,
+{
     let value = mutation_result?;
     match ensure_member_namespace_safe(member_dir) {
         Ok(()) => Ok(value),

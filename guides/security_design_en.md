@@ -1387,6 +1387,7 @@ Kapsaro does not guarantee complete erasure from process memory. Memory zeroizat
 | Git-history rollback | An encrypted artifact that was valid at a historical point is not detected as a freshness violation by context binding alone |
 | TOFU and identity review | First-contact MITM and whole-workspace substitution cannot be prevented cryptographically |
 | Local trusted area | Coherent replacement or rollback of the local trust store remains a compromise of the local trust boundary |
+| Concurrent updates | Concurrent writes from multiple hosts to the same storage location are unsupported |
 | Post-decryption use | Kapsaro cannot prevent legitimate recipients from misusing plaintext after decryption |
 | Distribution policy | Kapsaro does not provide a central policy for who should hold which secret |
 | Compression | Compression before encryption is not performed |

@@ -84,7 +84,7 @@ impl ResolvedTrustMutation<'_> {
         }
     }
 
-    /// Observe the stored bytes and the signer key, each under its own lock.
+    /// Observe the canonical stored bytes and the signer key before commit.
     ///
     /// A failure here happened before any gate was consulted, so it says what
     /// it is: the cause survives, carrying the route back with it, instead of
@@ -134,9 +134,8 @@ pub(crate) fn load_execution_verified_trust_store(
 /// Load and verify one trust store through its fixed local-state capability.
 /// Returns `None` when the trust directory or the store file is absent.
 ///
-/// The document is read under the trust directory's shared lock and that lock is
-/// released before the keystore is consulted, so this reader never holds the
-/// trust lock and a member lock at once.
+/// The canonical document is read as an atomically published snapshot before
+/// the keystore is consulted.
 pub(crate) fn load_optional_trust_store(
     base: &AnchoredDir,
     trust_dir: Option<&OpenDir>,
@@ -179,9 +178,8 @@ pub(crate) fn load_verified_local_trust_store(
 /// Apply one mutation to the trust store this command is bound to.
 ///
 /// The whole transaction runs here: the stored bytes and the signer key are
-/// observed under two separate shared locks, both released before the exclusive
-/// commit is taken. What `binding` decides is how tightly the write is tied to
-/// what was observed.
+/// observed before the exclusive commit is taken. What `binding` decides is how
+/// tightly the write is tied to what was observed.
 pub(crate) fn execute_trust_store_mutation_with_execution<T, F>(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
@@ -424,9 +422,8 @@ pub(crate) enum StoredTrustSigner {
 /// would stop verifying for good. Only a document that verified end to end
 /// names its signer here.
 ///
-/// The document is read under the trust directory's shared lock and that lock
-/// is released before the keystore is consulted, so this never holds the trust
-/// lock and a member lock at once.
+/// The canonical document is read before the keystore is consulted; both are
+/// ordinary published-snapshot reads.
 ///
 /// `keystore` is the one a caller already opened. Passing it keeps the keys the
 /// signature is verified against in the very keystore the caller decided

@@ -567,7 +567,6 @@ kapsaro doctor --workspace .kapsaro --home ~/.config/kapsaro
 - active なメンバーに対するローカル信頼ストアの承認状態
 - `<KAPSARO_HOME>` 配下のアクセス権と所有者
 - ローカル状態より上位のディレクトリの所有者（参考情報）
-- ローカル状態とワークスペースのディレクトリロックが、実際に他の書き手を排除できているか
 - 中断した書き込みが `<KAPSARO_HOME>` 配下に残した痕跡
 - `.kapsaro/secrets/` 配下の暗号ファイル
 - `KAPSARO_PRIVATE_KEY` が設定されている場合の CI 環境変数鍵の利用準備状態

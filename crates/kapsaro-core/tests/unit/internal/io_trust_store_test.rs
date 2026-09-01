@@ -4,7 +4,7 @@
 //! Unit tests for trust store file I/O
 
 use crate::io::trust::store::{
-    load_trust_store_with_shared_lock, save_trust_store_at, set_post_trust_store_save_hook,
+    load_trust_store_snapshot, save_trust_store_at, set_post_trust_store_save_hook,
     validate_trust_directory,
 };
 use crate::model::trust_store::{
@@ -87,7 +87,7 @@ fn test_load_trust_store_nonexistent_returns_none() {
     create_local_state_dir(&trust_dir);
     let path = trust_dir.join("nonexistent.json");
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path).unwrap();
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path).unwrap();
     assert!(result.is_none());
 }
 
@@ -101,7 +101,7 @@ fn test_save_and_load_trust_store_roundtrip() {
     save_trust_store(&path, &doc).unwrap();
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
-    let loaded = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path)
+    let loaded = load_trust_store_snapshot(&base, &opened_trust_dir, &path)
         .unwrap()
         .unwrap();
     assert_eq!(loaded.document, doc);
@@ -184,10 +184,9 @@ fn test_validate_trust_directory_allows_symlink_outside_trust_store_names() {
     validate_trust_directory(&anchored).unwrap();
 }
 
-/// An entry named like an unpublished staging write marks a write that was
-/// interrupted, so the directory is refused until an operator resolves it.
+/// Internal staging names are ignored by normal trust readers.
 #[test]
-fn test_validate_trust_directory_rejects_leftover_staging_entry() {
+fn test_validate_trust_directory_ignores_leftover_staging_entry() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     create_local_state_dir(&trust_dir);
@@ -203,15 +202,7 @@ fn test_validate_trust_directory_rejects_leftover_staging_entry() {
     )
     .unwrap();
 
-    let error = validate_trust_directory(&anchored).unwrap_err();
-
-    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
-    assert_eq!(error.recovery(), Some("E_LOCAL_STATE_PATH_UNSAFE"));
-    let message = error.format_user_message();
-    assert!(
-        message.contains("run: rm -r -- '") && message.contains(".alice@example.com.json.tmp."),
-        "{message}"
-    );
+    validate_trust_directory(&anchored).unwrap();
 }
 
 #[test]
@@ -252,7 +243,7 @@ fn test_load_trust_store_filename_mismatch_fails() {
     write_local_state_file(&path, json);
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("FILENAME_MISMATCH") || err_msg.contains("does not match"));
@@ -268,7 +259,7 @@ fn test_load_trust_store_invalid_json_fails() {
     write_local_state_file(&path, "not valid json");
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
     assert!(result.is_err());
 }
 
@@ -301,7 +292,7 @@ fn test_load_trust_store_rejects_duplicate_top_level_member() {
     write_local_state_file(&path, duplicate_signature);
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -335,7 +326,7 @@ fn test_load_trust_store_rejects_duplicate_nested_member() {
     write_local_state_file(&path, duplicate_owner);
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -354,7 +345,7 @@ fn test_load_trust_store_rejects_json_exceeding_depth_limit_before_parse() {
     write_local_state_file(&path, deeply_nested_json(MAX_JSON_DEPTH + 1));
 
     let (base, opened_trust_dir) = open_trust_directory(&base_dir);
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     assert!(result
@@ -382,7 +373,7 @@ fn test_load_trust_store_warns_about_insecure_parent_directory_permissions() {
     let (base, opened_trust_dir) = open_trust_directory(&base_dir);
 
     let guard = LocalStateWarningGuard::new();
-    let loaded = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path)
+    let loaded = load_trust_store_snapshot(&base, &opened_trust_dir, &path)
         .unwrap()
         .unwrap();
     let warnings = guard.take_reasons();
@@ -405,7 +396,7 @@ fn test_load_trust_store_rejects_oversized_document_before_parse() {
     write_local_state_file(&path, vec![b'A'; MAX_JSON_DOCUMENT_READ_SIZE + 1]);
 
     let (base, opened_trust_dir) = open_trust_directory(&base_dir);
-    let result = load_trust_store_with_shared_lock(&base, &opened_trust_dir, &path);
+    let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
 
     assert!(result.is_err());
     assert!(result

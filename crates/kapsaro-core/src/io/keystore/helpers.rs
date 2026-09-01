@@ -32,11 +32,8 @@ pub(crate) fn resolve_member_kid_query(
 ///
 /// Key directory names use the canonical `kid`, so at most one member matches.
 ///
-/// Each member is enumerated under its own shared lock. Reading a member
-/// directory that a key pair is being written into would otherwise observe the
-/// staging directory that write has not yet renamed into place, and the
-/// fail-closed namespace check turns that half-finished state into a refusal of
-/// the whole lookup.
+/// Internal staging names are skipped while each member's published key names
+/// are enumerated.
 pub(crate) fn find_member_by_kid(access: &KeystoreAccess, kid: &str) -> Result<MemberHandle> {
     let member_handles = access.list_members()?;
     let candidates = member_handles

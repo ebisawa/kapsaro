@@ -11,7 +11,6 @@ use crate::support::fs::read::{decode_loaded_text, load_capped_bytes};
 use crate::support::limits::MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH;
 use crate::support::path::{format_finding_path, format_path_relative_to_cwd};
 use crate::support::post_write::{format_post_change_failure, CompletedChange};
-use crate::support::shell::append_repair_command;
 use crate::{Error, Result};
 use std::ffi::{CString, OsStr};
 use std::fs::File;
@@ -2028,25 +2027,6 @@ pub(crate) fn is_write_staging_name(name: &str) -> bool {
 
 fn is_hyphenated_uuid(value: &str) -> bool {
     value.len() == 36 && uuid::Uuid::parse_str(value).is_ok()
-}
-
-/// Report an entry a write staged and never published.
-///
-/// The leftover blocks every later use of the directory holding it, so the
-/// report names the removal that unblocks it. Nothing is deleted here: the
-/// entry may hold the only copy of what the interrupted write was saving, so
-/// the operator decides after looking at it.
-pub(crate) fn write_staging_residue_error<D>(dir: &D, name: &str) -> Error
-where
-    D: DirectoryFd,
-{
-    let path = dir.path().join(name);
-    let explanation = format!(
-        "refusing to use a directory holding an entry staged by an unfinished write: {}; \
-         inspect the entry and, once its contents are no longer needed, remove it",
-        format_finding_path(&path)
-    );
-    invalid_operation_error(dir, append_repair_command(&explanation, "rm -r", &path))
 }
 
 /// Validate a name an atomic write will stage under `.{name}.tmp.{uuid}`.

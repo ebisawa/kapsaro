@@ -5,7 +5,7 @@
 //! Loads, publishes and removes the private and public halves of a key.
 
 use super::active::{clear_active_kid_locked, no_keys_found};
-use super::inspection::list_kids_locked;
+use super::inspection::list_kids_in_verified_namespace;
 use super::{
     ensure_key_directory_safe, ensure_member_namespace_safe, finish_member_mutation,
     key_half_missing, key_not_found, open_required_key_in_verified_namespace, KeystoreAccess,
@@ -16,10 +16,7 @@ use crate::io::document_store;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;
-use crate::support::fs::lock::{
-    with_exclusive_locked_directory, with_shared_locked_directory, ExclusiveLockedDir,
-    ReadLockedDirectory,
-};
+use crate::support::fs::lock::{with_exclusive_locked_directory, ExclusiveLockedDir};
 use crate::support::fs::permission::{
     collect_open_permission_violations, inspect_scoped_open_permission, report_violations,
     PermissionViolation, PermissionViolationKind,
@@ -101,13 +98,12 @@ impl KeystoreAccess {
     /// Settle whether removing one key would be refused, removing nothing.
     ///
     /// Every refusal `remove_key_with_validation` raises before it deletes
-    /// anything is raised here too, under a shared lock that is released before
-    /// this returns. A caller whose earlier steps cannot be undone asks first,
+    /// anything is raised here too before this returns. A caller whose earlier
+    /// steps cannot be undone asks first,
     /// so a removal that was never going to happen stops before them.
     ///
-    /// The lock is gone by the time the removal runs, so this is what the
-    /// keystore held when it was asked rather than a promise about later. The
-    /// removal decides again under its own exclusive lock.
+    /// This is what the keystore held when it was asked rather than a promise
+    /// about later. The removal decides again under its own exclusive lock.
     pub(crate) fn ensure_key_removable<F>(
         &self,
         member: &MemberHandle,
@@ -120,13 +116,11 @@ impl KeystoreAccess {
         let member_dir = self.open_member(member)?.ok_or_else(|| {
             Error::build_not_found_error(format!("Member '{}' not found", member))
         })?;
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            ensure_member_namespace_safe(locked_member_dir)?;
-            let active = self.load_active_kid_in_verified_namespace(locked_member_dir)?;
-            let was_active = active.as_ref() == Some(kid);
-            validate(was_active)?;
-            prepare_key_directory_removal(locked_member_dir, member, kid).map(|_| ())
-        })
+        ensure_member_namespace_safe(&member_dir)?;
+        let active = self.load_active_kid_in_verified_namespace(&member_dir)?;
+        let was_active = active.as_ref() == Some(kid);
+        validate(was_active)?;
+        prepare_key_directory_removal(&member_dir, member, kid).map(|_| ())
     }
 
     /// Load the private half of one key, refusing a key stored without its
@@ -141,7 +135,7 @@ impl KeystoreAccess {
             .map(|(private_key, _)| private_key)
     }
 
-    /// Load both halves of one named key under a shared lock on the member.
+    /// Load both halves of one named published key through one opened directory.
     pub(crate) fn load_key_pair(
         &self,
         member: &MemberHandle,
@@ -150,18 +144,15 @@ impl KeystoreAccess {
         let member_dir = self.open_member(member)?.ok_or_else(|| {
             Error::build_not_found_error(format!("Member '{}' not found", member))
         })?;
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            self.load_key_pair_locked(locked_member_dir, member, kid)
-        })
+        self.load_key_pair_checked(&member_dir, member, kid)
     }
 
-    /// Resolve which key `query` names and read both halves of it under one
-    /// shared lock on the member directory.
+    /// Resolve which key `query` names and read both halves through one opened
+    /// member directory.
     ///
-    /// Resolving in one lock section and loading in a second would let an
-    /// activation or a rotation land between them, so the key id handed back
-    /// would name a different key than the documents that came with it. Both
-    /// answers come from one locked view of the member instead.
+    /// Both operations stay bound to one opened member directory. A concurrent
+    /// removal may produce a retryable read failure, while a published key
+    /// directory is never replaced with different content.
     pub(crate) fn resolve_key_pair(
         &self,
         member: &MemberHandle,
@@ -170,33 +161,27 @@ impl KeystoreAccess {
         let member_dir = self
             .open_member(member)?
             .ok_or_else(|| no_keys_found(member))?;
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            // Resolution already inspected the member namespace under this
-            // lock, so the load enters through the verified-namespace route
-            // rather than walking the same entries a second time.
-            let kid = self.resolve_kid_locked(locked_member_dir, member, query)?;
-            let (private_key, public_key) =
-                self.load_key_pair_in_verified_namespace(locked_member_dir, member, &kid)?;
-            Ok((kid, private_key, public_key))
-        })
+        let kid = self.resolve_kid_in_verified_namespace(&member_dir, member, query)?;
+        let (private_key, public_key) =
+            self.load_key_pair_in_verified_namespace(&member_dir, member, &kid)?;
+        Ok((kid, private_key, public_key))
     }
 
-    /// Read both halves of one key from a member directory already locked.
-    fn load_key_pair_locked<D>(
+    /// Read both halves after validating the opened member namespace.
+    fn load_key_pair_checked<D>(
         &self,
         member_dir: &D,
         member: &MemberHandle,
         kid: &Kid,
     ) -> Result<(PrivateKey, PublicKey)>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         ensure_member_namespace_safe(member_dir)?;
         self.load_key_pair_in_verified_namespace(member_dir, member, kid)
     }
 
-    /// Read both halves of one key inside a member namespace already inspected
-    /// under the current lock.
+    /// Read both halves inside a member namespace already inspected by the caller.
     ///
     /// The key directory is opened once and both documents are read through
     /// that file descriptor, so the private and public halves always describe
@@ -208,7 +193,7 @@ impl KeystoreAccess {
         kid: &Kid,
     ) -> Result<(PrivateKey, PublicKey)>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let key_dir = open_required_key_in_verified_namespace(member_dir, member, kid)?;
         run_key_directory_open_hook();
@@ -232,14 +217,12 @@ impl KeystoreAccess {
         let Some(member_dir) = self.open_member(member)? else {
             return Ok(None);
         };
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            self.load_optional_public_key_locked(locked_member_dir, member, kid)
-        })
+        self.load_optional_public_key_checked(&member_dir, member, kid)
     }
 
-    /// Load a public key inside a member namespace already inspected under the
-    /// current lock. Readers that walk every key inspect the namespace once
-    /// instead of once per key.
+    /// Load a public key inside a member namespace already inspected by the
+    /// caller. Readers that walk every key inspect the namespace once instead
+    /// of once per key.
     pub(super) fn load_public_key_in_verified_namespace<D>(
         &self,
         member_dir: &D,
@@ -247,20 +230,20 @@ impl KeystoreAccess {
         kid: &Kid,
     ) -> Result<PublicKey>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         self.load_optional_public_key_in_verified_namespace(member_dir, member, kid)?
             .ok_or_else(|| key_not_found(member, kid))
     }
 
-    fn load_optional_public_key_locked<D>(
+    fn load_optional_public_key_checked<D>(
         &self,
         member_dir: &D,
         member: &MemberHandle,
         kid: &Kid,
     ) -> Result<Option<PublicKey>>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         ensure_member_namespace_safe(member_dir)?;
         self.load_optional_public_key_in_verified_namespace(member_dir, member, kid)
@@ -273,7 +256,7 @@ impl KeystoreAccess {
         kid: &Kid,
     ) -> Result<Option<PublicKey>>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let Some(key_dir) = open_optional_child_dir(member_dir, kid.as_str())? else {
             return Ok(None);
@@ -283,18 +266,16 @@ impl KeystoreAccess {
         load_optional_public_key_at(&key_dir, &permission_chain, member, kid)
     }
 
-    /// Every public key `member` holds together with the key it has active,
-    /// read under one shared lock.
+    /// Every published public key `member` holds together with its active marker.
     ///
     /// A key directory holding no public half contributes an incomplete entry
     /// rather than failing the read: one absence would otherwise hide every
     /// other key of the member, and omitting it would hide the key an operator
     /// needs to repair.
     ///
-    /// Enumerating and reading under the same lock is what makes the result a
-    /// single observation. Listing the names first and reading each afterwards
-    /// would let a rotation land in between and mix keys from two states of the
-    /// member directory.
+    /// Only canonical published names are read. A concurrent removal can make
+    /// the operation return a retryable failure instead of mixing an unfinished
+    /// key-pair publication into the result.
     pub(crate) fn load_public_key_entries_with_active(
         &self,
         member: &MemberHandle,
@@ -302,29 +283,21 @@ impl KeystoreAccess {
         let Some(member_dir) = self.open_member(member)? else {
             return Ok((None, Vec::new()));
         };
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            // Enumerating the member is what inspects its namespace, so the
-            // marker is read afterwards through the verified-namespace route
-            // instead of walking the same entries again.
-            let kids = list_kids_locked(locked_member_dir)?;
-            let active = self.load_active_kid_in_verified_namespace(locked_member_dir)?;
-            let mut entries = Vec::new();
-            for kid in kids {
-                let public_key = self.load_optional_public_key_in_verified_namespace(
-                    locked_member_dir,
-                    member,
-                    &kid,
-                )?;
-                entries.push(match public_key {
-                    Some(public_key) => PublicKeySnapshotEntry::Complete {
-                        kid,
-                        public_key: Box::new(public_key),
-                    },
-                    None => PublicKeySnapshotEntry::MissingPublicDocument { kid },
-                });
-            }
-            Ok((active, entries))
-        })
+        let kids = list_kids_in_verified_namespace(&member_dir)?;
+        let active = self.load_active_kid_in_verified_namespace(&member_dir)?;
+        let mut entries = Vec::new();
+        for kid in kids {
+            let public_key =
+                self.load_optional_public_key_in_verified_namespace(&member_dir, member, &kid)?;
+            entries.push(match public_key {
+                Some(public_key) => PublicKeySnapshotEntry::Complete {
+                    kid,
+                    public_key: Box::new(public_key),
+                },
+                None => PublicKeySnapshotEntry::MissingPublicDocument { kid },
+            });
+        }
+        Ok((active, entries))
     }
 
     /// The active key of `member`, when both halves of it are present.
@@ -342,16 +315,14 @@ impl KeystoreAccess {
         let Some(member_dir) = self.open_member(member)? else {
             return Ok(None);
         };
-        with_shared_locked_directory(&member_dir, |locked_member_dir| {
-            let Some(kid) = self.load_active_kid_locked(locked_member_dir)? else {
-                return Ok(None);
-            };
-            if !self.private_key_exists_in_verified_namespace(locked_member_dir, member, &kid)? {
-                return Ok(None);
-            }
-            self.load_public_key_in_verified_namespace(locked_member_dir, member, &kid)
-                .map(|public_key| Some((kid, public_key)))
-        })
+        let Some(kid) = self.load_active_kid_checked(&member_dir)? else {
+            return Ok(None);
+        };
+        if !self.private_key_exists_in_verified_namespace(&member_dir, member, &kid)? {
+            return Ok(None);
+        }
+        self.load_public_key_in_verified_namespace(&member_dir, member, &kid)
+            .map(|public_key| Some((kid, public_key)))
     }
 
     pub(crate) fn save_key_pair_atomic(
@@ -362,28 +333,21 @@ impl KeystoreAccess {
         public_key: &PublicKey,
     ) -> Result<()> {
         let member_dir = self.ensure_member(member)?;
-        with_exclusive_locked_directory(&member_dir, |locked_member_dir| {
-            ensure_member_namespace_safe(locked_member_dir)?;
-            // The chain is inspected before the key lands, matching what the
-            // read path inspects before it hands the key back. The write goes
-            // ahead either way, so the operator gets the key they asked for and
-            // is told which entries leave it exposed.
-            report_violations(collect_open_permission_violations(
-                &self.member_permission_chain(locked_member_dir),
-            ));
-            let result =
-                save_key_pair_locked(locked_member_dir, member, kid, private_key, public_key);
-            finish_member_mutation(
-                locked_member_dir,
-                &locked_member_dir.path().join(kid.as_str()),
-                CompletedChange::Written,
-                result,
-            )
-        })
+        ensure_member_namespace_safe(&member_dir)?;
+        report_violations(collect_open_permission_violations(
+            &self.member_permission_chain(&member_dir),
+        ));
+        let result = publish_key_pair_atomic(&member_dir, member, kid, private_key, public_key);
+        finish_member_mutation(
+            &member_dir,
+            &member_dir.path().join(kid.as_str()),
+            CompletedChange::Written,
+            result,
+        )
     }
 
     /// Whether the private half of one key is stored, inside a member namespace
-    /// already inspected under the current lock.
+    /// already inspected by the caller.
     ///
     /// This asks about the entry standing there rather than about the document
     /// in it. Its caller reports what the member has active, and a marker naming
@@ -391,10 +355,10 @@ impl KeystoreAccess {
     /// opening the document would turn that into a failure of a read that never
     /// asked for the key itself.
     ///
-    /// The caller inspects the member namespace once under its own lock, so a
-    /// reader that walks every key does not re-enumerate the member directory
-    /// per key. `load_active_public_key_with_private` reaches that inspection
-    /// through the active marker read.
+    /// The caller inspects the member namespace once, so a reader that walks
+    /// every key does not re-enumerate the member directory per key.
+    /// `load_active_public_key_with_private` reaches that inspection through the
+    /// active marker read.
     pub(super) fn private_key_exists_in_verified_namespace<D>(
         &self,
         member_dir: &D,
@@ -402,7 +366,7 @@ impl KeystoreAccess {
         kid: &Kid,
     ) -> Result<bool>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let Some(key_dir) = open_optional_child_dir(member_dir, kid.as_str())? else {
             return Ok(false);
@@ -439,7 +403,7 @@ impl KeystoreAccess {
         private_half: PrivateHalfCheck,
     ) -> Result<StoredKeyPair>
     where
-        D: ReadLockedDirectory,
+        D: DirectoryFd,
     {
         let Some(key_dir) = open_optional_child_dir(member_dir, kid.as_str())? else {
             return Ok(StoredKeyPair::NoKeyDirectory);
@@ -799,14 +763,14 @@ struct PreparedKeyRemoval {
 /// Removability is settled across the whole directory before anything is
 /// removed, so meeting an undeletable entry costs nothing: no key document has
 /// been touched and no marker has been cleared. Nothing here writes, so a
-/// caller asking the question ahead of time runs it under a shared lock.
+/// caller asking the question ahead of time performs only published reads.
 fn prepare_key_directory_removal<D>(
     member_dir: &D,
     member: &MemberHandle,
     kid: &Kid,
 ) -> Result<PreparedKeyRemoval>
 where
-    D: ReadLockedDirectory,
+    D: DirectoryFd,
 {
     let key_dir = open_optional_child_dir(member_dir, kid.as_str())?
         .ok_or_else(|| key_not_found(member, kid))?;
@@ -890,8 +854,8 @@ where
     }
 }
 
-fn save_key_pair_locked(
-    member_dir: &ExclusiveLockedDir<'_>,
+fn publish_key_pair_atomic(
+    member_dir: &OpenDir,
     member: &MemberHandle,
     kid: &Kid,
     private_key: &PrivateKey,
@@ -918,7 +882,7 @@ fn save_key_pair_locked(
 
 /// Write both documents into the staged directory and rename it into place.
 fn publish_staged_key_pair(
-    member_dir: &ExclusiveLockedDir<'_>,
+    member_dir: &OpenDir,
     temp_dir: &OpenDir,
     temp_name: &str,
     kid: &Kid,
@@ -932,16 +896,14 @@ fn publish_staged_key_pair(
 /// Keep the failure that stopped the write, naming the staging it left behind.
 ///
 /// The write is what the operator asked about, so its failure leads. A staging
-/// directory that survived refuses every later read and write of the same
-/// member, so it is named here instead of surfacing for the first time when the
-/// next command trips over it.
+/// directory that survived is ignored by normal readers and reported by Doctor,
+/// so it is named here while the failed command still knows its origin.
 fn report_with_staging_residue(error: Error, temp_dir: &OpenDir, cleanup: Result<()>) -> Error {
     let Err(cleanup_error) = cleanup else {
         return error;
     };
     Error::build_io_error(format!(
-        "{}. A key staging directory was left behind at {} and has to be removed before the \
-         member can be read or written again: {}",
+        "{}. A key staging directory was left behind at {} and should be inspected and removed: {}",
         error.format_user_message(),
         format_finding_path(temp_dir.path()),
         cleanup_error.format_user_message()
@@ -954,11 +916,7 @@ fn report_with_staging_residue(error: Error, temp_dir: &OpenDir, cleanup: Result
 /// happened, so the failure is about durability rather than about the write.
 /// Saying "key generation failed" would send the operator to generate another
 /// key, which the entry standing on disk would then refuse.
-fn build_unsynced_key_pair_error(
-    error: Error,
-    member_dir: &ExclusiveLockedDir<'_>,
-    kid: &Kid,
-) -> Error {
+fn build_unsynced_key_pair_error(error: Error, member_dir: &OpenDir, kid: &Kid) -> Error {
     Error::build_io_error(format_post_change_failure(
         "Key pair",
         &member_dir.path().join(kid.as_str()),
@@ -973,7 +931,7 @@ fn build_unsynced_key_pair_error(
 /// A test can make this fail once to check that a key pair left unsynced is
 /// still readable and does not strand its staging directory.
 #[cfg(test)]
-fn sync_published_key_pair(member_dir: &ExclusiveLockedDir<'_>) -> Result<()> {
+fn sync_published_key_pair(member_dir: &OpenDir) -> Result<()> {
     if FAIL_NEXT_KEY_PAIR_PARENT_SYNC.with(|flag| flag.replace(false)) {
         return Err(Error::build_io_error("Injected parent sync failure"));
     }
@@ -981,7 +939,7 @@ fn sync_published_key_pair(member_dir: &ExclusiveLockedDir<'_>) -> Result<()> {
 }
 
 #[cfg(not(test))]
-fn sync_published_key_pair(member_dir: &ExclusiveLockedDir<'_>) -> Result<()> {
+fn sync_published_key_pair(member_dir: &OpenDir) -> Result<()> {
     relative::sync_directory_at(member_dir)
 }
 
@@ -1005,7 +963,7 @@ pub(crate) fn fail_next_key_pair_parent_sync() {
 /// a pair written under the wrong name would be readable nowhere. Refusing at
 /// the write keeps the mismatch out of the keystore instead.
 fn ensure_key_pair_states_stored_identity(
-    member_dir: &ExclusiveLockedDir<'_>,
+    member_dir: &OpenDir,
     member: &MemberHandle,
     kid: &Kid,
     private_key: &PrivateKey,
@@ -1043,11 +1001,7 @@ fn save_key_pair_files(
 /// alive forever. Every entry is attempted even after one refuses to go, so a
 /// staged private key document is never what survives; the first refusal is
 /// what the caller is told, alongside the failure the write itself met.
-fn cleanup_temp_key_dir(
-    member_dir: &ExclusiveLockedDir<'_>,
-    temp_dir: &OpenDir,
-    temp_name: &str,
-) -> Result<()> {
+fn cleanup_temp_key_dir(member_dir: &OpenDir, temp_dir: &OpenDir, temp_name: &str) -> Result<()> {
     let mut failure = None;
     for (name, child_type) in list_child_entries_at(temp_dir)? {
         if let Err(error) = remove_child_entry(temp_dir, &name, child_type) {

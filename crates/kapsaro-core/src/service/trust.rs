@@ -33,7 +33,7 @@ use crate::feature::verify::public_key::{
 use crate::io::keystore::access::{build_local_keystore_capability_error, KeystoreAccess};
 use crate::io::trust::paths::{get_trust_store_file_path, TRUST_DIR_NAME};
 use crate::io::trust::store::{
-    attach_trust_store_recovery, load_trust_store_with_shared_lock, TrustStoreSnapshot,
+    attach_trust_store_recovery, load_trust_store_snapshot, TrustStoreSnapshot,
 };
 use crate::io::workspace::members::{load_active_member_files, load_active_member_files_at};
 use crate::model::identity::Kid;
@@ -429,8 +429,7 @@ impl LocalTrustStore {
     where
         D: DirectoryFd + LockTargetDirectory,
     {
-        let Some(loaded) = load_trust_store_with_shared_lock(&self.base_dir, trust_dir, path)?
-        else {
+        let Some(loaded) = load_trust_store_snapshot(&self.base_dir, trust_dir, path)? else {
             return Ok(None);
         };
         let keystore = resolve_owner_keystore(keystore, &self.base_dir, &self.owner_handle)?;

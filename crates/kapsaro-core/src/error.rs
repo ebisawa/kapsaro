@@ -41,12 +41,8 @@ pub(crate) const LOCAL_STATE_PERMISSIONS_RULE: &str = "W_LOCAL_STATE_PERMISSIONS
 /// administrator. Reported by the diagnostic command only.
 pub(crate) const LOCAL_STATE_ANCESTOR_OWNER_RULE: &str = "W_LOCAL_STATE_ANCESTOR_OWNER";
 
-/// A directory whose locks do not exclude every writer that can reach it.
-/// Reported by the diagnostic command only.
-pub(crate) const LOCK_EXCLUSION_RULE: &str = "W_LOCK_EXCLUSION";
-
 /// An entry an interrupted write staged and never published. Reported by the
-/// diagnostic command only; the commands that read the directory refuse it.
+/// diagnostic command while normal readers ignore internal staging names.
 pub(crate) const LOCAL_STATE_WRITE_RESIDUE_RULE: &str = "W_LOCAL_STATE_WRITE_RESIDUE";
 
 type BoxedSource = Box<dyn StdError + Send + Sync>;

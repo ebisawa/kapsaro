@@ -7,16 +7,8 @@
 use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::MemberHandle;
 use crate::test_utils::local_state_temp_dir;
-use crate::{Error, ErrorKind};
 use std::fs;
 use tempfile::TempDir;
-
-const LOCAL_STATE_PATH_UNSAFE: &str = "E_LOCAL_STATE_PATH_UNSAFE";
-
-fn assert_local_state_path_unsafe(error: &Error) {
-    assert_eq!(error.kind(), ErrorKind::InvalidOperation);
-    assert_eq!(error.recovery(), Some(LOCAL_STATE_PATH_UNSAFE));
-}
 
 #[test]
 fn test_list_members_empty() {
@@ -118,32 +110,16 @@ fn test_member_named_symlink_is_skipped_by_enumeration() {
     );
 }
 
-/// An entry named like an unpublished staging write is a sign of an interrupted
-/// write, so the keystore refuses to act on the namespace holding it.
+/// Internal staging names are not canonical member entries.
 #[test]
-fn test_leftover_staging_entry_is_rejected() {
+fn test_leftover_staging_entry_is_ignored_by_member_readers() {
     let temp_dir = local_state_temp_dir();
     let keystore_root = temp_dir.path();
     fs::create_dir_all(keystore_root.join(".tmp-3f2504e0-4f89-41d3-9a0c-0305e82c3301")).unwrap();
 
     let access = KeystoreAccess::open(keystore_root).unwrap();
-    let error = access.list_members().unwrap_err();
-
-    assert_local_state_path_unsafe(&error);
-    let message = error.format_user_message();
-    assert!(
-        message.contains("run: rm -r -- '") && message.contains(".tmp-3f2504e0"),
-        "{message}"
-    );
-
-    let ignored_error = access.list_ignored_root_entries().unwrap_err();
-
-    assert_local_state_path_unsafe(&ignored_error);
-    let ignored_message = ignored_error.format_user_message();
-    assert!(
-        ignored_message.contains(".tmp-3f2504e0"),
-        "{ignored_message}"
-    );
+    assert!(access.list_members().unwrap().is_empty());
+    assert!(access.list_ignored_root_entries().unwrap().is_empty());
 }
 
 /// The rejection keys on the staging name shape, not on the leading dot, so an

@@ -8,7 +8,6 @@
 
 use crate::io::document_store;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::lock;
 use crate::support::fs::relative::{
     describe_unreplaceable_child_type, optional_child_type_at, save_text_restricted_at, DirectoryFd,
 };
@@ -45,23 +44,21 @@ fn string_values(table: toml::Table) -> BTreeMap<String, String> {
 
 /// Set a configuration value in the config file of an opened home.
 ///
-/// The home directory itself is held exclusively for the whole read-modify-write.
+/// Concurrent updates use last-writer-wins; atomic replacement keeps the file complete.
 ///
 /// # Errors
 ///
 /// - `Error::Io` - Cannot read or write the file
 /// - `Error::Parse` - Invalid TOML format
 pub(crate) fn set_config_value(home: &AnchoredDir, key: &str, value: &str) -> Result<()> {
-    lock::with_exclusive_locked_directory(home, |locked_home| {
-        let mut table = load_toml_table(locked_home)?;
-        table.insert(key.to_string(), toml::Value::String(value.to_string()));
-        save_toml_table(locked_home, &table)
-    })
+    let mut table = load_toml_table(home)?;
+    table.insert(key.to_string(), toml::Value::String(value.to_string()));
+    save_toml_table(home, &table)
 }
 
 /// Remove a configuration value from the config file of an opened home.
 ///
-/// The home directory itself is held exclusively for the whole read-modify-write.
+/// Concurrent updates use last-writer-wins; atomic replacement keeps the file complete.
 ///
 /// # Errors
 ///
@@ -69,13 +66,11 @@ pub(crate) fn set_config_value(home: &AnchoredDir, key: &str, value: &str) -> Re
 /// - `Error::Io` - Cannot read or write the file
 /// - `Error::Parse` - Invalid TOML format
 pub(crate) fn unset_config_value(home: &AnchoredDir, key: &str) -> Result<()> {
-    lock::with_exclusive_locked_directory(home, |locked_home| {
-        let mut table = load_toml_table(locked_home)?;
-        if table.remove(key).is_none() {
-            return Err(config_key_not_found(key));
-        }
-        save_toml_table(locked_home, &table)
-    })
+    let mut table = load_toml_table(home)?;
+    if table.remove(key).is_none() {
+        return Err(config_key_not_found(key));
+    }
+    save_toml_table(home, &table)
 }
 
 /// The single wording for a configuration key that is not set.

@@ -12,8 +12,8 @@ use crate::app::trust::approval::{
     observe_recipient_set_approval_store, save_reviewed_recipient_set_approval, ApprovedKnownKey,
 };
 use crate::app::trust::{
-    evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome, CommandCapability,
-    RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate, TrustContext,
+    evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome, RecipientTrustOutcome,
+    SignerTrustOutcome, TrustApprovalCandidate, TrustContext,
 };
 use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
@@ -158,7 +158,7 @@ fn push_unique_candidate(
     seen: &mut BTreeSet<String>,
     candidate: &TrustApprovalCandidate,
 ) {
-    if seen.insert(candidate.kid.to_string()) {
+    if seen.insert(candidate.kid().to_string()) {
         candidates.push(candidate.clone());
     }
 }
@@ -197,7 +197,7 @@ where
     }
     save_reviewed_recipient_set_approval(
         execution.execution,
-        &observed,
+        observed.as_ref(),
         review.current_set().clone(),
     )
     .map(|_| ())
@@ -206,7 +206,6 @@ where
 pub struct ArtifactRecipientSetReviewInput<'a> {
     pub trust_ctx: &'a TrustContext,
     pub recipient_set: &'a ArtifactRecipientSet,
-    pub capability: CommandCapability,
     pub context_label: &'a str,
 }
 
@@ -218,10 +217,15 @@ pub fn review_artifact_recipient_set_output<ConfirmRecipientSet>(
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
+    let evaluator = crate::app::trust::snapshot::load_trust_policy_evaluator(
+        execution.execution,
+        review.trust_ctx.active_members_by_kid.clone(),
+    )?;
     let outcome = evaluate_output_recipient_set_trust(
+        &evaluator,
+        &execution.execution.key_ctx,
         review.trust_ctx,
         review.recipient_set,
-        review.capability,
     )?;
     review_and_save_artifact_recipient_set(
         execution,
@@ -328,7 +332,7 @@ fn is_approved_candidate(
 ) -> bool {
     approved_keys.iter().any(|approval| {
         let identity = KnownKeyIdentity::from(approval);
-        identity.member_handle() == candidate.member_handle.as_str()
-            && identity.kid() == candidate.kid.as_str()
+        identity.member_handle() == candidate.member_handle().as_str()
+            && identity.kid() == candidate.kid().as_str()
     })
 }

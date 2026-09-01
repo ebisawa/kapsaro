@@ -89,7 +89,6 @@ impl VerificationResult {
     ///
     /// Only the GitHub path reports this outcome in production, so it is built
     /// alongside it and for the tests that construct a result directly.
-    #[cfg(any(feature = "online", test))]
     pub(crate) fn not_configured(
         member_handle: &str,
         message: &str,

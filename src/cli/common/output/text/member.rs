@@ -12,7 +12,7 @@ use crate::cli::common::output::member::view::{
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::text::layout::{KidDisplayFallback, LabelAlignment, LineTarget};
 use crate::cli::common::output::trust::review::{
-    format_candidate_review_lines, print_trust_review_line,
+    format_github_verification, print_trust_review_line,
 };
 
 const MEMBER_SHOW_LABEL_WIDTH: usize = 12;
@@ -136,7 +136,7 @@ fn format_member_approval_results_lines(view: &MemberApprovalResultsView<'_>) ->
     let mut lines = Vec::new();
     for result in &view.results {
         lines.extend(format_member_approval_item_lines(result));
-        lines.extend(format_candidate_review_lines(&result.review_candidate));
+        lines.extend(format_member_approval_candidate_lines(result));
     }
     let approved_count = view.results.iter().filter(|result| result.approved).count();
     lines.push(String::new());
@@ -146,6 +146,26 @@ fn format_member_approval_results_lines(view: &MemberApprovalResultsView<'_>) ->
         view.results.len()
     ));
     lines
+}
+
+fn format_member_approval_candidate_lines(result: &MemberApprovalItemView<'_>) -> Vec<String> {
+    vec![
+        format!("  member handle      {}", result.member_handle),
+        format!("  key id             {}", result.kid),
+        format!(
+            "  SSH fingerprint    {}",
+            result.fingerprint.unwrap_or("unknown")
+        ),
+        format!(
+            "  GitHub account     {}",
+            format_github_verification(
+                result.github_id,
+                result.github_login,
+                result.github_binding_configured,
+                result.verified,
+            )
+        ),
+    ]
 }
 
 fn format_member_approval_item_lines(result: &MemberApprovalItemView<'_>) -> Vec<String> {

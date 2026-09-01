@@ -256,7 +256,7 @@ where
         InteractiveTrustReviewKind::KnownKeyApproval,
         verify_online,
     )?;
-    let approval = ApprovedKnownKey::from(&reviewed);
+    let approval = ApprovedKnownKey::from_candidate(&reviewed)?;
     if !seen_known.insert(KnownKeyIdentity::from(&approval)) {
         return Ok(());
     }
@@ -324,8 +324,7 @@ where
             "recipient trust",
         ));
     }
-    collect_rewrap_recipient_approvals(approved, seen_known, approvals);
-    Ok(())
+    collect_rewrap_recipient_approvals(approved, seen_known, approvals)
 }
 
 fn collect_rewrap_recipient_key_reviews<VerifyOnline>(
@@ -340,8 +339,8 @@ where
         .iter()
         .filter(|candidate| {
             !seen_known.contains(&KnownKeyIdentity::new(
-                candidate.member_handle.as_str(),
-                candidate.kid.as_str(),
+                candidate.member_handle().as_str(),
+                candidate.kid().as_str(),
             ))
         })
         .map(|candidate| {
@@ -358,12 +357,13 @@ fn collect_rewrap_recipient_approvals(
     approved: Vec<TrustApprovalCandidate>,
     seen_known: &mut BTreeSet<KnownKeyIdentity>,
     approvals: &mut Vec<ApprovedKnownKey>,
-) {
+) -> Result<()> {
     for candidate in approved {
-        let approval = ApprovedKnownKey::from(&candidate);
+        let approval = ApprovedKnownKey::from_candidate(&candidate)?;
         seen_known.insert(KnownKeyIdentity::from(&approval));
         approvals.push(approval);
     }
+    Ok(())
 }
 
 fn dedupe_approved_known_keys(approvals: Vec<ApprovedKnownKey>) -> Vec<ApprovedKnownKey> {

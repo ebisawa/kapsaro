@@ -103,23 +103,20 @@ impl PartialEq<String> for MemberHandle {
 pub struct Kid(String);
 
 impl Kid {
-    /// Build a `kid` from operator input, normalizing display form to canonical.
+    /// Build a `kid` that is already in canonical serialized form.
     pub fn new(value: impl Into<String>) -> Result<Self> {
-        Ok(Self(normalize_kid(&value.into())?))
+        Self::from_canonical(value)
     }
 
     /// Build a `kid` from a stored value that must already be canonical.
     ///
     /// Serialized documents carry the canonical form, so accepting display form
     /// here would silently rewrite bytes that a signature was computed over.
-    pub fn from_canonical(value: impl Into<String>) -> Result<Self> {
+    pub(crate) fn from_canonical(value: impl Into<String>) -> Result<Self> {
         let value = value.into();
-        let canonical = normalize_kid(&value)?;
+        let canonical = normalize_kid(&value).map_err(|_| build_non_canonical_kid_error())?;
         if canonical != value {
-            return Err(Error::build_invalid_argument_error(format!(
-                "kid must be stored in canonical form: '{}'",
-                value
-            )));
+            return Err(build_non_canonical_kid_error());
         }
         Ok(Self(canonical))
     }
@@ -131,6 +128,12 @@ impl Kid {
     pub fn into_string(self) -> String {
         self.0
     }
+}
+
+fn build_non_canonical_kid_error() -> Error {
+    Error::build_invalid_argument_error(
+        "kid must be canonical: exactly 32 uppercase Crockford Base32 characters",
+    )
 }
 
 impl AsRef<str> for Kid {

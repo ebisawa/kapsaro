@@ -4,7 +4,8 @@
 //! Integration tests for `list` command
 
 use crate::cli::common::{
-    cmd, setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature,
+    cmd, setup_unapproved_kv_read_fixture, setup_workspace, setup_workspace_with_kv_entries,
+    tamper_kv_signature,
 };
 use predicates::prelude::*;
 use std::path::PathBuf;
@@ -36,6 +37,33 @@ fn test_list_all_keys() {
         .stdout(predicate::str::contains("DATABASE_URL"))
         .stdout(predicate::str::contains("API_KEY"))
         .stdout(predicate::str::contains("SECRET_TOKEN"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_list_unknown_recipient_non_interactive_error() {
+    let fixture = setup_unapproved_kv_read_fixture();
+
+    cmd()
+        .arg("list")
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "yes")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("SHOULD_NOT_PRINT").not())
+        .stderr(predicate::str::contains(
+            "Unknown recipient kid requires approval",
+        ))
+        .stderr(predicate::str::contains(fixture.unapproved_member_handle))
+        .stderr(predicate::str::contains(&fixture.unapproved_kid))
+        .stderr(predicate::str::contains("Interactive confirmation requires a terminal").not());
+
+    assert!(!fixture.trust_store_path.exists());
 }
 
 #[test]

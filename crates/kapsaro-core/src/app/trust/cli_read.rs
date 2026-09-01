@@ -4,13 +4,14 @@
 //! CLI-only read policy exceptions bound to one reviewed artifact and operation.
 //! Re-evaluates current trust state before producing a trusted public facade.
 
-use crate::api::file::{FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact};
-use crate::api::key::KeyContext;
-use crate::api::kv::{KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact};
-use crate::api::operation::OperationOptions;
-use crate::api::trust::{CliReadTrustPolicy, TrustDecision, TrustPolicyEvaluator};
 use crate::app::trust::SignerTrustOutcome;
-use crate::config::resolution::strict_key_checking::resolve_strict_key_checking;
+use crate::service::file::{FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact};
+use crate::service::key::KeyContext;
+use crate::service::kv::{KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact};
+use crate::service::operation::OperationOptions;
+use crate::service::trust::{
+    KnownKeyReview, ReadTrustExceptions, TrustDecision, TrustPolicyEvaluator,
+};
 use crate::{Error, Result};
 
 pub fn evaluate_file_after_cli_review<'a>(
@@ -19,17 +20,25 @@ pub fn evaluate_file_after_cli_review<'a>(
     current: &'a VerifiedFileEncArtifact,
     key_ctx: &'a KeyContext,
     signer_outcome: &SignerTrustOutcome,
+    known_key_review: KnownKeyReview,
     options: OperationOptions,
 ) -> Result<TrustDecision<TrustedFileEncArtifact<'a>>> {
-    let policy = build_policy(signer_outcome);
+    let exceptions = build_exceptions(signer_outcome, known_key_review);
     enforce_exception_binding(
         reviewed.binding_digest()?,
         current.binding_digest()?,
         FileReadOperation::Decrypt,
     )?;
-    evaluator.evaluate_file_with_cli_policy(current, key_ctx, options, &policy)
+    evaluator.evaluate_file(
+        current,
+        key_ctx,
+        FileReadOperation::Decrypt,
+        options,
+        exceptions,
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_kv_after_cli_review<'a>(
     evaluator: &TrustPolicyEvaluator,
     reviewed: &VerifiedKvEncArtifact,
@@ -37,28 +46,27 @@ pub fn evaluate_kv_after_cli_review<'a>(
     key_ctx: &'a KeyContext,
     operation: KvReadOperation,
     signer_outcome: &SignerTrustOutcome,
+    known_key_review: KnownKeyReview,
     options: OperationOptions,
 ) -> Result<TrustDecision<TrustedKvEncArtifact<'a>>> {
-    let policy = build_policy(signer_outcome);
+    let exceptions = build_exceptions(signer_outcome, known_key_review);
     enforce_exception_binding(
         reviewed.binding_digest(),
         current.binding_digest(),
         &operation,
     )?;
-    evaluator.evaluate_kv_with_cli_policy(current, key_ctx, operation, options, &policy)
+    evaluator.evaluate_kv(current, key_ctx, operation, options, exceptions)
 }
 
-fn build_policy(signer_outcome: &SignerTrustOutcome) -> CliReadTrustPolicy {
-    let accepted_non_member = match signer_outcome {
-        SignerTrustOutcome::NeedsNonMemberAcceptance { candidate, .. } => Some((
-            candidate.member_handle.to_string(),
-            candidate.kid.to_string(),
-        )),
-        _ => None,
-    };
-    CliReadTrustPolicy {
-        skip_known_key_review: resolve_strict_key_checking().is_disabled(),
-        accepted_non_member,
+fn build_exceptions(
+    signer_outcome: &SignerTrustOutcome,
+    known_key_review: KnownKeyReview,
+) -> ReadTrustExceptions {
+    let exceptions = ReadTrustExceptions::none().with_known_key_review(known_key_review);
+    match signer_outcome {
+        SignerTrustOutcome::NeedsNonMemberAcceptance { candidate, .. } => exceptions
+            .accepting_non_member(candidate.member_handle().clone(), candidate.kid().clone()),
+        _ => exceptions,
     }
 }
 

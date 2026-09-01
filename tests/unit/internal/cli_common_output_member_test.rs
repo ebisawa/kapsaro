@@ -6,7 +6,6 @@ use crate::cli::common::output::member::view::{
 };
 use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
 use kapsaro_core::cli_api::app::member::types::{MemberListEntry, MemberListResult};
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 
 #[test]
 fn test_build_member_list_view_preserves_kid() {
@@ -31,37 +30,7 @@ fn test_build_member_list_view_preserves_kid() {
 }
 
 #[test]
-fn test_build_member_approval_candidate_preserves_review_fields() {
-    let result = MemberApprovalResult {
-        member_handle: "alice@example.com".to_string(),
-        kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
-        verified: true,
-        approved: false,
-        review_required: true,
-        already_known: false,
-        message: "verified".to_string(),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: Some(42),
-        github_login: Some("alice-gh".to_string()),
-        github_binding_configured: true,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-    };
-
-    let candidate = TrustApprovalCandidate::from(&result);
-
-    assert_eq!(candidate.member_handle, result.member_handle);
-    assert_eq!(candidate.kid, result.kid);
-    assert_eq!(candidate.fingerprint, result.fingerprint);
-    assert_eq!(candidate.github_id, result.github_id);
-    assert_eq!(candidate.github_login, result.github_login);
-    assert_eq!(candidate.attestor_pub, result.attestor_pub);
-    assert!(candidate.github_binding_configured);
-    assert!(candidate.requires_out_of_band_verification);
-}
-
-#[test]
-fn test_build_member_approval_results_view_preserves_review_candidate() {
+fn test_build_member_approval_results_view_preserves_review_fields() {
     let result = MemberApprovalResult {
         member_handle: "alice@example.com".to_string(),
         kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
@@ -81,20 +50,11 @@ fn test_build_member_approval_results_view_preserves_review_candidate() {
     let view = build_member_approval_results_view(std::slice::from_ref(&result));
 
     assert_eq!(view.results.len(), 1);
-    assert_eq!(
-        view.results[0].review_candidate.member_handle,
-        result.member_handle
-    );
-    assert_eq!(view.results[0].review_candidate.kid, result.kid);
-    assert_eq!(
-        view.results[0].review_candidate.fingerprint,
-        result.fingerprint
-    );
-    assert_eq!(view.results[0].review_candidate.github_id, result.github_id);
-    assert_eq!(
-        view.results[0].review_candidate.github_login,
-        result.github_login
-    );
+    assert_eq!(view.results[0].member_handle, result.member_handle);
+    assert_eq!(view.results[0].kid, result.kid);
+    assert_eq!(view.results[0].fingerprint, result.fingerprint.as_deref());
+    assert_eq!(view.results[0].github_id, result.github_id);
+    assert_eq!(view.results[0].github_login, result.github_login.as_deref());
 }
 
 #[test]

@@ -4,9 +4,6 @@
 //! Command execution context resolution and fixed local-state capabilities.
 //! Retains resolved identities for all retries within one command invocation.
 
-use crate::api::key::KeyContext;
-use crate::api::kv::KvEncArtifact;
-use crate::api::trust::{CurrentMemberSnapshot, TrustPolicyEvaluator};
 use crate::app::context::crypto::{
     load_crypto_context_from_env, load_crypto_context_with_selected_kid,
 };
@@ -23,6 +20,9 @@ use crate::io::trust::paths::TRUST_DIR_NAME;
 use crate::io::workspace::detection::WorkspaceRoot;
 use crate::io::workspace::setup::SECRETS_DIR_NAME;
 use crate::model::identity::MemberHandle;
+use crate::service::key::KeyContext;
+use crate::service::kv::KvEncArtifact;
+use crate::service::trust::{CurrentMemberSnapshot, TrustPolicyEvaluator};
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{
     ensure_child_dir_restricted_at, open_child_dir, open_optional_child_dir, DirectoryScope,

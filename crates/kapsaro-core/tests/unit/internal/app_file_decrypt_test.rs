@@ -5,12 +5,435 @@ use crate::app_test_utils::build_test_signing_command_options;
 use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
+use crate::feature::envelope::key_schedule::FileKeySchedule;
+use crate::feature::envelope::signature::sign_file_document;
+use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
+use crate::feature::verify::file::verify_file_document;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
-    update_active_private_key_expires_at, with_temp_cwd, ALICE_MEMBER_HANDLE,
+    update_active_private_key_expires_at, with_temp_cwd, EnvGuard, ALICE_MEMBER_HANDLE,
+    BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE,
 };
+
+struct InteractiveOverrideGuard;
+
+impl InteractiveOverrideGuard {
+    fn set(value: bool) -> Self {
+        crate::support::tty::set_interactive_override(Some(value));
+        Self
+    }
+}
+
+impl Drop for InteractiveOverrideGuard {
+    fn drop(&mut self) {
+        crate::support::tty::set_interactive_override(None);
+    }
+}
+
+#[test]
+fn test_decrypt_unknown_active_signer_non_interactive_error() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&alice));
+    let document = encrypt_file_document(
+        b"secret",
+        &[ALICE_MEMBER_HANDLE.to_string()],
+        &recipients,
+        &SigningContext {
+            signing_key: bob_ctx.signing_key(),
+            signer_kid: bob_ctx.kid(),
+            signer_pub: bob,
+        },
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let error = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "unknown-signer.fileenc",
+    )
+    .err()
+    .expect("non-interactive unknown signer must fail");
+
+    assert_eq!(error.kind(), crate::ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("E_TRUST_UNKNOWN_SIGNER"));
+    assert!(error.to_string().contains(BOB_MEMBER_HANDLE));
+    assert!(error.to_string().contains(bob_ctx.kid()));
+}
+
+#[test]
+fn test_decrypt_unknown_signer_precedes_recipient_handle_mismatch_non_interactive_error() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob.clone()]);
+    let mut document = encrypt_file_document(
+        b"secret",
+        &[
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string(),
+        ],
+        &recipients,
+        &SigningContext {
+            signing_key: bob_ctx.signing_key(),
+            signer_kid: bob_ctx.kid(),
+            signer_pub: bob.clone(),
+        },
+    )
+    .unwrap();
+    let verified = verify_file_document(&document).unwrap();
+    let master_key =
+        unwrap_master_key_for_file_with_context(&verified, ALICE_MEMBER_HANDLE, &alice_ctx)
+            .unwrap()
+            .value;
+    document
+        .protected
+        .wrap
+        .iter_mut()
+        .find(|wrap| wrap.kid == bob_ctx.kid())
+        .unwrap()
+        .recipient_handle = CAROL_MEMBER_HANDLE.to_string();
+    let mac_key = FileKeySchedule::extract(&master_key, &document.protected.sid)
+        .unwrap()
+        .derive_mac_key()
+        .unwrap();
+    document.signature = sign_file_document(
+        &document.protected,
+        &mac_key,
+        bob_ctx.signing_key(),
+        bob_ctx.kid(),
+        bob,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let error = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "signer-priority.fileenc",
+    )
+    .err()
+    .expect("unknown signer must precede recipient handle validation");
+
+    assert_eq!(error.kind(), crate::ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("E_TRUST_UNKNOWN_SIGNER"));
+    assert!(error.to_string().contains(BOB_MEMBER_HANDLE));
+    assert!(error.to_string().contains(bob_ctx.kid()));
+}
+
+#[test]
+fn test_decrypt_unknown_active_recipient_non_interactive_error() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob]);
+    let document = encrypt_file_document(
+        b"secret",
+        &[
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string(),
+        ],
+        &recipients,
+        &SigningContext {
+            signing_key: alice_ctx.signing_key(),
+            signer_kid: alice_ctx.kid(),
+            signer_pub: alice,
+        },
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let error = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "unknown-recipient.fileenc",
+    )
+    .err()
+    .expect("non-interactive unknown recipient must fail");
+
+    assert_eq!(error.kind(), crate::ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("E_TRUST_RECIPIENT_UNKNOWN"));
+    assert!(error.to_string().contains(BOB_MEMBER_HANDLE));
+    assert!(error.to_string().contains(bob_ctx.kid()));
+}
+
+#[test]
+fn test_decrypt_non_member_acceptance_non_interactive_error() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&alice));
+    let document = encrypt_file_document(
+        b"secret",
+        &[ALICE_MEMBER_HANDLE.to_string()],
+        &recipients,
+        &SigningContext {
+            signing_key: bob_ctx.signing_key(),
+            signer_kid: bob_ctx.kid(),
+            signer_pub: bob,
+        },
+    )
+    .unwrap();
+    crate::io::workspace::members::test_support::remove_active_member(
+        &workspace,
+        BOB_MEMBER_HANDLE,
+    )
+    .unwrap();
+    let mut options = build_test_signing_command_options(home.path(), &workspace);
+    options.allow_non_member = true;
+
+    let error = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "non-member.fileenc",
+    )
+    .err()
+    .expect("non-interactive non-member acceptance must fail");
+
+    assert_eq!(error.kind(), crate::ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("E_TRUST_NON_MEMBER"));
+    assert!(error.to_string().contains(BOB_MEMBER_HANDLE));
+    assert!(error.to_string().contains(bob_ctx.kid()));
+}
+
+#[test]
+fn test_decrypt_unknown_active_signer_interactive_review() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(true);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob.clone()]);
+    let document = encrypt_file_document(
+        b"secret",
+        &[
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string(),
+        ],
+        &recipients,
+        &SigningContext {
+            signing_key: bob_ctx.signing_key(),
+            signer_kid: bob_ctx.kid(),
+            signer_pub: bob,
+        },
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let command = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "interactive-review.fileenc",
+    )
+    .unwrap();
+
+    let crate::app::trust::SignerTrustOutcome::NeedsKnownKeyApproval(signer) =
+        command.signer_outcome
+    else {
+        panic!("interactive unknown signer must require known-key approval");
+    };
+    assert_eq!(signer.member_handle().as_str(), BOB_MEMBER_HANDLE);
+    assert_eq!(signer.kid().as_str(), bob_ctx.kid());
+    assert!(matches!(
+        command.recipient_outcome,
+        crate::app::trust::RecipientTrustOutcome::Accepted
+    ));
+}
+
+#[test]
+fn test_decrypt_unknown_active_signer_skips_review_when_strict_checking_is_disabled() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(std::slice::from_ref(&alice));
+    let document = encrypt_file_document(
+        b"secret",
+        &[ALICE_MEMBER_HANDLE.to_string()],
+        &recipients,
+        &SigningContext {
+            signing_key: bob_ctx.signing_key(),
+            signer_kid: bob_ctx.kid(),
+            signer_pub: bob,
+        },
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let command = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "strict-disabled-signer.fileenc",
+    )
+    .unwrap();
+
+    assert!(matches!(
+        command.signer_outcome,
+        crate::app::trust::SignerTrustOutcome::Accepted
+    ));
+}
+
+#[test]
+fn test_decrypt_unknown_active_recipient_interactive_review() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(true);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob]);
+    let document = encrypt_file_document(
+        b"secret",
+        &[
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string(),
+        ],
+        &recipients,
+        &SigningContext {
+            signing_key: alice_ctx.signing_key(),
+            signer_kid: alice_ctx.kid(),
+            signer_pub: alice,
+        },
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let command = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "interactive-recipient-review.fileenc",
+    )
+    .unwrap();
+
+    assert!(matches!(
+        command.signer_outcome,
+        crate::app::trust::SignerTrustOutcome::Accepted
+    ));
+    let crate::app::trust::RecipientTrustOutcome::NeedsManualApproval(recipients) =
+        command.recipient_outcome
+    else {
+        panic!("interactive unknown recipient must require manual approval");
+    };
+    assert_eq!(recipients.len(), 1);
+    assert_eq!(recipients[0].member_handle().as_str(), BOB_MEMBER_HANDLE);
+    assert_eq!(recipients[0].kid().as_str(), bob_ctx.kid());
+}
+
+#[test]
+fn test_decrypt_command_warns_about_unresolved_historical_recipient_when_review_is_skipped() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, key_ctx.kid()).unwrap();
+    let bob_kid = crate::cli_api::test_support::storage::keystore::storage::list_kids(
+        &keystore_root,
+        BOB_MEMBER_HANDLE,
+    )
+    .unwrap()
+    .remove(0);
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, &bob_kid).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob]);
+    let document = encrypt_file_document(
+        b"secret",
+        &[
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string(),
+        ],
+        &recipients,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: key_ctx.kid(),
+            signer_pub: alice,
+        },
+    )
+    .unwrap();
+    crate::io::workspace::members::test_support::remove_active_member(
+        &workspace,
+        BOB_MEMBER_HANDLE,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let command = resolve_decrypt_file_command_for_test(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        serde_json::to_string(&document).unwrap(),
+        "historical.fileenc",
+    )
+    .unwrap();
+
+    assert!(command.warnings.iter().any(|warning| {
+        warning.contains("Recipient kid is not active.")
+            && warning.contains(&bob_kid)
+            && warning.contains("historical metadata")
+            && warning.contains("kapsaro rewrap")
+    }));
+}
 
 #[test]
 fn decrypt_command_surfaces_expired_artifact_signer_recovery_warning() {
@@ -91,12 +514,16 @@ fn resolve_decrypt_file_command_for_test(
     let trust = super::evaluate_decrypt_file_trust_plan(options, &execution, &verified)?;
     Ok(TestDecryptContext {
         execution,
+        signer_outcome: trust.signer_outcome,
+        recipient_outcome: trust.recipient_outcome,
         warnings: trust.warnings,
     })
 }
 
 struct TestDecryptContext {
     execution: crate::app::context::execution::ExecutionContext,
+    signer_outcome: crate::app::trust::SignerTrustOutcome,
+    recipient_outcome: crate::app::trust::RecipientTrustOutcome,
     warnings: Vec<String>,
 }
 

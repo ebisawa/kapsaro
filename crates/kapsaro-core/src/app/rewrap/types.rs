@@ -18,6 +18,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct RewrapBatchPlan {
     pub pre_promotion_trust: TrustContext,
+    pub(crate) pre_promotion_evaluator: crate::service::trust::TrustPolicyEvaluator,
     pub incoming_report: Option<IncomingVerificationReport>,
     /// The artifacts to rewrite, each bound to the directory it was found under.
     pub artifacts: Vec<ArtifactRef>,
@@ -37,7 +38,8 @@ pub struct RewrapInputTrustRequirement {
 pub struct RewrapTrustPlan {
     pub warnings: Vec<String>,
     pub recipient_trust: RecipientTrustOutcome,
-    pub accepted_promotion_candidates: Vec<ApprovedKnownKey>,
+    /// Approvals created by this promotion review; existing known keys are excluded.
+    pub(crate) new_promotion_approvals: Vec<ApprovedKnownKey>,
     pub post_promotion_members: Vec<PublicKey>,
 }
 
@@ -57,6 +59,7 @@ pub struct IncomingVerificationItem {
     pub message: String,
     pub fingerprint: Option<String>,
     pub verified_github: Option<VerifiedGithubIdentity>,
+    pub verified_service_evidence: Option<crate::service::online::VerifiedGitHubEvidence>,
     pub github_binding_configured: bool,
     pub attestor_pub: Option<String>,
 }
@@ -99,15 +102,29 @@ pub struct RewrapBatchRequest {
 #[derive(Debug, Clone)]
 pub struct VerifiedPostPromotionRecipients {
     verified_members: Vec<VerifiedRecipientKey>,
+    recipient_handles: Vec<String>,
 }
 
 impl VerifiedPostPromotionRecipients {
     pub fn new(verified_members: Vec<VerifiedRecipientKey>) -> Self {
-        Self { verified_members }
+        let mut recipient_handles = verified_members
+            .iter()
+            .map(|member| member.document().protected.subject_handle.clone())
+            .collect::<Vec<_>>();
+        recipient_handles.sort();
+        recipient_handles.dedup();
+        Self {
+            verified_members,
+            recipient_handles,
+        }
     }
 
     pub fn verified_members(&self) -> &[VerifiedRecipientKey] {
         &self.verified_members
+    }
+
+    pub fn recipient_handles(&self) -> &[String] {
+        &self.recipient_handles
     }
 }
 

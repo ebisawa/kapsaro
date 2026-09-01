@@ -7,11 +7,12 @@
 use std::collections::BTreeMap;
 
 use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::{enforce_recipients_trust_with_additional, TrustContext};
+use crate::app::trust::{recipient_outcome_from_decision, TrustContext};
 use crate::feature::context::expiry::collect_recipient_key_expiry_warnings;
-use crate::feature::trust::known_keys::KnownKeyIdentity;
+use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
 use crate::feature::verify::public_key::verify_recipient_public_keys;
 use crate::model::public_key::PublicKey;
+use crate::service::trust::CurrentMemberSnapshot;
 use crate::{Error, Result};
 
 use super::types::{IncomingPromotionCandidate, RewrapBatchPlan, RewrapTrustPlan};
@@ -21,7 +22,7 @@ pub fn build_rewrap_trust(
     accepted_promotions: &[IncomingPromotionCandidate],
 ) -> Result<RewrapTrustPlan> {
     let trust_ctx = &plan.pre_promotion_trust;
-    let (post_promotion_members, accepted_promotion_candidates) =
+    let (post_promotion_members, new_promotion_approvals) =
         load_post_promotion_members(trust_ctx, accepted_promotions)?;
     let verified_recipients = verify_recipient_public_keys(&post_promotion_members)?;
     let recipient_expiry_warnings = collect_recipient_key_expiry_warnings(&verified_recipients)?;
@@ -29,22 +30,24 @@ pub fn build_rewrap_trust(
         .iter()
         .map(|recipient| recipient.document().clone())
         .collect::<Vec<_>>();
-    let mut review_ctx = trust_ctx.clone();
-    review_ctx.active_members_by_kid = build_post_promotion_index(&post_promotion_members)?;
-    let accepted_known_keys = accepted_promotion_candidates
-        .iter()
-        .map(KnownKeyIdentity::from)
-        .collect::<Vec<_>>();
-
-    let recipient_trust = enforce_recipients_trust_with_additional(
-        &review_ctx,
-        &post_promotion_members,
-        &accepted_known_keys,
+    let post_members = CurrentMemberSnapshot::from_verified_members_by_kid(
+        build_post_promotion_index(&post_promotion_members)?,
     )?;
+    let evaluator = plan.pre_promotion_evaluator.with_members(post_members);
+    let service_approvals = new_promotion_approvals
+        .iter()
+        .map(|approval| approval.service_approval().clone())
+        .collect::<Vec<_>>();
+    let decision = evaluator.preflight_output_recipient_keys(
+        &post_promotion_members,
+        &trust_ctx.self_trust,
+        &service_approvals,
+    )?;
+    let recipient_trust = recipient_outcome_from_decision(decision, trust_ctx.is_interactive)?;
     Ok(RewrapTrustPlan {
         warnings: recipient_expiry_warnings,
         recipient_trust,
-        accepted_promotion_candidates,
+        new_promotion_approvals,
         post_promotion_members,
     })
 }
@@ -77,18 +80,21 @@ fn load_post_promotion_members(
     }
 
     let self_member_handle = trust_ctx.self_trust.member_handle();
-    let mut accepted_promotion_candidates = Vec::new();
+    let mut new_promotion_approvals = Vec::new();
     for candidate in accepted_promotions {
         replace_post_promotion_member(&mut members, &candidate.public_key);
+        let reviewed = crate::app::trust::TrustApprovalCandidate::try_from(candidate)?;
+        let known_key_state = judge_known_key(
+            &trust_ctx.known_keys,
+            reviewed.kid().as_str(),
+            reviewed.member_handle().as_str(),
+        )?;
         if Some(candidate.review.member_handle.as_str()) == self_member_handle {
             continue;
         }
-        accepted_promotion_candidates.push(ApprovedKnownKey::from_review(
-            &candidate.review.member_handle,
-            &candidate.review.kid,
-            candidate.review.attestor_pub.clone(),
-            candidate.review.verified_github.as_ref(),
-        ));
+        if known_key_state == KnownKeyJudgment::New {
+            new_promotion_approvals.push(ApprovedKnownKey::from_candidate(&reviewed)?);
+        }
     }
     members.sort_by(|left, right| {
         left.protected
@@ -96,7 +102,7 @@ fn load_post_promotion_members(
             .cmp(&right.protected.subject_handle)
     });
 
-    Ok((members, accepted_promotion_candidates))
+    Ok((members, new_promotion_approvals))
 }
 
 fn replace_post_promotion_member(members: &mut Vec<PublicKey>, candidate: &PublicKey) {

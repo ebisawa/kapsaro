@@ -6,13 +6,11 @@
 
 use std::collections::BTreeSet;
 
-use crate::app::member::verification::verify_member_public_keys;
 use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
-use crate::io::verify_online::VerificationStatus;
+use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::trust_store::KnownKey;
-use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
 
 use super::types::{
@@ -188,40 +186,29 @@ pub fn verify_prompt_candidate_online(
         return Ok(candidate.clone());
     }
 
-    let results = block_on_result(verify_member_public_keys(std::slice::from_ref(
+    let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
         &candidate.public_key,
-    )))?;
-    let result = results.into_iter().next().ok_or_else(|| {
-        Error::build_verification_error(
-            "E_REWRAP_MISSING_VERIFICATION_RESULT".to_string(),
-            format!(
-                "Online verification produced no result for incoming member '{}'",
-                candidate.review.member_handle
-            ),
-        )
-    })?;
-
-    if result.member_handle != candidate.review.member_handle {
-        return Err(Error::build_verification_error(
-            "E_REWRAP_VERIFICATION_RESULT_MISMATCH".to_string(),
-            format!(
-                "Online verification result member_handle '{}' did not match candidate '{}'",
-                result.member_handle, candidate.review.member_handle
-            ),
-        ));
-    }
-
-    let category = match result.status {
-        VerificationStatus::Verified => IncomingVerificationCategory::Verified,
-        VerificationStatus::Failed => IncomingVerificationCategory::Failed,
-        VerificationStatus::NotConfigured => IncomingVerificationCategory::NotConfigured,
-    };
+        crate::feature::verify::public_key::WORKSPACE_INCOMING_MEMBER_CONTEXT,
+    )?;
+    let service_candidate =
+        crate::service::trust::KnownKeyReviewCandidate::from_verified_signing_public_key(
+            &verified.verified_public_key,
+        )?;
+    let evidence = crate::service::online::GitHubOnlineVerifier::new()
+        .verify_known_key_candidate(&service_candidate)?;
+    let verified_github = VerifiedGithubIdentity::new(
+        evidence.account().id(),
+        evidence.account().login().to_string(),
+        evidence.fingerprint().to_string(),
+        evidence.matched_key_id(),
+    );
 
     let mut reviewed = candidate.clone();
-    reviewed.review.category = category;
-    reviewed.review.message = result.message;
-    reviewed.review.fingerprint = result.fingerprint;
-    reviewed.review.verified_github = result.verified_github;
+    reviewed.review.category = IncomingVerificationCategory::Verified;
+    reviewed.review.message = "GitHub verification succeeded".to_string();
+    reviewed.review.fingerprint = Some(evidence.fingerprint().to_string());
+    reviewed.review.verified_github = Some(verified_github);
+    reviewed.review.verified_service_evidence = Some(evidence);
     Ok(reviewed)
 }
 
@@ -242,7 +229,14 @@ where
 
     for candidate in &review_plan.prompt_candidates {
         let reviewed = if candidate.review.github_binding_configured {
-            verify_online(candidate)?
+            match verify_online(candidate) {
+                Ok(reviewed) => reviewed,
+                Err(error) => {
+                    let failed = build_online_verification_failure(candidate, &error);
+                    failed_candidates.push(build_failed_candidate(&failed));
+                    continue;
+                }
+            }
         } else {
             candidate.clone()
         };
@@ -251,7 +245,7 @@ where
             continue;
         }
         prompt_views.push(PromotionReviewPrompt {
-            candidate: (&reviewed).into(),
+            candidate: TrustApprovalCandidate::try_from(&reviewed)?,
         });
         prompt_candidates.push(reviewed);
     }
@@ -264,6 +258,19 @@ where
         auto_accepted_candidates: review_plan.auto_accepted_candidates.clone(),
         prompt_candidates,
     })
+}
+
+fn build_online_verification_failure(
+    candidate: &IncomingPromotionCandidate,
+    error: &Error,
+) -> IncomingPromotionCandidate {
+    let mut failed = candidate.clone();
+    failed.review.category = IncomingVerificationCategory::Failed;
+    failed.review.message = error.format_user_message().to_string();
+    failed.review.fingerprint = None;
+    failed.review.verified_github = None;
+    failed.review.verified_service_evidence = None;
+    failed
 }
 
 fn should_skip_prompt_candidate(candidate: &IncomingPromotionCandidate) -> bool {
@@ -279,18 +286,28 @@ fn build_failed_candidate(candidate: &IncomingPromotionCandidate) -> PromotionRe
     }
 }
 
-impl From<&IncomingPromotionCandidate> for TrustApprovalCandidate {
-    fn from(candidate: &IncomingPromotionCandidate) -> Self {
-        TrustApprovalCandidateBuilder::from_public_key(&candidate.public_key)
-            .with_fingerprint(candidate.review.fingerprint.clone())
-            .with_attestor_pub(candidate.review.attestor_pub.clone())
-            .with_verified_github(candidate.review.verified_github.clone())
-            .with_github_binding_configured(candidate.review.github_binding_configured)
+impl TryFrom<&IncomingPromotionCandidate> for TrustApprovalCandidate {
+    type Error = Error;
+
+    fn try_from(candidate: &IncomingPromotionCandidate) -> Result<Self> {
+        let verified =
+            crate::feature::verify::public_key::verify_public_key_for_verification_context(
+                &candidate.public_key,
+                crate::feature::verify::public_key::WORKSPACE_INCOMING_MEMBER_CONTEXT,
+            )?;
+        Ok(
+            TrustApprovalCandidateBuilder::from_verified_signing_public_key(
+                &verified.verified_public_key,
+            )?
             .with_online_verification_context(
                 candidate.review.github_binding_configured,
                 Some(candidate.review.message.clone()),
             )
-            .build()
+            .with_optional_verified_service_evidence(
+                candidate.review.verified_service_evidence.clone(),
+            )
+            .build(),
+        )
     }
 }
 

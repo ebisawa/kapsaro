@@ -60,7 +60,9 @@ pub fn enforce_read_trust_member_eligibility(
             "E_TRUST_NON_MEMBER".to_string(),
             format!(
                 "Signer '{}' ({}) is not eligible for {} trust approval",
-                candidate.member_handle, candidate.kid, approval_subject
+                candidate.member_handle(),
+                candidate.kid(),
+                approval_subject
             ),
         ));
     }
@@ -84,7 +86,7 @@ where
         verify_online,
     )?;
     if confirm_known(&reviewed, context_label)? {
-        return Ok(vec![ApprovedKnownKey::from(&reviewed)]);
+        return Ok(vec![ApprovedKnownKey::from_candidate(&reviewed)?]);
     }
     Err(build_trust_approval_rejection_error(
         approval_subject,

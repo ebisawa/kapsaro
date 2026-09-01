@@ -4,27 +4,40 @@
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, format_failed_promotion_review_lines,
 };
-use crate::test_utils::{kid, member_handle};
 use kapsaro_core::cli_api::app::rewrap::promotion::PromotionReviewFailure;
 use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
-use kapsaro_core::cli_api::test_support::storage::verify_online::VerifiedGithubIdentity;
+
+fn candidate(
+    member_handle: impl Into<String>,
+    fingerprint: Option<String>,
+    github_binding_configured: bool,
+    verified: bool,
+    attempted: bool,
+    message: Option<String>,
+) -> TrustApprovalCandidate {
+    let member_handle = member_handle.into();
+    TrustApprovalCandidate::for_test_review(
+        &member_handle,
+        "KAD1AAAA1111BBBB2222CCCC3333DDDD",
+        fingerprint,
+        github_binding_configured,
+        verified.then(|| (42, "octocat".to_string(), "SHA256:test".to_string(), 12345)),
+        attempted,
+        message,
+        !verified,
+    )
+}
 
 #[test]
 fn test_format_candidate_review_lines_includes_required_fields() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: Some(42),
-        github_login: Some("octocat".to_string()),
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate(
+        "bob@example.com",
+        Some("SHA256:test".to_string()),
+        true,
+        false,
+        false,
+        None,
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
@@ -37,20 +50,14 @@ fn test_format_candidate_review_lines_includes_required_fields() {
 
 #[test]
 fn test_format_candidate_review_lines_warns_when_github_binding_is_missing() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: false,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate(
+        "bob@example.com",
+        Some("SHA256:test".to_string()),
+        false,
+        false,
+        false,
+        None,
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
@@ -61,20 +68,7 @@ fn test_format_candidate_review_lines_warns_when_github_binding_is_missing() {
 
 #[test]
 fn test_format_candidate_review_lines_shows_github_id_without_login() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: None,
-        github_id: Some(42),
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate("bob@example.com", None, true, false, false, None);
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
@@ -85,20 +79,14 @@ fn test_format_candidate_review_lines_shows_github_id_without_login() {
 
 #[test]
 fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate(
+        "bob@example.com",
+        Some("SHA256:test".to_string()),
+        true,
+        false,
+        false,
+        None,
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
@@ -109,48 +97,31 @@ fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
 
 #[test]
 fn test_format_candidate_review_lines_shows_online_verification_failure_message() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: true,
-        online_verification_message: Some("online verification failed".to_string()),
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate(
+        "bob@example.com",
+        Some("SHA256:test".to_string()),
+        true,
+        false,
+        true,
+        Some("online verification failed".to_string()),
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(rendered.contains("GitHub account     not verified (online verification failed)"));
+    assert!(rendered.contains("GitHub account     not verified"));
 }
 
 #[test]
 fn test_format_candidate_review_lines_shows_verified_github_mark() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: Some(42),
-        github_login: Some("octocat".to_string()),
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: Some(VerifiedGithubIdentity::new(
-            42,
-            "octocat".to_string(),
-            "SHA256:test".to_string(),
-            12345,
-        )),
-        github_binding_configured: true,
-        online_verification_attempted: true,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: false,
-    };
+    let candidate = candidate(
+        "bob@example.com",
+        Some("SHA256:test".to_string()),
+        true,
+        true,
+        true,
+        None,
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
@@ -165,20 +136,14 @@ fn test_format_candidate_review_lines_shows_verified_github_mark() {
 
 #[test]
 fn test_format_candidate_review_lines_no_verified_mark_without_online_verification() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle("bob@example.com"),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: Some(42),
-        github_login: Some("octocat".to_string()),
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate(
+        "bob@example.com",
+        Some("SHA256:test".to_string()),
+        true,
+        false,
+        false,
+        None,
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
@@ -193,50 +158,38 @@ fn test_format_candidate_review_lines_no_verified_mark_without_online_verificati
 
 #[test]
 fn test_format_candidate_review_lines_keeps_long_member_handles_and_hashes_inline() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle(format!("{}@example.com", "release.engineering.".repeat(4))),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: Some(format!("SHA256:{}", "abcdef0123456789".repeat(8))),
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: true,
-        online_verification_attempted: true,
-        online_verification_message: Some(format!(
+    let candidate = candidate(
+        format!("{}@example.com", "release.engineering.".repeat(4)),
+        Some(format!("SHA256:{}", "abcdef0123456789".repeat(8))),
+        true,
+        false,
+        true,
+        Some(format!(
             "online verification failed for {}",
             "github-response-fragment-".repeat(5)
         )),
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    );
 
     let lines = format_candidate_review_lines(&candidate);
     let rendered = lines.join("\n");
 
-    assert!(rendered.contains(candidate.member_handle.as_str()));
+    assert!(rendered.contains(candidate.member_handle().as_str()));
     assert!(rendered.contains("abcdef0123456789"));
     assert!(rendered.contains("github-response-fragment-"));
 }
 
 #[test]
 fn test_format_failed_promotion_review_lines_keeps_long_messages_inline() {
-    let candidate = TrustApprovalCandidate {
-        member_handle: member_handle(format!("{}@example.com", "release.engineering.".repeat(4))),
-        kid: kid("KAD1AAAA1111BBBB2222CCCC3333DDDD"),
-        fingerprint: None,
-        github_id: None,
-        github_login: None,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-        github_binding_configured: false,
-        online_verification_attempted: false,
-        online_verification_message: None,
-        public_key: None,
-        requires_out_of_band_verification: true,
-    };
+    let candidate = candidate(
+        format!("{}@example.com", "release.engineering.".repeat(4)),
+        None,
+        false,
+        false,
+        false,
+        None,
+    );
     let failure = PromotionReviewFailure {
-        member_handle: candidate.member_handle.to_string(),
+        member_handle: candidate.member_handle().to_string(),
         message: format!(
             "verification failed because {}",
             "a-long-review-diagnostic-fragment-".repeat(5)

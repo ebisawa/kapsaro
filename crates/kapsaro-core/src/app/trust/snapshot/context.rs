@@ -9,14 +9,12 @@ use std::collections::BTreeMap;
 use crate::app::context::execution::ExecutionContext;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::context::paths::build_workspace_not_found_error;
-use crate::app::trust::store::load_execution_trust_store;
+use crate::app::trust::store::load_execution_verified_trust_store;
 use crate::config::types::{
     StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
 };
 use crate::feature::context::crypto::LocalKeyIdentity;
-use crate::feature::trust::judgment::{
-    build_active_members_by_kid, ActiveMemberSnapshot, SelfTrustSet,
-};
+use crate::feature::trust::judgment::{build_active_members_by_kid, SelfTrustSet};
 use crate::feature::trust::store_mutation::TrustStoreState;
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
@@ -25,6 +23,7 @@ use crate::io::keystore::access::KeystoreAccess;
 use crate::io::workspace::members::load_active_member_files_at;
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{KnownKey, RecipientSetRecord};
+use crate::service::trust::{CurrentMemberSnapshot, TrustPolicyEvaluator};
 use crate::support::fs::relative::DirectoryFd;
 use crate::support::tty;
 use crate::Result;
@@ -42,15 +41,25 @@ pub struct TrustContext {
     pub allow_non_member: bool,
 }
 
-impl TrustContext {
-    pub fn active_member_snapshot(&self) -> ActiveMemberSnapshot<'_> {
-        ActiveMemberSnapshot::new(&self.active_members_by_kid)
-    }
-}
-
 pub struct ReadTrustContextLoadResult {
     pub trust_ctx: TrustContext,
+    pub evaluator: TrustPolicyEvaluator,
     pub warnings: Vec<String>,
+}
+
+pub(super) struct WriteTrustContextLoadResult {
+    pub trust_ctx: TrustContext,
+    pub evaluator: TrustPolicyEvaluator,
+}
+
+pub(crate) fn load_trust_policy_evaluator(
+    execution: &ExecutionContext,
+    active_members_by_kid: BTreeMap<String, PublicKey>,
+) -> Result<TrustPolicyEvaluator> {
+    let store =
+        load_execution_verified_trust_store(execution)?.map(|loaded| loaded.store().clone());
+    let members = CurrentMemberSnapshot::from_verified_members_by_kid(active_members_by_kid)?;
+    Ok(TrustPolicyEvaluator::new(members, store))
 }
 
 /// Load the read-side trust context from the identities `execution` fixed.
@@ -66,18 +75,24 @@ pub fn load_read_trust_context(
     let key_ctx = execution.key_ctx.inner();
     let verified_active_members =
         load_active_member_index_for_read_trust(workspace, Some(key_ctx.local_key_identity()))?;
-    let loaded = load_execution_trust_store(execution)?;
+    let loaded = load_execution_verified_trust_store(execution)?;
+    let service_store = loaded.as_ref().map(|loaded| loaded.store().clone());
+    let loaded_state = loaded.map(|loaded| loaded.into_state());
+    let members = CurrentMemberSnapshot::from_verified_members_by_kid(
+        verified_active_members.active_members_by_kid.clone(),
+    )?;
     let trust_ctx = build_trust_context(
         options,
         verified_active_members.active_members_by_kid,
         &execution.member_handle,
         Some(key_ctx.self_signature_public_key_x()),
-        loaded,
+        loaded_state,
         key_ctx.local_keystore_access(),
     )?;
     let warnings = verified_active_members.warnings;
     Ok(ReadTrustContextLoadResult {
         trust_ctx,
+        evaluator: TrustPolicyEvaluator::new(members, service_store),
         warnings,
     })
 }
@@ -87,16 +102,24 @@ pub(super) fn load_trust_context(
     execution: &ExecutionContext,
     active_members_by_kid: BTreeMap<String, PublicKey>,
     keystore: &KeystoreAccess,
-) -> Result<TrustContext> {
-    let loaded = load_execution_trust_store(execution)?;
-    build_trust_context(
+) -> Result<WriteTrustContextLoadResult> {
+    let loaded = load_execution_verified_trust_store(execution)?;
+    let service_store = loaded.as_ref().map(|loaded| loaded.store().clone());
+    let loaded_state = loaded.map(|loaded| loaded.into_state());
+    let members =
+        CurrentMemberSnapshot::from_verified_members_by_kid(active_members_by_kid.clone())?;
+    let trust_ctx = build_trust_context(
         options,
         active_members_by_kid,
         &execution.member_handle,
         Some(execution.key_ctx.inner().self_signature_public_key_x()),
-        loaded,
+        loaded_state,
         Some(keystore),
-    )
+    )?;
+    Ok(WriteTrustContextLoadResult {
+        trust_ctx,
+        evaluator: TrustPolicyEvaluator::new(members, service_store),
+    })
 }
 
 fn log_trust_context(

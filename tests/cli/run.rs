@@ -5,7 +5,7 @@
 
 use crate::cli::common::{
     cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
-    setup_workspace, tamper_kv_signature, TEST_MEMBER_HANDLE,
+    setup_unapproved_kv_read_fixture, setup_workspace, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
@@ -60,6 +60,42 @@ fn test_run_error_when_workspace_not_found() {
         );
 
     drop(ssh_temp);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_run_unknown_recipient_non_interactive_error_before_child_start() {
+    let fixture = setup_unapproved_kv_read_fixture();
+    let child_marker = fixture.home.path().join("child-started");
+
+    cmd()
+        .arg("run")
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("printf child-started > \"$1\"")
+        .arg("kapsaro-test")
+        .arg(&child_marker)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "yes")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("must-not-print").not())
+        .stdout(predicate::str::contains("child-started").not())
+        .stderr(predicate::str::contains(
+            "Unknown recipient kid requires approval",
+        ))
+        .stderr(predicate::str::contains(fixture.unapproved_member_handle))
+        .stderr(predicate::str::contains(&fixture.unapproved_kid))
+        .stderr(predicate::str::contains("Interactive confirmation requires a terminal").not());
+
+    assert!(!child_marker.exists());
+    assert!(!fixture.trust_store_path.exists());
 }
 
 #[test]

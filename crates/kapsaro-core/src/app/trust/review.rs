@@ -16,6 +16,7 @@ mod types;
 pub use artifact_recipient::{
     review_artifact_output_recipient_set, ArtifactOutputRecipientSetReviewInput,
 };
+pub(crate) use execution::review_and_save_artifact_recipient_set;
 pub use execution::{
     execute_read_with_signer_trust, review_artifact_recipient_set_output,
     review_write_recipient_trust, ArtifactRecipientSetReviewInput, TrustExecutionContext,

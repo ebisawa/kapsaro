@@ -8,10 +8,8 @@ mod context;
 mod workspace;
 mod write;
 
+pub(crate) use context::load_trust_policy_evaluator;
 pub use context::{load_read_trust_context, ReadTrustContextLoadResult, TrustContext};
 pub use workspace::WorkspaceMemberSnapshot;
-// Production builds the snapshot inside `WriteRecipientTrustPlan`; the type is
-// re-exported so the snapshot tests can load one on its own.
-#[cfg(test)]
 pub(crate) use write::CommandTrustSnapshot;
 pub use write::WriteRecipientTrustPlan;

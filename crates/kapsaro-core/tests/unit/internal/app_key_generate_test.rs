@@ -15,11 +15,11 @@ use super::{
 use crate::app::context::ssh::{
     build_ssh_signing_context_with_params, SshSigningContextResolution, SshSigningParams,
 };
-use crate::app::verification::OnlineVerificationStatus;
 use crate::app_test_utils::{add_generated_key, build_test_command_options};
 use crate::config::types::SshSigningMethod;
 use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::service::online::OnlineVerificationStatus;
 use crate::support::warning::LocalStateWarningGuard;
 use crate::test_utils::{
     create_local_state_dir, local_state_temp_dir, setup_test_keystore_from_fixtures,

@@ -163,6 +163,16 @@ pub fn load_fixture_ssh_pubkey() -> String {
     SHARED_FIXTURE.ssh_public_key_content.clone()
 }
 
+/// Load a signed public-key fixture for tests that exercise full verification.
+pub fn load_fixture_public_key(member_handle: &str) -> PublicKey {
+    SHARED_FIXTURE
+        .members
+        .get(member_handle)
+        .unwrap_or_else(|| panic!("No fixture for member: {member_handle}"))
+        .public_key
+        .clone()
+}
+
 /// Write SSH keypair from shared fixture into per-test TempDir
 fn save_ssh_keys(temp_dir: &TempDir) -> (PathBuf, String) {
     let fixture = &*SHARED_FIXTURE;

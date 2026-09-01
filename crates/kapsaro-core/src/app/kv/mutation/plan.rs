@@ -10,16 +10,14 @@ use crate::app::context::execution::{
     evaluate_selected_decryption_key_expiry, ExecutionContext, SelectedDecryptionKeyExpiry,
 };
 use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::enforcement::enforce_write_input_artifact_recipients;
 use crate::app::trust::{
-    evaluate_signer_trust_with_proof, push_signature_verification_warnings, CommandCapability,
-    RecipientTrustOutcome, SignerTrustOutcome, TrustContext, WriteRecipientTrustPlan,
-    WriteTrustPolicy,
+    push_signature_verification_warnings, signer_outcome_from_decision, RecipientTrustOutcome,
+    SignerTrustOutcome, TrustContext, WriteRecipientTrustPlan, WriteTrustPolicy,
 };
 use crate::feature::envelope::wrap_set::WrapSet;
-use crate::feature::trust::recipient_sets::kv_recipient_evidence;
-use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
 use crate::format::content::KvEncContent;
+use crate::service::key::RecipientKeys;
+use crate::service::kv::KvEncArtifact;
 use crate::support::warning::push_unique_warning;
 use crate::{Error, Result};
 
@@ -117,7 +115,7 @@ where
 fn resolve_mutation_write_review_context<'a, P>(
     options: &CommonCommandOptions,
     command: &KvCommandSession<'a>,
-    operation_options: crate::api::operation::OperationOptions,
+    operation_options: crate::service::operation::OperationOptions,
     allow_missing: bool,
 ) -> Result<MutationWriteReviewContext<'a, P>>
 where
@@ -127,10 +125,9 @@ where
     let review = build_mutation_review_snapshot(command, &recipient_review, allow_missing)?;
     let existing_signer = evaluate_existing_signer_trust(
         review.existing_content(),
-        recipient_review.trust_context(),
+        &recipient_review,
         command.execution,
         operation_options.allow_expired_key(),
-        P::CAPABILITY,
     )?;
     let warnings = collect_mutation_write_warnings(
         command.warnings.clone(),
@@ -233,22 +230,21 @@ where
 
 fn evaluate_existing_signer_trust(
     reviewed_file: Option<&KvEncContent>,
-    trust_ctx: &TrustContext,
+    recipient_review: &WriteRecipientTrustPlan<impl WriteTrustPolicy>,
     execution: &ExecutionContext,
     allow_expired_key: bool,
-    capability: CommandCapability,
 ) -> Result<ExistingSignerTrustEvaluation> {
     let selected_key_expiry =
         evaluate_existing_decryption_key_expiry(reviewed_file, execution, allow_expired_key)?;
     let mut warnings = Vec::new();
     let signer_trust = evaluate_signer_trust(
         reviewed_file,
-        trust_ctx,
+        recipient_review,
+        execution,
         selected_key_expiry
             .as_ref()
             .map(|expiry| &expiry.key_identity),
         allow_expired_key,
-        capability,
         &mut warnings,
     )?;
     Ok(ExistingSignerTrustEvaluation {
@@ -287,21 +283,36 @@ fn evaluate_existing_decryption_key_expiry(
 
 fn evaluate_signer_trust(
     reviewed_file: Option<&KvEncContent>,
-    trust_ctx: &TrustContext,
+    recipient_review: &WriteRecipientTrustPlan<impl WriteTrustPolicy>,
+    execution: &ExecutionContext,
     local_key_identity: Option<&crate::feature::context::crypto::LocalKeyIdentity>,
     allow_expired_key: bool,
-    capability: CommandCapability,
     warnings: &mut Vec<String>,
 ) -> Result<Option<SignerTrustOutcome>> {
     let Some(content) = reviewed_file else {
         return Ok(None);
     };
 
-    let verified_doc = verify_kv_content_for_operation(content, allow_expired_key)?;
-    push_signature_verification_warnings(warnings, verified_doc.proof(), local_key_identity)?;
-    let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
-    enforce_write_input_artifact_recipients(trust_ctx, &recipient_evidence.recipient_set)?;
-    let outcome =
-        evaluate_signer_trust_with_proof(trust_ctx, verified_doc.proof(), capability, &[])?;
+    let verified = KvEncArtifact::parse(content.as_str())?.verify(
+        crate::service::operation::OperationOptions::new()
+            .with_allow_expired_key(allow_expired_key),
+    )?;
+    push_signature_verification_warnings(warnings, verified.inner().proof(), local_key_identity)?;
+    let members = recipient_review.workspace_members();
+    let recipients = RecipientKeys::from_verified_parts(
+        members.member_handles().to_vec(),
+        members.verified_recipients().to_vec(),
+    )?;
+    let evaluator = crate::app::trust::snapshot::load_trust_policy_evaluator(
+        execution,
+        members.active_members_by_kid().clone(),
+    )?;
+    let decision = evaluator.preflight_kv_mutation(&verified, &recipients, &execution.key_ctx)?;
+    let signer_kid = verified.inner().proof().kid.as_str();
+    let outcome = signer_outcome_from_decision(
+        &decision,
+        Some(signer_kid),
+        recipient_review.trust_context().is_interactive,
+    )?;
     Ok(Some(outcome))
 }

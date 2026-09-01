@@ -14,19 +14,16 @@
 //! afresh from the trust store on disk rather than from the decision the review
 //! reached. A concurrent write is reported and the mutation abandoned.
 
-use crate::api::key::RecipientKeys;
-use crate::api::kv::{AuthorizedKvMutation, KvEncArtifact, KvMutationOperation};
-use crate::api::trust::{
-    CurrentMemberSnapshot, TrustDecision, TrustPolicyEvaluator, TrustReviewKind, TrustReviewRequest,
-};
 use crate::app::context::review::ReviewedTrustStore;
 use crate::app::errors::build_kv_key_not_found_error;
 use crate::app::trust::review::{
-    review_artifact_recipient_set_output, ArtifactRecipientSetReviewInput, TrustExecutionContext,
+    review_and_save_artifact_recipient_set, review_artifact_recipient_set_output,
+    ArtifactRecipientSetReviewInput, TrustExecutionContext,
 };
 use crate::app::trust::store::load_verified_local_trust_store;
 use crate::app::trust::{
-    evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome, WriteTrustPolicy,
+    artifact_recipient_outcome_from_decision, ArtifactRecipientTrustOutcome, TrustContext,
+    WriteTrustPolicy,
 };
 use crate::feature::artifact::artifact_recipient_evidence;
 use crate::feature::kv::mutate::{
@@ -36,6 +33,11 @@ use crate::feature::kv::mutate::{
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::KvEncContent;
 use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
+use crate::service::key::RecipientKeys;
+use crate::service::kv::{AuthorizedKvMutation, KvEncArtifact, KvMutationOperation};
+use crate::service::trust::{
+    CurrentMemberSnapshot, TrustDecision, TrustPolicyEvaluator, TrustReviewKind, TrustReviewRequest,
+};
 use crate::support::fs::lock::with_exclusive_locked_directory;
 use crate::support::fs::relative::DirectoryFd;
 use crate::{Error, Result};
@@ -349,13 +351,19 @@ where
         plan.options.operation_options(),
     )?;
     let output = build_output_recipient_set(&verified, &recipients)?;
-    let app_outcome =
-        evaluate_output_recipient_set_trust(&plan.trust_context, &output, P::CAPABILITY)?;
     let TrustDecision::ReviewRequired(requests) = decision else {
-        return enforce_app_accepts_recipient_set(&app_outcome);
+        return Ok(());
     };
-    enforce_app_reviews_recipient_set(&requests, &app_outcome, &output)?;
-    review_existing_recipient_set(plan, &output, &app_outcome, confirm_recipient_set)?;
+    enforce_app_reviews_recipient_set(&requests, &plan.trust_context, &output)?;
+    let app_outcome = artifact_recipient_outcome_from_decision(
+        TrustDecision::<()>::ReviewRequired(requests.clone()),
+        &plan.trust_context,
+        &output,
+    )?;
+    if matches!(app_outcome, ArtifactRecipientTrustOutcome::Accepted) {
+        return Err(build_mutation_review_changed_error());
+    }
+    review_existing_recipient_set(plan, &app_outcome, confirm_recipient_set)?;
     run_post_recipient_approval_hook();
     Ok(())
 }
@@ -459,7 +467,6 @@ where
         ArtifactRecipientSetReviewInput {
             trust_ctx: &plan.trust_context,
             recipient_set: &evidence.recipient_set,
-            capability: P::CAPABILITY,
             context_label: "kv output member set",
         },
         |outcome, context_label| {
@@ -473,7 +480,6 @@ where
 
 fn review_existing_recipient_set<P, ConfirmRecipientSet>(
     plan: &MutationWriteTrustPlan<'_, P>,
-    output: &ArtifactRecipientSet,
     outcome: &ArtifactRecipientTrustOutcome,
     confirm_recipient_set: &mut ConfirmRecipientSet,
 ) -> Result<()>
@@ -481,17 +487,13 @@ where
     P: WriteTrustPolicy,
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    review_artifact_recipient_set_output(
+    review_and_save_artifact_recipient_set(
         TrustExecutionContext {
             options: &plan.options,
             execution: plan.execution,
         },
-        ArtifactRecipientSetReviewInput {
-            trust_ctx: &plan.trust_context,
-            recipient_set: output,
-            capability: P::CAPABILITY,
-            context_label: "kv output member set",
-        },
+        outcome,
+        "kv output member set",
         |review_outcome, context_label| {
             if review_outcome != outcome {
                 return Err(build_mutation_review_changed_error());
@@ -504,7 +506,7 @@ where
 }
 
 fn build_output_recipient_set(
-    artifact: &crate::api::kv::VerifiedKvEncArtifact,
+    artifact: &crate::service::kv::VerifiedKvEncArtifact,
     recipients: &RecipientKeys,
 ) -> Result<ArtifactRecipientSet> {
     let sid = artifact.recipient_set_subject()?.sid();
@@ -516,22 +518,18 @@ fn build_output_recipient_set(
     ArtifactRecipientSet::from_public_keys(sid, &public_keys)
 }
 
-fn enforce_app_accepts_recipient_set(outcome: &ArtifactRecipientTrustOutcome) -> Result<()> {
-    if matches!(outcome, ArtifactRecipientTrustOutcome::Accepted) {
-        return Ok(());
-    }
-    Err(build_mutation_review_changed_error())
-}
-
 fn enforce_app_reviews_recipient_set(
     requests: &[TrustReviewRequest],
-    outcome: &ArtifactRecipientTrustOutcome,
+    trust_context: &TrustContext,
     output: &ArtifactRecipientSet,
 ) -> Result<()> {
-    let ArtifactRecipientTrustOutcome::NeedsManualApproval(review) = outcome else {
-        return Err(build_mutation_review_changed_error());
-    };
-    let expected_kind = if review.has_approved_set() {
+    let output_sid = output.sid();
+    let output_sid_string = output_sid.to_string();
+    let has_approved_set = trust_context
+        .recipient_sets
+        .iter()
+        .any(|record| record.sid == output_sid_string);
+    let expected_kind = if has_approved_set {
         TrustReviewKind::ChangedRecipientSet
     } else {
         TrustReviewKind::RecipientSet
@@ -539,10 +537,12 @@ fn enforce_app_reviews_recipient_set(
     let [request] = requests else {
         return Err(build_mutation_review_changed_error());
     };
-    if request.kind() == expected_kind
-        && request.sid() == Some(output.sid_string().as_str())
-        && request.recipient_kids() == output.recipient_kids()
-    {
+    let recipients_match = request
+        .recipient_kids()
+        .iter()
+        .map(|kid| kid.as_str())
+        .eq(output.recipient_kids().iter().map(String::as_str));
+    if request.kind() == expected_kind && request.sid() == Some(output_sid) && recipients_match {
         return Ok(());
     }
     Err(build_mutation_review_changed_error())

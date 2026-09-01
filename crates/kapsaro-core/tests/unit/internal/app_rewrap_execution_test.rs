@@ -155,6 +155,7 @@ fn find_incoming_candidate(
             message: "snapshot".to_string(),
             fingerprint: None,
             verified_github: None,
+            verified_service_evidence: None,
             github_binding_configured: false,
             attestor_pub: Some(public_key.protected.attestation.pub_.clone()),
         },
@@ -168,7 +169,7 @@ fn build_empty_plan(
     options: &CommonCommandOptions,
     execution: &ExecutionContext,
 ) -> RewrapBatchPlan {
-    let pre_promotion_trust = CommandTrustSnapshot::<RewrapInputPolicy>::load(
+    let snapshot = CommandTrustSnapshot::<RewrapInputPolicy>::load(
         options,
         execution,
         execution
@@ -177,11 +178,10 @@ fn build_empty_plan(
             .local_keystore_access()
             .expect("local keystore"),
     )
-    .unwrap()
-    .trust_context()
-    .clone();
+    .unwrap();
     RewrapBatchPlan {
-        pre_promotion_trust,
+        pre_promotion_trust: snapshot.trust_context().clone(),
+        pre_promotion_evaluator: snapshot.evaluator().clone(),
         incoming_report: None,
         artifacts: Vec::new(),
         discovery_warnings: Vec::new(),
@@ -193,6 +193,32 @@ fn build_verified_post_promotion_recipients(
 ) -> VerifiedPostPromotionRecipients {
     let verified = verify_recipient_public_keys(&members).unwrap();
     VerifiedPostPromotionRecipients::new(verified)
+}
+
+#[test]
+fn test_verified_post_promotion_recipients_normalize_member_handles_once() {
+    let (_home, workspace) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let members = load_active_member_files(&workspace).unwrap();
+    let alice = members
+        .iter()
+        .find(|member| member.protected.subject_handle == ALICE_MEMBER_HANDLE)
+        .unwrap()
+        .clone();
+    let bob = members
+        .iter()
+        .find(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE)
+        .unwrap()
+        .clone();
+
+    let recipients = build_verified_post_promotion_recipients(vec![bob.clone(), alice, bob]);
+
+    assert_eq!(
+        recipients.recipient_handles(),
+        &[
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string()
+        ]
+    );
 }
 
 fn build_post_promotion_trust(
@@ -604,19 +630,19 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         .iter()
         .find(|member| member.protected.subject_handle == BOB_MEMBER_HANDLE)
         .unwrap();
+    let snapshot = CommandTrustSnapshot::<RewrapInputPolicy>::load(
+        &options,
+        &execution,
+        execution
+            .key_ctx
+            .inner()
+            .local_keystore_access()
+            .expect("local keystore"),
+    )
+    .unwrap();
     let plan = RewrapBatchPlan {
-        pre_promotion_trust: CommandTrustSnapshot::<RewrapInputPolicy>::load(
-            &options,
-            &execution,
-            execution
-                .key_ctx
-                .inner()
-                .local_keystore_access()
-                .expect("local keystore"),
-        )
-        .unwrap()
-        .trust_context()
-        .clone(),
+        pre_promotion_trust: snapshot.trust_context().clone(),
+        pre_promotion_evaluator: snapshot.evaluator().clone(),
         incoming_report: None,
         artifacts: vec![ArtifactRef::open_from_path(&invalid_file).unwrap()],
         discovery_warnings: Vec::new(),
@@ -627,7 +653,7 @@ fn test_execute_confirmed_rewrap_batch_persists_approvals_before_file_failures()
         clear_disclosure_history: false,
         accepted_promotions: vec![bob_candidate],
     };
-    let approvals = vec![ApprovedKnownKey::from_review(
+    let approvals = vec![ApprovedKnownKey::for_test(
         &bob.protected.subject_handle,
         &bob.protected.kid,
         Some(bob.protected.attestation.pub_.clone()),
@@ -706,7 +732,7 @@ fn test_execute_confirmed_rewrap_batch_rejects_expired_signing_key_before_promot
         clear_disclosure_history: false,
         accepted_promotions: vec![bob_candidate],
     };
-    let approvals = vec![ApprovedKnownKey::from_review(
+    let approvals = vec![ApprovedKnownKey::for_test(
         &bob.protected.subject_handle,
         &bob.protected.kid,
         Some(bob.protected.attestation.pub_.clone()),
@@ -814,6 +840,15 @@ fn test_execute_reviewed_rewrap_artifacts_uses_fixed_post_promotion_members() {
     );
     let secret_path = workspace_dir.join("secrets").join("snapshot-file.json");
     fs::write(&secret_path, &encrypted).unwrap();
+    let bob_active = workspace_dir
+        .join("members")
+        .join("active")
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
+    let bob_incoming = workspace_dir
+        .join("members")
+        .join("incoming")
+        .join(format!("{}.json", BOB_MEMBER_HANDLE));
+    fs::rename(bob_active, bob_incoming).unwrap();
     let mut plan = build_rewrap_batch_plan(&options, &execution, &[]).unwrap();
     plan.pre_promotion_trust.is_interactive = true;
     let request = RewrapBatchRequest {
@@ -844,6 +879,11 @@ fn test_execute_reviewed_rewrap_artifacts_uses_fixed_post_promotion_members() {
     .unwrap();
 
     assert_eq!(outcome.failed_files.len(), 0);
+    assert!(outcome.warnings.iter().any(|warning| {
+        warning.contains("Recipient kid is not active.")
+            && warning.contains("historical metadata")
+            && warning.contains("kapsaro rewrap")
+    }));
     let rewritten = fs::read_to_string(&secret_path).unwrap();
     let document: crate::model::file_enc::FileEncDocument =
         serde_json::from_str(FileEncContent::new_unchecked(rewritten).as_str()).unwrap();
@@ -1144,18 +1184,21 @@ fn test_execute_reviewed_rewrap_artifacts_continues_after_signer_review_rejectio
         build_verified_post_promotion_state(&plan, post_members);
     let bob_canonical = bob_path.canonicalize().unwrap();
 
-    let outcome = execute_reviewed_rewrap_artifacts(
-        &request,
-        &plan,
-        &execution,
-        &fixed_members,
-        &post_promotion_trust,
-        &mut |candidate, _context_label| Ok(candidate.member_handle.as_str() != BOB_MEMBER_HANDLE),
-        &mut |_candidate, _context_label, _recipients| Ok(true),
-        &mut |candidates, _context_label| Ok(candidates.to_vec()),
-        &mut |_outcome, _context_label| Ok(true),
-    )
-    .unwrap();
+    let outcome =
+        execute_reviewed_rewrap_artifacts(
+            &request,
+            &plan,
+            &execution,
+            &fixed_members,
+            &post_promotion_trust,
+            &mut |candidate, _context_label| {
+                Ok(candidate.member_handle().as_str() != BOB_MEMBER_HANDLE)
+            },
+            &mut |_candidate, _context_label, _recipients| Ok(true),
+            &mut |candidates, _context_label| Ok(candidates.to_vec()),
+            &mut |_outcome, _context_label| Ok(true),
+        )
+        .unwrap();
 
     assert_eq!(outcome.processed_files.len(), 1);
     assert_eq!(outcome.failed_files.len(), 1);
@@ -1182,7 +1225,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
             BOB_MEMBER_HANDLE,
             bob_key_ctx.kid(),
             &bob_key_ctx,
-            &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
+            &[ALICE_MEMBER_HANDLE],
         ),
     )
     .unwrap();
@@ -1208,7 +1251,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
         clear_disclosure_history: false,
         accepted_promotions: vec![bob_candidate.clone()],
     };
-    let approvals = vec![ApprovedKnownKey::from_review(
+    let approvals = vec![ApprovedKnownKey::for_test(
         &bob_candidate.review.member_handle,
         &bob_candidate.review.kid,
         bob_candidate.review.attestor_pub.clone(),
@@ -1217,6 +1260,7 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
     let mut expected_post_promotion_members = load_active_member_files(&workspace_dir).unwrap();
     expected_post_promotion_members.push(bob_public);
     let mut non_member_prompts = 0usize;
+    let mut reviewed_recipients = Vec::new();
 
     let outcome = execute_confirmed_rewrap_batch(
         build_review_session(
@@ -1227,8 +1271,9 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
         ),
         &execution,
         |_candidate, _context_label| Ok(true),
-        |_candidate, _context_label, _recipients| {
+        |_candidate, _context_label, recipients| {
             non_member_prompts += 1;
+            reviewed_recipients = recipients.to_vec();
             Ok(true)
         },
         |candidates, _context_label| Ok(candidates.to_vec()),
@@ -1237,6 +1282,13 @@ fn test_execute_confirmed_rewrap_batch_uses_pre_promotion_members_for_signer_rev
     .unwrap();
 
     assert_eq!(non_member_prompts, 1);
+    assert_eq!(
+        reviewed_recipients,
+        vec![
+            ALICE_MEMBER_HANDLE.to_string(),
+            BOB_MEMBER_HANDLE.to_string()
+        ]
+    );
     assert_eq!(outcome.processed_files.len(), 1);
     assert!(outcome.failed_files.is_empty());
 }

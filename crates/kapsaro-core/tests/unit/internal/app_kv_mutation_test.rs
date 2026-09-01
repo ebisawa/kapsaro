@@ -4,8 +4,8 @@
 use crate::api::key::LocalKeyStore;
 use crate::api::kv::{KvEncArtifact, KvReadOperation};
 use crate::api::trust::{
-    ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, TrustApproval, TrustDecision,
-    TrustPolicyEvaluator,
+    ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, ReadTrustExceptions,
+    TrustApproval, TrustDecision, TrustPolicyEvaluator,
 };
 use crate::app::context::execution::resolve_read_execution;
 use crate::app::context::execution::ExecutionContext;
@@ -141,6 +141,7 @@ fn read_kv_values(
             &execution.key_ctx,
             operation,
             options.operation_options(),
+            ReadTrustExceptions::none(),
         )
         .unwrap()
     else {
@@ -411,6 +412,73 @@ fn test_execute_existing_set_approves_recipient_set_before_single_mutation() {
     });
 }
 
+#[test]
+fn test_execute_existing_set_rejects_mixed_known_key_and_recipient_set_review() {
+    assert_existing_set_rejects_mixed_known_key_and_recipient_set_review(true);
+}
+
+#[test]
+fn test_execute_existing_set_rejects_mixed_reviews_non_interactive_error() {
+    assert_existing_set_rejects_mixed_known_key_and_recipient_set_review(false);
+}
+
+fn assert_existing_set_rejects_mixed_known_key_and_recipient_set_review(is_interactive: bool) {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
+    activate_fixture_key(temp_dir.path());
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    with_temp_cwd(temp_dir.path(), || {
+        let _interactive = InteractiveOverrideGuard::enable();
+        let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+        let mut initial = evaluate_set_plan(&options, &execution, None);
+        allow_member_set_review(&mut initial);
+        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
+            .unwrap();
+        remove_bob_known_key(&options, &initial, temp_dir.path());
+        remove_approved_recipient_set(&options, &initial);
+
+        let mut reviewed = evaluate_set_plan(&options, &execution, None);
+        reviewed.trust_context.is_interactive = is_interactive;
+        let artifact_path = resolve_test_kv_target_path(&options, None).unwrap();
+        let trust_path =
+            get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+        let artifact_before = fs::read(&artifact_path).unwrap();
+        let trust_before = fs::read(&trust_path).unwrap();
+        let mut confirmations = 0;
+        reset_authorized_mutation_count();
+
+        let error = set_kv_command_with_recipient_set_confirmation(
+            &reviewed,
+            vec![KvInputEntry::new("KEY1", "new")],
+            None,
+            |_, _| {
+                confirmations += 1;
+                Ok(true)
+            },
+        )
+        .expect_err("mixed trust review requests must be reviewed again");
+
+        assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+        assert_eq!(
+            error.format_user_message(),
+            "KV mutation trust changed and must be reviewed again."
+        );
+        assert_eq!(confirmations, 0);
+        assert_eq!(authorized_mutation_count(), 0);
+        assert_eq!(fs::read(artifact_path).unwrap(), artifact_before);
+        assert_eq!(fs::read(trust_path).unwrap(), trust_before);
+    });
+}
+
 /// The recipient-set prompt runs before the secrets directory is locked.
 ///
 /// A directory lock is given up on a timeout, so an operator stopping at the
@@ -591,7 +659,7 @@ fn test_execute_existing_set_preserves_changed_recipient_error_non_interactive()
         LocalTrustStore::open(temp_dir.path(), member_handle(ALICE_MEMBER_HANDLE))
             .expect("open trust store")
             .apply_approvals_with_conflict_handling(
-                vec![TrustApproval::recipient_set(sid, vec![alice_kid])],
+                vec![TrustApproval::recipient_set_for_test(sid, vec![alice_kid])],
                 &initial.execution.key_ctx,
                 ApprovalConflictHandling::merge(),
             )

@@ -8,7 +8,6 @@ use std::path::Path;
 use crate::app::artifact::{detect_reviewed_artifact, load_reviewed_artifact, ArtifactRef};
 use crate::app::context::execution::{enforce_selected_decryption_key_expiry, ExecutionContext};
 use crate::app::context::review::ReviewedTextFile;
-use crate::app::trust::enforcement::evaluate_read_artifact_recipient_keys;
 use crate::app::trust::recovery::classify_trust_store_reset;
 use crate::app::trust::review::{
     review_artifact_output_recipient_set, review_rewrap_input_trust_requirements_with_confirmation,
@@ -16,15 +15,15 @@ use crate::app::trust::review::{
     TrustExecutionContext,
 };
 use crate::app::trust::{
-    evaluate_signer_trust_with_proof, load_read_trust_context, ArtifactRecipientTrustOutcome,
-    CommandCapability, RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate,
-    TrustContext,
+    build_read_artifact_trust_plan, load_read_trust_context, ArtifactRecipientTrustOutcome,
+    RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate, TrustContext,
 };
-use crate::feature::artifact::{
-    artifact_recipient_evidence, artifact_wrap_set, verify_artifact_signature_for_operation,
-};
+use crate::feature::artifact::{artifact_wrap_set, verify_artifact_signature_for_operation};
 use crate::format::content::EncContent;
 use crate::model::verification::SignatureVerificationProof;
+use crate::service::file::FileEncArtifact;
+use crate::service::kv::KvEncArtifact;
+use crate::service::trust::KnownKeyReview;
 use crate::support::fs::lock;
 use crate::support::path::{format_finding_path, format_path_relative_to_cwd};
 use crate::support::warning::push_unique_warning;
@@ -43,7 +42,6 @@ pub struct RewrapArtifactExecutionContext<'a> {
     pub execution: &'a ExecutionContext,
     pub post_promotion_members: &'a VerifiedPostPromotionRecipients,
     pub post_promotion_trust: &'a TrustContext,
-    pub current_recipients: Vec<String>,
 }
 
 impl<'a> RewrapArtifactExecutionContext<'a> {
@@ -60,7 +58,6 @@ impl<'a> RewrapArtifactExecutionContext<'a> {
             execution,
             post_promotion_members,
             post_promotion_trust,
-            current_recipients: collect_current_recipient_handles(post_promotion_members),
         }
     }
 }
@@ -163,18 +160,6 @@ fn build_rewrap_batch_outcome(
         promoted_member_handles: Vec::new(),
         warnings,
     }
-}
-
-fn collect_current_recipient_handles(
-    post_promotion_members: &VerifiedPostPromotionRecipients,
-) -> Vec<String> {
-    let mut recipients = post_promotion_members
-        .verified_members()
-        .iter()
-        .map(|member| member.document().protected.subject_handle.clone())
-        .collect::<Vec<_>>();
-    recipients.sort();
-    recipients
 }
 
 fn execute_rewrap_file<ConfirmKnown, ConfirmNonMember, ConfirmRecipients, ConfirmRecipientSet>(
@@ -342,7 +327,6 @@ where
             execution: ctx.execution,
             trust_ctx: ctx.post_promotion_trust,
             content: rewritten_content,
-            capability: CommandCapability::Rewrap,
             context_label: "rewrap output member set",
         },
         confirm_recipient_set,
@@ -381,8 +365,9 @@ where
         captured,
         content,
         &trust_ctx,
+        ctx.execution,
+        ctx.post_promotion_members,
         ctx.request.options.allow_expired_key,
-        &ctx.current_recipients,
         warnings,
     )?
     else {
@@ -422,8 +407,9 @@ fn build_rewrap_input_trust_requirement(
     captured: &ReviewedTextFile,
     content: &EncContent,
     trust_ctx: &TrustContext,
+    execution: &ExecutionContext,
+    post_promotion_members: &VerifiedPostPromotionRecipients,
     allow_expired_key: bool,
-    current_recipients: &[String],
     warnings: &mut Vec<String>,
 ) -> Result<Option<RewrapInputTrustRequirement>> {
     debug!("[REWRAP] input signer: verify captured artifact proof");
@@ -431,23 +417,54 @@ fn build_rewrap_input_trust_requirement(
     for warning in &proof.warnings {
         push_unique_warning(warnings, warning.clone());
     }
-    let recipient_evidence = artifact_recipient_evidence(content)?;
-    let recipient_trust =
-        evaluate_read_artifact_recipient_keys(trust_ctx, &recipient_evidence.recipient_set)?;
-    warnings.extend(recipient_trust.warnings);
-    let signer_outcome = evaluate_signer_trust_with_proof(
-        trust_ctx,
-        &proof,
-        CommandCapability::Rewrap,
-        current_recipients,
+    let evaluator = crate::app::trust::snapshot::load_trust_policy_evaluator(
+        execution,
+        trust_ctx.active_members_by_kid.clone(),
     )?;
-    if input_trust_accepted(&signer_outcome, &recipient_trust.outcome) {
+    let allow_non_member = trust_ctx.is_interactive && trust_ctx.allow_non_member;
+    let review = match content {
+        EncContent::FileEnc(content) => evaluator.preflight_file_read(
+            &FileEncArtifact::parse(content.as_str())?.verify(
+                crate::service::operation::OperationOptions::new()
+                    .with_allow_expired_key(allow_expired_key),
+            )?,
+            &execution.key_ctx,
+            KnownKeyReview::Required,
+            allow_non_member,
+        )?,
+        EncContent::KvEnc(content) => evaluator.preflight_kv_read(
+            &KvEncArtifact::parse(content.as_str())?.verify(
+                crate::service::operation::OperationOptions::new()
+                    .with_allow_expired_key(allow_expired_key),
+            )?,
+            &execution.key_ctx,
+            KnownKeyReview::Required,
+            allow_non_member,
+        )?,
+    };
+    let mut plan = build_read_artifact_trust_plan(
+        review,
+        &proof,
+        KnownKeyReview::Required,
+        trust_ctx.is_interactive,
+        Vec::new(),
+    )?;
+    for warning in plan.warnings.drain(..) {
+        push_unique_warning(warnings, warning);
+    }
+    if let SignerTrustOutcome::NeedsNonMemberAcceptance {
+        current_recipients, ..
+    } = &mut plan.signer_outcome
+    {
+        *current_recipients = post_promotion_members.recipient_handles().to_vec();
+    }
+    if input_trust_accepted(&plan.signer_outcome, &plan.recipient_outcome) {
         return Ok(None);
     }
     Ok(Some(RewrapInputTrustRequirement {
         file_path: captured.path().to_path_buf(),
-        signer_outcome,
-        recipient_outcome: recipient_trust.outcome,
+        signer_outcome: plan.signer_outcome,
+        recipient_outcome: plan.recipient_outcome,
     }))
 }
 

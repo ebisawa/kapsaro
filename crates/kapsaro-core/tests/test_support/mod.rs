@@ -40,8 +40,8 @@ pub use constants::{
 pub use crypto_context::setup_member_key_context;
 #[allow(unused_imports)]
 pub use fixture::{
-    create_local_state_dir, generate_temp_ssh_keypair_in_dir, load_fixture_ssh_pubkey,
-    local_state_temp_dir, restrict_local_state_file, setup_test_keystore,
+    create_local_state_dir, generate_temp_ssh_keypair_in_dir, load_fixture_public_key,
+    load_fixture_ssh_pubkey, local_state_temp_dir, restrict_local_state_file, setup_test_keystore,
     setup_test_keystore_from_fixtures, setup_test_workspace, setup_test_workspace_from_fixtures,
     write_local_state_file,
 };
@@ -65,6 +65,8 @@ pub fn save_public_key(
 }
 #[allow(unused_imports)]
 pub use guards::{with_temp_cwd, EnvGuard};
+#[allow(unused_imports)]
+pub use kapsaro_core::cli_api::test_support::domain::public_key::refresh_public_key_kid;
 #[allow(unused_imports)]
 pub use keygen_helpers::{build_test_private_key, keygen_test};
 // The privilege helper is unix-only, matching the permission bits the tests stage.

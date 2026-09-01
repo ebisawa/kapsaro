@@ -11,10 +11,10 @@ use crate::app::key::generate::{
 };
 use crate::app::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::app::key::timestamp::resolve_key_timestamps;
-use crate::app::verification::OnlineVerificationStatus;
 use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::GithubAccount;
+use crate::service::online::OnlineVerificationStatus;
 use crate::Result;
 
 use super::types::{

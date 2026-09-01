@@ -50,7 +50,7 @@ where
     let mut accepted = Vec::new();
     for prompt in &review_view.prompt_candidates {
         if confirm(prompt)? {
-            accepted.push(prompt.candidate.member_handle.to_string());
+            accepted.push(prompt.candidate.member_handle().to_string());
         }
     }
     Ok(accepted)
@@ -66,7 +66,7 @@ pub(crate) fn print_promotion_summary(promoted_ids: &[String], quiet: bool) {
 }
 
 fn prompt_tofu_confirmation(prompt: &PromotionReviewPrompt) -> Result<bool> {
-    eprintln!("Incoming member '{}':", prompt.candidate.member_handle);
+    eprintln!("Incoming member '{}':", prompt.candidate.member_handle());
     print_candidate_review(&prompt.candidate);
     prompt_yes_no(promotion_prompt_label(), false)
 }
@@ -77,7 +77,7 @@ fn prompt_tofu_confirmation_with_reader(
     prompt: &PromotionReviewPrompt,
     input: &mut impl BufRead,
 ) -> Result<bool> {
-    eprintln!("Incoming member '{}':", prompt.candidate.member_handle);
+    eprintln!("Incoming member '{}':", prompt.candidate.member_handle());
     print_candidate_review(&prompt.candidate);
     prompt_yes_no_with_reader(promotion_prompt_label(), false, input)
 }

@@ -5,10 +5,11 @@
 
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::trust::review::{
-    format_candidate_review_lines, print_trust_review_line,
+    format_candidate_review_lines, format_github_verification, print_trust_review_line,
 };
 use crate::cli::common::prompt::prompt_yes_no;
 use console::Style;
+use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
 use kapsaro_core::cli_api::app::trust::enforcement::{
     ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
 };
@@ -88,7 +89,7 @@ pub(crate) fn confirm_recipient_key_approval(
 }
 
 pub(crate) fn confirm_member_key_approval(
-    candidate: &TrustApprovalCandidate,
+    candidate: &MemberApprovalResult,
     _context_label: &str,
 ) -> Result<bool> {
     for line in format_member_key_review_lines(candidate) {
@@ -136,16 +137,15 @@ fn format_non_member_signer_review_lines(
 fn format_non_member_online_verification_warning(
     candidate: &TrustApprovalCandidate,
 ) -> Option<String> {
-    if !candidate.github_binding_configured
-        || !candidate.online_verification_attempted
-        || candidate.verified_github.is_some()
+    if !candidate.github_binding_configured()
+        || !candidate.online_verification_attempted()
+        || candidate.is_github_verified()
     {
         return None;
     }
 
     let message = candidate
-        .online_verification_message
-        .as_deref()
+        .online_verification_message()
         .unwrap_or("online verification did not succeed");
     Some(format!(
         "Warning: GitHub online verification did not verify this signer: {}",
@@ -160,9 +160,28 @@ fn format_recipient_key_review_lines(candidate: &TrustApprovalCandidate) -> Vec<
     lines
 }
 
-fn format_member_key_review_lines(candidate: &TrustApprovalCandidate) -> Vec<String> {
+fn format_member_key_review_lines(candidate: &MemberApprovalResult) -> Vec<String> {
     let mut lines = format_key_approval_review_lines("You are approving the member key below.");
-    lines.extend(format_candidate_review_lines(candidate));
+    lines.extend([
+        format!("  member handle      {}", candidate.member_handle),
+        format!(
+            "  key id             {}",
+            format_kid_display_lossy(&candidate.kid)
+        ),
+        format!(
+            "  SSH fingerprint    {}",
+            candidate.fingerprint.as_deref().unwrap_or("unknown")
+        ),
+        format!(
+            "  GitHub account     {}",
+            format_github_verification(
+                candidate.github_id,
+                candidate.github_login.as_deref(),
+                candidate.github_binding_configured,
+                candidate.verified,
+            )
+        ),
+    ]);
     lines
 }
 

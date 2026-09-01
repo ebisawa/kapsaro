@@ -4,15 +4,15 @@
 //! Read-path orchestration for the KV query commands.
 //! Resolves which document to read and the trust plan that read runs under.
 
-use crate::api::kv::{KvEncArtifact, VerifiedKvEncArtifact};
 use crate::app::context::execution::evaluate_selected_decryption_key_expiry;
 use crate::app::context::options::CommonCommandOptions;
 use crate::app::errors::build_default_kv_file_not_found_error;
-use crate::app::trust::{
-    evaluate_read_artifact_trust, push_signature_verification_warnings, ReadTrustPolicy,
+use crate::app::trust::evaluation::{
+    build_read_artifact_trust_plan, known_key_review, resolve_read_trust_context_for_policy,
 };
+use crate::app::trust::{push_signature_verification_warnings, ReadTrustPolicy};
 use crate::feature::envelope::wrap_set::WrapSet;
-use crate::feature::trust::recipient_sets::kv_recipient_evidence;
+use crate::service::kv::{KvEncArtifact, VerifiedKvEncArtifact};
 use crate::support::fs::relative::file_exists_at;
 use crate::support::warning::push_unique_warning;
 use crate::{ErrorKind, Result};
@@ -66,7 +66,7 @@ where
     let verified_doc = verified_artifact.inner();
     let selected_key_expiry =
         evaluate_kv_read_key_expiry(execution, verified_doc, operation_options)?;
-    let trust_plan = evaluate_kv_read_trust::<P>(options, execution, verified_doc)?;
+    let trust_plan = evaluate_kv_read_trust::<P>(options, execution, verified_artifact)?;
     let warnings = collect_kv_read_warnings(
         verified_doc.proof(),
         selected_key_expiry,
@@ -76,6 +76,7 @@ where
     Ok(ReadArtifactTrustPlan {
         signer_outcome: trust_plan.signer_outcome,
         recipient_outcome: trust_plan.recipient_outcome,
+        known_key_review: trust_plan.known_key_review,
         warnings,
     })
 }
@@ -83,7 +84,7 @@ where
 fn evaluate_kv_read_key_expiry(
     execution: &crate::app::context::execution::ExecutionContext,
     verified_doc: &VerifiedKvEncDocument,
-    options: crate::api::operation::OperationOptions,
+    options: crate::service::operation::OperationOptions,
 ) -> Result<SelectedDecryptionKeyExpiry> {
     let wrap_set = WrapSet::parse(&verified_doc.document().wrap().wrap, "Document")?;
     evaluate_selected_decryption_key_expiry(execution, &wrap_set, options.allow_expired_key())
@@ -92,18 +93,25 @@ fn evaluate_kv_read_key_expiry(
 fn evaluate_kv_read_trust<P>(
     options: &CommonCommandOptions,
     execution: &crate::app::context::execution::ExecutionContext,
-    verified_doc: &VerifiedKvEncDocument,
+    verified_artifact: &VerifiedKvEncArtifact,
 ) -> Result<ReadArtifactTrustPlan>
 where
     P: ReadTrustPolicy,
 {
-    let recipient_evidence = kv_recipient_evidence(verified_doc.document())?;
-    evaluate_read_artifact_trust::<P>(
-        options,
-        execution,
-        verified_doc.proof(),
-        &recipient_evidence.recipient_set,
-        &recipient_evidence.recipient_handles,
+    let loaded = resolve_read_trust_context_for_policy::<P>(options, execution)?;
+    let review = known_key_review(&loaded.trust_ctx);
+    let decision = loaded.evaluator.preflight_kv_read(
+        verified_artifact,
+        &execution.key_ctx,
+        review,
+        options.allow_non_member && P::CAPABILITY.allows_non_member_acceptance(),
+    )?;
+    build_read_artifact_trust_plan(
+        decision,
+        verified_artifact.inner().proof(),
+        review,
+        loaded.trust_ctx.is_interactive,
+        loaded.warnings,
     )
 }
 

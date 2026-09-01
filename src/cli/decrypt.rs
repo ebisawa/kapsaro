@@ -154,6 +154,7 @@ fn decrypt_after_review(
         current,
         &context.execution.key_ctx,
         context.signer_outcome(),
+        context.known_key_review(),
         options.operation_options(),
     )? {
         TrustDecision::Trusted(trusted) => trusted.decrypt_bytes(),

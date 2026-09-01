@@ -6,7 +6,6 @@
 pub(crate) mod approval;
 pub(crate) mod candidate;
 pub(crate) mod cli_read;
-pub(crate) mod enforcement;
 pub(crate) mod evaluation;
 pub(crate) mod list;
 pub(crate) mod management;
@@ -21,37 +20,29 @@ pub(crate) mod types;
 
 pub use candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 pub use cli_read::{evaluate_file_after_cli_review, evaluate_kv_after_cli_review};
-pub use enforcement::enforce_recipients_trust_with_additional;
-pub(crate) use evaluation::push_signature_verification_warnings;
-pub use evaluation::{
-    evaluate_output_recipient_set_trust, evaluate_read_artifact_trust,
-    evaluate_signer_trust_with_proof, ReadArtifactTrustPlan,
+pub(crate) use evaluation::{
+    artifact_recipient_outcome_from_decision, build_read_artifact_trust_plan,
+    push_signature_verification_warnings, recipient_outcome_from_decision,
+    signer_outcome_from_decision,
 };
+pub use evaluation::{evaluate_output_recipient_set_trust, ReadArtifactTrustPlan};
 pub use outcome::{
     ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
     ArtifactRecipientTrustOutcome, RecipientTrustOutcome, SignerTrustOutcome,
 };
+pub(crate) use policy::RewrapInputPolicy;
 pub use policy::{
     CommandCapability, DecryptPolicy, EncryptPolicy, GetPolicy, ImportPolicy, ListPolicy,
     ReadTrustPolicy, RunPolicy, SetPolicy, UnsetPolicy, WriteTrustPolicy,
 };
+pub(crate) use snapshot::CommandTrustSnapshot;
 pub use snapshot::{
     load_read_trust_context, TrustContext, WorkspaceMemberSnapshot, WriteRecipientTrustPlan,
 };
 
-// Production reaches everything below through the review and snapshot
-// orchestration in this module, so none of it is named from outside. The
-// re-exports give the trust tests a direct path to the same items.
-#[cfg(test)]
-pub(crate) use enforcement::{
-    build_signer_identity, enforce_recipients_trust, enforce_signer_trust,
-};
+// Snapshot policy enforcement is also exercised directly by trust tests.
 #[cfg(test)]
 pub(crate) use evaluation::enforce_policy_strict_key_checking;
-#[cfg(test)]
-pub(crate) use policy::RewrapInputPolicy;
-#[cfg(test)]
-pub(crate) use snapshot::CommandTrustSnapshot;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/app_context_trust_test.rs"]

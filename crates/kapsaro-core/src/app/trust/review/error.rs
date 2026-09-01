@@ -18,7 +18,9 @@ pub(super) fn build_trust_approval_rejection_error(
         "E_TRUST_APPROVAL_REJECTED".to_string(),
         format!(
             "Trust approval rejected for {} '{}' ({})",
-            approval_subject, reviewed.member_handle, reviewed.kid
+            approval_subject,
+            reviewed.member_handle(),
+            reviewed.kid()
         ),
     )
 }
@@ -31,7 +33,9 @@ pub(super) fn build_non_member_rejection_error(
         "E_TRUST_NON_MEMBER_REJECTED".to_string(),
         format!(
             "Non-member acceptance rejected for {} '{}' ({})",
-            approval_subject, reviewed.member_handle, reviewed.kid
+            approval_subject,
+            reviewed.member_handle(),
+            reviewed.kid()
         ),
     )
 }

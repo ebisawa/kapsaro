@@ -11,6 +11,7 @@ use kapsaro_core::api::kv::{KvEncArtifact, KvInputEntry, KvReadOperation, Verifi
 use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::secret::SecretString;
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
+use kapsaro_core::api::trust::KnownKeyReview;
 use kapsaro_core::api::trust::{CurrentMemberSnapshot, TrustPolicyEvaluator};
 use kapsaro_core::cli_api::app::trust::SignerTrustOutcome;
 use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
@@ -120,6 +121,7 @@ fn test_authorize_returns_the_trusted_artifact_for_an_approved_read() {
         current: verify(&artifact),
         key_ctx: &key_ctx,
         signer_outcome: &signer_outcome,
+        known_key_review: KnownKeyReview::Required,
         options: OperationOptions::default(),
     };
 
@@ -159,6 +161,7 @@ fn test_authorize_reports_a_trust_state_that_no_longer_approves_the_read() {
         current: verify(&artifact),
         key_ctx: &key_ctx,
         signer_outcome: &signer_outcome,
+        known_key_review: KnownKeyReview::Required,
         options: OperationOptions::default(),
     };
 

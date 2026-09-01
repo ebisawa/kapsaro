@@ -4,10 +4,10 @@
 //! GitHub account resolution and preflight binding checks for key generation.
 //! Confirms an SSH public key is already registered under the claimed account before proceeding.
 
-use crate::app::verification::OnlineVerificationStatus;
 use crate::io::github::account::resolve_github_account_by_login;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;
 use crate::model::public_key::GithubAccount;
+use crate::service::online::OnlineVerificationStatus;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 

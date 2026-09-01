@@ -18,9 +18,181 @@ use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
-    update_active_private_key_expires_at, with_temp_cwd, ALICE_MEMBER_HANDLE,
+    update_active_private_key_expires_at, with_temp_cwd, EnvGuard, ALICE_MEMBER_HANDLE,
+    BOB_MEMBER_HANDLE,
 };
 use zeroize::Zeroizing;
+
+struct InteractiveOverrideGuard;
+
+impl InteractiveOverrideGuard {
+    fn set(value: bool) -> Self {
+        crate::support::tty::set_interactive_override(Some(value));
+        Self
+    }
+}
+
+impl Drop for InteractiveOverrideGuard {
+    fn drop(&mut self) {
+        crate::support::tty::set_interactive_override(None);
+    }
+}
+
+#[test]
+fn test_kv_read_unknown_active_recipient_non_interactive_error() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob]);
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
+        &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
+        &recipients,
+        &SigningContext {
+            signing_key: alice_ctx.signing_key(),
+            signer_kid: alice_ctx.kid(),
+            signer_pub: alice,
+        },
+        TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
+    )
+    .unwrap();
+    std::fs::write(
+        workspace
+            .join("secrets")
+            .join(format!("{DEFAULT_KV_ENC_BASENAME}{KV_ENC_EXTENSION}")),
+        encrypted,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let error = resolve_kv_read_command_for_test::<GetPolicy>(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+    )
+    .err()
+    .expect("non-interactive unknown recipient must fail");
+
+    assert_eq!(error.kind(), crate::ErrorKind::Verify);
+    assert_eq!(error.rule(), Some("E_TRUST_RECIPIENT_UNKNOWN"));
+    assert!(error.to_string().contains(BOB_MEMBER_HANDLE));
+    assert!(error.to_string().contains(bob_ctx.kid()));
+}
+
+#[test]
+fn test_kv_read_unknown_active_recipient_skips_review_when_strict_checking_is_disabled() {
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+    let _interactive = InteractiveOverrideGuard::set(false);
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let alice_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, alice_ctx.kid()).unwrap();
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, bob_ctx.kid()).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob]);
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
+        &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
+        &recipients,
+        &SigningContext {
+            signing_key: alice_ctx.signing_key(),
+            signer_kid: alice_ctx.kid(),
+            signer_pub: alice,
+        },
+        TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
+    )
+    .unwrap();
+    std::fs::write(
+        workspace
+            .join("secrets")
+            .join(format!("{DEFAULT_KV_ENC_BASENAME}{KV_ENC_EXTENSION}")),
+        encrypted,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let command = resolve_kv_read_command_for_test::<GetPolicy>(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+    )
+    .unwrap();
+
+    assert!(matches!(
+        command.recipient_outcome,
+        crate::app::trust::RecipientTrustOutcome::Accepted
+    ));
+}
+
+#[test]
+fn test_kv_read_command_warns_about_unresolved_historical_recipient() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None);
+    let keystore_root = home.path().join("keys");
+    let alice = load_public_key(&keystore_root, ALICE_MEMBER_HANDLE, key_ctx.kid()).unwrap();
+    let bob_kid = crate::cli_api::test_support::storage::keystore::storage::list_kids(
+        &keystore_root,
+        BOB_MEMBER_HANDLE,
+    )
+    .unwrap()
+    .remove(0);
+    let bob = load_public_key(&keystore_root, BOB_MEMBER_HANDLE, &bob_kid).unwrap();
+    let recipients = build_verified_recipient_keys(&[alice.clone(), bob]);
+    let encrypted = encrypt_kv_map_with_wrap_mutation(
+        &HashMap::from([("API_KEY".to_string(), "secret".to_string())]),
+        &recipients,
+        &SigningContext {
+            signing_key: key_ctx.signing_key(),
+            signer_kid: key_ctx.kid(),
+            signer_pub: alice,
+        },
+        TokenCodec::JsonJcs,
+        false,
+        |_| Ok(()),
+    )
+    .unwrap();
+    std::fs::write(
+        workspace
+            .join("secrets")
+            .join(format!("{DEFAULT_KV_ENC_BASENAME}{KV_ENC_EXTENSION}")),
+        encrypted,
+    )
+    .unwrap();
+    crate::io::workspace::members::test_support::remove_active_member(
+        &workspace,
+        BOB_MEMBER_HANDLE,
+    )
+    .unwrap();
+    let options = build_test_signing_command_options(home.path(), &workspace);
+
+    let command = resolve_kv_read_command_for_test::<GetPolicy>(
+        &options,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+    )
+    .unwrap();
+
+    assert!(command.warnings.iter().any(|warning| {
+        warning.contains("Recipient kid is not active.")
+            && warning.contains(&bob_kid)
+            && warning.contains("historical metadata")
+            && warning.contains("kapsaro rewrap")
+    }));
+}
 
 #[cfg(unix)]
 #[test]
@@ -297,6 +469,7 @@ where
     Ok(TestKvReadContext {
         execution,
         verified,
+        recipient_outcome: trust.recipient_outcome,
         warnings: trust.warnings,
     })
 }
@@ -304,6 +477,7 @@ where
 struct TestKvReadContext {
     execution: crate::app::context::execution::ExecutionContext,
     verified: crate::api::kv::VerifiedKvEncArtifact,
+    recipient_outcome: crate::app::trust::RecipientTrustOutcome,
     warnings: Vec<String>,
 }
 

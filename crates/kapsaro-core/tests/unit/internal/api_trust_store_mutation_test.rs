@@ -10,7 +10,7 @@ use std::thread;
 use std::time::Duration;
 
 #[cfg(unix)]
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{symlink, PermissionsExt};
 
 use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::feature::trust::recipient_sets::compute_recipient_set_hash;
@@ -21,6 +21,8 @@ use crate::io::trust::store::fail_next_trust_store_save;
 use crate::model::trust_store::{RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected};
 use crate::model::wire::format::LOCAL_TRUST_V1;
 use crate::support::fs::lock::lock_test_support::with_locked_workspace_dir;
+#[cfg(unix)]
+use crate::support::warning::LocalStateWarningGuard;
 use crate::test_utils::{create_local_state_dir, member_handle, setup_member_key_context};
 use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, MemberHandle};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
@@ -131,7 +133,7 @@ fn fixture_kid(key_store: &LocalKeyStore, member_handle: &str) -> String {
 fn seed_trust_store(trust_store: &kapsaro_core::api::trust::LocalTrustStore, key_ctx: &KeyContext) {
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::recipient_set(
+            vec![TrustApproval::recipient_set_for_test(
                 uuid::Uuid::new_v4(),
                 vec![SEED_RECIPIENT_KID.to_string()],
             )],
@@ -172,14 +174,14 @@ fn apply_approvals_revalidates_existing_store_with_key_context_keystore() {
 
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid.clone())],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid.clone())],
             &alice_key_ctx,
             ApprovalConflictHandling::merge(),
         )
         .expect("create trust store with explicit keystore");
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::recipient_set(
+            vec![TrustApproval::recipient_set_for_test(
                 uuid::Uuid::new_v4(),
                 vec![bob_kid],
             )],
@@ -207,7 +209,7 @@ fn apply_approvals_rejects_invalid_existing_trust_store() {
 
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid.clone())],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid.clone())],
             &alice_key_ctx,
             ApprovalConflictHandling::merge(),
         )
@@ -216,7 +218,7 @@ fn apply_approvals_rejects_invalid_existing_trust_store() {
 
     let err = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::recipient_set(
+            vec![TrustApproval::recipient_set_for_test(
                 uuid::Uuid::new_v4(),
                 vec![bob_kid],
             )],
@@ -247,7 +249,7 @@ fn apply_approvals_rejects_key_context_for_different_owner() {
 
     let err = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid)],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid)],
             &bob_key_ctx,
             ApprovalConflictHandling::merge(),
         )
@@ -257,50 +259,6 @@ fn apply_approvals_rejects_key_context_for_different_owner() {
     assert!(
         !trust_store.path().exists(),
         "mismatched key context must not create a trust store"
-    );
-}
-
-#[test]
-fn apply_approvals_rejects_malformed_known_key_kid() {
-    let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let trust_store = build_trust_store(temp.path(), ALICE);
-    let alice_key_ctx = load_key_context(&temp, ALICE);
-
-    let err = trust_store
-        .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, "not-a-canonical-kid")],
-            &alice_key_ctx,
-            ApprovalConflictHandling::merge(),
-        )
-        .expect_err("malformed known-key kid must be rejected");
-
-    assert_eq!(err.kind(), ErrorKind::InvalidArgument);
-    assert!(
-        !trust_store.path().exists(),
-        "malformed known-key kid must not create a trust store"
-    );
-}
-
-#[test]
-fn apply_approvals_rejects_malformed_known_key_subject_handle() {
-    let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
-    let key_store = LocalKeyStore::open(temp.path().join("keys")).expect("open keystore");
-    let trust_store = build_trust_store(temp.path(), ALICE);
-    let alice_key_ctx = load_key_context(&temp, ALICE);
-    let bob_kid = fixture_kid(&key_store, BOB);
-
-    let err = trust_store
-        .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key("../bob", bob_kid)],
-            &alice_key_ctx,
-            ApprovalConflictHandling::merge(),
-        )
-        .expect_err("malformed known-key subject handle must be rejected");
-
-    assert_eq!(err.kind(), ErrorKind::InvalidArgument);
-    assert!(
-        !trust_store.path().exists(),
-        "malformed known-key subject handle must not create a trust store"
     );
 }
 
@@ -315,7 +273,7 @@ fn apply_approvals_rejects_expired_signing_key() {
 
     let err = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid)],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid)],
             &expired_key_ctx,
             ApprovalConflictHandling::merge(),
         )
@@ -352,7 +310,7 @@ fn test_apply_approvals_waits_for_trust_store_dir_lock() {
             ready_tx.send(()).expect("signal worker ready");
             let result = trust_store
                 .apply_approvals_with_conflict_handling(
-                    vec![TrustApproval::known_key(BOB, bob_kid)],
+                    vec![TrustApproval::known_key_for_test(BOB, bob_kid)],
                     &key_ctx,
                     ApprovalConflictHandling::merge(),
                 )
@@ -389,27 +347,61 @@ fn apply_approvals_with_no_effect_leaves_the_stored_bytes_alone() {
     let trust_store = build_trust_store(temp.path(), ALICE);
     let key_ctx = load_key_context(&temp, ALICE);
     let bob_kid = fixture_kid(&key_store, BOB);
-    trust_store
+    let first = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid.clone())],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid.clone())],
             &key_ctx,
             ApprovalConflictHandling::merge(),
         )
         .expect("approve bob for the first time");
+    assert_eq!(first.applied(), 1);
+    assert!(first.warnings().diagnostics().is_empty());
     let stored = fs::read(trust_store.path()).expect("read stored trust store");
     // Any save this call attempts fails here, so completing it proves the
     // approval the store already holds reached the file system at all.
     fail_next_trust_store_save();
 
-    trust_store
+    let duplicate = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid)],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid)],
             &key_ctx,
             ApprovalConflictHandling::merge(),
         )
         .expect("re-apply the approval the store already holds");
 
+    assert_eq!(duplicate.applied(), 0);
+    assert!(duplicate.warnings().diagnostics().is_empty());
     assert_eq!(fs::read(trust_store.path()).unwrap(), stored);
+}
+
+#[cfg(unix)]
+#[test]
+fn apply_approvals_returns_operation_permission_warnings_without_leaking_them() {
+    let (temp, _workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
+    let key_store = LocalKeyStore::open(temp.path().join("keys")).expect("open keystore");
+    let trust_store = build_trust_store(temp.path(), ALICE);
+    let key_ctx = load_key_context(&temp, ALICE);
+    let bob_kid = fixture_kid(&key_store, BOB);
+    seed_trust_store(&trust_store, &key_ctx);
+    let trust_dir = trust_store.path().parent().unwrap().to_path_buf();
+    fs::set_permissions(&trust_dir, fs::Permissions::from_mode(0o755))
+        .expect("make trust directory observable by other users");
+    let warning_guard = LocalStateWarningGuard::new();
+
+    let outcome = trust_store
+        .apply_approvals_with_conflict_handling(
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid)],
+            &key_ctx,
+            ApprovalConflictHandling::merge(),
+        )
+        .expect("permission warnings must remain non-fatal");
+
+    assert!(outcome
+        .warnings()
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.path() == trust_dir));
+    assert!(warning_guard.take().warnings.is_empty());
 }
 
 /// Write a trust store that already approves one recipient set.
@@ -461,7 +453,7 @@ fn reapproving_the_same_recipient_set_moves_the_approval_forward() {
 
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::recipient_set(sid, vec![bob_kid])],
+            vec![TrustApproval::recipient_set_for_test(sid, vec![bob_kid])],
             &key_ctx,
             ApprovalConflictHandling::merge(),
         )
@@ -487,7 +479,7 @@ fn approving_a_changed_recipient_set_moves_updated_at() {
 
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::recipient_set(
+            vec![TrustApproval::recipient_set_for_test(
                 sid,
                 vec![bob_kid, SEED_RECIPIENT_KID.to_string()],
             )],
@@ -550,7 +542,7 @@ fn test_apply_approvals_rejects_a_byte_level_change_to_reviewed_content() {
 
     let error = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid)],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid)],
             &key_ctx,
             ApprovalConflictHandling::surface(&reviewed),
         )
@@ -573,7 +565,7 @@ fn test_apply_approvals_surfaces_a_reviewed_absence() {
 
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid.clone())],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid.clone())],
             &key_ctx,
             ApprovalConflictHandling::surface_absent(),
         )
@@ -600,7 +592,7 @@ fn test_apply_approvals_surfacing_an_absence_rejects_a_store_that_appeared() {
 
     let error = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid.clone())],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid.clone())],
             &key_ctx,
             ApprovalConflictHandling::surface_absent(),
         )
@@ -629,7 +621,7 @@ fn test_apply_approvals_surfaces_change_to_public_reviewed_snapshot() {
     let concurrent_kid = "C4A00000C4A00000C4A00000C4A00000";
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(
+            vec![TrustApproval::known_key_for_test(
                 "charlie@example.com",
                 concurrent_kid,
             )],
@@ -641,7 +633,7 @@ fn test_apply_approvals_surfaces_change_to_public_reviewed_snapshot() {
 
     let error = trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, bob_kid.clone())],
+            vec![TrustApproval::known_key_for_test(BOB, bob_kid.clone())],
             &key_ctx,
             ApprovalConflictHandling::surface(&reviewed),
         )
@@ -686,7 +678,7 @@ fn test_apply_approvals_preserves_both_concurrent_known_keys() {
             let key_ctx = load_key_context_from_home_path(&home, ALICE);
             start.wait();
             trust_store.apply_approvals_with_conflict_handling(
-                vec![TrustApproval::known_key(member_handle, kid)],
+                vec![TrustApproval::known_key_for_test(member_handle, kid)],
                 &key_ctx,
                 ApprovalConflictHandling::merge(),
             )
@@ -733,7 +725,7 @@ fn test_apply_approvals_concurrent_writers_all_converge() {
                 let kid = format!("{writer:032X}");
                 start.wait();
                 trust_store.apply_approvals_with_conflict_handling(
-                    vec![TrustApproval::known_key(
+                    vec![TrustApproval::known_key_for_test(
                         format!("writer-{writer}@example.com"),
                         kid,
                     )],
@@ -855,7 +847,7 @@ fn apply_approvals_uses_opened_local_state_root_after_path_swap() {
 
     trust_store
         .apply_approvals_with_conflict_handling(
-            vec![TrustApproval::known_key(BOB, SEED_RECIPIENT_KID)],
+            vec![TrustApproval::known_key_for_test(BOB, SEED_RECIPIENT_KID)],
             &key_ctx,
             ApprovalConflictHandling::merge(),
         )

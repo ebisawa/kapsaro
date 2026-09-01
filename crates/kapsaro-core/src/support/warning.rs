@@ -5,7 +5,9 @@
 //! Keeps ordered warning lists deduplicated and collects local state warnings.
 
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub(crate) fn push_unique_warning<T: PartialEq>(warnings: &mut Vec<T>, warning: T) {
     if !warnings.contains(&warning) {
@@ -74,14 +76,13 @@ pub(crate) struct LocalStateWarningBatch {
 
 /// The warnings held for one command and the distinct ones it could not hold.
 ///
-/// The turned-away warnings are kept by value beside the held ones so a capped
-/// report can say how much of the finding is missing instead of reading as the
-/// whole of it, and so a repeat of one already turned away is not counted
-/// again. That list carries the same cap: once it is full a further distinct
-/// warning goes uncounted.
+/// Turned-away warnings are kept by value so repeats remain deduplicated. A
+/// restored batch can only provide its missing-count lower bound, which is
+/// retained separately and combined conservatively with identified findings.
 struct LocalStateWarningSink {
     warnings: Vec<LocalStateWarning>,
     dropped: Vec<LocalStateWarning>,
+    dropped_floor: usize,
 }
 
 impl LocalStateWarningSink {
@@ -89,6 +90,42 @@ impl LocalStateWarningSink {
         Self {
             warnings: Vec::new(),
             dropped: Vec::new(),
+            dropped_floor: 0,
+        }
+    }
+
+    fn record(&mut self, warning: LocalStateWarning) {
+        if self.warnings.len() < MAX_LOCAL_STATE_WARNINGS {
+            push_unique_warning(&mut self.warnings, warning);
+            return;
+        }
+        if self.warnings.contains(&warning) || self.dropped.len() >= MAX_LOCAL_STATE_WARNINGS {
+            return;
+        }
+        push_unique_warning(&mut self.dropped, warning);
+    }
+
+    fn merge(&mut self, other: Self) {
+        self.dropped_floor = self
+            .dropped_floor
+            .max(other.dropped_floor)
+            .max(other.dropped.len());
+        for warning in other.warnings.into_iter().chain(other.dropped) {
+            self.record(warning);
+        }
+    }
+
+    fn restore_batch(&mut self, batch: LocalStateWarningBatch) {
+        self.dropped_floor = self.dropped_floor.max(batch.dropped);
+        for warning in batch.warnings {
+            self.record(warning);
+        }
+    }
+
+    fn into_batch(self) -> LocalStateWarningBatch {
+        LocalStateWarningBatch {
+            warnings: self.warnings,
+            dropped: self.dropped_floor.max(self.dropped.len()),
         }
     }
 }
@@ -113,15 +150,7 @@ thread_local! {
 /// A repeat is never a loss, so only a new warning past the cap is counted.
 pub(crate) fn record_local_state_warning(warning: LocalStateWarning) {
     LOCAL_STATE_WARNINGS.with(|sink| {
-        let sink = &mut *sink.borrow_mut();
-        if sink.warnings.len() < MAX_LOCAL_STATE_WARNINGS {
-            push_unique_warning(&mut sink.warnings, warning);
-            return;
-        }
-        if sink.warnings.contains(&warning) || sink.dropped.len() >= MAX_LOCAL_STATE_WARNINGS {
-            return;
-        }
-        push_unique_warning(&mut sink.dropped, warning);
+        sink.borrow_mut().record(warning);
     });
 }
 
@@ -133,11 +162,66 @@ pub(crate) fn record_local_state_warning(warning: LocalStateWarning) {
 pub(crate) fn take_local_state_warnings() -> LocalStateWarningBatch {
     LOCAL_STATE_WARNINGS.with(|sink| {
         let sink = &mut *sink.borrow_mut();
-        LocalStateWarningBatch {
-            warnings: std::mem::take(&mut sink.warnings),
-            dropped: std::mem::take(&mut sink.dropped).len(),
-        }
+        std::mem::replace(sink, LocalStateWarningSink::new()).into_batch()
     })
+}
+
+/// Return one completed operation's warnings to the current command sink.
+///
+/// A restored truncation count is a lower bound whose individual findings are
+/// unavailable, so it is combined with identified findings by taking the
+/// greater lower bound rather than assuming both sets are disjoint.
+pub(crate) fn restore_local_state_warnings(batch: LocalStateWarningBatch) {
+    LOCAL_STATE_WARNINGS.with(|sink| sink.borrow_mut().restore_batch(batch));
+}
+
+/// Isolates warnings recorded by one operation from the caller's warning sink.
+///
+/// A completed capture returns its own batch and restores the caller's sink.
+/// Dropping an unfinished capture merges its warnings back into that sink, so
+/// early returns and unwinding do not lose diagnostics. Captures are bound to
+/// their creating thread because the warning sink itself is thread-local.
+#[must_use = "warning captures must be held until the operation completes"]
+pub(crate) struct LocalStateWarningCapture {
+    previous: Option<LocalStateWarningSink>,
+    _thread_bound: PhantomData<Rc<()>>,
+}
+
+impl LocalStateWarningCapture {
+    pub(crate) fn new() -> Self {
+        let previous = LOCAL_STATE_WARNINGS
+            .with(|sink| std::mem::replace(&mut *sink.borrow_mut(), LocalStateWarningSink::new()));
+        Self {
+            previous: Some(previous),
+            _thread_bound: PhantomData,
+        }
+    }
+
+    pub(crate) fn finish(mut self) -> LocalStateWarningBatch {
+        let captured = self.restore_previous();
+        captured.into_batch()
+    }
+
+    fn restore_previous(&mut self) -> LocalStateWarningSink {
+        let previous = self
+            .previous
+            .take()
+            .expect("warning capture must restore its sink exactly once");
+        LOCAL_STATE_WARNINGS.with(|sink| std::mem::replace(&mut *sink.borrow_mut(), previous))
+    }
+}
+
+impl Drop for LocalStateWarningCapture {
+    fn drop(&mut self) {
+        let Some(previous) = self.previous.take() else {
+            return;
+        };
+        LOCAL_STATE_WARNINGS.with(|sink| {
+            let sink = &mut *sink.borrow_mut();
+            let captured = std::mem::replace(sink, previous);
+            sink.merge(captured);
+        });
+    }
 }
 
 /// Drop the recorded warnings without reporting them.

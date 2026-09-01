@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Trust review outcome types shared across app-layer orchestration.
-//! Keeps decision data separate from enforcement and review execution logic.
+//! Keeps decision data separate from service evaluation and review execution logic.
 
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::trust_store::{RecipientHandleHint, RecipientSetRecord};
@@ -107,10 +107,4 @@ impl ArtifactRecipientHandleHint {
             recipient_handle: hint.recipient_handle.clone(),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadRecipientKeyTrust {
-    pub outcome: RecipientTrustOutcome,
-    pub warnings: Vec<String>,
 }

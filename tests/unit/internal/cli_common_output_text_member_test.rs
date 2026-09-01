@@ -10,8 +10,6 @@ use crate::cli::common::output::member::view::{
     MemberListView, MemberShowView, MemberVerificationItemView, MemberVerificationResultsView,
 };
 use console::{colors_enabled, set_colors_enabled};
-use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
 use serde_json::json;
 use serial_test::serial;
 
@@ -257,6 +255,65 @@ fn test_format_member_approval_results_keeps_long_handle_and_message_inline() {
     assert!(lines.iter().any(|line| line == "Approved 0/1 members"));
 }
 
+#[test]
+fn test_format_member_approval_results_shows_verified_github_account_id() {
+    let view = MemberApprovalResultsView {
+        results: vec![MemberApprovalItemView {
+            member_handle: "bob@example.com",
+            kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1",
+            verified: true,
+            approved: true,
+            review_required: true,
+            message: "verified",
+            fingerprint: Some("SHA256:test"),
+            github_id: Some(42),
+            github_login: Some("octocat"),
+            github_binding_configured: true,
+        }],
+    };
+
+    let rendered = format_member_approval_results_lines(&view).join("\n");
+
+    assert!(rendered.contains("GitHub account     octocat (id: 42, verified)"));
+}
+
+#[test]
+fn test_format_member_approval_results_shows_verified_github_id_without_login() {
+    let view = MemberApprovalResultsView {
+        results: vec![MemberApprovalItemView {
+            member_handle: "bob@example.com",
+            kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1",
+            verified: true,
+            approved: true,
+            review_required: true,
+            message: "verified",
+            fingerprint: Some("SHA256:test"),
+            github_id: Some(42),
+            github_login: None,
+            github_binding_configured: true,
+        }],
+    };
+
+    let rendered = format_member_approval_results_lines(&view).join("\n");
+
+    assert!(rendered.contains("GitHub account     id: 42 (verified)"));
+}
+
+#[test]
+fn test_format_member_approval_results_distinguishes_unverified_and_unconfigured() {
+    let mut configured = build_member_approval_item_view("bob@example.com", "not verified");
+    configured.github_binding_configured = true;
+    let unconfigured = build_member_approval_item_view("carol@example.com", "manual review");
+    let view = MemberApprovalResultsView {
+        results: vec![configured, unconfigured],
+    };
+
+    let rendered = format_member_approval_results_lines(&view).join("\n");
+
+    assert!(rendered.contains("GitHub account     not verified"));
+    assert!(rendered.contains("GitHub account     not configured"));
+}
+
 fn build_member_show_view(
     github_claim: Option<MemberGithubClaimView<'static>>,
 ) -> MemberShowView<'static> {
@@ -279,23 +336,6 @@ fn build_member_approval_item_view<'a>(
     member_handle: &'a str,
     message: &'a str,
 ) -> MemberApprovalItemView<'a> {
-    let result = MemberApprovalResult {
-        member_handle: member_handle.to_string(),
-        kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1".to_string(),
-        verified: false,
-        approved: false,
-        review_required: true,
-        already_known: false,
-        message: message.to_string(),
-        fingerprint: Some("SHA256:test".to_string()),
-        github_id: None,
-        github_login: None,
-        github_binding_configured: false,
-        attestor_pub: Some("ssh-ed25519 AAAA test".to_string()),
-        verified_github: None,
-    };
-    let review_candidate = TrustApprovalCandidate::from(&result);
-
     MemberApprovalItemView {
         member_handle,
         kid: "A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1",
@@ -307,6 +347,5 @@ fn build_member_approval_item_view<'a>(
         github_id: None,
         github_login: None,
         github_binding_configured: false,
-        review_candidate,
     }
 }

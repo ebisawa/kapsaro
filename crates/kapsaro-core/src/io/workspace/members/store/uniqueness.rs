@@ -4,7 +4,7 @@
 //! Uniqueness of the key identifiers the workspace members carry.
 //! Reads every member document through its directory descriptor to find a kid claimed twice.
 
-use super::super::paths::{open_optional_members_dir, status_dir_name, MemberStatus};
+use super::super::paths::{status_dir_name, MemberStatus};
 use super::load::{load_member_document_names_at, load_verified_member_file_at};
 use crate::support::fs::relative::DirectoryFd;
 use crate::support::kid::format_kid_display_lossy;
@@ -67,25 +67,6 @@ fn build_saved_member_candidate(
         status,
     };
     (candidate, ignored_existing)
-}
-
-pub fn ensure_workspace_member_kid_uniqueness(workspace_path: &Path) -> Result<()> {
-    check_workspace_member_kid_uniqueness(
-        workspace_path,
-        &[],
-        &[],
-        &[MemberStatus::Active, MemberStatus::Incoming],
-    )
-}
-
-fn check_workspace_member_kid_uniqueness(
-    workspace_path: &Path,
-    candidates: &[MemberKidCandidate],
-    ignored_existing: &[(MemberStatus, String)],
-    existing_statuses: &[MemberStatus],
-) -> Result<()> {
-    let existing = load_member_kid_candidates(workspace_path, existing_statuses, ignored_existing)?;
-    check_member_kid_candidates(&existing, candidates)
 }
 
 pub(crate) fn check_workspace_member_kid_uniqueness_in_open_dirs<A, I>(
@@ -174,25 +155,6 @@ where
             kid: member.protected.kid.clone(),
             status,
         });
-    }
-    Ok(candidates)
-}
-
-fn load_member_kid_candidates(
-    workspace_path: &Path,
-    statuses: &[MemberStatus],
-    ignored_existing: &[(MemberStatus, String)],
-) -> Result<Vec<MemberKidCandidate>> {
-    let mut candidates = Vec::new();
-    for status in statuses {
-        let Some(dir) = open_optional_members_dir(workspace_path, *status)? else {
-            continue;
-        };
-        candidates.extend(load_member_kid_candidates_from_open_dir(
-            &dir,
-            *status,
-            ignored_existing,
-        )?);
     }
     Ok(candidates)
 }

@@ -3,7 +3,8 @@
 
 //! trust purge CLI handler.
 
-use crate::cli::common::command::{resolve_options, resolve_write_execution_input};
+use crate::cli::common::context::CliContext;
+use crate::cli::common::key_context::load_trust_command_session;
 use crate::cli::common::output::text::trust::{
     print_purge_cancelled, print_recipient_set_purge_reset_to_empty,
     print_trust_purge_reset_to_empty,
@@ -14,13 +15,13 @@ use crate::cli::common::output::trust::{
 };
 use crate::cli::common::prompt::confirm_destructive_action_or_cancel;
 use crate::cli::common::trust::{
-    run_with_execution_trust_store_reset_without_retry, TrustStoreResetOutcome,
+    run_with_trust_command_session_reset_without_retry, TrustStoreResetOutcome,
 };
-use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::trust::management::{
+use kapsaro_core::api::trust::management::{
     execute_purge, execute_recipient_set_purge, list_purge_candidates,
     list_recipient_set_purge_candidates, ReviewedPurgeCandidates,
 };
+use kapsaro_core::api::trust::TrustCommandSession;
 use kapsaro_core::Error;
 use time::OffsetDateTime;
 
@@ -53,10 +54,13 @@ pub(crate) fn run_recipients(args: PurgeArgs) -> Result<(), Error> {
 /// keys and recipient sets share this flow without a marker type per variant.
 fn run_purge_flow<Item, Outcome>(
     args: PurgeArgs,
-    list: impl Fn(&ExecutionContext, OffsetDateTime) -> Result<ReviewedPurgeCandidates<Item>, Error>,
+    list: for<'a> fn(
+        &'a TrustCommandSession,
+        OffsetDateTime,
+    ) -> Result<ReviewedPurgeCandidates<'a, Item>, Error>,
     // Shows the candidates and reports whether the flow should continue.
-    preview: impl Fn(&ReviewedPurgeCandidates<Item>) -> bool,
-    execute: impl Fn(&ExecutionContext, &ReviewedPurgeCandidates<Item>) -> Result<Outcome, Error>,
+    preview: for<'a> fn(&ReviewedPurgeCandidates<'a, Item>) -> bool,
+    execute: for<'a> fn(&ReviewedPurgeCandidates<'a, Item>) -> Result<Outcome, Error>,
     // Reports that a trust store reset left nothing to purge.
     //
     // A purge count is the wrong thing to print here: the store was discarded
@@ -66,11 +70,12 @@ fn run_purge_flow<Item, Outcome>(
     report: impl Fn(&Outcome),
 ) -> Result<(), Error> {
     let older_than = parse_duration_to_threshold(&args.older_than)?;
-    let options = resolve_options(&args.common);
-    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
+    let context = CliContext::resolve(&args.common)?;
+    let session =
+        load_trust_command_session(&context, &args.common, args.member.member_handle.clone())?;
 
-    let listed = run_with_execution_trust_store_reset_without_retry(&execution, || {
-        list(&execution, older_than)
+    let listed = run_with_trust_command_session_reset_without_retry(&session, || {
+        list(&session, older_than)
     })?;
     let candidates = match listed {
         TrustStoreResetOutcome::Completed(candidates) => candidates,
@@ -89,7 +94,7 @@ fn run_purge_flow<Item, Outcome>(
 
     // The write-back is bound to the candidates that were just shown, so it
     // reports a store that moved as a conflict and never asks to delete one.
-    report(&execute(&execution, &candidates)?);
+    report(&execute(&candidates)?);
     Ok(())
 }
 

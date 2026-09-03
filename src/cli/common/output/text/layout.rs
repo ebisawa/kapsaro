@@ -4,8 +4,8 @@
 //! Text layout helpers for CLI renderers.
 //! Preserves explicit line breaks without applying terminal-width wrapping.
 
+use crate::cli::common::presentation::{format_kid_display, format_kid_display_lossy};
 use console::strip_ansi_codes;
-use kapsaro_core::cli_api::presentation::kid::{format_kid_display, format_kid_display_lossy};
 
 const PAIR_SEPARATOR: &str = "  ";
 

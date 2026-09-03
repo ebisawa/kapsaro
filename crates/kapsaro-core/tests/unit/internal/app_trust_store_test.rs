@@ -4,25 +4,24 @@
 //! Tests trust-store loading behavior for partially initialized local state.
 //! Verifies absent trust documents do not require an existing keystore.
 
-use crate::api::key::KeyContext;
-use crate::app::context::execution::ExecutionContext;
-use crate::app::trust::store::{
-    execute_trust_store_mutation_with_execution, execute_trust_store_mutation_with_prepare_hook,
-    load_optional_trust_store, trust_store_or_empty, TrustStoreWriteBinding,
-};
 use crate::app_test_utils::{
-    build_test_command_options, build_test_execution_context, load_test_trust_store,
+    build_test_command_options, build_test_trust_command_session, load_test_trust_store,
     rotate_active_key, save_test_trust_store_signed_by_active_key,
 };
-use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::feature::trust::signature::sign_trust_store;
-use crate::feature::trust::store_mutation::{TrustStoreMutation, TrustStoreMutationMode};
+use crate::feature::trust::store_mutation::TrustStoreMutation;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::trust::store::{
+    execute_trust_store_mutation_with_session,
+    execute_trust_store_mutation_with_session_prepare_hook, load_optional_trust_store,
+    trust_store_or_empty,
+};
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{open_optional_child_dir, DirectoryScope};
+use crate::test_support::storage::trust::store::save_trust_store;
 use crate::test_utils::create_local_state_dir;
 use crate::test_utils::{
     member_handle, setup_member_key_context, setup_test_keystore_from_fixtures,
@@ -184,57 +183,6 @@ fn test_load_optional_trust_store_reports_unsafe_keystore_path() {
     assert!(!message.contains(&trust_path.display().to_string()));
 }
 
-#[test]
-fn test_require_execution_keystore_reports_shared_missing_rule() {
-    let home = setup_test_keystore_from_fixtures(OWNER);
-    let owner = MemberHandle::try_from(OWNER).unwrap();
-    let key_ctx = setup_member_key_context(&home, OWNER, None).with_local_key_access(None, None);
-    let execution = ExecutionContext::from_test_parts(
-        owner,
-        KeyContext::from_inner(key_ctx),
-        None,
-        Some(home.path().to_path_buf()),
-    )
-    .unwrap();
-
-    let error =
-        match super::require_execution_keystore(&execution, || Ok(home.path().to_path_buf())) {
-            Err(error) => error,
-            Ok(_) => panic!("an execution context without local keystore access must fail"),
-        };
-
-    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
-    assert_eq!(error.recovery(), Some("E_LOCAL_KEYSTORE_MISSING"));
-    assert!(error
-        .format_user_message()
-        .contains(&home.path().join("keys").display().to_string()));
-    assert!(error.format_user_message().contains(OWNER));
-    assert!(error.format_user_message().contains("--home"));
-    assert!(error.format_user_message().contains("KAPSARO_HOME"));
-}
-
-#[test]
-fn test_require_execution_keystore_reports_shared_rule_without_fixed_home() {
-    let home = setup_test_keystore_from_fixtures(OWNER);
-    let owner = MemberHandle::try_from(OWNER).unwrap();
-    let key_ctx = setup_member_key_context(&home, OWNER, None).with_local_key_access(None, None);
-    let execution =
-        ExecutionContext::from_test_parts(owner, KeyContext::from_inner(key_ctx), None, None)
-            .unwrap();
-
-    let error =
-        match super::require_execution_keystore(&execution, || Ok(home.path().to_path_buf())) {
-            Err(error) => error,
-            Ok(_) => panic!("an execution context without local keystore access must fail"),
-        };
-
-    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
-    assert_eq!(error.recovery(), Some("E_LOCAL_KEYSTORE_MISSING"));
-    assert!(error
-        .format_user_message()
-        .contains(&home.path().join("keys").display().to_string()));
-}
-
 fn save_active_key_signed_trust_store(home: &TempDir) {
     save_test_trust_store_signed_by_active_key(home, OWNER, STORED_AT);
 }
@@ -273,15 +221,11 @@ fn add_known_key_mutation(
 fn test_commit_verifies_with_the_keys_read_before_the_trust_lock() {
     let home = setup_test_keystore_from_fixtures(OWNER);
     let signer_kid = save_test_trust_store_signed_by_active_key(&home, OWNER, STORED_AT);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
+    let session = build_test_trust_command_session(&home, OWNER);
     let signer_key_dir = home.path().join("keys").join(OWNER).join(&signer_kid);
 
-    execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
+    execute_trust_store_mutation_with_session_prepare_hook(
+        &session,
         add_known_key_mutation,
         move || fs::remove_dir_all(&signer_key_dir).unwrap(),
     )
@@ -291,62 +235,6 @@ fn test_commit_verifies_with_the_keys_read_before_the_trust_lock() {
         read_stored_trust_store(&home)["protected"]["known_keys"][0]["kid"],
         OTHER_KID
     );
-}
-
-/// A merged write takes whatever is stored when it locks. A store another
-/// writer created after this one observed its absence is observed again, so the
-/// approval lands in that writer's document instead of costing a re-run. The
-/// stored `created_at` is the other writer's, which is what says the document
-/// was merged into rather than replaced by a freshly built one.
-#[test]
-fn test_merged_mutation_merges_into_a_store_created_after_the_snapshot() {
-    let home = setup_test_keystore_from_fixtures(OWNER);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
-
-    execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::CreateIfMissing,
-        TrustStoreWriteBinding::MergedApproval,
-        add_known_key_mutation,
-        || {
-            save_test_trust_store_signed_by_active_key(&home, OWNER, STORED_AT);
-        },
-    )
-    .expect("a store another writer created is merged into");
-
-    let stored = read_stored_trust_store(&home);
-    assert_eq!(stored["protected"]["created_at"], STORED_AT);
-    assert_eq!(stored["protected"]["known_keys"][0]["kid"], OTHER_KID);
-}
-
-/// The same for a document another writer re-signed with a rotated key: the key
-/// its signature names is read under the member lock before the trust lock is
-/// taken again, so the merged approval reaches the re-signed content.
-#[test]
-fn test_merged_mutation_merges_into_a_document_resigned_after_the_snapshot() {
-    let home = setup_test_keystore_from_fixtures(OWNER);
-    save_test_trust_store_signed_by_active_key(&home, OWNER, STORED_AT);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
-
-    execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::CreateIfMissing,
-        TrustStoreWriteBinding::MergedApproval,
-        add_known_key_mutation,
-        || {
-            rotate_active_key(home.path(), OWNER);
-            save_test_trust_store_signed_by_active_key(&home, OWNER, STORED_AT);
-        },
-    )
-    .expect("a document another writer re-signed is merged into");
-
-    let stored = read_stored_trust_store(&home);
-    assert_eq!(stored["protected"]["created_at"], STORED_AT);
-    assert_eq!(stored["protected"]["known_keys"][0]["kid"], OTHER_KID);
 }
 
 fn read_stored_trust_store(home: &TempDir) -> serde_json::Value {
@@ -360,16 +248,9 @@ fn test_serialized_mutation_resigns_without_touching_updated_at() {
     save_active_key_signed_trust_store(&home);
     let rotated_kid = rotate_active_key(home.path(), OWNER);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
+    let session = build_test_trust_command_session(&home, OWNER);
 
-    execute_trust_store_mutation_with_execution(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
-        unchanged_mutation,
-    )
-    .unwrap();
+    execute_trust_store_mutation_with_session(&session, unchanged_mutation).unwrap();
 
     let stored = load_test_trust_store(&options, OWNER)
         .unwrap()
@@ -387,17 +268,10 @@ fn test_reviewed_mutation_resigns_without_touching_updated_at() {
     save_active_key_signed_trust_store(&home);
     let rotated_kid = rotate_active_key(home.path(), OWNER);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
+    let session = build_test_trust_command_session(&home, OWNER);
 
-    execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
-        unchanged_mutation,
-        || {},
-    )
-    .unwrap();
+    execute_trust_store_mutation_with_session_prepare_hook(&session, unchanged_mutation, || {})
+        .unwrap();
 
     let stored = load_test_trust_store(&options, OWNER)
         .unwrap()
@@ -415,17 +289,9 @@ fn test_unchanged_mutation_by_the_signing_key_leaves_the_stored_bytes_alone() {
     save_active_key_signed_trust_store(&home);
     let path = get_trust_store_file_path(home.path(), &member_handle(OWNER));
     let before = fs::read(&path).unwrap();
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
+    let session = build_test_trust_command_session(&home, OWNER);
 
-    execute_trust_store_mutation_with_execution(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
-        unchanged_mutation,
-    )
-    .unwrap();
+    execute_trust_store_mutation_with_session(&session, unchanged_mutation).unwrap();
 
     assert_eq!(fs::read(&path).unwrap(), before);
 }
@@ -438,15 +304,8 @@ fn test_missing_signer_key_error_offers_the_recovery_route_first() {
     save_active_key_signed_trust_store(&home);
     let rotated_kid = rotate_active_key(home.path(), OWNER);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, OWNER, None);
-    execute_trust_store_mutation_with_execution(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
-        unchanged_mutation,
-    )
-    .unwrap();
+    let session = build_test_trust_command_session(&home, OWNER);
+    execute_trust_store_mutation_with_session(&session, unchanged_mutation).unwrap();
     // The mutation above handed the signature to the rotated key, so taking
     // that key away is what leaves the stored document without a signer.
     fs::remove_dir_all(

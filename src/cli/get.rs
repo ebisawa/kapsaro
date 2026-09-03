@@ -5,21 +5,15 @@
 
 use clap::Args;
 
-use std::collections::BTreeMap;
-use std::path::Path;
-
-use crate::cli::common::command::{resolve_options_with_read_trust_allowances, ReadCommandLabels};
-use crate::cli::common::kv_read::{KvReadReview, KvReadSession};
+use crate::cli::common::command::ReadCommandLabels;
+use crate::cli::common::kv_read::{KvReadSession, NonMemberReviewMode};
 use crate::cli::common::output::kv::{print_kv_read_result, KvReadResult};
+use crate::cli::common::presentation::format_path_relative_to_cwd;
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, KvStoreNameOption, MemberHandleOption,
     SigningOutputOptions,
 };
-use kapsaro_core::api::kv::KvReadOperation;
-use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::cli_api::app::errors::build_kv_key_not_found_error;
-use kapsaro_core::cli_api::app::kv::query::evaluate_kv_read_trust_plan;
-use kapsaro_core::cli_api::app::trust::GetPolicy;
+use kapsaro_core::api::kv::{is_missing_key_error, KvReadOperation};
 use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
@@ -55,21 +49,28 @@ pub(crate) struct GetArgs {
 pub(crate) fn run(args: GetArgs) -> Result<()> {
     let read_mode = resolve_get_read_mode(args.all, args.key.as_deref())?;
     let session = open_get_session(&args)?;
-    let kv_map = session.read(
-        ReadCommandLabels {
-            context: "get signer",
-            subject: "signer",
-            allow_non_member: session.allow_non_member(),
-        },
-        "KV get authorization",
-        evaluate_kv_read_trust_plan::<GetPolicy>,
-        |review| {
-            Ok(KvReadResult {
-                values: decrypt_requested_values(review, read_mode, session.artifact_path())?,
-                disclosed: review.authorize(KvReadOperation::List)?.list_entry_keys()?,
-            })
-        },
-    )?;
+    let operation = match read_mode {
+        KvReadMode::All => KvReadOperation::Entries,
+        KvReadMode::Single(key) => KvReadOperation::Entry(key.to_string()),
+    };
+    let result = session
+        .authorize(
+            operation,
+            ReadCommandLabels {
+                context: "get signer",
+                allow_non_member: session.allow_non_member(),
+            },
+        )?
+        .into_value()
+        .get_result()
+        .map_err(|error| match read_mode {
+            KvReadMode::Single(key) => {
+                annotate_missing_key_error(error, session.artifact_path(), key)
+            }
+            KvReadMode::All => error,
+        })?;
+    let (values, disclosed) = result.into_parts();
+    let kv_map = KvReadResult { values, disclosed };
 
     print_kv_read_result(
         &kv_map,
@@ -79,36 +80,25 @@ pub(crate) fn run(args: GetArgs) -> Result<()> {
     )
 }
 
+fn annotate_missing_key_error(error: Error, input_path: &std::path::Path, key: &str) -> Error {
+    if !is_missing_key_error(&error, key) {
+        return error;
+    }
+    Error::build_not_found_error(format!(
+        "{} in {}",
+        error.format_user_message(),
+        format_path_relative_to_cwd(input_path)
+    ))
+}
+
 fn open_get_session(args: &GetArgs) -> Result<KvReadSession> {
-    let options = resolve_options_with_read_trust_allowances(
+    KvReadSession::open(
         &args.common,
         args.allow_expired_key.allow_expired_key,
-        args.allow_non_member.allow_non_member,
-    )?;
-    KvReadSession::open(
-        options,
+        NonMemberReviewMode::Configured(args.allow_non_member.allow_non_member),
         args.store.name.as_deref(),
         args.member.member_handle.clone(),
     )
-}
-
-fn decrypt_requested_values(
-    review: &KvReadReview<'_>,
-    read_mode: KvReadMode<'_>,
-    artifact_path: &Path,
-) -> Result<BTreeMap<String, SecretString>> {
-    match read_mode {
-        KvReadMode::All => review
-            .authorize(KvReadOperation::Entries)?
-            .decrypt_entries(),
-        KvReadMode::Single(key) => {
-            let value = review
-                .authorize(KvReadOperation::Entry(key.to_string()))?
-                .decrypt_entry()
-                .map_err(|error| build_kv_key_not_found_error(error, artifact_path, key))?;
-            Ok(BTreeMap::from([(key.to_string(), value)]))
-        }
-    }
 }
 
 #[derive(Clone, Copy)]

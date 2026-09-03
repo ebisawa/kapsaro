@@ -3,13 +3,13 @@
 
 use std::collections::HashMap;
 
-use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::content::KvEncContent;
 use crate::format::schema::document::parse_kv_signature_token;
 use crate::format::token::TokenCodec;
+use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures,

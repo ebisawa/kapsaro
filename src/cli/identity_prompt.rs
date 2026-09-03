@@ -3,12 +3,11 @@
 
 //! Interactive identity and registration prompts for CLI commands.
 
+use crate::cli::common::context::CliContext;
+use crate::cli::common::presentation as validation;
 use crate::cli::common::prompt::prompt_yes_no;
 use dialoguer::{Input, Select};
-use kapsaro_core::cli_api::app::context::identity::resolve_github_user_input;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::context::ssh::SshKeyCandidateView;
-use kapsaro_core::cli_api::presentation::validation;
+use kapsaro_core::api::ssh::SshKeyCandidateView;
 use kapsaro_core::{Error, Result};
 use std::io::IsTerminal;
 
@@ -108,15 +107,18 @@ pub(crate) fn prompt_github_user() -> Result<Option<String>> {
     }
 }
 
-pub(crate) fn resolve_key_generation_github_user(
+pub(crate) fn resolve_cli_key_generation_github_user(
     needs_new_key: bool,
     github_user: Option<String>,
-    options: &CommonCommandOptions,
+    context: &CliContext,
 ) -> Result<Option<String>> {
+    if !needs_new_key {
+        return Ok(None);
+    }
+    let resolved = context.github_user(github_user)?;
     resolve_key_generation_github_user_with_prompt(
-        needs_new_key,
-        github_user,
-        options,
+        true,
+        resolved,
         is_prompt_available(),
         prompt_github_user,
     )
@@ -124,8 +126,7 @@ pub(crate) fn resolve_key_generation_github_user(
 
 pub(crate) fn resolve_key_generation_github_user_with_prompt<F>(
     needs_new_key: bool,
-    github_user: Option<String>,
-    options: &CommonCommandOptions,
+    resolved: Option<String>,
     prompt_available: bool,
     prompt: F,
 ) -> Result<Option<String>>
@@ -135,8 +136,7 @@ where
     if !needs_new_key {
         return Ok(None);
     }
-
-    match resolve_github_user_input(github_user, options)? {
+    match resolved {
         Some(github_user) => Ok(Some(github_user)),
         None if prompt_available => validate_prompt_github_user(prompt()?),
         None => Ok(None),

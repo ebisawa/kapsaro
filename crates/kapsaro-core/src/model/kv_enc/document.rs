@@ -43,7 +43,6 @@ pub struct KvEncDocument {
     pub wrap: KvWrap,
     pub wrap_token: String,
     pub entries: Vec<KvEncEntry>,
-    pub signature_token: String,
     pub signature: KvFileSignature,
 }
 
@@ -54,7 +53,6 @@ impl KvEncDocument {
         wrap: KvWrap,
         wrap_token: String,
         entries: Vec<KvEncEntry>,
-        signature_token: String,
         signature: KvFileSignature,
     ) -> Self {
         Self {
@@ -63,7 +61,6 @@ impl KvEncDocument {
             wrap,
             wrap_token,
             entries,
-            signature_token,
             signature,
         }
     }
@@ -91,10 +88,6 @@ impl KvEncDocument {
 
     pub fn entry(&self, key: &str) -> Option<&KvEncEntry> {
         self.entries.iter().find(|entry| entry.key() == key)
-    }
-
-    pub fn signature_token(&self) -> &str {
-        &self.signature_token
     }
 
     pub fn signature(&self) -> &KvFileSignature {

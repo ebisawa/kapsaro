@@ -7,8 +7,8 @@ use std::path::Path;
 
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::text::layout::LineTarget;
-use kapsaro_core::cli_api::app::registration::types::RegistrationMode;
-use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use crate::cli::common::presentation::format_path_relative_to_cwd;
+use kapsaro_core::api::registration::types::RegistrationMode;
 
 pub(crate) fn print_created_workspace_summary(workspace_path: &Path) {
     layout::print_lines(

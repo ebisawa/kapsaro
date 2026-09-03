@@ -8,15 +8,15 @@ use crate::app_test_utils::{
     build_test_private_key_document, build_test_public_key_document, OTHER_TEST_KEY_SIGNATURE,
     TEST_KEY_SIGNATURE,
 };
-use crate::cli_api::test_support::storage::keystore::storage::{
-    list_kids, load_private_key, load_public_key, save_key_pair_atomic,
-};
 use crate::io::keystore::access::{
     set_key_directory_open_hook, set_private_key_checked_hook, KeystoreAccess,
     PublicKeySnapshotEntry,
 };
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::private_key::PrivateKey;
+use crate::test_support::storage::keystore::storage::{
+    list_kids, load_private_key, load_public_key, save_key_pair_atomic,
+};
 use crate::test_utils::save_public_key;
 use crate::test_utils::TEST_MEMBER_HANDLE;
 use crate::test_utils::{

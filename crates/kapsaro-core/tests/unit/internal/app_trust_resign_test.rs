@@ -6,13 +6,13 @@
 
 use std::fs;
 
-use crate::app::trust::resign::resign_trust_store_command;
 use crate::app_test_utils::{
-    build_test_command_options, build_test_execution_context, load_test_trust_store,
+    build_test_command_options, build_test_trust_command_session, load_test_trust_store,
     rotate_active_key, save_test_trust_store_signed_by_active_key,
 };
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::Kid;
+use crate::service::trust::resign::resign_trust_store_command;
 use crate::test_utils::{member_handle, setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE};
 use crate::ErrorKind;
 use tempfile::TempDir;
@@ -40,9 +40,9 @@ fn test_resign_moves_the_signature_to_the_active_key() {
     let previous_kid = save_signed_trust_store(&home);
     let rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = resign_trust_store_command(&options, &execution).unwrap();
+    let result = resign_trust_store_command(&session).unwrap();
 
     assert!(result.resigned);
     assert_eq!(result.owner_handle, ALICE_MEMBER_HANDLE);
@@ -64,10 +64,9 @@ fn test_resign_leaves_a_store_already_signed_by_the_active_key_untouched() {
     let signer_kid = save_signed_trust_store(&home);
     let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
     let before = fs::read(&path).unwrap();
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = resign_trust_store_command(&options, &execution).unwrap();
+    let result = resign_trust_store_command(&session).unwrap();
 
     assert!(!result.resigned);
     assert_eq!(result.previous_signer_kid, signer_kid);
@@ -81,10 +80,9 @@ fn test_resign_refuses_a_trust_store_that_does_not_verify() {
     save_signed_trust_store(&home);
     invalidate_signature(&home);
     rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let error = resign_trust_store_command(&options, &execution)
+    let error = resign_trust_store_command(&session)
         .expect_err("content that fails verification must not be re-signed");
 
     assert_eq!(error.kind(), ErrorKind::Crypto);
@@ -107,10 +105,9 @@ fn test_resign_reports_a_signer_key_the_keystore_no_longer_holds() {
             .join("public.json"),
     )
     .unwrap();
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let error = resign_trust_store_command(&options, &execution)
+    let error = resign_trust_store_command(&session)
         .expect_err("a store whose signer public key is gone cannot be re-signed");
     let message = error.format_user_message();
 
@@ -123,11 +120,10 @@ fn test_resign_reports_a_signer_key_the_keystore_no_longer_holds() {
 #[test]
 fn test_resign_reports_an_absent_trust_store() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let error = resign_trust_store_command(&options, &execution)
-        .expect_err("there is no trust store to re-sign");
+    let error =
+        resign_trust_store_command(&session).expect_err("there is no trust store to re-sign");
 
     assert_eq!(error.kind(), ErrorKind::NotFound);
 }

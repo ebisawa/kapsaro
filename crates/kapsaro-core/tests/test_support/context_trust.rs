@@ -4,24 +4,24 @@
 //! Trust store setup and readback for application-layer tests.
 //! Opens the local state directory a test named and verifies the stored document.
 
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::store::load_optional_trust_store;
-use crate::cli_api::test_support::storage::trust::store::save_trust_store;
+use crate::app_test_utils::TestCommandOptions;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::feature::trust::store_mutation::TrustStoreState;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::MemberHandle;
 use crate::model::trust_store::{RecipientSetRecord, TrustStoreProtected};
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::trust::store::load_optional_trust_store;
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{open_optional_child_dir, DirectoryScope};
+use crate::test_support::storage::trust::store::save_trust_store;
 use crate::test_utils::{member_handle, setup_member_key_context};
 use crate::Result;
 use tempfile::TempDir;
 
 /// Read back the trust store a command wrote under one local state directory.
 pub(crate) fn load_test_trust_store(
-    options: &CommonCommandOptions,
+    options: &TestCommandOptions,
     owner_handle: &str,
 ) -> Result<Option<TrustStoreState>> {
     let base = AnchoredDir::open(

@@ -5,20 +5,20 @@
 
 use super::{build_ssh_child_env, remove_ssh_agent_socket_from_child};
 use crate::io::process::set_child_env_os;
-use crate::io::ssh::agent::socket::resolve_agent_socket_path;
 use crate::io::ssh::SshError;
 use crate::{Error, Result};
 use std::ffi::OsStr;
 use std::io;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::string::FromUtf8Error;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) enum AgentSocketPolicy {
     Disabled,
-    Optional,
-    Required,
+    Optional(Option<PathBuf>),
+    Required(Option<PathBuf>),
 }
 
 pub(super) struct SshCommandRunner {
@@ -38,17 +38,23 @@ impl SshCommandRunner {
         }
     }
 
-    pub(super) fn optional_agent(program: impl Into<String>) -> Self {
+    pub(super) fn optional_agent(
+        program: impl Into<String>,
+        agent_socket: Option<PathBuf>,
+    ) -> Self {
         Self {
             program: program.into(),
-            agent_socket_policy: AgentSocketPolicy::Optional,
+            agent_socket_policy: AgentSocketPolicy::Optional(agent_socket),
         }
     }
 
-    pub(super) fn required_agent(program: impl Into<String>) -> Self {
+    pub(super) fn required_agent(
+        program: impl Into<String>,
+        agent_socket: Option<PathBuf>,
+    ) -> Self {
         Self {
             program: program.into(),
-            agent_socket_policy: AgentSocketPolicy::Required,
+            agent_socket_policy: AgentSocketPolicy::Required(agent_socket),
         }
     }
 
@@ -111,22 +117,31 @@ impl SshCommandRunner {
     /// disagreeing and let the operator's agent through.
     fn command(&self) -> Result<Command> {
         let mut command = Command::new(&self.program);
-        match self.agent_socket_policy {
+        match &self.agent_socket_policy {
             AgentSocketPolicy::Disabled => {
                 set_child_env_os(&mut command, &build_ssh_child_env(None));
                 remove_ssh_agent_socket_from_child(&mut command);
             }
-            AgentSocketPolicy::Optional => {
-                let agent_socket = resolve_agent_socket_path().ok();
+            AgentSocketPolicy::Optional(agent_socket) => {
                 set_child_env_os(&mut command, &build_ssh_child_env(agent_socket.as_deref()));
+                if agent_socket.is_none() {
+                    remove_ssh_agent_socket_from_child(&mut command);
+                }
             }
-            AgentSocketPolicy::Required => {
-                let agent_socket = resolve_agent_socket_path()?;
-                set_child_env_os(&mut command, &build_ssh_child_env(Some(&agent_socket)));
+            AgentSocketPolicy::Required(Some(agent_socket)) => {
+                set_child_env_os(&mut command, &build_ssh_child_env(Some(agent_socket)));
             }
+            AgentSocketPolicy::Required(None) => return Err(build_missing_agent_socket_error()),
         }
         Ok(command)
     }
+}
+
+fn build_missing_agent_socket_error() -> Error {
+    SshError::build_operation_failed_error(
+        "SSH agent socket was not resolved before starting the operation",
+    )
+    .into()
 }
 
 pub(super) fn decode_lossy(bytes: &[u8]) -> String {

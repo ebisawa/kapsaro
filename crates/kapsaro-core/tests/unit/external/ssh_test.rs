@@ -1,10 +1,15 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for SSH public key fingerprints.
+//! Unit tests for the public SSH resolution and fingerprint contracts.
 //! Agent framing and SSHSIG parsing are covered by the internal test tree.
 
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use kapsaro_core::api::ssh::{
+    build_ssh_signing_context, resolve_ssh_agent_socket, SshSigningInputs, SshSigningMethod,
+};
+use kapsaro_core::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// The fingerprint is what users compare out of band when approving a key, so
 /// it has to agree with what ssh-keygen prints rather than merely be stable.
@@ -104,4 +109,63 @@ fn test_comment_excluded_from_fingerprint() {
     let fpr3 = result3.unwrap();
     assert_eq!(fpr1, fpr2);
     assert_eq!(fpr2, fpr3);
+}
+
+#[test]
+fn test_resolve_ssh_agent_socket_prefers_explicit_home_config() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let ssh_dir = temp.path().join(".ssh");
+    std::fs::create_dir_all(&ssh_dir).unwrap();
+    std::fs::write(
+        ssh_dir.join("config"),
+        "Host *\n    IdentityAgent ~/agent/config.sock\n",
+    )
+    .unwrap();
+
+    let socket = resolve_ssh_agent_socket(
+        Some(temp.path()),
+        Some(PathBuf::from("/tmp/environment.sock")),
+        &BTreeMap::new(),
+    )
+    .unwrap();
+
+    assert_eq!(socket, Some(temp.path().join("agent/config.sock")));
+}
+
+#[test]
+fn test_resolve_ssh_agent_socket_falls_back_to_the_fixed_environment_value() {
+    let socket = resolve_ssh_agent_socket(
+        None,
+        Some(PathBuf::from("/tmp/environment.sock")),
+        &BTreeMap::new(),
+    )
+    .unwrap();
+
+    assert_eq!(socket, Some(PathBuf::from("/tmp/environment.sock")));
+}
+
+#[test]
+fn test_resolve_ssh_agent_socket_reports_no_available_input() {
+    let socket = resolve_ssh_agent_socket(None, None, &BTreeMap::new()).unwrap();
+
+    assert_eq!(socket, None);
+}
+
+#[test]
+fn test_agent_signing_without_a_fixed_socket_error() {
+    let inputs = SshSigningInputs::new(
+        SshSigningMethod::SshAgent,
+        None,
+        None,
+        "ssh-keygen",
+        "ssh-add",
+    );
+    let public_key =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+
+    let error = build_ssh_signing_context(&inputs, public_key, false)
+        .err()
+        .expect("ssh-agent signing needs the socket fixed by the caller");
+
+    assert_eq!(error.kind(), kapsaro_core::ErrorKind::Config);
 }

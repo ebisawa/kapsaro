@@ -6,12 +6,12 @@
 
 use std::fs;
 
-use crate::app::trust::recovery::{classify_trust_store_reset, TrustStoreResetCause};
 use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{TrustStoreDocument, TrustStoreProtected, TrustStoreSignature};
 use crate::model::wire::algorithm::SIGNATURE_ED25519;
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::trust::recovery::{classify_trust_store_reset, TrustStoreResetCause};
 use crate::test_utils::{setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE};
 use crate::ErrorKind;
 use tempfile::TempDir;

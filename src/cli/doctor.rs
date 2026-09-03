@@ -7,8 +7,9 @@ use clap::Args;
 
 use crate::cli::common::output::json::doctor::print_doctor_report;
 use crate::cli::common::output::text::doctor::format_doctor_report;
+use crate::cli::common::{context::CliContext, env_mode::capture_doctor_ci_readiness};
 use crate::cli::options::{MemberHandleOption, WorkspaceOutputOptions};
-use kapsaro_core::cli_api::app::doctor::{execute_doctor_command, DoctorRequest};
+use kapsaro_core::api::doctor::{execute_doctor_command, DoctorCiReadiness, DoctorRequest};
 use kapsaro_core::Result;
 
 #[derive(Debug, Clone, Args)]
@@ -23,11 +24,20 @@ pub(crate) struct DoctorArgs {
 
 pub(crate) fn run(args: DoctorArgs) -> Result<i32> {
     let verbose = args.common.verbose.verbose;
+    let context = CliContext::resolve(&args.common)?;
+    let ci = capture_doctor_ci_readiness();
+    let workspace = context.doctor_workspace_resolution();
+    let member_handle = match &ci {
+        DoctorCiReadiness::Active { .. } => args.member.member_handle.clone(),
+        DoctorCiReadiness::Inactive => {
+            context.resolve_member_handle_override(args.member.member_handle)?
+        }
+    };
     let report = execute_doctor_command(DoctorRequest {
-        workspace: args.common.workspace.workspace,
-        home: args.common.home.home,
-        member_handle: args.member.member_handle,
-        verbose,
+        base_dir: context.base_dir()?.to_path_buf(),
+        workspace,
+        member_handle,
+        ci,
     })?;
     if args.common.json.json {
         print_doctor_report(&report)?;

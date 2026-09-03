@@ -34,7 +34,7 @@ impl SshSignatureBackend for GoldenSshBackend {
         ssh_pubkey: &str,
         message: &[u8],
     ) -> Result<SshRawSignature> {
-        use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
+        use kapsaro_core::test_support::storage::ssh::backend::SignatureBackend;
 
         self.inner
             .sign_sshsig(namespace, ssh_pubkey, message)

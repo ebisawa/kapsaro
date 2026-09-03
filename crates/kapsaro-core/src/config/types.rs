@@ -6,7 +6,6 @@
 //! Defines shared value types used while resolving kapsaro configuration.
 
 use crate::{Error, Result};
-use serde::{Deserialize, Serialize};
 
 const GITHUB_USER_TYPO_ALIAS: &str = "gihub_user";
 
@@ -88,22 +87,6 @@ fn build_invalid_config_key_error(key: &str) -> Error {
         key,
         ConfigKey::canonical_names().join(", ")
     ))
-}
-
-/// Signing method configuration value
-///
-/// Represents the user's configured preference for SSH signing.
-/// `Auto` selects ssh-agent if available, otherwise ssh-keygen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum SshSigningMethodConfig {
-    /// Automatically select based on ssh-agent availability
-    #[default]
-    Auto,
-    /// Use ssh-agent protocol directly
-    SshAgent,
-    /// Use ssh-keygen -Y sign
-    SshKeygen,
 }
 
 /// Signing method for SSH signature operations

@@ -4,7 +4,7 @@
 use crate::support::display::{
     format_path_for_message, sanitize_display_field, sanitize_display_field_with_limit,
 };
-use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
+use crate::support::kid::format_kid_display_lossy;
 
 #[test]
 fn test_sanitize_display_field_escapes_newlines_and_controls() {

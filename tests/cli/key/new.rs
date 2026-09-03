@@ -7,13 +7,35 @@ use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_
 #[cfg(unix)]
 use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script};
 use crate::cli::key::find_kid_in_member_dir;
-use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKey;
-use kapsaro_core::cli_api::test_support::domain::wire::format;
+use kapsaro_core::test_support::domain::private_key::PrivateKey;
+use kapsaro_core::test_support::domain::wire::format;
 use predicates::prelude::*;
 use std::fs;
+use std::path::Path;
 
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
+
+fn build_auto_key_new_command(
+    local_home: &Path,
+    process_home: &Path,
+    ssh_identity: &Path,
+) -> assert_cmd::Command {
+    let mut command = cmd();
+    command
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("-i")
+        .arg(ssh_identity)
+        .env("KAPSARO_HOME", local_home)
+        .env("HOME", process_home)
+        .env_remove("KAPSARO_SSH_SIGNING_METHOD")
+        .env_remove("SSH_AUTH_SOCK")
+        .env_remove("KAPSARO_GITHUB_USER");
+    command
+}
 
 /// Pointing the local state root at another volume through a symlink is a
 /// supported setup, so the keystore is created behind the link.
@@ -90,6 +112,104 @@ fn test_key_new_requires_member_handle_before_ssh_resolution() {
                 .and(predicate::str::contains("SSH key").not())
                 .and(predicate::str::contains("GitHub username").not()),
         );
+}
+
+#[test]
+fn test_key_new_invalid_github_user_before_ssh_resolution_fails() {
+    let home = make_secret_home();
+    let missing_identity = home.path().join("missing-identity");
+    let member_dir = home.path().join("keys").join(TEST_MEMBER_HANDLE);
+
+    cmd()
+        .arg("key")
+        .arg("new")
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--github-user")
+        .arg("alice/keys")
+        .arg("--ssh-identity")
+        .arg(&missing_identity)
+        .env("KAPSARO_HOME", home.path())
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("GitHub login")
+                .and(predicate::str::contains("SSH identity").not()),
+        );
+
+    assert!(
+        !member_dir.exists(),
+        "invalid login must not generate a key"
+    );
+    assert!(
+        !member_dir.join("active").exists(),
+        "invalid login must not activate a key"
+    );
+}
+
+#[test]
+fn test_key_new_auto_selects_identity_agent() {
+    let local_home = make_secret_home();
+    let process_home = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let socket_path = process_home.path().join("missing-identity-agent.sock");
+    let ssh_dir = process_home.path().join(".ssh");
+    fs::create_dir(&ssh_dir).unwrap();
+    fs::write(
+        ssh_dir.join("config"),
+        format!("Host *\n    IdentityAgent \"{}\"\n", socket_path.display()),
+    )
+    .unwrap();
+
+    build_auto_key_new_command(local_home.path(), process_home.path(), &ssh_priv)
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("ssh-agent connect failed for")
+                .and(predicate::str::contains("missing-identity-agent.sock")),
+        );
+
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_new_auto_selects_ssh_auth_sock() {
+    let local_home = make_secret_home();
+    let process_home = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+    let socket_path = process_home.path().join("missing-environment-agent.sock");
+
+    build_auto_key_new_command(local_home.path(), process_home.path(), &ssh_priv)
+        .env("SSH_AUTH_SOCK", &socket_path)
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("ssh-agent connect failed for")
+                .and(predicate::str::contains("missing-environment-agent.sock")),
+        );
+
+    drop(ssh_temp);
+}
+
+#[test]
+fn test_key_new_auto_selects_ssh_keygen_without_agent() {
+    let local_home = make_secret_home();
+    let process_home = make_secret_home();
+    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
+
+    build_auto_key_new_command(local_home.path(), process_home.path(), &ssh_priv)
+        .assert()
+        .success();
+
+    assert!(
+        local_home
+            .path()
+            .join("keys")
+            .join(TEST_MEMBER_HANDLE)
+            .is_dir(),
+        "keygen selection must publish the generated Kapsaro key"
+    );
+    drop(ssh_temp);
 }
 
 #[cfg(unix)]
@@ -481,7 +601,7 @@ fn test_key_new_default_activate() {
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Verify active file is created
-    use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+    use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
     let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
     assert_eq!(
         active_kid,

@@ -4,7 +4,6 @@
 //! Encrypted artifact domain helpers.
 //! Provides format-neutral signature, recipient, and wrap-set extraction.
 
-use crate::feature::envelope::wrap_set::WrapSet;
 use crate::feature::trust::recipient_sets::{
     encrypted_content_recipient_evidence, ArtifactRecipientEvidence,
 };
@@ -51,17 +50,4 @@ pub(crate) fn artifact_recipient_evidence(
     content: &EncContent,
 ) -> Result<ArtifactRecipientEvidence> {
     encrypted_content_recipient_evidence(content)
-}
-
-pub(crate) fn artifact_wrap_set(content: &EncContent) -> Result<WrapSet> {
-    match content {
-        EncContent::FileEnc(file_content) => {
-            let doc = file_content.parse()?;
-            WrapSet::parse(&doc.protected.wrap, "Document")
-        }
-        EncContent::KvEnc(kv_content) => {
-            let doc = kv_content.parse()?;
-            WrapSet::parse(&doc.wrap().wrap, "Document")
-        }
-    }
 }

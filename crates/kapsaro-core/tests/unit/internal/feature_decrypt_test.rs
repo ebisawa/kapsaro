@@ -5,7 +5,6 @@
 //!
 //! Tests for file-enc decryption.
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
@@ -14,6 +13,7 @@ use crate::feature::verify::file::{verify_file_content, verify_file_document};
 use crate::format::content::FileEncContent;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{

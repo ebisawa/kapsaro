@@ -10,10 +10,10 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use super::keygen_helpers::{build_test_private_key, keygen_test};
-use kapsaro_core::cli_api::test_support::domain::private_key::PrivateKey;
-use kapsaro_core::cli_api::test_support::domain::public_key::PublicKey;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
+use kapsaro_core::test_support::domain::private_key::PrivateKey;
+use kapsaro_core::test_support::domain::public_key::PublicKey;
+use kapsaro_core::test_support::storage::keystore::active::set_active_kid;
+use kapsaro_core::test_support::storage::keystore::storage::save_key_pair_atomic;
 use tempfile::TempDir;
 
 // ============================================================================
@@ -91,7 +91,7 @@ fn build_shared_fixture() -> SharedFixture {
     let ssh_private_key_bytes =
         fs::read(&ssh_priv).expect("Failed to read generated SSH private key");
 
-    let members = ["alice@example.com", "bob@example.com"]
+    let members = ["alice@example.com", "bob@example.com", "carol@example.com"]
         .into_iter()
         .map(|member_handle| {
             (
@@ -282,14 +282,11 @@ pub fn save_public_key(
     keystore_root: &Path,
     member_handle: &str,
     kid: &str,
-    public_key: &kapsaro_core::cli_api::test_support::domain::public_key::PublicKey,
+    public_key: &kapsaro_core::test_support::domain::public_key::PublicKey,
 ) -> kapsaro_core::Result<()> {
     let dir = keystore_root.join(member_handle).join(kid);
     ensure_restricted_dir(&dir);
-    kapsaro_core::cli_api::test_support::helpers::fs::atomic::save_json(
-        &dir.join("public.json"),
-        public_key,
-    )
+    kapsaro_core::test_support::helpers::fs::atomic::save_json(&dir.join("public.json"), public_key)
 }
 
 /// Helper to create a temporary SSH Ed25519 keypair for testing
@@ -304,7 +301,7 @@ pub fn generate_temp_ssh_keypair_in_dir(temp_dir: &TempDir) -> (PathBuf, PathBuf
 
     let output = std::process::Command::new("ssh-keygen")
         .arg("-t")
-        .arg(kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEYGEN_TYPE_ED25519)
+        .arg(kapsaro_core::test_support::storage::ssh::protocol::constants::KEYGEN_TYPE_ED25519)
         .arg("-f")
         .arg(&private_key_path)
         .arg("-N")

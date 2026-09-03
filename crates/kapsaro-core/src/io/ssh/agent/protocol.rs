@@ -87,8 +87,8 @@ fn parse_identities(mut payload: &[u8]) -> Result<Vec<AgentIdentity>> {
 
     for _ in 0..count {
         let (key_blob, rest) = decode_ssh_string(payload)?;
-        let (comment, rest) = parse_utf8_string(rest)?;
-        identities.push(AgentIdentity::new(key_blob.to_vec(), comment));
+        let rest = validate_utf8_string(rest)?;
+        identities.push(AgentIdentity::new(key_blob.to_vec()));
         payload = rest;
     }
 
@@ -132,15 +132,15 @@ fn parse_signature(payload: &[u8]) -> Result<Ed25519RawSignature> {
     Ed25519RawSignature::from_slice(raw_signature)
 }
 
-fn parse_utf8_string(payload: &[u8]) -> Result<(String, &[u8])> {
+fn validate_utf8_string(payload: &[u8]) -> Result<&[u8]> {
     let (bytes, rest) = decode_ssh_string(payload)?;
-    let value = std::str::from_utf8(bytes).map_err(|e| {
+    std::str::from_utf8(bytes).map_err(|e| {
         crate::Error::from(SshError::build_operation_failed_error_with_source(
             format!("ssh-agent returned invalid UTF-8: {}", e),
             e,
         ))
     })?;
-    Ok((value.to_string(), rest))
+    Ok(rest)
 }
 
 fn decode_u32(payload: &mut &[u8], field_name: &str) -> Result<usize> {

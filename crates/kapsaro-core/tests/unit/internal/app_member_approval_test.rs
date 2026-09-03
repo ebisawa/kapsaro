@@ -4,11 +4,8 @@
 use std::fs;
 use std::path::Path;
 
-use crate::app::member::approval::{
-    evaluate_members_for_approval, save_member_approvals, MemberApprovalResult,
-};
 use crate::app_test_utils::{
-    build_test_command_options, build_test_execution_context, load_test_trust_store,
+    build_test_command_options, build_test_member_approval_session, load_test_trust_store,
 };
 use crate::feature::key::generate::{generate_key, KeyGenerationOptions};
 use crate::feature::key::ssh_binding::SshBindingContext;
@@ -18,6 +15,9 @@ use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::protocol::fingerprint::build_sha256_fingerprint;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::model::ssh::SshDeterminismStatus;
+use crate::service::member::approval::{
+    evaluate_members_for_approval, save_member_approvals, MemberApprovalResult,
+};
 use crate::support::time::format_timestamp_rfc3339;
 use crate::test_utils::member_handle;
 use crate::test_utils::setup_test_workspace_from_fixtures;
@@ -58,7 +58,7 @@ fn build_verified_ssh_binding(home: &Path) -> SshBindingContext {
         .to_string();
     let fingerprint = build_sha256_fingerprint(&ssh_public_key).unwrap();
     let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
         SshKeyDescriptor::from_path(ssh_key_path),
     ));
     SshBindingContext {
@@ -154,10 +154,10 @@ fn test_save_member_approvals_persists_only_manually_approved_candidates() {
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob_kid = find_kid(&active_members, BOB_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    let evaluation = crate::app::member::approval::MemberApprovalEvaluation::for_test(
+    let evaluation = crate::service::member::approval::MemberApprovalEvaluation::for_test(
         vec![build_manual_approval(
             &bob_kid,
             false,
@@ -169,7 +169,7 @@ fn test_save_member_approvals_persists_only_manually_approved_candidates() {
         &active_members,
     )
     .unwrap();
-    save_member_approvals(&options, &evaluation, &execution).unwrap();
+    save_member_approvals(&session, &evaluation).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
@@ -193,10 +193,10 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
         ALICE_MEMBER_HANDLE,
         "2020-01-01T00:00:00Z",
     );
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    let evaluation = crate::app::member::approval::MemberApprovalEvaluation::for_test(
+    let evaluation = crate::service::member::approval::MemberApprovalEvaluation::for_test(
         vec![build_manual_approval(
             &bob_kid,
             false,
@@ -208,7 +208,7 @@ fn test_save_member_approvals_rejects_expired_signing_key() {
         &active_members,
     )
     .unwrap();
-    let result = save_member_approvals(&options, &evaluation, &execution);
+    let result = save_member_approvals(&session, &evaluation);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
@@ -250,15 +250,15 @@ fn test_member_verify_approve_rejects_an_expired_target_key() {
 }
 
 #[test]
-fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspace() {
+fn test_save_member_approvals_rejects_workspace_change_after_review() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
     let original_attestor_pub = bob.protected.attestation.pub_.clone();
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
     let bob_file = workspace_dir
         .join("members")
         .join("active")
@@ -269,7 +269,7 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
         serde_json::Value::String("ssh-ed25519 AAAA changed".to_string());
     fs::write(&bob_file, serde_json::to_string_pretty(&tampered).unwrap()).unwrap();
 
-    let evaluation = crate::app::member::approval::MemberApprovalEvaluation::for_test(
+    let evaluation = crate::service::member::approval::MemberApprovalEvaluation::for_test(
         vec![build_manual_approval(
             &bob.protected.kid,
             true,
@@ -278,21 +278,13 @@ fn test_save_member_approvals_uses_evaluated_snapshot_without_rereading_workspac
         &active_members,
     )
     .unwrap();
-    save_member_approvals(&options, &evaluation, &execution).unwrap();
+    let error = save_member_approvals(&session, &evaluation)
+        .expect_err("approval must remain bound to the reviewed member documents");
 
-    let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
+    assert_eq!(error.rule(), Some("E_TRUST_TARGET_CHANGED"));
+    assert!(load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
-        .unwrap();
-    let saved = loaded
-        .protected
-        .known_keys
-        .iter()
-        .find(|entry| entry.subject_handle == BOB_MEMBER_HANDLE)
-        .unwrap();
-    assert_eq!(
-        saved.evidence.as_ref().unwrap().ssh_attestor_pub.as_deref(),
-        Some(original_attestor_pub.as_str())
-    );
+        .is_none());
 }
 
 #[test]
@@ -302,10 +294,10 @@ fn test_save_member_approvals_persists_verified_github_login_from_review() {
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    let evaluation = crate::app::member::approval::MemberApprovalEvaluation::for_test(
+    let evaluation = crate::service::member::approval::MemberApprovalEvaluation::for_test(
         vec![MemberApprovalResult {
             member_handle: BOB_MEMBER_HANDLE.to_string(),
             kid: bob.protected.kid.clone(),
@@ -329,7 +321,7 @@ fn test_save_member_approvals_persists_verified_github_login_from_review() {
         &active_members,
     )
     .unwrap();
-    save_member_approvals(&options, &evaluation, &execution).unwrap();
+    save_member_approvals(&session, &evaluation).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
@@ -384,12 +376,13 @@ fn test_member_approval_persists_opaque_evidence_from_the_single_verification_re
     let evaluation = super::MemberApprovalEvaluation {
         results: vec![result],
         approvals,
+        active_members: active_members.clone(),
     };
     let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    save_member_approvals(&options, &evaluation, &execution).unwrap();
+    save_member_approvals(&session, &evaluation).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
@@ -420,11 +413,10 @@ fn test_evaluate_members_for_approval_warns_about_insecure_trust_store() {
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
-    let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    let approval = crate::app::member::approval::MemberApprovalEvaluation::for_test(
+    let approval = crate::service::member::approval::MemberApprovalEvaluation::for_test(
         vec![build_manual_approval(
             &bob.protected.kid,
             true,
@@ -433,14 +425,14 @@ fn test_evaluate_members_for_approval_warns_about_insecure_trust_store() {
         &active_members,
     )
     .unwrap();
-    save_member_approvals(&options, &approval, &execution).unwrap();
+    save_member_approvals(&session, &approval).unwrap();
 
     let trust_path =
         get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let warning_guard = LocalStateWarningGuard::new();
-    evaluate_members_for_approval(&execution, &[BOB_MEMBER_HANDLE.to_string()]).unwrap();
+    evaluate_members_for_approval(&session, &[BOB_MEMBER_HANDLE.to_string()]).unwrap();
     let warnings = warning_guard.take_reasons();
 
     assert_eq!(warnings.len(), 1, "{warnings:?}");
@@ -461,10 +453,9 @@ fn test_evaluate_members_for_approval_reads_trust_store_of_fixed_home() {
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let active_members = load_active_member_files(&workspace_dir).unwrap();
     let bob = find_member(&active_members, BOB_MEMBER_HANDLE);
-    let options = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
-    let approval = crate::app::member::approval::MemberApprovalEvaluation::for_test(
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
+    let approval = crate::service::member::approval::MemberApprovalEvaluation::for_test(
         vec![build_manual_approval(
             &bob.protected.kid,
             true,
@@ -473,7 +464,7 @@ fn test_evaluate_members_for_approval_reads_trust_store_of_fixed_home() {
         &active_members,
     )
     .unwrap();
-    save_member_approvals(&options, &approval, &execution).unwrap();
+    save_member_approvals(&session, &approval).unwrap();
 
     // A second fixture home holds the same workspace and keystore, but no
     // trust store: reading it would report Bob as an unreviewed candidate.
@@ -484,7 +475,7 @@ fn test_evaluate_members_for_approval_reads_trust_store_of_fixed_home() {
     fs::rename(replacement.path(), temp_dir.path()).unwrap();
 
     let evaluation =
-        evaluate_members_for_approval(&execution, &[BOB_MEMBER_HANDLE.to_string()]).unwrap();
+        evaluate_members_for_approval(&session, &[BOB_MEMBER_HANDLE.to_string()]).unwrap();
 
     assert_eq!(evaluation.results.len(), 1);
     assert!(
@@ -493,7 +484,7 @@ fn test_evaluate_members_for_approval_reads_trust_store_of_fixed_home() {
         evaluation.results[0]
     );
 
-    drop(execution);
+    drop(session);
     fs::rename(temp_dir.path(), replacement.path()).unwrap();
     fs::rename(&opened_home, temp_dir.path()).unwrap();
 }
@@ -506,8 +497,8 @@ fn test_evaluate_members_for_approval_reads_trust_store_of_fixed_home() {
 fn test_evaluate_members_for_approval_reads_members_of_fixed_workspace() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
     // A second workspace holds Alice alone, so a read addressed by path would
     // report Bob as missing from active/.
@@ -518,7 +509,7 @@ fn test_evaluate_members_for_approval_reads_members_of_fixed_workspace() {
     fs::rename(&replacement_workspace, &workspace_dir).unwrap();
 
     let evaluation =
-        evaluate_members_for_approval(&execution, &[BOB_MEMBER_HANDLE.to_string()]).unwrap();
+        evaluate_members_for_approval(&session, &[BOB_MEMBER_HANDLE.to_string()]).unwrap();
 
     assert_eq!(evaluation.results.len(), 1);
     assert_eq!(evaluation.results[0].member_handle, BOB_MEMBER_HANDLE);
@@ -537,10 +528,10 @@ fn test_evaluate_members_for_approval_rejects_incoming_member() {
         .join("incoming")
         .join(format!("{}.json", BOB_MEMBER_HANDLE));
     fs::rename(&bob_active, &bob_incoming).unwrap();
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    let result = evaluate_members_for_approval(&execution, &[BOB_MEMBER_HANDLE.to_string()]);
+    let result = evaluate_members_for_approval(&session, &[BOB_MEMBER_HANDLE.to_string()]);
 
     assert!(result.is_err());
     assert!(result
@@ -554,10 +545,10 @@ fn test_evaluate_members_for_approval_rejects_incoming_member() {
 fn test_evaluate_members_for_approval_excludes_self_from_default_targets() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let execution =
-        build_test_execution_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&workspace_dir));
+    let session =
+        build_test_member_approval_session(&temp_dir, ALICE_MEMBER_HANDLE, &workspace_dir);
 
-    let evaluation = evaluate_members_for_approval(&execution, &[]).unwrap();
+    let evaluation = evaluate_members_for_approval(&session, &[]).unwrap();
 
     assert_eq!(evaluation.results.len(), 1);
     assert_eq!(evaluation.results[0].member_handle, BOB_MEMBER_HANDLE);

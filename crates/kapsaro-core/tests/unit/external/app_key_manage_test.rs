@@ -10,28 +10,22 @@ use crate::test_utils::{
     build_test_private_key, keygen_test, local_state_temp_dir, setup_test_keystore_from_fixtures,
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
-use kapsaro_core::api::key::MemberHandle;
-use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution;
-use kapsaro_core::cli_api::app::key::manage::{
+use kapsaro_core::api::config::LocalStateSession;
+use kapsaro_core::api::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, list_keys_command,
     remove_key_command,
 };
-use kapsaro_core::cli_api::app::key::types::KeyInfo;
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
-use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-
-fn build_options(home: &Path) -> CommonCommandOptions {
-    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
-}
+use kapsaro_core::api::key::types::KeyInfo;
+use kapsaro_core::api::key::MemberHandle;
+use kapsaro_core::api::secret::SecretString;
+use kapsaro_core::api::ssh::{SshSigningContextResolution, SshSigningInputs, SshSigningMethod};
+use kapsaro_core::api::trust::TrustCommandSession;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::test_support::storage::keystore::storage::save_key_pair_atomic;
 
 /// Signing capability for a keystore that holds no trust store to re-sign.
-fn unreachable_resign(_member_handle: &MemberHandle) -> kapsaro_core::Result<ExecutionContext> {
+fn unreachable_resign(_member_handle: &MemberHandle) -> kapsaro_core::Result<TrustCommandSession> {
     panic!("a keystore without a trust store must not re-sign one");
 }
 
@@ -61,9 +55,7 @@ fn add_second_key(temp_dir: &tempfile::TempDir, member_handle: &str) -> String {
 #[test]
 fn test_list_keys_command_single_member() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
-
-    let result = list_keys_command(&options, None).unwrap();
+    let result = list_keys_command(temp_dir.path(), None).unwrap();
 
     assert_eq!(result.total_keys, 1);
     assert_eq!(result.entries.len(), 1);
@@ -80,9 +72,7 @@ fn test_list_keys_command_single_member() {
 #[test]
 fn test_list_keys_command_without_a_keystore_lists_nothing() {
     let temp_dir = local_state_temp_dir();
-    let options = build_options(temp_dir.path());
-
-    let result = list_keys_command(&options, None).unwrap();
+    let result = list_keys_command(temp_dir.path(), None).unwrap();
 
     assert_eq!(result.total_keys, 0);
     assert!(result.entries.is_empty());
@@ -92,10 +82,8 @@ fn test_list_keys_command_without_a_keystore_lists_nothing() {
 fn test_list_keys_command_filtered_by_member_handle() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     add_second_key(&temp_dir, BOB_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
-
-    let alice = list_keys_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
-    let bob = list_keys_command(&options, Some(BOB_MEMBER_HANDLE.to_string())).unwrap();
+    let alice = list_keys_command(temp_dir.path(), Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let bob = list_keys_command(temp_dir.path(), Some(BOB_MEMBER_HANDLE.to_string())).unwrap();
 
     assert_eq!(alice.total_keys, 1);
     assert_eq!(alice.entries[0].0, ALICE_MEMBER_HANDLE);
@@ -118,9 +106,7 @@ fn test_list_keys_command_includes_an_incomplete_active_key() {
             .join("public.json"),
     )
     .unwrap();
-    let options = build_options(temp_dir.path());
-
-    let result = list_keys_command(&options, Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
+    let result = list_keys_command(temp_dir.path(), Some(ALICE_MEMBER_HANDLE.to_string())).unwrap();
 
     assert_eq!(result.total_keys, 2);
     assert_eq!(result.entries[0].1.len(), 2);
@@ -144,11 +130,15 @@ fn test_list_keys_command_includes_an_incomplete_active_key() {
 #[test]
 fn test_export_key_command_active_key() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
     let out = temp_dir.path().join("exported-public.json");
 
-    let result =
-        export_key_command(&options, Some(ALICE_MEMBER_HANDLE.to_string()), None, &out).unwrap();
+    let result = export_key_command(
+        temp_dir.path(),
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        &out,
+    )
+    .unwrap();
 
     assert_eq!(result.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(
@@ -163,12 +153,15 @@ fn test_export_key_command_active_key() {
 #[test]
 fn test_export_key_command_writes_without_resolving_a_workspace() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let mut options = build_options(temp_dir.path());
-    options.workspace = Some(temp_dir.path().join("absent-workspace"));
     let out = temp_dir.path().join("exported-public.json");
 
-    let result =
-        export_key_command(&options, Some(ALICE_MEMBER_HANDLE.to_string()), None, &out).unwrap();
+    let result = export_key_command(
+        temp_dir.path(),
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        None,
+        &out,
+    )
+    .unwrap();
 
     assert_eq!(result.member_handle, ALICE_MEMBER_HANDLE);
     assert!(out.exists());
@@ -181,11 +174,10 @@ fn test_export_key_command_explicit_display_kid() {
     let active_kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .unwrap();
-    let options = build_options(temp_dir.path());
     let out = temp_dir.path().join("exported-public.json");
 
     let result = export_key_command(
-        &options,
+        temp_dir.path(),
         Some(ALICE_MEMBER_HANDLE.to_string()),
         Some(format_kid_display(&active_kid).unwrap().to_lowercase()),
         &out,
@@ -202,12 +194,11 @@ fn test_export_private_key_command_reencrypts_active_key() {
     let active_kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .unwrap();
-    let options = build_options(temp_dir.path());
     let password = SecretString::new("correct horse battery staple".to_string());
     let ssh_ctx = build_test_ssh_context(temp_dir.path());
 
     let result = export_private_key_command(
-        &options,
+        temp_dir.path(),
         ALICE_MEMBER_HANDLE.to_string(),
         None,
         &password,
@@ -226,10 +217,8 @@ fn test_export_private_key_command_reencrypts_active_key() {
 fn test_activate_key_command_explicit_kid() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let second_kid = add_second_key(&temp_dir, ALICE_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
-
     let result = activate_key_command(
-        &options,
+        temp_dir.path(),
         Some(ALICE_MEMBER_HANDLE.to_string()),
         Some(format_kid_display(&second_kid).unwrap().to_lowercase()),
     )
@@ -244,10 +233,8 @@ fn test_activate_key_command_auto_select_latest() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     std::thread::sleep(std::time::Duration::from_secs(1));
     let second_kid = add_second_key(&temp_dir, ALICE_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
-
     let result =
-        activate_key_command(&options, Some(ALICE_MEMBER_HANDLE.to_string()), None).unwrap();
+        activate_key_command(temp_dir.path(), Some(ALICE_MEMBER_HANDLE.to_string()), None).unwrap();
 
     assert_eq!(result.member_handle, ALICE_MEMBER_HANDLE);
     assert_eq!(result.kid, second_kid);
@@ -256,10 +243,8 @@ fn test_activate_key_command_auto_select_latest() {
 #[test]
 fn test_activate_key_command_not_found() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
-
     let result = activate_key_command(
-        &options,
+        temp_dir.path(),
         Some(ALICE_MEMBER_HANDLE.to_string()),
         Some("00000000000000000000000000000001".to_string()),
     );
@@ -276,10 +261,8 @@ fn test_activate_key_command_not_found() {
 fn test_remove_key_command_non_active() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let second_kid = add_second_key(&temp_dir, ALICE_MEMBER_HANDLE);
-    let options = build_options(temp_dir.path());
-
     let result = remove_key_command(
-        &options,
+        temp_dir.path(),
         None,
         format_kid_display(&second_kid).unwrap().to_lowercase(),
         false,
@@ -299,10 +282,8 @@ fn test_remove_key_command_active_without_force() {
     let active_kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .unwrap();
-    let options = build_options(temp_dir.path());
-
     let result = remove_key_command(
-        &options,
+        temp_dir.path(),
         Some(ALICE_MEMBER_HANDLE.to_string()),
         active_kid,
         false,
@@ -324,10 +305,8 @@ fn test_remove_key_command_active_with_force() {
     let active_kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
         .unwrap()
         .unwrap();
-    let options = build_options(temp_dir.path());
-
     let result = remove_key_command(
-        &options,
+        temp_dir.path(),
         Some(ALICE_MEMBER_HANDLE.to_string()),
         active_kid.clone(),
         true,
@@ -344,18 +323,18 @@ fn test_remove_key_command_active_with_force() {
 
 fn build_test_ssh_context(home: &Path) -> SshSigningContextResolution {
     let ssh_private_key_path = home.join(".ssh/test_ed25519");
-    let ssh_public_key = std::fs::read_to_string(home.join(".ssh/test_ed25519.pub"))
+    let local_state = LocalStateSession::open(home).unwrap();
+    let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
+    let store = local_state.require_key_store(&member).unwrap();
+    let inputs = SshSigningInputs::new(
+        SshSigningMethod::SshKeygen,
+        Some(ssh_private_key_path),
+        None,
+        "ssh-keygen",
+        "ssh-add",
+    );
+    store
+        .resolve_signing_context(member, None, &inputs, false)
         .unwrap()
-        .trim()
-        .to_string();
-    let backend =
-        crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_private_key_path)
-            .unwrap();
-
-    SshSigningContextResolution {
-        fingerprint: build_sha256_fingerprint(&ssh_public_key).unwrap(),
-        public_key: ssh_public_key,
-        backend: Box::new(backend),
-        determinism: SshDeterminismStatus::Verified,
-    }
+        .1
 }

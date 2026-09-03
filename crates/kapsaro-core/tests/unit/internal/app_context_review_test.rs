@@ -12,7 +12,9 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 use super::ReviewedTextFile;
-use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope, OpenDir};
+use crate::support::fs::relative::{
+    open_dir_nofollow, set_pre_publish_hook, DirectoryScope, OpenDir,
+};
 
 const SUBJECT: &str = "Reviewed document";
 
@@ -80,6 +82,39 @@ fn test_replacement_refuses_a_directory_other_than_the_reviewed_one() {
     );
     assert_eq!(
         fs::read_to_string(temp.path().join("other").join("doc.json")).unwrap(),
+        "reviewed"
+    );
+}
+
+/// The target can change while its replacement is being staged. The final
+/// precondition catches even a same-bytes inode replacement before rename.
+#[test]
+fn test_replacement_rechecks_identity_immediately_before_publish() {
+    let temp = TempDir::new().unwrap();
+    let directory = temp.path().join("reviewed");
+    fs::create_dir(&directory).unwrap();
+    let target = directory.join("doc.json");
+    fs::write(&target, "reviewed").unwrap();
+    let reviewed_dir = open_dir(&directory);
+    let reviewed =
+        ReviewedTextFile::load_existing_at(Arc::clone(&reviewed_dir), "doc.json", SUBJECT, 1024)
+            .unwrap();
+
+    let replacement = directory.join("replacement.json");
+    fs::write(&replacement, "reviewed").unwrap();
+    set_pre_publish_hook(move || fs::rename(replacement, target).unwrap());
+
+    let error = reviewed
+        .save_replacement_if_current_at(reviewed_dir.as_ref(), "rewritten")
+        .unwrap_err();
+
+    assert!(
+        error.format_user_message().contains("changed since review"),
+        "{}",
+        error.format_user_message()
+    );
+    assert_eq!(
+        fs::read_to_string(directory.join("doc.json")).unwrap(),
         "reviewed"
     );
 }

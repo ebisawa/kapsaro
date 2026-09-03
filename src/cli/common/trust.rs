@@ -7,14 +7,14 @@ use crate::cli::common::output::text::layout;
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, format_github_verification, print_trust_review_line,
 };
+use crate::cli::common::presentation::format_kid_display_lossy;
 use crate::cli::common::prompt::prompt_yes_no;
 use console::Style;
-use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
-use kapsaro_core::cli_api::app::trust::enforcement::{
+use kapsaro_core::api::member::approval::MemberApprovalResult;
+use kapsaro_core::api::trust::enforcement::{
     ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
 };
-use kapsaro_core::cli_api::app::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
-use kapsaro_core::cli_api::presentation::kid::format_kid_display_lossy;
+use kapsaro_core::api::trust::{ArtifactRecipientTrustOutcome, TrustApprovalCandidate};
 use kapsaro_core::Result;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -25,9 +25,9 @@ mod recovery;
 #[cfg(test)]
 pub(crate) use recovery::recover_invalid_trust_store_with_reader;
 pub(crate) use recovery::{
-    run_with_execution_trust_store_reset_recovery,
-    run_with_execution_trust_store_reset_without_retry, run_with_trust_list_reset_recovery,
-    TrustStoreResetOutcome,
+    run_with_trust_command_session_reset_recovery,
+    run_with_trust_command_session_reset_without_retry, run_with_trust_list_reset_recovery,
+    run_with_workspace_read_trust_store_reset_recovery, TrustStoreResetOutcome,
 };
 
 pub(crate) fn confirm_signer_key_approval(
@@ -185,7 +185,7 @@ fn format_member_key_review_lines(candidate: &MemberApprovalResult) -> Vec<Strin
     lines
 }
 
-fn format_key_approval_review_lines(intro: &str) -> Vec<String> {
+pub(crate) fn format_key_approval_review_lines(intro: &str) -> Vec<String> {
     vec![
         "Key review required:".to_string(),
         String::new(),

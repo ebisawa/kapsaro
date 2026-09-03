@@ -6,19 +6,19 @@
 
 mod output;
 
-use crate::cli::common::command::{require_member_handle, resolve_options};
+use crate::cli::common::command::require_member_handle;
+use crate::cli::common::context::CliContext;
 use crate::cli::common::output::text::registration::print_init_noop_summary;
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::registration::command::{
+use kapsaro_core::api::registration::command::{
     evaluate_registration_decision, execute_registration_decision, resolve_registration_command,
     RegistrationDecision,
 };
-use kapsaro_core::cli_api::app::registration::key_plan::open_registration_local_state;
-use kapsaro_core::cli_api::app::registration::types::{RegistrationCommand, RegistrationMode};
-use kapsaro_core::cli_api::app::registration::{
+use kapsaro_core::api::registration::key_plan::open_registration_local_state;
+use kapsaro_core::api::registration::types::{RegistrationCommand, RegistrationMode};
+use kapsaro_core::api::registration::{
     ensure_init_workspace_structure, evaluate_init_workspace_status, InitWorkspaceState,
 };
 use kapsaro_core::Error;
@@ -31,13 +31,19 @@ pub(crate) fn run_registration_command(
     member_handle: Option<String>,
     mode: RegistrationMode,
 ) -> Result<(), Error> {
-    let options = resolve_options(&common);
-    if handle_init_noop(&options, mode)? {
+    let context = CliContext::resolve(&common)?;
+    let workspace_path = context.registration_workspace_path()?;
+    if handle_init_noop(&workspace_path, mode)? {
         return Ok(());
     }
 
-    let command =
-        resolve_registration_command_from_local_state(&options, member_handle, github_user, mode)?;
+    let command = resolve_registration_command_from_local_state(
+        &context,
+        &workspace_path,
+        member_handle,
+        github_user,
+        mode,
+    )?;
     let outcome =
         execute_registration_decision(&command, resolve_registration_decision(&command, force)?)?;
     print_registration_outcome(&outcome)?;
@@ -46,9 +52,12 @@ pub(crate) fn run_registration_command(
 
 /// Handle the `init` mode's no-op case, where the workspace already exists.
 /// Returns whether the command was fully handled here.
-fn handle_init_noop(options: &CommonCommandOptions, mode: RegistrationMode) -> Result<bool, Error> {
+fn handle_init_noop(
+    workspace_path: &std::path::Path,
+    mode: RegistrationMode,
+) -> Result<bool, Error> {
     if let RegistrationMode::Init = mode {
-        let init_workspace = evaluate_init_workspace_status(options)?;
+        let init_workspace = evaluate_init_workspace_status(workspace_path)?;
         if init_workspace.state == InitWorkspaceState::NoOp {
             ensure_init_workspace_structure(&init_workspace.workspace_path)?;
             print_init_noop_summary(&init_workspace.workspace_path);
@@ -61,26 +70,31 @@ fn handle_init_noop(options: &CommonCommandOptions, mode: RegistrationMode) -> R
 /// Resolve the member handle, key plan, GitHub user and SSH context from local
 /// state, then build the `RegistrationCommand` they decide together.
 fn resolve_registration_command_from_local_state(
-    options: &CommonCommandOptions,
+    context: &CliContext,
+    workspace_path: &std::path::Path,
     member_handle: Option<String>,
     github_user: Option<String>,
     mode: RegistrationMode,
 ) -> Result<RegistrationCommand, Error> {
     // One opened local state directory answers both the member handle fallback
     // and the key plan, so a generated key lands where the plan was decided.
-    let local_state = open_registration_local_state(options)?;
-    let member_handle = require_member_handle(
-        local_state.resolve_optional_member_handle(member_handle)?,
-        true,
-    )?;
+    let local_state = open_registration_local_state(context.local_state()?)?;
+    let member_handle = require_member_handle(context.member_handle(member_handle)?, true)?;
     let key_plan = local_state.resolve_key_plan(&member_handle)?;
     let needs_new_key = key_plan.needs_new_key();
     if needs_new_key {
         print_missing_key_notice(&member_handle);
     }
-    let github_user = resolve_registration_github_user(needs_new_key, github_user, options)?;
-    let ssh_ctx = resolve_registration_ssh_context(needs_new_key, options)?;
-    resolve_registration_command(options, member_handle, github_user, key_plan, mode, ssh_ctx)
+    let github_user = resolve_registration_github_user(needs_new_key, github_user, context)?;
+    let ssh_ctx = resolve_registration_ssh_context(needs_new_key, context)?;
+    resolve_registration_command(
+        workspace_path,
+        member_handle,
+        github_user,
+        key_plan,
+        mode,
+        ssh_ctx,
+    )
 }
 
 fn resolve_registration_decision(
@@ -95,7 +109,7 @@ fn resolve_registration_decision(
                 Ok(RegistrationDecision::Apply { overwrite: true })
             } else {
                 Ok(RegistrationDecision::Return(
-                    kapsaro_core::cli_api::app::registration::types::RegistrationResult::AlreadyExists,
+                    kapsaro_core::api::registration::types::RegistrationResult::AlreadyExists,
                 ))
             }
         }
@@ -106,17 +120,17 @@ fn resolve_registration_decision(
 fn resolve_registration_github_user(
     needs_new_key: bool,
     github_user: Option<String>,
-    options: &CommonCommandOptions,
+    context: &CliContext,
 ) -> Result<Option<String>, Error> {
-    identity_prompt::resolve_key_generation_github_user(needs_new_key, github_user, options)
+    identity_prompt::resolve_cli_key_generation_github_user(needs_new_key, github_user, context)
 }
 
 fn resolve_registration_ssh_context(
     needs_new_key: bool,
-    options: &CommonCommandOptions,
-) -> Result<Option<kapsaro_core::cli_api::app::context::ssh::SshSigningContextResolution>, Error> {
+    context: &CliContext,
+) -> Result<Option<kapsaro_core::api::ssh::SshSigningContextResolution>, Error> {
     if needs_new_key {
-        Ok(Some(resolve_ssh_context(options)?))
+        Ok(Some(resolve_ssh_context(context)?))
     } else {
         Ok(None)
     }

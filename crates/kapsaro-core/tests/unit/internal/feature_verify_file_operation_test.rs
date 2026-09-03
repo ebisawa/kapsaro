@@ -1,12 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::verify::file::verify_file_document_report;
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::content::FileEncContent;
+use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     setup_member_key_context, setup_test_keystore_from_fixtures,

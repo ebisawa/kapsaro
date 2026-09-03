@@ -7,7 +7,7 @@ use tempfile::{tempdir, TempDir};
 
 use super::{
     is_encrypted_artifact_name, list_workspace_encrypted_artifacts_at, load_reviewed_artifact,
-    ArtifactRef, WorkspaceArtifactListing,
+    WorkspaceArtifactListing,
 };
 use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope, OpenDir};
 
@@ -127,68 +127,6 @@ fn listed_artifacts_read_the_tree_they_were_listed_in() {
     assert_eq!(captured.content(), Some("reviewed tree"));
 }
 
-/// A target named without a directory is resolved against the working directory
-/// the operator typed it in.
-#[cfg(unix)]
-#[test]
-fn open_from_path_binds_a_bare_name_to_the_working_directory() {
-    let temp_dir = tempdir().unwrap();
-    fs::write(temp_dir.path().join("bare.json"), "{}").unwrap();
-
-    let artifact = crate::test_utils::with_temp_cwd(temp_dir.path(), || {
-        ArtifactRef::open_from_path(std::path::Path::new("bare.json")).unwrap()
-    });
-
-    assert_eq!(artifact.name(), "bare.json");
-    assert_eq!(artifact.path(), std::path::Path::new("bare.json"));
-}
-
-#[test]
-fn open_from_path_reports_a_target_that_is_not_there() {
-    let temp_dir = tempdir().unwrap();
-
-    let error = ArtifactRef::open_from_path(&temp_dir.path().join("missing.json")).unwrap_err();
-
-    assert_eq!(error.kind(), crate::ErrorKind::NotFound);
-}
-
-#[test]
-fn open_from_path_refuses_a_directory_named_as_a_target() {
-    let temp_dir = tempdir().unwrap();
-    let directory = temp_dir.path().join("nested.json");
-    fs::create_dir(&directory).unwrap();
-
-    let error = ArtifactRef::open_from_path(&directory).unwrap_err();
-
-    assert!(
-        error.format_user_message().contains("non-regular file"),
-        "{}",
-        error.format_user_message()
-    );
-}
-
-/// A link in the final position sends the write somewhere the operator did not
-/// name, and that is settled while the run is still planning.
-#[cfg(unix)]
-#[test]
-fn open_from_path_refuses_a_symlinked_target() {
-    use std::os::unix::fs::symlink;
-
-    let temp_dir = tempdir().unwrap();
-    let real = temp_dir.path().join("real.json");
-    let link = temp_dir.path().join("link.json");
-    fs::write(&real, "{}").unwrap();
-    symlink(&real, &link).unwrap();
-
-    let error = ArtifactRef::open_from_path(&link).unwrap_err();
-
-    assert!(
-        error.format_user_message().contains("non-regular file"),
-        "{}",
-        error.format_user_message()
-    );
-}
-
 /// Entries a teammate committed are judged one at a time, so the cases below
 /// hand over a scan result directly: a filesystem may refuse to create a name
 /// that does not decode, and an entry nobody can inspect cannot be staged from
@@ -242,7 +180,12 @@ mod skipped_entries {
         let dir = open_secrets_dir(&temp_dir);
         let mut listing = empty_listing();
 
-        collect_scanned_artifact(&dir, inspected_child(b"broken\xff.json"), &mut listing);
+        collect_scanned_artifact(
+            &dir,
+            &dir,
+            inspected_child(b"broken\xff.json"),
+            &mut listing,
+        );
 
         assert!(listing.artifacts.is_empty(), "{:?}", listing.artifacts);
         assert_eq!(listing.warnings.len(), 1, "{:?}", listing.warnings);
@@ -262,6 +205,7 @@ mod skipped_entries {
         let mut listing = empty_listing();
 
         collect_scanned_artifact(
+            &dir,
             &dir,
             ScannedChild::Unreadable {
                 name: ChildName::from_raw_bytes(b"denied.json"),
@@ -296,6 +240,7 @@ mod skipped_entries {
 
         collect_scanned_artifact(
             &dir,
+            &dir,
             inspected_child_with_type(b"nested.json", ChildType::Directory),
             &mut listing,
         );
@@ -321,7 +266,7 @@ mod skipped_entries {
         let dir = open_secrets_dir(&temp_dir);
         let mut listing = empty_listing();
 
-        collect_scanned_artifact(&dir, inspected_child(b"real.json"), &mut listing);
+        collect_scanned_artifact(&dir, &dir, inspected_child(b"real.json"), &mut listing);
 
         assert_eq!(listing.artifacts.len(), 1, "{:?}", listing.artifacts);
         assert_eq!(listing.artifacts[0].name(), "real.json");

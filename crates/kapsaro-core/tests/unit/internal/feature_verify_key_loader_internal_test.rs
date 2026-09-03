@@ -29,7 +29,7 @@ use std::path::Path;
 fn build_test_ssh_context(ssh_key_path: &Path, ssh_pubkey: &str) -> SshBindingContext {
     let fingerprint = build_sha256_fingerprint(ssh_pubkey).unwrap();
     let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
         SshKeyDescriptor::from_path(ssh_key_path.to_path_buf()),
     ));
     SshBindingContext {

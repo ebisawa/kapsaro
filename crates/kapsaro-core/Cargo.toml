@@ -40,8 +40,7 @@ rustix = { version = "1.1.4", features = ["fs", "process"] }
 
 [features]
 default = []
-cli-internal = []
-cli-test-support = ["cli-internal"]
+cli-test-support = []
 online = ["dep:reqwest", "dep:tokio"]
 
 [dev-dependencies]
@@ -56,6 +55,6 @@ name = "unit"
 path = "tests/unit.rs"
 
 [[test]]
-name = "cli_api_boundary"
-path = "tests/cli_api_boundary.rs"
+name = "test_support_boundary"
+path = "tests/test_support_boundary.rs"
 required-features = ["cli-test-support"]

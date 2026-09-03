@@ -12,10 +12,6 @@ mod cli;
 #[path = "../tests/test_utils/internal_cli.rs"]
 mod test_utils;
 
-#[cfg(test)]
-#[path = "../tests/test_utils/context_options.rs"]
-mod app_test_utils;
-
 use tracing_subscriber::{fmt, EnvFilter};
 
 fn main() {

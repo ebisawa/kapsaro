@@ -12,7 +12,7 @@ use crate::io::ssh::external::keygen::DefaultSshKeygen;
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::io::ssh::protocol::types::Ed25519RawSignature;
-use crate::test_utils::{stub_agent_signer, EnvGuard};
+use crate::test_utils::stub_agent_signer;
 
 #[test]
 fn test_backend_trait_determinism_check() {
@@ -136,7 +136,7 @@ fn test_ssh_keygen_backend_real() {
         std::env::var("HOME").unwrap_or_else(|_| "/home/user".to_string()) + "/.ssh/id_ed25519",
     );
     let backend = SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
         SshKeyDescriptor::from_path(ssh_key_path),
     );
 
@@ -195,7 +195,7 @@ fn test_ssh_keygen_backend_real() {
 #[test]
 fn test_ssh_keygen_backend_command_not_found() {
     let backend = SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("/nonexistent/ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("/nonexistent/ssh-keygen", None)),
         SshKeyDescriptor::from_path(std::path::PathBuf::from("/dummy/key")),
     );
     let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
@@ -210,12 +210,11 @@ fn test_ssh_keygen_backend_command_not_found() {
 }
 
 #[test]
-fn test_ssh_agent_backend_no_auth_sock() {
-    let _guard = EnvGuard::new(&["SSH_AUTH_SOCK"]);
-    std::env::remove_var("SSH_AUTH_SOCK");
-
-    let backend = SshAgentBackend::new(Box::new(DefaultAgentSigner));
+fn test_ssh_agent_backend_reports_unreachable_fixed_socket() {
+    let backend = SshAgentBackend::new(Box::new(DefaultAgentSigner::new(
+        std::path::PathBuf::from("/nonexistent/agent.sock"),
+    )));
     let result = backend.sign_sshsig(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
 
-    assert!(result.is_err(), "Should fail without SSH_AUTH_SOCK");
+    assert!(result.is_err(), "an unreachable fixed socket must fail");
 }

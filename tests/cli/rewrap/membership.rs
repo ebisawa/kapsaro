@@ -4,18 +4,18 @@
 use super::*;
 use crate::cli::common::{kapsaro_bin, run_command_with_pty};
 use crate::test_utils::{member_handle, setup_trust_store_for_workspace};
-use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-use kapsaro_core::cli_api::test_support::operations::key::public_key_document::{
+use kapsaro_core::test_support::domain::ssh::SshDeterminismStatus;
+use kapsaro_core::test_support::operations::key::public_key_document::{
     build_attestation, build_public_key, PublicKeyDocumentParams,
 };
-use kapsaro_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-use kapsaro_core::cli_api::test_support::storage::workspace::members::load_member_file_from_path;
-use kapsaro_core::cli_api::test_support::wire::public_key::AttestationBodyInput;
+use kapsaro_core::test_support::operations::key::ssh_binding::SshBindingContext;
+use kapsaro_core::test_support::storage::keystore::active::set_active_kid;
+use kapsaro_core::test_support::storage::keystore::storage::list_kids;
+use kapsaro_core::test_support::storage::ssh::backend::SignatureBackend;
+use kapsaro_core::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::test_support::storage::workspace::members::load_member_file_from_path;
+use kapsaro_core::test_support::wire::public_key::AttestationBodyInput;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
 use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
 #[cfg(unix)]
@@ -211,8 +211,35 @@ fn test_rewrap_rejects_self_incoming_when_local_identity_mismatches() {
     );
 }
 
+fn assert_rewrap_recipient_set_rejected_without_side_effects(
+    common_opts: &CommonOptions,
+    artifact_path: &Path,
+    trust_store_path: &Path,
+    expected_message: &str,
+    forbidden_prompt: &str,
+) {
+    let artifact_before = fs::read(artifact_path).unwrap();
+    let trust_store_before = fs::read(trust_store_path).unwrap();
+
+    let output = run_rewrap_command(common_opts, ALICE_MEMBER_HANDLE, &[]);
+    assert!(!output.status.success());
+    let rendered = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        rendered.contains(expected_message),
+        "unexpected output: {rendered}"
+    );
+    assert!(!rendered.contains("Secret sharing review required:"));
+    assert!(!rendered.contains(forbidden_prompt));
+    assert_eq!(fs::read(artifact_path).unwrap(), artifact_before);
+    assert_eq!(fs::read(trust_store_path).unwrap(), trust_store_before);
+}
+
 #[test]
-fn test_rewrap_requires_recipient_trust_approval() {
+fn test_rewrap_non_interactive_rejects_unreviewed_recipient_set_without_side_effects() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
     setup_trust_store_for_workspace(
@@ -228,7 +255,7 @@ fn test_rewrap_requires_recipient_trust_approval() {
     common_opts.quiet = true;
     set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
 
-    let _kv_path = save_kv_file(
+    let kv_path = save_kv_file(
         &workspace_dir,
         common_opts.clone(),
         ALICE_MEMBER_HANDLE,
@@ -236,15 +263,67 @@ fn test_rewrap_requires_recipient_trust_approval() {
         &[("KEY", "value")],
     );
 
-    fs::remove_file(get_trust_store_file_path(
+    setup_trust_store_for_workspace(
         temp_dir.path(),
-        &member_handle(ALICE_MEMBER_HANDLE),
-    ))
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let trust_store_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+
+    assert_rewrap_recipient_set_rejected_without_side_effects(
+        &common_opts,
+        &kv_path,
+        &trust_store_path,
+        "This secret's member set has not been reviewed locally",
+        "Trust this member set for this secret?",
+    );
+}
+
+#[test]
+fn test_rewrap_non_interactive_rejects_changed_recipient_set_without_side_effects() {
+    let (temp_dir, workspace_dir) =
+        setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+
+    let mut common_opts = default_common_options();
+    common_opts.home = Some(temp_dir.path().to_path_buf());
+    common_opts.workspace = Some(workspace_dir.clone());
+    common_opts.quiet = true;
+    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
+
+    let kv_path = save_kv_file(
+        &workspace_dir,
+        common_opts.clone(),
+        ALICE_MEMBER_HANDLE,
+        "changed_trust_gate",
+        &[("KEY", "value")],
+    );
+    let trust_store_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    fs::rename(
+        workspace_dir
+            .join("members")
+            .join("active")
+            .join(format!("{}.json", CAROL_MEMBER_HANDLE)),
+        temp_dir.path().join("removed-carol.json"),
+    )
     .unwrap();
 
-    let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("Unknown recipient kid"));
+    assert_rewrap_recipient_set_rejected_without_side_effects(
+        &common_opts,
+        &kv_path,
+        &trust_store_path,
+        "This secret's member set changed since local review",
+        "Update the trusted member set for this secret?",
+    );
 }
 
 #[test]

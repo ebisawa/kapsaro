@@ -10,6 +10,7 @@ use crate::config::types::SshSigningMethod;
 use crate::io::ssh::agent::client::DefaultAgentSigner;
 use crate::io::ssh::external::traits::SshKeygen;
 use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use std::path::PathBuf;
 
 /// Factory: create backend based on config
 ///
@@ -18,6 +19,7 @@ use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 /// * `method` - Signing method from config (SshAgent or SshKeygen)
 /// * `ssh_keygen` - Implementation of the `SshKeygen` trait (used only for SshKeygen method)
 /// * `key_descriptor` - SSH key descriptor (private or public key, used only for SshKeygen method)
+/// * `agent_socket` - Caller-fixed agent socket (required for SshAgent method)
 ///
 /// # Returns
 ///
@@ -26,11 +28,19 @@ pub fn build_backend(
     method: SshSigningMethod,
     ssh_keygen: Box<dyn SshKeygen>,
     key_descriptor: Option<SshKeyDescriptor>,
+    agent_socket: Option<PathBuf>,
 ) -> crate::Result<Box<dyn SignatureBackend>> {
     match method {
-        SshSigningMethod::SshAgent => {
-            Ok(Box::new(SshAgentBackend::new(Box::new(DefaultAgentSigner))))
-        }
+        SshSigningMethod::SshAgent => agent_socket
+            .map(DefaultAgentSigner::new)
+            .map(|signer| {
+                Box::new(SshAgentBackend::new(Box::new(signer))) as Box<dyn SignatureBackend>
+            })
+            .ok_or_else(|| {
+                crate::Error::build_config_error(
+                    "SSH agent socket is required for ssh-agent signing".to_string(),
+                )
+            }),
         SshSigningMethod::SshKeygen => {
             let key_descriptor = key_descriptor.ok_or_else(|| {
                 crate::Error::build_config_error(

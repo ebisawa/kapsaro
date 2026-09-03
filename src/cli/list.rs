@@ -5,16 +5,14 @@
 
 use clap::Args;
 
-use crate::cli::common::command::{resolve_options_with_read_trust_allowances, ReadCommandLabels};
-use crate::cli::common::kv_read::KvReadSession;
+use crate::cli::common::command::ReadCommandLabels;
+use crate::cli::common::kv_read::{KvReadSession, NonMemberReviewMode};
 use crate::cli::common::output::kv::print_kv_key_list;
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, KvStoreNameOption, MemberHandleOption,
     SigningOutputOptions,
 };
 use kapsaro_core::api::kv::KvReadOperation;
-use kapsaro_core::cli_api::app::kv::query::evaluate_kv_read_trust_plan;
-use kapsaro_core::cli_api::app::trust::ListPolicy;
 use kapsaro_core::Result;
 
 #[derive(Args)]
@@ -37,25 +35,22 @@ pub(crate) struct ListArgs {
 }
 
 pub(crate) fn run(args: ListArgs) -> Result<()> {
-    let options = resolve_options_with_read_trust_allowances(
+    let session = KvReadSession::open(
         &args.common,
         args.allow_expired_key.allow_expired_key,
-        args.allow_non_member.allow_non_member,
-    )?;
-    let session = KvReadSession::open(
-        options,
+        NonMemberReviewMode::Configured(args.allow_non_member.allow_non_member),
         args.store.name.as_deref(),
         args.member.member_handle.clone(),
     )?;
-    let keys_with_disclosed = session.read(
-        ReadCommandLabels {
-            context: "list signer",
-            subject: "signer",
-            allow_non_member: session.allow_non_member(),
-        },
-        "KV list authorization",
-        evaluate_kv_read_trust_plan::<ListPolicy>,
-        |review| review.authorize(KvReadOperation::List)?.list_entry_keys(),
-    )?;
+    let keys_with_disclosed = session
+        .authorize(
+            KvReadOperation::List,
+            ReadCommandLabels {
+                context: "list signer",
+                allow_non_member: session.allow_non_member(),
+            },
+        )?
+        .into_value()
+        .list_entry_keys()?;
     print_kv_key_list(&keys_with_disclosed, args.common.json.json)
 }

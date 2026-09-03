@@ -3,7 +3,6 @@
 
 //! Unit tests for disclosed-flag behavior in feature/kv.
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
@@ -19,6 +18,7 @@ use crate::format::token::TokenCodec;
 use crate::io::workspace::members::test_support::{list_active_member_handles, load_member_files};
 use crate::model::kv_enc::entry::KvEntryValue;
 use crate::model::kv_enc::line::KvEncLine;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
@@ -54,7 +54,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
         &ssh_pub_content,
     )
     .unwrap();
-    crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
+    crate::test_support::storage::keystore::storage::save_key_pair_atomic(
         &keystore_root,
         BOB_MEMBER_HANDLE,
         &bob_kid,

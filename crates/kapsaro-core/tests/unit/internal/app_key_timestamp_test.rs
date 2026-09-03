@@ -5,7 +5,7 @@
 //! Covers the durations a caller can type, including ones no expiry can hold.
 
 use super::{ensure_expiry_after, ensure_expiry_not_reached};
-use crate::app::key::timestamp::resolve_key_timestamps;
+use crate::service::key::timestamp::resolve_key_timestamps;
 use crate::ErrorKind;
 
 fn valid_for(duration: &str) -> Option<String> {

@@ -14,7 +14,7 @@ use clap::Args;
 
 use crate::cli::options::{MemberHandleOption, SigningOptions};
 use crate::cli::registration::run_registration_command;
-use kapsaro_core::cli_api::app::registration::types::RegistrationMode;
+use kapsaro_core::api::registration::types::RegistrationMode;
 use kapsaro_core::Error;
 
 #[derive(Args)]

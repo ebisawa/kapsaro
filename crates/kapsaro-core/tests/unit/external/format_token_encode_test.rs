@@ -5,7 +5,7 @@
 //!
 //! Tests for token encoding.
 
-use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
+use kapsaro_core::test_support::wire::token::TokenCodec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

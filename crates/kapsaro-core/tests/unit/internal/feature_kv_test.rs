@@ -5,7 +5,6 @@
 //!
 //! Tests for KV operations (get/set/unset/list).
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::decrypt::decrypt_kv_single_entry_with_context;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
@@ -20,6 +19,7 @@ use crate::format::kv::document::parse_kv_document;
 use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::token::TokenCodec;
 use crate::io::workspace::members::test_support::{list_active_member_handles, load_member_files};
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{

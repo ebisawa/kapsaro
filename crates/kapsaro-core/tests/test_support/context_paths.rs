@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use kapsaro_core::cli_api::test_support::storage::workspace::detection::WorkspaceRoot;
+use kapsaro_core::test_support::storage::workspace::detection::WorkspaceRoot;
 
 pub(crate) fn build_test_workspace_root(workspace: &Path) -> WorkspaceRoot {
     WorkspaceRoot {

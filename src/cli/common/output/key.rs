@@ -13,7 +13,7 @@ use crate::cli::common::output::text::key::{
     print_empty_key_list as print_empty_key_list_text, print_key_list as print_key_list_text,
 };
 use crate::cli::common::output::text::layout::{self, LineTarget};
-use kapsaro_core::cli_api::app::key::types::KeyListResult;
+use kapsaro_core::api::key::types::KeyListResult;
 use kapsaro_core::Result;
 
 /// Named on stderr beside an empty listing, so the listing stays machine

@@ -20,9 +20,9 @@ use std::collections::BTreeMap;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::Path;
 
-use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{open_optional_child_dir, DirectoryScope, OpenDir};
+use crate::test_support::storage::trust::store::save_trust_store;
 
 fn open_trust_directory(base_dir: &Path) -> (AnchoredDir, OpenDir) {
     let base = AnchoredDir::open(
@@ -386,7 +386,7 @@ fn test_load_trust_store_warns_about_insecure_parent_directory_permissions() {
 
 #[test]
 fn test_load_trust_store_rejects_oversized_document_before_parse() {
-    use kapsaro_core::cli_api::presentation::limits::MAX_JSON_DOCUMENT_READ_SIZE;
+    use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 
     let dir = local_state_temp_dir();
     let base_dir = dir.path().join("kapsaro");

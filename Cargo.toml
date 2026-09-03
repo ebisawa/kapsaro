@@ -33,7 +33,7 @@ disallowed_methods = "deny"
 workspace = true
 
 [dependencies]
-kapsaro-core = { workspace = true, features = ["cli-internal"] }
+kapsaro-core = { workspace = true }
 
 # CLI framework
 clap = { version = "4", features = ["derive"] }
@@ -59,7 +59,7 @@ default = ["online"]
 online = ["kapsaro-core/online"]
 
 [dev-dependencies]
-kapsaro-core = { workspace = true, features = ["cli-internal", "cli-test-support"] }
+kapsaro-core = { workspace = true, features = ["cli-test-support"] }
 kapsaro-test-support = { path = "crates/kapsaro-test-support" }
 
 # CLI testing

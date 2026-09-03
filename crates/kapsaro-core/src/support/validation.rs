@@ -12,6 +12,7 @@ use crate::{Error, Result};
 const KV_ENC_EXTENSION_LENGTH: usize = 6;
 
 /// Longest login GitHub issues.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
 const MAX_GITHUB_LOGIN_LENGTH: usize = 39;
 
 /// Validate member_handle using the common ASCII identifier rules
@@ -73,12 +74,14 @@ mod support_validation_test;
 /// Validate a GitHub login.
 ///
 /// GitHub logins are ASCII identifiers for REST `/users/{login}` lookups.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
 pub fn validate_github_login(login: &str) -> Result<()> {
     ensure_github_login_length(login)?;
     ensure_github_login_boundaries(login)?;
     ensure_github_login_characters(login)
 }
 
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
 fn ensure_github_login_length(login: &str) -> Result<()> {
     if login.is_empty() {
         return Err(Error::build_invalid_argument_error(
@@ -95,6 +98,7 @@ fn ensure_github_login_length(login: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
 fn ensure_github_login_boundaries(login: &str) -> Result<()> {
     // The length rule rejects an empty login before this rule indexes the bytes.
     let bytes = login.as_bytes();
@@ -113,6 +117,7 @@ fn ensure_github_login_boundaries(login: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
 fn ensure_github_login_characters(login: &str) -> Result<()> {
     let mut previous_hyphen = false;
     for &byte in login.as_bytes() {

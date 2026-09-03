@@ -15,9 +15,11 @@ use crate::support::fs::load_text_with_limit;
 use crate::support::limits::MAX_SSH_CONFIG_FILE_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
-/// Parse `~/.ssh/config` and extract `IdentityAgent` value
+/// Parse the explicit home directory's SSH config and extract `IdentityAgent`.
+/// Path expansion uses only the caller-supplied home and variable values.
 ///
 /// # Priority
 ///
@@ -36,10 +38,11 @@ use std::path::PathBuf;
 /// Host *
 ///     IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 /// ```
-pub fn find_identity_agent() -> Result<Option<PathBuf>> {
-    let home = std::env::var("HOME").map_err(|_| Error::build_home_environment_not_set_error())?;
-
-    let config_path = PathBuf::from(home).join(".ssh").join("config");
+pub fn find_identity_agent(
+    home: &Path,
+    expansion_values: &BTreeMap<String, String>,
+) -> Result<Option<PathBuf>> {
+    let config_path = home.join(".ssh").join("config");
     if !config_path.exists() {
         return Ok(None);
     }
@@ -53,7 +56,7 @@ pub fn find_identity_agent() -> Result<Option<PathBuf>> {
         ))
     })?;
 
-    parse_identity_agent(&content)
+    parse_identity_agent(&content, home, expansion_values)
 }
 
 /// Extract IdentityAgent values (global and Host *) from parsed SSH config lines.
@@ -93,12 +96,29 @@ fn extract_identity_agent_values(content: &str) -> (Option<String>, Option<Strin
     (global_identity_agent, host_star_identity_agent)
 }
 
-/// Resolve an IdentityAgent string value to a PathBuf, expanding tilde/env vars.
-fn resolve_identity_agent_path(val: String) -> Result<Option<PathBuf>> {
+/// Resolve an IdentityAgent value using only caller-supplied expansion inputs.
+fn resolve_identity_agent_path(
+    val: String,
+    home: &Path,
+    expansion_values: &BTreeMap<String, String>,
+) -> Result<Option<PathBuf>> {
     if val.eq_ignore_ascii_case("none") {
         return Ok(None);
     }
-    let expanded = shellexpand::full(&val).map_err(|e| {
+    let home = home.to_str().ok_or_else(|| {
+        Error::build_config_error("IdentityAgent home path contains invalid UTF-8")
+    })?;
+    let expanded = shellexpand::full_with_context(
+        &val,
+        || Some(home),
+        |name| match expansion_values.get(name) {
+            Some(value) => Ok(Some(value.as_str())),
+            None => Err(format!(
+                "environment variable {name} is not available in fixed inputs"
+            )),
+        },
+    )
+    .map_err(|e| {
         Error::build_config_error(format!(
             "Failed to expand IdentityAgent path '{}': {}",
             val, e
@@ -108,12 +128,16 @@ fn resolve_identity_agent_path(val: String) -> Result<Option<PathBuf>> {
 }
 
 /// Parse SSH config content and extract `IdentityAgent`
-pub fn parse_identity_agent(content: &str) -> Result<Option<PathBuf>> {
+pub fn parse_identity_agent(
+    content: &str,
+    home: &Path,
+    expansion_values: &BTreeMap<String, String>,
+) -> Result<Option<PathBuf>> {
     let (global, host_star) = extract_identity_agent_values(content);
 
     // Priority: Host * block > global scope
     match host_star.or(global) {
-        Some(val) => resolve_identity_agent_path(val),
+        Some(val) => resolve_identity_agent_path(val, home, expansion_values),
         None => Ok(None),
     }
 }

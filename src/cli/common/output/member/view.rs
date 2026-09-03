@@ -3,8 +3,8 @@
 
 //! View builders for member command output.
 
-use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
-use kapsaro_core::cli_api::app::member::types::{
+use kapsaro_core::api::member::approval::MemberApprovalResult;
+use kapsaro_core::api::member::types::{
     MemberListResult, MemberShowResult, MemberVerificationResult,
 };
 

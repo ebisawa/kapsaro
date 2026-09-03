@@ -79,6 +79,47 @@ fn test_unset_non_interactive_without_force_fails() {
 }
 
 #[test]
+fn test_unset_confirmation_precedes_signing_key_resolution() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace_with_keys();
+    let missing_identity = home_dir.path().join("missing-identity");
+
+    cmd()
+        .arg("unset")
+        .arg("KEY1")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--member-handle")
+        .arg(crate::cli::common::TEST_MEMBER_HANDLE)
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", &missing_identity)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Unset requires --force."))
+        .stderr(predicate::str::contains("missing-identity").not());
+}
+
+#[test]
+fn test_unset_requires_workspace_before_confirmation() {
+    let home_dir = make_secret_home();
+    let missing_workspace = home_dir.path().join("missing-workspace");
+
+    cmd()
+        .arg("unset")
+        .arg("KEY1")
+        .arg("--workspace")
+        .arg(&missing_workspace)
+        .arg("--member-handle")
+        .arg(crate::cli::common::TEST_MEMBER_HANDLE)
+        .env("KAPSARO_HOME", home_dir.path())
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("Invalid workspace path")
+                .and(predicate::str::contains("Unset requires --force.").not()),
+        );
+}
+
+#[test]
 fn test_unset_requires_member_handle_before_confirmation() {
     let workspace_dir = TempDir::new().unwrap();
     let home_dir = make_secret_home();

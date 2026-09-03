@@ -37,7 +37,7 @@ pub use constants::{
     TEST_MEMBER_HANDLE,
 };
 #[allow(unused_imports)]
-pub use crypto_context::setup_member_key_context;
+pub use crypto_context::{setup_member_key_context, setup_member_key_context_at};
 #[allow(unused_imports)]
 pub use fixture::{
     create_local_state_dir, generate_temp_ssh_keypair_in_dir, load_fixture_public_key,
@@ -57,7 +57,7 @@ pub fn save_public_key(
     keystore_root: &std::path::Path,
     member_handle: &str,
     kid: &str,
-    public_key: &kapsaro_core::cli_api::test_support::domain::public_key::PublicKey,
+    public_key: &kapsaro_core::test_support::domain::public_key::PublicKey,
 ) -> kapsaro_core::Result<()> {
     create_local_state_dir(keystore_root);
     create_local_state_dir(&keystore_root.join(member_handle));
@@ -66,7 +66,7 @@ pub fn save_public_key(
 #[allow(unused_imports)]
 pub use guards::{with_temp_cwd, EnvGuard};
 #[allow(unused_imports)]
-pub use kapsaro_core::cli_api::test_support::domain::public_key::refresh_public_key_kid;
+pub use kapsaro_core::test_support::domain::public_key::refresh_public_key_kid;
 #[allow(unused_imports)]
 pub use keygen_helpers::{build_test_private_key, keygen_test};
 // The privilege helper is unix-only, matching the permission bits the tests stage.

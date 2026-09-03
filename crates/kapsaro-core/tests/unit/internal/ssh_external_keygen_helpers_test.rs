@@ -5,13 +5,19 @@
 //!
 //! These tests synthesize `std::process::Output` values directly so the
 //! helpers can be exercised without invoking the real `ssh-keygen` binary.
+//! Executable stubs are serialized because they inspect process-wide SSH_AUTH_SOCK.
 
-use super::{build_derive_public_key_args, build_sign_args, check_sign_output, parse_sign_stdout};
+use super::{
+    build_derive_public_key_args, build_sign_args, check_sign_output, execute_sign_command,
+    parse_sign_stdout,
+};
 use crate::format::codec::codec_base64_fixtures::encode_base64_standard;
 use crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
 use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
 use crate::io::ssh::protocol::wire::encode_ssh_string;
-use crate::test_utils::process_output::{build_process_output, failed_code};
+use crate::test_utils::process_output::{
+    build_process_output, failed_code, save_agent_socket_echo_script,
+};
 
 const TEST_SSH_PUBKEY: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@example.com";
@@ -200,4 +206,50 @@ fn test_build_sign_args_names_no_output_file() {
     let args = build_sign_args("/tmp/id_ed25519", KEY_PROTECTION_NAMESPACE);
 
     assert_eq!(args.len(), 8);
+}
+
+#[cfg(target_family = "unix")]
+#[test]
+#[serial_test::serial]
+fn test_public_key_signing_uses_the_fixed_socket_after_the_environment_changes() {
+    let _guard = crate::test_utils::EnvGuard::new(&["SSH_AUTH_SOCK"]);
+    let temp = tempfile::TempDir::new().unwrap();
+    let script = save_agent_socket_echo_script(temp.path(), "ssh-keygen-stub");
+    let fixed_socket = temp.path().join("fixed.sock");
+    std::env::set_var("SSH_AUTH_SOCK", temp.path().join("replacement.sock"));
+
+    let output = execute_sign_command(
+        &script.to_string_lossy(),
+        "/tmp/test.pub",
+        KEY_PROTECTION_NAMESPACE,
+        b"message",
+        true,
+        Some(fixed_socket.clone()),
+    )
+    .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), fixed_socket.to_str().unwrap());
+}
+
+#[cfg(target_family = "unix")]
+#[test]
+#[serial_test::serial]
+fn test_public_key_signing_removes_ambient_socket_when_the_fixed_socket_is_absent() {
+    let _guard = crate::test_utils::EnvGuard::new(&["SSH_AUTH_SOCK"]);
+    let temp = tempfile::TempDir::new().unwrap();
+    let script = save_agent_socket_echo_script(temp.path(), "ssh-keygen-stub");
+    std::env::set_var("SSH_AUTH_SOCK", temp.path().join("ambient.sock"));
+
+    let output = execute_sign_command(
+        &script.to_string_lossy(),
+        "/tmp/test.pub",
+        KEY_PROTECTION_NAMESPACE,
+        b"message",
+        true,
+        None,
+    )
+    .unwrap();
+
+    assert!(String::from_utf8(output.stdout).unwrap().trim().is_empty());
 }

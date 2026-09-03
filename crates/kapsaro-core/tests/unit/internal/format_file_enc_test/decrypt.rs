@@ -5,13 +5,13 @@ use super::helpers::{
     b64url, build_test_private_key, build_test_public_key, decrypt_file_document_for_test,
     generate_ed25519_keypair, generate_x25519_keypair, recipients_and_members,
 };
-use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::feature::context::crypto::{CryptoContext, SigningContext};
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::file as file_enc;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
+use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};

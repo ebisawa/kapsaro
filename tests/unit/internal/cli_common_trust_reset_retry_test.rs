@@ -11,8 +11,8 @@ use super::{
     run_with_trust_store_reset_retry, run_with_trust_store_reset_without_retry,
     trust_store_reset_prompt, TrustStoreResetOutcome,
 };
-use kapsaro_core::cli_api::app::trust::recovery::{TrustStoreResetCause, TrustStoreResetLoss};
-use kapsaro_core::cli_api::test_support::helpers::recovery;
+use kapsaro_core::api::trust::recovery::{TrustStoreResetCause, TrustStoreResetLoss};
+use kapsaro_core::test_support::helpers::recovery;
 use kapsaro_core::{Error, Result};
 
 fn build_reset_required_error() -> Error {

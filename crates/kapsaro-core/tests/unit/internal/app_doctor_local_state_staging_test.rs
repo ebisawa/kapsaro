@@ -10,7 +10,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 use super::{build_residue_checks, check_local_state_write_residue, search_residue, ResidueLimits};
-use crate::app::doctor::types::{DoctorCheck, DoctorStatus, LocalStateHome};
+use crate::service::doctor::types::{DoctorCheck, DoctorStatus, LocalStateHome};
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{DirectoryFd, DirectoryScope};
 use crate::support::warning::LocalStateWarningGuard;

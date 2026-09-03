@@ -8,11 +8,11 @@
 use std::fs;
 use std::path::Path;
 
-use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
-use crate::cli_api::test_support::storage::keystore::storage::{
+use crate::feature::context::crypto::build_signing_context;
+use crate::test_support::storage::keystore::active::set_active_kid;
+use crate::test_support::storage::keystore::storage::{
     list_kids, load_public_key, save_key_pair_atomic,
 };
-use crate::feature::context::crypto::build_signing_context;
 use crate::test_utils::keygen_helpers::{build_test_private_key, keygen_test};
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 

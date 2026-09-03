@@ -3,10 +3,14 @@
 
 //! Integration tests for `key export` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
-use crate::cli::key::find_kid_in_member_dir;
+use crate::cli::common::{
+    cmd, generate_temp_ssh_keypair, make_secret_home, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    TEST_MEMBER_HANDLE,
+};
+use crate::cli::key::{find_kid_in_member_dir, install_secondary_member_fixture};
 use console::strip_ansi_codes;
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
+use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
@@ -111,6 +115,33 @@ fn test_key_export_active() {
 
     // Keep temp directories alive
     drop(ssh_temp);
+}
+
+#[test]
+fn test_key_export_public_with_config_member_handle_in_multi_member_home() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
+    std::fs::write(
+        home.path().join("config.toml"),
+        format!("member_handle = \"{ALICE_MEMBER_HANDLE}\"\n"),
+    )
+    .unwrap();
+    let export_file = home.path().join("configured-member-public.json");
+
+    cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--out")
+        .arg(&export_file)
+        .arg("--home")
+        .arg(home.path())
+        .env_remove("KAPSARO_MEMBER_HANDLE")
+        .assert()
+        .success();
+
+    let document: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(export_file).unwrap()).unwrap();
+    assert_eq!(document["protected"]["subject_handle"], ALICE_MEMBER_HANDLE);
 }
 
 #[test]

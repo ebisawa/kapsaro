@@ -3,12 +3,13 @@
 
 //! Unit tests for the ssh-add adapter.
 //! Covers agent listing output handling and the required agent socket.
+//! Executable stubs are serialized because they inspect process-wide SSH_AUTH_SOCK.
 
 use super::{parse_list_keys_output, DefaultSshAdd};
 use crate::io::ssh::external::traits::SshAdd;
-use crate::test_utils::process_output::{build_process_output, failed_code};
-use crate::test_utils::EnvGuard;
-use tempfile::TempDir;
+use crate::test_utils::process_output::{
+    build_process_output, failed_code, save_agent_socket_echo_script,
+};
 
 #[test]
 fn test_parse_list_keys_output_returns_the_agent_listing() {
@@ -48,16 +49,26 @@ fn test_parse_list_keys_output_reports_invalid_utf8() {
 /// Listing keys is meaningless without an agent, so resolution failure stops
 /// the call before a process is started.
 #[test]
-#[serial_test::serial]
-fn test_list_keys_requires_a_resolved_agent_socket() {
-    let _guard = EnvGuard::new(&["HOME", "SSH_AUTH_SOCK"]);
-    let fake_home = TempDir::new().unwrap();
-    std::env::set_var("HOME", fake_home.path());
-    std::env::remove_var("SSH_AUTH_SOCK");
-
-    let error = DefaultSshAdd::new("/should/not/run")
+fn test_list_keys_without_fixed_agent_socket_error() {
+    let error = DefaultSshAdd::new("/should/not/run", None)
         .list_keys()
-        .expect_err("a missing agent socket must fail");
+        .expect_err("an absent fixed agent socket must fail");
 
     assert_eq!(error.kind(), crate::ErrorKind::Ssh);
+}
+
+#[cfg(target_family = "unix")]
+#[test]
+#[serial_test::serial]
+fn test_list_keys_uses_the_fixed_socket_after_the_environment_changes() {
+    let _guard = crate::test_utils::EnvGuard::new(&["SSH_AUTH_SOCK"]);
+    let temp = tempfile::TempDir::new().unwrap();
+    let script = save_agent_socket_echo_script(temp.path(), "ssh-add-stub");
+    let fixed_socket = temp.path().join("fixed.sock");
+    let ssh_add = DefaultSshAdd::new(script.to_string_lossy(), Some(fixed_socket.clone()));
+    std::env::set_var("SSH_AUTH_SOCK", temp.path().join("replacement.sock"));
+
+    let output = ssh_add.list_keys().unwrap();
+
+    assert_eq!(output.trim(), fixed_socket.to_str().unwrap());
 }

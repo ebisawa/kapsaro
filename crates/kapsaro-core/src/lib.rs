@@ -1,8 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg_attr(not(feature = "cli-internal"), allow(dead_code, unused_imports))]
-
 //! Core library APIs for Kapsaro encrypted artifacts and local state.
 //!
 //! The implementation roots below stay crate-private so that every caller
@@ -10,10 +8,6 @@
 //! would let the CLI, or an external application, bypass the facade and bind
 //! itself to an internal module path. Each root is held shut by a doctest that
 //! stops compiling the moment the root becomes reachable from outside.
-//!
-//! ```compile_fail
-//! use kapsaro_core::app;
-//! ```
 //!
 //! ```compile_fail
 //! use kapsaro_core::config;
@@ -53,11 +47,10 @@ compile_error!("kapsaro-core currently supports Unix targets only.");
 pub mod api;
 mod error;
 
-#[cfg(any(feature = "cli-internal", test))]
+#[cfg(any(feature = "cli-test-support", test))]
 #[doc(hidden)]
-pub mod cli_api;
+pub mod test_support;
 
-mod app;
 pub(crate) mod config;
 pub(crate) mod crypto;
 pub(crate) mod feature;

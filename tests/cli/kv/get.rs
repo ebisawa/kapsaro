@@ -3,13 +3,15 @@
 
 //! Integration tests for `get` command
 
+#[cfg(unix)]
+use crate::cli::common::artifact::setup_unapproved_kv_signer_read_fixture;
 use crate::cli::common::{
     cmd, setup_unapproved_kv_read_fixture, setup_workspace, setup_workspace_with_kv_entries,
     tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
-use kapsaro_core::cli_api::test_support::helpers::kid::format_kid_half_display;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::test_support::helpers::kid::format_kid_half_display;
+use kapsaro_core::test_support::storage::keystore::storage::list_kids;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
@@ -71,6 +73,29 @@ fn test_get_unknown_recipient_non_interactive_error() {
         .stderr(predicate::str::contains(fixture.unapproved_member_handle))
         .stderr(predicate::str::contains(&fixture.unapproved_kid))
         .stderr(predicate::str::contains("Interactive confirmation requires a terminal").not());
+
+    assert!(!fixture.trust_store_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_get_skips_known_signer_review_when_strict_checking_is_disabled() {
+    let fixture = setup_unapproved_kv_signer_read_fixture();
+
+    cmd()
+        .arg("get")
+        .arg("SHOULD_NOT_PRINT")
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("must-not-print"))
+        .stderr(predicate::str::contains("Approve this key?").not());
 
     assert!(!fixture.trust_store_path.exists());
 }

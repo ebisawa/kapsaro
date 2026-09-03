@@ -1,5 +1,8 @@
 .kapsaro
 .worktrees
+.claude/settings.local.json
+.claude/RESUME.md
+.claude/scheduled_tasks.lock
 docs
 target
 *.tmp

@@ -5,13 +5,13 @@
 //!
 //! Tests for file-enc rewrap, including signature verification at entry.
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::format::content::{EncContent, FileEncContent};
 use crate::model::public_key::VerifiedRecipientKey;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};

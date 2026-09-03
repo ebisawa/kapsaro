@@ -164,7 +164,6 @@ fn build_test_kv_document(
         },
         String::new(),
         Vec::new(),
-        String::new(),
         signature,
     )
 }

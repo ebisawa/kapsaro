@@ -8,9 +8,9 @@ use std::path::Path;
 use crate::cli::common::output::key::view::{KeyInfoView, KeyListView};
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::text::layout::{KidDisplayFallback, LabelAlignment, LineTarget};
+use crate::cli::common::presentation::format_path_relative_to_cwd;
 use kapsaro_core::api::online::OnlineVerificationStatus;
-use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use kapsaro_core::cli_api::presentation::ssh::SshDeterminismStatus;
+use kapsaro_core::api::ssh::SshDeterminismStatus;
 use kapsaro_core::{Error, Result};
 
 const KEY_INFO_LABEL_WIDTH: usize = "Member Handle".len();

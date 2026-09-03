@@ -15,18 +15,16 @@ use clap::Args;
 use std::collections::BTreeMap;
 use std::process::{Command, Stdio};
 
-use crate::cli::common::command::{resolve_options_with_allow_expired_key, ReadCommandLabels};
-use crate::cli::common::kv_read::KvReadSession;
+use crate::cli::common::command::ReadCommandLabels;
+use crate::cli::common::kv_read::{KvReadSession, NonMemberReviewMode};
 use crate::cli::common::output::text::print_local_state_diagnostics;
+use crate::cli::common::presentation::remove_parent_kapsaro_env_vars;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOptions,
 };
 use kapsaro_core::api::diagnostics::take_local_state_warnings;
 use kapsaro_core::api::kv::KvReadOperation;
 use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::cli_api::app::kv::query::evaluate_kv_read_trust_plan;
-use kapsaro_core::cli_api::app::trust::RunPolicy;
-use kapsaro_core::cli_api::presentation::process::remove_parent_kapsaro_env_vars;
 use kapsaro_core::{Error, Result};
 use tracing::debug;
 
@@ -51,31 +49,23 @@ pub(crate) struct RunArgs {
 }
 
 pub(crate) fn run(args: RunArgs) -> Result<i32> {
-    let options = resolve_options_with_allow_expired_key(
+    let session = KvReadSession::open(
         &args.common,
         args.allow_expired_key.allow_expired_key,
-    )?;
-    let session = KvReadSession::open(
-        options,
+        NonMemberReviewMode::Disabled,
         args.store.name.as_deref(),
         args.member.member_handle.clone(),
     )?;
-    session.read(
+    let authorized = session.authorize(
+        KvReadOperation::Environment,
         ReadCommandLabels {
             context: "run signer",
-            subject: "run",
             allow_non_member: false,
         },
-        "KV run authorization",
-        evaluate_kv_read_trust_plan::<RunPolicy>,
-        |review| {
-            debug!("[KV] env command: decrypt values");
-            let env_vars = review
-                .authorize(KvReadOperation::Environment)?
-                .decrypt_environment()?;
-            execute_child_command(&args.command, &env_vars)
-        },
-    )
+    )?;
+    debug!("[KV] env command: decrypt values");
+    let env_vars = authorized.into_value().decrypt_environment()?;
+    execute_child_command(&args.command, &env_vars)
 }
 
 pub(crate) fn execute_child_command(

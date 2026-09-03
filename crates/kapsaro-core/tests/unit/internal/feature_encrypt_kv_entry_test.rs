@@ -73,11 +73,11 @@ fn build_verified_recipient_key_for_test(
     signing_key: &SigningKey,
     kid: &str,
 ) -> VerifiedRecipientKey {
-    use crate::cli_api::test_support::domain::public_key::build_unverified_recipient_key;
     use crate::format::codec::base64_public::encode_base64url_nopad;
     use crate::model::public_key::{
         Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
     };
+    use crate::test_support::domain::public_key::build_unverified_recipient_key;
     use ed25519_dalek::Signer;
 
     let b64url = |b: &[u8]| encode_base64url_nopad(b);

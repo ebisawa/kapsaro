@@ -8,8 +8,6 @@
 //! - save_and_activate (tested via public save_key_pair_atomic + set_active_kid)
 //! - build_public_key with github_account
 
-use crate::cli_api::test_support::storage::keystore::active::load_active_kid;
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, save_key_pair_atomic};
 use crate::crypto::kem::{derive_public_key_from_secret, X25519SecretKey};
 use crate::feature::key::generate::KeyGenerationOptions;
 use crate::feature::key::material::{build_identity_keys, generate_keypairs, KeypairMaterial};
@@ -26,6 +24,8 @@ use crate::model::identity::MemberHandle;
 use crate::model::public_key::{Attestation, BindingClaims, GithubAccount, IdentityKeys};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::model::wire::jwk::{CURVE_ED25519, CURVE_X25519};
+use crate::test_support::storage::keystore::active::load_active_kid;
+use crate::test_support::storage::keystore::storage::{list_kids, save_key_pair_atomic};
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{keygen_test, setup_test_keystore_from_fixtures};
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -376,7 +376,7 @@ fn test_save_and_activate_activates() {
     )
     .unwrap();
     // no_activate=false means we DO activate
-    crate::cli_api::test_support::storage::keystore::active::set_active_kid(
+    crate::test_support::storage::keystore::active::set_active_kid(
         ALICE_MEMBER_HANDLE,
         new_kid,
         &keystore_root,
@@ -524,7 +524,7 @@ fn test_generate_key_rejects_skipped_determinism() {
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&ssh_temp);
 
     let ssh_keygen =
-        crate::io::ssh::external::keygen::DefaultSshKeygen::new("ssh-keygen".to_string());
+        crate::io::ssh::external::keygen::DefaultSshKeygen::new("ssh-keygen".to_string(), None);
     let descriptor =
         crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor::from_path(ssh_priv);
     let backend: Box<dyn SignatureBackend> =

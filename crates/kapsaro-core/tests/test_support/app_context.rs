@@ -14,9 +14,14 @@ mod keystore_documents;
 #[path = "keystore_rotation.rs"]
 mod keystore_rotation;
 
-pub(crate) use context_execution::{build_test_execution_context, resolve_test_write_execution};
+pub(crate) use context_execution::{
+    build_test_execution_context, build_test_member_approval_session,
+    build_test_trust_command_session, build_test_trust_command_session_from_options,
+    resolve_test_write_execution, resolve_test_write_session, TestWriteSession,
+};
 pub(crate) use context_options::{
-    build_test_command_options, build_test_command_options_with, build_test_signing_command_options,
+    build_test_command_options, build_test_command_options_with,
+    build_test_signing_command_options, TestCommandOptions,
 };
 pub(crate) use context_trust::{
     load_test_trust_store, save_test_trust_store_signed_by_active_key,

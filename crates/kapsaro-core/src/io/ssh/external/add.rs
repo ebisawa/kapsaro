@@ -8,18 +8,21 @@ use super::runner::SshCommandRunner;
 use super::traits::SshAdd;
 use crate::io::ssh::SshError;
 use crate::Result;
+use std::path::PathBuf;
 use std::process::Output;
 
 /// Default implementation of `SshAdd` that invokes the system `ssh-add` binary.
 pub struct DefaultSshAdd {
     ssh_add_path: String,
+    agent_socket: Option<PathBuf>,
 }
 
 impl DefaultSshAdd {
-    /// Create a new `DefaultSshAdd` using the given binary path.
-    pub fn new(ssh_add_path: impl Into<String>) -> Self {
+    /// Bind ssh-add to its binary and caller-selected agent socket.
+    pub fn new(ssh_add_path: impl Into<String>, agent_socket: Option<PathBuf>) -> Self {
         Self {
             ssh_add_path: ssh_add_path.into(),
+            agent_socket,
         }
     }
 }
@@ -27,12 +30,13 @@ impl DefaultSshAdd {
 impl SshAdd for DefaultSshAdd {
     fn list_keys(&self) -> Result<String> {
         let output =
-            SshCommandRunner::required_agent(self.ssh_add_path.clone()).output(["-L"], |e| {
-                SshError::build_operation_failed_error_with_source(
-                    format!("Failed to run ssh-add -L: {}", e),
-                    e,
-                )
-            })?;
+            SshCommandRunner::required_agent(self.ssh_add_path.clone(), self.agent_socket.clone())
+                .output(["-L"], |e| {
+                    SshError::build_operation_failed_error_with_source(
+                        format!("Failed to run ssh-add -L: {}", e),
+                        e,
+                    )
+                })?;
 
         parse_list_keys_output(output)
     }

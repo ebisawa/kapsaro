@@ -1,11 +1,6 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::trust::approval::{
-    observe_recipient_set_approval_store, save_known_key_approvals,
-    save_reviewed_recipient_set_approval, ApprovedKnownKey,
-};
-use crate::app::trust::TrustApprovalCandidateBuilder;
 use crate::app_test_utils::{
     build_test_command_options, build_test_execution_context, load_test_trust_store,
     save_test_trust_store_signed_by_active_key, save_test_trust_store_with_recipient_sets,
@@ -13,6 +8,11 @@ use crate::app_test_utils::{
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::trust_store::{RecipientHandleHint, RecipientSetRecord};
+use crate::service::trust::approval::{
+    observe_recipient_set_approval_store, save_known_key_approvals,
+    save_reviewed_recipient_set_approval, ApprovedKnownKey,
+};
+use crate::service::trust::TrustApprovalCandidateBuilder;
 #[cfg(unix)]
 use crate::support::warning::LocalStateWarningGuard;
 use crate::test_utils::setup_test_keystore_from_fixtures;
@@ -90,10 +90,14 @@ fn test_save_known_key_approvals_rejects_self_candidate() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
-    let candidate =
-        ApprovedKnownKey::for_test(ALICE_MEMBER_HANDLE, execution.key_ctx.kid(), None, None);
+    let candidate = ApprovedKnownKey::for_test(
+        ALICE_MEMBER_HANDLE,
+        execution.key_ctx().inner().kid(),
+        None,
+        None,
+    );
 
-    let result = save_known_key_approvals(&options, &execution, &[candidate]);
+    let result = save_known_key_approvals(&execution, &[candidate]);
 
     assert!(result.is_err());
     assert!(result
@@ -112,7 +116,7 @@ fn test_save_known_key_approvals_uses_execution_context_for_signing() {
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
     let candidate = ApprovedKnownKey::for_test(BOB_MEMBER_HANDLE, BOB_KID, None, None);
 
-    save_known_key_approvals(&options, &execution, &[candidate]).unwrap();
+    save_known_key_approvals(&execution, &[candidate]).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
@@ -139,7 +143,7 @@ fn test_save_known_key_approvals_keeps_opened_trust_directory() {
     execution.ensured_trust_directory().unwrap();
     let replacement_snapshot = replace_trust_directory_with_snapshot(home.path());
 
-    save_known_key_approvals(&options, &execution, &[candidate]).unwrap();
+    save_known_key_approvals(&execution, &[candidate]).unwrap();
 
     let replacement_path = home
         .path()
@@ -158,16 +162,15 @@ fn test_save_known_key_approvals_keeps_opened_trust_directory() {
 #[test]
 fn test_save_known_key_approvals_returns_operation_warnings_to_command_sink() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let options = build_test_command_options(home.path(), None);
     let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
     let candidate = ApprovedKnownKey::for_test(BOB_MEMBER_HANDLE, BOB_KID, None, None);
-    save_known_key_approvals(&options, &execution, std::slice::from_ref(&candidate)).unwrap();
+    save_known_key_approvals(&execution, std::slice::from_ref(&candidate)).unwrap();
     let trust_dir = home.path().join("trust");
     fs::set_permissions(&trust_dir, fs::Permissions::from_mode(0o755))
         .expect("make trust directory observable by other users");
     let warning_guard = LocalStateWarningGuard::new();
 
-    save_known_key_approvals(&options, &execution, &[candidate]).unwrap();
+    save_known_key_approvals(&execution, &[candidate]).unwrap();
 
     assert!(warning_guard
         .take()
@@ -186,7 +189,7 @@ fn test_save_known_key_approvals_persists_verified_github_evidence() {
     let candidate =
         ApprovedKnownKey::for_test(BOB_MEMBER_HANDLE, BOB_KID, None, Some(&verified_github));
 
-    save_known_key_approvals(&options, &execution, &[candidate]).unwrap();
+    save_known_key_approvals(&execution, &[candidate]).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
@@ -211,7 +214,7 @@ fn test_save_known_key_approvals_records_manual_review_without_a_github_claim() 
         TrustApprovalCandidateBuilder::from_known_key_candidate(&service_candidate).build();
     let approval = ApprovedKnownKey::from_candidate(&candidate).unwrap();
 
-    save_known_key_approvals(&options, &execution, &[approval]).unwrap();
+    save_known_key_approvals(&execution, &[approval]).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()
@@ -249,7 +252,7 @@ fn test_save_known_key_approvals_persists_verified_github_from_trust_review_cand
         .build();
     let approval = ApprovedKnownKey::from_candidate(&candidate).unwrap();
 
-    save_known_key_approvals(&options, &execution, &[approval]).unwrap();
+    save_known_key_approvals(&execution, &[approval]).unwrap();
 
     let loaded = load_test_trust_store(&options, ALICE_MEMBER_HANDLE)
         .unwrap()

@@ -6,12 +6,14 @@
 //! Tests the decrypt command with CommonOptions, member_handle resolution, and file-enc format
 
 use crate::cli::common::{
-    cmd, encrypt_file_with_member_set_review, setup_unapproved_file_read_fixture, setup_workspace,
-    TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, kapsaro_std_cmd,
+    run_command_with_optional_prompt_pty, run_command_with_pty, setup_unapproved_file_read_fixture,
+    setup_workspace, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::{build_expiring_soon_timestamp, update_active_private_key_expires_at};
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
+use kapsaro_core::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::test_support::storage::keystore::member::find_active_key_document;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -101,6 +103,190 @@ fn test_decrypt_unknown_signer_non_interactive_error() {
     assert!(!fixture.trust_store_path.exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn test_decrypt_missing_output_fails_before_signer_review() {
+    let fixture = setup_unapproved_file_read_fixture();
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("decrypt")
+        .arg(&fixture.artifact_path)
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "yes")
+        .env_remove("CI");
+
+    let result = run_command_with_optional_prompt_pty(&mut command, "Approve this key?", b"n\r");
+
+    assert!(!result.status.success(), "{}", result.output);
+    assert!(
+        result.output.contains("requires either --out or --stdout"),
+        "{}",
+        result.output
+    );
+    assert!(
+        !result.output.contains("Approve this key?"),
+        "{}",
+        result.output
+    );
+    assert!(
+        !result.output.contains("MUST_NOT_BE_DECRYPTED"),
+        "{}",
+        result.output
+    );
+    assert!(
+        !result.output.contains("Unknown signer kid"),
+        "{}",
+        result.output
+    );
+    assert!(!fixture.trust_store_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_decrypt_skips_known_signer_review_when_strict_checking_is_disabled() {
+    let fixture = setup_unapproved_file_read_fixture();
+    let output_path = fixture.home.path().join("strict-disabled.txt");
+
+    cmd()
+        .arg("decrypt")
+        .arg(&fixture.artifact_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Approve this key?").not());
+
+    assert_eq!(fs::read(&output_path).unwrap(), b"MUST_NOT_BE_DECRYPTED\n");
+    assert!(!fixture.trust_store_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_decrypt_non_member_enabled_by_env_non_interactive_error() {
+    let fixture = setup_unapproved_file_read_fixture();
+    fs::remove_file(
+        fixture
+            .workspace
+            .join("members/active")
+            .join(format!("{}.json", fixture.unapproved_member_handle)),
+    )
+    .unwrap();
+    let output_path = fixture.home.path().join("must-not-exist.txt");
+
+    cmd()
+        .arg("decrypt")
+        .arg(&fixture.artifact_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_ALLOW_NON_MEMBER", "yes")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("MUST_NOT_BE_DECRYPTED").not())
+        .stderr(predicate::str::contains("Signer is not in active members"))
+        .stderr(predicate::str::contains(fixture.unapproved_member_handle))
+        .stderr(predicate::str::contains(&fixture.unapproved_kid))
+        .stderr(predicate::str::contains("Accept this signed artifact once?").not());
+
+    assert!(!output_path.exists());
+    assert!(!fixture.trust_store_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_decrypt_non_member_cli_acceptance_is_one_shot() {
+    let fixture = setup_unapproved_file_read_fixture();
+    fs::remove_file(
+        fixture
+            .workspace
+            .join("members/active")
+            .join(format!("{}.json", fixture.unapproved_member_handle)),
+    )
+    .unwrap();
+    let output_path = fixture.home.path().join("accepted.txt");
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("decrypt")
+        .arg(&fixture.artifact_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--allow-non-member")
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env_remove("CI");
+
+    let result = run_command_with_pty(&mut command, "Accept this signed artifact once?", b"y\r");
+
+    assert!(result.status.success(), "{}", result.output);
+    assert!(result.output.contains(fixture.unapproved_member_handle));
+    assert!(result
+        .output
+        .contains(&format_kid_display(&fixture.unapproved_kid).unwrap()));
+    assert!(result.output.contains("SSH fingerprint"));
+    assert!(result.output.contains("will not save the signer key"));
+    assert!(result.output.contains("Current recipients"));
+    assert_eq!(fs::read(&output_path).unwrap(), b"MUST_NOT_BE_DECRYPTED\n");
+    assert!(!fixture.trust_store_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_decrypt_non_member_cli_rejection_has_no_side_effect() {
+    let fixture = setup_unapproved_file_read_fixture();
+    fs::remove_file(
+        fixture
+            .workspace
+            .join("members/active")
+            .join(format!("{}.json", fixture.unapproved_member_handle)),
+    )
+    .unwrap();
+    let output_path = fixture.home.path().join("rejected.txt");
+    let mut command = kapsaro_std_cmd();
+    command
+        .arg("decrypt")
+        .arg(&fixture.artifact_path)
+        .arg("--out")
+        .arg(&output_path)
+        .arg("--allow-non-member")
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env_remove("CI");
+
+    let result = run_command_with_pty(&mut command, "Accept this signed artifact once?", b"n\r");
+
+    assert!(!result.status.success(), "{}", result.output);
+    assert!(result
+        .output
+        .contains("Non-member signer acceptance was rejected"));
+    assert!(!output_path.exists());
+    assert!(!fixture.trust_store_path.exists());
+}
+
 // ============================================================================
 // Format detection tests
 // ============================================================================
@@ -143,6 +329,7 @@ fn test_decrypt_rejects_unknown_format() {
 
     // Create a file with unknown content
     let unknown_path = test_dir.join("unknown.txt");
+    let output_path = test_dir.join("unknown.out");
     let content = "This is just some random text that doesn't match any format\n";
     fs::write(&unknown_path, content).unwrap();
 
@@ -150,6 +337,8 @@ fn test_decrypt_rejects_unknown_format() {
     cmd()
         .arg("decrypt")
         .arg(unknown_path.to_str().unwrap())
+        .arg("--out")
+        .arg(output_path)
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .arg("--workspace")

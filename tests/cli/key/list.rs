@@ -5,7 +5,7 @@
 
 use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
 
 #[cfg(unix)]
 use std::os::unix::fs::symlink;

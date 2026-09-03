@@ -8,8 +8,8 @@ use crate::cli::common::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::cli::key::{find_kid_in_member_dir, install_secondary_member_fixture};
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
 #[cfg(unix)]
 use kapsaro_test_support::fixture::create_local_state_dir;
 use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
@@ -449,4 +449,28 @@ fn test_key_remove_forced_reports_how_to_restore_the_trust_store_signer() {
         .join(ALICE_MEMBER_HANDLE)
         .join(&signer_kid)
         .exists());
+}
+
+#[test]
+fn test_key_remove_other_member_kid_with_environment_member_handle_fails() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
+    let keystore_root = home.path().join("keys");
+    let bob_kid = load_active_kid(BOB_MEMBER_HANDLE, &keystore_root)
+        .unwrap()
+        .expect("Bob fixture must have an active key");
+    let bob_key_dir = keystore_root.join(BOB_MEMBER_HANDLE).join(&bob_kid);
+
+    cmd()
+        .arg("key")
+        .arg("remove")
+        .arg(&bob_kid)
+        .arg("--force")
+        .arg("--home")
+        .arg(home.path())
+        .env("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .assert()
+        .failure();
+
+    assert!(bob_key_dir.exists(), "Bob's key must remain untouched");
 }

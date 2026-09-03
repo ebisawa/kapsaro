@@ -22,8 +22,8 @@ use crate::cli::common::output::{
     print_empty_or_json_or_text, print_empty_or_json_or_text_with_warnings,
     print_json_or_text_with_warnings,
 };
-use kapsaro_core::cli_api::app::member::approval::MemberApprovalResult;
-use kapsaro_core::cli_api::app::member::types::{
+use kapsaro_core::api::member::approval::MemberApprovalResult;
+use kapsaro_core::api::member::types::{
     MemberListResult, MemberShowResult, MemberVerificationResult,
 };
 use kapsaro_core::Result;

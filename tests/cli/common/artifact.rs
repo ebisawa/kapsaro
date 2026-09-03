@@ -4,9 +4,9 @@
 // Artifact manipulation, assertion helpers, and file utilities for CLI integration tests.
 // Provides KV signature tampering and stderr ordering assertions.
 
-use kapsaro_core::cli_api::test_support::helpers::codec::base64_public::encode_base64url_nopad;
-use kapsaro_core::cli_api::test_support::wire::schema::document::parse_kv_signature_token;
-use kapsaro_core::cli_api::test_support::wire::token::TokenCodec;
+use kapsaro_core::test_support::helpers::codec::base64_public::encode_base64url_nopad;
+use kapsaro_core::test_support::wire::schema::document::parse_kv_signature_token;
+use kapsaro_core::test_support::wire::token::TokenCodec;
 use std::path::Path;
 
 #[cfg(unix)]
@@ -23,8 +23,8 @@ pub struct UnapprovedReadFixture {
 #[cfg(unix)]
 pub fn setup_unapproved_file_read_fixture() -> UnapprovedReadFixture {
     use super::review::encrypt_file_with_member_set_review;
-    use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
-    use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+    use kapsaro_core::test_support::storage::keystore::storage::list_kids;
+    use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
     use kapsaro_test_support::constants::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
     use kapsaro_test_support::crypto_context::setup_member_key_context;
     use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
@@ -71,8 +71,8 @@ pub fn setup_unapproved_file_read_fixture() -> UnapprovedReadFixture {
 #[cfg(unix)]
 pub fn setup_unapproved_kv_read_fixture() -> UnapprovedReadFixture {
     use super::review::set_value_with_member_set_review;
-    use kapsaro_core::cli_api::test_support::storage::keystore::storage::list_kids;
-    use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+    use kapsaro_core::test_support::storage::keystore::storage::list_kids;
+    use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
     use kapsaro_test_support::constants::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
     use kapsaro_test_support::crypto_context::setup_member_key_context;
     use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
@@ -103,6 +103,53 @@ pub fn setup_unapproved_kv_read_fixture() -> UnapprovedReadFixture {
         .into_iter()
         .next()
         .unwrap();
+    let artifact_path = workspace.join("secrets").join("default.kvenc");
+    UnapprovedReadFixture {
+        home,
+        workspace,
+        ssh_identity,
+        artifact_path,
+        trust_store_path,
+        unapproved_member_handle: BOB_MEMBER_HANDLE,
+        unapproved_kid,
+    }
+}
+
+#[cfg(unix)]
+pub fn setup_unapproved_kv_signer_read_fixture() -> UnapprovedReadFixture {
+    use super::review::set_value_with_member_set_review;
+    use kapsaro_core::test_support::storage::keystore::storage::list_kids;
+    use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
+    use kapsaro_test_support::constants::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
+    use kapsaro_test_support::crypto_context::setup_member_key_context;
+    use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
+    use kapsaro_test_support::guards::EnvGuard;
+    use kapsaro_test_support::workspace_state::{member_handle, setup_trust_store_for_workspace};
+
+    let _env = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+    let (home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let bob_ctx = setup_member_key_context(&home, BOB_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(home.path(), &workspace, BOB_MEMBER_HANDLE, &bob_ctx);
+    let ssh_identity = home.path().join(".ssh").join("test_ed25519");
+    set_value_with_member_set_review(
+        &workspace,
+        home.path(),
+        &ssh_identity,
+        "SHOULD_NOT_PRINT",
+        "must-not-print",
+        Some(BOB_MEMBER_HANDLE),
+        None,
+    );
+    let trust_store_path =
+        get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    let unapproved_kid = list_kids(&home.path().join("keys"), BOB_MEMBER_HANDLE)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    assert!(!trust_store_path.exists());
     let artifact_path = workspace.join("secrets").join("default.kvenc");
     UnapprovedReadFixture {
         home,

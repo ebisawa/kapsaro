@@ -3,12 +3,15 @@
 
 //! Integration tests for `run` command
 
+#[cfg(unix)]
+use crate::cli::common::artifact::setup_unapproved_kv_signer_read_fixture;
 use crate::cli::common::{
     cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
     setup_unapproved_kv_read_fixture, setup_workspace, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -28,6 +31,66 @@ fn setup_workspace_with_default_file() -> (TempDir, TempDir, TempDir, PathBuf) {
     );
 
     (workspace_dir, home_dir, ssh_temp, ssh_priv)
+}
+
+#[cfg(unix)]
+fn assert_run_ignores_non_member_setting(
+    workspace: &Path,
+    home: &Path,
+    ssh_identity: &Path,
+    configure: impl FnOnce(&mut assert_cmd::Command),
+) {
+    let child_output = home.join("run-non-member-setting-output");
+    let mut command = cmd();
+    command
+        .arg("run")
+        .arg("--workspace")
+        .arg(workspace)
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("printf %s \"$TEST_KEY\" > \"$1\"")
+        .arg("kapsaro-test")
+        .arg(&child_output)
+        .env("KAPSARO_HOME", home)
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity)
+        .env_remove("KAPSARO_ALLOW_NON_MEMBER");
+    configure(&mut command);
+
+    command
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("E_CONFIG_VALUE_INVALID").not());
+    assert_eq!(fs::read_to_string(child_output).unwrap(), "test_value");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_run_ignores_invalid_allow_non_member_environment_value() {
+    let (workspace, home, _ssh_temp, ssh_identity) = setup_workspace_with_default_file();
+
+    assert_run_ignores_non_member_setting(
+        workspace.path(),
+        home.path(),
+        &ssh_identity,
+        |command| {
+            command.env("KAPSARO_ALLOW_NON_MEMBER", "invalid");
+        },
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_run_ignores_invalid_allow_non_member_config_value() {
+    let (workspace, home, _ssh_temp, ssh_identity) = setup_workspace_with_default_file();
+    let config_path = home.path().join("config.toml");
+    fs::write(&config_path, "allow_non_member = \"invalid\"\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&config_path, fs::Permissions::from_mode(0o600)).unwrap();
+
+    assert_run_ignores_non_member_setting(workspace.path(), home.path(), &ssh_identity, |_| {});
 }
 
 #[test]
@@ -95,6 +158,35 @@ fn test_run_unknown_recipient_non_interactive_error_before_child_start() {
         .stderr(predicate::str::contains("Interactive confirmation requires a terminal").not());
 
     assert!(!child_marker.exists());
+    assert!(!fixture.trust_store_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_run_skips_known_signer_review_when_strict_checking_is_disabled() {
+    let fixture = setup_unapproved_kv_signer_read_fixture();
+    let child_marker = fixture.home.path().join("child-output");
+
+    cmd()
+        .arg("run")
+        .arg("--member-handle")
+        .arg(crate::cli::common::ALICE_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(&fixture.workspace)
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("printf %s \"$SHOULD_NOT_PRINT\" > \"$1\"")
+        .arg("kapsaro-test")
+        .arg(&child_marker)
+        .env("KAPSARO_HOME", fixture.home.path())
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Approve this key?").not());
+
+    assert_eq!(fs::read_to_string(&child_marker).unwrap(), "must-not-print");
     assert!(!fixture.trust_store_path.exists());
 }
 

@@ -7,9 +7,7 @@
 
 use crate::support::limits::{MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH, MAX_MEMBER_HANDLE_LENGTH};
 use crate::support::validation::validate_kv_file_basename;
-use kapsaro_core::cli_api::presentation::validation::{
-    validate_github_login, validate_member_handle,
-};
+use crate::support::validation::{validate_github_login, validate_member_handle};
 
 #[test]
 fn test_validate_member_handle_valid() {

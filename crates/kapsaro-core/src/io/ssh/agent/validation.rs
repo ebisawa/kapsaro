@@ -10,24 +10,15 @@ use crate::Result;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentIdentity {
     key_blob: Vec<u8>,
-    comment: String,
 }
 
 impl AgentIdentity {
-    pub fn new(key_blob: Vec<u8>, comment: String) -> Self {
-        Self { key_blob, comment }
+    pub fn new(key_blob: Vec<u8>) -> Self {
+        Self { key_blob }
     }
 
     pub fn key_blob(&self) -> &[u8] {
         &self.key_blob
-    }
-
-    // The comment is part of every identity the agent reports and is what the
-    // agent protocol tests assert on. It stays compiled in production builds so
-    // the parsed identity record can be read in full when diagnosing an agent.
-    #[allow(dead_code)]
-    pub fn comment(&self) -> &str {
-        &self.comment
     }
 }
 

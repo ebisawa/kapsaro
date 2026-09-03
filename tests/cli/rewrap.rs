@@ -9,7 +9,7 @@ use crate::cli::common::{
     append_common_command_args, cmd, default_common_options, encrypt_file_with_member_set_review,
     generate_temp_ssh_keypair, set_ssh_key_from_temp_dir, set_value_with_member_set_review,
     setup_workspace, setup_workspace_with_kv_entries, tamper_kv_signature, CommonOptions,
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
@@ -51,6 +51,16 @@ fn run_rewrap_command(
     member_handle: &str,
     extra_args: &[&str],
 ) -> std::process::Output {
+    build_rewrap_command(common_opts, member_handle, extra_args)
+        .output()
+        .unwrap()
+}
+
+fn build_rewrap_command(
+    common_opts: &CommonOptions,
+    member_handle: &str,
+    extra_args: &[&str],
+) -> std::process::Command {
     let mut command = crate::cli::common::kapsaro_std_cmd();
     command
         .arg("rewrap")
@@ -60,7 +70,7 @@ fn run_rewrap_command(
     for arg in extra_args {
         command.arg(arg);
     }
-    command.output().unwrap()
+    command
 }
 
 /// Create a kv-enc file in the workspace using the set command.

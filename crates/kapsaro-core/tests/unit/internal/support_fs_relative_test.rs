@@ -9,12 +9,12 @@ use super::{
     ensure_child_dir_at, ensure_child_dir_restricted_at, ensure_text_file_content_matches_at,
     fail_next_child_dir_creation_at, fail_next_parent_sync, file_exists_at, is_write_staging_name,
     list_child_entries_at, load_text_with_limit_at, open_child_dir, open_child_dir_following,
-    open_dir_following, open_dir_nofollow, open_optional_child_dir, open_scanned_child_dir,
-    read_directory_entry_error, regular_file_exists_at, remove_empty_child_dir_if_exists_at,
-    remove_file_at, remove_file_if_exists_at, rename_child_noreplace_unsynced_at, save_text_at,
-    save_text_restricted_at, scan_child_entries_at, scan_one_child, vanish_next_scanned_child,
-    ChildDirectoryCreationStep, ChildName, ChildType, DirectoryFd, DirectoryScope, RemovedEntry,
-    ScanBudget,
+    open_dir_following, open_dir_nofollow, open_optional_child_dir, open_os_child_dir_nofollow,
+    open_scanned_child_dir, read_directory_entry_error, regular_file_exists_at,
+    remove_empty_child_dir_if_exists_at, remove_file_at, remove_file_if_exists_at,
+    rename_child_noreplace_unsynced_at, save_text_at, save_text_restricted_at,
+    scan_child_entries_at, scan_one_child, vanish_next_scanned_child, ChildDirectoryCreationStep,
+    ChildName, ChildType, DirectoryFd, DirectoryScope, RemovedEntry, ScanBudget,
 };
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::lock::lock_test_support::with_locked_workspace_dir;
@@ -115,6 +115,60 @@ fn test_open_child_dir_following_opens_a_non_utf8_name() {
 
     assert_eq!(list_child_names_at(&opened).unwrap(), vec!["entry"]);
     assert_eq!(opened.path(), child);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_open_os_child_dir_nofollow_opens_a_non_utf8_name() {
+    let temp_dir = TempDir::new().unwrap();
+    let name = non_utf8_name();
+    let child = temp_dir.path().join(name);
+    if !non_utf8_dir_can_be_created(
+        &child,
+        "test_open_os_child_dir_nofollow_opens_a_non_utf8_name",
+    ) {
+        return;
+    }
+    fs::write(child.join("entry"), "payload").unwrap();
+    let parent = open_dir_following(temp_dir.path(), DirectoryScope::Generic).unwrap();
+
+    let opened = open_os_child_dir_nofollow(&parent, name).unwrap();
+
+    assert_eq!(list_child_names_at(&opened).unwrap(), vec!["entry"]);
+    assert_eq!(opened.path(), child);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_open_os_child_dir_nofollow_refuses_a_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let real = temp_dir.path().join("real");
+    fs::create_dir(&real).unwrap();
+    symlink(&real, temp_dir.path().join("alias")).unwrap();
+    let parent = open_dir_following(temp_dir.path(), DirectoryScope::Generic).unwrap();
+
+    let error = open_os_child_dir_nofollow(&parent, OsStr::new("alias")).unwrap_err();
+
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert!(error.to_string().contains("symlink"), "{error}");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_open_os_child_dir_nofollow_invalid_component_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let parent = open_dir_following(temp_dir.path(), DirectoryScope::Generic).unwrap();
+
+    for name in [
+        OsStr::new("."),
+        OsStr::new(".."),
+        OsStr::new("nested/child"),
+    ] {
+        let error = open_os_child_dir_nofollow(&parent, name).unwrap_err();
+        assert_eq!(error.kind(), crate::ErrorKind::InvalidArgument, "{name:?}");
+    }
 }
 
 /// A root the operator chose is opened by the bytes its path holds, so a final

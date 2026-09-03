@@ -11,20 +11,19 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    ensure_workspace_required, resolve_options, resolve_write_execution_input,
-    run_write_command_with_trust, WriteCommandLabels,
+    resolve_cli_write_session, run_write_command_with_trust, CliWriteSession, WriteCommandLabels,
 };
+use crate::cli::common::context::CliContext;
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
 use crate::cli::common::trust::{
-    confirm_recipient_set_approval, run_with_execution_trust_store_reset_recovery,
+    confirm_recipient_set_approval, run_with_trust_command_session_reset_recovery,
 };
 use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
-use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::file::encrypt::{
+use kapsaro_core::api::file::encrypt::{
     execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
 };
-use kapsaro_core::cli_api::presentation::fs::load_bytes;
+use kapsaro_core::api::file::load_plaintext_bytes;
+use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
@@ -64,24 +63,31 @@ pub(crate) fn run(args: EncryptArgs) -> Result<()> {
         args.input.as_deref(),
         args.stdin,
     )?;
-    let options = resolve_options(&args.common);
-    ensure_workspace_required(&options, "encrypt")?;
-    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
-    let encrypted = encrypt_under_trust_review(&options, &execution, &input_bytes)?;
+    let context = CliContext::resolve(&args.common)?;
+    let workspace_path = context.workspace_path()?;
+    let directories = WorkspaceWriteDirectories::open(workspace_path)?;
+    let session = resolve_cli_write_session(
+        &context,
+        &args.common,
+        directories,
+        args.member.member_handle.clone(),
+        false,
+    )?;
+    let encrypted = encrypt_under_trust_review(&session, &input_bytes)?;
 
     save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet.quiet)?;
     Ok(())
 }
 
-fn encrypt_under_trust_review(
-    options: &CommonCommandOptions,
-    execution: &ExecutionContext,
-    input_bytes: &[u8],
-) -> Result<String> {
-    run_with_execution_trust_store_reset_recovery(execution, || {
-        let command = resolve_encrypt_file_command(options, execution, input_bytes.to_vec())?;
+fn encrypt_under_trust_review(session: &CliWriteSession, input_bytes: &[u8]) -> Result<String> {
+    run_with_trust_command_session_reset_recovery(session.trust(), || {
+        let command = resolve_encrypt_file_command(
+            session.directories(),
+            session.trust(),
+            session.options(),
+            input_bytes.to_vec(),
+        )?;
         run_write_command_with_trust(
-            options,
             &command,
             WriteCommandLabels {
                 signer_context: None,
@@ -89,7 +95,6 @@ fn encrypt_under_trust_review(
             },
             || {
                 execute_encrypt_file_command_with_recipient_set_confirmation(
-                    options,
                     &command,
                     confirm_recipient_set_approval,
                 )
@@ -106,7 +111,7 @@ fn resolve_encrypt_input_bytes(input_path: Option<&PathBuf>, from_stdin: bool) -
     }
 
     input_path
-        .map(|path| load_bytes(path))
+        .map(load_plaintext_bytes)
         .transpose()?
         .ok_or_else(|| {
             Error::build_invalid_argument_error("INPUT is required unless --stdin is used")

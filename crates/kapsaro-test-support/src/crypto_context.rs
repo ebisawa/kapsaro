@@ -5,9 +5,11 @@
 // Uses Ed25519DirectBackend to avoid spawning ssh-keygen subprocesses.
 
 use super::ed25519_backend::Ed25519DirectBackend;
-use kapsaro_core::cli_api::test_support::operations::context::crypto::{
+use kapsaro_core::test_support::operations::context::crypto::{
     load_crypto_context_from_keystore, CryptoContext,
 };
+use std::path::Path;
+
 use tempfile::TempDir;
 
 /// Build CryptoContext for a member in a test keystore
@@ -19,12 +21,20 @@ pub fn setup_member_key_context(
     member_handle: &str,
     explicit_kid: Option<&str>,
 ) -> CryptoContext {
-    let keystore_root = temp_dir.path().join("keys");
-    let ssh_pub = std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub"))
+    setup_member_key_context_at(temp_dir.path(), member_handle, explicit_kid)
+}
+
+pub fn setup_member_key_context_at(
+    home: &Path,
+    member_handle: &str,
+    explicit_kid: Option<&str>,
+) -> CryptoContext {
+    let keystore_root = home.join("keys");
+    let ssh_pub = std::fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
         .unwrap()
         .trim()
         .to_string();
-    let ssh_priv = temp_dir.path().join(".ssh").join("test_ed25519");
+    let ssh_priv = home.join(".ssh").join("test_ed25519");
     let backend = Ed25519DirectBackend::new(&ssh_priv).unwrap();
 
     load_crypto_context_from_keystore(
@@ -33,7 +43,7 @@ pub fn setup_member_key_context(
         explicit_kid,
         Box::new(backend),
         ssh_pub,
-        Some(temp_dir.path().join("workspace")),
+        Some(home.join("workspace")),
     )
     .unwrap()
 }

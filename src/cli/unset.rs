@@ -8,10 +8,10 @@ use clap::Args;
 use std::io::BufRead;
 
 use crate::cli::common::command::{
-    ensure_workspace_required, resolve_options_with_allow_expired_key,
-    resolve_required_member_handle, resolve_write_execution_input,
-    run_kv_write_command_with_recovery, WriteCommandLabels, KV_MUTATION_PURPOSE,
+    resolve_cli_write_session, resolve_required_cli_member_handle,
+    run_kv_write_command_with_recovery, CliWriteSession, WriteCommandLabels,
 };
+use crate::cli::common::context::CliContext;
 use crate::cli::common::output::text::print_optional_status;
 use crate::cli::common::prompt::confirm_destructive_action;
 #[cfg(test)]
@@ -20,11 +20,9 @@ use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
-use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
-use kapsaro_core::cli_api::app::kv::types::KvWriteOutcome;
-use kapsaro_core::cli_api::app::trust::UnsetPolicy;
+use kapsaro_core::api::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::api::kv::types::KvWriteOutcome;
+use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::Result;
 
 #[derive(Args)]
@@ -50,23 +48,27 @@ pub(crate) struct UnsetArgs {
 }
 
 pub(crate) fn run(args: UnsetArgs) -> Result<()> {
-    let options = resolve_options_with_allow_expired_key(
-        &args.common,
-        args.allow_expired_key.allow_expired_key,
-    )?;
-    ensure_workspace_required(&options, KV_MUTATION_PURPOSE)?;
+    let context = CliContext::resolve(&args.common)?;
+    let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
+    let workspace_path = context.workspace_path()?;
+    let directories = WorkspaceWriteDirectories::open(workspace_path)?;
     let member_handle =
-        resolve_required_member_handle(&options, args.member.member_handle.clone(), false)?;
+        resolve_required_cli_member_handle(&context, args.member.member_handle.clone(), false)?;
     confirm_unset_operation(args.force.force, &args.key)?;
-    let execution = resolve_write_execution_input(&options, Some(member_handle.clone()))?;
-    let outcome = remove_entry(&options, &execution, args.store.name.as_deref(), &args.key)?;
+    let session = resolve_cli_write_session(
+        &context,
+        &args.common,
+        directories,
+        Some(member_handle),
+        allow_expired_key,
+    )?;
+    let outcome = remove_entry(&session, args.store.name.as_deref(), &args.key)?;
     print_optional_status(outcome.message.as_deref(), args.common.quiet.quiet);
     Ok(())
 }
 
 fn remove_entry(
-    options: &CommonCommandOptions,
-    execution: &ExecutionContext,
+    session: &CliWriteSession,
     store_name: Option<&str>,
     key: &str,
 ) -> Result<KvWriteOutcome> {
@@ -75,16 +77,15 @@ fn remove_entry(
         key,
         store_name.unwrap_or("default")
     );
-    run_kv_write_command_with_recovery::<UnsetPolicy, _, _>(
-        options,
-        execution,
+    run_kv_write_command_with_recovery(
+        session,
         store_name,
         false,
         WriteCommandLabels {
             signer_context: Some(("unset input signer", "input signer")),
             recipient_context: "unset recipients",
         },
-        |_, trust_plan| {
+        |trust_plan| {
             unset_kv_command_with_recipient_set_confirmation(
                 trust_plan,
                 key,

@@ -3,15 +3,17 @@
 
 //! rewrap command - recipient management for encrypted files
 
-use crate::cli::common::command::{
-    resolve_options_with_read_trust_allowances, resolve_write_execution_input,
-};
-use crate::cli::common::trust::run_with_execution_trust_store_reset_recovery;
+use crate::cli::common::context::CliContext;
+use crate::cli::common::key_context::load_trust_command_session;
+use crate::cli::common::presentation::tty;
+use crate::cli::common::trust::run_with_trust_command_session_reset_recovery;
 use crate::cli::options::{
     AllowExpiredKeyOption, AllowNonMemberOption, MemberHandleOption, SigningQuietOutputOptions,
 };
 use clap::Args;
-use kapsaro_core::Result;
+use kapsaro_core::api::operation::OperationOptions;
+use kapsaro_core::api::rewrap::RewrapSession;
+use kapsaro_core::{Error, Result};
 use std::path::PathBuf;
 
 mod batch;
@@ -46,13 +48,32 @@ pub(crate) struct RewrapArgs {
 }
 
 pub(crate) fn run(args: RewrapArgs) -> Result<()> {
-    let options = resolve_options_with_read_trust_allowances(
-        &args.common,
-        args.allow_expired_key.allow_expired_key,
-        args.allow_non_member.allow_non_member,
-    )?;
-    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
-    run_with_execution_trust_store_reset_recovery(&execution, || {
-        batch::run_batch_rewrap(&args, &options, &execution)
+    let context = CliContext::resolve(&args.common)?;
+    enforce_rewrap_strict_key_checking(&context)?;
+    let workspace = context.workspace_path()?;
+    let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
+    let allow_non_member = context.allow_non_member(args.allow_non_member.allow_non_member)?;
+    let trust_session =
+        load_trust_command_session(&context, &args.common, args.member.member_handle.clone())?;
+    let session = RewrapSession::from_trust_command(&workspace, &trust_session)?;
+    let operation = OperationOptions::new().with_allow_expired_key(allow_expired_key);
+
+    run_with_trust_command_session_reset_recovery(&trust_session, || {
+        batch::run_batch_rewrap(
+            &args,
+            &session,
+            operation,
+            allow_non_member,
+            tty::is_interactive(),
+        )
     })
+}
+
+fn enforce_rewrap_strict_key_checking(context: &CliContext) -> Result<()> {
+    if context.strict_key_checking() {
+        return Ok(());
+    }
+    Err(Error::build_invalid_operation_error(
+        "KAPSARO_STRICT_KEY_CHECKING=no is not allowed for rewrap".to_string(),
+    ))
 }

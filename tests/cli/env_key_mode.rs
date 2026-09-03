@@ -10,13 +10,13 @@ use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
     TEST_MEMBER_HANDLE,
 };
-use kapsaro_core::cli_api::test_support::helpers::secret::SecretString;
-use kapsaro_core::cli_api::test_support::operations::key::portable_export::{
+use kapsaro_core::test_support::helpers::secret::SecretString;
+use kapsaro_core::test_support::operations::key::portable_export::{
     export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
 };
-use kapsaro_core::cli_api::test_support::operations::key::protection::encryption::decrypt_private_key;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
-use kapsaro_core::cli_api::test_support::storage::keystore::storage::load_private_key;
+use kapsaro_core::test_support::operations::key::protection::encryption::decrypt_private_key;
+use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::test_support::storage::keystore::storage::load_private_key;
 use kapsaro_test_support::ed25519_backend::Ed25519DirectBackend;
 use predicates::prelude::*;
 use std::fs;
@@ -95,6 +95,19 @@ fn env_key_cmd_at(home: &Path, exported_key: &str, password: &str) -> assert_cmd
     c.env_remove("SSH_AUTH_SOCK");
     c.env_remove("KAPSARO_SSH_IDENTITY");
     c
+}
+
+fn env_key_cmd_without_home(exported_key: &str) -> assert_cmd::Command {
+    let mut command = cmd();
+    command
+        .env_remove("HOME")
+        .env_remove("KAPSARO_HOME")
+        .env_remove("SSH_AUTH_SOCK")
+        .env_remove("KAPSARO_SSH_IDENTITY")
+        .env("KAPSARO_PRIVATE_KEY", exported_key)
+        .env("KAPSARO_KEY_PASSWORD", TEST_PASSWORD)
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no");
+    command
 }
 
 // ============================================================================
@@ -305,6 +318,70 @@ fn test_env_key_run_roundtrip() {
         .assert()
         .success()
         .stdout(predicate::str::contains("run-mode-value"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_env_key_reads_with_explicit_workspace_and_no_home() {
+    let (workspace_dir, home_dir, _ssh_temp, ssh_priv, exported_key) = setup_env_key_workspace();
+    set_value_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        "HOMELESS_VALUE",
+        "available",
+        None,
+        None,
+    );
+    let plaintext = home_dir.path().join("homeless.txt");
+    let encrypted = home_dir.path().join("homeless.txt.kapsaro");
+    let decrypted = home_dir.path().join("homeless.out");
+    fs::write(&plaintext, b"HOMELESS_FILE=available\n").unwrap();
+    encrypt_file_with_member_set_review(
+        workspace_dir.path(),
+        home_dir.path(),
+        &ssh_priv,
+        &plaintext,
+        &encrypted,
+        TEST_MEMBER_HANDLE,
+    );
+
+    env_key_cmd_without_home(&exported_key)
+        .arg("get")
+        .arg("HOMELESS_VALUE")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("available"));
+    env_key_cmd_without_home(&exported_key)
+        .arg("list")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("HOMELESS_VALUE"));
+    env_key_cmd_without_home(&exported_key)
+        .arg("decrypt")
+        .arg(&encrypted)
+        .arg("--out")
+        .arg(&decrypted)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .assert()
+        .success();
+    assert_eq!(fs::read(&decrypted).unwrap(), b"HOMELESS_FILE=available\n");
+    env_key_cmd_without_home(&exported_key)
+        .arg("run")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--")
+        .arg("sh")
+        .arg("-c")
+        .arg("printf %s \"$HOMELESS_VALUE\"")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("available"));
 }
 
 #[cfg(unix)]

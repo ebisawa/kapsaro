@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::output::text::doctor::format_doctor_report;
-use kapsaro_core::cli_api::app::doctor::types::{
+use kapsaro_core::api::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
 };
 

@@ -10,7 +10,169 @@ use console::strip_ansi_codes;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
 
 #[cfg(unix)]
-use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
+
+#[cfg(unix)]
+struct PromotionSideEffectFixture {
+    _temp_dir: tempfile::TempDir,
+    workspace_dir: PathBuf,
+    common_opts: CommonOptions,
+    artifact_path: PathBuf,
+    artifact_before: Vec<u8>,
+    active_path: PathBuf,
+    incoming_path: PathBuf,
+    incoming_before: Vec<u8>,
+    trust_path: PathBuf,
+    trust_before: Vec<u8>,
+}
+
+#[cfg(unix)]
+fn setup_promotion_side_effect_fixture() -> PromotionSideEffectFixture {
+    use crate::test_utils::member_handle;
+
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let common_opts = build_preflight_common_options(&temp_dir, &workspace_dir);
+    let artifact_path = save_kv_file(
+        &workspace_dir,
+        common_opts.clone(),
+        ALICE_MEMBER_HANDLE,
+        "preflight",
+        &[("KEY", "value")],
+    );
+    let (active_path, incoming_path) = setup_bob_incoming(&workspace_dir);
+    let trust_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+
+    PromotionSideEffectFixture {
+        artifact_before: fs::read(&artifact_path).unwrap(),
+        incoming_before: fs::read(&incoming_path).unwrap(),
+        trust_before: fs::read(&trust_path).unwrap(),
+        _temp_dir: temp_dir,
+        workspace_dir,
+        common_opts,
+        artifact_path,
+        active_path,
+        incoming_path,
+        trust_path,
+    }
+}
+
+#[cfg(unix)]
+fn build_preflight_common_options(
+    temp_dir: &tempfile::TempDir,
+    workspace_dir: &Path,
+) -> CommonOptions {
+    let mut common_opts = default_common_options();
+    common_opts.home = Some(temp_dir.path().to_path_buf());
+    common_opts.workspace = Some(workspace_dir.to_path_buf());
+    common_opts.quiet = true;
+    set_ssh_key_from_temp_dir(&mut common_opts, temp_dir);
+    common_opts
+}
+
+#[cfg(unix)]
+fn setup_bob_incoming(workspace_dir: &Path) -> (PathBuf, PathBuf) {
+    let active_path = workspace_dir
+        .join("members/active")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"));
+    let incoming_path = workspace_dir
+        .join("members/incoming")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"));
+    fs::rename(&active_path, &incoming_path).unwrap();
+    (active_path, incoming_path)
+}
+
+#[cfg(unix)]
+fn assert_promotion_side_effects_absent(fixture: &PromotionSideEffectFixture) {
+    assert!(!fixture.active_path.exists());
+    assert_eq!(
+        fs::read(&fixture.incoming_path).unwrap(),
+        fixture.incoming_before
+    );
+    assert_eq!(fs::read(&fixture.trust_path).unwrap(), fixture.trust_before);
+    assert_eq!(
+        fs::read(&fixture.artifact_path).unwrap(),
+        fixture.artifact_before
+    );
+}
+
+#[cfg(unix)]
+fn assert_no_promotion_prompt(output: &std::process::Output) {
+    let rendered = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !rendered.contains("Accept?"),
+        "unexpected prompt: {rendered}"
+    );
+    assert!(
+        !rendered.contains("Secret sharing review"),
+        "unexpected promotion review: {rendered}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_rewrap_strict_key_checking_no_before_side_effects_error() {
+    let fixture = setup_promotion_side_effect_fixture();
+    let output = build_rewrap_command(&fixture.common_opts, ALICE_MEMBER_HANDLE, &[])
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("KAPSARO_STRICT_KEY_CHECKING=no is not allowed for rewrap"));
+    assert_no_promotion_prompt(&output);
+    assert_promotion_side_effects_absent(&fixture);
+}
+
+#[test]
+fn test_rewrap_strict_key_checking_no_before_resolving_paths_error() {
+    let root = tempfile::tempdir().unwrap();
+    let home = root.path().join("missing-home");
+    let workspace = root.path().join("missing-workspace");
+    let mut common_opts = default_common_options();
+    common_opts.home = Some(home.clone());
+    common_opts.workspace = Some(workspace.clone());
+    let output = build_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[])
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("KAPSARO_STRICT_KEY_CHECKING=no is not allowed for rewrap"));
+    assert!(!home.exists());
+    assert!(!workspace.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_rewrap_missing_target_before_promotion_error() {
+    let fixture = setup_promotion_side_effect_fixture();
+    let missing = fixture.workspace_dir.join("missing.json");
+
+    let output = run_rewrap_command(
+        &fixture.common_opts,
+        ALICE_MEMBER_HANDLE,
+        &["--target", missing.to_str().unwrap()],
+    );
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no such file"));
+    assert_no_promotion_prompt(&output);
+    assert_promotion_side_effects_absent(&fixture);
+}
 
 #[test]
 fn test_rewrap_requires_workspace() {
@@ -29,15 +191,24 @@ fn test_rewrap_requires_workspace() {
     assert!(!output.status.success(), "Should fail without workspace");
 }
 
+#[cfg(unix)]
 #[test]
 fn test_rewrap_with_no_files_fails_gracefully() {
-    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE]);
+    use crate::test_utils::member_handle;
 
-    let mut common_opts = default_common_options();
-    common_opts.home = Some(temp_dir.path().to_path_buf());
-    common_opts.workspace = Some(workspace_dir.clone());
-    common_opts.quiet = true;
-    set_ssh_key_from_temp_dir(&mut common_opts, &temp_dir);
+    let (temp_dir, workspace_dir) = setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, None);
+    setup_trust_store_for_workspace(
+        temp_dir.path(),
+        &workspace_dir,
+        ALICE_MEMBER_HANDLE,
+        &key_ctx,
+    );
+    let (active_path, incoming_path) = setup_bob_incoming(&workspace_dir);
+    let common_opts = build_preflight_common_options(&temp_dir, &workspace_dir);
+    let trust_path =
+        get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
+    let trust_before = fs::read(&trust_path).unwrap();
 
     let output = run_rewrap_command(&common_opts, ALICE_MEMBER_HANDLE, &[]);
     assert!(
@@ -51,6 +222,10 @@ fn test_rewrap_with_no_files_fails_gracefully() {
         "Error should mention no files found: {}",
         err_msg
     );
+    assert_no_promotion_prompt(&output);
+    assert!(!active_path.exists());
+    assert!(incoming_path.exists());
+    assert_eq!(fs::read(trust_path).unwrap(), trust_before);
 }
 
 #[test]

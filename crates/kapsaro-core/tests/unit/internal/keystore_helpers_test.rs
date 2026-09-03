@@ -5,7 +5,6 @@
 //! Covers resolution order, query error phrasing and member lookup by kid.
 
 use crate::app_test_utils::build_test_private_key_document;
-use crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
 use crate::io::config::paths::get_base_dir;
 use crate::io::keystore::access::KeystoreAccess;
 use crate::io::keystore::helpers::{find_member_by_kid, resolve_member_kid_query};
@@ -14,6 +13,7 @@ use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::{
     Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected,
 };
+use crate::test_support::storage::keystore::storage::save_key_pair_atomic;
 use crate::test_utils::save_public_key;
 use crate::test_utils::{local_state_temp_dir, EnvGuard};
 

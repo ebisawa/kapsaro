@@ -3,31 +3,31 @@
 
 //! Key generation (key new) implementation
 
-use crate::cli::common::command::{resolve_options, resolve_required_member_handle};
+use crate::cli::common::command::resolve_required_cli_member_handle;
+use crate::cli::common::context::CliContext;
 use crate::cli::common::output::text::key::{
     print_generated_key_summary, print_key_generation_binding_info,
 };
 use crate::cli::common::ssh::resolve_ssh_context;
-use crate::cli::identity_prompt::resolve_key_generation_github_user;
-use kapsaro_core::cli_api::app::key::generate::{
-    generate_key_command, KeyExpiryRequest, KeyGenerationHome,
-};
+use crate::cli::identity_prompt::resolve_cli_key_generation_github_user;
+use kapsaro_core::api::key::generate::{generate_key_command, KeyExpiryRequest, KeyGenerationHome};
 use kapsaro_core::Result;
 
 use super::NewArgs;
 
 /// Main entry point for key generation
 pub(super) fn run(args: NewArgs) -> Result<()> {
-    let options = resolve_options(&args.common);
+    let context = CliContext::resolve(&args.common)?;
     // The local state directory is fixed before anything else is resolved, so
     // the identity prompts and the SSH selection below cannot move where the
     // generated key lands.
-    let home = KeyGenerationHome::fix(&options)?;
+    let home = KeyGenerationHome::fix(context.local_state()?)?;
     let member_handle =
-        resolve_required_member_handle(&options, args.member.member_handle.clone(), true)?;
-    let github_user = resolve_key_generation_github_user(true, args.github_user.clone(), &options)?;
+        resolve_required_cli_member_handle(&context, args.member.member_handle.clone(), true)?;
+    let github_user =
+        resolve_cli_key_generation_github_user(true, args.github_user.clone(), &context)?;
     eprintln!();
-    let ssh_ctx = resolve_ssh_context(&options)?;
+    let ssh_ctx = resolve_ssh_context(&context)?;
     let result = generate_key_command(
         home,
         member_handle,

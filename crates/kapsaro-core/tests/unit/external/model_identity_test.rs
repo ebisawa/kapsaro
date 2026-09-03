@@ -3,7 +3,7 @@
 
 //! Unit tests for internal identity newtypes.
 
-use kapsaro_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
+use kapsaro_core::test_support::domain::identity::{Kid, MemberHandle};
 
 #[test]
 fn test_member_handle_try_from_valid() {

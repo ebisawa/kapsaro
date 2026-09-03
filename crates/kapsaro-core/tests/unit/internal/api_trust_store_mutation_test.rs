@@ -12,7 +12,6 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::os::unix::fs::{symlink, PermissionsExt};
 
-use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::feature::trust::recipient_sets::compute_recipient_set_hash;
 use crate::feature::trust::signature::sign_trust_store;
 use crate::io::ssh::backend::SignatureBackend;
@@ -23,6 +22,7 @@ use crate::model::wire::format::LOCAL_TRUST_V1;
 use crate::support::fs::lock::lock_test_support::with_locked_workspace_dir;
 #[cfg(unix)]
 use crate::support::warning::LocalStateWarningGuard;
+use crate::test_support::storage::trust::store::save_trust_store;
 use crate::test_utils::{create_local_state_dir, member_handle, setup_member_key_context};
 use kapsaro_core::api::key::{KeyContext, KeyContextOptions, LocalKeyStore, MemberHandle};
 use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};

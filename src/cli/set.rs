@@ -9,21 +9,20 @@ use clap::Args;
 use zeroize::Zeroizing;
 
 use crate::cli::common::command::{
-    resolve_kv_write_execution_input, resolve_options_with_allow_expired_key,
-    run_kv_write_command_with_recovery, WriteCommandLabels,
+    resolve_cli_write_session, run_kv_write_command_with_recovery, CliWriteSession,
+    WriteCommandLabels,
 };
+use crate::cli::common::context::CliContext;
 use crate::cli::common::output::text::print_optional_status;
 use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
+use kapsaro_core::api::kv::mutation::set_kv_command_with_recipient_set_confirmation;
+use kapsaro_core::api::kv::types::KvWriteOutcome;
 use kapsaro_core::api::kv::KvInputEntry;
 use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::kv::mutation::set_kv_command_with_recipient_set_confirmation;
-use kapsaro_core::cli_api::app::kv::types::KvWriteOutcome;
-use kapsaro_core::cli_api::app::trust::SetPolicy;
+use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
@@ -73,40 +72,38 @@ fn resolve_value(value: Option<String>, from_stdin: bool) -> Result<SecretString
 
 pub(crate) fn run(args: SetArgs) -> Result<()> {
     let value = resolve_value(args.value, args.stdin)?;
-    let options = resolve_options_with_allow_expired_key(
+    let context = CliContext::resolve(&args.common)?;
+    let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
+    let workspace_path = context.workspace_path()?;
+    let directories = WorkspaceWriteDirectories::open(workspace_path)?;
+    let session = resolve_cli_write_session(
+        &context,
         &args.common,
-        args.allow_expired_key.allow_expired_key,
+        directories,
+        args.member.member_handle.clone(),
+        allow_expired_key,
     )?;
-    let execution = resolve_kv_write_execution_input(&options, args.member.member_handle.clone())?;
-    let outcome = set_entry(
-        &options,
-        &execution,
-        args.store.name.as_deref(),
-        &args.key,
-        value,
-    )?;
+    let outcome = set_entry(&session, args.store.name.as_deref(), &args.key, value)?;
     print_optional_status(outcome.message.as_deref(), args.common.quiet.quiet);
     Ok(())
 }
 
 fn set_entry(
-    options: &CommonCommandOptions,
-    execution: &ExecutionContext,
+    session: &CliWriteSession,
     store_name: Option<&str>,
     key: &str,
     value: SecretString,
 ) -> Result<KvWriteOutcome> {
     let success_message = format!("Set key '{}' in '{}'", key, store_name.unwrap_or("default"));
-    run_kv_write_command_with_recovery::<SetPolicy, _, _>(
-        options,
-        execution,
+    run_kv_write_command_with_recovery(
+        session,
         store_name,
         true,
         WriteCommandLabels {
             signer_context: Some(("set input signer", "input signer")),
             recipient_context: "set recipients",
         },
-        |_, trust_plan| {
+        |trust_plan| {
             let entry = KvInputEntry::new(key.to_string(), copy_set_value(&value));
             set_kv_command_with_recipient_set_confirmation(
                 trust_plan,

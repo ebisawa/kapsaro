@@ -7,7 +7,7 @@
 use serde::Serialize;
 
 use crate::cli::common::output::json::print_json_output;
-use kapsaro_core::cli_api::app::doctor::types::{
+use kapsaro_core::api::doctor::types::{
     DoctorCategory, DoctorCheck, DoctorReason, DoctorReport, DoctorStatus,
 };
 use kapsaro_core::Result;

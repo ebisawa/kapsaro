@@ -5,13 +5,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::app::doctor::ci::check_ci_readiness;
-use crate::app::doctor::local_state::set_post_keystore_open_hook;
-use crate::app::doctor::types::{DoctorCheck, DoctorReason, DoctorStatus, DoctorSubject};
-use crate::app::doctor::{execute_doctor_command, DoctorRequest};
-use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
-use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::trust::signature::sign_trust_store;
@@ -23,6 +16,15 @@ use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::TrustStoreProtected;
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::doctor::ci::{check_ci_readiness, DoctorCiReadiness};
+use crate::service::doctor::local_state::set_post_keystore_open_hook;
+use crate::service::doctor::types::{DoctorCheck, DoctorReason, DoctorStatus, DoctorSubject};
+use crate::service::doctor::{
+    execute_doctor_command, DoctorRequest, DoctorWorkspaceResolution, DoctorWorkspaceSource,
+};
+use crate::test_support::storage::keystore::active::set_active_kid;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
+use crate::test_support::storage::trust::store::save_trust_store;
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
     create_local_state_dir, local_state_temp_dir, member_handle, permission_denial_can_be_staged,
@@ -33,10 +35,13 @@ use tempfile::TempDir;
 
 fn doctor_request(home: &TempDir, workspace: &Path) -> DoctorRequest {
     DoctorRequest {
-        workspace: Some(workspace.to_path_buf()),
-        home: Some(home.path().to_path_buf()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace.to_path_buf(),
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
         member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     }
 }
 
@@ -182,15 +187,10 @@ fn encrypted_kv_for_mislabeled_bob_recipient(home: &TempDir) -> String {
 
 #[test]
 fn test_doctor_ci_invalid_env_key_reports_fail_and_strict_warning() {
-    let _guard = EnvGuard::new(&[
-        "KAPSARO_PRIVATE_KEY",
-        "KAPSARO_KEY_PASSWORD",
-        "KAPSARO_STRICT_KEY_CHECKING",
-    ]);
-    std::env::set_var("KAPSARO_PRIVATE_KEY", "not-base64url");
-    std::env::set_var("KAPSARO_KEY_PASSWORD", "password");
-    std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
-    let checks = check_ci_readiness();
+    let checks = check_ci_readiness(DoctorCiReadiness::Active {
+        strict_key_checking_disabled: true,
+        private_key_error: Some("invalid environment key".to_string()),
+    });
 
     assert!(
         has_check(&checks, "ci.env_key.present", DoctorStatus::Ok),
@@ -206,10 +206,7 @@ fn test_doctor_ci_invalid_env_key_reports_fail_and_strict_warning() {
 
 #[test]
 fn test_doctor_ci_env_key_absent_reports_skip() {
-    let _guard = EnvGuard::new(&["KAPSARO_PRIVATE_KEY", "KAPSARO_KEY_PASSWORD"]);
-    std::env::remove_var("KAPSARO_PRIVATE_KEY");
-    std::env::remove_var("KAPSARO_KEY_PASSWORD");
-    let checks = check_ci_readiness();
+    let checks = check_ci_readiness(DoctorCiReadiness::Inactive);
 
     assert!(has_check(&checks, "ci.env_key.present", DoctorStatus::Skip));
 }
@@ -239,10 +236,13 @@ fn test_doctor_reports_owner_config_parse_error_and_continues() {
     let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     write_local_state_file(&home.path().join("config.toml"), "member_handle = [");
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(home.path().to_path_buf()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
         member_handle: None,
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let report = execute_doctor_command(request).unwrap();
@@ -426,10 +426,13 @@ fn test_doctor_verifies_the_trust_store_through_a_symlinked_home() {
     let selected_home = links.path().join("selected-home");
     symlink(home.path(), &selected_home).unwrap();
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(selected_home.clone()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: selected_home.clone(),
         member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let report = execute_doctor_command(request).unwrap();
@@ -493,10 +496,13 @@ fn test_doctor_reports_keystore_root_io_failure_with_unsafe_rule() {
     create_workspace_dirs(&workspace);
     let base_dir = home.path().join("x".repeat(300));
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(base_dir.clone()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: base_dir.clone(),
         member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let checks = execute_doctor_command(request).unwrap().checks().to_vec();
@@ -619,10 +625,13 @@ fn test_doctor_warns_about_ignored_root_entry_during_owner_fallback() {
     let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     fs::write(home.path().join("keys/unexpected"), "unexpected").unwrap();
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(home.path().to_path_buf()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
         member_handle: None,
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let report = execute_doctor_command(request).unwrap();
@@ -922,10 +931,13 @@ fn test_doctor_without_member_handle_reports_owner_warnings_when_ambiguous() {
     let (home, workspace) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(home.path().to_path_buf()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
         member_handle: None,
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let checks = execute_doctor_command(request).unwrap().checks().to_vec();
@@ -958,10 +970,13 @@ fn test_doctor_uses_opened_keystore_identity_for_owner_and_trust_store() {
         fs::rename(&replacement_keystore, &keystore_root).unwrap();
     });
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(home.path().to_path_buf()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
         member_handle: None,
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let checks = execute_doctor_command(request).unwrap().checks().to_vec();
@@ -991,10 +1006,13 @@ fn test_doctor_stays_bound_to_the_opened_keystore_for_ambiguous_owner() {
         fs::rename(&replacement_keystore, &keystore_root).unwrap();
     });
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(home.path().to_path_buf()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
         member_handle: None,
-        verbose: false,
+        ci: DoctorCiReadiness::Inactive,
     };
 
     let checks = execute_doctor_command(request).unwrap().checks().to_vec();
@@ -1022,10 +1040,16 @@ fn test_doctor_env_key_without_explicit_member_preserves_missing_home() {
     let missing_home = temp.path().join("missing-home");
     create_workspace_dirs(&workspace);
     let request = DoctorRequest {
-        workspace: Some(workspace),
-        home: Some(missing_home.clone()),
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: missing_home.clone(),
         member_handle: None,
-        verbose: false,
+        ci: DoctorCiReadiness::Active {
+            strict_key_checking_disabled: false,
+            private_key_error: Some("invalid test key".to_string()),
+        },
     };
 
     let checks = execute_doctor_command(request).unwrap().checks().to_vec();
@@ -1033,6 +1057,54 @@ fn test_doctor_env_key_without_explicit_member_preserves_missing_home() {
     assert!(!missing_home.exists());
     assert!(has_check(&checks, "keystore.root", DoctorStatus::Warn));
     assert!(has_check(&checks, "keystore.member", DoctorStatus::Warn));
+}
+
+#[test]
+fn test_doctor_env_key_without_explicit_member_skips_local_owner_fallback() {
+    let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    write_local_state_file(&home.path().join("config.toml"), "member_handle = [");
+    let request = DoctorRequest {
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
+        member_handle: None,
+        ci: DoctorCiReadiness::Active {
+            strict_key_checking_disabled: false,
+            private_key_error: Some("invalid test key".to_string()),
+        },
+    };
+
+    let checks = execute_doctor_command(request).unwrap().checks().to_vec();
+    let owner = find_check(&checks, "keystore.member", DoctorStatus::Warn);
+
+    assert_eq!(owner.message, "Member handle could not be resolved");
+}
+
+#[test]
+fn test_doctor_env_key_respects_explicit_member() {
+    let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let request = DoctorRequest {
+        workspace: DoctorWorkspaceResolution::Selection {
+            path: workspace,
+            source: DoctorWorkspaceSource::Cli,
+        },
+        base_dir: home.path().to_path_buf(),
+        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        ci: DoctorCiReadiness::Active {
+            strict_key_checking_disabled: false,
+            private_key_error: Some("invalid test key".to_string()),
+        },
+    };
+
+    let checks = execute_doctor_command(request).unwrap().checks().to_vec();
+    let owner = find_check(&checks, "keystore.member", DoctorStatus::Ok);
+
+    assert_eq!(
+        owner.subject,
+        DoctorSubject::Member(ALICE_MEMBER_HANDLE.to_string())
+    );
 }
 
 #[test]

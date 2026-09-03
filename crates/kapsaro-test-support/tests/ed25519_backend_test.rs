@@ -3,11 +3,11 @@
 
 //! Tests for Ed25519DirectBackend
 
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+use kapsaro_core::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+use kapsaro_core::test_support::storage::ssh::backend::SignatureBackend;
+use kapsaro_core::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+use kapsaro_core::test_support::storage::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE;
+use kapsaro_core::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use kapsaro_test_support::ed25519_backend::Ed25519DirectBackend;
 use kapsaro_test_support::fixture::generate_temp_ssh_keypair_in_dir;
 use tempfile::TempDir;
@@ -19,7 +19,7 @@ fn test_ed25519_direct_backend_produces_same_signature_as_ssh_keygen() {
 
     let direct = Ed25519DirectBackend::new(&ssh_priv).unwrap();
     let keygen = SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
         SshKeyDescriptor::from_path(ssh_priv),
     );
 

@@ -5,9 +5,9 @@
 //!
 //! Tests for member management use cases.
 
-use crate::app::member::verification::verify_member_files;
 use crate::io::workspace::members::test_support::remove_active_member as remove_member;
 use crate::io::workspace::members::{load_active_member_files, load_member_file};
+use crate::service::member::verification::verify_member_files;
 use crate::test_utils::setup_test_workspace;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use tempfile::TempDir;

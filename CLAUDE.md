@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working in this repository. `AGENTS.md` is a symlink to this file, so Claude Code, Codex, and any other agent that follows either convention read the same content.
 
 ## Project Overview
 
@@ -11,26 +11,22 @@ kapsaro は、オフライン優先（offline-first）の暗号ファイル共�
 本リポジトリは cargo workspace で構成されています。
 
 - ルート crate `kapsaro` (bin) — `src/cli/`, `src/main.rs`。CLI バイナリのみ
-- `crates/kapsaro-core` (lib) — domain ロジック全て（`app/`, `service/`, `feature/`, `crypto/`, `format/`, `model/`, `io/`, `config/`, `support/` と公開 API `api/`）
+- `crates/kapsaro-core` (lib) — domain ロジック全て（`service/`, `feature/`, `crypto/`, `format/`, `model/`, `io/`, `config/`, `support/` と公開 API `api/`）
 - `crates/kapsaro-test-support` (lib) — workspace 内テストで共有する fixture と環境制御 helper
 
 ### kapsaro-core の API 境界
 
 - `kapsaro_core::api` — 外部アプリケーションと first-party CLI が共有する標準公開 API
 - `kapsaro_core::Error` / `ErrorKind` / `Result` — crate 共通のエラー API
-- `kapsaro_core::cli_api` — first-party CLI 向けの内部 API
-  - `cli_api::app` — CLI ユースケースの入口
-  - `cli_api::presentation` — CLI 表示の補助
-  - `cli_api::test_support` — test harness 専用の補助
-- `app` / `service` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` — crate-private の実装モジュール
+- `kapsaro_core::test_support` — feature-gated の first-party test harness 専用補助。標準 API ではない
+- `service` / `feature` / `io` / `format` / `model` / `crypto` / `config` / `support` — crate-private の実装モジュール
 
 ### Feature flags
 
-- `cli-internal` — `cli_api` を有効化（CLI バイナリビルド時に必須）
-- `cli-test-support` — `cli_api::test_support` を有効化（dev-dependencies で有効）
+- `cli-test-support` — hidden root `test_support` を有効化（dev-dependencies で有効）
 - `online` — GitHub オンライン検証のネットワーク実装を有効化（core は既定で無効、ルート CLI は既定で有効）
 
-`cli-test-support` は first-party test harness 用であり、外部 API 契約ではない。CLI production code は `cli_api::test_support` を import せず、標準 `api` または `cli_api::app` / `cli_api::presentation` の allow-list を使う。`cli_api::test_support` は下位実装 layer root の broad mirror を提供せず、用途別 helper root だけを公開する。外部 API の facade 境界は `crates/kapsaro-core/tests/public_api.rs` で固定する。
+`cli-test-support` は first-party test harness 用であり、外部 API 契約ではない。CLI production code は `test_support` を importせず、標準 `api` だけを使う。`test_support` は下位実装 layer root の broad mirror を提供せず、用途別 helper root だけを公開する。外部 API の facade 境界は `crates/kapsaro-core/tests/public_api.rs` で固定する。
 
 ## Build/Test/Lint Commands
 
@@ -74,8 +70,6 @@ cargo llvm-cov clean --workspace               # 計測データを掃除（前�
 
 ```
 cli -> api -> service
-cli -> cli_api -> app -> service
-app -> feature | io | format | model | config
 service -> feature | io | format | model | config | support
 feature -> crypto | format | model | io | config
 format -> crypto | model | support
@@ -83,22 +77,22 @@ crypto -> model | support
 config -> io | support
 ```
 
-- `cli` (ルート crate) は標準 `api` または `cli_api` の allow-list を使い、`service` / `feature` / `io` に直接依存しない
+production の依存経路は `cli -> api -> service` の一本とする。
+
+- `cli` (ルート crate) は標準 `api` を使い、`service` / `feature` / `io` に直接依存しない
 - `api` は `service` の標準操作と型から外部公開する項目だけを明示的に再公開し、実装本体を持たない
-- `service` は `app` / `api` / `cli_api` / `cli` に依存しない
-- `feature` は `cli` / `app` に依存しない
-- `app` は `cli` / `api` に依存しない
-- `io` は `feature` / `app` / `cli` に依存しない
+- `service` は `api` / `cli` に依存しない
+- `feature` は `cli` に依存しない
+- `io` は `feature` / `cli` に依存しない
 - `format` は `feature` に依存しない
-- `crypto` は `app` / `cli` / `feature` / `io` に依存しない
-- `model` は `cli` / `app` / `feature` に依存しない
+- `crypto` は `cli` / `feature` / `io` に依存しない
+- `model` は `cli` / `feature` に依存しない
 - `config/types.rs` は `io` / `feature` に依存しない
 
 ### レイヤー責務
 
-- **`cli/`**（ルート crate） — presentation 層。clap 引数定義、対話入力（dialoguer）、stdout/stderr 出力、標準 `api` と `cli_api` の request/result を CLI 表現に変換。`common/` に共有オプション・出力・コンテキスト構築。`io::*` / `feature::*` への直接アクセス禁止
-- **`app/`** — first-party CLI のユースケースオーケストレーション層。CLI 引数、環境変数、設定、既定値から実行対象と方針を一度だけ解決し、コマンド単位の処理順序、review 前後の reload、retry、recovery を管理する。標準規則は `service` に委ね、`api` は参照しない。`println!` / `dialoguer` 禁止
-- **`service/`** — 標準公開 API の実装層。caller が明示した入力と検証済み capability を受け取り、artifact、key、KV、trust、online verification、diagnostics の再利用可能な規則を実行する。入力の再解決、環境変数・設定優先順位・workspace 自動検出、TTY、CLI DTO を扱わず、`app` / `api` / `cli_api` / `cli` に依存しない
+- **`cli/`**（ルート crate） — presentation 層。clap 引数定義、CLI・環境変数・設定の優先順位、対話入力（dialoguer）、stdout/stderr 出力、子 process 起動、標準 `api` の request/result 変換を担当する。`io::*` / `feature::*` への直接アクセス禁止
+- **`service/`** — 標準公開 API の実装層。caller が明示した入力と検証済み capability を受け取り、artifact、key、KV、trust、online verification、diagnostics の再利用可能な規則を実行する。入力の再解決、環境変数・設定優先順位・workspace 自動検出、TTY、CLI DTO を扱わず、`api` / `cli` に依存しない
 - **`feature/`** — ドメイン処理本体。CLI の存在を知らず、再利用可能な機能を提供
   - `envelope/` — artifact key schedule、HPKE wrap/unwrap、key-possession proof、エントリ暗号化
   - `kv/` — KV ドキュメント操作（builder, encrypt, decrypt, mutate, rewrite）
@@ -108,7 +102,7 @@ config -> io | support
   - `inspect/` — ドキュメント検査
   - `key/` — 鍵生成・管理（保護付き秘密鍵含む）
   - `member/`, `trust/`, `recipient/`, `disclosure/` — メンバー・信頼・受信者・開示処理
-  - `context/` — CryptoContext（鍵ロード）、env key、鍵期限の処理。SSH 署名環境の解決は `app/context/ssh` が担当
+  - `context/` — CryptoContext（鍵ロード）、env key、鍵期限の処理
 - **`config/`** — 設定モデル（`types.rs`）と設定解決ロジック（`resolution/`）。CLI > env > config > default の優先順
 - **`model/`** — 共有ドメインモデル（`file_enc`, `kv_enc`, `public_key`, `private_key`, `signature`, `verified`, `trust_store` 等）
 - **`crypto/`** — 暗号プリミティブ（AEAD, KDF, KEM, Ed25519 署名）
@@ -145,11 +139,11 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 
 #### kapsaro-core crate (`crates/kapsaro-core/tests/`)
 
-- `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する独立ユニットテスト。`cli_api::test_support` と公開 API 経由でアクセス
+- `tests/unit/external/` — `tests/unit.rs` から `#[path]` 登録する独立ユニットテスト。hidden root `test_support` と公開 API 経由でアクセス
 - `tests/unit/internal/` — `crates/kapsaro-core/src/` 内の production module から `#[cfg(test)] #[path = "..."]` で登録する crate-private ユニットテスト
 - `tests/unit.rs` — 上記外部テストを登録するエントリポイント。`tests/test_support/mod.rs` を import
 - `tests/public_api.rs` — `kapsaro_core::api` の公開 API 境界テスト
-- `tests/cli_api_boundary.rs` — `kapsaro_core::cli_api` の境界テスト。`required-features = ["cli-test-support"]` 付きの独立ターゲット
+- `tests/test_support_boundary.rs` — hidden root `kapsaro_core::test_support` 境界テスト。`required-features = ["cli-test-support"]` 付きの独立ターゲット
 
 #### kapsaro-test-support crate (`crates/kapsaro-test-support/tests/`)
 
@@ -157,27 +151,11 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 - `tests/guards_test.rs` — cwd と環境変数の guard helper の独立テスト
 - `tests/privilege_test.rs` — 権限拒否を再現するテストが共有する特権判定の独立テスト
 
-#### テストを追加する際の手順
+#### テストの層選択と登録
 
-- core 外部テスト: `crates/kapsaro-core/tests/unit/external/` にファイルを作成し、`crates/kapsaro-core/tests/unit.rs` に登録
-- crate-private テスト: 対象 crate の `tests/unit/internal/` にファイルを作成し、対応する production module から配置深度に合う相対 `#[path]` で登録
-- CLI E2E: `tests/cli/` の該当モジュールへ追加し、新規モジュールの場合は親モジュールから登録
-- 複数 crate で共有する fixture/helper: `crates/kapsaro-test-support` に追加
+どの層にテストを置くか、どこへ登録するか、テスト名の付け方、書いてはいけないテストは `kapsaro-testing` skill にある。テストを追加・移動するときは先にそれを読む。
 
-#### 登録漏れに注意
-
-`crates/kapsaro-core/tests/unit/external/`、`tests/unit/internal/`、`tests/cli/`、`tests/test_support/`、`tests/test_utils/` のいずれかに `.rs` ファイルを追加したら、その親にあたるエントリポイント（core の `tests/unit.rs`、production module、`tests/cli.rs`、同名ディレクトリの `.rs` など）へ必ず `mod` または `#[path]` を書く。登録漏れのファイルはコンパイルされず、テストが存在しないまま緑になる。
-
-#### レビューで確認する規約
-
-以下は自動検査がない。コードレビューで確認する。
-
-- `#[path]` 登録の書き忘れ
-- 実体のないファイルを指す stale な登録と、同じファイルを二か所から取り込む二重登録
-- production source 内のインラインテストモジュール（`#[cfg(test)] mod tests`）
-- shebang 付きのファイルを書き出して exec するテストの `#[serial]` 指定。理由は当該テストの module doc に記載されている
-- 登録の有無を確認するときは `#[path]` 属性そのものを grep する。モジュール名は `mod tests;` のような総称名とファイル名と同名のものが混在しており、名前からは追えない
-- cwd を変えるテストは `kapsaro-test-support` の `with_temp_cwd` を使う。生の `set_current_dir` は `CWD_LOCK` を取らないため、`with_temp_cwd` を使う他のテストと並行実行され、panic 時に cwd も復元されない
+登録漏れのファイルはコンパイルされず、テストが存在しないまま緑になる。`.claude/hooks/pre-stop-checks.sh` が未登録を検出するが、登録は書いた本人が行う。
 
 #### production tree に置くテスト専用コード
 
@@ -205,4 +183,47 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 ## Conventions
 
 - Copyright ヘッダー: `// Copyright 2026 Satoshi Ebisawa` + `// SPDX-License-Identifier: Apache-2.0`
-- 命名規則・モジュール構成・テスト命名は、別途定められた関連ドキュメントの規定に従う
+- すべてのソースファイルの冒頭に、Copyright ヘッダーに続けて役割を述べる `//!` コメントを置く
+- レイヤーの置き場所判断、依存方向、関数名・型名・モジュール名の規則は `kapsaro-conventions` skill にある。実装前に読む
+- テストの層選択と登録手順は `kapsaro-testing` skill、レビュー観点は `kapsaro-review` skill にある
+
+### 自動検査
+
+規約検査は `scripts/` のスクリプトにある。エージェントの hook からも、コマンドとしても同じものが動く。
+
+```bash
+./scripts/check-source-conventions.sh [file.rs ...]  # 省略時は production ソース全件
+./scripts/check-repo-conventions.sh
+```
+
+- `check-source-conventions.sh` — Copyright ヘッダー、`//!` コメント、`mod.rs` の新設、インラインテストモジュール
+- `check-repo-conventions.sh` — テストファイルの登録漏れ、`guides/` の行末スペース
+
+違反があると標準エラーへ説明を出して終了コード 2 で終わる。Claude Code では `.claude/settings.json` が前者を PostToolUse、後者を Stop の hook として登録している。hook 機構を持たないエージェントは、ソースを追加・変更したあとに自分で実行する。
+
+これらが扱えない規約（stale な登録、`#[serial]` 指定、テスト層の選択、命名）は `kapsaro-review` の観点で確認する。
+
+### skill の所在
+
+規約の詳細はリポジトリ内の `.claude/skills/` にある。実体はここだけで、他の場所にコピーは置かない。
+
+| 読むもの | いつ |
+| --- | --- |
+| `.claude/skills/kapsaro-conventions/SKILL.md` | コードを実装・変更・移動するとき。レイヤーの置き場所判断と命名 |
+| `.claude/skills/kapsaro-conventions/references/layering.md` | 各層の責務の詳細が要るとき |
+| `.claude/skills/kapsaro-conventions/references/naming.md` | 動詞・型名・廃止パターンの一覧が要るとき |
+| `.claude/skills/kapsaro-testing/SKILL.md` | テストを追加・移動するとき。層の選択と登録手順 |
+| `.claude/skills/kapsaro-review/SKILL.md` | 変更をレビューするとき |
+
+上の表のパスは、どのエージェントからもリポジトリ内の相対パスとして読める。作業内容が該当したら、行動する前に対応するファイルを開いて読む。
+
+skill を名前で読み込む機構を持つエージェントは、設定なしでリポジトリから発見できる。
+
+- Claude Code は `.claude/skills/` を読む
+- Codex は `.agents/skills/` を読む。中身は `.claude/skills/` への相対 symlink
+
+実体は `.claude/skills/` の 1 つだけで、`.agents/skills/` はそこを指す symlink である。skill を追加したら `.claude/skills/` に置き、`.agents/skills/` へ symlink を張る。
+
+```bash
+ln -s ../../.claude/skills/<name> .agents/skills/<name>
+```

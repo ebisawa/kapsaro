@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{execute_encrypt_file_command, resolve_encrypt_file_command};
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::management::remove_known_key_command;
-use crate::app::trust::{evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome};
-use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
-use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
-use crate::cli_api::test_support::storage::keystore::storage::list_kids;
+use crate::app_test_utils::{
+    build_test_signing_command_options, build_test_trust_command_session_from_options,
+    resolve_test_write_session, TestCommandOptions,
+};
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::FileEncContent;
+use crate::service::trust::management::remove_known_key_command;
+use crate::service::trust::{evaluate_output_recipient_set_trust, ArtifactRecipientTrustOutcome};
+use crate::test_support::storage::keystore::active::set_active_kid;
+use crate::test_support::storage::keystore::storage::list_kids;
 use crate::test_utils::{
     build_expiring_soon_timestamp, save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_workspace_from_fixtures, setup_trust_store_for_workspace,
@@ -28,22 +30,28 @@ fn test_encrypt_output_member_set_auto_accepts_self_only_non_interactive() {
     let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     activate_member_key(temp_dir.path(), ALICE_MEMBER_HANDLE);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let command = resolve_encrypt_file_command(&options, &execution, b"secret".to_vec()).unwrap();
+    let session = resolve_test_write_session(&options, ALICE_MEMBER_HANDLE);
+    let command = resolve_encrypt_file_command(
+        &session.directories,
+        &session.trust,
+        session.options,
+        b"secret".to_vec(),
+    )
+    .unwrap();
     let encrypted = execute_encrypt_file_command(&command).unwrap();
     let document = FileEncContent::new_unchecked(encrypted).parse().unwrap();
     let recipient_set =
         ArtifactRecipientSet::from_wrap_items(document.protected.sid, &document.protected.wrap)
             .unwrap();
 
-    let evaluator = crate::app::trust::snapshot::load_trust_policy_evaluator(
-        command.execution,
+    let evaluator = crate::service::trust::snapshot::load_trust_policy_evaluator(
+        &session.trust,
         command.trust_context.active_members_by_kid.clone(),
     )
     .unwrap();
     let outcome = evaluate_output_recipient_set_trust(
         &evaluator,
-        &command.execution.key_ctx,
+        session.trust.key_ctx(),
         &command.trust_context,
         &recipient_set,
     )
@@ -62,8 +70,14 @@ fn test_encrypt_command_coalesces_local_key_pair_expiry_warning() {
         .unwrap();
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-    let command = resolve_encrypt_file_command(&options, &execution, b"secret".to_vec()).unwrap();
+    let session = resolve_test_write_session(&options, ALICE_MEMBER_HANDLE);
+    let command = resolve_encrypt_file_command(
+        &session.directories,
+        &session.trust,
+        session.options,
+        b"secret".to_vec(),
+    )
+    .unwrap();
 
     let expiry_warning_count = command
         .warnings
@@ -82,7 +96,7 @@ fn test_encrypt_command_coalesces_local_key_pair_expiry_warning() {
 struct ApprovedTwoMemberWorkspace {
     temp_dir: TempDir,
     workspace_dir: PathBuf,
-    options: CommonCommandOptions,
+    options: TestCommandOptions,
 }
 
 fn setup_approved_two_member_workspace() -> ApprovedTwoMemberWorkspace {
@@ -126,9 +140,14 @@ fn test_encrypt_accepts_unchanged_review_state_after_confirmation() {
     let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
     let fixture = setup_approved_two_member_workspace();
 
-    let execution = resolve_test_write_execution(&fixture.options, ALICE_MEMBER_HANDLE);
-    let command =
-        resolve_encrypt_file_command(&fixture.options, &execution, b"secret".to_vec()).unwrap();
+    let session = resolve_test_write_session(&fixture.options, ALICE_MEMBER_HANDLE);
+    let command = resolve_encrypt_file_command(
+        &session.directories,
+        &session.trust,
+        session.options,
+        b"secret".to_vec(),
+    )
+    .unwrap();
 
     command.ensure_current_after_confirmation().unwrap();
     assert!(execute_encrypt_file_command(&command).is_ok());
@@ -139,9 +158,14 @@ fn test_encrypt_rejects_active_member_change_after_confirmation() {
     let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
     let fixture = setup_approved_two_member_workspace();
 
-    let execution = resolve_test_write_execution(&fixture.options, ALICE_MEMBER_HANDLE);
-    let command =
-        resolve_encrypt_file_command(&fixture.options, &execution, b"secret".to_vec()).unwrap();
+    let session = resolve_test_write_session(&fixture.options, ALICE_MEMBER_HANDLE);
+    let command = resolve_encrypt_file_command(
+        &session.directories,
+        &session.trust,
+        session.options,
+        b"secret".to_vec(),
+    )
+    .unwrap();
     fs::rename(
         workspace_member_path(&fixture.workspace_dir, "active", BOB_MEMBER_HANDLE),
         workspace_member_path(&fixture.workspace_dir, "incoming", BOB_MEMBER_HANDLE),
@@ -165,13 +189,20 @@ fn test_encrypt_rejects_trust_store_change_after_confirmation() {
     let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
     let fixture = setup_approved_two_member_workspace();
 
-    let execution = resolve_test_write_execution(&fixture.options, ALICE_MEMBER_HANDLE);
-    let command =
-        resolve_encrypt_file_command(&fixture.options, &execution, b"secret".to_vec()).unwrap();
+    let session = resolve_test_write_session(&fixture.options, ALICE_MEMBER_HANDLE);
+    let command = resolve_encrypt_file_command(
+        &session.directories,
+        &session.trust,
+        session.options,
+        b"secret".to_vec(),
+    )
+    .unwrap();
     let bob_kid = list_kids(&fixture.temp_dir.path().join("keys"), BOB_MEMBER_HANDLE)
         .unwrap()
         .remove(0);
-    remove_known_key_command(&fixture.options, &execution, &bob_kid).unwrap();
+    let trust =
+        build_test_trust_command_session_from_options(&fixture.options, ALICE_MEMBER_HANDLE);
+    remove_known_key_command(&trust, &bob_kid).unwrap();
 
     let error = command
         .ensure_current_after_confirmation()

@@ -11,7 +11,7 @@ use crate::test_utils::{
     save_active_public_key_to_workspace, setup_trust_store_for_workspace,
     update_active_private_key_expires_at,
 };
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
 use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
@@ -70,6 +70,23 @@ fn test_member_list_shows_initialized_member() {
         .success()
         .stdout(predicate::str::contains(TEST_MEMBER_HANDLE))
         .stdout(predicate::str::contains(kid_display));
+}
+
+#[test]
+fn test_member_list_with_explicit_workspace_does_not_require_home() {
+    let (workspace_dir, _home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+
+    cmd()
+        .arg("member")
+        .arg("list")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env_remove("HOME")
+        .env_remove("KAPSARO_HOME")
+        .env_remove("KAPSARO_WORKSPACE")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
 }
 
 #[test]
@@ -216,6 +233,40 @@ fn test_member_show_displays_public_key() {
         .stdout(predicate::str::contains("  Fingerprint : SHA256:"))
         .stdout(predicate::str::contains("\nIdentity\n").not())
         .stdout(predicate::str::contains("Public Key").not());
+}
+
+#[test]
+fn test_member_show_with_explicit_workspace_ignores_broken_global_config() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+    fs::write(home_dir.path().join("config.toml"), "workspace = [").unwrap();
+
+    cmd()
+        .arg("member")
+        .arg("show")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env_remove("KAPSARO_WORKSPACE")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(TEST_MEMBER_HANDLE));
+}
+
+#[test]
+fn test_member_list_reports_broken_config_when_workspace_falls_back_to_config() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+    fs::write(home_dir.path().join("config.toml"), "workspace = [").unwrap();
+
+    cmd()
+        .arg("member")
+        .arg("list")
+        .current_dir(workspace_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env_remove("KAPSARO_WORKSPACE")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid TOML in config file"));
 }
 
 #[test]

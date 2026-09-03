@@ -3,7 +3,6 @@
 
 //! Unit tests for trust judgment logic
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::trust::judgment::{
     judge_recipients_trust, judge_signer_trust, ActiveMemberSnapshot, KnownKeyCache, SelfTrustSet,
     TrustIdentity, TrustJudgment,
@@ -12,6 +11,7 @@ use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::{setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE};
 use std::collections::BTreeMap;
 use tempfile::TempDir;

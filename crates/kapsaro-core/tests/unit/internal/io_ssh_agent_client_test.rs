@@ -4,7 +4,7 @@
 //! Unit tests for the ssh-agent client transport.
 //! Covers packet framing limits and socket error reporting.
 
-use super::{AgentClient, MAX_AGENT_PACKET_SIZE};
+use super::{AgentClient, DefaultAgentSigner, MAX_AGENT_PACKET_SIZE};
 use crate::io::ssh::protocol::wire::encode_ssh_string;
 use std::cell::RefCell;
 use std::io::{Error, Read, Result as IoResult, Write};
@@ -109,7 +109,6 @@ fn test_list_identities_writes_request_and_reads_response() {
 
     assert_eq!(identities.len(), 1);
     assert_eq!(identities[0].key_blob(), b"key-blob");
-    assert_eq!(identities[0].comment(), "test-key");
     assert_eq!(written.written(), vec![0, 0, 0, 1, 11]);
 }
 
@@ -149,4 +148,24 @@ fn test_list_identities_reports_write_error() {
     let error = client.list_identities().unwrap_err();
 
     assert!(error.to_string().contains("ssh-agent write failed"));
+}
+
+#[cfg(target_family = "unix")]
+#[test]
+#[serial_test::serial]
+fn test_default_signer_connects_to_the_fixed_socket_after_the_environment_changes() {
+    use crate::test_utils::EnvGuard;
+    use std::os::unix::net::UnixListener;
+
+    let _guard = EnvGuard::new(&["SSH_AUTH_SOCK"]);
+    let temp = tempfile::TempDir::new().unwrap();
+    let fixed_socket = temp.path().join("fixed.sock");
+    let listener = UnixListener::bind(&fixed_socket).unwrap();
+    let signer = DefaultAgentSigner::new(fixed_socket.clone());
+    std::env::set_var("SSH_AUTH_SOCK", temp.path().join("replacement.sock"));
+
+    let (_client, connected_path) = signer.connect_client().unwrap();
+    let (_stream, _) = listener.accept().unwrap();
+
+    assert_eq!(connected_path, fixed_socket);
 }

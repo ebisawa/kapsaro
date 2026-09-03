@@ -25,7 +25,7 @@ const RECIPIENT_EXPIRY_WARNING: &str =
     "Warning: Recipient public key for 'bob@example.com' expires in";
 
 #[cfg(unix)]
-use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
 
 #[test]
 fn test_encrypt_rejects_filename_content_mismatch() {

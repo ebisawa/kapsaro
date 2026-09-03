@@ -5,19 +5,15 @@ use super::online_verification::verify_trust_candidate_online;
 use super::{
     enforce_read_trust_member_eligibility, execute_read_with_signer_trust,
     review_recipient_trust_with_confirmation, review_recipient_trust_with_confirmation_verifier,
-    review_rewrap_input_trust_requirements_with_confirmation,
-    review_rewrap_input_trust_requirements_with_confirmation_verifier,
     review_signer_trust_with_confirmation_verifier, review_write_recipient_trust,
-    ReadSignerTrustReviewPlan, SignerTrustLabels, TrustExecutionContext, TrustReviewContext,
+    ReadSignerTrustReviewPlan, SignerTrustLabels, TrustReviewContext,
     WriteRecipientTrustReviewPlan,
 };
-use crate::app::rewrap::types::RewrapInputTrustRequirement;
-use crate::app::trust::approval::ApprovedKnownKey;
-use crate::app::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};
-use crate::app_test_utils::{build_test_command_options, build_test_execution_context};
+use crate::app_test_utils::build_test_execution_context;
 use crate::feature::trust::known_keys::KnownKeyIdentity;
+use crate::service::trust::approval::ApprovedKnownKey;
+use crate::service::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};
 use crate::test_utils::setup_test_keystore_from_fixtures;
-use std::path::PathBuf;
 
 fn build_candidate(member_handle: &str, kid: &str) -> TrustApprovalCandidate {
     build_candidate_with_binding(member_handle, kid, false)
@@ -39,7 +35,7 @@ fn build_verified_candidate(candidate: &TrustApprovalCandidate) -> TrustApproval
         "SHA256:test",
         100,
     );
-    crate::app::trust::TrustApprovalCandidateBuilder::from_known_key_candidate(
+    crate::service::trust::TrustApprovalCandidateBuilder::from_known_key_candidate(
         candidate.service_candidate(),
     )
     .with_verified_service_evidence(evidence)
@@ -51,7 +47,7 @@ fn build_failed_online_candidate(
     candidate: &TrustApprovalCandidate,
     message: &str,
 ) -> TrustApprovalCandidate {
-    crate::app::trust::TrustApprovalCandidateBuilder::from_known_key_candidate(
+    crate::service::trust::TrustApprovalCandidateBuilder::from_known_key_candidate(
         candidate.service_candidate(),
     )
     .with_online_verification_context(true, Some(message.to_string()))
@@ -67,7 +63,6 @@ fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_handle: &st
 #[test]
 fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let options = build_test_command_options(home.path(), None);
     let execution_context = build_test_execution_context(&home, "alice@example.com", None);
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let signer_outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone());
@@ -76,10 +71,7 @@ fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review()
 
     execute_read_with_signer_trust(
         TrustReviewContext {
-            trust: TrustExecutionContext {
-                options: &options,
-                execution: &execution_context,
-            },
+            trust: &execution_context,
             warnings: &[],
         },
         ReadSignerTrustReviewPlan {
@@ -108,7 +100,6 @@ fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review()
 #[test]
 fn test_review_write_recipient_trust_reuses_signer_key_approval_for_recipient() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let options = build_test_command_options(home.path(), None);
     let execution_context = build_test_execution_context(&home, "alice@example.com", None);
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let signer_outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone());
@@ -118,10 +109,7 @@ fn test_review_write_recipient_trust_reuses_signer_key_approval_for_recipient() 
 
     review_write_recipient_trust(
         TrustReviewContext {
-            trust: TrustExecutionContext {
-                options: &options,
-                execution: &execution_context,
-            },
+            trust: &execution_context,
             warnings: &[],
         },
         WriteRecipientTrustReviewPlan {
@@ -155,7 +143,6 @@ fn test_review_write_recipient_trust_reuses_signer_key_approval_for_recipient() 
 #[test]
 fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_acceptance() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let options = build_test_command_options(home.path(), None);
     let execution_context = build_test_execution_context(&home, "alice@example.com", None);
     let signer = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
     let recipient = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
@@ -170,10 +157,7 @@ fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_accep
 
     execute_read_with_signer_trust(
         TrustReviewContext {
-            trust: TrustExecutionContext {
-                options: &options,
-                execution: &execution_context,
-            },
+            trust: &execution_context,
             warnings: &[],
         },
         ReadSignerTrustReviewPlan {
@@ -216,7 +200,6 @@ fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_accep
 #[test]
 fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_member_acceptance() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let options = build_test_command_options(home.path(), None);
     let execution_context = build_test_execution_context(&home, "alice@example.com", None);
     let signer = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
     let recipient = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
@@ -229,10 +212,7 @@ fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_me
 
     let result = execute_read_with_signer_trust(
         TrustReviewContext {
-            trust: TrustExecutionContext {
-                options: &options,
-                execution: &execution_context,
-            },
+            trust: &execution_context,
             warnings: &[],
         },
         ReadSignerTrustReviewPlan {
@@ -472,126 +452,6 @@ fn test_review_recipient_trust_with_confirmation_collects_all_approved_candidate
         bob.member_handle().as_str(),
         bob.kid().as_str(),
     );
-}
-
-#[test]
-fn test_review_rewrap_input_trust_requirements_with_confirmation_prompts_non_member_per_artifact() {
-    let candidate = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
-    let requirements = vec![
-        RewrapInputTrustRequirement {
-            file_path: PathBuf::from("secrets/one.json"),
-            signer_outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
-                candidate: candidate.clone(),
-                current_recipients: vec!["alice@example.com".to_string()],
-            },
-            recipient_outcome: RecipientTrustOutcome::Accepted,
-        },
-        RewrapInputTrustRequirement {
-            file_path: PathBuf::from("secrets/two.json"),
-            signer_outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
-                candidate,
-                current_recipients: vec!["alice@example.com".to_string()],
-            },
-            recipient_outcome: RecipientTrustOutcome::Accepted,
-        },
-    ];
-    let mut prompt_count = 0usize;
-
-    let approvals = review_rewrap_input_trust_requirements_with_confirmation(
-        &requirements,
-        "rewrap signer",
-        "signer trust",
-        |_candidate, _context_label| Ok(true),
-        |_candidate, _context_label, _recipients| {
-            prompt_count += 1;
-            Ok(true)
-        },
-        |_candidates, _context_label| Ok(Vec::new()),
-    )
-    .unwrap();
-
-    assert!(approvals.is_empty());
-    assert_eq!(prompt_count, 2);
-}
-
-#[test]
-fn test_review_rewrap_input_trust_requirements_with_confirmation_allows_non_member_after_failed_online_verification(
-) {
-    let candidate = build_candidate_with_binding(
-        "mallory@example.com",
-        "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0",
-        true,
-    );
-    let requirements = vec![RewrapInputTrustRequirement {
-        file_path: PathBuf::from("secrets/one.json"),
-        signer_outcome: SignerTrustOutcome::NeedsNonMemberAcceptance {
-            candidate: candidate.clone(),
-            current_recipients: vec!["alice@example.com".to_string()],
-        },
-        recipient_outcome: RecipientTrustOutcome::Accepted,
-    }];
-    let mut warned = None;
-
-    let approvals = review_rewrap_input_trust_requirements_with_confirmation_verifier(
-        &requirements,
-        "rewrap signer",
-        "signer trust",
-        |_candidate| {
-            Ok(build_failed_online_candidate(
-                &candidate,
-                "online verification failed",
-            ))
-        },
-        |_candidate, _context_label| Ok(true),
-        |candidate, _context_label, _recipients| {
-            warned = candidate.online_verification_message().map(str::to_string);
-            Ok(true)
-        },
-        |_candidates, _context_label| Ok(Vec::new()),
-    )
-    .unwrap();
-
-    assert!(approvals.is_empty());
-    assert_eq!(warned.as_deref(), Some("online verification failed"));
-}
-
-#[test]
-fn test_review_rewrap_input_trust_requirements_with_confirmation_dedupes_known_key_approvals() {
-    let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
-    let requirements = vec![
-        RewrapInputTrustRequirement {
-            file_path: PathBuf::from("secrets/one.json"),
-            signer_outcome: SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
-            recipient_outcome: RecipientTrustOutcome::Accepted,
-        },
-        RewrapInputTrustRequirement {
-            file_path: PathBuf::from("secrets/two.json"),
-            signer_outcome: SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone()),
-            recipient_outcome: RecipientTrustOutcome::Accepted,
-        },
-    ];
-    let mut prompt_count = 0usize;
-
-    let approvals = review_rewrap_input_trust_requirements_with_confirmation(
-        &requirements,
-        "rewrap signer",
-        "signer trust",
-        |_candidate, _context_label| {
-            prompt_count += 1;
-            Ok(true)
-        },
-        |_candidate, _context_label, _recipients| Ok(false),
-        |_candidates, _context_label| Ok(Vec::new()),
-    )
-    .unwrap();
-
-    assert_eq!(approvals.len(), 1);
-    assert_manual_review_approval(
-        &approvals[0],
-        candidate.member_handle().as_str(),
-        candidate.kid().as_str(),
-    );
-    assert_eq!(prompt_count, 1);
 }
 
 #[test]

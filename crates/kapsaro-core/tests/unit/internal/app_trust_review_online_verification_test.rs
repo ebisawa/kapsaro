@@ -4,7 +4,7 @@
 use super::{
     review_candidate_for_confirmation, verify_trust_candidate_online, InteractiveTrustReviewKind,
 };
-use crate::app::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
+use crate::service::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
 
 fn candidate(configured: bool) -> TrustApprovalCandidate {
     TrustApprovalCandidate::for_test(

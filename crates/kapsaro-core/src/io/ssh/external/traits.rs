@@ -35,7 +35,7 @@ pub trait SshKeygen: Send + Sync {
 
 /// Abstraction over the `ssh-add` command.
 ///
-/// Socket resolution (SSH_AUTH_SOCK / IdentityAgent) is handled internally.
+/// Implementations use only the caller-fixed agent socket.
 pub trait SshAdd: Send + Sync {
     /// `ssh-add -L` — list public keys loaded in the agent.
     fn list_keys(&self) -> Result<String>;

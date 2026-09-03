@@ -43,6 +43,25 @@ pub(crate) struct OpenDir {
     scope: DirectoryScope,
 }
 
+/// Duplicate a directory capability without resolving its display path again.
+#[cfg(unix)]
+pub(crate) fn duplicate_open_dir<D>(dir: &D) -> Result<OpenDir>
+where
+    D: DirectoryFd,
+{
+    let file = dir.file().try_clone().map_err(|error| {
+        Error::build_io_error_with_source(
+            format!("Failed to duplicate directory: {}", dir.path().display()),
+            error,
+        )
+    })?;
+    Ok(OpenDir {
+        file,
+        path: dir.path().to_path_buf(),
+        scope: dir.scope(),
+    })
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DirectoryScope {
     Generic,
@@ -145,6 +164,32 @@ where
 {
     open_optional_child_dir(parent, name)?.ok_or_else(|| {
         Error::build_not_found_error(format!("Directory not found: {}", child_path(parent, name)))
+    })
+}
+
+/// Open a caller-named child directory without following a symlink.
+///
+/// The name is accepted as the OS byte string from one path component. This
+/// keeps caller-selected non-UTF-8 directory names usable while refusing
+/// empty names, dot components, separators, and symlinks.
+#[cfg(unix)]
+pub(crate) fn open_os_child_dir_nofollow<D>(parent: &D, name: &OsStr) -> Result<OpenDir>
+where
+    D: DirectoryFd,
+{
+    let child = checked_os_child_name(name)?;
+    let path = parent.path().join(name);
+    let fd = rfs::openat(
+        parent.file(),
+        child.as_c_str(),
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|error| build_os_child_dir_open_error(parent, name, child.as_c_str(), error))?;
+    Ok(OpenDir {
+        file: fd.into(),
+        path,
+        scope: parent.scope(),
     })
 }
 
@@ -1250,6 +1295,33 @@ where
     save_bytes_at_with_mode(dir, name, content.as_bytes(), None)
 }
 
+/// Stage text and check a caller-owned precondition immediately before rename.
+///
+/// The closure runs after the staged file has been written and synced. A
+/// rejected precondition removes that staged file and leaves the target alone.
+#[cfg(unix)]
+pub(crate) fn save_text_at_with_precondition<D, F>(
+    dir: &D,
+    name: &str,
+    content: &str,
+    precondition: F,
+) -> Result<()>
+where
+    D: DirectoryFd,
+    F: FnOnce() -> Result<()>,
+{
+    let target = checked_atomic_write_target_name(name)?;
+    let temp_name = unique_write_staging_name(name);
+    let temp = checked_child_name(&temp_name)?;
+    write_staged_file(dir, &temp_name, temp.as_c_str(), content.as_bytes(), None)?;
+    run_pre_publish_hook();
+    if let Err(error) = precondition() {
+        discard_staged_file(dir, &temp_name);
+        return Err(error);
+    }
+    publish_staged_file(dir, name, &temp_name, temp.as_c_str(), target.as_c_str())
+}
+
 #[cfg(unix)]
 pub(crate) fn save_bytes_at<D>(dir: &D, name: &str, data: &[u8]) -> Result<()>
 where
@@ -1314,6 +1386,32 @@ where
     write_staged_file(dir, &temp_name, temp.as_c_str(), data, mode)?;
     publish_staged_file(dir, name, &temp_name, temp.as_c_str(), target.as_c_str())
 }
+
+#[cfg(all(test, unix))]
+thread_local! {
+    static PRE_PUBLISH_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(all(test, unix))]
+pub(crate) fn set_pre_publish_hook<F>(hook: F)
+where
+    F: FnOnce() + 'static,
+{
+    PRE_PUBLISH_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(all(test, unix))]
+fn run_pre_publish_hook() {
+    PRE_PUBLISH_HOOK.with(|slot| {
+        if let Some(hook) = slot.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+#[cfg(all(not(test), unix))]
+fn run_pre_publish_hook() {}
 
 /// Fill the file a write stages beside its target, leaving nothing on failure.
 ///
@@ -1621,6 +1719,41 @@ where
     open_directory_error(&path, error)
 }
 
+/// Report a failed nofollow open for a caller-selected OS path component.
+#[cfg(unix)]
+fn build_os_child_dir_open_error<D>(
+    parent: &D,
+    name: &OsStr,
+    child: &std::ffi::CStr,
+    error: rustix::io::Errno,
+) -> Error
+where
+    D: DirectoryFd,
+{
+    let path = parent.path().join(name);
+    if let Some(kind) = load_os_child_type_at(parent, &path, child)
+        .ok()
+        .and_then(mismatched_dir_kind)
+    {
+        return invalid_directory_type(&path, kind, parent.scope());
+    }
+    open_directory_error(&path, error)
+}
+
+#[cfg(unix)]
+fn load_os_child_type_at<D>(dir: &D, path: &Path, child: &std::ffi::CStr) -> Result<ChildType>
+where
+    D: DirectoryFd,
+{
+    let stat = rfs::statat(dir.file(), child, AtFlags::SYMLINK_NOFOLLOW).map_err(|error| {
+        io_error(
+            format!("Failed to inspect entry: {}", format_finding_path(path)),
+            error,
+        )
+    })?;
+    Ok(child_type_from_raw(FileType::from_raw_mode(stat.st_mode)))
+}
+
 /// Turn a failed directory open named by path into a not-found or I/O error.
 ///
 /// A type mismatch is settled before the open by the caller, which stats the
@@ -1802,12 +1935,7 @@ where
         OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
     )
-    .map_err(|e| {
-        io_error(
-            format!("Failed to read file {}: {}", child_path(dir, name), e),
-            e,
-        )
-    })?;
+    .map_err(|e| read_file_error(dir, name, e))?;
     let file: File = fd.into();
     validate_regular_file(&file, &child_path(dir, name), dir.scope())?;
     Ok(file)
@@ -1820,7 +1948,7 @@ where
 {
     let path = child_path(dir, name);
     let stat = rfs::statat(dir.file(), child, AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|e| io_error(format!("Failed to read file {}: {}", path, e), e))?;
+        .map_err(|e| read_file_error(dir, name, e))?;
     validate_raw_file_type(FileType::from_raw_mode(stat.st_mode), &path, dir.scope())
 }
 
@@ -2060,6 +2188,20 @@ where
 #[cfg(unix)]
 fn io_error(message: String, error: rustix::io::Errno) -> Error {
     Error::build_io_error_with_source(message, std::io::Error::from(error))
+}
+
+#[cfg(unix)]
+fn read_file_error<D>(dir: &D, name: &str, error: rustix::io::Errno) -> Error
+where
+    D: DirectoryFd,
+{
+    if is_not_found(error) {
+        return Error::build_not_found_error(format!("File not found: {}", child_path(dir, name)));
+    }
+    io_error(
+        format!("Failed to read file {}: {}", child_path(dir, name), error),
+        error,
+    )
 }
 
 #[cfg(unix)]

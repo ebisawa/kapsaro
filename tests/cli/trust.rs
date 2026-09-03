@@ -15,12 +15,12 @@ use crate::cli::common::{
 use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script_at_prompt};
 use crate::test_utils::member_handle;
 use assert_cmd::cargo;
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
+use kapsaro_core::test_support::domain::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord,
 };
-use kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339;
-use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
-use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::test_support::helpers::time::format_timestamp_rfc3339;
+use kapsaro_core::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
+use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
 use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use predicates::prelude::*;
 use serde_json::Value;
@@ -151,6 +151,25 @@ fn test_trust_list_succeeds_without_ssh_agent() {
         stderr
     );
     assert.stderr(predicate::str::contains(BOB_MEMBER_HANDLE));
+}
+
+#[test]
+fn test_trust_list_explicit_member_succeeds_with_invalid_config() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+    fs::write(home.path().join("config.toml"), "member_handle = [\n").unwrap();
+
+    cmd()
+        .arg("trust")
+        .arg("keys")
+        .arg("list")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(BOB_MEMBER_HANDLE));
 }
 
 /// The listing reports the approvals it read and the permission problem it met

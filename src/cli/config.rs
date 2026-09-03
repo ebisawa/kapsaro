@@ -5,12 +5,11 @@
 
 use clap::{Args, Subcommand};
 
-use crate::cli::common::command::resolve_options;
 use crate::cli::common::output::config::{
     print_config_list, print_config_set_result, print_config_unset_result, print_config_value,
 };
-use crate::cli::options::LocalOptions;
-use kapsaro_core::cli_api::app::config;
+use crate::cli::options::{resolve_base_dir, LocalOptions};
+use kapsaro_core::api::config;
 use kapsaro_core::Error;
 
 #[derive(Args)]
@@ -85,27 +84,27 @@ pub(crate) fn run(args: ConfigArgs) -> Result<(), Error> {
 }
 
 fn run_get(args: GetArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    print_config_value(&config::resolve_config_value_command(&options, &args.key)?);
+    let base_dir = resolve_base_dir(&args.common.home)?;
+    print_config_value(&config::resolve_config_value(&base_dir, &args.key)?);
     Ok(())
 }
 
 fn run_set(args: SetArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    let result = config::set_config_command(&options, &args.key, &args.value)?;
+    let base_dir = resolve_base_dir(&args.common.home)?;
+    let result = config::set_config(&base_dir, &args.key, &args.value)?;
     print_config_set_result(&result);
     Ok(())
 }
 
 fn run_unset(args: UnsetArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    let result = config::unset_config_command(&options, &args.key)?;
+    let base_dir = resolve_base_dir(&args.common.home)?;
+    let result = config::unset_config(&args.key, &base_dir)?;
     print_config_unset_result(&result);
     Ok(())
 }
 
 fn run_list(args: ListArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    print_config_list(&config::list_config_command(&options)?);
+    let base_dir = resolve_base_dir(&args.common.home)?;
+    print_config_list(&config::list_config(&base_dir)?);
     Ok(())
 }

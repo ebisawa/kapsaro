@@ -6,8 +6,6 @@
 //! Tests rotate, add-recipient, and remove-recipient via the app-level
 //! rewrap API since `file_op` is `pub(crate)`.
 
-use crate::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic;
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
@@ -19,6 +17,8 @@ use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::feature::verify::file::verify_file_document;
 use crate::format::content::{EncContent, FileEncContent};
 use crate::model::file_enc::FileEncDocument;
+use crate::test_support::storage::keystore::storage::save_key_pair_atomic;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE};

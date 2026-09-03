@@ -58,9 +58,12 @@ fn test_command_removes_kapsaro_env_and_sets_only_the_agent_socket() {
     std::env::set_var("SSH_AUTH_SOCK", AGENT_SOCKET);
     std::env::set_var("KAPSARO_PRIVATE_KEY", "sensitive");
 
-    let command = SshCommandRunner::optional_agent("/usr/bin/ssh-keygen")
-        .command()
-        .unwrap();
+    let command = SshCommandRunner::optional_agent(
+        "/usr/bin/ssh-keygen",
+        Some(std::path::PathBuf::from(AGENT_SOCKET)),
+    )
+    .command()
+    .unwrap();
     let delta = env_delta(&command);
 
     assert_eq!(command.get_program(), OsStr::new("/usr/bin/ssh-keygen"));
@@ -129,9 +132,12 @@ fn test_output_passes_the_parent_environment_to_the_child() {
     std::env::set_var("KAPSARO_PRIVATE_KEY", "sensitive");
     std::env::set_var("CUSTOM_PARENT_ENV", "parent-value");
 
-    let output = SshCommandRunner::optional_agent(ENV_DUMP_PROGRAM)
-        .output(no_args(), spawn_error)
-        .unwrap();
+    let output = SshCommandRunner::optional_agent(
+        ENV_DUMP_PROGRAM,
+        Some(std::path::PathBuf::from(AGENT_SOCKET)),
+    )
+    .output(no_args(), spawn_error)
+    .unwrap();
 
     let dumped = String::from_utf8(output.stdout).unwrap();
     let names: Vec<&str> = dumped
@@ -147,7 +153,7 @@ fn test_output_passes_the_parent_environment_to_the_child() {
 /// Signing material travels on stdin so it never lands in a file.
 #[test]
 fn test_output_with_stdin_pipes_the_payload_to_the_child() {
-    let output = SshCommandRunner::optional_agent(ECHO_STDIN_PROGRAM)
+    let output = SshCommandRunner::optional_agent(ECHO_STDIN_PROGRAM, None)
         .output_with_stdin(
             no_args(),
             b"stdin-signature-payload",
@@ -161,30 +167,42 @@ fn test_output_with_stdin_pipes_the_payload_to_the_child() {
 
 #[test]
 #[serial_test::serial]
-fn test_optional_agent_builds_a_command_without_an_agent_socket() {
+fn test_optional_agent_removes_an_ambient_socket_when_the_fixed_socket_is_absent() {
     let (_guard, _home) = guard_with_empty_home(&["HOME", "SSH_AUTH_SOCK"]);
-    std::env::remove_var("SSH_AUTH_SOCK");
+    std::env::set_var("SSH_AUTH_SOCK", AGENT_SOCKET);
 
-    let command = SshCommandRunner::optional_agent("/usr/bin/ssh-keygen")
+    let command = SshCommandRunner::optional_agent("/usr/bin/ssh-keygen", None)
         .command()
         .unwrap();
 
-    let assigned: Vec<String> = env_delta(&command)
-        .into_iter()
-        .filter(|(_, value)| value.is_some())
-        .map(|(key, _)| key)
-        .collect();
-    assert!(assigned.is_empty());
+    assert_eq!(env_delta(&command).get("SSH_AUTH_SOCK"), Some(&None));
+}
+
+#[test]
+#[serial_test::serial]
+fn test_optional_agent_uses_the_fixed_socket_after_the_ambient_socket_changes() {
+    let (_guard, _home) = guard_with_empty_home(&["HOME", "SSH_AUTH_SOCK"]);
+    let fixed_socket = std::path::PathBuf::from("/tmp/kapsaro-fixed-agent.sock");
+    std::env::set_var("SSH_AUTH_SOCK", "/tmp/kapsaro-replacement-agent.sock");
+
+    let command = SshCommandRunner::optional_agent("/usr/bin/ssh-keygen", Some(fixed_socket))
+        .command()
+        .unwrap();
+
+    assert_eq!(
+        env_delta(&command)["SSH_AUTH_SOCK"],
+        Some("/tmp/kapsaro-fixed-agent.sock".to_string())
+    );
 }
 
 /// ssh-add cannot work without an agent, so the runner refuses before spawning.
 #[test]
 #[serial_test::serial]
-fn test_required_agent_fails_without_an_agent_socket() {
+fn test_required_agent_without_a_fixed_socket_error() {
     let (_guard, _home) = guard_with_empty_home(&["HOME", "SSH_AUTH_SOCK"]);
     std::env::remove_var("SSH_AUTH_SOCK");
 
-    let error = SshCommandRunner::required_agent("/usr/bin/ssh-add")
+    let error = SshCommandRunner::required_agent("/usr/bin/ssh-add", None)
         .command()
         .expect_err("a required agent socket must be resolved");
 

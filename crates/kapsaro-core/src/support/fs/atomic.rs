@@ -12,6 +12,7 @@ use crate::support::fs::relative::{
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
+#[cfg(feature = "cli-test-support")]
 use serde::Serialize;
 use std::path::Path;
 

@@ -1,33 +1,55 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
+use kapsaro_core::api::config::LocalStateSession;
 use kapsaro_core::api::diagnostics::{
     DiagnosticBatch, DiagnosticCode, DiagnosticCompleteness, DiagnosticTruncation,
     LocalStateDiagnostic,
 };
+use kapsaro_core::api::doctor::{
+    execute_doctor_command, DoctorCiReadiness, DoctorRequest, DoctorWorkspaceResolution,
+    DoctorWorkspaceSource,
+};
+use kapsaro_core::api::file::encrypt::{resolve_encrypt_file_command, EncryptFileCommand};
 use kapsaro_core::api::file::{
-    FileEncArtifact, FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
+    load_plaintext_bytes, save_decrypted_bytes, save_encrypted_text, FileEncArtifact,
+    FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
 };
+use kapsaro_core::api::key::generate::KeyGenerationHome;
 use kapsaro_core::api::key::{
-    KeyContext, KeyContextOptions, Kid, LocalKeyStore, MemberHandle, RecipientKeys,
+    save_private_export_text, validate_environment_key, KeyContext, KeyContextOptions, Kid,
+    LocalKeyContextRequest, LocalKeyStore, MemberHandle, RecipientKeys,
 };
+use kapsaro_core::api::kv::mutation::{resolve_mutation_write_plan, MutationWriteTrustPlan};
 use kapsaro_core::api::kv::{
-    AuthorizedKvMutation, KvDisclosedEntry, KvEncArtifact, KvInputEntry, KvMutationOperation,
-    KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact,
+    load_import_text, AuthorizedKvMutation, KvDisclosedEntry, KvEncArtifact, KvGetResult,
+    KvInputEntry, KvMutationOperation, KvReadOperation, TrustedKvEncArtifact,
+    VerifiedKvEncArtifact,
 };
 use kapsaro_core::api::online::{
     GitHubAccount, GitHubOnlineVerifier, OnlineVerificationStatus, VerifiedGitHubEvidence,
 };
 use kapsaro_core::api::operation::OperationOptions;
-use kapsaro_core::api::secret::{SecretBytes, SecretString};
-use kapsaro_core::api::ssh::{SshRawSignature, SshSignatureBackend};
-use kapsaro_core::api::trust::{
-    ApprovalConflictHandling, CurrentMemberSnapshot, KnownKeyApprovalEvidence, KnownKeyReview,
-    KnownKeyReviewCandidate, LocalTrustStore, ReadTrustExceptions, RecipientSetSubject,
-    TrustApproval, TrustApprovalOutcome, TrustDecision, TrustPolicyEvaluator,
-    TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
-    VerifiedLocalTrustStoreLoadResult,
+use kapsaro_core::api::rewrap::{
+    AuthorizedRewrapInput, RewrapDirectories, RewrapOptions, RewrapPromotionReview, RewrapReview,
+    RewrapSession, RewrapTarget, RewrapTargetListing,
 };
+use kapsaro_core::api::secret::{SecretBytes, SecretString};
+use kapsaro_core::api::ssh::{
+    build_ssh_signing_context, resolve_ssh_agent_socket, resolve_ssh_key_candidates,
+    SshDeterminismStatus, SshKeyCandidateView, SshRawSignature, SshSignatureBackend,
+    SshSigningContextResolution, SshSigningInputs, SshSigningMethod,
+};
+use kapsaro_core::api::trust::{
+    ApprovalConflictHandling, AuthorizedRead, CurrentMemberSnapshot, FileReadTarget,
+    KnownKeyApprovalEvidence, KnownKeyReview, KnownKeyReviewCandidate, LocalTrustStore,
+    NonMemberReadReview, ReadAcceptance, ReadReview, ReadSessionDecision, ReadTrustExceptions,
+    RecipientSetSubject, TrustApproval, TrustApprovalOutcome, TrustCommandSession, TrustDecision,
+    TrustPolicyEvaluator, TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest,
+    VerifiedLocalTrustStore, VerifiedLocalTrustStoreLoadResult, WorkspaceReadDirectories,
+    WorkspaceReadSession,
+};
+use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::error::Error as StdError;
 use zeroize::Zeroizing;
@@ -73,12 +95,38 @@ fn api_exposes_use_case_modules() {
     let _options = kapsaro_core::api::operation::OperationOptions::default();
     let _online = kapsaro_core::api::online::GitHubOnlineVerifier::new();
     let _warnings = kapsaro_core::api::diagnostics::take_local_state_warnings();
+    let local_state = LocalStateSession::open(temp.path()).expect("open local state session");
+    let _config = local_state.load_config().expect("load global config");
 
     assert_eq!(key_store.root(), temp.path().join("keys").as_path());
     assert_eq!(
         trust_store.path(),
         temp.path().join("trust/alice@example.com.json")
     );
+}
+
+#[test]
+fn test_doctor_request_exposes_caller_resolved_workspace() {
+    let workspace = DoctorWorkspaceResolution::Selection {
+        path: std::path::PathBuf::from("/tmp/workspace"),
+        source: DoctorWorkspaceSource::Cli,
+    };
+    let _request = DoctorRequest {
+        base_dir: std::path::PathBuf::from("/tmp/home"),
+        workspace,
+        member_handle: None,
+        ci: DoctorCiReadiness::Inactive,
+    };
+    let _execute: fn(DoctorRequest) -> Result<kapsaro_core::api::doctor::types::DoctorReport> =
+        execute_doctor_command;
+    let _unresolved = DoctorWorkspaceResolution::Unresolved;
+    let _failure = DoctorWorkspaceResolution::Failure(Error::build_config_error("failure"));
+    let _sources = [
+        DoctorWorkspaceSource::Cli,
+        DoctorWorkspaceSource::Environment,
+        DoctorWorkspaceSource::Config,
+        DoctorWorkspaceSource::AutoDetect,
+    ];
 }
 
 #[test]
@@ -104,6 +152,30 @@ fn key_context_options_group_runtime_inputs() {
     .with_workspace_path(std::path::PathBuf::from("/tmp/workspace"));
 
     let _load_key_context = LocalKeyStore::load_key_context;
+    let _load_selected_key_context = LocalKeyStore::load_selected_key_context;
+    let _resolve_signing_context = LocalKeyStore::resolve_signing_context;
+    let _load_environment_key = KeyContext::load_environment_key;
+    let _validate_environment_key = validate_environment_key;
+    assert!(std::any::type_name::<LocalKeyContextRequest>().contains("LocalKeyContextRequest"));
+    assert!(std::any::type_name::<SshSigningInputs>().contains("SshSigningInputs"));
+    let _ssh_inputs = SshSigningInputs::new(
+        SshSigningMethod::SshAgent,
+        None,
+        Some(std::path::PathBuf::from("/tmp/agent.sock")),
+        "ssh-keygen",
+        "ssh-add",
+    );
+    let _list_ssh_candidates = resolve_ssh_key_candidates;
+    let _build_ssh_context = build_ssh_signing_context;
+    type ResolveSshAgentSocket = fn(
+        Option<&std::path::Path>,
+        Option<std::path::PathBuf>,
+        &std::collections::BTreeMap<String, String>,
+    ) -> Result<Option<std::path::PathBuf>>;
+    let _resolve_ssh_agent_socket: ResolveSshAgentSocket = resolve_ssh_agent_socket;
+    assert!(std::any::type_name::<SshKeyCandidateView>().contains("SshKeyCandidateView"));
+    assert!(std::any::type_name::<SshSigningContextResolution>()
+        .contains("SshSigningContextResolution"));
 }
 
 #[test]
@@ -156,6 +228,8 @@ fn canonical_api_exposes_facade_helper_types() {
     assert_eq!(signature.as_bytes(), &[7u8; 64]);
     assert!(std::any::type_name::<&dyn SshSignatureBackend>().contains("SshSignatureBackend"));
     assert!(std::any::type_name::<KeyContextOptions>().contains("KeyContextOptions"));
+    assert!(std::any::type_name::<SshSigningMethod>().contains("SshSigningMethod"));
+    assert!(std::any::type_name::<SshDeterminismStatus>().contains("SshDeterminismStatus"));
     assert!(std::any::type_name::<RecipientSetSubject>().contains("RecipientSetSubject"));
     assert!(std::any::type_name::<VerifiedFileEncArtifact>().contains("VerifiedFileEncArtifact"));
     assert!(std::any::type_name::<VerifiedKvEncArtifact>().contains("VerifiedKvEncArtifact"));
@@ -173,6 +247,46 @@ fn canonical_api_exposes_facade_helper_types() {
         OnlineVerificationStatus::Verified
     );
     assert!(OnlineVerificationStatus::Verified.is_verified());
+}
+
+#[test]
+fn artifact_io_helpers_are_available_through_purpose_specific_modules() {
+    let temp = tempfile::tempdir().expect("create temporary directory");
+    let plaintext_path = temp.path().join("plaintext");
+    std::fs::write(&plaintext_path, b"secret").expect("write plaintext fixture");
+
+    assert_eq!(
+        load_plaintext_bytes(&plaintext_path).expect("load plaintext"),
+        b"secret"
+    );
+
+    let encrypted_path = temp.path().join("artifact.kapsaro");
+    save_encrypted_text(&encrypted_path, "encrypted").expect("save encrypted artifact");
+    assert_eq!(
+        std::fs::read_to_string(encrypted_path).expect("read encrypted artifact"),
+        "encrypted"
+    );
+
+    let decrypted_path = temp.path().join("decrypted");
+    save_decrypted_bytes(&decrypted_path, b"decrypted").expect("save decrypted artifact");
+    assert_eq!(
+        std::fs::read(decrypted_path).expect("read decrypted artifact"),
+        b"decrypted"
+    );
+
+    let import_path = temp.path().join("import.env");
+    std::fs::write(&import_path, "KEY=value\n").expect("write import fixture");
+    assert_eq!(
+        load_import_text(&import_path).expect("load import text"),
+        "KEY=value\n"
+    );
+
+    let export_path = temp.path().join("private-key.json");
+    save_private_export_text(&export_path, "protected").expect("save private export");
+    assert_eq!(
+        std::fs::read_to_string(export_path).expect("read private export"),
+        "protected"
+    );
 }
 
 #[test]
@@ -218,6 +332,7 @@ fn kv_artifact_exposes_entry_named_operations() {
     let _decrypt_entry = TrustedKvEncArtifact::decrypt_entry;
     let _decrypt_entries = TrustedKvEncArtifact::decrypt_entries;
     let _decrypt_environment = TrustedKvEncArtifact::decrypt_environment;
+    let _get_result = TrustedKvEncArtifact::get_result;
     let _set_entries = AuthorizedKvMutation::set_entries;
     let _unset_entry = AuthorizedKvMutation::unset_entry;
 }
@@ -237,11 +352,84 @@ fn artifact_facades_expose_verified_operations() {
 }
 
 #[test]
+fn test_workspace_write_directories_and_resolvers_are_public() {
+    fn open_directories(path: std::path::PathBuf) -> Result<WorkspaceWriteDirectories> {
+        WorkspaceWriteDirectories::open(path)
+    }
+
+    fn resolve_encrypt<'a>(
+        directories: &'a WorkspaceWriteDirectories,
+        trust: &'a TrustCommandSession,
+        options: kapsaro_core::api::trust::WriteTrustOptions,
+        input: Vec<u8>,
+    ) -> Result<EncryptFileCommand<'a>> {
+        resolve_encrypt_file_command(directories, trust, options, input)
+    }
+
+    fn resolve_mutation<'a>(
+        directories: &'a WorkspaceWriteDirectories,
+        trust: &'a TrustCommandSession,
+        options: kapsaro_core::api::trust::WriteTrustOptions,
+        file_name: Option<&str>,
+        allow_missing: bool,
+    ) -> Result<MutationWriteTrustPlan<'a>> {
+        resolve_mutation_write_plan(directories, trust, options, file_name, allow_missing)
+    }
+
+    let _open_directories = open_directories;
+    let _resolve_encrypt = resolve_encrypt;
+    let _resolve_mutation = resolve_mutation;
+    assert!(
+        std::any::type_name::<WorkspaceWriteDirectories>().contains("WorkspaceWriteDirectories")
+    );
+}
+
+#[test]
 fn trust_evaluator_exposes_operation_bound_decisions() {
+    fn open_rewrap_session<'a>(
+        workspace: &std::path::Path,
+        home: Option<std::path::PathBuf>,
+        key_ctx: &'a KeyContext,
+    ) -> Result<RewrapSession<'a>> {
+        RewrapSession::open(workspace, home, key_ctx)
+    }
+
+    fn open_rewrap_with_trust<'a>(
+        workspace: &std::path::Path,
+        trust: &'a TrustCommandSession,
+    ) -> Result<RewrapSession<'a>> {
+        RewrapSession::from_trust_command(workspace, trust)
+    }
+
     let _load_snapshot = CurrentMemberSnapshot::load;
     let _evaluate_file = TrustPolicyEvaluator::evaluate_file;
     let _evaluate_kv = TrustPolicyEvaluator::evaluate_kv;
     let _evaluate_kv_mutation = TrustPolicyEvaluator::evaluate_kv_mutation;
+    let _rewrite = AuthorizedRewrapInput::rewrite;
+    let _publish = AuthorizedRewrapInput::publish;
+    let _rewrap_options = RewrapOptions::new();
+    let _open_rewrap_session = open_rewrap_session;
+    let _open_rewrap_with_trust = open_rewrap_with_trust;
+    let _open_rewrap_target = |path: &std::path::Path| RewrapTarget::open(path);
+    let _workspace_rewrap_target = RewrapSession::workspace_target;
+    let _list_workspace_targets = RewrapSession::list_workspace_targets;
+    let _post_promotion_warnings = RewrapSession::post_promotion_warnings;
+    let _signing_key_warnings = RewrapSession::signing_key_warnings;
+    let _begin_promotion_review = RewrapSession::begin_promotion_review;
+    let _apply_promotions = RewrapSession::apply_promotions;
+    let _apply_rewrap_approvals = RewrapSession::apply_approvals;
+    let _apply_rewrap_review_approval = RewrapSession::apply_review_approval;
+    let _begin_rewrap = RewrapSession::begin_rewrap;
+    let _resume_rewrap = RewrapSession::resume_rewrap;
+    let _begin_file_rewrap = RewrapSession::begin_file_rewrap;
+    let _resume_file_rewrap = RewrapSession::resume_file_rewrap;
+    let _begin_kv_rewrap = RewrapSession::begin_kv_rewrap;
+    let _resume_kv_rewrap = RewrapSession::resume_kv_rewrap;
+    let _accept_non_member_rewrap = RewrapReview::accept_non_member;
+    let _rewrap_signer_first = RewrapReview::first_request_is_signer;
+    assert!(std::any::type_name::<RewrapDirectories>().contains("RewrapDirectories"));
+    assert!(std::any::type_name::<RewrapTargetListing>().contains("RewrapTargetListing"));
+    assert!(std::any::type_name::<RewrapPromotionReview>().contains("RewrapPromotionReview"));
     let _file_operation = FileReadOperation::Decrypt;
     let _kv_operation = KvReadOperation::Entry("DATABASE_URL".to_string());
     let _kv_mutation = KvMutationOperation::Set;
@@ -293,6 +481,9 @@ fn test_kv_artifact_io_methods_pinned() {
     assert!(std::any::type_name::<KvDisclosedEntry>().contains("KvDisclosedEntry"));
     let _key_fn: fn(&KvDisclosedEntry) -> &str = KvDisclosedEntry::key;
     let _disclosed_fn: fn(&KvDisclosedEntry) -> bool = KvDisclosedEntry::disclosed;
+    let _values = KvGetResult::values;
+    let _disclosed_entries = KvGetResult::disclosed_entries;
+    let _into_parts = KvGetResult::into_parts;
 }
 
 #[test]
@@ -534,14 +725,39 @@ fn test_trust_approval_constructors_and_from_request_pinned() {
 }
 
 #[test]
-fn test_read_trust_exceptions_are_explicit_and_consumed() {
-    let exceptions = ReadTrustExceptions::none()
-        .with_known_key_review(KnownKeyReview::Skipped)
-        .accepting_non_member(
-            MemberHandle::new("alice@example.com").expect("valid member handle"),
-            Kid::new("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("canonical kid"),
-        );
+fn test_read_session_types_and_low_level_review_control_are_public() {
+    fn open_session<'a>(
+        workspace: &std::path::Path,
+        local_state: Option<&LocalStateSession>,
+        key_context: &'a KeyContext,
+        options: OperationOptions,
+    ) -> Result<WorkspaceReadSession<'a>> {
+        WorkspaceReadSession::open_with_local_state(workspace, local_state, key_context, options)
+    }
+
+    let exceptions = ReadTrustExceptions::none().with_known_key_review(KnownKeyReview::Skipped);
     assert!(format!("{exceptions:?}").contains("ReadTrustExceptions"));
+    assert!(std::any::type_name::<WorkspaceReadSession<'static>>().contains("WorkspaceReadSession"));
+    assert!(std::any::type_name::<WorkspaceReadDirectories>().contains("WorkspaceReadDirectories"));
+    assert!(std::any::type_name::<ReadSessionDecision<()>>().contains("ReadSessionDecision"));
+    assert!(std::any::type_name::<AuthorizedRead<()>>().contains("AuthorizedRead"));
+    assert!(std::any::type_name::<ReadReview>().contains("ReadReview"));
+    assert!(std::any::type_name::<ReadAcceptance>().contains("ReadAcceptance"));
+    assert!(std::any::type_name::<FileReadTarget>().contains("FileReadTarget"));
+    assert!(std::any::type_name::<NonMemberReadReview>().contains("NonMemberReadReview"));
+    let _requests = ReadReview::requests;
+    let _first_request_is_signer = ReadReview::first_request_is_signer;
+    let _non_member_signer = ReadReview::non_member_signer;
+    let _accept_non_member = ReadReview::accept_non_member;
+    let _open_with_local_state = open_session;
+    let _with_known_key_review = WorkspaceReadSession::with_known_key_review;
+    let _observe_recovery = WorkspaceReadSession::observe_trust_store_recovery;
+    let _build_reset_plan = WorkspaceReadSession::build_trust_store_reset_plan;
+}
+
+#[test]
+fn test_key_generation_home_uses_a_fixed_local_state_session() {
+    let _fix: fn(&LocalStateSession) -> Result<KeyGenerationHome> = KeyGenerationHome::fix;
 }
 
 #[test]

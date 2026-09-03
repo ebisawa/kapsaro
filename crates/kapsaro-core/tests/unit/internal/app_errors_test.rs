@@ -3,7 +3,7 @@
 
 //! Unit tests for app/errors.rs helpers.
 
-use crate::app::errors::{
+use crate::service::errors::{
     build_default_kv_file_not_found_error, build_kv_key_not_found_error, serialize_to_json_value,
 };
 use crate::{Error, ErrorKind};

@@ -180,7 +180,7 @@ pub fn run_command_with_pty_script(
 
 /// Runs a command through a PTY; if the optional prompt appears sends input, otherwise returns early.
 #[cfg(unix)]
-pub(super) fn run_command_with_optional_prompt_pty(
+pub fn run_command_with_optional_prompt_pty(
     command: &mut StdCommand,
     prompt: &str,
     input: &[u8],

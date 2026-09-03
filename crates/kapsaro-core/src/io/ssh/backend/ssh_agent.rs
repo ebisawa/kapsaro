@@ -11,9 +11,9 @@ use crate::Result;
 
 /// ssh-agent backend (Method A)
 ///
-/// Communicates directly with ssh-agent via SSH_AUTH_SOCK.
+/// Communicates directly with ssh-agent through a caller-fixed socket.
 /// Requires:
-/// - `SSH_AUTH_SOCK` environment variable set
+/// - An agent socket selected before backend construction
 /// - Target key loaded in ssh-agent
 pub struct SshAgentBackend {
     agent_signer: Box<dyn AgentSigner>,

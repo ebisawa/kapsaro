@@ -11,17 +11,19 @@
 //! says, only which key vouches for it, so there is no approval content to review
 //! before it is written.
 
-use crate::cli::common::command::{resolve_options, resolve_write_execution_input};
+use crate::cli::common::context::CliContext;
+use crate::cli::common::key_context::load_trust_command_session;
 use crate::cli::common::output::text::trust::print_trust_resign_summary;
-use kapsaro_core::cli_api::app::trust::resign::resign_trust_store_command;
+use kapsaro_core::api::trust::resign::resign_trust_store_command;
 use kapsaro_core::Error;
 
 use super::ResignArgs;
 
 pub(crate) fn run(args: ResignArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
-    let result = resign_trust_store_command(&options, &execution)?;
+    let context = CliContext::resolve(&args.common)?;
+    let session =
+        load_trust_command_session(&context, &args.common, args.member.member_handle.clone())?;
+    let result = resign_trust_store_command(&session)?;
     print_trust_resign_summary(
         &result.owner_handle,
         &result.previous_signer_kid,

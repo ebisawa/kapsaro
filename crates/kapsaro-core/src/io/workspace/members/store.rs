@@ -9,8 +9,6 @@ mod remove;
 mod save;
 mod uniqueness;
 
-#[cfg(test)]
-pub(crate) use load::set_post_member_document_read_hook;
 pub use load::{
     list_active_member_paths, list_incoming_member_paths, load_active_member_files,
     load_member_file, load_member_file_from_path, load_verified_member_file_from_path,
@@ -22,7 +20,6 @@ pub(crate) use remove::{set_member_post_quarantine_hook, set_member_pre_quaranti
 #[cfg(test)]
 pub(crate) use save::set_post_open_save_dirs_hook;
 pub use save::{save_member_content, save_member_content_keeping_existing, MemberDocumentWrite};
-pub use uniqueness::ensure_workspace_member_kid_uniqueness;
 pub(crate) use uniqueness::{
     check_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate,
 };

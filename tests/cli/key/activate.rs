@@ -8,8 +8,8 @@ use crate::cli::common::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::cli::key::install_secondary_member_fixture;
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
-use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use kapsaro_core::test_support::helpers::kid::format_kid_display;
+use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
 use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use std::fs;
 
@@ -230,5 +230,31 @@ fn test_key_activate_reports_a_trust_store_signed_by_another_key() {
         stderr.contains("Local trust store is still signed by kid")
             && stderr.contains("kapsaro trust resign --member-handle alice@example.com",),
         "activation must point at the command that moves the signature, got: {stderr}"
+    );
+}
+
+#[test]
+fn test_key_activate_with_environment_member_handle_in_multi_member_home() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
+    let keystore_root = home.path().join("keys");
+    let alice_kid = load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root)
+        .unwrap()
+        .expect("Alice fixture must have an active key");
+    fs::remove_file(keystore_root.join(ALICE_MEMBER_HANDLE).join("active")).unwrap();
+
+    cmd()
+        .arg("key")
+        .arg("activate")
+        .arg(&alice_kid)
+        .arg("--home")
+        .arg(home.path())
+        .env("KAPSARO_MEMBER_HANDLE", ALICE_MEMBER_HANDLE)
+        .assert()
+        .success();
+
+    assert_eq!(
+        load_active_kid(ALICE_MEMBER_HANDLE, &keystore_root).unwrap(),
+        Some(alice_kid)
     );
 }

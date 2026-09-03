@@ -7,7 +7,6 @@ use super::protocol::{
     build_request_identities, build_sign_request, parse_identities_response, parse_sign_response,
     MAX_AGENT_PACKET_SIZE,
 };
-use super::socket::resolve_agent_socket_path;
 use super::traits::AgentSigner;
 use super::validation::{find_key_in_agent, validate_agent_has_keys, validate_key_present};
 use crate::io::ssh::protocol::parse::decode_ssh_public_key_blob;
@@ -16,10 +15,12 @@ use crate::io::ssh::SshError;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::Result;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// Default ssh-agent signer that communicates with a real ssh-agent.
-pub struct DefaultAgentSigner;
+/// Default ssh-agent signer bound to one caller-selected socket.
+pub struct DefaultAgentSigner {
+    socket_path: PathBuf,
+}
 
 impl AgentSigner for DefaultAgentSigner {
     fn sign(&self, ssh_pubkey: &str, message: &[u8]) -> Result<Ed25519RawSignature> {
@@ -31,10 +32,14 @@ impl AgentSigner for DefaultAgentSigner {
 }
 
 impl DefaultAgentSigner {
+    /// Bind a signer to the socket selected before the operation starts.
+    pub fn new(socket_path: PathBuf) -> Self {
+        Self { socket_path }
+    }
+
     fn connect_client(&self) -> Result<(AgentClient, std::path::PathBuf)> {
-        let socket_path = resolve_agent_socket_path()?;
-        let client = AgentClient::connect(&socket_path)?;
-        Ok((client, socket_path))
+        let client = AgentClient::connect(&self.socket_path)?;
+        Ok((client, self.socket_path.clone()))
     }
 
     fn validate_target_key(

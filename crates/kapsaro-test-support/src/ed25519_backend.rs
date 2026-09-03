@@ -5,11 +5,11 @@
 // Replaces SshKeygenBackend to avoid spawning ssh-keygen subprocesses in tests.
 
 use ed25519_dalek::{Signer, SigningKey};
-use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::base64::decode_base64_armored;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::sshsig;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::wire::decode_ssh_string;
+use kapsaro_core::test_support::storage::ssh::backend::SignatureBackend;
+use kapsaro_core::test_support::storage::ssh::protocol::base64::decode_base64_armored;
+use kapsaro_core::test_support::storage::ssh::protocol::sshsig;
+use kapsaro_core::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
+use kapsaro_core::test_support::storage::ssh::protocol::wire::decode_ssh_string;
 use kapsaro_core::Result;
 use std::fs;
 use std::path::Path;

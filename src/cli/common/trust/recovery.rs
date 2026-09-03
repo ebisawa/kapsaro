@@ -9,39 +9,33 @@
 use std::io::BufRead;
 
 use crate::cli::common::output::text::print_warning;
+use crate::cli::common::presentation::format_path_relative_to_cwd;
+use crate::cli::common::presentation::tty;
 use crate::cli::common::prompt::prompt_yes_no;
 #[cfg(test)]
 use crate::cli::common::prompt::prompt_yes_no_with_reader;
-use kapsaro_core::cli_api::app::context::execution::ExecutionContext;
-use kapsaro_core::cli_api::app::trust::list::TrustListCommand;
-use kapsaro_core::cli_api::app::trust::recovery::{
-    build_trust_store_reset_plan_from_execution, build_trust_store_reset_plan_from_list_command,
+use kapsaro_core::api::trust::list::TrustListCommand;
+use kapsaro_core::api::trust::recovery::{
+    build_trust_store_reset_plan_from_list_command, build_trust_store_reset_plan_from_session,
     classify_trust_store_reset, execute_trust_store_reset,
-    observe_trust_store_recovery_from_execution, observe_trust_store_recovery_from_list_command,
+    observe_trust_store_recovery_from_list_command, observe_trust_store_recovery_from_session,
     TrustStoreRecoveryToken, TrustStoreResetCause, TrustStoreResetLoss, TrustStoreResetPlan,
 };
-use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
-use kapsaro_core::cli_api::presentation::tty;
+use kapsaro_core::api::trust::{TrustCommandSession, WorkspaceReadSession};
 use kapsaro_core::{Error, Result};
 
-/// Run an operation and, on a recoverable trust store failure, let the operator
-/// confirm the reset before running once more.
-///
-/// Both the failing run and the reset act through `execution`, so the store the
-/// run read is the store the reset deletes. The store is observed before the
-/// run so the reset can be bound to the document that run started from, rather
-/// than to whatever stands under the name once the failure has been reported.
-pub(crate) fn run_with_execution_trust_store_reset_recovery<T, Run>(
-    execution: &ExecutionContext,
+/// Retry one workspace read after resetting the exact trust store it observed.
+pub(crate) fn run_with_workspace_read_trust_store_reset_recovery<T, Run>(
+    session: &WorkspaceReadSession<'_>,
     run: Run,
 ) -> Result<T>
 where
     Run: FnMut() -> Result<T>,
 {
-    let mut token = Some(observe_trust_store_recovery_from_execution(execution));
+    let mut token = Some(session.observe_trust_store_recovery());
     run_with_trust_store_reset_retry(run, |error| {
-        recover_invalid_trust_store_from_execution(
-            execution,
+        recover_invalid_trust_store_from_workspace_read(
+            session,
             take_recovery_token(&mut token)?,
             error,
         )
@@ -65,20 +59,29 @@ where
     })
 }
 
-pub(crate) fn run_with_execution_trust_store_reset_without_retry<T, Run>(
-    execution: &ExecutionContext,
+pub(crate) fn run_with_trust_command_session_reset_recovery<T, Run>(
+    session: &TrustCommandSession,
+    run: Run,
+) -> Result<T>
+where
+    Run: FnMut() -> Result<T>,
+{
+    let mut token = Some(observe_trust_store_recovery_from_session(session));
+    run_with_trust_store_reset_retry(run, |error| {
+        recover_invalid_trust_store_from_session(session, take_recovery_token(&mut token)?, error)
+    })
+}
+
+pub(crate) fn run_with_trust_command_session_reset_without_retry<T, Run>(
+    session: &TrustCommandSession,
     run: Run,
 ) -> Result<TrustStoreResetOutcome<T>>
 where
     Run: FnMut() -> Result<T>,
 {
-    let mut token = Some(observe_trust_store_recovery_from_execution(execution));
+    let mut token = Some(observe_trust_store_recovery_from_session(session));
     run_with_trust_store_reset_without_retry(run, |error| {
-        recover_invalid_trust_store_from_execution(
-            execution,
-            take_recovery_token(&mut token)?,
-            error,
-        )
+        recover_invalid_trust_store_from_session(session, take_recovery_token(&mut token)?, error)
     })
 }
 
@@ -160,17 +163,22 @@ fn recover_invalid_trust_store_from_list_command(
     recover_prepared_trust_store(&plan, confirm_trust_store_reset)
 }
 
-fn recover_invalid_trust_store_from_execution(
-    execution: &ExecutionContext,
+fn recover_invalid_trust_store_from_session(
+    session: &TrustCommandSession,
     token: TrustStoreRecoveryToken,
     error: Error,
 ) -> Result<()> {
-    let plan = build_trust_store_reset_plan_from_execution(
-        execution,
-        token,
-        error,
-        tty::is_interactive(),
-    )?;
+    let plan =
+        build_trust_store_reset_plan_from_session(session, token, error, tty::is_interactive())?;
+    recover_prepared_trust_store(&plan, confirm_trust_store_reset)
+}
+
+fn recover_invalid_trust_store_from_workspace_read(
+    session: &WorkspaceReadSession<'_>,
+    token: TrustStoreRecoveryToken,
+    error: Error,
+) -> Result<()> {
+    let plan = session.build_trust_store_reset_plan(token, error, tty::is_interactive())?;
     recover_prepared_trust_store(&plan, confirm_trust_store_reset)
 }
 

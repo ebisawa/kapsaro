@@ -6,14 +6,10 @@
 mod resolution;
 mod search;
 
-pub use resolution::{
-    resolve_optional_workspace, resolve_workspace, resolve_workspace_creation_path,
-};
+pub use resolution::resolve_workspace;
+pub(crate) use resolution::resolve_workspace_creation_path_from;
+pub(crate) use search::detect_workspace_root;
 pub use search::WorkspaceRoot;
-// Production callers reach detection through the resolution helpers; the raw
-// search entry point is re-exported for the tests that cover it directly.
-#[cfg(test)]
-pub use search::detect_workspace_root;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/workspace_detection_internal_test.rs"]

@@ -2,35 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::key::LocalKeyStore;
-use crate::api::kv::{KvEncArtifact, KvReadOperation};
+use crate::api::kv::{KvEncArtifact, KvInputEntry, KvReadOperation};
+use crate::api::secret::SecretString;
 use crate::api::trust::{
     ApprovalConflictHandling, CurrentMemberSnapshot, LocalTrustStore, ReadTrustExceptions,
     TrustApproval, TrustDecision, TrustPolicyEvaluator,
 };
-use crate::app::context::execution::resolve_read_execution;
-use crate::app::context::execution::ExecutionContext;
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::kv::mutation::{
+use crate::app_test_utils::{
+    build_test_signing_command_options, build_test_trust_command_session_from_options,
+    resolve_test_write_execution, resolve_test_write_session, TestCommandOptions, TestWriteSession,
+};
+use crate::io::trust::paths::get_trust_store_file_path;
+use crate::io::trust::store::fail_next_trust_store_save;
+use crate::service::kv::mutation::{
     authorized_mutation_count, import_kv_command_with_recipient_set_confirmation,
     reevaluate_mutation_write_plan_after_review, reset_authorized_mutation_count,
     resolve_mutation_write_plan, set_kv_command_with_recipient_set_confirmation,
     set_post_authorized_mutation_hook, set_post_recipient_approval_hook,
     unset_kv_command_with_recipient_set_confirmation, MutationWriteTrustPlan,
 };
-use crate::app::kv::session::KvFileTarget;
-use crate::app::kv::types::KvInputEntry;
-use crate::app::trust::management::{remove_known_key_command, remove_recipient_set_command};
-use crate::app::trust::review::{
-    review_write_recipient_trust, TrustExecutionContext, TrustReviewContext,
-    WriteRecipientTrustReviewPlan,
+use crate::service::trust::management::{remove_known_key_command, remove_recipient_set_command};
+use crate::service::trust::review::{
+    review_write_recipient_trust, TrustReviewContext, WriteRecipientTrustReviewPlan,
 };
-use crate::app::trust::{ImportPolicy, SetPolicy, UnsetPolicy, WriteTrustPolicy};
-use crate::app_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
-use crate::cli_api::test_support::storage::keystore::active::set_active_kid;
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
-use crate::io::trust::paths::get_trust_store_file_path;
-use crate::io::trust::store::fail_next_trust_store_save;
 use crate::support::warning::LocalStateWarningGuard;
+use crate::test_support::storage::keystore::active::set_active_kid;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::{
     build_expiring_soon_timestamp, member_handle, save_active_public_key_to_workspace,
     save_public_key, setup_member_key_context, setup_test_workspace_from_fixtures,
@@ -43,11 +40,21 @@ use std::os::unix::fs::PermissionsExt;
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
 const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 
+fn kv_input(key: impl Into<String>, value: impl Into<String>) -> KvInputEntry {
+    KvInputEntry::new(key, SecretString::new(value.into()))
+}
+
 fn resolve_test_kv_target_path(
-    options: &CommonCommandOptions,
+    options: &TestCommandOptions,
     file_name: Option<&str>,
 ) -> crate::Result<std::path::PathBuf> {
-    KvFileTarget::resolve(options, file_name).map(|target| target.file_path)
+    let name = file_name.unwrap_or("default");
+    Ok(options
+        .workspace
+        .as_ref()
+        .expect("test workspace")
+        .join("secrets")
+        .join(format!("{name}.kvenc")))
 }
 
 #[derive(Clone, Copy)]
@@ -56,43 +63,49 @@ enum KvReadMode<'a> {
     Single(&'a str),
 }
 
-struct InteractiveOverrideGuard;
-
-impl InteractiveOverrideGuard {
-    fn enable() -> Self {
-        crate::support::tty::set_interactive_override(Some(true));
-        Self
-    }
-}
-
-impl Drop for InteractiveOverrideGuard {
-    fn drop(&mut self) {
-        crate::support::tty::set_interactive_override(None);
-    }
-}
-
 fn evaluate_set_plan<'a>(
-    options: &'a CommonCommandOptions,
-    execution: &'a ExecutionContext,
+    _options: &TestCommandOptions,
+    session: &'a TestWriteSession,
     name: Option<&str>,
-) -> MutationWriteTrustPlan<'a, SetPolicy> {
-    resolve_mutation_write_plan::<SetPolicy>(options, execution, name, true).unwrap()
+) -> MutationWriteTrustPlan<'a> {
+    resolve_mutation_write_plan(
+        &session.directories,
+        &session.trust,
+        session.options,
+        name,
+        true,
+    )
+    .unwrap()
 }
 
 fn evaluate_unset_plan<'a>(
-    options: &'a CommonCommandOptions,
-    execution: &'a ExecutionContext,
+    _options: &TestCommandOptions,
+    session: &'a TestWriteSession,
     name: Option<&str>,
-) -> MutationWriteTrustPlan<'a, UnsetPolicy> {
-    resolve_mutation_write_plan::<UnsetPolicy>(options, execution, name, false).unwrap()
+) -> MutationWriteTrustPlan<'a> {
+    resolve_mutation_write_plan(
+        &session.directories,
+        &session.trust,
+        session.options,
+        name,
+        false,
+    )
+    .unwrap()
 }
 
 fn evaluate_import_plan<'a>(
-    options: &'a CommonCommandOptions,
-    execution: &'a ExecutionContext,
+    _options: &TestCommandOptions,
+    session: &'a TestWriteSession,
     name: Option<&str>,
-) -> MutationWriteTrustPlan<'a, ImportPolicy> {
-    resolve_mutation_write_plan::<ImportPolicy>(options, execution, name, true).unwrap()
+) -> MutationWriteTrustPlan<'a> {
+    resolve_mutation_write_plan(
+        &session.directories,
+        &session.trust,
+        session.options,
+        name,
+        true,
+    )
+    .unwrap()
 }
 
 fn activate_fixture_key(home: &std::path::Path) {
@@ -105,16 +118,13 @@ fn activate_fixture_key(home: &std::path::Path) {
     set_active_kid(ALICE_MEMBER_HANDLE, &kid, &keystore_root).unwrap();
 }
 
-fn allow_member_set_review<P>(plan: &mut MutationWriteTrustPlan<'_, P>) {
-    plan.trust_context.is_interactive = true;
-}
+fn allow_member_set_review(_plan: &mut MutationWriteTrustPlan<'_>) {}
 
 fn read_kv_values(
-    options: &CommonCommandOptions,
+    options: &TestCommandOptions,
     mode: KvReadMode<'_>,
 ) -> std::collections::BTreeMap<String, String> {
-    let execution =
-        resolve_read_execution(options, Some(ALICE_MEMBER_HANDLE.to_string()), None).unwrap();
+    let session = resolve_test_write_session(options, ALICE_MEMBER_HANDLE);
     let artifact =
         KvEncArtifact::load(resolve_test_kv_target_path(options, None).unwrap()).unwrap();
     let verified = artifact.verify(options.operation_options()).unwrap();
@@ -138,7 +148,7 @@ fn read_kv_values(
     let TrustDecision::Trusted(trusted) = evaluator
         .evaluate_kv(
             &verified,
-            &execution.key_ctx,
+            session.trust.key_ctx(),
             operation,
             options.operation_options(),
             ReadTrustExceptions::none(),
@@ -159,41 +169,29 @@ fn read_kv_values(
         .collect()
 }
 
-fn set_kv_with_approved_member_set<P>(
-    plan: &MutationWriteTrustPlan<'_, P>,
+fn set_kv_with_approved_member_set(
+    plan: &MutationWriteTrustPlan<'_>,
     entries: Vec<KvInputEntry>,
     success_message: Option<&str>,
-) -> crate::Result<crate::app::kv::types::KvWriteOutcome>
-where
-    P: crate::app::trust::WriteTrustPolicy,
-{
+) -> crate::Result<crate::service::kv::types::KvWriteOutcome> {
     set_kv_command_with_recipient_set_confirmation(plan, entries, success_message, |_, _| Ok(true))
 }
 
-fn unset_kv_with_approved_member_set<P>(
-    plan: &MutationWriteTrustPlan<'_, P>,
+fn unset_kv_with_approved_member_set(
+    plan: &MutationWriteTrustPlan<'_>,
     key: &str,
     success_message: Option<&str>,
-) -> crate::Result<crate::app::kv::types::KvWriteOutcome>
-where
-    P: crate::app::trust::WriteTrustPolicy,
-{
+) -> crate::Result<crate::service::kv::types::KvWriteOutcome> {
     unset_kv_command_with_recipient_set_confirmation(plan, key, success_message, |_, _| Ok(true))
 }
 
-fn approve_recipient_keys_and_reevaluate<'a, P>(
-    options: &CommonCommandOptions,
-    plan: MutationWriteTrustPlan<'a, P>,
-) -> MutationWriteTrustPlan<'a, P>
-where
-    P: WriteTrustPolicy,
-{
+fn approve_recipient_keys_and_reevaluate<'a>(
+    _options: &TestCommandOptions,
+    plan: MutationWriteTrustPlan<'a>,
+) -> MutationWriteTrustPlan<'a> {
     review_write_recipient_trust(
         TrustReviewContext {
-            trust: TrustExecutionContext {
-                options,
-                execution: plan.execution,
-            },
+            trust: plan.trust_session(),
             warnings: &plan.warnings,
         },
         WriteRecipientTrustReviewPlan {
@@ -210,21 +208,19 @@ where
     reevaluate_mutation_write_plan_after_review(plan).unwrap()
 }
 
-fn remove_bob_known_key<P>(
-    options: &CommonCommandOptions,
-    plan: &MutationWriteTrustPlan<'_, P>,
+fn remove_bob_known_key(
+    options: &TestCommandOptions,
+    _plan: &MutationWriteTrustPlan<'_>,
     home: &std::path::Path,
 ) {
     let bob_kid = list_kids(&home.join("keys"), BOB_MEMBER_HANDLE)
         .unwrap()
         .remove(0);
-    remove_known_key_command(options, plan.execution, &bob_kid).unwrap();
+    let trust = build_test_trust_command_session_from_options(options, ALICE_MEMBER_HANDLE);
+    remove_known_key_command(&trust, &bob_kid).unwrap();
 }
 
-fn remove_approved_recipient_set<P>(
-    options: &CommonCommandOptions,
-    plan: &MutationWriteTrustPlan<'_, P>,
-) {
+fn remove_approved_recipient_set(options: &TestCommandOptions, _plan: &MutationWriteTrustPlan<'_>) {
     let path = resolve_test_kv_target_path(options, None).unwrap();
     let artifact = KvEncArtifact::load(path).unwrap();
     let sid = artifact
@@ -234,7 +230,8 @@ fn remove_approved_recipient_set<P>(
         .unwrap()
         .sid()
         .to_string();
-    remove_recipient_set_command(options, plan.execution, &sid).unwrap();
+    let trust = build_test_trust_command_session_from_options(options, ALICE_MEMBER_HANDLE);
+    remove_recipient_set_command(&trust, &sid).unwrap();
 }
 
 #[test]
@@ -252,7 +249,7 @@ fn test_execute_set_creates_default_kv_file_with_entry() {
 
         set_kv_with_approved_member_set(
             &plan,
-            vec![KvInputEntry::new("DATABASE_URL", "postgres://localhost/db")],
+            vec![kv_input("DATABASE_URL", "postgres://localhost/db")],
             None,
         )
         .unwrap();
@@ -273,14 +270,13 @@ fn test_execute_set_uses_recipient_key_approval_saved_by_same_command() {
     activate_fixture_key(temp_dir.path());
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let plan = evaluate_set_plan(&options, &execution, None);
         let plan = approve_recipient_keys_and_reevaluate(&options, plan);
 
         set_kv_with_approved_member_set(
             &plan,
-            vec![KvInputEntry::new("DATABASE_URL", "postgres://localhost/db")],
+            vec![kv_input("DATABASE_URL", "postgres://localhost/db")],
             None,
         )
         .unwrap();
@@ -309,12 +305,10 @@ fn test_execute_unset_uses_recipient_key_approval_saved_by_same_command() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
         remove_bob_known_key(&options, &initial, temp_dir.path());
 
         let plan = evaluate_unset_plan(&options, &execution, None);
@@ -341,12 +335,10 @@ fn test_execute_import_uses_recipient_key_approval_saved_by_same_command() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_bob_known_key(&options, &initial, temp_dir.path());
 
         let plan = evaluate_import_plan(&options, &execution, None);
@@ -382,12 +374,10 @@ fn test_execute_existing_set_approves_recipient_set_before_single_mutation() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -396,7 +386,7 @@ fn test_execute_existing_set_approves_recipient_set_before_single_mutation() {
 
         set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| {
                 confirmations += 1;
@@ -437,17 +427,15 @@ fn assert_existing_set_rejects_mixed_known_key_and_recipient_set_review(is_inter
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_bob_known_key(&options, &initial, temp_dir.path());
         remove_approved_recipient_set(&options, &initial);
 
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
-        reviewed.trust_context.is_interactive = is_interactive;
+        reviewed.trust_context.review_available = is_interactive;
         let artifact_path = resolve_test_kv_target_path(&options, None).unwrap();
         let trust_path =
             get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
@@ -458,7 +446,7 @@ fn assert_existing_set_rejects_mixed_known_key_and_recipient_set_review(is_inter
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| {
                 confirmations += 1;
@@ -505,21 +493,19 @@ fn test_execute_existing_set_prompts_outside_the_secrets_directory_lock() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
-        let secrets_dir = Arc::clone(reviewed.execution.ensured_secrets_directory().unwrap());
+        let secrets_dir = Arc::clone(reviewed.secrets_directory());
         let mut confirmations = 0;
 
         set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| {
                 confirmations += 1;
@@ -552,12 +538,10 @@ fn test_execute_existing_set_rejection_preserves_artifact_without_mutation() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -567,7 +551,7 @@ fn test_execute_existing_set_rejection_preserves_artifact_without_mutation() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| Ok(false),
         )
@@ -598,18 +582,17 @@ fn test_execute_existing_set_preserves_missing_recipient_error_non_interactive()
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
-        reviewed.trust_context.is_interactive = false;
+        reviewed.trust_context.review_available = false;
         let path = resolve_test_kv_target_path(&options, None).unwrap();
         let before = fs::read_to_string(&path).unwrap();
         reset_authorized_mutation_count();
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| panic!("non-interactive review must not prompt"),
         )
@@ -640,8 +623,7 @@ fn test_execute_existing_set_preserves_changed_recipient_error_non_interactive()
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         let path = resolve_test_kv_target_path(&options, None).unwrap();
         let artifact = KvEncArtifact::load(&path).unwrap();
         let sid = artifact
@@ -660,18 +642,18 @@ fn test_execute_existing_set_preserves_changed_recipient_error_non_interactive()
             .expect("open trust store")
             .apply_approvals_with_conflict_handling(
                 vec![TrustApproval::recipient_set_for_test(sid, vec![alice_kid])],
-                &initial.execution.key_ctx,
+                initial.trust_session().key_ctx(),
                 ApprovalConflictHandling::merge(),
             )
             .unwrap();
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
-        reviewed.trust_context.is_interactive = false;
+        reviewed.trust_context.review_available = false;
         let before = fs::read_to_string(&path).unwrap();
         reset_authorized_mutation_count();
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| panic!("non-interactive review must not prompt"),
         )
@@ -699,12 +681,10 @@ fn test_execute_existing_set_rechecks_artifact_immediately_after_confirmation() 
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -713,7 +693,7 @@ fn test_execute_existing_set_rechecks_artifact_immediately_after_confirmation() 
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| {
                 fs::write(&path, "concurrent artifact").unwrap();
@@ -744,12 +724,10 @@ fn test_execute_existing_set_rechecks_members_immediately_after_confirmation() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -767,7 +745,7 @@ fn test_execute_existing_set_rechecks_members_immediately_after_confirmation() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| {
                 fs::rename(&bob_active, &bob_incoming).unwrap();
@@ -828,12 +806,10 @@ fn test_execute_existing_set_rechecks_members_in_the_fixed_workspace() {
     let moved_aside = temp_dir.path().join("workspace.original");
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -856,7 +832,7 @@ fn test_execute_existing_set_rechecks_members_in_the_fixed_workspace() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| Ok(true),
         )
@@ -887,12 +863,10 @@ fn test_execute_existing_set_rechecks_artifact_after_recipient_approval() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -905,7 +879,7 @@ fn test_execute_existing_set_rechecks_artifact_after_recipient_approval() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| Ok(true),
         )
@@ -933,12 +907,10 @@ fn test_execute_existing_set_rechecks_post_approval_trust_snapshot() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let trust_path =
             get_trust_store_file_path(temp_dir.path(), &member_handle(ALICE_MEMBER_HANDLE));
@@ -954,7 +926,7 @@ fn test_execute_existing_set_rechecks_post_approval_trust_snapshot() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| Ok(true),
         )
@@ -984,7 +956,6 @@ fn test_execute_new_set_rechecks_post_approval_recipient_set() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -999,7 +970,7 @@ fn test_execute_new_set_rechecks_post_approval_recipient_set() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "value1")],
+            vec![kv_input("KEY1", "value1")],
             None,
             |_, _| Ok(true),
         )
@@ -1029,7 +1000,6 @@ fn test_execute_new_set_keeps_post_approval_checks_bound_to_loaded_keystore() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -1057,7 +1027,7 @@ fn test_execute_new_set_keeps_post_approval_checks_bound_to_loaded_keystore() {
 
         set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "value1")],
+            vec![kv_input("KEY1", "value1")],
             None,
             |_, _| Ok(true),
         )
@@ -1084,12 +1054,10 @@ fn test_execute_existing_set_reports_missing_signer_key_when_verification_keysto
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -1101,7 +1069,7 @@ fn test_execute_existing_set_reports_missing_signer_key_when_verification_keysto
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| Ok(true),
         )
@@ -1132,12 +1100,10 @@ fn test_execute_existing_set_keeps_final_authorization_bound_to_opened_home() {
     );
 
     with_temp_cwd(temp_dir.path(), || {
-        let _interactive = InteractiveOverrideGuard::enable();
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -1168,7 +1134,7 @@ fn test_execute_existing_set_keeps_final_authorization_bound_to_opened_home() {
 
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| Ok(true),
         );
@@ -1236,8 +1202,7 @@ fn test_execute_existing_set_rechecks_artifact_after_authorized_mutation() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "old")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "old")], None).unwrap();
         let reviewed = evaluate_set_plan(&options, &execution, None);
         let path = resolve_test_kv_target_path(&options, None).unwrap();
         let concurrent_path = path.clone();
@@ -1248,7 +1213,7 @@ fn test_execute_existing_set_rechecks_artifact_after_authorized_mutation() {
 
         let error = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "new")],
+            vec![kv_input("KEY1", "new")],
             None,
             |_, _| panic!("approved recipient set must not prompt"),
         )
@@ -1273,12 +1238,8 @@ fn test_reevaluate_set_plan_rejects_artifact_change_after_review() {
         let reviewed_missing = evaluate_set_plan(&options, &execution, None);
         let mut concurrent = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut concurrent);
-        set_kv_with_approved_member_set(
-            &concurrent,
-            vec![KvInputEntry::new("EXTERNAL", "change")],
-            None,
-        )
-        .unwrap();
+        set_kv_with_approved_member_set(&concurrent, vec![kv_input("EXTERNAL", "change")], None)
+            .unwrap();
 
         let error = match reevaluate_mutation_write_plan_after_review(reviewed_missing) {
             Err(error) => error,
@@ -1339,21 +1300,13 @@ fn test_execute_set_updates_existing_key_value() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(
-            &initial,
-            vec![KvInputEntry::new("API_KEY", "initial_value")],
-            None,
-        )
-        .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("API_KEY", "initial_value")], None)
+            .unwrap();
 
         let mut update = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut update);
-        set_kv_with_approved_member_set(
-            &update,
-            vec![KvInputEntry::new("API_KEY", "updated_value")],
-            None,
-        )
-        .unwrap();
+        set_kv_with_approved_member_set(&update, vec![kv_input("API_KEY", "updated_value")], None)
+            .unwrap();
 
         let values = read_kv_values(&options, KvReadMode::Single("API_KEY"));
         assert_eq!(
@@ -1375,13 +1328,11 @@ fn test_execute_set_preserves_existing_keys_when_adding_entry() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
 
         let mut update = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut update);
-        set_kv_with_approved_member_set(&update, vec![KvInputEntry::new("KEY2", "value2")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&update, vec![kv_input("KEY2", "value2")], None).unwrap();
 
         let values = read_kv_values(&options, KvReadMode::All);
         assert_eq!(values.get("KEY1").map(String::as_str), Some("value1"));
@@ -1401,12 +1352,8 @@ fn test_import_kv_overwrites_existing_key() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(
-            &initial,
-            vec![KvInputEntry::new("API_KEY", "old_value")],
-            None,
-        )
-        .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("API_KEY", "old_value")], None)
+            .unwrap();
 
         let mut import = evaluate_import_plan(&options, &execution, None);
         allow_member_set_review(&mut import);
@@ -1443,11 +1390,11 @@ fn test_execute_set_rejects_unreviewed_output_member_set_non_interactive() {
     with_temp_cwd(temp_dir.path(), || {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut reviewed = evaluate_set_plan(&options, &execution, None);
-        reviewed.trust_context.is_interactive = false;
+        reviewed.trust_context.review_available = false;
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "value1")],
+            vec![kv_input("KEY1", "value1")],
             None,
             |_, _| Ok(true),
         );
@@ -1479,8 +1426,7 @@ fn test_execute_unset_keeps_the_file_when_recipient_set_approval_save_fails() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
         remove_approved_recipient_set(&options, &initial);
         let mut reviewed = evaluate_unset_plan(&options, &execution, None);
         allow_member_set_review(&mut reviewed);
@@ -1517,8 +1463,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
 
         let reviewed = evaluate_set_plan(&options, &execution, None);
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
@@ -1526,7 +1471,7 @@ fn test_execute_set_rejects_existing_file_mismatch_after_review() {
 
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY2", "value2")],
+            vec![kv_input("KEY2", "value2")],
             None,
             |_, _| Ok(false),
         );
@@ -1562,8 +1507,7 @@ fn test_resolve_set_plan_rejects_existing_artifact_with_inactive_recipient() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
         fs::remove_file(
             workspace_dir
                 .join("members")
@@ -1573,7 +1517,13 @@ fn test_resolve_set_plan_rejects_existing_artifact_with_inactive_recipient() {
         .unwrap();
 
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-        let result = resolve_mutation_write_plan::<SetPolicy>(&options, &execution, None, true);
+        let result = resolve_mutation_write_plan(
+            &execution.directories,
+            &execution.trust,
+            execution.options,
+            None,
+            true,
+        );
 
         let error = match result {
             Err(error) => error,
@@ -1601,7 +1551,7 @@ fn test_execute_set_rejects_file_created_after_missing_review() {
 
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "value1")],
+            vec![kv_input("KEY1", "value1")],
             None,
             |_, _| Ok(false),
         );
@@ -1629,8 +1579,7 @@ fn test_execute_set_rejects_symlinked_existing_file_after_review() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
 
         let reviewed = evaluate_set_plan(&options, &execution, None);
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
@@ -1642,7 +1591,7 @@ fn test_execute_set_rejects_symlinked_existing_file_after_review() {
 
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY2", "value2")],
+            vec![kv_input("KEY2", "value2")],
             None,
             |_, _| Ok(false),
         );
@@ -1686,7 +1635,7 @@ fn test_execute_set_rejects_active_member_snapshot_change_after_review() {
 
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "value1")],
+            vec![kv_input("KEY1", "value1")],
             None,
             |_, _| Ok(false),
         );
@@ -1727,10 +1676,12 @@ fn test_execute_set_rejects_resigned_trust_store_change_after_review() {
         let kv_path = workspace_dir.join("secrets").join("default.kvenc");
         let result = set_kv_command_with_recipient_set_confirmation(
             &reviewed,
-            vec![KvInputEntry::new("KEY1", "value1")],
+            vec![kv_input("KEY1", "value1")],
             None,
             |_, _| {
-                remove_known_key_command(&options, reviewed.execution, &bob_kid)?;
+                let trust =
+                    build_test_trust_command_session_from_options(&options, ALICE_MEMBER_HANDLE);
+                remove_known_key_command(&trust, &bob_kid)?;
                 Ok(true)
             },
         );
@@ -1745,8 +1696,6 @@ fn test_execute_set_rejects_resigned_trust_store_change_after_review() {
 
 #[test]
 fn test_evaluate_set_rejects_strict_key_checking_no_for_existing_file() {
-    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
-
     let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
     activate_fixture_key(temp_dir.path());
@@ -1755,14 +1704,17 @@ fn test_evaluate_set_rejects_strict_key_checking_no_for_existing_file() {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
         let mut initial = evaluate_set_plan(&options, &execution, None);
         allow_member_set_review(&mut initial);
-        set_kv_with_approved_member_set(&initial, vec![KvInputEntry::new("KEY1", "value1")], None)
-            .unwrap();
-        std::env::set_var("KAPSARO_STRICT_KEY_CHECKING", "no");
-
-        let result = resolve_mutation_write_plan::<SetPolicy>(&options, &execution, None, true);
+        set_kv_with_approved_member_set(&initial, vec![kv_input("KEY1", "value1")], None).unwrap();
+        let result = resolve_mutation_write_plan(
+            &execution.directories,
+            &execution.trust,
+            crate::service::trust::WriteTrustOptions::new(false, true, false),
+            None,
+            true,
+        );
 
         match result {
-            Err(err) => assert!(err.to_string().contains("not allowed")),
+            Err(err) => assert!(err.to_string().contains("cannot be disabled")),
             Ok(_) => panic!("expected strict key checking error"),
         }
     });
@@ -1793,7 +1745,14 @@ fn test_evaluate_kv_write_trust_warns_about_insecure_trust_store() {
     let warning_guard = LocalStateWarningGuard::new();
     with_temp_cwd(temp_dir.path(), || {
         let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
-        resolve_mutation_write_plan::<SetPolicy>(&options, &execution, None, true).unwrap();
+        resolve_mutation_write_plan(
+            &execution.directories,
+            &execution.trust,
+            execution.options,
+            None,
+            true,
+        )
+        .unwrap();
     });
     let warnings = warning_guard.take_reasons();
 

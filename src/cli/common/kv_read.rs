@@ -1,72 +1,85 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared read pipeline for the KV query commands (get, list, run).
-//! Loads the artifact under review, runs the trust gate, and re-verifies before decryption.
+//! Shared service-session read pipeline for KV query commands.
+//! Owns CLI review prompts while service capabilities own authorization state.
 
 use std::path::{Path, PathBuf};
 
-use crate::cli::common::command::{
-    ensure_reviewed_artifact_unchanged, resolve_read_execution_input,
-    run_read_command_with_recovery, ReadCommandContext, ReadCommandLabels,
+use crate::cli::common::command::ReadCommandLabels;
+use crate::cli::common::context::CliContext;
+use crate::cli::common::key_context::load_read_key_context;
+use crate::cli::common::output::text::print_warnings;
+use crate::cli::common::presentation::tty;
+use crate::cli::common::read_review::{
+    accept_non_member, approve_next_key, print_unresolved_recipients,
 };
+use crate::cli::common::trust::run_with_workspace_read_trust_store_reset_recovery;
+use crate::cli::options::ToCommonOptions;
+use kapsaro_core::api::config::LocalStateSession;
 use kapsaro_core::api::key::KeyContext;
-use kapsaro_core::api::kv::{
-    KvEncArtifact, KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact,
-};
+use kapsaro_core::api::kv::{resolve_kv_store_file_name, KvReadOperation, TrustedKvEncArtifact};
 use kapsaro_core::api::operation::OperationOptions;
-use kapsaro_core::api::trust::{KnownKeyReview, TrustDecision, TrustPolicyEvaluator};
-use kapsaro_core::cli_api::app::context::execution::{
-    resolve_read_trust_evaluator, ExecutionContext,
-};
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::app::kv::query::load_kv_read_input;
-use kapsaro_core::cli_api::app::trust::{
-    evaluate_kv_after_cli_review, ReadArtifactTrustPlan, SignerTrustOutcome,
+use kapsaro_core::api::trust::{
+    AuthorizedRead, KnownKeyReview, ReadSessionDecision, WorkspaceReadSession,
 };
 use kapsaro_core::{Error, Result};
+use tracing::debug;
 
-/// Purpose reported when a KV read runs outside a workspace.
-const KV_READ_PURPOSE: &str = "kv access";
-
-/// One KV artifact opened for reading, together with the identity that reads it.
+/// One KV target and identity resolved once for a CLI command.
 pub(crate) struct KvReadSession {
-    options: CommonCommandOptions,
+    workspace_path: PathBuf,
+    local_state: Option<LocalStateSession>,
+    key_ctx: KeyContext,
+    options: OperationOptions,
+    allow_non_member: bool,
+    known_key_review: KnownKeyReview,
     artifact_path: PathBuf,
     artifact_file_name: String,
-    artifact: KvEncArtifact,
-    verified: VerifiedKvEncArtifact,
-    execution: ExecutionContext,
 }
 
-/// The artifact as it stands after trust review, ready to authorize read operations.
-pub(crate) struct KvReadReview<'a> {
-    evaluator: TrustPolicyEvaluator,
-    reviewed: &'a VerifiedKvEncArtifact,
-    current: VerifiedKvEncArtifact,
-    key_ctx: &'a KeyContext,
-    signer_outcome: &'a SignerTrustOutcome,
-    known_key_review: KnownKeyReview,
-    options: OperationOptions,
+/// Whether a KV command supports resolving the non-member review setting.
+pub(crate) enum NonMemberReviewMode {
+    Disabled,
+    Configured(bool),
 }
 
 impl KvReadSession {
     pub(crate) fn open(
-        options: CommonCommandOptions,
+        common: &impl ToCommonOptions,
+        allow_expired_key: bool,
+        non_member_review: NonMemberReviewMode,
         store_name: Option<&str>,
         member_handle: Option<String>,
     ) -> Result<Self> {
-        let execution =
-            resolve_read_execution_input(&options, member_handle, None, KV_READ_PURPOSE)?;
-        let input = load_kv_read_input(&execution, store_name)?;
-        let verified = input.artifact.verify(options.operation_options())?;
+        let common = common.to_common_options();
+        let context = CliContext::resolve(&common)?;
+        let workspace_path = context.workspace_path()?;
+        let options = OperationOptions::new()
+            .with_allow_expired_key(context.allow_expired_key(allow_expired_key)?);
+        let allow_non_member = match non_member_review {
+            NonMemberReviewMode::Disabled => false,
+            NonMemberReviewMode::Configured(cli_value) => context.allow_non_member(cli_value)?,
+        };
+        let known_key_review = if context.strict_key_checking() {
+            KnownKeyReview::Required
+        } else {
+            KnownKeyReview::Skipped
+        };
+        let key_ctx =
+            load_read_key_context(&context, &common, &workspace_path, member_handle, None)?;
+        let artifact_file_name = resolve_kv_store_file_name(store_name)?;
+        let artifact_path = workspace_path.join("secrets").join(&artifact_file_name);
+        let local_state = context.into_optional_local_state()?;
         Ok(Self {
+            workspace_path,
+            local_state,
+            key_ctx,
             options,
-            artifact_path: input.file_path,
-            artifact_file_name: input.file_name,
-            artifact: input.artifact,
-            verified,
-            execution,
+            allow_non_member,
+            known_key_review,
+            artifact_path,
+            artifact_file_name,
         })
     }
 
@@ -75,92 +88,70 @@ impl KvReadSession {
     }
 
     pub(crate) fn allow_non_member(&self) -> bool {
-        self.options.allow_non_member
+        self.allow_non_member
     }
 
-    /// Run one read under trust review, handing the reviewed artifact to `decrypt`.
-    pub(crate) fn read<T, ResolvePlan, Decrypt>(
+    pub(crate) fn authorize(
         &self,
+        operation: KvReadOperation,
         labels: ReadCommandLabels<'_>,
-        authorization: &str,
-        resolve_plan: ResolvePlan,
-        mut decrypt: Decrypt,
-    ) -> Result<T>
-    where
-        ResolvePlan: Fn(
-            &CommonCommandOptions,
-            &ExecutionContext,
-            &VerifiedKvEncArtifact,
-        ) -> Result<ReadArtifactTrustPlan>,
-        Decrypt: FnMut(&KvReadReview<'_>) -> Result<T>,
-    {
-        run_read_command_with_recovery(
-            &self.options,
-            &self.execution,
-            labels,
-            |execution| {
-                let trust = resolve_plan(&self.options, execution, &self.verified)?;
-                Ok(ReadCommandContext::new(execution, trust))
-            },
-            |context| decrypt(&self.review_current_artifact(context, authorization)?),
-        )
+    ) -> Result<AuthorizedRead<TrustedKvEncArtifact<'_>>> {
+        let session = self.open_workspace_session()?;
+        run_with_workspace_read_trust_store_reset_recovery(&session, || {
+            debug!(
+                "[TRUST] read gate: operation={operation:?}, allow_non_member={}",
+                labels.allow_non_member
+            );
+            let decision = session.begin_kv_read(
+                &self.artifact_file_name,
+                operation.clone(),
+                labels.allow_non_member && tty::is_interactive(),
+            )?;
+            authorize_kv_decision(&session, decision, labels)
+        })
     }
 
-    /// Reload the artifact so the decryption runs against the reviewed content.
-    ///
-    /// The reload goes through the secrets directory the execution bound to, so
-    /// the document the decryption acts on and the member set the trust gate
-    /// answered from come from the same tree.
-    fn review_current_artifact<'a>(
-        &'a self,
-        context: &'a ReadCommandContext<'a>,
-        authorization: &str,
-    ) -> Result<KvReadReview<'a>> {
-        let current_artifact = context
-            .execution
-            .reload_fixed_kv_artifact(&self.artifact_file_name)?;
-        ensure_reviewed_artifact_unchanged(
-            self.artifact.as_str(),
-            current_artifact.as_str(),
-            authorization,
-        )?;
-        Ok(KvReadReview {
-            evaluator: resolve_read_trust_evaluator(context.execution)?,
-            reviewed: &self.verified,
-            current: current_artifact.verify(self.options.operation_options())?,
-            key_ctx: &context.execution.key_ctx,
-            signer_outcome: context.signer_outcome(),
-            known_key_review: context.known_key_review(),
-            options: self.options.operation_options(),
-        })
+    fn open_workspace_session(&self) -> Result<WorkspaceReadSession<'_>> {
+        WorkspaceReadSession::open_with_local_state(
+            &self.workspace_path,
+            self.local_state.as_ref(),
+            &self.key_ctx,
+            self.options,
+        )
+        .map(|session| session.with_known_key_review(self.known_key_review))
     }
 }
 
-impl KvReadReview<'_> {
-    pub(crate) fn authorize(&self, operation: KvReadOperation) -> Result<TrustedKvEncArtifact<'_>> {
-        match evaluate_kv_after_cli_review(
-            &self.evaluator,
-            self.reviewed,
-            &self.current,
-            self.key_ctx,
-            operation,
-            self.signer_outcome,
-            self.known_key_review,
-            self.options,
-        )? {
-            TrustDecision::Trusted(trusted) => Ok(trusted),
-            TrustDecision::ReviewRequired(_) => Err(trust_state_changed_error()),
+fn authorize_kv_decision<'a>(
+    session: &WorkspaceReadSession<'a>,
+    mut decision: ReadSessionDecision<TrustedKvEncArtifact<'a>>,
+    labels: ReadCommandLabels<'_>,
+) -> Result<AuthorizedRead<TrustedKvEncArtifact<'a>>> {
+    loop {
+        match decision {
+            ReadSessionDecision::Authorized(authorized) => {
+                print_unresolved_recipients(authorized.unresolved_recipient_kids());
+                print_warnings(authorized.value().warnings());
+                return Ok(authorized);
+            }
+            ReadSessionDecision::ReviewRequired(mut review) => {
+                let acceptance = if review.non_member_signer().is_some() {
+                    Some(accept_non_member(&mut review)?)
+                } else {
+                    if !approve_next_key(session, &review, labels.context)? {
+                        return Err(build_target_changed_error());
+                    }
+                    None
+                };
+                decision = session.resume_kv_read(review, acceptance)?;
+            }
         }
     }
 }
 
-fn trust_state_changed_error() -> Error {
+fn build_target_changed_error() -> Error {
     Error::build_verification_error(
-        "E_TRUST_REVIEW_REQUIRED".to_string(),
-        "Trust state changed while reviewing the KV artifact".to_string(),
+        "E_TRUST_TARGET_CHANGED",
+        "Trust state changed while reviewing the KV artifact",
     )
 }
-
-#[cfg(test)]
-#[path = "../../../tests/unit/internal/cli_common_kv_read_test.rs"]
-mod cli_common_kv_read_test;

@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use kapsaro_core::cli_api::test_support::storage::ssh::agent::traits::AgentSigner;
-use kapsaro_core::cli_api::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
+use kapsaro_core::test_support::storage::ssh::agent::traits::AgentSigner;
+use kapsaro_core::test_support::storage::ssh::protocol::types::Ed25519RawSignature;
 
 struct StubAgentSigner;
 

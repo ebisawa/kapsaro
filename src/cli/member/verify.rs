@@ -4,17 +4,18 @@
 //! `member verify` command.
 //! Verifies an incoming member document and offers to approve it.
 
-use crate::cli::common::command::{resolve_options, resolve_write_execution_input};
+use crate::cli::common::context::CliContext;
+use crate::cli::common::key_context::load_trust_command_session;
 use crate::cli::common::output::member::print_member_approval_results;
 use crate::cli::common::output::member::print_member_verification_results;
+use crate::cli::common::presentation::tty;
 use crate::cli::common::trust::{
-    confirm_member_key_approval, run_with_execution_trust_store_reset_recovery,
+    confirm_member_key_approval, run_with_trust_command_session_reset_recovery,
 };
-use kapsaro_core::cli_api::app::member::approval::{
-    evaluate_members_for_approval, save_member_approvals,
+use kapsaro_core::api::member::approval::{
+    evaluate_members_for_approval, save_member_approvals, MemberApprovalSession,
 };
-use kapsaro_core::cli_api::app::member::verification::verify_members;
-use kapsaro_core::cli_api::presentation::tty;
+use kapsaro_core::api::member::verification::verify_members;
 use kapsaro_core::Error;
 
 use super::VerifyArgs;
@@ -28,16 +29,18 @@ pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
 }
 
 fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    let results = verify_members(&options, &args.member_handles)?;
+    let context = CliContext::resolve(&args.common)?;
+    let results = verify_members(&context.workspace_path()?, &args.member_handles)?;
     print_member_verification_results(args.common.json.json, &results)
 }
 
 fn run_approve(args: VerifyArgs) -> Result<(), Error> {
-    let options = resolve_options(&args.common);
-    let execution = resolve_write_execution_input(&options, args.member.member_handle.clone())?;
-    run_with_execution_trust_store_reset_recovery(&execution, || {
-        let mut evaluation = evaluate_members_for_approval(&execution, &args.member_handles)?;
+    let context = CliContext::resolve(&args.common)?;
+    let trust =
+        load_trust_command_session(&context, &args.common, args.member.member_handle.clone())?;
+    let session = MemberApprovalSession::open(context.workspace_path()?, trust)?;
+    run_with_trust_command_session_reset_recovery(session.trust_command(), || {
+        let mut evaluation = evaluate_members_for_approval(&session, &args.member_handles)?;
         if evaluation.results.is_empty() {
             return print_member_approval_results(args.common.json.json, &evaluation.results);
         }
@@ -46,7 +49,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
 
         let has_new_approvals = evaluation.results.iter().any(|r| r.approved);
         if has_new_approvals {
-            save_member_approvals(&options, &evaluation, &execution)?;
+            save_member_approvals(&session, &evaluation)?;
         }
 
         print_member_approval_results(args.common.json.json, &evaluation.results)
@@ -54,7 +57,7 @@ fn run_approve(args: VerifyArgs) -> Result<(), Error> {
 }
 
 fn review_approval_candidates(
-    results: &mut [kapsaro_core::cli_api::app::member::approval::MemberApprovalResult],
+    results: &mut [kapsaro_core::api::member::approval::MemberApprovalResult],
 ) -> Result<(), Error> {
     let requires_review = results.iter().any(|r| r.review_required);
     if !requires_review {

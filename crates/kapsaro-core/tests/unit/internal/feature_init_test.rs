@@ -3,10 +3,10 @@
 
 //! Unit tests for feature/init module
 
-use crate::cli_api::test_support::storage::keystore::member::load_single_member_handle_from_keystore;
 use crate::io::keystore::resolver::KeystoreResolver;
-use crate::io::workspace::detection::resolve_workspace_creation_path;
-use crate::test_utils::{create_local_state_dir, local_state_temp_dir, with_temp_cwd};
+use crate::io::workspace::detection::resolve_workspace_creation_path_from;
+use crate::test_support::storage::keystore::member::load_single_member_handle_from_keystore;
+use crate::test_utils::{create_local_state_dir, local_state_temp_dir};
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------
@@ -89,23 +89,13 @@ fn test_load_single_member_handle_from_keystore_nonexistent() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_resolve_workspace_creation_path_explicit() {
-    let tmp = TempDir::new().unwrap();
-    let explicit_path = tmp.path().join("my_workspace");
-
-    let result = resolve_workspace_creation_path(Some(explicit_path.clone())).unwrap();
-
-    assert_eq!(result, explicit_path);
-}
-
-#[test]
 fn test_resolve_workspace_creation_path_defaults_to_git_root_dot_kapsaro() {
     let tmp = TempDir::new().unwrap();
     std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
     let nested = tmp.path().join("nested").join("dir");
     std::fs::create_dir_all(&nested).unwrap();
 
-    let result = with_temp_cwd(&nested, || resolve_workspace_creation_path(None).unwrap());
+    let result = resolve_workspace_creation_path_from(&nested).unwrap();
 
     assert_eq!(result, tmp.path().canonicalize().unwrap().join(".kapsaro"));
 }
@@ -116,9 +106,7 @@ fn test_resolve_workspace_creation_path_uses_current_dot_kapsaro_without_git() {
     let workspace_path = tmp.path().join(".kapsaro");
     std::fs::create_dir_all(&workspace_path).unwrap();
 
-    let result = with_temp_cwd(tmp.path(), || {
-        resolve_workspace_creation_path(None).unwrap()
-    });
+    let result = resolve_workspace_creation_path_from(tmp.path()).unwrap();
 
     assert_eq!(result, workspace_path.canonicalize().unwrap());
 }
@@ -127,7 +115,7 @@ fn test_resolve_workspace_creation_path_uses_current_dot_kapsaro_without_git() {
 fn test_resolve_workspace_creation_path_errors_without_git_or_current_dot_kapsaro() {
     let tmp = TempDir::new().unwrap();
 
-    let result = with_temp_cwd(tmp.path(), || resolve_workspace_creation_path(None));
+    let result = resolve_workspace_creation_path_from(tmp.path());
 
     assert!(result.is_err());
 }

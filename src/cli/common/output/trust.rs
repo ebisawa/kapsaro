@@ -16,10 +16,10 @@ use crate::cli::common::output::text::trust::{
     print_recipient_set_purge_candidates, print_recipient_set_purge_summary,
     print_trust_purge_candidates, print_trust_purge_resigned, print_trust_purge_summary,
 };
-use kapsaro_core::cli_api::app::trust::list::{
+use kapsaro_core::api::trust::list::{
     RecipientSetListItem, RecipientSetListResult, TrustListItem, TrustListResult,
 };
-use kapsaro_core::cli_api::app::trust::management::{PurgeOutcome, ReviewedPurgeCandidates};
+use kapsaro_core::api::trust::management::{PurgeOutcome, ReviewedPurgeCandidates};
 use kapsaro_core::Result;
 
 pub(crate) fn print_trust_list(json_output: bool, result: &TrustListResult) -> Result<()> {

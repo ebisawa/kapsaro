@@ -104,7 +104,6 @@ fn sample_document(lines: Vec<KvEncLine>, entries: &[(&str, KvEntryValue)]) -> K
         sample_wrap(),
         wrap_token,
         doc_entries,
-        String::new(),
         sample_signature(),
     )
 }

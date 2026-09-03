@@ -4,7 +4,7 @@
 //! Basic encryption tests
 
 use crate::cli::common::{cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE};
-use kapsaro_core::cli_api::test_support::domain::wire::format;
+use kapsaro_core::test_support::domain::wire::format;
 use kapsaro_test_support::fixture::{setup_test_keystore, setup_test_workspace};
 use std::fs;
 

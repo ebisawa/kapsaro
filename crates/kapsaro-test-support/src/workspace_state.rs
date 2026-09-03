@@ -1,11 +1,11 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Workspace and keystore state helpers shared by every test binary.
-// Included by path in kapsaro-core so the types stay identical to crate::.
+//! Workspace and keystore state helpers shared by every test binary.
+//! Included by path in kapsaro-core so the types stay identical to crate::.
 
-use kapsaro_core::cli_api::test_support::domain::identity::{Kid, MemberHandle};
-use kapsaro_core::cli_api::test_support::storage::keystore::member::find_active_key_document;
+use kapsaro_core::test_support::domain::identity::{Kid, MemberHandle};
+use kapsaro_core::test_support::storage::keystore::member::find_active_key_document;
 use kapsaro_core::Error;
 use std::path::Path;
 
@@ -27,16 +27,16 @@ pub fn setup_trust_store_for_workspace(
     home: &std::path::Path,
     workspace_path: &std::path::Path,
     owner_handle: &str,
-    key_ctx: &kapsaro_core::cli_api::test_support::operations::context::crypto::CryptoContext,
+    key_ctx: &kapsaro_core::test_support::operations::context::crypto::CryptoContext,
 ) {
-    use kapsaro_core::cli_api::test_support::domain::trust_store::{
+    use kapsaro_core::test_support::domain::trust_store::{
         KnownKey, KnownKeyApprovalVia, TrustStoreProtected,
     };
-    use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
-    use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
-    use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-    use kapsaro_core::cli_api::test_support::storage::trust::store::save_trust_store;
-    use kapsaro_core::cli_api::test_support::storage::workspace::members::load_active_member_files;
+    use kapsaro_core::test_support::domain::wire::format::LOCAL_TRUST_V1;
+    use kapsaro_core::test_support::operations::trust::signature::sign_trust_store;
+    use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
+    use kapsaro_core::test_support::storage::trust::store::save_trust_store;
+    use kapsaro_core::test_support::storage::workspace::members::load_active_member_files;
     use std::collections::BTreeMap;
 
     let active_members = load_active_member_files(workspace_path).unwrap();
@@ -69,23 +69,23 @@ pub fn setup_trust_store_for_workspace(
 
 /// Generate and activate a new test key for a member with the requested expires_at.
 pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, expires_at: &str) {
-    use kapsaro_core::cli_api::test_support::domain::ssh::SshDeterminismStatus;
-    use kapsaro_core::cli_api::test_support::operations::key::generate::{
+    use kapsaro_core::test_support::domain::ssh::SshDeterminismStatus;
+    use kapsaro_core::test_support::operations::key::generate::{
         generate_key, KeyGenerationOptions,
     };
-    use kapsaro_core::cli_api::test_support::operations::key::ssh_binding::SshBindingContext;
-    use kapsaro_core::cli_api::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
-    use kapsaro_core::cli_api::test_support::storage::ssh::backend::SignatureBackend;
-    use kapsaro_core::cli_api::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
-    use kapsaro_core::cli_api::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
-    use kapsaro_core::cli_api::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
+    use kapsaro_core::test_support::operations::key::ssh_binding::SshBindingContext;
+    use kapsaro_core::test_support::storage::ssh::backend::ssh_keygen::SshKeygenBackend;
+    use kapsaro_core::test_support::storage::ssh::backend::SignatureBackend;
+    use kapsaro_core::test_support::storage::ssh::external::keygen::DefaultSshKeygen;
+    use kapsaro_core::test_support::storage::ssh::protocol::fingerprint::build_sha256_fingerprint;
+    use kapsaro_core::test_support::storage::ssh::protocol::key_descriptor::SshKeyDescriptor;
 
     let ssh_key_path = home.join(".ssh").join("test_ed25519");
     let ssh_pubkey = std::fs::read_to_string(home.join(".ssh").join("test_ed25519.pub"))
         .unwrap()
         .trim()
         .to_string();
-    let created_at = kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(
+    let created_at = kapsaro_core::test_support::helpers::time::format_timestamp_rfc3339(
         time::OffsetDateTime::now_utc(),
     )
     .unwrap();
@@ -93,7 +93,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
         public_key: ssh_pubkey.clone(),
         fingerprint: build_sha256_fingerprint(&ssh_pubkey).unwrap(),
         backend: Box::new(SshKeygenBackend::new(
-            Box::new(DefaultSshKeygen::new("ssh-keygen")),
+            Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
             SshKeyDescriptor::from_path(ssh_key_path),
         )) as Box<dyn SignatureBackend>,
         determinism: SshDeterminismStatus::Verified,
@@ -108,7 +108,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
     })
     .map(|result| {
         let keystore_root = home.join("keys");
-        kapsaro_core::cli_api::test_support::storage::keystore::storage::save_key_pair_atomic(
+        kapsaro_core::test_support::storage::keystore::storage::save_key_pair_atomic(
             &keystore_root,
             member_handle,
             &result.kid,
@@ -116,7 +116,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
             &result.public_key,
         )
         .unwrap();
-        kapsaro_core::cli_api::test_support::storage::keystore::active::set_active_kid(
+        kapsaro_core::test_support::storage::keystore::active::set_active_kid_unchecked(
             member_handle,
             &result.kid,
             &keystore_root,
@@ -128,8 +128,7 @@ pub fn update_active_private_key_expires_at(home: &Path, member_handle: &str, ex
 
 pub fn build_expiring_soon_timestamp(days_from_now: i64) -> String {
     let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(days_from_now);
-    kapsaro_core::cli_api::test_support::helpers::time::format_timestamp_rfc3339(expires_at)
-        .unwrap()
+    kapsaro_core::test_support::helpers::time::format_timestamp_rfc3339(expires_at).unwrap()
 }
 
 pub fn save_active_public_key_to_workspace(

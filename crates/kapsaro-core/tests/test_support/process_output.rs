@@ -4,7 +4,9 @@
 // Synthesized process results for testing output handling without spawning.
 // Lets error and decoding paths be exercised as pure functions.
 
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
+use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 
 /// Build a process result from a raw wait status and the captured streams.
@@ -22,4 +24,20 @@ pub fn build_process_output(code: i32, stderr: &[u8], stdout: &[u8]) -> Output {
 /// `1 << 8` rather than `1`.
 pub fn failed_code() -> i32 {
     256
+}
+
+/// Save an executable that prints the child process's SSH agent socket.
+///
+/// The stub drains stdin first, the way the real binary consumes the message
+/// it is asked to sign. Without that read the stub can exit while the caller
+/// is still writing, and the write fails with a broken pipe.
+pub fn save_agent_socket_echo_script(directory: &Path, name: &str) -> PathBuf {
+    let script = directory.join(name);
+    std::fs::write(
+        &script,
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' \"$SSH_AUTH_SOCK\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    script
 }

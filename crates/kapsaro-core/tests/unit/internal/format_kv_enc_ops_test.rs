@@ -215,7 +215,7 @@ fn test_parse_kv_document_keeps_validated_entries_and_signature() {
     let keys: Vec<&str> = doc.entries().iter().map(|entry| entry.key()).collect();
     assert_eq!(keys, vec!["A", "B"]);
     assert!(!doc.entries()[0].token().is_empty());
-    assert!(!doc.signature_token().is_empty());
+    assert!(!doc.signature().sig.is_empty());
     assert_eq!(doc.signature().kid, "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD");
 }
 

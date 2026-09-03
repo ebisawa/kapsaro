@@ -5,10 +5,10 @@
 //!
 //! Tests for embedded signer_pub based verifying key loading.
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::verify::key_loader::load_verifying_key_from_signature;
 use crate::model::signature::ArtifactSignature;
 use crate::model::verification::VerifyingKeySource;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_dummy_key_possession_proof;
 use crate::test_utils::setup_test_workspace_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;

@@ -1,11 +1,22 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli::common::{cmd, setup_workspace, TEST_MEMBER_HANDLE};
-use kapsaro_core::cli_api::test_support::storage::keystore::active::load_active_kid;
+use crate::cli::common::{
+    cmd, make_secret_home, setup_workspace, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+};
+use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
+
+fn assert_doctor_workspace_source(mut command: assert_cmd::Command, source: &str) {
+    let output = command.assert().success().get_output().stdout.clone();
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(value["checks"].as_array().unwrap().iter().any(|check| {
+        check["id"] == "workspace.resolve"
+            && check["message"] == format!("Workspace resolved from {source}")
+    }));
+}
 
 #[test]
 fn test_doctor_missing_trust_store_warns_but_exits_success() {
@@ -79,6 +90,109 @@ fn test_doctor_json_missing_trust_store_warns_but_exits_success() {
 }
 
 #[test]
+fn test_doctor_resolves_workspace_in_cli_environment_config_auto_order() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+    let invalid_workspace = home_dir.path().join("lower-priority-workspace");
+    fs::write(home_dir.path().join("config.toml"), "workspace = [\n").unwrap();
+
+    let mut cli = cmd();
+    cli.arg("doctor")
+        .arg("--json")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env("KAPSARO_WORKSPACE", &invalid_workspace);
+    assert_doctor_workspace_source(cli, "CLI option");
+
+    let mut environment = cmd();
+    environment
+        .arg("doctor")
+        .arg("--json")
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env("KAPSARO_WORKSPACE", workspace_dir.path());
+    assert_doctor_workspace_source(environment, "environment variable");
+
+    fs::write(
+        home_dir.path().join("config.toml"),
+        format!(
+            "member_handle = \"{TEST_MEMBER_HANDLE}\"\nworkspace = \"{}\"\n",
+            workspace_dir.path().display()
+        ),
+    )
+    .unwrap();
+    let mut config = cmd();
+    config
+        .arg("doctor")
+        .arg("--json")
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env_remove("KAPSARO_WORKSPACE");
+    assert_doctor_workspace_source(config, "global configuration");
+
+    fs::write(
+        home_dir.path().join("config.toml"),
+        format!("member_handle = \"{TEST_MEMBER_HANDLE}\"\n"),
+    )
+    .unwrap();
+    let auto_root = TempDir::new().unwrap();
+    let auto_workspace = auto_root.path().join(".kapsaro");
+    fs::rename(workspace_dir.path(), &auto_workspace).unwrap();
+    let mut automatic = cmd();
+    automatic
+        .current_dir(auto_root.path())
+        .arg("doctor")
+        .arg("--json")
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env_remove("KAPSARO_WORKSPACE");
+    assert_doctor_workspace_source(automatic, "auto-detection");
+}
+
+#[test]
+fn test_doctor_reports_workspace_resolution_failure_and_continues() {
+    let (_workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+    fs::write(home_dir.path().join("config.toml"), "workspace = [\n").unwrap();
+
+    let output = cmd()
+        .arg("doctor")
+        .arg("--json")
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .env_remove("KAPSARO_WORKSPACE")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(value["checks"].as_array().unwrap().iter().any(|check| {
+        check["id"] == "workspace.resolve"
+            && check["status"] == "fail"
+            && check["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.contains("Invalid TOML"))
+    }));
+    assert!(value["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check["id"] == "keystore.root"));
+}
+
+#[test]
 fn test_doctor_incomplete_workspace_fails() {
     let workspace = TempDir::new().unwrap();
     let home = TempDir::new().unwrap();
@@ -128,6 +242,94 @@ fn test_doctor_json_incomplete_workspace_fails_with_json() {
         .unwrap()
         .iter()
         .any(|check| { check["id"] == "workspace.structure" && check["status"] == "fail" }));
+}
+
+#[test]
+fn test_doctor_reports_invalid_owner_config_and_continues_workspace_checks() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
+    fs::write(home_dir.path().join("config.toml"), "member_handle = [\n").unwrap();
+
+    let output = cmd()
+        .arg("doctor")
+        .arg("--json")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--home")
+        .arg(home_dir.path())
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(value["checks"].as_array().unwrap().iter().any(|check| {
+        check["id"] == "keystore.member"
+            && check["status"] == "fail"
+            && check["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.contains("Invalid TOML in config file"))
+    }));
+    assert!(value["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| { check["id"] == "members.active.present" && check["status"] == "ok" }));
+}
+
+#[test]
+fn test_doctor_env_key_without_explicit_member_keeps_local_owner_unresolved() {
+    const PASSWORD: &str = "doctor-env-key-password-42";
+
+    let (workspace_dir, key_home, _ssh_temp, ssh_priv) = setup_workspace();
+    let exported_key = cmd()
+        .arg("key")
+        .arg("export")
+        .arg("--private")
+        .arg("--stdout")
+        .arg("--member-handle")
+        .arg(TEST_MEMBER_HANDLE)
+        .arg("--home")
+        .arg(key_home.path())
+        .env("KAPSARO_SSH_IDENTITY", &ssh_priv)
+        .write_stdin(format!("{PASSWORD}\n{PASSWORD}\n"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let exported_key = String::from_utf8(exported_key).unwrap();
+    let diagnostic_home = make_secret_home();
+
+    let output = cmd()
+        .arg("doctor")
+        .arg("--json")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--home")
+        .arg(diagnostic_home.path())
+        .env("KAPSARO_PRIVATE_KEY", exported_key.trim())
+        .env("KAPSARO_KEY_PASSWORD", PASSWORD)
+        .env("KAPSARO_MEMBER_HANDLE", BOB_MEMBER_HANDLE)
+        .env_remove("SSH_AUTH_SOCK")
+        .env_remove("KAPSARO_SSH_IDENTITY")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(report["checks"].as_array().unwrap().iter().any(|check| {
+        check["id"] == "keystore.member"
+            && check["status"] == "warn"
+            && check["message"] == "Member handle could not be resolved"
+    }));
+    assert!(report["checks"].as_array().unwrap().iter().any(|check| {
+        check["id"] == "trust_store.present"
+            && check["status"] == "warn"
+            && check["message"] == "Local trust store owner could not be resolved"
+    }));
 }
 
 /// Local state entries other users can reach are reported one finding per path,

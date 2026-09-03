@@ -4,13 +4,13 @@
 // Local trust store fixtures for CLI integration tests.
 // Writes a store signed by the owner's active key so trust-gated commands have one to read.
 
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
+use kapsaro_core::test_support::domain::trust_store::{
     KnownKey, RecipientSetRecord, TrustStoreProtected,
 };
-use kapsaro_core::cli_api::test_support::domain::wire::format::LOCAL_TRUST_V1;
-use kapsaro_core::cli_api::test_support::operations::trust::signature::sign_trust_store;
-use kapsaro_core::cli_api::test_support::storage::trust::paths::get_trust_store_file_path;
-use kapsaro_core::cli_api::test_support::storage::trust::store::save_trust_store;
+use kapsaro_core::test_support::domain::wire::format::LOCAL_TRUST_V1;
+use kapsaro_core::test_support::operations::trust::signature::sign_trust_store;
+use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
+use kapsaro_core::test_support::storage::trust::store::save_trust_store;
 use kapsaro_test_support::crypto_context::setup_member_key_context;
 use kapsaro_test_support::workspace_state::member_handle;
 use tempfile::TempDir;

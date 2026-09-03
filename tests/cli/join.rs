@@ -158,7 +158,7 @@ fn test_join_existing_key_ignores_github_user_input() {
         .arg(TEST_MEMBER_HANDLE)
         .arg("--force")
         .arg("--github-user")
-        .arg("definitely-not-a-real-github-user-for-kapsaro-tests")
+        .arg("alice/keys")
         .env("KAPSARO_HOME", home_dir.path())
         .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()

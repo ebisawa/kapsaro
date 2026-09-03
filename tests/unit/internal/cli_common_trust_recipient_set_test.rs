@@ -7,13 +7,13 @@ use crate::cli::common::trust::{
 };
 use crate::cli::stderr_color_guard::StderrColorGuard;
 use console::strip_ansi_codes;
-use kapsaro_core::cli_api::app::trust::enforcement::ArtifactRecipientSetReview;
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
-use kapsaro_core::cli_api::test_support::domain::common::WrapItem;
-use kapsaro_core::cli_api::test_support::domain::trust_store::{
+use kapsaro_core::api::trust::enforcement::ArtifactRecipientSetReview;
+use kapsaro_core::api::trust::TrustApprovalCandidate;
+use kapsaro_core::test_support::domain::common::WrapItem;
+use kapsaro_core::test_support::domain::trust_store::{
     RecipientHandleHint, RecipientSetApprovalVia, RecipientSetRecord,
 };
-use kapsaro_core::cli_api::test_support::operations::trust::recipient_sets::ArtifactRecipientSet;
+use kapsaro_core::test_support::operations::trust::recipient_sets::ArtifactRecipientSet;
 use serial_test::serial;
 use uuid::Uuid;
 
@@ -67,7 +67,7 @@ fn test_format_non_member_signer_review_lines_warns_after_online_verification_fa
 
 #[test]
 fn test_format_member_key_review_lines_uses_member_verify_copy() {
-    let candidate = kapsaro_core::cli_api::app::member::approval::MemberApprovalResult {
+    let candidate = kapsaro_core::api::member::approval::MemberApprovalResult {
         member_handle: "bob@example.com".to_string(),
         kid: "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
         verified: true,

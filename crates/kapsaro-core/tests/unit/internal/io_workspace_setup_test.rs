@@ -1,13 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_api::test_support::storage::keystore::active::load_active_kid;
-use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
 use crate::io::workspace::members::{save_member_content, MemberStatus};
 use crate::io::workspace::setup::{
     check_workspace_has_active_members, ensure_workspace_structure, validate_workspace_exists,
 };
 use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope};
+use crate::test_support::storage::keystore::active::load_active_kid;
+use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::setup_test_keystore_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use std::fs;

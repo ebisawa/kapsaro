@@ -6,17 +6,14 @@
 //! These tests require file system operations and environment variable manipulation
 
 use crate::io::ssh::openssh_config::find_identity_agent;
-use crate::test_utils::EnvGuard;
-use std::env;
+use std::collections::BTreeMap;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
 fn test_find_identity_agent_with_config_file() {
-    let _guard = EnvGuard::new(&["HOME"]);
     let temp_dir = TempDir::new().unwrap();
     let home = temp_dir.path();
-    env::set_var("HOME", home.to_str().unwrap());
 
     // Create .ssh directory and config file
     let ssh_dir = home.join(".ssh");
@@ -30,7 +27,7 @@ fn test_find_identity_agent_with_config_file() {
     )
     .unwrap();
 
-    let result = find_identity_agent().unwrap();
+    let result = find_identity_agent(home, &BTreeMap::new()).unwrap();
     assert!(result.is_some());
     let path = result.unwrap();
     assert!(path.to_string_lossy().contains("test/agent.sock"));
@@ -38,23 +35,19 @@ fn test_find_identity_agent_with_config_file() {
 
 #[test]
 fn test_find_identity_agent_no_config_file() {
-    let _guard = EnvGuard::new(&["HOME"]);
     let temp_dir = TempDir::new().unwrap();
     let home = temp_dir.path();
-    env::set_var("HOME", home.to_str().unwrap());
 
     // Don't create .ssh/config
 
-    let result = find_identity_agent().unwrap();
+    let result = find_identity_agent(home, &BTreeMap::new()).unwrap();
     assert!(result.is_none());
 }
 
 #[test]
 fn test_find_identity_agent_none_value() {
-    let _guard = EnvGuard::new(&["HOME"]);
     let temp_dir = TempDir::new().unwrap();
     let home = temp_dir.path();
-    env::set_var("HOME", home.to_str().unwrap());
 
     let ssh_dir = home.join(".ssh");
     fs::create_dir_all(&ssh_dir).unwrap();
@@ -67,16 +60,14 @@ fn test_find_identity_agent_none_value() {
     )
     .unwrap();
 
-    let result = find_identity_agent().unwrap();
+    let result = find_identity_agent(home, &BTreeMap::new()).unwrap();
     assert!(result.is_none());
 }
 
 #[test]
 fn test_find_identity_agent_tilde_expansion() {
-    let _guard = EnvGuard::new(&["HOME"]);
     let temp_dir = TempDir::new().unwrap();
     let home = temp_dir.path();
-    env::set_var("HOME", home.to_str().unwrap());
 
     let ssh_dir = home.join(".ssh");
     fs::create_dir_all(&ssh_dir).unwrap();
@@ -95,7 +86,7 @@ fn test_find_identity_agent_tilde_expansion() {
     )
     .unwrap();
 
-    let result = find_identity_agent().unwrap();
+    let result = find_identity_agent(home, &BTreeMap::new()).unwrap();
     assert!(result.is_some());
     let path = result.unwrap();
     assert_eq!(path, expected_path);
@@ -106,10 +97,8 @@ fn test_find_identity_agent_tilde_expansion() {
 fn test_find_identity_agent_reads_symlinked_config_file() {
     use std::os::unix::fs::symlink;
 
-    let _guard = EnvGuard::new(&["HOME"]);
     let temp_dir = TempDir::new().unwrap();
     let home = temp_dir.path();
-    env::set_var("HOME", home.to_str().unwrap());
 
     let ssh_dir = home.join(".ssh");
     fs::create_dir_all(&ssh_dir).unwrap();
@@ -123,17 +112,17 @@ fn test_find_identity_agent_reads_symlinked_config_file() {
     .unwrap();
     symlink(&real_config, ssh_dir.join("config")).unwrap();
 
-    let path = find_identity_agent().unwrap().unwrap();
+    let path = find_identity_agent(home, &BTreeMap::new())
+        .unwrap()
+        .unwrap();
 
     assert_eq!(path, home.join("test").join("agent.sock"));
 }
 
 #[test]
 fn test_find_identity_agent_rejects_oversized_config_file() {
-    let _guard = EnvGuard::new(&["HOME"]);
     let temp_dir = TempDir::new().unwrap();
     let home = temp_dir.path();
-    env::set_var("HOME", home.to_str().unwrap());
 
     let ssh_dir = home.join(".ssh");
     fs::create_dir_all(&ssh_dir).unwrap();
@@ -147,11 +136,37 @@ fn test_find_identity_agent_rejects_oversized_config_file() {
     )
     .unwrap();
 
-    let result = find_identity_agent();
+    let result = find_identity_agent(home, &BTreeMap::new());
     assert!(result.is_err());
     let message = result.unwrap_err().to_string();
     assert!(
         message.contains("maximum size limit"),
         "unexpected error: {message}"
+    );
+}
+
+#[test]
+fn test_find_identity_agent_uses_only_explicit_expansion_values() {
+    let _guard = crate::test_utils::EnvGuard::new(&["KAPSARO_AGENT_DIR"]);
+    let temp_dir = TempDir::new().unwrap();
+    let home = temp_dir.path();
+    let ssh_dir = home.join(".ssh");
+    fs::create_dir_all(&ssh_dir).unwrap();
+    fs::write(
+        ssh_dir.join("config"),
+        "Host *\n    IdentityAgent \"$KAPSARO_AGENT_DIR/agent.sock\"\n",
+    )
+    .unwrap();
+    let values = BTreeMap::from([(
+        "KAPSARO_AGENT_DIR".to_string(),
+        "/tmp/fixed-agent-dir".to_string(),
+    )]);
+    std::env::set_var("KAPSARO_AGENT_DIR", "/tmp/ambient-agent-dir");
+
+    let path = find_identity_agent(home, &values).unwrap().unwrap();
+
+    assert_eq!(
+        path,
+        std::path::PathBuf::from("/tmp/fixed-agent-dir/agent.sock")
     );
 }

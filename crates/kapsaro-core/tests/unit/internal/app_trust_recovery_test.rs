@@ -4,35 +4,32 @@
 //! Regression tests for invalid local trust store recovery.
 //! Covers review-to-delete consistency and descriptor-bound path handling.
 
-use crate::api::key::KeyContext;
-use crate::app::context::crypto::load_crypto_context_with_access;
-use crate::app::context::execution::ExecutionContext;
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::trust::list::{list_known_keys_command, resolve_trust_list_command};
-use crate::app::trust::management::list_purge_candidates;
 use crate::error::{LOCAL_KEYSTORE_MISSING_RECOVERY, TRUST_STORE_RESET_REQUIRED_RECOVERY};
-use crate::io::keystore::access::KeystoreAccess;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::remove::{set_post_quarantine_hook, set_pre_quarantine_hook};
 use crate::model::identity::MemberHandle;
+use crate::service::config::LocalStateSession;
+use crate::service::trust::list::{
+    list_known_keys_command, resolve_trust_list_command as resolve_trust_list_command_with_session,
+    TrustListCommand,
+};
+use crate::service::trust::management::list_purge_candidates;
+use crate::service::trust::TrustCommandSession;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
-use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
-use crate::test_utils::{create_local_state_dir, member_handle, write_local_state_file};
+use crate::test_utils::{
+    create_local_state_dir, member_handle, setup_member_key_context_at, write_local_state_file,
+};
 use tempfile::TempDir;
 
 use super::{
-    build_trust_store_reset_plan_from_execution, build_trust_store_reset_plan_from_list_command,
+    build_trust_store_reset_plan_from_list_command, build_trust_store_reset_plan_from_session,
     classify_trust_store_reset, execute_trust_store_reset,
-    observe_trust_store_recovery_from_execution, observe_trust_store_recovery_from_list_command,
+    observe_trust_store_recovery_from_list_command, observe_trust_store_recovery_from_session,
     TrustStoreResetPlan,
 };
 
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
-
-fn build_options(home: &std::path::Path) -> CommonCommandOptions {
-    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
-}
 
 /// A store whose bytes would not parse, reported the way a real load reports
 /// it: still a parse failure, and naming a reset as the route past it.
@@ -58,34 +55,34 @@ fn build_reset_plan(
     error: crate::Error,
     is_interactive: bool,
 ) -> crate::Result<TrustStoreResetPlan> {
-    let command =
-        resolve_trust_list_command(&build_options(home), Some("alice@example.com".to_string()))?;
+    let command = resolve_trust_list_command(home, member_handle("alice@example.com"))?;
     let token = observe_trust_store_recovery_from_list_command(&command);
     build_trust_store_reset_plan_from_list_command(&command, token, error, is_interactive)
 }
 
-fn build_execution(home: &TempDir, member_handle: &str) -> ExecutionContext {
-    let access = KeystoreAccess::open_from_home(home.path()).unwrap();
-    let ssh_public_key =
-        std::fs::read_to_string(home.path().join(".ssh/test_ed25519.pub")).unwrap();
-    let backend = Ed25519DirectBackend::new(&home.path().join(".ssh/test_ed25519")).unwrap();
-    let member_handle = MemberHandle::try_from(member_handle).unwrap();
-    let key_ctx = load_crypto_context_with_access(
-        access,
-        member_handle.clone(),
-        Box::new(backend),
-        ssh_public_key,
-        None,
-        None,
-    )
-    .unwrap();
-    ExecutionContext::from_test_parts(
-        member_handle,
-        KeyContext::from_inner(key_ctx),
-        None,
-        Some(home.path().to_path_buf()),
+fn resolve_trust_list_command(
+    path: &std::path::Path,
+    owner: MemberHandle,
+) -> crate::Result<TrustListCommand> {
+    let local_state = LocalStateSession::open(path.to_path_buf())?;
+    resolve_trust_list_command_with_session(&local_state, owner)
+}
+
+fn build_execution(home: &TempDir, owner: &str) -> TrustCommandSession {
+    TrustCommandSession::from_test_parts(
+        home.path(),
+        MemberHandle::try_from(owner).unwrap(),
+        crate::api::key::KeyContext::from_inner(setup_member_key_context_at(
+            home.path(),
+            owner,
+            None,
+        )),
     )
     .unwrap()
+}
+
+fn build_session(home: &TempDir, owner: &str) -> TrustCommandSession {
+    build_execution(home, owner)
 }
 
 #[test]
@@ -219,7 +216,7 @@ fn test_execute_trust_store_reset_preserves_target_created_after_plan() {
 }
 
 #[test]
-fn test_build_trust_store_reset_plan_noninteractive_fails_without_deleting() {
+fn test_build_trust_store_reset_plan_without_confirmation_fails_without_deleting() {
     let temp_dir = TempDir::new().unwrap();
     let trust_path =
         get_trust_store_file_path(temp_dir.path(), &member_handle("alice@example.com"));
@@ -228,7 +225,9 @@ fn test_build_trust_store_reset_plan_noninteractive_fails_without_deleting() {
 
     let error = build_reset_plan(temp_dir.path(), build_reset_required_error(), false).unwrap_err();
 
-    assert!(error.to_string().contains("non-interactive"));
+    assert!(error
+        .to_string()
+        .contains("caller confirmation is required"));
     assert!(trust_path.exists());
 }
 
@@ -245,7 +244,8 @@ fn test_build_trust_store_reset_plan_preserves_unclassified_noninteractive_error
 #[test]
 fn test_list_command_reset_plan_preserves_unclassified_noninteractive_error() {
     let home = crate::test_utils::setup_test_keystore_from_fixtures("alice@example.com");
-    let command = resolve_trust_list_command(&build_options(home.path()), None).unwrap();
+    let command =
+        resolve_trust_list_command(home.path(), member_handle("alice@example.com")).unwrap();
 
     let token = observe_trust_store_recovery_from_list_command(&command);
     let error = build_trust_store_reset_plan_from_list_command(
@@ -264,8 +264,8 @@ fn test_execution_reset_plan_preserves_unclassified_noninteractive_error() {
     let home = crate::test_utils::setup_test_keystore_from_fixtures("alice@example.com");
     let execution = build_execution(&home, "alice@example.com");
 
-    let token = observe_trust_store_recovery_from_execution(&execution);
-    let error = build_trust_store_reset_plan_from_execution(
+    let token = observe_trust_store_recovery_from_session(&execution);
+    let error = build_trust_store_reset_plan_from_session(
         &execution,
         token,
         build_local_keystore_missing_error(),
@@ -338,8 +338,8 @@ fn test_list_command_reset_uses_resolved_owner_and_trust_directory() {
     create_local_state_dir(alice_path.parent().unwrap());
     write_local_state_file(&alice_path, "invalid-alice");
     write_local_state_file(&bob_path, "invalid-bob");
-    let options = build_options(home.path());
-    let command = resolve_trust_list_command(&options, None).unwrap();
+    let command =
+        resolve_trust_list_command(home.path(), member_handle("alice@example.com")).unwrap();
     let token = observe_trust_store_recovery_from_list_command(&command);
     let error = list_known_keys_command(&command).unwrap_err();
     let original_trust = home.path().join("trust.original");
@@ -371,7 +371,8 @@ fn test_list_command_reset_preserves_target_changed_after_plan() {
     let trust_path = get_trust_store_file_path(home.path(), &member_handle("alice@example.com"));
     create_local_state_dir(trust_path.parent().unwrap());
     write_local_state_file(&trust_path, "invalid");
-    let command = resolve_trust_list_command(&build_options(home.path()), None).unwrap();
+    let command =
+        resolve_trust_list_command(home.path(), member_handle("alice@example.com")).unwrap();
     let token = observe_trust_store_recovery_from_list_command(&command);
     let error = list_known_keys_command(&command).unwrap_err();
     let plan =
@@ -393,7 +394,8 @@ fn test_list_command_reset_plan_refuses_a_store_replaced_before_the_offer() {
     let trust_path = get_trust_store_file_path(home.path(), &member_handle("alice@example.com"));
     create_local_state_dir(trust_path.parent().unwrap());
     write_local_state_file(&trust_path, "invalid");
-    let command = resolve_trust_list_command(&build_options(home.path()), None).unwrap();
+    let command =
+        resolve_trust_list_command(home.path(), member_handle("alice@example.com")).unwrap();
     let token = observe_trust_store_recovery_from_list_command(&command);
     let error = list_known_keys_command(&command).unwrap_err();
     write_local_state_file(&trust_path, "replacement");
@@ -419,10 +421,11 @@ fn test_reset_plan_counts_the_approvals_a_deletion_would_discard() {
     let home = crate::test_utils::setup_test_keystore_from_fixtures("alice@example.com");
     write_trust_store_with_absent_signer(&home, "alice@example.com", 2);
     let execution = build_execution(&home, "alice@example.com");
-    let token = observe_trust_store_recovery_from_execution(&execution);
-    let error = missing_signer_key_error(&execution);
+    let session = build_session(&home, "alice@example.com");
+    let token = observe_trust_store_recovery_from_session(&execution);
+    let error = missing_signer_key_error(&session);
 
-    let plan = build_trust_store_reset_plan_from_execution(&execution, token, error, true).unwrap();
+    let plan = build_trust_store_reset_plan_from_session(&execution, token, error, true).unwrap();
 
     let loss = plan
         .loss()
@@ -460,12 +463,13 @@ fn test_execution_reset_deletes_only_original_home_target_after_path_swap() {
     write_local_state_file(&original_target, "invalid-original");
     write_local_state_file(&replacement_target, "replacement-bytes");
     let execution = build_execution(&home, "alice@example.com");
-    let token = observe_trust_store_recovery_from_execution(&execution);
+    let session = build_session(&home, "alice@example.com");
+    let token = observe_trust_store_recovery_from_session(&execution);
     let opened_home = home.path().with_extension("opened");
     std::fs::rename(home.path(), &opened_home).unwrap();
     std::fs::rename(replacement.path(), home.path()).unwrap();
 
-    let error = list_purge_candidates(&execution, time::OffsetDateTime::now_utc()).unwrap_err();
+    let error = list_purge_candidates(&session, time::OffsetDateTime::now_utc()).unwrap_err();
     assert_eq!(error.recovery(), Some("E_TRUST_STORE_RESET_REQUIRED"));
     let opened_original_trust = opened_home.join("trust.original");
     std::fs::rename(opened_home.join("trust"), &opened_original_trust).unwrap();
@@ -473,11 +477,10 @@ fn test_execution_reset_deletes_only_original_home_target_after_path_swap() {
     let replaced_original_target =
         get_trust_store_file_path(&opened_home, &member_handle("alice@example.com"));
     write_local_state_file(&replaced_original_target, "replacement-directory-bytes");
-    let plan = build_trust_store_reset_plan_from_execution(&execution, token, error, true).unwrap();
+    let plan = build_trust_store_reset_plan_from_session(&execution, token, error, true).unwrap();
     execute_trust_store_reset(&plan).unwrap();
 
-    let list_error =
-        list_purge_candidates(&execution, time::OffsetDateTime::now_utc()).unwrap_err();
+    let list_error = list_purge_candidates(&session, time::OffsetDateTime::now_utc()).unwrap_err();
     assert_eq!(list_error.kind(), crate::ErrorKind::NotFound);
 
     assert!(!opened_original_trust
@@ -501,10 +504,10 @@ fn write_trust_store_with_absent_signer(
     owner: &str,
     known_key_count: usize,
 ) -> std::path::PathBuf {
-    use crate::cli_api::test_support::storage::trust::store::save_trust_store;
     use crate::feature::trust::signature::sign_trust_store;
     use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia, TrustStoreProtected};
     use crate::model::wire::format::LOCAL_TRUST_V1;
+    use crate::test_support::storage::trust::store::save_trust_store;
 
     let key_ctx = crate::test_utils::setup_member_key_context(home, owner, None);
     let known_keys = (0..known_key_count)
@@ -538,8 +541,8 @@ fn swap_first_kid_character(kid: &str) -> String {
     format!("{replacement}{}", &kid[1..])
 }
 
-fn missing_signer_key_error(execution: &ExecutionContext) -> crate::Error {
-    let error = list_purge_candidates(execution, time::OffsetDateTime::now_utc())
+fn missing_signer_key_error(session: &TrustCommandSession) -> crate::Error {
+    let error = list_purge_candidates(session, time::OffsetDateTime::now_utc())
         .expect_err("an absent signer key must fail verification");
     assert_eq!(error.recovery(), Some("E_TRUST_SIGNER_KEY_MISSING"));
     error
@@ -550,15 +553,16 @@ fn test_execute_trust_store_reset_deletes_a_store_whose_signer_key_is_absent() {
     let home = crate::test_utils::setup_test_keystore_from_fixtures("alice@example.com");
     let path = write_trust_store_with_absent_signer(&home, "alice@example.com", 1);
     let execution = build_execution(&home, "alice@example.com");
-    let token = observe_trust_store_recovery_from_execution(&execution);
-    let error = missing_signer_key_error(&execution);
+    let session = build_session(&home, "alice@example.com");
+    let token = observe_trust_store_recovery_from_session(&execution);
+    let error = missing_signer_key_error(&session);
 
-    let plan = build_trust_store_reset_plan_from_execution(&execution, token, error, true).unwrap();
+    let plan = build_trust_store_reset_plan_from_session(&execution, token, error, true).unwrap();
     let outcome = execute_trust_store_reset(&plan).unwrap();
 
     assert_eq!(outcome.path, path);
     assert!(!path.exists());
-    let candidates = list_purge_candidates(&execution, time::OffsetDateTime::now_utc())
+    let candidates = list_purge_candidates(&session, time::OffsetDateTime::now_utc())
         .expect_err("an absent trust store leaves no purge candidates to review");
     assert_eq!(candidates.kind(), crate::ErrorKind::NotFound);
 }
@@ -579,11 +583,8 @@ fn test_reset_plan_reports_a_read_failure_as_itself() {
         get_trust_store_file_path(temp_dir.path(), &member_handle("alice@example.com"));
     std::fs::create_dir_all(trust_path.parent().unwrap()).unwrap();
     std::fs::write(&trust_path, "invalid").unwrap();
-    let command = resolve_trust_list_command(
-        &build_options(temp_dir.path()),
-        Some("alice@example.com".to_string()),
-    )
-    .unwrap();
+    let command =
+        resolve_trust_list_command(temp_dir.path(), member_handle("alice@example.com")).unwrap();
     let token = observe_trust_store_recovery_from_list_command(&command);
     std::fs::set_permissions(&trust_path, std::fs::Permissions::from_mode(0o000)).unwrap();
 
@@ -614,10 +615,11 @@ fn test_reset_plan_carries_the_recovery_route_for_a_missing_signer_key() {
     let home = crate::test_utils::setup_test_keystore_from_fixtures("alice@example.com");
     write_trust_store_with_absent_signer(&home, "alice@example.com", 1);
     let execution = build_execution(&home, "alice@example.com");
-    let token = observe_trust_store_recovery_from_execution(&execution);
-    let error = missing_signer_key_error(&execution);
+    let session = build_session(&home, "alice@example.com");
+    let token = observe_trust_store_recovery_from_session(&execution);
+    let error = missing_signer_key_error(&session);
 
-    let plan = build_trust_store_reset_plan_from_execution(&execution, token, error, true).unwrap();
+    let plan = build_trust_store_reset_plan_from_session(&execution, token, error, true).unwrap();
 
     let hint = plan
         .recovery_hint()

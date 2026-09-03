@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Shared clap option groups for the CLI commands.
-//! Converts parsed flags into the common options the core API takes.
+//! Keeps parsed CLI flags in a CLI-owned representation.
 
 use clap::Args;
 use std::path::PathBuf;
 
-use kapsaro_core::cli_api::app::context::options::CommonCommandOptions;
-use kapsaro_core::cli_api::presentation::config::SshSigningMethod;
+use kapsaro_core::api::ssh::SshSigningMethod;
+use kapsaro_core::{Error, Result};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CommonOptions {
@@ -16,7 +16,6 @@ pub(crate) struct CommonOptions {
     pub(crate) identity: Option<PathBuf>,
     pub(crate) ssh_agent: bool,
     pub(crate) ssh_keygen: bool,
-    pub(crate) verbose: bool,
     pub(crate) workspace: Option<PathBuf>,
 }
 
@@ -29,6 +28,18 @@ pub(crate) struct HomeOption {
     /// Base directory for kapsaro
     #[arg(long)]
     pub(crate) home: Option<PathBuf>,
+}
+
+pub(crate) fn resolve_base_dir(home: &HomeOption) -> Result<PathBuf> {
+    if let Some(path) = &home.home {
+        return Ok(path.clone());
+    }
+    if let Ok(path) = std::env::var("KAPSARO_HOME") {
+        return Ok(PathBuf::from(path));
+    }
+    std::env::var("HOME")
+        .map(|path| PathBuf::from(path).join(".config").join("kapsaro"))
+        .map_err(|_| Error::build_config_error("HOME environment variable not set"))
 }
 
 #[derive(Debug, Clone, Args, Default)]
@@ -284,15 +295,10 @@ impl SshSigningOptions {
     }
 }
 
-fn build_common_options(
-    home: &HomeOption,
-    workspace: Option<&WorkspaceOption>,
-    verbose: Option<&VerboseOption>,
-) -> CommonOptions {
+fn build_common_options(home: &HomeOption, workspace: Option<&WorkspaceOption>) -> CommonOptions {
     CommonOptions {
         home: home.home.clone(),
         workspace: workspace.and_then(|option| option.workspace.clone()),
-        verbose: verbose.is_some_and(|option| option.verbose),
         ..CommonOptions::default()
     }
 }
@@ -301,9 +307,8 @@ fn build_signing_common_options(
     home: &HomeOption,
     workspace: &WorkspaceOption,
     ssh: &SshSigningOptions,
-    verbose: &VerboseOption,
 ) -> CommonOptions {
-    let mut common = build_common_options(home, Some(workspace), Some(verbose));
+    let mut common = build_common_options(home, Some(workspace));
     ssh.apply_to(&mut common);
     common
 }
@@ -316,13 +321,13 @@ impl ToCommonOptions for CommonOptions {
 
 impl ToCommonOptions for LocalOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, None, None)
+        build_common_options(&self.home, None)
     }
 }
 
 impl ToCommonOptions for LocalSigningOptions {
     fn to_common_options(&self) -> CommonOptions {
-        let mut common = build_common_options(&self.home, None, None);
+        let mut common = build_common_options(&self.home, None);
         self.ssh.apply_to(&mut common);
         common
     }
@@ -330,53 +335,42 @@ impl ToCommonOptions for LocalSigningOptions {
 
 impl ToCommonOptions for LocalOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, None, Some(&self.verbose))
+        build_common_options(&self.home, None)
     }
 }
 
 impl ToCommonOptions for WorkspaceOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, Some(&self.workspace), None)
+        build_common_options(&self.home, Some(&self.workspace))
     }
 }
 
 impl ToCommonOptions for WorkspaceOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_common_options(&self.home, Some(&self.workspace), Some(&self.verbose))
+        build_common_options(&self.home, Some(&self.workspace))
     }
 }
 
 impl ToCommonOptions for SigningOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh)
     }
 }
 
 impl ToCommonOptions for SigningOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh)
     }
 }
 
 impl ToCommonOptions for SigningQuietOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh)
     }
 }
 
 impl ToCommonOptions for SigningQuietOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
-        build_signing_common_options(&self.home, &self.workspace, &self.ssh, &self.verbose)
-    }
-}
-
-impl From<&CommonOptions> for CommonCommandOptions {
-    fn from(value: &CommonOptions) -> Self {
-        Self::new()
-            .with_home(value.home.clone())
-            .with_identity(value.identity.clone())
-            .with_verbose(value.verbose)
-            .with_workspace(value.workspace.clone())
-            .with_ssh_signing_method(value.ssh_signing_method())
+        build_signing_common_options(&self.home, &self.workspace, &self.ssh)
     }
 }

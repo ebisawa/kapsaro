@@ -3,10 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::app::rewrap::types::{
-    IncomingPromotionCandidate, IncomingVerificationCategory, IncomingVerificationItem,
-    IncomingVerificationReport,
-};
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::io::verify_online::VerifiedGithubIdentity;
@@ -15,6 +11,10 @@ use crate::model::public_key::{
     Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyParts,
 };
 use crate::model::trust_store::{KnownKey, KnownKeyApprovalVia};
+use crate::service::rewrap::types::{
+    IncomingPromotionCandidate, IncomingVerificationCategory, IncomingVerificationItem,
+    IncomingVerificationReport,
+};
 
 use super::{build_promotion_review_plan, build_promotion_review_session_with_verifier};
 
@@ -186,7 +186,7 @@ fn test_build_promotion_review_plan_keeps_failed_candidates_without_aborting_bat
 }
 
 #[test]
-fn test_build_promotion_review_plan_not_configured_non_interactive_errors() {
+fn test_build_promotion_review_plan_not_configured_without_review_errors() {
     let report = build_report(
         vec![],
         vec![],
@@ -202,10 +202,7 @@ fn test_build_promotion_review_plan_not_configured_non_interactive_errors() {
     let result = build_promotion_review_plan(&report, &[], &SelfTrustSet::default(), false);
 
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("TOFU confirmation required"));
+    assert!(result.unwrap_err().to_string().contains("E_TRUST_REJECTED"));
 }
 
 #[test]
@@ -269,9 +266,10 @@ fn test_build_promotion_review_session_skips_online_verify_for_known_github_bind
         panic!("online verifier should not run for auto-accepted known incoming keys");
     })
     .unwrap();
-    let accepted = session.into_accepted_candidates(&[]);
+    let (accepted, approvals) = session.into_accepted_candidates_and_approvals(&[]).unwrap();
 
     assert_eq!(accepted.len(), 1);
+    assert!(approvals.is_empty());
     assert_eq!(accepted[0].review.member_handle, "bob");
     assert!(accepted[0].review.github_binding_configured);
 }
@@ -410,13 +408,16 @@ fn test_build_promotion_review_session_keeps_later_prompt_after_verifier_error()
             .as_str(),
         "bob@example.com"
     );
-    assert!(session
-        .into_accepted_candidates(&[
+    let (accepted, approvals) = session
+        .into_accepted_candidates_and_approvals(&[
             "alice@example.com".to_string(),
             "bob@example.com".to_string(),
         ])
+        .unwrap();
+    assert!(accepted
         .iter()
         .all(|candidate| candidate.review.member_handle == "bob@example.com"));
+    assert_eq!(approvals.len(), 1);
 }
 
 #[test]
@@ -454,10 +455,12 @@ fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_
     .unwrap();
 
     assert_eq!(session.view().prompt_candidates.len(), 2);
-    let accepted = session.into_accepted_candidates(&[
-        "alice@example.com".to_string(),
-        "bob@example.com".to_string(),
-    ]);
+    let (accepted, approvals) = session
+        .into_accepted_candidates_and_approvals(&[
+            "alice@example.com".to_string(),
+            "bob@example.com".to_string(),
+        ])
+        .unwrap();
     let accepted_ids = accepted
         .into_iter()
         .map(|candidate| candidate.review.member_handle)
@@ -470,11 +473,12 @@ fn test_build_promotion_review_session_restores_accepted_candidates_from_prompt_
             "bob@example.com".to_string()
         ]
     );
+    assert_eq!(approvals.len(), 2);
 }
 
 #[test]
 fn test_build_promotion_review_session_empty_report_produces_empty_view() {
-    let review_plan = crate::app::rewrap::types::IncomingPromotionReviewPlan::default();
+    let review_plan = crate::service::rewrap::types::IncomingPromotionReviewPlan::default();
 
     let session =
         build_promotion_review_session_with_verifier(&review_plan, |_candidate| unreachable!())
@@ -482,7 +486,9 @@ fn test_build_promotion_review_session_empty_report_produces_empty_view() {
 
     assert!(session.view().failed_candidates.is_empty());
     assert!(session.view().prompt_candidates.is_empty());
-    assert!(session.into_accepted_candidates(&[]).is_empty());
+    let (accepted, approvals) = session.into_accepted_candidates_and_approvals(&[]).unwrap();
+    assert!(accepted.is_empty());
+    assert!(approvals.is_empty());
 }
 
 #[test]

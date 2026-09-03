@@ -14,7 +14,7 @@ use super::{
     build_permission_check, check_local_state_ancestor_owner, check_local_state_permissions,
     LocalStateAncestry,
 };
-use crate::app::doctor::types::{DoctorCheck, DoctorStatus, DoctorSubject, LocalStateHome};
+use crate::service::doctor::types::{DoctorCheck, DoctorStatus, DoctorSubject, LocalStateHome};
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::permission::PermissionViolationKind;
 use crate::support::fs::relative::DirectoryScope;

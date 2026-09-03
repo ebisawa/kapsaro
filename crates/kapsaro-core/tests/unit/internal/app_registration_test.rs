@@ -1,17 +1,20 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::app::key::generate::KeyGenerationHome;
-use crate::app::registration::command::{
+use crate::io::ssh::protocol::build_sha256_fingerprint;
+use crate::io::workspace::members::set_post_open_save_dirs_hook;
+use crate::model::ssh::SshDeterminismStatus;
+use crate::service::config::LocalStateSession;
+use crate::service::key::generate::KeyGenerationHome;
+use crate::service::registration::command::{
     evaluate_registration_decision, execute_registration_command, execute_registration_decision,
     resolve_registration_command, RegistrationDecision,
 };
-use crate::app::registration::key_plan::open_registration_local_state;
-use crate::app::registration::types::{RegistrationKeyPlan, RegistrationMode, RegistrationResult};
-use crate::app_test_utils::build_test_command_options;
-use crate::cli_api::test_support::storage::keystore::storage::load_public_key;
-use crate::config::types::SshSigningMethod;
-use crate::io::workspace::members::set_post_open_save_dirs_hook;
+use crate::service::registration::key_plan::open_registration_local_state;
+use crate::service::registration::types::{
+    RegistrationKeyPlan, RegistrationMode, RegistrationResult,
+};
+use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::{
     build_expiring_soon_timestamp, setup_test_keystore_from_fixtures, setup_test_workspace,
     update_active_private_key_expires_at,
@@ -20,21 +23,21 @@ use tempfile::TempDir;
 
 fn build_test_ssh_context(
     home: &std::path::Path,
-) -> crate::app::context::ssh::SshSigningContextResolution {
+) -> crate::service::ssh::SshSigningContextResolution {
+    let ssh_private_key_path = home.join(".ssh/test_ed25519");
     let ssh_public_key = std::fs::read_to_string(home.join(".ssh/test_ed25519.pub"))
         .unwrap()
         .trim()
         .to_string();
-    crate::app::context::ssh::build_ssh_signing_context_with_params(
-        &crate::app::context::ssh::SshSigningParams {
-            ssh_key: Some(home.join(".ssh/test_ed25519")),
-            signing_method: Some(SshSigningMethod::SshKeygen),
-            base_dir: Some(home.to_path_buf()),
-            check_determinism: true,
-        },
-        &ssh_public_key,
-    )
-    .unwrap()
+    let backend =
+        crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_private_key_path)
+            .unwrap();
+    crate::service::ssh::SshSigningContextResolution {
+        fingerprint: build_sha256_fingerprint(&ssh_public_key).unwrap(),
+        public_key: ssh_public_key,
+        backend: Box::new(backend),
+        determinism: SshDeterminismStatus::Verified,
+    }
 }
 
 fn create_test_workspace_dirs() -> TempDir {
@@ -46,8 +49,8 @@ fn create_test_workspace_dirs() -> TempDir {
 }
 
 fn resolve_test_key_plan(home: &std::path::Path, member_handle: &str) -> RegistrationKeyPlan {
-    let options = build_test_command_options(home, None);
-    open_registration_local_state(&options)
+    let local_state = crate::service::config::LocalStateSession::open(home.to_path_buf()).unwrap();
+    open_registration_local_state(&local_state)
         .unwrap()
         .resolve_key_plan(member_handle)
         .unwrap()
@@ -80,7 +83,7 @@ fn test_resolve_registration_command_reuses_existing_key_without_github_user() {
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
 
     let prepared = resolve_registration_command(
@@ -106,7 +109,7 @@ fn test_resolve_registration_command_reuses_key_plan_keystore_after_path_swap() 
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let keystore_root = home_dir.path().join("keys");
     let opened_root = home_dir.path().join("keys.opened");
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
@@ -144,7 +147,7 @@ fn test_execute_registration_decision_reuses_keystore_after_confirmation_path_sw
         .path()
         .join("members/incoming/alice@example.com.json");
     std::fs::write(&member_file, "{}").unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let keystore_root = home_dir.path().join("keys");
     let opened_root = home_dir.path().join("keys.opened");
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
@@ -181,7 +184,7 @@ fn test_generated_registration_writes_the_key_into_the_planned_home() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let replacement = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let ssh_ctx = build_test_ssh_context(home_dir.path());
     let key_plan = resolve_test_key_plan(home_dir.path(), "bob@example.com");
     assert!(key_plan.needs_new_key());
@@ -221,16 +224,17 @@ fn test_generated_registration_writes_the_key_into_the_planned_home() {
 fn test_generated_registration_reuses_created_keystore_after_path_swap() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let ssh_ctx = build_test_ssh_context(home_dir.path());
     let keystore_root = home_dir.path().join("keys");
     std::fs::rename(&keystore_root, home_dir.path().join("keys.seed")).unwrap();
+    let local_state = LocalStateSession::open(home_dir.path().to_path_buf()).unwrap();
 
     let command = resolve_registration_command(
         &common,
         "bob@example.com".to_string(),
         None,
-        RegistrationKeyPlan::generate_new(KeyGenerationHome::fix(&common).unwrap()),
+        RegistrationKeyPlan::generate_new(KeyGenerationHome::fix(&local_state).unwrap()),
         RegistrationMode::Join,
         Some(ssh_ctx),
     )
@@ -255,13 +259,14 @@ fn test_resolve_registration_command_requires_ssh_context_for_generated_key() {
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
+    let local_state = LocalStateSession::open(home_dir.path().to_path_buf()).unwrap();
 
     let error = resolve_registration_command(
         &common,
         "alice@example.com".to_string(),
         None,
-        RegistrationKeyPlan::generate_new(KeyGenerationHome::fix(&common).unwrap()),
+        RegistrationKeyPlan::generate_new(KeyGenerationHome::fix(&local_state).unwrap()),
         RegistrationMode::Join,
         None,
     )
@@ -282,7 +287,7 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let keystore_root = home_dir.path().join("keys");
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let kid = key_plan
@@ -328,7 +333,7 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
 fn test_registration_judges_the_kid_against_the_member_set_it_writes_into() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let kid = key_plan
         .existing_kid()
@@ -370,7 +375,7 @@ fn test_registration_judges_the_kid_against_the_member_set_it_writes_into() {
 fn test_registration_reports_a_member_that_appeared_under_the_lock() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let command = resolve_registration_command(
         &common,
@@ -408,7 +413,7 @@ fn test_evaluate_registration_decision_prompts_for_overwrite_when_interactive() 
         "{}",
     )
     .unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let prepared = resolve_registration_command(
         &common,
@@ -440,7 +445,7 @@ fn test_evaluate_registration_decision_skips_init_conflict_non_interactive() {
         "{}",
     )
     .unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let prepared = resolve_registration_command(
         &common,
@@ -475,7 +480,7 @@ fn test_evaluate_registration_decision_rejects_join_conflict_non_interactive() {
         "{}",
     )
     .unwrap();
-    let common = build_test_command_options(home_dir.path(), Some(workspace_dir.path()));
+    let common = workspace_dir.path().to_path_buf();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let prepared = resolve_registration_command(
         &common,
@@ -500,7 +505,7 @@ fn test_evaluate_registration_decision_rejects_join_conflict_non_interactive() {
 #[test]
 fn test_evaluate_registration_decision_allows_join_rotation_when_active_kid_differs() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
-    let common = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
+    let common = workspace_dir.clone();
     let expires_at = build_expiring_soon_timestamp(365);
     update_active_private_key_expires_at(temp_dir.path(), "alice@example.com", &expires_at);
 
@@ -523,7 +528,7 @@ fn test_evaluate_registration_decision_allows_join_rotation_when_active_kid_diff
 #[test]
 fn test_resolve_registration_command_rejects_mismatched_active_member_file_for_join() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com", "bob@example.com"]);
-    let common = build_test_command_options(temp_dir.path(), Some(&workspace_dir));
+    let common = workspace_dir.clone();
     let alice_path = workspace_dir
         .join("members/active")
         .join("alice@example.com.json");

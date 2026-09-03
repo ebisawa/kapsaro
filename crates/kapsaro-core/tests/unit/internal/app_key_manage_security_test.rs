@@ -10,24 +10,23 @@ use std::path::Path;
 
 use super::{activate_key_command, remove_key_command, set_post_member_resolution_hook};
 use crate::api::key::KeyContext;
-use crate::app::context::execution::ExecutionContext;
-use crate::app::context::options::CommonCommandOptions;
 use crate::app_test_utils::{
     add_generated_key, load_test_trust_store, rotate_active_key,
-    save_test_trust_store_signed_by_active_key,
+    save_test_trust_store_signed_by_active_key, TestCommandOptions,
 };
 use crate::error::TRUST_STORE_RESET_REQUIRED_RECOVERY;
 use crate::io::keystore::access::KeystoreAccess;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::service::trust::TrustCommandSession;
 use crate::test_utils::{
     member_handle, setup_member_key_context, setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE,
 };
 use crate::{Error, ErrorKind};
 use tempfile::TempDir;
 
-fn build_options(home: &Path) -> CommonCommandOptions {
-    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
+fn build_options(home: &Path) -> TestCommandOptions {
+    TestCommandOptions::new().with_home(Some(home.to_path_buf()))
 }
 
 fn add_second_key(home: &Path) -> Kid {
@@ -78,12 +77,10 @@ fn test_activate_reuses_resolved_keystore_after_path_swap() {
         &home.path().join("keys"),
         &home.path().join("keys.replacement"),
     );
-    let options = build_options(home.path());
-
     let swap_home = home.path().to_path_buf();
     set_post_member_resolution_hook(move || swap_keystore_path(&swap_home));
 
-    activate_key_command(&options, None, Some(second_kid.to_string())).unwrap();
+    activate_key_command(home.path(), None, Some(second_kid.to_string())).unwrap();
 
     let member = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
     let original = KeystoreAccess::open(home.path().join("keys.original")).unwrap();
@@ -107,13 +104,11 @@ fn test_remove_reuses_resolved_keystore_after_path_swap() {
         &home.path().join("keys"),
         &home.path().join("keys.replacement"),
     );
-    let options = build_options(home.path());
-
     let swap_home = home.path().to_path_buf();
     set_post_member_resolution_hook(move || swap_keystore_path(&swap_home));
 
     remove_key_command(
-        &options,
+        home.path(),
         None,
         second_kid.to_string(),
         false,
@@ -141,12 +136,12 @@ fn build_reset_required_error() -> Error {
 }
 
 /// Signing capability for a removal that must never ask for one.
-fn unreachable_resign(_member_handle: &MemberHandle) -> crate::Result<ExecutionContext> {
+fn unreachable_resign(_member_handle: &MemberHandle) -> crate::Result<TrustCommandSession> {
     panic!("removing a key that does not sign the trust store must not re-sign it");
 }
 
 /// Signing capability for a removal the keystore settles before the hand-over.
-fn unreachable_handover(_member_handle: &MemberHandle) -> crate::Result<ExecutionContext> {
+fn unreachable_handover(_member_handle: &MemberHandle) -> crate::Result<TrustCommandSession> {
     panic!("a removal the keystore refuses must not reach the trust store hand-over");
 }
 
@@ -161,12 +156,11 @@ fn signed_home() -> (TempDir, String) {
 ///
 /// `kid` selects the key that signs; `None` takes the member's active key, which
 /// is what the CLI resolves for a removal.
-fn signing_execution(home: &TempDir, kid: Option<&str>) -> ExecutionContext {
-    ExecutionContext::from_test_parts(
+fn signing_session(home: &TempDir, kid: Option<&str>) -> TrustCommandSession {
+    TrustCommandSession::from_test_parts(
+        home.path(),
         MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap(),
         KeyContext::from_inner(setup_member_key_context(home, ALICE_MEMBER_HANDLE, kid)),
-        None,
-        Some(home.path().to_path_buf()),
     )
     .unwrap()
 }
@@ -193,10 +187,8 @@ fn key_dir(home: &TempDir, kid: &str) -> std::path::PathBuf {
 fn test_removing_a_key_that_does_not_sign_the_trust_store_skips_re_signing() {
     let (home, _signer_kid) = signed_home();
     let spare_kid = add_generated_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
-
     let result = remove_key_command(
-        &options,
+        home.path(),
         None,
         spare_kid.to_string(),
         false,
@@ -217,15 +209,21 @@ fn test_removing_the_signer_key_re_signs_before_the_key_is_gone() {
     let signer_dir = key_dir(&home, &signer_kid);
     let called = Cell::new(false);
 
-    let result = remove_key_command(&options, None, signer_kid.clone(), false, |member_handle| {
-        assert_eq!(member_handle.as_str(), ALICE_MEMBER_HANDLE);
-        assert!(
-            signer_dir.exists(),
-            "the trust store must be re-signed while the old signer key is still readable"
-        );
-        called.set(true);
-        Ok(signing_execution(&home, None))
-    })
+    let result = remove_key_command(
+        home.path(),
+        None,
+        signer_kid.clone(),
+        false,
+        |member_handle| {
+            assert_eq!(member_handle.as_str(), ALICE_MEMBER_HANDLE);
+            assert!(
+                signer_dir.exists(),
+                "the trust store must be re-signed while the old signer key is still readable"
+            );
+            called.set(true);
+            Ok(signing_session(&home, None))
+        },
+    )
     .unwrap();
 
     assert!(called.get());
@@ -247,10 +245,8 @@ fn test_removing_the_signer_key_re_signs_before_the_key_is_gone() {
 #[test]
 fn test_removing_the_only_signer_key_is_refused() {
     let (home, signer_kid) = signed_home();
-    let options = build_options(home.path());
-
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
@@ -278,10 +274,14 @@ fn test_removing_the_only_signer_key_is_refused() {
 #[test]
 fn test_forced_removal_of_the_only_signer_key_reports_how_to_restore_it() {
     let (home, signer_kid) = signed_home();
-    let options = build_options(home.path());
-
-    let result =
-        remove_key_command(&options, None, signer_kid.clone(), true, unreachable_resign).unwrap();
+    let result = remove_key_command(
+        home.path(),
+        None,
+        signer_kid.clone(),
+        true,
+        unreachable_resign,
+    )
+    .unwrap();
 
     let warning = result
         .trust_store_warning
@@ -310,13 +310,18 @@ fn test_forced_removal_of_the_only_signer_key_reports_how_to_restore_it() {
 fn test_forced_removal_of_the_signer_key_still_hands_the_signature_over() {
     let (home, signer_kid) = signed_home();
     let rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
     let called = Cell::new(false);
 
-    let result = remove_key_command(&options, None, signer_kid.clone(), true, |_member_handle| {
-        called.set(true);
-        Ok(signing_execution(&home, None))
-    })
+    let result = remove_key_command(
+        home.path(),
+        None,
+        signer_kid.clone(),
+        true,
+        |_member_handle| {
+            called.set(true);
+            Ok(signing_session(&home, None))
+        },
+    )
     .unwrap();
 
     assert!(called.get());
@@ -333,9 +338,7 @@ fn test_forced_removal_of_the_signer_key_still_hands_the_signature_over() {
 fn test_activate_reports_the_key_the_trust_store_is_still_signed_by() {
     let (home, signer_kid) = signed_home();
     let spare_kid = add_generated_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
-
-    let result = activate_key_command(&options, None, Some(spare_kid.to_string())).unwrap();
+    let result = activate_key_command(home.path(), None, Some(spare_kid.to_string())).unwrap();
 
     assert_eq!(result.kid, spare_kid.as_str());
     assert_eq!(
@@ -353,9 +356,7 @@ fn test_activate_reports_a_trust_store_it_could_not_read() {
     let (home, _signer_kid) = signed_home();
     let spare_kid = add_generated_key(home.path(), ALICE_MEMBER_HANDLE);
     store_unreadable_trust_store(&home);
-    let options = build_options(home.path());
-
-    let result = activate_key_command(&options, None, Some(spare_kid.to_string())).unwrap();
+    let result = activate_key_command(home.path(), None, Some(spare_kid.to_string())).unwrap();
 
     assert_eq!(result.kid, spare_kid.as_str());
     assert!(result.trust_store_signer_kid.is_none());
@@ -375,11 +376,13 @@ fn test_activate_reports_a_trust_store_it_could_not_read() {
 fn test_forced_removal_proceeds_when_the_signature_cannot_be_handed_over() {
     let (home, signer_kid) = signed_home();
     let rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
-
-    let result = remove_key_command(&options, None, signer_kid.clone(), true, |_member_handle| {
-        Err(build_reset_required_error())
-    })
+    let result = remove_key_command(
+        home.path(),
+        None,
+        signer_kid.clone(),
+        true,
+        |_member_handle| Err(build_reset_required_error()),
+    )
     .unwrap();
 
     let warning = result
@@ -412,10 +415,8 @@ fn test_forced_removal_proceeds_when_the_signature_cannot_be_handed_over() {
 fn test_removal_without_force_stops_when_the_signature_cannot_be_handed_over() {
     let (home, signer_kid) = signed_home();
     let _rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
-
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
@@ -439,10 +440,8 @@ fn test_removal_without_force_stops_when_the_signature_cannot_be_handed_over() {
 fn test_removal_stops_when_the_stored_trust_store_cannot_be_read() {
     let (home, signer_kid) = signed_home();
     store_unreadable_trust_store(&home);
-    let options = build_options(home.path());
-
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
@@ -461,10 +460,14 @@ fn test_removal_stops_when_the_stored_trust_store_cannot_be_read() {
 fn test_forced_removal_reports_a_trust_store_that_could_not_be_read() {
     let (home, signer_kid) = signed_home();
     store_unreadable_trust_store(&home);
-    let options = build_options(home.path());
-
-    let result =
-        remove_key_command(&options, None, signer_kid.clone(), true, unreachable_resign).unwrap();
+    let result = remove_key_command(
+        home.path(),
+        None,
+        signer_kid.clone(),
+        true,
+        unreachable_resign,
+    )
+    .unwrap();
 
     let warning = result
         .trust_store_warning
@@ -484,13 +487,11 @@ fn test_forced_removal_reports_a_trust_store_that_could_not_be_read() {
 fn test_removal_classifies_through_the_trust_directory_it_opened() {
     let (home, signer_kid) = signed_home();
     let _rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
-
     let swap_home = home.path().to_path_buf();
     set_post_member_resolution_hook(move || swap_trust_directory(&swap_home));
 
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
@@ -523,11 +524,11 @@ fn test_hand_over_is_refused_when_the_signing_identity_resolves_another_trust_di
     set_post_member_resolution_hook(move || swap_trust_directory_with_copy(&swap_home));
 
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
-        |_member_handle| Ok(signing_execution(&home, None)),
+        |_member_handle| Ok(signing_session(&home, None)),
     )
     .expect_err("a hand-over must not re-sign a trust store the removal never looked at");
 
@@ -568,11 +569,11 @@ fn test_hand_over_is_refused_when_the_signing_identity_resolves_another_keystore
     set_post_member_resolution_hook(move || swap_keystore_path(&swap_home));
 
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
-        |_member_handle| Ok(signing_execution(&home, None)),
+        |_member_handle| Ok(signing_session(&home, None)),
     )
     .expect_err(
         "a hand-over must not re-sign through a keystore the removal never decided against",
@@ -603,14 +604,12 @@ fn test_hand_over_is_refused_when_the_signing_identity_resolves_another_keystore
 fn test_removal_stops_when_the_hand_over_leaves_the_signature_in_place() {
     let (home, signer_kid) = signed_home();
     let _rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let options = build_options(home.path());
-
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
-        |_member_handle| Ok(signing_execution(&home, Some(&signer_kid))),
+        |_member_handle| Ok(signing_session(&home, Some(&signer_kid))),
     )
     .expect_err("a signature that stayed on the removed key must stop the removal");
 
@@ -634,7 +633,7 @@ fn test_a_deletion_that_failed_after_the_hand_over_names_both_keys() {
     let options = build_options(home.path());
 
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,
@@ -644,7 +643,7 @@ fn test_a_deletion_that_failed_after_the_hand_over_names_both_keys() {
             let kept = key_dir(&home, &signer_kid).join("nested");
             fs::create_dir(&kept).unwrap();
             fs::write(kept.join("kept.txt"), b"kept").unwrap();
-            Ok(signing_execution(&home, None))
+            Ok(signing_session(&home, None))
         },
     )
     .expect_err("a key directory holding an entry that cannot be deleted stops the removal");
@@ -683,7 +682,7 @@ fn test_a_removal_the_keystore_refuses_stops_before_the_hand_over() {
     let options = build_options(home.path());
 
     let error = remove_key_command(
-        &options,
+        home.path(),
         None,
         signer_kid.clone(),
         false,

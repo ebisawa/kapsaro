@@ -16,8 +16,8 @@ pub use artifact::{setup_unapproved_file_read_fixture, setup_unapproved_kv_read_
 pub use execution::cmd;
 #[cfg(unix)]
 pub use execution::{
-    kapsaro_bin, kapsaro_std_cmd, run_command_with_pty, run_command_with_pty_script,
-    run_command_with_pty_script_at_prompt,
+    kapsaro_bin, kapsaro_std_cmd, run_command_with_optional_prompt_pty, run_command_with_pty,
+    run_command_with_pty_script, run_command_with_pty_script_at_prompt,
 };
 pub use kapsaro_test_support::constants::{
     ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE, TEST_MEMBER_HANDLE,

@@ -129,6 +129,7 @@ enum ErrorRepr {
         source: Option<BoxedSource>,
     },
     Config {
+        rule: Option<String>,
         message: String,
     },
     NotFound {
@@ -177,14 +178,14 @@ impl Error {
 
     /// The validation rule this error was refused under, if there was one.
     ///
-    /// Only a verification failure names a rule: the rule says which check the
-    /// input was held against, which is a question only verification asks. What
+    /// Verification and coded configuration failures may name a rule. What
     /// would repair the failure is a separate axis and is read from
     /// [`Error::recovery`] instead, so a rule and a recovery code never have to
     /// be told apart by their name.
     pub fn rule(&self) -> Option<&str> {
         match &self.repr {
             ErrorRepr::Verify { rule, .. } => Some(rule),
+            ErrorRepr::Config { rule, .. } => rule.as_deref(),
             _ => None,
         }
     }
@@ -215,7 +216,7 @@ impl Error {
             | ErrorRepr::Verify { message, .. }
             | ErrorRepr::Io { message, .. }
             | ErrorRepr::Parse { message, .. }
-            | ErrorRepr::Config { message }
+            | ErrorRepr::Config { message, .. }
             | ErrorRepr::NotFound { message }
             | ErrorRepr::InvalidArgument { message }
             | ErrorRepr::InvalidOperation { message } => message,
@@ -270,6 +271,18 @@ impl Error {
     /// Build a configuration error.
     pub fn build_config_error(message: impl Into<String>) -> Self {
         Self::from_repr(ErrorRepr::Config {
+            rule: None,
+            message: message.into(),
+        })
+    }
+
+    /// Build a configuration error associated with a stable validation rule.
+    pub fn build_config_error_with_rule(
+        rule: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::from_repr(ErrorRepr::Config {
+            rule: Some(rule.into()),
             message: message.into(),
         })
     }
@@ -379,7 +392,7 @@ impl Error {
             | ErrorRepr::Verify { message, .. }
             | ErrorRepr::Io { message, .. }
             | ErrorRepr::Parse { message, .. }
-            | ErrorRepr::Config { message }
+            | ErrorRepr::Config { message, .. }
             | ErrorRepr::NotFound { message }
             | ErrorRepr::InvalidArgument { message }
             | ErrorRepr::InvalidOperation { message } => message,
@@ -450,7 +463,7 @@ impl fmt::Display for Error {
             }
             ErrorRepr::Io { message, .. } => write!(formatter, "I/O error: {message}"),
             ErrorRepr::Parse { message, .. } => write!(formatter, "Parse error: {message}"),
-            ErrorRepr::Config { message } => {
+            ErrorRepr::Config { message, .. } => {
                 write!(formatter, "Configuration error: {message}")
             }
             ErrorRepr::NotFound { message } => write!(formatter, "Not found: {message}"),

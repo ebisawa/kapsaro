@@ -3,10 +3,10 @@
 
 use std::io::Cursor;
 
-use kapsaro_core::cli_api::app::rewrap::promotion::{
+use kapsaro_core::api::rewrap::promotion::{
     PromotionReviewFailure, PromotionReviewPrompt, PromotionReviewView,
 };
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::api::trust::TrustApprovalCandidate;
 
 use super::{confirm_incoming_promotions_with_reader, promotion_prompt_label};
 

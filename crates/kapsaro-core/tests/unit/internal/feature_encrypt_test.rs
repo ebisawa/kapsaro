@@ -5,7 +5,6 @@
 //!
 //! Tests for encryption use cases.
 
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
@@ -15,6 +14,7 @@ use crate::feature::verify::kv::signature::verify_kv_document;
 use crate::format::kv::document::parse_kv_document;
 use crate::model::file_enc::FileEncDocument;
 use crate::model::wire::format::FILE_ENC_V1;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_key;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
 use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
@@ -152,9 +152,10 @@ fn test_encrypt_kv_document_via_inner_api() {
 
     // Verify signer_pub is always embedded in output signature
     let doc = parse_kv_document(&encrypted).unwrap();
-    let sig_token = &doc.signature_token;
-    let sig = crate::format::schema::document::parse_kv_signature_token(sig_token).unwrap();
-    assert_eq!(sig.signer_pub.protected.subject_handle, ALICE_MEMBER_HANDLE);
+    assert_eq!(
+        doc.signature().signer_pub.protected.subject_handle,
+        ALICE_MEMBER_HANDLE
+    );
 
     // Decrypt and verify
     let verified_doc = verify_kv_document(&doc).unwrap();

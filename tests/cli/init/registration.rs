@@ -26,13 +26,13 @@ fn test_init_registers_member() {
     assert!(member_file.exists());
 
     let member_json = fs::read_to_string(&member_file).unwrap();
-    let public_key: kapsaro_core::cli_api::test_support::domain::public_key::PublicKey =
+    let public_key: kapsaro_core::test_support::domain::public_key::PublicKey =
         serde_json::from_str(&member_json).unwrap();
 
     assert_eq!(public_key.protected.subject_handle, TEST_MEMBER_HANDLE);
     assert_eq!(
         public_key.protected.format,
-        kapsaro_core::cli_api::test_support::domain::wire::format::PUBLIC_KEY_V1
+        kapsaro_core::test_support::domain::wire::format::PUBLIC_KEY_V1
     );
 }
 

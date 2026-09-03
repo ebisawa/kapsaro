@@ -11,10 +11,10 @@ use crate::cli::common::output::text::print_warning_line;
 use crate::cli::common::output::text::registration::{
     print_created_workspace_summary, print_registration_next_steps,
 };
-use kapsaro_core::cli_api::app::registration::types::{
+use crate::cli::common::presentation::format_kid_display;
+use kapsaro_core::api::registration::types::{
     MemberKeySetupResult, RegistrationOutcome, RegistrationResult,
 };
-use kapsaro_core::cli_api::presentation::kid::format_kid_display;
 use kapsaro_core::Error;
 
 pub(super) fn print_registration_outcome(outcome: &RegistrationOutcome) -> Result<(), Error> {

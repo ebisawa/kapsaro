@@ -18,7 +18,6 @@ use super::parse::token_source;
 
 pub(super) struct ValidatedKvTokens {
     pub entries: Vec<KvEncEntry>,
-    pub signature_token: String,
     pub signature: KvFileSignature,
 }
 
@@ -36,21 +35,14 @@ pub(super) fn validate_kv_tokens(
                 entries.push(validate_entry_token(key, token, source_name)?);
             }
             KvEncLine::Sig { token } => {
-                signature = Some(ValidatedSignature {
-                    token: token.clone(),
-                    signature: validate_signature_token(token, source_name)?,
-                });
+                signature = Some(validate_signature_token(token, source_name)?);
             }
             _ => {}
         }
     }
 
     let signature = signature.ok_or_else(missing_sig_error)?;
-    Ok(ValidatedKvTokens {
-        entries,
-        signature_token: signature.token,
-        signature: signature.signature,
-    })
+    Ok(ValidatedKvTokens { entries, signature })
 }
 
 pub(super) fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {
@@ -95,11 +87,6 @@ fn validate_entry_token(key: &str, token: &str, source_name: &str) -> Result<KvE
 
 fn validate_signature_token(token: &str, source_name: &str) -> Result<KvFileSignature> {
     parse_kv_signature_document_with_source(token, &token_source(source_name, "SIG token"))
-}
-
-struct ValidatedSignature {
-    token: String,
-    signature: KvFileSignature,
 }
 
 /// One line a kv-enc document must carry exactly once, at a known position.

@@ -13,10 +13,10 @@ use std::str::Utf8Error;
 use kapsaro_core::api::file::FileEncArtifact;
 use kapsaro_core::api::kv::KvEncArtifact;
 use kapsaro_core::api::operation::OperationOptions;
-use kapsaro_core::cli_api::presentation::limits::{
-    MAX_JSON_DOCUMENT_READ_SIZE, MAX_KV_ENC_FILE_SIZE,
-};
 use kapsaro_core::{Error, ErrorKind, Result};
+
+const MAX_JSON_DOCUMENT_READ_SIZE: usize = 24 * 1024 * 1024;
+const MAX_KV_ENC_FILE_SIZE: usize = 16 * 1024 * 1024;
 
 #[test]
 fn file_artifact_load_rejects_over_file_enc_read_limit() {

@@ -103,7 +103,6 @@ fn test_verify_kv_document_rejects_wrap_count_over_limit() {
         },
         String::new(),
         Vec::new(),
-        "invalid".to_string(),
         test_signature(),
     );
 
@@ -178,7 +177,6 @@ fn test_verify_kv_document_rejects_duplicate_wrap_rh() {
         },
         String::new(),
         Vec::new(),
-        "invalid".to_string(),
         test_signature(),
     );
 

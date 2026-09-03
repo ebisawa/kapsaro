@@ -22,10 +22,7 @@ fn test_find_key_matches_same_key_with_different_comments() {
     let key_no_comment = decode_ssh_public_key_blob(ED25519_KEY_NO_COMMENT).unwrap();
     let key_with_comment = decode_ssh_public_key_blob(ED25519_KEY_WITH_COMMENT).unwrap();
 
-    let identities = vec![AgentIdentity::new(
-        key_with_comment,
-        "test-key-1".to_string(),
-    )];
+    let identities = vec![AgentIdentity::new(key_with_comment)];
     let result = find_key_in_agent(&identities, &key_no_comment).unwrap();
     assert!(result, "key should match regardless of comment difference");
 }
@@ -35,7 +32,7 @@ fn test_find_key_matches_identical_keys() {
     let key1 = decode_ssh_public_key_blob(ED25519_KEY_WITH_COMMENT).unwrap();
     let key2 = decode_ssh_public_key_blob(ED25519_KEY_WITH_COMMENT).unwrap();
 
-    let identities = vec![AgentIdentity::new(key1, "test-key-1".to_string())];
+    let identities = vec![AgentIdentity::new(key1)];
     let result = find_key_in_agent(&identities, &key2).unwrap();
     assert!(result);
 }
@@ -45,7 +42,7 @@ fn test_find_key_no_match_different_key() {
     let agent_key = decode_ssh_public_key_blob(ED25519_OTHER_KEY).unwrap();
     let target_key = decode_ssh_public_key_blob(ED25519_KEY_NO_COMMENT).unwrap();
 
-    let identities = vec![AgentIdentity::new(agent_key, "test-key-2".to_string())];
+    let identities = vec![AgentIdentity::new(agent_key)];
     let result = find_key_in_agent(&identities, &target_key).unwrap();
     assert!(!result);
 }
@@ -61,7 +58,7 @@ fn test_find_key_empty_identities() {
 #[test]
 fn test_validate_agent_has_keys_accepts_loaded_identity() {
     let key = decode_ssh_public_key_blob(ED25519_KEY_WITH_COMMENT).unwrap();
-    let identities = vec![AgentIdentity::new(key, "test-key-1".to_string())];
+    let identities = vec![AgentIdentity::new(key)];
 
     let result = validate_agent_has_keys(&identities, std::path::Path::new("/tmp/agent.sock"));
 

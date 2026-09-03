@@ -13,20 +13,22 @@ use crate::io::ssh::SshError;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 use zeroize::Zeroizing;
 
 /// Default implementation of `SshKeygen` that invokes the system `ssh-keygen` binary.
 pub struct DefaultSshKeygen {
     ssh_keygen_path: String,
+    agent_socket: Option<PathBuf>,
 }
 
 impl DefaultSshKeygen {
-    /// Create a new `DefaultSshKeygen` using the given binary path.
-    pub fn new(ssh_keygen_path: impl Into<String>) -> Self {
+    /// Bind ssh-keygen to its binary and optional caller-selected agent socket.
+    pub fn new(ssh_keygen_path: impl Into<String>, agent_socket: Option<PathBuf>) -> Self {
         Self {
             ssh_keygen_path: ssh_keygen_path.into(),
+            agent_socket,
         }
     }
 }
@@ -103,6 +105,7 @@ impl SshKeygen for DefaultSshKeygen {
             namespace,
             data,
             is_public_key,
+            self.agent_socket.clone(),
         )?;
         check_sign_output(&output, is_public_key)?;
         parse_sign_stdout(output.stdout, namespace, ssh_pubkey)
@@ -121,9 +124,10 @@ fn execute_sign_command(
     namespace: &str,
     data: &[u8],
     is_public_key: bool,
+    agent_socket: Option<PathBuf>,
 ) -> Result<std::process::Output> {
     let runner = if is_public_key {
-        SshCommandRunner::optional_agent(ssh_keygen_path.to_string())
+        SshCommandRunner::optional_agent(ssh_keygen_path.to_string(), agent_socket)
     } else {
         SshCommandRunner::without_agent(ssh_keygen_path.to_string())
     };

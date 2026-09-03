@@ -3,8 +3,8 @@
 
 //! Unit tests for feature/member_add module
 
-use crate::cli_api::test_support::operations::member::add::add_member_from_file;
 use crate::io::workspace::members::test_support::load_incoming_member_files;
+use crate::test_support::operations::member::add::add_member_from_file;
 use crate::test_utils::setup_test_workspace;
 use serde_json::Value;
 use std::fs;

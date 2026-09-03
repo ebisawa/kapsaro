@@ -8,9 +8,6 @@
 //! error paths such as a wrap set with no entry for the local key, empty entries,
 //! and a wrap entry whose recipient handle contradicts the selected key.
 
-use crate::cli_api::test_support::storage::keystore::storage::{
-    list_kids, load_private_key, load_public_key,
-};
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::decode_kem_secret_key;
 use crate::feature::context::crypto::CryptoContext;
@@ -37,6 +34,9 @@ use crate::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
 use crate::model::file_enc::FileEncDocument;
 use crate::model::kv_enc::document::KvEncDocument;
 use crate::model::public_key::PublicKey;
+use crate::test_support::storage::keystore::storage::{
+    list_kids, load_private_key, load_public_key,
+};
 use crate::test_utils::keygen_helpers::{
     build_verified_private_key, build_verified_recipient_key, build_verified_recipient_keys,
 };
@@ -422,7 +422,7 @@ fn test_unwrap_master_key_from_wrap_item() {
     let ssh_pub =
         std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub")).unwrap();
     let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
         SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
     ));
     let private_key_plaintext =
@@ -479,7 +479,7 @@ fn test_hpke_aad_binding_defence_in_depth() {
     let ssh_pub =
         std::fs::read_to_string(temp_dir.path().join(".ssh").join("test_ed25519.pub")).unwrap();
     let backend: Box<dyn SignatureBackend> = Box::new(SshKeygenBackend::new(
-        Box::new(DefaultSshKeygen::new("ssh-keygen")),
+        Box::new(DefaultSshKeygen::new("ssh-keygen", None)),
         SshKeyDescriptor::from_path(temp_dir.path().join(".ssh").join("test_ed25519")),
     ));
     let private_key_plaintext =

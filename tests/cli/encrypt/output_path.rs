@@ -8,7 +8,7 @@ use crate::cli::common::{
     setup_workspace, ALICE_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use crate::test_utils::with_temp_cwd;
-use kapsaro_core::cli_api::test_support::domain::wire::format;
+use kapsaro_core::test_support::domain::wire::format;
 use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
 use std::fs;

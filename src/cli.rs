@@ -54,7 +54,6 @@ use clap::{Parser, Subcommand};
 use crate::cli::common::env_mode::ensure_env_mode_command_allowed;
 use crate::cli::common::output::text::print_local_state_diagnostics;
 use kapsaro_core::api::diagnostics::take_local_state_warnings;
-use kapsaro_core::cli_api::app::trust::CommandCapability;
 use kapsaro_core::Error;
 use tracing::debug;
 
@@ -119,6 +118,58 @@ enum Commands {
 
     /// Remove a secret
     Unset(UnsetArgs),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommandCapability {
+    Config,
+    Decrypt,
+    Doctor,
+    Encrypt,
+    Get,
+    Import,
+    Init,
+    Inspect,
+    Join,
+    Key,
+    List,
+    Member,
+    Rewrap,
+    Run,
+    Set,
+    Trust,
+    Unset,
+}
+
+impl CommandCapability {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Config => "config",
+            Self::Decrypt => "decrypt",
+            Self::Doctor => "doctor",
+            Self::Encrypt => "encrypt",
+            Self::Get => "get",
+            Self::Import => "import",
+            Self::Init => "init",
+            Self::Inspect => "inspect",
+            Self::Join => "join",
+            Self::Key => "key",
+            Self::List => "list",
+            Self::Member => "member",
+            Self::Rewrap => "rewrap",
+            Self::Run => "run",
+            Self::Set => "set",
+            Self::Trust => "trust",
+            Self::Unset => "unset",
+        }
+    }
+
+    pub(crate) fn allows_env_key_mode(self) -> bool {
+        matches!(
+            self,
+            Self::Decrypt | Self::Doctor | Self::Get | Self::List | Self::Run
+        )
+    }
 }
 
 pub(crate) fn parse() -> Cli {

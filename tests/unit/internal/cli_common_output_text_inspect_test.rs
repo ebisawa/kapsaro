@@ -4,8 +4,10 @@
 use console::{colors_enabled, set_colors_enabled};
 use serial_test::serial;
 
-use super::{colorize_inspect_line, format_inspect_banner_lines, format_inspect_output};
-use kapsaro_core::cli_api::app::file::inspect::{InspectOutput, InspectSection};
+use super::{
+    colorize_inspect_line, format_inspect_banner_lines, format_inspect_output, InspectOutput,
+    InspectSection,
+};
 
 struct StdoutColorGuard {
     enabled: bool,

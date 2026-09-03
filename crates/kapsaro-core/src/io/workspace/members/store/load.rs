@@ -302,7 +302,6 @@ where
         MAX_JSON_DOCUMENT_READ_SIZE,
         "PublicKey file",
     )?;
-    run_post_member_document_read_hook();
     let public_key = parse_public_key_str(&content, &source_name)?;
     Ok(LoadedMemberDocument {
         content,
@@ -369,36 +368,6 @@ where
         )));
     }
     Ok(())
-}
-
-// Fault-injection seam: runs once a member document has been read and before the
-// caller is handed what it read, which is the only window in which the entry a
-// caller is about to review can be replaced under it. Only a call point in the
-// production read reaches that window, so the seam lives here and compiles out
-// of production builds.
-#[cfg(test)]
-thread_local! {
-    static POST_MEMBER_DOCUMENT_READ_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
-        const { std::cell::RefCell::new(None) };
-}
-
-#[cfg(test)]
-fn run_post_member_document_read_hook() {
-    POST_MEMBER_DOCUMENT_READ_HOOK.with(|hook| {
-        if let Some(hook) = hook.borrow_mut().take() {
-            hook();
-        }
-    });
-}
-
-#[cfg(not(test))]
-fn run_post_member_document_read_hook() {}
-
-#[cfg(test)]
-pub(crate) fn set_post_member_document_read_hook(hook: impl FnOnce() + 'static) {
-    POST_MEMBER_DOCUMENT_READ_HOOK.with(|slot| {
-        *slot.borrow_mut() = Some(Box::new(hook));
-    });
 }
 
 #[cfg(test)]

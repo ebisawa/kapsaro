@@ -23,10 +23,12 @@ pub struct WorkspaceRoot {
 }
 
 impl WorkspaceRoot {
+    #[cfg(test)]
     pub fn members_dir(&self) -> PathBuf {
         self.root_path.join(MEMBERS_DIR_NAME)
     }
 
+    #[cfg(test)]
     pub fn secrets_dir(&self) -> PathBuf {
         self.root_path.join(SECRETS_DIR_NAME)
     }

@@ -8,6 +8,12 @@
 use crate::io::ssh::openssh_config::{
     extract_config_line_before_comment, parse_identity_agent, parse_quoted_value,
 };
+use std::collections::BTreeMap;
+use std::path::Path;
+
+fn parse(content: &str) -> crate::Result<Option<std::path::PathBuf>> {
+    parse_identity_agent(content, Path::new("/home/test"), &BTreeMap::new())
+}
 
 #[test]
 fn test_parse_quoted_value_double() {
@@ -46,7 +52,7 @@ fn test_parse_identity_agent_host_star() {
 Host *
     IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
     let path = result.unwrap();
     assert!(path.to_string_lossy().contains("1password"));
@@ -57,7 +63,7 @@ fn test_parse_identity_agent_global() {
     let config = r#"
 IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
 }
 
@@ -67,7 +73,7 @@ fn test_parse_identity_agent_none() {
 Host *
     IdentityAgent none
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_none());
 }
 
@@ -77,7 +83,7 @@ fn test_parse_identity_agent_case_insensitive() {
 host *
     identityagent "~/test.sock"
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
 }
 
@@ -88,7 +94,7 @@ IdentityAgent "/global/sock"
 Host *
     IdentityAgent "~/host_star/sock"
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
     let path = result.unwrap();
     assert!(path.to_string_lossy().contains("host_star"));
@@ -102,7 +108,7 @@ Host *
     # Another comment
     IdentityAgent "~/test.sock"  # Inline comment
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
 }
 
@@ -112,7 +118,7 @@ fn test_parse_identity_agent_single_quotes() {
 Host *
     IdentityAgent '~/test.sock'
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
 }
 
@@ -122,7 +128,7 @@ fn test_parse_identity_agent_no_quotes() {
 Host *
     IdentityAgent ~/test.sock
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
 }
 
@@ -135,7 +141,7 @@ Host example.com
 Host *
     IdentityAgent "~/host_star/sock"
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_some());
     let path = result.unwrap();
     assert!(path.to_string_lossy().contains("host_star"));
@@ -147,6 +153,6 @@ fn test_parse_identity_agent_not_found() {
 Host example.com
     User alice
 "#;
-    let result = parse_identity_agent(config).unwrap();
+    let result = parse(config).unwrap();
     assert!(result.is_none());
 }

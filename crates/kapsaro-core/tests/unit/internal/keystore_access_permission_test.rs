@@ -6,12 +6,10 @@
 
 #[cfg(unix)]
 mod unix_tests {
-    use crate::cli_api::test_support::storage::keystore::storage::{
-        load_private_key, load_public_key,
-    };
     use crate::io::keystore::access::KeystoreAccess;
     use crate::model::identity::{Kid, MemberHandle};
     use crate::support::warning::LocalStateWarningGuard;
+    use crate::test_support::storage::keystore::storage::{load_private_key, load_public_key};
     use crate::test_utils::{
         local_state_temp_dir, setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE,
     };

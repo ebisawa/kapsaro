@@ -12,14 +12,14 @@ use super::{
     build_activation_failure_error, ensure_kid_not_in_keystore, generate_and_save_key_with_access,
     publish_generated_key, AppKeyGenerationOptions, KeyGenerationHome,
 };
-use crate::app::context::ssh::{
-    build_ssh_signing_context_with_params, SshSigningContextResolution, SshSigningParams,
-};
-use crate::app_test_utils::{add_generated_key, build_test_command_options};
-use crate::config::types::SshSigningMethod;
+use crate::app_test_utils::add_generated_key;
 use crate::io::keystore::access::KeystoreAccess;
+use crate::io::ssh::protocol::build_sha256_fingerprint;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::model::ssh::SshDeterminismStatus;
+use crate::service::config::LocalStateSession;
 use crate::service::online::OnlineVerificationStatus;
+use crate::service::ssh::SshSigningContextResolution;
 use crate::support::warning::LocalStateWarningGuard;
 use crate::test_utils::{
     create_local_state_dir, local_state_temp_dir, setup_test_keystore_from_fixtures,
@@ -29,20 +29,20 @@ use crate::{Error, ErrorKind};
 
 /// The signing environment a generated key is attested with.
 fn build_test_ssh_context(home: &Path) -> SshSigningContextResolution {
+    let ssh_private_key_path = home.join(".ssh/test_ed25519");
     let ssh_public_key = fs::read_to_string(home.join(".ssh/test_ed25519.pub"))
         .unwrap()
         .trim()
         .to_string();
-    build_ssh_signing_context_with_params(
-        &SshSigningParams {
-            ssh_key: Some(home.join(".ssh/test_ed25519")),
-            signing_method: Some(SshSigningMethod::SshKeygen),
-            base_dir: Some(home.to_path_buf()),
-            check_determinism: true,
-        },
-        &ssh_public_key,
-    )
-    .unwrap()
+    let backend =
+        crate::test_utils::ed25519_backend::Ed25519DirectBackend::new(&ssh_private_key_path)
+            .unwrap();
+    SshSigningContextResolution {
+        fingerprint: build_sha256_fingerprint(&ssh_public_key).unwrap(),
+        public_key: ssh_public_key,
+        backend: Box::new(backend),
+        determinism: SshDeterminismStatus::Verified,
+    }
 }
 
 fn key_dir(home: &Path, member_handle: &str, kid: &Kid) -> std::path::PathBuf {
@@ -94,7 +94,8 @@ fn test_key_generation_home_creates_the_keystore_through_an_explicit_home_symlin
     create_local_state_dir(&outside);
     symlink(&outside, &home).unwrap();
 
-    let access = KeyGenerationHome::fix(&build_test_command_options(&home, None))
+    let local_state = LocalStateSession::open(&home).unwrap();
+    let access = KeyGenerationHome::fix(&local_state)
         .unwrap()
         .ensure_keystore_access()
         .unwrap();
@@ -103,29 +104,18 @@ fn test_key_generation_home_creates_the_keystore_through_an_explicit_home_symlin
     assert!(outside.join("keys").is_dir());
 }
 
-#[cfg(unix)]
 #[test]
-fn test_key_generation_home_creates_the_keystore_through_an_environment_home_symlink() {
-    use crate::app::context::options::CommonCommandOptions;
-    use crate::test_utils::EnvGuard;
-    use std::os::unix::fs::symlink;
-
-    let _guard = EnvGuard::new(&["KAPSARO_HOME"]);
+fn test_key_generation_home_creates_an_absent_local_state_home() {
     let temp = local_state_temp_dir();
-    let outside = temp.path().join("outside");
     let home = temp.path().join("home");
-    create_local_state_dir(&outside);
-    symlink(&outside, &home).unwrap();
-    std::env::set_var("KAPSARO_HOME", &home);
-
-    let options = CommonCommandOptions::new();
-    let access = KeyGenerationHome::fix(&options)
+    let local_state = LocalStateSession::open(&home).unwrap();
+    let access = KeyGenerationHome::fix(&local_state)
         .unwrap()
         .ensure_keystore_access()
         .unwrap();
 
     assert_eq!(access.root(), home.join("keys"));
-    assert!(outside.join("keys").is_dir());
+    assert!(home.join("keys").is_dir());
 }
 
 /// The local state directory is fixed before the SSH identity and the GitHub
@@ -145,9 +135,10 @@ fn test_a_key_lands_in_the_home_fixed_at_the_start_after_the_path_is_repointed()
     create_local_state_dir(&repointed_to);
     symlink(&started_in, &home).unwrap();
 
-    let fixed = KeyGenerationHome::fix(&build_test_command_options(&home, None)).unwrap();
+    let local_state = LocalStateSession::open(&home).unwrap();
     fs::remove_file(&home).unwrap();
     symlink(&repointed_to, &home).unwrap();
+    let fixed = KeyGenerationHome::fix(&local_state).unwrap();
 
     let saved = generate_and_save_key_with_access(AppKeyGenerationOptions {
         member_handle: BOB_MEMBER_HANDLE.to_string(),
@@ -180,7 +171,7 @@ fn test_a_key_whose_expiry_was_reached_never_enters_the_keystore() {
 
     let saved = generate_and_save_key_with_access(AppKeyGenerationOptions {
         member_handle: BOB_MEMBER_HANDLE.to_string(),
-        home: KeyGenerationHome::fix(&build_test_command_options(home.path(), None)).unwrap(),
+        home: KeyGenerationHome::fix(&LocalStateSession::open(home.path()).unwrap()).unwrap(),
         created_at: "2020-01-01T00:00:00Z".to_string(),
         expires_at: "2021-01-01T00:00:00Z".to_string(),
         no_activate: false,

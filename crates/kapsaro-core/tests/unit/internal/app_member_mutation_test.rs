@@ -6,13 +6,12 @@ use std::fs;
 use std::path::Path;
 
 use super::{evaluate_member_removal, remove_member};
-use crate::app_test_utils::build_test_signing_command_options;
-use crate::cli_api::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::format::token::TokenCodec;
 use crate::io::workspace::members::load_active_member_files;
+use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
 use serde_json::Value;
@@ -134,9 +133,7 @@ fn test_evaluate_member_removal_detects_file_enc_recipient() {
         "shared.json",
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let result = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("shared.json"));
@@ -158,9 +155,7 @@ fn test_evaluate_member_removal_detects_kv_enc_recipient() {
         "default.kvenc",
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let result = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("default.kvenc"));
@@ -181,9 +176,7 @@ fn test_evaluate_member_removal_ignores_unrelated_artifact() {
         "alice-only.json",
         &[ALICE_MEMBER_HANDLE],
     );
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let result = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert!(result.warnings.is_empty());
@@ -191,11 +184,9 @@ fn test_evaluate_member_removal_ignores_unrelated_artifact() {
 
 #[test]
 fn test_remove_member_deletes_active_member_file() {
-    let (temp_dir, workspace_dir) =
+    let (_temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let review = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let review = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
     let result = remove_member(&review).unwrap();
 
     assert_eq!(result.member_handle, BOB_MEMBER_HANDLE);
@@ -209,12 +200,10 @@ fn test_remove_member_deletes_active_member_file() {
 
 #[test]
 fn test_evaluate_member_removal_collects_warning_for_invalid_artifact() {
-    let (temp_dir, workspace_dir) =
+    let (_temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     fs::write(workspace_dir.join("secrets").join("broken.json"), "{broken").unwrap();
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let result = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert_eq!(result.warnings.len(), 1);
@@ -238,9 +227,7 @@ fn test_evaluate_member_removal_continues_after_tampered_artifact() {
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     tamper_file_artifact_signature(&workspace_dir, "tampered.json");
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let result = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("valid.json"));
@@ -260,9 +247,7 @@ fn test_evaluate_member_removal_collects_warning_for_invalid_signature() {
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     tamper_file_artifact_signature(&workspace_dir, "tampered.json");
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
-
-    let result = evaluate_member_removal(&options, BOB_MEMBER_HANDLE).unwrap();
+    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert_eq!(result.warnings.len(), 1);

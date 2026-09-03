@@ -3,7 +3,7 @@
 
 //! View builders for key command output.
 
-use kapsaro_core::cli_api::app::key::types::{KeyInfo, KeyListResult};
+use kapsaro_core::api::key::types::{KeyInfo, KeyListResult};
 
 pub(crate) enum KeyInfoView<'a> {
     Complete {

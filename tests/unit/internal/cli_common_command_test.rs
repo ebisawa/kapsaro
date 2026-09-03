@@ -1,161 +1,152 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
+//! Tests that CLI write sessions retain one opened workspace identity.
+//! Covers recipient resolution and repeated KV plans after the path is replaced.
 
-use crate::app_test_utils::build_test_command_options;
-use crate::cli::common::command::{
-    ensure_reviewed_artifact_unchanged, resolve_options_with_allow_expired_key,
-    resolve_options_with_read_trust_allowances, resolve_required_member_handle_with_prompt,
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use kapsaro_core::api::file::encrypt::{
+    execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
 };
+use kapsaro_core::api::kv::mutation::{
+    reevaluate_mutation_write_plan_after_review, resolve_mutation_write_plan,
+    set_kv_command_with_recipient_set_confirmation,
+};
+use kapsaro_core::api::kv::KvInputEntry;
+use kapsaro_core::api::secret::SecretString;
+use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
+use kapsaro_test_support::fixture::setup_test_workspace_from_fixtures;
+
+use crate::cli::common::context::CliContext;
 use crate::cli::options::CommonOptions;
-use crate::test_utils::{local_state_temp_dir, write_local_state_file, EnvGuard};
-use tempfile::TempDir;
+use crate::test_utils::EnvGuard;
 
-fn save_global_config(temp_home: &TempDir, lines: &[&str]) {
-    let config_path = temp_home.path().join("config.toml");
-    write_local_state_file(&config_path, lines.join("\n"));
+use super::{resolve_cli_write_session, set_pre_signing_key_load_hook, CliWriteSession};
+
+const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
+
+struct SwappedWorkspaceFixture {
+    _env: EnvGuard,
+    _home: tempfile::TempDir,
+    original_workspace: PathBuf,
+    replacement_workspace: PathBuf,
+    session: CliWriteSession,
 }
 
-#[test]
-fn test_reviewed_artifact_comparison_accepts_exact_content() {
-    ensure_reviewed_artifact_unchanged("artifact", "artifact", "read authorization").unwrap();
-}
+fn setup_swapped_workspace_session() -> SwappedWorkspaceFixture {
+    let env = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE", "KAPSARO_STRICT_KEY_CHECKING"]);
+    std::env::remove_var("KAPSARO_MEMBER_HANDLE");
+    std::env::remove_var("KAPSARO_STRICT_KEY_CHECKING");
+    let (home, workspace_path) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let original_workspace = home.path().join("workspace-original");
+    let replacement_source = home.path().join("workspace-replacement");
+    ensure_empty_workspace(&replacement_source);
 
-#[test]
-fn test_reviewed_artifact_comparison_rejects_tampered_content_before_verification() {
-    let error = ensure_reviewed_artifact_unchanged(
-        "reviewed artifact",
-        "signature-tampered artifact",
-        "read authorization",
+    let options = CommonOptions {
+        home: Some(home.path().to_path_buf()),
+        identity: Some(home.path().join(".ssh/test_ed25519")),
+        ssh_keygen: true,
+        workspace: Some(workspace_path.clone()),
+        ..CommonOptions::default()
+    };
+    let context = CliContext::resolve(&options).unwrap();
+    let directories = WorkspaceWriteDirectories::open(&workspace_path).unwrap();
+
+    let original_for_swap = original_workspace.clone();
+    let replacement_for_swap = replacement_source.clone();
+    let workspace_for_swap = workspace_path.clone();
+    set_pre_signing_key_load_hook(move || {
+        fs::rename(&workspace_for_swap, &original_for_swap).unwrap();
+        fs::rename(&replacement_for_swap, &workspace_for_swap).unwrap();
+    });
+
+    let session = resolve_cli_write_session(
+        &context,
+        &options,
+        directories,
+        Some(ALICE_MEMBER_HANDLE.to_string()),
+        false,
     )
-    .unwrap_err();
+    .unwrap();
 
-    assert_eq!(error.rule(), Some("E_TRUST_TARGET_CHANGED"));
-    assert!(error
-        .format_user_message()
-        .contains("run the command again"));
-}
-
-#[test]
-fn test_resolve_required_member_handle_with_prompt_uses_config_without_prompt() {
-    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = local_state_temp_dir();
-    env::set_var("KAPSARO_HOME", home.path());
-    save_global_config(&home, &["member_handle = \"config-member\""]);
-    let options = build_test_command_options(home.path(), None);
-
-    let mut prompted = false;
-    let member_handle =
-        resolve_required_member_handle_with_prompt(&options, None, false, false, || {
-            prompted = true;
-            Ok("prompt-member".to_string())
-        })
-        .unwrap();
-
-    assert_eq!(member_handle, "config-member");
-    assert!(!prompted);
-}
-
-#[test]
-fn test_resolve_required_member_handle_with_prompt_uses_prompt_when_enabled() {
-    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = local_state_temp_dir();
-    env::set_var("KAPSARO_HOME", home.path());
-    let options = build_test_command_options(home.path(), None);
-
-    let mut prompted = false;
-    let member_handle =
-        resolve_required_member_handle_with_prompt(&options, None, true, true, || {
-            prompted = true;
-            Ok("prompt-member".to_string())
-        })
-        .unwrap();
-
-    assert_eq!(member_handle, "prompt-member");
-    assert!(prompted);
-}
-
-#[test]
-fn test_resolve_required_member_handle_with_prompt_errors_when_prompt_disabled() {
-    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = local_state_temp_dir();
-    env::set_var("KAPSARO_HOME", home.path());
-    let options = build_test_command_options(home.path(), None);
-
-    let error = resolve_required_member_handle_with_prompt(&options, None, false, true, || {
-        panic!("prompt must not be called when prompting is disabled")
-    })
-    .unwrap_err();
-
-    assert!(error
-        .format_user_message()
-        .contains("member handle not configured"));
-    assert!(!error
-        .format_user_message()
-        .contains("Run in an interactive terminal for prompt"));
-}
-
-#[test]
-fn test_resolve_required_member_handle_with_prompt_errors_with_hint_when_prompt_unavailable() {
-    let _guard = EnvGuard::new(&["KAPSARO_HOME", "KAPSARO_MEMBER_HANDLE"]);
-    let home = local_state_temp_dir();
-    env::set_var("KAPSARO_HOME", home.path());
-    let options = build_test_command_options(home.path(), None);
-
-    let error = resolve_required_member_handle_with_prompt(&options, None, true, false, || {
-        panic!("prompt must not be called when prompt is unavailable")
-    })
-    .unwrap_err();
-
-    assert!(error
-        .format_user_message()
-        .contains("member handle not configured"));
-    assert!(error
-        .format_user_message()
-        .contains("Run in an interactive terminal for prompt"));
-}
-
-#[test]
-fn test_resolve_options_with_allow_expired_key_ignores_allow_non_member_config() {
-    let _guard = EnvGuard::new(&[
-        "KAPSARO_HOME",
-        "KAPSARO_ALLOW_EXPIRED_KEY",
-        "KAPSARO_ALLOW_NON_MEMBER",
-    ]);
-    let home = local_state_temp_dir();
-    env::set_var("KAPSARO_HOME", home.path());
-    env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
-    let options = common_options(home.path());
-
-    let resolved = resolve_options_with_allow_expired_key(&options, false).unwrap();
-
-    assert!(!resolved.allow_expired_key);
-    assert!(!resolved.allow_non_member);
-}
-
-#[test]
-fn test_resolve_options_with_read_trust_allowances_rejects_invalid_allow_non_member_config() {
-    let _guard = EnvGuard::new(&[
-        "KAPSARO_HOME",
-        "KAPSARO_ALLOW_EXPIRED_KEY",
-        "KAPSARO_ALLOW_NON_MEMBER",
-    ]);
-    let home = local_state_temp_dir();
-    env::set_var("KAPSARO_HOME", home.path());
-    env::set_var("KAPSARO_ALLOW_NON_MEMBER", "maybe");
-    let options = common_options(home.path());
-
-    let error = resolve_options_with_read_trust_allowances(&options, false, false).unwrap_err();
-
-    assert!(error
-        .format_user_message()
-        .contains("Invalid allow_non_member value"));
-}
-
-fn common_options(home: &std::path::Path) -> CommonOptions {
-    CommonOptions {
-        home: Some(home.to_path_buf()),
-        ..Default::default()
+    SwappedWorkspaceFixture {
+        _env: env,
+        _home: home,
+        original_workspace,
+        replacement_workspace: workspace_path,
+        session,
     }
+}
+
+fn ensure_empty_workspace(path: &Path) {
+    fs::create_dir_all(path.join("members/active")).unwrap();
+    fs::create_dir_all(path.join("members/incoming")).unwrap();
+    fs::create_dir_all(path.join("secrets")).unwrap();
+}
+
+#[test]
+fn test_cli_write_session_encrypt_uses_opened_workspace_after_path_replacement() {
+    let fixture = setup_swapped_workspace_session();
+
+    let command = resolve_encrypt_file_command(
+        fixture.session.directories(),
+        fixture.session.trust(),
+        fixture.session.options(),
+        b"secret".to_vec(),
+    )
+    .unwrap();
+    let encrypted =
+        execute_encrypt_file_command_with_recipient_set_confirmation(&command, |_, _| Ok(true))
+            .unwrap();
+    let document: serde_json::Value = serde_json::from_str(&encrypted).unwrap();
+    let recipient_handles = document["protected"]["wrap"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["rh"].as_str().unwrap())
+        .collect::<Vec<_>>();
+
+    assert_eq!(recipient_handles, vec![ALICE_MEMBER_HANDLE]);
+    assert!(fixture
+        .replacement_workspace
+        .join("members/active")
+        .exists());
+}
+
+#[test]
+fn test_cli_write_session_reuses_opened_workspace_for_repeated_kv_plans() {
+    let fixture = setup_swapped_workspace_session();
+
+    for (key, value) in [("FIRST", "one"), ("SECOND", "two")] {
+        let plan = resolve_mutation_write_plan(
+            fixture.session.directories(),
+            fixture.session.trust(),
+            fixture.session.options(),
+            None,
+            true,
+        )
+        .unwrap();
+        let plan = reevaluate_mutation_write_plan_after_review(plan).unwrap();
+        set_kv_command_with_recipient_set_confirmation(
+            &plan,
+            vec![KvInputEntry::new(
+                key.to_string(),
+                SecretString::new(value.to_string()),
+            )],
+            None,
+            |_, _| Ok(true),
+        )
+        .unwrap();
+    }
+
+    assert!(fixture
+        .original_workspace
+        .join("secrets/default.kvenc")
+        .is_file());
+    assert!(!fixture
+        .replacement_workspace
+        .join("secrets/default.kvenc")
+        .exists());
 }

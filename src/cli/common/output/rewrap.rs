@@ -6,9 +6,23 @@
 use crate::cli::common::output::json::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_json;
 use crate::cli::common::output::print_json_or_text;
 use crate::cli::common::output::text::rewrap::print_rewrap_batch_outcome as print_rewrap_batch_text;
-use kapsaro_core::cli_api::app::rewrap::types::RewrapBatchOutcome;
-use kapsaro_core::cli_api::presentation::path::format_path_relative_to_cwd;
+use crate::cli::common::presentation::format_path_relative_to_cwd;
 use kapsaro_core::{Error, Result};
+use std::path::PathBuf;
+
+pub(crate) struct RewrapFileSuccess {
+    pub(crate) output_path: PathBuf,
+}
+
+pub(crate) struct RewrapFileFailure {
+    pub(crate) output_path: PathBuf,
+    pub(crate) error_message: String,
+}
+
+pub(crate) struct RewrapBatchOutcome {
+    pub(crate) processed_files: Vec<RewrapFileSuccess>,
+    pub(crate) failed_files: Vec<RewrapFileFailure>,
+}
 
 pub(crate) struct RewrapFailureView {
     pub(crate) path: String,

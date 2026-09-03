@@ -4,8 +4,8 @@
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, format_failed_promotion_review_lines,
 };
-use kapsaro_core::cli_api::app::rewrap::promotion::PromotionReviewFailure;
-use kapsaro_core::cli_api::app::trust::TrustApprovalCandidate;
+use kapsaro_core::api::rewrap::promotion::PromotionReviewFailure;
+use kapsaro_core::api::trust::TrustApprovalCandidate;
 
 fn candidate(
     member_handle: impl Into<String>,

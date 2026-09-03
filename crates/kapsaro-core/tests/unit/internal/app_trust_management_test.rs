@@ -5,40 +5,31 @@ use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::symlink;
-use std::path::Path;
-use std::sync::{Arc, Barrier};
-use std::thread;
 
 use crate::api::key::KeyContext;
-use crate::app::context::crypto::load_crypto_context_with_access;
-use crate::app::context::execution::ExecutionContext;
-use crate::app::trust::list::{RecipientSetListItem, TrustListItem};
-use crate::app::trust::management::{
-    execute_purge, execute_recipient_set_purge, list_purge_candidates,
-    list_recipient_set_purge_candidates, remove_known_key_command, remove_recipient_set_command,
-    PurgeOutcome, ReviewedPurgeCandidates,
-};
-use crate::app::trust::store::{
-    execute_trust_store_mutation_with_execution, execute_trust_store_mutation_with_prepare_hook,
-    TrustStoreWriteBinding,
-};
 use crate::app_test_utils::{
-    build_test_command_options, build_test_execution_context, load_test_trust_store,
+    build_test_command_options, build_test_trust_command_session, load_test_trust_store,
     rotate_active_key,
 };
-use crate::cli_api::test_support::storage::trust::store::save_trust_store;
 use crate::feature::trust::recipient_sets::compute_recipient_set_hash;
 use crate::feature::trust::signature::sign_trust_store;
-use crate::feature::trust::store_mutation::{TrustStoreMutation, TrustStoreMutationMode};
-use crate::io::keystore::access::KeystoreAccess;
+use crate::feature::trust::store_mutation::TrustStoreMutation;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{
     KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord, TrustStoreProtected,
 };
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::trust::list::{RecipientSetListItem, TrustListItem};
+use crate::service::trust::management::{
+    execute_purge, execute_recipient_set_purge, list_purge_candidates,
+    list_recipient_set_purge_candidates, remove_known_key_command, remove_recipient_set_command,
+    PurgeOutcome, ReviewedPurgeCandidates,
+};
+use crate::service::trust::store::execute_trust_store_mutation_with_session_prepare_hook;
+use crate::service::trust::TrustCommandSession;
 use crate::support::warning::LocalStateWarningGuard;
-use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
+use crate::test_support::storage::trust::store::save_trust_store;
 use crate::test_utils::{
     local_state_temp_dir, member_handle, setup_member_key_context,
     setup_test_keystore_from_fixtures,
@@ -58,23 +49,21 @@ const SID_NEW: &str = "00000000-0000-4000-8000-000000000003";
 
 #[test]
 fn test_purge_entrypoints_require_reviewed_candidate_types() {
-    let _list_known: fn(
-        &ExecutionContext,
+    let _list_known: for<'a> fn(
+        &'a TrustCommandSession,
         OffsetDateTime,
-    ) -> crate::Result<ReviewedPurgeCandidates<TrustListItem>> = list_purge_candidates;
-    let _execute_known: fn(
-        &ExecutionContext,
-        &ReviewedPurgeCandidates<TrustListItem>,
+    ) -> crate::Result<ReviewedPurgeCandidates<'a, TrustListItem>> = list_purge_candidates;
+    let _execute_known: for<'a> fn(
+        &ReviewedPurgeCandidates<'a, TrustListItem>,
     ) -> crate::Result<PurgeOutcome> = execute_purge;
-    let _list_recipient_sets: fn(
-        &ExecutionContext,
+    let _list_recipient_sets: for<'a> fn(
+        &'a TrustCommandSession,
         OffsetDateTime,
-    )
-        -> crate::Result<ReviewedPurgeCandidates<RecipientSetListItem>> =
-        list_recipient_set_purge_candidates;
-    let _execute_recipient_sets: fn(
-        &ExecutionContext,
-        &ReviewedPurgeCandidates<RecipientSetListItem>,
+    ) -> crate::Result<
+        ReviewedPurgeCandidates<'a, RecipientSetListItem>,
+    > = list_recipient_set_purge_candidates;
+    let _execute_recipient_sets: for<'a> fn(
+        &ReviewedPurgeCandidates<'a, RecipientSetListItem>,
     ) -> crate::Result<PurgeOutcome> = execute_recipient_set_purge;
 }
 
@@ -161,29 +150,6 @@ fn verified_trust_store(home: &TempDir) -> TrustStoreProtected {
         .protected
 }
 
-fn build_execution_context_from_home(home: &Path) -> ExecutionContext {
-    let access = KeystoreAccess::open_from_home(home).unwrap();
-    let ssh_public_key = fs::read_to_string(home.join(".ssh/test_ed25519.pub")).unwrap();
-    let backend = Ed25519DirectBackend::new(&home.join(".ssh/test_ed25519")).unwrap();
-    let member_handle = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
-    let key_ctx = load_crypto_context_with_access(
-        access,
-        member_handle.clone(),
-        Box::new(backend),
-        ssh_public_key,
-        None,
-        None,
-    )
-    .unwrap();
-    ExecutionContext::from_test_parts(
-        member_handle,
-        KeyContext::from_inner(key_ctx),
-        None,
-        Some(home.to_path_buf()),
-    )
-    .unwrap()
-}
-
 #[test]
 fn test_remove_known_key_command_rejects_expired_signing_key() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
@@ -194,9 +160,9 @@ fn test_remove_known_key_command_rejects_expired_signing_key() {
         ALICE_MEMBER_HANDLE,
         "2020-01-01T00:00:00Z",
     );
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = remove_known_key_command(&options, &execution, KID_OLD);
+    let result = remove_known_key_command(&session, KID_OLD);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
@@ -214,10 +180,9 @@ fn test_remove_known_key_command_rejects_expired_signing_key() {
 fn test_remove_recipient_set_command_removes_only_requested_sid() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store_with_default_recipient_sets(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = remove_recipient_set_command(&options, &execution, SID_FRACTIONAL).unwrap();
+    let result = remove_recipient_set_command(&session, SID_FRACTIONAL).unwrap();
 
     assert_eq!(result, SID_FRACTIONAL);
     let protected = verified_trust_store(&home);
@@ -232,37 +197,21 @@ fn test_remove_recipient_set_command_removes_only_requested_sid() {
 }
 
 #[test]
-fn test_trust_mutation_uses_execution_home_after_logical_path_swap() {
+fn test_trust_mutation_uses_session_home_after_logical_path_swap() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let access = KeystoreAccess::open_from_home(home.path()).unwrap();
-    let ssh_public_key = fs::read_to_string(home.path().join(".ssh/test_ed25519.pub")).unwrap();
-    let backend = Ed25519DirectBackend::new(&home.path().join(".ssh/test_ed25519")).unwrap();
     let member_handle = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
-    let key_ctx = load_crypto_context_with_access(
-        access,
-        member_handle.clone(),
-        Box::new(backend),
-        ssh_public_key,
-        None,
-        None,
-    )
-    .unwrap();
-    let execution = ExecutionContext::from_test_parts(
-        member_handle,
-        KeyContext::from_inner(key_ctx),
-        None,
-        Some(home.path().to_path_buf()),
-    )
-    .unwrap();
+    let key_ctx =
+        KeyContext::from_inner(setup_member_key_context(&home, ALICE_MEMBER_HANDLE, None));
+    let session =
+        TrustCommandSession::from_test_parts(home.path(), member_handle, key_ctx).unwrap();
     let moved_parent = local_state_temp_dir();
     let moved_home = moved_parent.path().join("original-home");
     let replacement = local_state_temp_dir();
     fs::rename(home.path(), &moved_home).unwrap();
     symlink(replacement.path(), home.path()).unwrap();
 
-    remove_known_key_command(&options, &execution, KID_OLD).unwrap();
+    remove_known_key_command(&session, KID_OLD).unwrap();
 
     let moved_options = build_test_command_options(&moved_home, None);
     let loaded = load_test_trust_store(&moved_options, ALICE_MEMBER_HANDLE)
@@ -280,16 +229,12 @@ fn test_trust_mutation_uses_execution_home_after_logical_path_swap() {
 fn test_trust_mutation_snapshot_change_skips_mutation_error() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
     let mutation_calls = Cell::new(0);
 
-    let error = execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
+    let error = execute_trust_store_mutation_with_session_prepare_hook(
+        &session,
         |_| {
             mutation_calls.set(mutation_calls.get() + 1);
             Ok(TrustStoreMutation {
@@ -318,16 +263,12 @@ fn test_trust_mutation_snapshot_change_skips_mutation_error() {
 fn test_reviewed_trust_mutation_reports_unparseable_replacement_as_a_conflict() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
     let mutation_calls = Cell::new(0);
 
-    let error = execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
+    let error = execute_trust_store_mutation_with_session_prepare_hook(
+        &session,
         |_| {
             mutation_calls.set(mutation_calls.get() + 1);
             Ok(TrustStoreMutation {
@@ -358,16 +299,12 @@ fn test_reviewed_trust_mutation_warns_about_an_unsafe_path_and_completes() {
 
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
 
     let warning_guard = LocalStateWarningGuard::new();
-    execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
+    execute_trust_store_mutation_with_session_prepare_hook(
+        &session,
         |_| {
             Ok(TrustStoreMutation {
                 value: (),
@@ -391,14 +328,10 @@ fn test_reviewed_trust_mutation_warns_about_an_unsafe_path_and_completes() {
 fn test_reviewed_trust_mutation_preserves_mutation_parse_error() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let error = execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::ExistingRequired,
-        TrustStoreWriteBinding::ObservedDocument,
+    let error = execute_trust_store_mutation_with_session_prepare_hook(
+        &session,
         |_| {
             Err::<TrustStoreMutation<()>, _>(crate::Error::build_parse_error(
                 "Injected mutation parse failure",
@@ -417,107 +350,13 @@ fn test_reviewed_trust_mutation_preserves_mutation_parse_error() {
 }
 
 #[test]
-fn test_trust_mutation_missing_snapshot_create_race_skips_mutation_error() {
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
-    let path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
-    let replacement = fs::read(&path).unwrap();
-    fs::remove_file(&path).unwrap();
-    let mutation_calls = Cell::new(0);
-
-    let error = execute_trust_store_mutation_with_prepare_hook(
-        &options,
-        &execution,
-        TrustStoreMutationMode::CreateIfMissing,
-        TrustStoreWriteBinding::ObservedDocument,
-        |_| {
-            mutation_calls.set(mutation_calls.get() + 1);
-            Ok(TrustStoreMutation {
-                value: (),
-                changed: true,
-            })
-        },
-        || fs::write(&path, &replacement).unwrap(),
-    )
-    .expect_err("competing trust store creation must stop mutation");
-
-    assert_eq!(error.kind(), ErrorKind::InvalidOperation);
-    assert_eq!(mutation_calls.get(), 0);
-    assert_eq!(fs::read(path).unwrap(), replacement);
-}
-
-#[test]
-fn test_trust_mutation_preserves_both_concurrent_known_keys() {
-    const FIRST_KID: &str = "E5E00000E5E00000E5E00000E5E00001";
-    const SECOND_KID: &str = "E5E00000E5E00000E5E00000E5E00002";
-
-    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    save_signed_trust_store(&home);
-    let start = Arc::new(Barrier::new(2));
-    let home_path = home.path().to_path_buf();
-    let writers = [
-        (FIRST_KID, "eve@example.com"),
-        (SECOND_KID, "frank@example.com"),
-    ]
-    .into_iter()
-    .map(|(kid, member_handle)| {
-        let home_path = home_path.clone();
-        let start = Arc::clone(&start);
-        thread::spawn(move || {
-            let options = build_test_command_options(&home_path, None);
-            let execution = build_execution_context_from_home(&home_path);
-            start.wait();
-            execute_trust_store_mutation_with_execution(
-                &options,
-                &execution,
-                TrustStoreMutationMode::ExistingRequired,
-                TrustStoreWriteBinding::MergedApproval,
-                |protected| {
-                    protected.known_keys.push(build_known_key(
-                        kid,
-                        member_handle,
-                        "2026-01-15T00:00:00Z",
-                    ));
-                    Ok(TrustStoreMutation {
-                        value: (),
-                        changed: true,
-                    })
-                },
-            )
-        })
-    })
-    .collect::<Vec<_>>();
-
-    for writer in writers {
-        writer.join().unwrap().unwrap();
-    }
-
-    let protected = verified_trust_store(&home);
-    assert!(protected
-        .known_keys
-        .iter()
-        .any(|entry| entry.kid == FIRST_KID));
-    assert!(protected
-        .known_keys
-        .iter()
-        .any(|entry| entry.kid == SECOND_KID));
-}
-
-#[test]
 fn test_remove_known_key_command_accepts_display_kid() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = remove_known_key_command(
-        &options,
-        &execution,
-        "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0",
-    )
-    .unwrap();
+    let result =
+        remove_known_key_command(&session, "B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0-B0B0").unwrap();
 
     assert_eq!(result.member_handle, "bob@example.com");
     assert_eq!(result.kid, KID_OLD);
@@ -527,10 +366,9 @@ fn test_remove_known_key_command_accepts_display_kid() {
 fn test_remove_known_key_command_accepts_unique_prefix() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = remove_known_key_command(&options, &execution, "C4AR").unwrap();
+    let result = remove_known_key_command(&session, "C4AR").unwrap();
 
     assert_eq!(result.member_handle, "charlie@example.com");
     assert_eq!(result.kid, KID_FRACTIONAL);
@@ -545,11 +383,11 @@ fn test_execute_purge_rejects_expired_signing_key() {
         ALICE_MEMBER_HANDLE,
         "2020-01-01T00:00:00Z",
     );
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let reviewed =
-        list_purge_candidates(&execution, parse_timestamp("2026-01-01T00:00:01Z")).unwrap();
+        list_purge_candidates(&session, parse_timestamp("2026-01-01T00:00:01Z")).unwrap();
 
-    let result = execute_purge(&execution, &reviewed);
+    let result = execute_purge(&reviewed);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
@@ -566,9 +404,9 @@ fn test_execute_purge_rejects_trust_store_changed_after_review() {
 
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let threshold = parse_timestamp("2026-02-01T00:00:00Z");
-    let reviewed = list_purge_candidates(&execution, threshold).unwrap();
+    let reviewed = list_purge_candidates(&session, threshold).unwrap();
     let mut protected = verified_trust_store(&home);
     protected.known_keys.push(build_known_key(
         UNREVIEWED_KID,
@@ -583,8 +421,8 @@ fn test_execute_purge_rejects_trust_store_changed_after_review() {
     )
     .unwrap();
 
-    let error = execute_purge(&execution, &reviewed)
-        .expect_err("purge must reject content that was not reviewed");
+    let error =
+        execute_purge(&reviewed).expect_err("purge must reject content that was not reviewed");
 
     assert_eq!(error.kind(), ErrorKind::InvalidOperation);
     assert!(verified_trust_store(&home)
@@ -604,9 +442,9 @@ fn test_execute_purge_verifies_with_the_keys_read_for_the_review() {
         .to_string();
     save_signed_trust_store(&home);
     let rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let threshold = parse_timestamp("2026-02-01T00:00:00Z");
-    let reviewed = list_purge_candidates(&execution, threshold).unwrap();
+    let reviewed = list_purge_candidates(&session, threshold).unwrap();
     fs::remove_file(
         home.path()
             .join("keys")
@@ -616,7 +454,7 @@ fn test_execute_purge_verifies_with_the_keys_read_for_the_review() {
     )
     .unwrap();
 
-    let outcome = execute_purge(&execution, &reviewed).unwrap();
+    let outcome = execute_purge(&reviewed).unwrap();
 
     assert_eq!(outcome.removed, 2);
     let stored = load_test_trust_store(
@@ -640,11 +478,11 @@ fn test_execute_purge_reports_resign_when_nothing_is_removed() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
     let rotated_kid = rotate_active_key(home.path(), ALICE_MEMBER_HANDLE);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let threshold = parse_timestamp("2020-01-01T00:00:00Z");
-    let reviewed = list_purge_candidates(&execution, threshold).unwrap();
+    let reviewed = list_purge_candidates(&session, threshold).unwrap();
 
-    let outcome = execute_purge(&execution, &reviewed).unwrap();
+    let outcome = execute_purge(&reviewed).unwrap();
 
     assert_eq!(outcome.removed, 0);
     assert!(outcome.resigned);
@@ -664,11 +502,11 @@ fn test_execute_purge_reports_resign_when_nothing_is_removed() {
 fn test_execute_recipient_set_purge_removes_only_old_records() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store_with_default_recipient_sets(&home);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let threshold = parse_timestamp("2026-01-01T00:00:00.05Z");
-    let reviewed = list_recipient_set_purge_candidates(&execution, threshold).unwrap();
+    let reviewed = list_recipient_set_purge_candidates(&session, threshold).unwrap();
 
-    let outcome = execute_recipient_set_purge(&execution, &reviewed).unwrap();
+    let outcome = execute_recipient_set_purge(&reviewed).unwrap();
 
     assert_eq!(outcome.removed, 1);
     assert!(!outcome.resigned);
@@ -690,12 +528,12 @@ fn test_purge_candidate_lists_require_an_existing_trust_store() {
         if create_trust_directory {
             crate::test_utils::create_local_state_dir(&home.path().join("trust"));
         }
-        let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+        let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
         let threshold = parse_timestamp("2026-01-01T00:00:00Z");
         let errors = [
-            list_purge_candidates(&execution, threshold)
+            list_purge_candidates(&session, threshold)
                 .expect_err("known-key purge listing requires a trust store"),
-            list_recipient_set_purge_candidates(&execution, threshold)
+            list_recipient_set_purge_candidates(&session, threshold)
                 .expect_err("recipient purge listing requires a trust store"),
         ];
 
@@ -712,15 +550,14 @@ fn test_purge_candidate_lists_require_an_existing_trust_store() {
 fn test_recipient_set_mutation_rejects_expired_signing_key_without_store_change() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store_with_default_recipient_sets(&home);
-    let options = build_test_command_options(home.path(), None);
     crate::test_utils::update_active_private_key_expires_at(
         home.path(),
         ALICE_MEMBER_HANDLE,
         "2020-01-01T00:00:00Z",
     );
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let result = remove_recipient_set_command(&options, &execution, SID_OLD);
+    let result = remove_recipient_set_command(&session, SID_OLD);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expired"));
@@ -739,10 +576,10 @@ fn test_recipient_set_mutation_rejects_expired_signing_key_without_store_change(
 fn test_list_recipient_set_purge_candidates_returns_only_old_records() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store_with_default_recipient_sets(&home);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
     let result =
-        list_recipient_set_purge_candidates(&execution, parse_timestamp("2026-01-01T00:00:00.05Z"))
+        list_recipient_set_purge_candidates(&session, parse_timestamp("2026-01-01T00:00:00.05Z"))
             .unwrap();
 
     assert_eq!(result.items.len(), 1);
@@ -757,13 +594,12 @@ fn test_remove_known_key_command_warns_about_insecure_permission() {
 
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     save_signed_trust_store(&home);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let trust_path = get_trust_store_file_path(home.path(), &member_handle(ALICE_MEMBER_HANDLE));
     fs::set_permissions(&trust_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let warning_guard = LocalStateWarningGuard::new();
-    remove_known_key_command(&options, &execution, KID_OLD).unwrap();
+    remove_known_key_command(&session, KID_OLD).unwrap();
     let warnings = warning_guard.take_reasons();
 
     assert_eq!(warnings.len(), 1, "{warnings:?}");
@@ -779,10 +615,9 @@ fn test_remove_known_key_command_warns_about_insecure_permission() {
 #[test]
 fn test_remove_known_key_command_reports_missing_store_without_creating_the_directory() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let session = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
-    let error = remove_known_key_command(&options, &execution, KID_OLD)
+    let error = remove_known_key_command(&session, KID_OLD)
         .expect_err("a removal without a trust store must fail");
 
     assert_eq!(error.kind(), ErrorKind::NotFound);

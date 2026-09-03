@@ -34,7 +34,7 @@ pub(crate) struct RewrapContext<'a> {
 
 /// Request for rewrapping a single encrypted artifact.
 #[derive(Clone)]
-pub struct RewrapRequest<'a> {
+pub(crate) struct RewrapRequest<'a> {
     pub member_handle: &'a str,
     pub key_ctx: &'a CryptoContext,
     pub target_members: Vec<VerifiedRecipientKey>,
@@ -298,7 +298,7 @@ fn collect_target_member_handles(target_members: &[VerifiedRecipientKey]) -> Vec
     member_handles
 }
 
-pub fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Result<String> {
+pub(crate) fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) -> Result<String> {
     let options = RewrapOptions {
         rotate_key: request.rotate_key,
         clear_disclosure_history: request.clear_disclosure_history,

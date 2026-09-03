@@ -7,18 +7,17 @@
 use std::path::Path;
 
 use crate::api::key::KeyContext;
-use crate::app::context::execution::ExecutionContext;
-use crate::app::context::options::CommonCommandOptions;
-use crate::app::key::manage::remove_key_command;
-use crate::app::key::types::KeyRemoveResult;
 use crate::app_test_utils::{
     add_generated_key, load_test_trust_store, rotate_active_key,
-    save_test_trust_store_signed_by_active_key,
+    save_test_trust_store_signed_by_active_key, TestCommandOptions,
 };
 use crate::error::TRUST_SIGNER_KEY_IN_USE_RECOVERY;
 use crate::io::trust::paths::get_trust_store_file_path;
 use crate::io::trust::store::fail_next_trust_store_save;
 use crate::model::identity::{Kid, MemberHandle};
+use crate::service::key::manage::remove_key_command;
+use crate::service::key::types::KeyRemoveResult;
+use crate::service::trust::TrustCommandSession;
 use crate::test_utils::{
     kid, member_handle, setup_member_key_context, setup_test_keystore_from_fixtures,
     ALICE_MEMBER_HANDLE,
@@ -30,17 +29,16 @@ const SIGNING_FAILURE: &str = "ssh-agent is not reachable";
 const UNREADABLE_STORE_FAILURE: &str = "the trust store could not be opened";
 const REMOVED_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 
-fn build_options(home: &Path) -> CommonCommandOptions {
-    CommonCommandOptions::new().with_home(Some(home.to_path_buf()))
+fn build_options(home: &Path) -> TestCommandOptions {
+    TestCommandOptions::new().with_home(Some(home.to_path_buf()))
 }
 
 /// Signing identity a hand-over is given, bound to one key of the owner.
-fn signing_execution(home: &TempDir, kid: Option<&str>) -> ExecutionContext {
-    ExecutionContext::from_test_parts(
+fn signing_session(home: &TempDir, kid: Option<&str>) -> TrustCommandSession {
+    TrustCommandSession::from_test_parts(
+        home.path(),
         MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap(),
         KeyContext::from_inner(setup_member_key_context(home, ALICE_MEMBER_HANDLE, kid)),
-        None,
-        Some(home.path().to_path_buf()),
     )
     .unwrap()
 }
@@ -51,10 +49,10 @@ fn signing_execution(home: &TempDir, kid: Option<&str>) -> ExecutionContext {
 /// document verifies, and the key its signature names is not the one the
 /// removal was classified against.
 fn resign_stored_trust_store_with(home: &TempDir, kid: &Kid) {
-    use crate::cli_api::test_support::storage::trust::store::save_trust_store;
     use crate::feature::trust::signature::sign_trust_store;
     use crate::model::trust_store::TrustStoreProtected;
     use crate::model::wire::format::LOCAL_TRUST_V1;
+    use crate::test_support::storage::trust::store::save_trust_store;
 
     let key_ctx = setup_member_key_context(home, ALICE_MEMBER_HANDLE, Some(kid.as_str()));
     let protected = TrustStoreProtected {
@@ -73,7 +71,7 @@ fn resign_stored_trust_store_with(home: &TempDir, kid: &Kid) {
     .unwrap();
 }
 
-fn stored_signer_kid(options: &CommonCommandOptions) -> String {
+fn stored_signer_kid(options: &TestCommandOptions) -> String {
     load_test_trust_store(options, ALICE_MEMBER_HANDLE)
         .unwrap()
         .expect("the stored trust store must still verify")
@@ -111,18 +109,14 @@ impl HandoverRace {
     }
 
     fn remove_signer_key(&self, force: bool) -> crate::Result<KeyRemoveResult> {
-        let options = build_options(self.home.path());
         remove_key_command(
-            &options,
+            self.home.path(),
             None,
             self.removed_kid.clone(),
             force,
             |_member_handle| {
                 resign_stored_trust_store_with(&self.home, &self.other_kid);
-                Ok(signing_execution(
-                    &self.home,
-                    Some(self.active_kid.as_str()),
-                ))
+                Ok(signing_session(&self.home, Some(self.active_kid.as_str())))
             },
         )
     }
@@ -152,14 +146,13 @@ impl UncommittedHandover {
     }
 
     fn force_remove_signer_key(&self) -> crate::Result<KeyRemoveResult> {
-        let options = build_options(self.home.path());
         remove_key_command(
-            &options,
+            self.home.path(),
             None,
             self.removed_kid.clone(),
             true,
             |_member_handle| {
-                let execution = signing_execution(&self.home, Some(self.active_kid.as_str()));
+                let execution = signing_session(&self.home, Some(self.active_kid.as_str()));
                 fail_next_trust_store_save();
                 Ok(execution)
             },
@@ -184,9 +177,8 @@ impl UnsignableHandover {
     }
 
     fn remove_signer_key(&self) -> crate::Result<KeyRemoveResult> {
-        let options = build_options(self.home.path());
         remove_key_command(
-            &options,
+            self.home.path(),
             None,
             self.removed_kid.clone(),
             false,

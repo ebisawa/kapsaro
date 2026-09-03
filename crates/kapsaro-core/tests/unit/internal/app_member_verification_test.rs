@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::select_verification_member_files;
-use crate::app::member::query::list_members;
-use crate::app_test_utils::build_test_signing_command_options;
+use crate::service::member::query::list_members;
 use crate::test_utils::{
     setup_test_workspace_from_fixtures, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
 };
@@ -72,11 +71,10 @@ fn test_select_verification_member_files_rejects_missing_active_member() {
 
 #[test]
 fn test_list_members_skips_invalid_incoming_member_file() {
-    let (temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let (_temp_dir, workspace_dir) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     save_tampered_incoming_member(&workspace_dir, BOB_MEMBER_HANDLE);
-    let options = build_test_signing_command_options(temp_dir.path(), &workspace_dir);
 
-    let result = list_members(&options).unwrap();
+    let result = list_members(&workspace_dir).unwrap();
 
     assert_eq!(result.active.len(), 1);
     assert_eq!(result.active[0].member_handle, ALICE_MEMBER_HANDLE);

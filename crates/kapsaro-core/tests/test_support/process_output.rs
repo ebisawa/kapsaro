@@ -27,9 +27,17 @@ pub fn failed_code() -> i32 {
 }
 
 /// Save an executable that prints the child process's SSH agent socket.
+///
+/// The stub drains stdin first, the way the real binary consumes the message
+/// it is asked to sign. Without that read the stub can exit while the caller
+/// is still writing, and the write fails with a broken pipe.
 pub fn save_agent_socket_echo_script(directory: &Path, name: &str) -> PathBuf {
     let script = directory.join(name);
-    std::fs::write(&script, "#!/bin/sh\nprintf '%s\\n' \"$SSH_AUTH_SOCK\"\n").unwrap();
+    std::fs::write(
+        &script,
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' \"$SSH_AUTH_SOCK\"\n",
+    )
+    .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
     script
 }
